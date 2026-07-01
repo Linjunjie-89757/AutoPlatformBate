@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Connection, DocumentCopy, RefreshRight, Warning } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { CircleClose, Connection, DocumentCopy, RefreshRight, Warning } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { ConfigStatCard, ConfigTypeBadge, type ConfigStat } from '@/entities/config'
-import { localRunnerApi, type RunnerNodeSummary } from '@/entities/local-runner'
+import { localRunnerApi, type RunnerActiveTaskSummary, type RunnerNodeSummary } from '@/entities/local-runner'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -17,6 +17,7 @@ const errorMessage = ref('')
 const guideVisible = ref(false)
 const autoRefresh = ref(true)
 const lastRefreshedAt = ref<Date | null>(null)
+const cancelingRunIds = ref<Set<string>>(new Set())
 let refreshTimer: ReturnType<typeof window.setInterval> | null = null
 
 const runnerStartCommand = 'npm.cmd run runner'
@@ -96,12 +97,72 @@ async function triggerOfflineScan() {
   scanning.value = true
   try {
     const result = await localRunnerApi.triggerOfflineScan()
-    ElMessage.success(result.changedTasks > 0 ? `已处理 ${result.changedTasks} 个离线任务` : '未发现需要处理的离线任务')
+    const changedDetails = [
+      result.offlineTasks != null ? `离线 ${result.offlineTasks}` : '',
+      result.timedOutTasks != null ? `超时 ${result.timedOutTasks}` : '',
+    ].filter(Boolean).join('，')
+    ElMessage.success(result.changedTasks > 0
+      ? `已处理 ${result.changedTasks} 个任务${changedDetails ? `（${changedDetails}）` : ''}`
+      : '未发现需要处理的离线或超时任务')
     await loadRunners()
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
     scanning.value = false
+  }
+}
+
+function setTaskCanceling(runId: string, value: boolean) {
+  const next = new Set(cancelingRunIds.value)
+  if (value) {
+    next.add(runId)
+  } else {
+    next.delete(runId)
+  }
+  cancelingRunIds.value = next
+}
+
+function isTaskCanceling(runId: string) {
+  return cancelingRunIds.value.has(runId)
+}
+
+function isTaskCancelable(status: string | null) {
+  return ['PENDING', 'ASSIGNED', 'RUNNING'].includes(String(status || '').toUpperCase())
+}
+
+async function cancelRunnerTask(task: RunnerActiveTaskSummary) {
+  if (!task.runId || isTaskCanceling(task.runId) || !isTaskCancelable(task.status)) {
+    return
+  }
+  const confirmed = await ElMessageBox.confirm(
+    `确定取消本地任务「${task.runId}」吗？Runner 收到取消后会停止继续执行并上报已取消状态。`,
+    '取消本地执行任务',
+    {
+      confirmButtonText: '取消任务',
+      cancelButtonText: '保留任务',
+      type: 'warning',
+    },
+  ).then(
+    () => true,
+    () => false,
+  )
+  if (!confirmed) {
+    return
+  }
+
+  setTaskCanceling(task.runId, true)
+  try {
+    const result = await localRunnerApi.cancelTask(task.runId)
+    if (result.accepted === false) {
+      ElMessage.warning(result.message || '任务未进入可取消状态')
+    } else {
+      ElMessage.success(result.message || '任务已取消')
+    }
+    await loadRunners()
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    setTaskCanceling(task.runId, false)
   }
 }
 
@@ -158,6 +219,23 @@ function formatRunnerName(item: RunnerNodeSummary) {
   return item.runnerName || item.runnerId
 }
 
+function normalizeUnselectableReason(reason?: string | null) {
+  const text = String(reason || '').trim()
+  if (!text) {
+    return ''
+  }
+  if (text === 'Runner is offline') {
+    return 'Runner 离线'
+  }
+  if (text === 'Insufficient resource slots') {
+    return '资源槽位不足'
+  }
+  if (text.startsWith('Runner does not support task type:')) {
+    return `能力不匹配：${text.replace('Runner does not support task type:', '').trim()}`
+  }
+  return text
+}
+
 function getRunnerStatusLabel(item: RunnerNodeSummary) {
   if (item.offline) {
     return '离线'
@@ -176,6 +254,39 @@ function getRunnerStatusTone(item: RunnerNodeSummary) {
     return 'success'
   }
   return 'warning'
+}
+
+function getRunnerDispatchLabel(item: RunnerNodeSummary) {
+  if (item.selectable === false || item.offline) {
+    return '不可调度'
+  }
+  return '可调度'
+}
+
+function getRunnerDispatchTone(item: RunnerNodeSummary) {
+  if (item.selectable === false || item.offline) {
+    return 'warning'
+  }
+  return 'success'
+}
+
+function getRunnerDispatchText(item: RunnerNodeSummary) {
+  const reason = normalizeUnselectableReason(item.unselectableReason)
+  if (reason) {
+    return reason
+  }
+  if (item.selectable === true) {
+    return '满足当前筛选条件'
+  }
+  return item.offline ? 'Runner 离线' : '等待任务筛选'
+}
+
+function getRunnerMaxSlots(item: RunnerNodeSummary) {
+  const maxSlots = numberFromRecord(item.resource, 'maxSlots')
+  if (maxSlots > 0) {
+    return maxSlots
+  }
+  return numberFromRecord(item.resource, 'usedSlots') + numberFromRecord(item.resource, 'availableSlots')
 }
 
 function getCapabilityText(item: RunnerNodeSummary) {
@@ -211,13 +322,49 @@ function getTaskTypeLabel(taskType: string | null) {
 }
 
 function getTaskStatusLabel(status: string | null) {
-  if (status === 'RUNNING') {
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'RUNNING') {
     return '运行中'
   }
-  if (status === 'ASSIGNED') {
-    return '已分配'
+  if (normalized === 'ASSIGNED') {
+    return '已领取'
+  }
+  if (normalized === 'PENDING') {
+    return '等待领取'
+  }
+  if (normalized === 'SUCCESS') {
+    return '成功'
+  }
+  if (normalized === 'FAILED') {
+    return '失败'
+  }
+  if (normalized === 'CANCELED') {
+    return '已取消'
+  }
+  if (normalized === 'TIMEOUT') {
+    return '执行超时'
+  }
+  if (normalized === 'RUNNER_OFFLINE') {
+    return 'Runner 离线'
   }
   return status || '未知'
+}
+
+function getTaskStatusTone(status: string | null) {
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'SUCCESS') {
+    return 'success'
+  }
+  if (normalized === 'FAILED' || normalized === 'RUNNER_OFFLINE') {
+    return 'danger'
+  }
+  if (normalized === 'CANCELED' || normalized === 'TIMEOUT') {
+    return 'warning'
+  }
+  if (normalized === 'RUNNING' || normalized === 'ASSIGNED') {
+    return 'primary'
+  }
+  return 'default'
 }
 
 onMounted(() => {
@@ -262,7 +409,7 @@ onBeforeUnmount(() => {
       <el-icon><Warning /></el-icon>
       <div>
         <strong>发现 {{ offlineRunners.length }} 个离线执行器</strong>
-        <p>离线节点不会继续领取本地任务，已分配或运行中的任务可通过离线扫描标记为 Runner 离线。</p>
+        <p>离线节点不会继续领取本地任务，已分配或运行中的任务可通过扫描标记为 Runner 离线或执行超时。</p>
       </div>
       <AppButton size="small" :loading="scanning" @click="triggerOfflineScan">立即扫描</AppButton>
     </div>
@@ -293,6 +440,7 @@ onBeforeUnmount(() => {
         <colgroup>
           <col class="config-runner-table-card__name-col" />
           <col class="config-runner-table-card__status-col" />
+          <col class="config-runner-table-card__dispatch-col" />
           <col class="config-runner-table-card__resource-col" />
           <col class="config-runner-table-card__task-col" />
           <col class="config-runner-table-card__capability-col" />
@@ -303,6 +451,7 @@ onBeforeUnmount(() => {
           <tr>
             <th>执行器</th>
             <th>状态</th>
+            <th>调度状态</th>
             <th>资源槽位</th>
             <th>当前任务</th>
             <th>能力标签</th>
@@ -324,8 +473,17 @@ onBeforeUnmount(() => {
               />
             </td>
             <td>
+              <div class="config-runner-dispatch">
+                <ConfigTypeBadge
+                  :label="getRunnerDispatchLabel(item)"
+                  :tone="getRunnerDispatchTone(item)"
+                />
+                <span>{{ getRunnerDispatchText(item) }}</span>
+              </div>
+            </td>
+            <td>
               <div class="config-runner-resource">
-                <strong>{{ numberFromRecord(item.resource, 'usedSlots') }} / {{ numberFromRecord(item.resource, 'maxSlots') }}</strong>
+                <strong>{{ numberFromRecord(item.resource, 'usedSlots') }} / {{ getRunnerMaxSlots(item) }}</strong>
                 <span>可用 {{ numberFromRecord(item.resource, 'availableSlots') }}</span>
               </div>
             </td>
@@ -334,7 +492,10 @@ onBeforeUnmount(() => {
                 <div v-for="task in activeTasksOf(item)" :key="task.runId" class="config-runner-task">
                   <div class="config-runner-task__head">
                     <strong>{{ getTaskTypeLabel(task.taskType) }}</strong>
-                    <span>{{ getTaskStatusLabel(task.status) }}</span>
+                    <ConfigTypeBadge
+                      :label="getTaskStatusLabel(task.status)"
+                      :tone="getTaskStatusTone(task.status)"
+                    />
                   </div>
                   <div class="config-runner-task__meta">
                     <span>{{ task.currentStage || '等待阶段上报' }}</span>
@@ -342,7 +503,20 @@ onBeforeUnmount(() => {
                     <span>{{ task.resourceCost ?? 1 }} 槽</span>
                     <span>{{ formatDuration(task.runningSeconds) }}</span>
                   </div>
-                  <code :title="task.runId">{{ task.runId }}</code>
+                  <div class="config-runner-task__footer">
+                    <code :title="task.runId">{{ task.runId }}</code>
+                    <AppButton
+                      v-if="isTaskCancelable(task.status)"
+                      type="danger"
+                      size="small"
+                      plain
+                      :icon="CircleClose"
+                      :loading="isTaskCanceling(task.runId)"
+                      @click="cancelRunnerTask(task)"
+                    >
+                      取消
+                    </AppButton>
+                  </div>
                 </div>
               </div>
               <span v-else class="config-runner-muted">空闲</span>
@@ -549,31 +723,35 @@ onBeforeUnmount(() => {
 }
 
 .config-runner-table-card__name-col {
-  width: 22%;
-}
-
-.config-runner-table-card__status-col {
-  width: 88px;
-}
-
-.config-runner-table-card__resource-col {
-  width: 120px;
-}
-
-.config-runner-table-card__task-col {
-  width: 24%;
-}
-
-.config-runner-table-card__capability-col {
-  width: 16%;
-}
-
-.config-runner-table-card__runtime-col {
   width: 20%;
 }
 
+.config-runner-table-card__status-col {
+  width: 82px;
+}
+
+.config-runner-table-card__dispatch-col {
+  width: 132px;
+}
+
+.config-runner-table-card__resource-col {
+  width: 110px;
+}
+
+.config-runner-table-card__task-col {
+  width: 25%;
+}
+
+.config-runner-table-card__capability-col {
+  width: 14%;
+}
+
+.config-runner-table-card__runtime-col {
+  width: 16%;
+}
+
 .config-runner-table-card__heartbeat-col {
-  width: 150px;
+  width: 140px;
 }
 
 .config-runner-table-card thead {
@@ -624,6 +802,7 @@ onBeforeUnmount(() => {
 }
 
 .config-runner-resource,
+.config-runner-dispatch,
 .config-runner-runtime {
   display: grid;
   gap: 4px;
@@ -636,6 +815,7 @@ onBeforeUnmount(() => {
 }
 
 .config-runner-resource span,
+.config-runner-dispatch span,
 .config-runner-runtime span {
   overflow: hidden;
   color: var(--app-text-muted);
@@ -673,7 +853,7 @@ onBeforeUnmount(() => {
   font-size: var(--app-font-size-xs);
 }
 
-.config-runner-task__head span {
+.config-runner-task__head > span:not(.config-type-badge) {
   color: var(--app-primary);
   font-size: var(--app-font-size-xs);
   font-weight: 600;
@@ -684,13 +864,26 @@ onBeforeUnmount(() => {
   font-size: var(--app-font-size-xs);
 }
 
-.config-runner-task code {
+.config-runner-task__footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+}
+
+.config-runner-task__footer code {
   overflow: hidden;
+  min-width: 0;
   color: var(--app-text-subtle);
   font-family: Consolas, Monaco, monospace;
   font-size: var(--app-font-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.config-runner-task__footer :deep(.el-button) {
+  flex: 0 0 auto;
 }
 
 .config-runner-runtime code {
@@ -814,7 +1007,7 @@ onBeforeUnmount(() => {
   }
 
   .config-runner-table-card table {
-    min-width: 1040px;
+    min-width: 1180px;
   }
 }
 

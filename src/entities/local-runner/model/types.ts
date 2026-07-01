@@ -31,6 +31,15 @@ export interface RunnerActiveTaskSummary {
 
 export interface RunnerOfflineScanResult {
   changedTasks: number
+  offlineTasks?: number | null
+  timedOutTasks?: number | null
+}
+
+export interface RunnerTaskAckResponse {
+  runId: string
+  status: string
+  accepted: boolean
+  message: string | null
 }
 
 export interface LocalRunnerTaskDetailResponse {

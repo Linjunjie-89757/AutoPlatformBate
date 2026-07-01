@@ -1,6 +1,11 @@
 import { httpGet, httpPost, type ApiResponse } from '@/shared/api/request'
 
-import type { LocalRunnerTaskDetailResponse, RunnerNodeSummary, RunnerOfflineScanResult } from '../model/types'
+import type {
+  LocalRunnerTaskDetailResponse,
+  RunnerNodeSummary,
+  RunnerOfflineScanResult,
+  RunnerTaskAckResponse,
+} from '../model/types'
 
 export interface RunnerNodeQuery {
   taskType?: string | null
@@ -64,5 +69,12 @@ export const localRunnerApi = {
       `/local-runner/tasks/${encodeURIComponent(runId)}`,
     )
     return normalizeLocalRunnerTaskDetail(unwrapApiResponse(response))
+  },
+
+  async cancelTask(runId: string) {
+    const response = await httpPost<ApiResponse<RunnerTaskAckResponse>>(
+      `/local-runner/tasks/${encodeURIComponent(runId)}/cancel`,
+    )
+    return unwrapApiResponse(response)
   },
 }
