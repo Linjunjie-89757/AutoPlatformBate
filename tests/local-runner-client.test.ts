@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 
 import {
   LOCAL_RUNNER_BASE_URL,
+  LOCAL_RUNNER_INSTALL_CHROMIUM_COMMAND,
+  LOCAL_RUNNER_START_COMMAND,
   mapRunnerCandidateToCollectCandidate,
   normalizeRunnerHealth,
   validateLocalRunnerLocators,
@@ -12,7 +14,7 @@ test('local runner client uses localhost runner endpoint', () => {
   assert.equal(LOCAL_RUNNER_BASE_URL, 'http://127.0.0.1:39118')
 })
 
-test('normalizeRunnerHealth keeps only the fields needed by the UI', () => {
+test('normalizeRunnerHealth keeps UI fields with safe defaults', () => {
   const health = normalizeRunnerHealth({
     success: true,
     runner: { version: '0.1.0', port: 39118 },
@@ -26,7 +28,28 @@ test('normalizeRunnerHealth keeps only the fields needed by the UI', () => {
     runnerVersion: '0.1.0',
     playwrightAvailable: true,
     chromiumInstalled: true,
+    capabilities: [],
+    diagnostics: {
+      startCommand: LOCAL_RUNNER_START_COMMAND,
+      installChromiumCommand: LOCAL_RUNNER_INSTALL_CHROMIUM_COMMAND,
+      sessionTtlMinutes: null,
+      validationLocatorLimit: null,
+      validationScreenshotLimit: null,
+    },
     currentUrl: 'https://example.test/orders',
+    pageTitle: null,
+    pageAlive: false,
+    sessionId: null,
+    openedAt: null,
+    boundTaskId: null,
+    boundAt: null,
+    lastActiveAt: null,
+    authStateExists: false,
+    authSavedAt: null,
+    expiresAt: null,
+    ttlMinutes: null,
+    remainingSeconds: null,
+    expired: false,
   })
 })
 

@@ -2293,6 +2293,8 @@ Runner 健康检查
 Runner 会话 TTL
 Runner 能力识别
 Runner 资源槽快照
+前端 Runner 客户端契约
+API Local Runner 报告证据视图
 脚本沙箱基础约束
 iframe / Shadow DOM 定位链路
 登录态缺失、过期、跳登录页

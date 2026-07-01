@@ -5,7 +5,7 @@ import type {
   WebUiLocatorContextPathItem,
   WebUiLocatorType,
 } from '../model/types'
-import { env } from '@/shared/config/env'
+import { env } from '../../../shared/config/env.ts'
 
 export const LOCAL_RUNNER_BASE_URL = 'http://127.0.0.1:39118'
 export const LOCAL_RUNNER_VALIDATION_TIMEOUT_MS = 30000
