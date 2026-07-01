@@ -29,7 +29,7 @@ test('api suite local run view finds latest local runner suite history', () => {
       environmentId: null,
       variableSetId: null,
       runMode: 'SERIAL',
-      runOn: 'REMOTE',
+      runOn: 'SERVER',
       continueOnFailure: false,
       globalTimeoutMs: 300000,
       stepFailureRetryCount: 0,
@@ -93,7 +93,7 @@ test('api suite local run notice exposes runner task and report key states', () 
   })
 
   assert.equal(running.visible, true)
-  assert.equal(running.title, 'Local Runner 套件任务已创建')
+  assert.equal(running.title, '本地执行器任务已创建')
   assert.equal(running.reportKey, null)
   assert.match(running.description, /api_suite_8001_001/)
 
@@ -106,7 +106,7 @@ test('api suite local run notice exposes runner task and report key states', () 
   })
 
   assert.equal(completed.visible, true)
-  assert.equal(completed.title, 'Local Runner 套件报告已生成')
+  assert.equal(completed.title, '本地执行器报告已生成')
   assert.equal(completed.reportKey, 'suite:12')
   assert.equal(completed.tone, 'success')
 })

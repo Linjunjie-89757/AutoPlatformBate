@@ -39,7 +39,7 @@ export function runnerOptionLabel(runner: RunnerNodeSummary, taskType: string) {
   const status = isRunnerOnline(runner) ? '在线' : '离线'
   const taskCount = Array.isArray(runner.activeTasks) ? runner.activeTasks.length : 0
   const reason = runnerUnselectableReason(runner, taskType)
-  const capability = reason ? `不可用：${reason}` : taskType
+  const capability = reason ? `不可用：${reason}` : '可用于本地执行器任务'
   return `${runnerDisplayName(runner)} · ${status} · ${capability} · ${taskCount} 个任务`
 }
 

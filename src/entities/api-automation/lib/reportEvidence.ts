@@ -25,9 +25,9 @@ export function buildLocalRunnerContextRows(input: RuntimeContextInput): ReportC
   if (context?.executionLocation !== 'LOCAL_RUNNER') return []
 
   return [
-    { label: '执行位置', value: 'Local Runner' },
-    { label: 'Runner', value: normalizeText(context.runnerId) },
-    { label: 'Runner Run ID', value: normalizeText(context.runnerRunId) },
+    { label: '执行来源', value: '本地执行器' },
+    { label: '本地执行器', value: normalizeText(context.runnerId) },
+    { label: '本地任务', value: normalizeText(context.runnerRunId) },
     { label: '任务类型', value: normalizeText(context.taskType) },
   ].filter(row => row.value !== '-')
 }

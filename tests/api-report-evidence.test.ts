@@ -18,9 +18,9 @@ test('report evidence detects Local Runner context and builds stable rows', () =
 
   assert.equal(isLocalRunnerReport(contextSnapshotJson), true)
   assert.deepEqual(buildLocalRunnerContextRows(contextSnapshotJson), [
-    { label: '执行位置', value: 'Local Runner' },
-    { label: 'Runner', value: 'runner_local' },
-    { label: 'Runner Run ID', value: 'run_api_case_001' },
+    { label: '执行来源', value: '本地执行器' },
+    { label: '本地执行器', value: 'runner_local' },
+    { label: '本地任务', value: 'run_api_case_001' },
     { label: '任务类型', value: 'API_CASE_RUN' },
   ])
 })

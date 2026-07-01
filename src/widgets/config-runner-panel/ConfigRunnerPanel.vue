@@ -389,7 +389,16 @@ function getRunnerMaxSlots(item: RunnerNodeSummary) {
 }
 
 function getCapabilityText(item: RunnerNodeSummary) {
-  return item.capabilities?.length ? item.capabilities.join(' / ') : '未上报能力'
+  return item.capabilities?.length ? item.capabilities.map(formatCapabilityLabel).join(' / ') : '未上报能力'
+}
+
+function formatCapabilityLabel(value: string) {
+  if (value === 'WEB_CASE_RUN') return 'Web UI 用例'
+  if (value === 'WEB_ELEMENT_VALIDATE') return '元素验证'
+  if (value === 'API_CASE_RUN') return '接口用例'
+  if (value === 'API_SCENARIO_RUN') return '接口场景'
+  if (value === 'API_SUITE_RUN') return '接口套件'
+  return value
 }
 
 function getBrowserText(item: RunnerNodeSummary) {
@@ -492,7 +501,7 @@ onBeforeUnmount(() => {
     <header class="config-runner-panel__header">
       <div>
         <h2>本地执行器</h2>
-        <p>查看 Local Runner 在线状态、能力标签、资源槽位和最近心跳。</p>
+        <p>查看本地执行器的在线状态、能力、资源槽位和最近心跳。</p>
       </div>
       <div class="config-runner-panel__actions">
         <AppButton :icon="Connection" @click="guideVisible = true">启动指引</AppButton>
@@ -515,11 +524,22 @@ onBeforeUnmount(() => {
       />
     </div>
 
+    <section class="config-runner-mode-strip" aria-label="运行方式">
+      <div>
+        <strong>本地执行器</strong>
+        <span>录制、元素采集、登录状态保存和本地运行都走本地执行器，使用本机真实浏览器。</span>
+      </div>
+      <div>
+        <strong>服务端执行</strong>
+        <span>用例调试稳定后交给服务端执行，按后端环境配置生成正式报告。</span>
+      </div>
+    </section>
+
     <div v-if="hasOfflineRunner" class="config-runner-warning">
       <el-icon><Warning /></el-icon>
       <div>
-        <strong>发现 {{ offlineRunners.length }} 个离线执行器</strong>
-        <p>离线节点不会继续领取本地任务，已分配或运行中的任务可通过扫描标记为 Runner 离线或执行超时。</p>
+        <strong>发现 {{ offlineRunners.length }} 个离线 Runner</strong>
+        <p>离线 Runner 不会继续领取本地任务，已分配或运行中的任务可通过扫描标记为离线或执行超时。</p>
       </div>
       <AppButton size="small" :loading="scanning" @click="triggerOfflineScan">立即扫描</AppButton>
     </div>
@@ -537,7 +557,7 @@ onBeforeUnmount(() => {
 
     <AppEmptyState
       v-else-if="errorMessage && !runners.length"
-      title="执行器状态加载失败"
+      title="本地执行器状态加载失败"
       :description="errorMessage"
     >
       <template #actions>
@@ -559,7 +579,7 @@ onBeforeUnmount(() => {
         </colgroup>
         <thead>
           <tr>
-            <th>执行器</th>
+            <th>本地执行器</th>
             <th>状态</th>
             <th>调度状态</th>
             <th>资源槽位</th>
@@ -664,7 +684,7 @@ onBeforeUnmount(() => {
     <AppEmptyState
       v-else
       title="暂无本地执行器"
-      description="启动 Web UI Runner 后，它会自动注册并上报心跳。"
+      description="启动本地执行器后，它会自动注册并上报心跳。"
     >
       <template #actions>
         <AppButton :icon="Connection" @click="guideVisible = true">查看启动指引</AppButton>
@@ -697,7 +717,7 @@ onBeforeUnmount(() => {
 
         <section>
           <h3>状态判断</h3>
-          <p>Runner 正常启动后，本页会在下一次自动刷新时显示在线节点、可用槽位和最近心跳。</p>
+          <p>Runner 正常启动后，本页会在下一次自动刷新时显示在线状态、可用槽位和最近心跳。</p>
         </section>
       </div>
     </el-drawer>
@@ -864,6 +884,37 @@ onBeforeUnmount(() => {
   display: grid;
   gap: var(--app-space-4);
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.config-runner-mode-strip {
+  display: grid;
+  gap: var(--app-space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-bg-panel);
+}
+
+.config-runner-mode-strip div {
+  min-width: 0;
+}
+
+.config-runner-mode-strip strong,
+.config-runner-mode-strip span {
+  display: block;
+}
+
+.config-runner-mode-strip strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-runner-mode-strip span {
+  margin-top: var(--app-space-1);
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-sm);
+  line-height: 1.6;
 }
 
 .config-runner-refresh-bar {
@@ -1407,6 +1458,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 720px) {
+  .config-runner-mode-strip,
   .config-runner-panel__stats {
     grid-template-columns: 1fr;
   }

@@ -4098,8 +4098,8 @@ watch(activeScenarioDetailTab, (tab) => {
                     <label class="scenario-property-field">
                       <span>运行于</span>
                       <el-select v-model="activeScenarioDetail.runOn" placeholder="请选择运行位置" @change="markScenarioDirty">
-                        <el-option label="本地执行机" value="LOCAL" />
-                        <el-option label="远程执行机" value="REMOTE" />
+                        <el-option label="服务端执行" value="SERVER" />
+                        <el-option label="本地执行器" value="LOCAL" />
                       </el-select>
                     </label>
                     <label v-if="activeScenarioDetail.runOn === 'LOCAL'" class="scenario-property-field">

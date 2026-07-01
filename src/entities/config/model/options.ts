@@ -8,7 +8,7 @@ export const configCenterTabs: Array<{
   { id: 'env', label: '环境配置', description: '测试环境管理' },
   { id: 'param', label: '变量集', description: '运行参数与敏感变量' },
   { id: 'mock', label: 'Mock 服务', description: '第三方响应模拟' },
-  { id: 'runner', label: '本地执行器', description: 'Runner 状态与资源' },
+  { id: 'runner', label: '本地执行器', description: '本地执行与服务端执行' },
   { id: 'notification', label: '通知配置', description: '失败通知与渠道' },
   { id: 'proxy', label: '网络代理', description: '网络出口与代理' },
   { id: 'dbConnection', label: '数据库连接', description: '数据源配置' },

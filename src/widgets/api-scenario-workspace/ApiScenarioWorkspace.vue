@@ -1740,7 +1740,7 @@ function fingerprintScenarioDetail(detail: ApiScenarioDetail) {
     tags: [...(detail.tags || [])],
     defaultEnvironmentId: detail.defaultEnvironmentId ?? null,
     variableSetId: detail.variableSetId ?? null,
-    runOn: detail.runOn || 'LOCAL',
+    runOn: detail.runOn || 'SERVER',
     continueOnFailure: !!detail.continueOnFailure,
     globalTimeoutMs: detail.globalTimeoutMs ?? SCENARIO_DEFAULT_GLOBAL_TIMEOUT_MS,
     stepFailureRetryCount: detail.stepFailureRetryCount ?? 0,
@@ -2094,7 +2094,7 @@ function buildEmptyScenarioDetail(): ApiScenarioDetail {
     stepCount: 0,
     defaultEnvironmentId: props.environments?.[0]?.id ?? null,
     variableSetId: null,
-    runOn: 'LOCAL',
+    runOn: 'SERVER',
     continueOnFailure: false,
     globalTimeoutMs: SCENARIO_DEFAULT_GLOBAL_TIMEOUT_MS,
     stepFailureRetryCount: 0,
@@ -3119,7 +3119,7 @@ function buildScenarioPayload(): SaveApiScenarioPayload {
     tags: Array.isArray(detail.tags) ? detail.tags : [],
     defaultEnvironmentId: detail.defaultEnvironmentId,
     variableSetId: detail.variableSetId,
-    runOn: detail.runOn || 'LOCAL',
+    runOn: detail.runOn || 'SERVER',
     continueOnFailure: detail.continueOnFailure,
     globalTimeoutMs: detail.globalTimeoutMs ?? SCENARIO_DEFAULT_GLOBAL_TIMEOUT_MS,
     stepFailureRetryCount: detail.stepFailureRetryCount ?? 0,
@@ -3204,17 +3204,17 @@ async function runScenario() {
   }
   scenarioRunning.value = true
   try {
-    const runOn = detail.runOn || 'LOCAL'
+    const runOn = detail.runOn || 'SERVER'
     if (runOn === 'LOCAL') {
       await loadScenarioRunnerNodes()
       if (!selectedScenarioRunnerId.value) {
-        ElMessage.warning('未检测到支持接口场景运行的在线 Local Runner，请先启动本地执行器')
+        ElMessage.warning('未检测到支持接口场景运行的本地 Runner，请先启动本地 Runner')
         return
       }
       const selectedRunner = scenarioRunnerNodes.value.find(item => item.runnerId === selectedScenarioRunnerId.value)
       if (!selectedRunner || !isRunnerSelectable(selectedRunner, API_SCENARIO_RUNNER_TASK_TYPE)) {
         const reason = selectedRunner ? runnerUnselectableReason(selectedRunner, API_SCENARIO_RUNNER_TASK_TYPE) : 'Runner 不存在或已离线'
-        ElMessage.warning(`当前 Local Runner 不可用：${reason}`)
+        ElMessage.warning(`当前本地 Runner 不可用：${reason}`)
         return
       }
     }
@@ -3256,7 +3256,7 @@ async function runScenario() {
       if (runId) {
         scheduleScenarioLocalRunnerTaskRefresh(runId)
       }
-      ElMessage.success('已创建本地执行任务，等待 Local Runner 拉取')
+      ElMessage.success('已创建本地执行器任务，等待本地 Runner 拉取')
     } else {
       activeScenarioEditorTab.value.localRunnerTask = null
       ElMessage.success(response.result === 'SUCCESS' ? '场景执行成功' : '场景执行失败')
@@ -4114,7 +4114,7 @@ watch(activeScenarioDetailTab, (tab) => {
                       <strong>{{ item.scenarioName }}</strong>
                       <small>{{ formatScenarioDateTime(item.createdAt) }} · {{ item.testDatasetName || '未使用测试数据' }}</small>
                     </span>
-                    <el-tag v-if="item.operatorName === 'Local Runner'" size="small" effect="light" type="primary">Local Runner</el-tag>
+                    <el-tag v-if="item.operatorName === 'Local Runner'" size="small" effect="light" type="primary">本地执行器</el-tag>
                     <span class="scenario-run-history-item-meta">
                       {{ item.loopCount || 1 }} 轮 / {{ item.threadCount || 1 }} 线程 / {{ item.durationMs ?? 0 }} ms
                     </span>
@@ -4318,18 +4318,18 @@ watch(activeScenarioDetailTab, (tab) => {
                     <label class="scenario-property-field">
                       <span>运行于</span>
                       <el-select v-model="activeScenarioDetail.runOn" placeholder="请选择运行位置" @change="markScenarioDirty">
-                        <el-option label="本地执行机" value="LOCAL" />
-                        <el-option label="远程执行机" value="REMOTE" />
+                        <el-option label="服务端执行" value="SERVER" />
+                        <el-option label="本地执行器" value="LOCAL" />
                       </el-select>
                     </label>
                     <label v-if="activeScenarioDetail.runOn === 'LOCAL'" class="scenario-property-field">
-                      <span>Local Runner</span>
+                      <span>本地执行器</span>
                       <el-select
                         v-model="selectedScenarioRunnerId"
                         clearable
                         filterable
                         :loading="scenarioRunnerNodesLoading"
-                        placeholder="选择可用本地执行器"
+                        placeholder="选择可用本地 Runner"
                       >
                         <el-option
                           v-for="runner in scenarioRunnerNodes"

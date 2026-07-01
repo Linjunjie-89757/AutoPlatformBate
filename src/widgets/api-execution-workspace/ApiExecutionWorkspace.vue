@@ -155,7 +155,7 @@ const suiteTabOverflow = ref({
 })
 const executionVisualEnvironment = ref<number | string | null>(null)
 const executionVisualRunMode = ref('parallel')
-const executionVisualRunOn = ref('local')
+const executionVisualRunOn = ref('server')
 const executionVisualNotify = ref(true)
 const executionScheduleEnabled = ref(false)
 const executionCronExpression = ref('')
@@ -179,7 +179,7 @@ let draftSuiteSeed = 0
 
 const visibleEnvironmentOptions = computed(() => props.environments || [])
 const API_SUITE_RUNNER_TASK_TYPE = 'API_SUITE_RUN'
-const API_SUITE_LOCAL_RUNNER_NOTE = '当前会创建套件级 Local Runner 任务，执行完成后写入正式套件报告。'
+const API_SUITE_LOCAL_RUNNER_NOTE = '当前会创建本地执行器任务，执行完成后写入套件报告。'
 const latestSuiteLocalRunnerHistory = computed(() => findLatestSuiteLocalRunnerHistory(suiteRunHistories.value))
 const suiteLocalRunNotice = computed(() => buildApiSuiteLocalRunNotice({
   runId: latestSuiteLocalRunnerRunId.value,
@@ -476,7 +476,7 @@ function createDraftSuiteDetail(workspaceCode: string, moduleId: number | null, 
     environmentId: null,
     variableSetId: null,
     runMode: 'SERIAL',
-    runOn: 'LOCAL',
+    runOn: 'SERVER',
     notifyEnabled: true,
     continueOnFailure: false,
     globalTimeoutMs: 300000,
@@ -958,7 +958,7 @@ function syncSuiteConfigForm() {
   if (!activeSuiteDetail.value) return
   executionVisualEnvironment.value = activeSuiteDetail.value.environmentId
   executionVisualRunMode.value = String(activeSuiteDetail.value.runMode || 'SERIAL').toLowerCase()
-  executionVisualRunOn.value = String(activeSuiteDetail.value.runOn || 'LOCAL').toLowerCase()
+  executionVisualRunOn.value = normalizeRunOnForUi(activeSuiteDetail.value.runOn)
   executionVisualNotify.value = activeSuiteDetail.value.notifyEnabled !== false
   executionScheduleEnabled.value = Boolean(activeSuiteDetail.value.scheduleEnabled)
   executionCronExpression.value = activeSuiteDetail.value.cronExpression || ''
@@ -1364,8 +1364,15 @@ function formatRunMode(value?: string | null) {
 }
 
 function formatRunOn(value?: string | null) {
-  if (value === 'REMOTE') return '远程执行器'
-  return '本地执行器'
+  const normalized = String(value || 'SERVER').toUpperCase()
+  if (normalized === 'LOCAL' || normalized === 'LOCAL_RUNNER') return '本地执行器'
+  return '服务端执行'
+}
+
+function normalizeRunOnForUi(value?: string | null) {
+  const normalized = String(value || 'SERVER').toUpperCase()
+  if (normalized === 'LOCAL' || normalized === 'LOCAL_RUNNER') return 'local'
+  return 'server'
 }
 
 function formatDuration(value?: number | null) {
@@ -1472,13 +1479,13 @@ async function handleRunSuite() {
     if (runOn === 'LOCAL') {
       await loadSuiteRunnerNodes()
       if (!selectedSuiteRunnerId.value) {
-        ElMessage.warning('未检测到支持接口套件运行的在线 Local Runner，请先启动本地执行器')
+        ElMessage.warning('未检测到支持接口套件运行的本地 Runner，请先启动本地 Runner')
         return
       }
       const selectedRunner = suiteRunnerNodes.value.find(item => item.runnerId === selectedSuiteRunnerId.value)
       if (!selectedRunner || !isRunnerSelectable(selectedRunner, API_SUITE_RUNNER_TASK_TYPE)) {
         const reason = selectedRunner ? runnerUnselectableReason(selectedRunner, API_SUITE_RUNNER_TASK_TYPE) : 'Runner 不存在或已离线'
-        ElMessage.warning(`当前 Local Runner 不可用：${reason}`)
+        ElMessage.warning(`当前本地 Runner 不可用：${reason}`)
         return
       }
     }
@@ -1515,17 +1522,17 @@ async function runSuiteFromList(suite: ApiExecutionSuiteItem) {
   }
   suiteRunning.value = true
   try {
-    const runOn = suite.runOn || 'LOCAL'
+    const runOn = suite.runOn || 'SERVER'
     if (runOn === 'LOCAL') {
       await loadSuiteRunnerNodes()
       if (!selectedSuiteRunnerId.value) {
-        ElMessage.warning('未检测到支持接口套件运行的在线 Local Runner，请先启动本地执行器')
+        ElMessage.warning('未检测到支持接口套件运行的本地 Runner，请先启动本地 Runner')
         return
       }
       const selectedRunner = suiteRunnerNodes.value.find(item => item.runnerId === selectedSuiteRunnerId.value)
       if (!selectedRunner || !isRunnerSelectable(selectedRunner, API_SUITE_RUNNER_TASK_TYPE)) {
         const reason = selectedRunner ? runnerUnselectableReason(selectedRunner, API_SUITE_RUNNER_TASK_TYPE) : 'Runner 不存在或已离线'
-        ElMessage.warning(`当前 Local Runner 不可用：${reason}`)
+        ElMessage.warning(`当前本地 Runner 不可用：${reason}`)
         return
       }
     }
@@ -2166,7 +2173,7 @@ function showPending(message: string) {
             <section v-if="suiteLocalRunNotice.visible" class="execution-local-suite-run">
               <div class="execution-local-suite-run__main">
                 <el-tag :type="suiteLocalRunNotice.tone" effect="light">
-                  Local Runner
+                  本地执行器
                 </el-tag>
                 <div>
                   <strong>{{ suiteLocalRunNotice.title }}</strong>
@@ -2305,18 +2312,18 @@ function showPending(message: string) {
               <label>
                 <span>运行于</span>
                 <el-select v-model="executionVisualRunOn">
+                  <el-option label="服务端执行" value="server" />
                   <el-option label="本地执行器" value="local" />
-                  <el-option label="远程执行器" value="remote" />
                 </el-select>
               </label>
               <label v-if="executionVisualRunOn === 'local'">
-                <span>Local Runner</span>
+                <span>本地执行器</span>
                 <el-select
                   v-model="selectedSuiteRunnerId"
                   clearable
                   filterable
                   :loading="suiteRunnerNodesLoading"
-                  placeholder="选择可用本地执行器"
+                  placeholder="选择可用本地 Runner"
                 >
                   <el-option
                     v-for="runner in suiteRunnerNodes"

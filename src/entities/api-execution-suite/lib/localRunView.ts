@@ -31,16 +31,16 @@ export function buildApiSuiteLocalRunNotice(input: ApiSuiteLocalRunNoticeInput) 
   if (history?.id) {
     return {
       visible: true,
-      title: 'Local Runner 套件报告已生成',
-      description: `正式报告已回写到套件运行记录，任务 ${runId || '-'} 可继续追溯。`,
+      title: '本地执行器报告已生成',
+      description: `报告已回写到套件运行记录，任务 ${runId || '-'} 可继续追溯。`,
       tone: statusTone(history.result),
       reportKey: `suite:${history.id}`,
     }
   }
   return {
     visible: true,
-    title: 'Local Runner 套件任务已创建',
-    description: `任务 ${runId || '-'} 正在等待本地执行器回传结果，完成后可查看正式套件报告。`,
+    title: '本地执行器任务已创建',
+    description: `任务 ${runId || '-'} 正在等待本地 Runner 回传结果，完成后可查看套件报告。`,
     tone: 'primary',
     reportKey: null,
   }

@@ -41,12 +41,12 @@ export function formatRunStatus(status?: string | null) {
 
 export function formatExecutionLocation(value?: string | null) {
   if (value === 'LOCAL_RUNNER') {
-    return 'Local Runner'
+    return '本地执行器'
   }
   if (value === 'SERVER') {
-    return '服务端'
+    return '服务端执行'
   }
-  return value || '服务端'
+  return value || '服务端执行'
 }
 
 export function formatRunStepStatus(status?: string | null) {
