@@ -426,13 +426,17 @@ public class ApiExecutionSuiteDomainService {
             ApiRunRequest effectiveRequest,
             SuiteExecutionPolicy policy
     ) {
-        String contextSnapshotJson = executionDomainServiceProvider.getObject().buildExecutionContextSnapshot(
+        ApiExecutionDomainService executionDomainService = executionDomainServiceProvider.getObject();
+        ApiExecutionRuntimeModels.ExecutionContext context = executionDomainService.buildExecutionContextForSuiteLocalRunner(
                 suite.getWorkspaceId(),
                 effectiveRequest.environmentId(),
                 effectiveRequest.variableSetId(),
+                effectiveRequest.rowVariables(),
                 effectiveRequest.mockApplicationId(),
-                effectiveRequest.mockEnabled()
+                effectiveRequest.mockEnabled(),
+                effectiveRequest.mockBusinessScenarioId()
         );
+        String contextSnapshotJson = context.contextSnapshotJson();
         ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector = ApiLocalRunnerPayloadSupport.artifactCollector();
         Map<String, Object> payload = buildApiLocalRunnerSuitePayload(suite, enabledItems, effectiveRequest, policy, contextSnapshotJson, artifactCollector);
 
@@ -449,8 +453,8 @@ public class ApiExecutionSuiteDomainService {
                 1,
                 null,
                 buildApiLocalRunnerSuiteTimeoutPolicy(policy),
-                buildApiLocalRunnerSuiteEnvironmentSnapshot(effectiveRequest.environmentId(), contextSnapshotJson),
-                buildApiLocalRunnerSuiteVariableSnapshot(effectiveRequest.variableSetId(), effectiveRequest.rowVariables()),
+                buildApiLocalRunnerSuiteEnvironmentSnapshot(effectiveRequest.environmentId(), context.environment(), contextSnapshotJson),
+                buildApiLocalRunnerSuiteVariableSnapshot(effectiveRequest.variableSetId(), context.variables()),
                 Map.of(),
                 artifactCollector.artifactRefs(),
                 List.of(),
@@ -480,17 +484,25 @@ public class ApiExecutionSuiteDomainService {
         return values;
     }
 
-    private Map<String, Object> buildApiLocalRunnerSuiteEnvironmentSnapshot(Long environmentId, String contextSnapshotJson) {
+    private Map<String, Object> buildApiLocalRunnerSuiteEnvironmentSnapshot(
+            Long environmentId,
+            ApiExecutionRuntimeModels.ResolvedEnvironment environment,
+            String contextSnapshotJson
+    ) {
         Map<String, Object> values = new java.util.LinkedHashMap<>();
         values.put("environmentId", environmentId);
+        values.put("baseUrl", environment == null ? null : environment.baseUrl());
+        values.put("timeoutMs", environment == null ? null : environment.timeoutMs());
+        values.put("defaultServiceKey", environment == null ? null : environment.defaultServiceKey());
+        values.put("services", environment == null ? List.of() : environment.services());
         values.put("contextSnapshotJson", contextSnapshotJson);
         return values;
     }
 
-    private Map<String, Object> buildApiLocalRunnerSuiteVariableSnapshot(Long variableSetId, Map<String, String> rowVariables) {
+    private Map<String, Object> buildApiLocalRunnerSuiteVariableSnapshot(Long variableSetId, Map<String, String> variables) {
         Map<String, Object> values = new java.util.LinkedHashMap<>();
         values.put("variableSetId", variableSetId);
-        values.put("variables", rowVariables == null ? Map.of() : new java.util.LinkedHashMap<>(rowVariables));
+        values.put("variables", variables == null ? Map.of() : new java.util.LinkedHashMap<>(variables));
         return values;
     }
 

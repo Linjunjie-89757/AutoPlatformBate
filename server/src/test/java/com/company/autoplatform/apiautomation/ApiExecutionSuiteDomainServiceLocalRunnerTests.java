@@ -118,7 +118,12 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
         );
         ApiExecutionDomainService executionDomainService = mock(ApiExecutionDomainService.class);
         when(executionDomainServiceProvider.getObject()).thenReturn(executionDomainService);
-        when(executionDomainService.buildExecutionContextSnapshot(7L, 21L, 31L, null, null)).thenReturn("{}");
+        when(executionDomainService.buildExecutionContextForSuiteLocalRunner(7L, 21L, 31L, Map.of("NAME", "codex"), null, null, null))
+                .thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
+                        environment,
+                        Map.of("NAME", "codex"),
+                        "{}"
+                ));
         when(suiteMapper.selectById(8001L)).thenReturn(suite);
         when(suiteItemMapper.selectList(any())).thenReturn(List.of(apiCaseItem, scenarioItem));
         when(caseMapper.selectById(2001L)).thenReturn(apiCase);
@@ -184,6 +189,8 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
         assertThat(command.taskType()).isEqualTo("API_SUITE_RUN");
         assertThat(command.runnerId()).isEqualTo("runner-api-1");
         assertThat(command.environmentSnapshot()).containsEntry("environmentId", 21L);
+        assertThat(command.environmentSnapshot()).containsEntry("baseUrl", "http://127.0.0.1:18080");
+        assertThat(command.environmentSnapshot()).containsEntry("timeoutMs", 30000);
         assertThat(command.variableSnapshot()).containsEntry("variables", Map.of("NAME", "codex"));
 
         @SuppressWarnings("unchecked")

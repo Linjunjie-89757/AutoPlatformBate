@@ -176,6 +176,26 @@ public class ApiExecutionDomainService {
         return executionEngine.buildExecutionContext(workspaceId, environmentId, variableSetId, null, mockApplicationId, mockEnabled, null).contextSnapshotJson();
     }
 
+    ApiExecutionRuntimeModels.ExecutionContext buildExecutionContextForSuiteLocalRunner(
+            Long workspaceId,
+            Long environmentId,
+            Long variableSetId,
+            Map<String, String> rowVariables,
+            Long mockApplicationId,
+            Boolean mockEnabled,
+            Long mockBusinessScenarioId
+    ) {
+        return executionEngine.buildExecutionContext(
+                workspaceId,
+                environmentId,
+                variableSetId,
+                rowVariables,
+                mockApplicationId,
+                mockEnabled,
+                mockBusinessScenarioId
+        );
+    }
+
     public ApiRunResponse debugRunDefinitionDraft(String workspaceCode, ApiDebugDefinitionRequest request) {
         WorkspaceEntity workspace = workspaceService.requireWorkspace(
                 blankToFallback(request.workspaceCode(), workspaceCode)
