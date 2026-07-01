@@ -433,6 +433,9 @@ public class ApiExecutionSuiteDomainService {
                 effectiveRequest.mockApplicationId(),
                 effectiveRequest.mockEnabled()
         );
+        ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector = ApiLocalRunnerPayloadSupport.artifactCollector();
+        Map<String, Object> payload = buildApiLocalRunnerSuitePayload(suite, enabledItems, effectiveRequest, policy, contextSnapshotJson, artifactCollector);
+
         RunnerTaskDetailResponse task = localRunnerService.createDebugTask(new CreateRunnerTaskCommand(
                 suite.getWorkspaceId(),
                 workspace.getWorkspaceCode(),
@@ -449,10 +452,10 @@ public class ApiExecutionSuiteDomainService {
                 buildApiLocalRunnerSuiteEnvironmentSnapshot(effectiveRequest.environmentId(), contextSnapshotJson),
                 buildApiLocalRunnerSuiteVariableSnapshot(effectiveRequest.variableSetId(), effectiveRequest.rowVariables()),
                 Map.of(),
-                List.of(),
+                artifactCollector.artifactRefs(),
                 List.of(),
                 Map.of(),
-                buildApiLocalRunnerSuitePayload(suite, enabledItems, effectiveRequest, policy, contextSnapshotJson)
+                payload
         ));
 
         return new ApiRunResponse(
@@ -496,13 +499,16 @@ public class ApiExecutionSuiteDomainService {
             List<ApiExecutionSuiteItemEntity> enabledItems,
             ApiRunRequest effectiveRequest,
             SuiteExecutionPolicy policy,
-            String contextSnapshotJson
+            String contextSnapshotJson,
+            ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector
     ) {
         Map<String, Object> suiteSnapshot = new java.util.LinkedHashMap<>();
         suiteSnapshot.put("suiteId", suite.getId());
         suiteSnapshot.put("suiteName", suite.getSuiteName());
         suiteSnapshot.put("runMode", suite.getRunMode());
-        suiteSnapshot.put("items", enabledItems.stream().map(this::buildApiLocalRunnerSuiteItem).toList());
+        suiteSnapshot.put("items", enabledItems.stream()
+                .map(item -> buildApiLocalRunnerSuiteItem(item, artifactCollector))
+                .toList());
 
         Map<String, Object> runOptions = new java.util.LinkedHashMap<>();
         runOptions.put("stopOnFirstFailure", !policy.continueOnFailure());
@@ -518,7 +524,10 @@ public class ApiExecutionSuiteDomainService {
         return payload;
     }
 
-    private Map<String, Object> buildApiLocalRunnerSuiteItem(ApiExecutionSuiteItemEntity item) {
+    private Map<String, Object> buildApiLocalRunnerSuiteItem(
+            ApiExecutionSuiteItemEntity item,
+            ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector
+    ) {
         Map<String, Object> value = new java.util.LinkedHashMap<>();
         value.put("itemId", item.getId());
         value.put("resourceId", item.getItemId());
@@ -528,7 +537,7 @@ public class ApiExecutionSuiteDomainService {
         value.put("enabled", item.getEnabled());
         if ("API_CASE".equals(item.getItemType())) {
             ApiDefinitionCaseEntity apiCase = caseMapper.selectById(item.getItemId());
-            value.put("caseSnapshot", ApiLocalRunnerPayloadSupport.buildApiCaseSnapshot(apiCase));
+            value.put("caseSnapshot", ApiLocalRunnerPayloadSupport.buildApiCaseSnapshot(apiCase, artifactCollector));
             return value;
         }
         if ("SCENARIO".equals(item.getItemType())) {
@@ -542,7 +551,8 @@ public class ApiExecutionSuiteDomainService {
             scenarioSnapshot.put("steps", ApiLocalRunnerPayloadSupport.buildScenarioSteps(
                     readScenarioSteps(scenario.getStepsJson()),
                     Boolean.TRUE.equals(scenario.getContinueOnFailure()),
-                    caseMapper
+                    caseMapper,
+                    artifactCollector
             ));
             value.put("scenarioSnapshot", scenarioSnapshot);
             return value;
@@ -1301,8 +1311,12 @@ public class ApiExecutionSuiteDomainService {
     }
 
     private String normalizeRunOn(String runOn) {
-        String normalized = runOn == null || runOn.isBlank() ? "LOCAL" : runOn.trim().toUpperCase(Locale.ROOT);
-        return "REMOTE".equals(normalized) ? "REMOTE" : "LOCAL";
+        String normalized = runOn == null || runOn.isBlank() ? "SERVER" : runOn.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "LOCAL", "LOCAL_RUNNER" -> "LOCAL";
+            case "SERVER", "REMOTE" -> "SERVER";
+            default -> "SERVER";
+        };
     }
 
     private boolean isLocalRunnerRun(String runOn) {

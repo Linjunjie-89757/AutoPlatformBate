@@ -1296,6 +1296,214 @@ test('reports clear WEB_CASE_RUN failure when FILE_UPLOAD artifact is not availa
   assert.deepEqual(stderr, []);
 });
 
+test('uploads WEB_CASE_RUN artifact file from localPath', async () => {
+  const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
+  let targetPort = await findAvailablePort();
+  while (targetPort === runnerPort || targetPort === platformPort) {
+    targetPort = await findAvailablePort();
+  }
+  const artifactDir = join(homedir(), '.auto-web-ui-runner', 'test-artifacts');
+  const artifactPath = join(artifactDir, `avatar-${Date.now()}.txt`);
+  await mkdir(artifactDir, { recursive: true });
+  await writeFile(artifactPath, 'avatar-content', 'utf8');
+
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const targetBaseUrl = `http://127.0.0.1:${targetPort}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+
+  const targetApp = createServer((request, response) => {
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    response.end(`<!doctype html>
+      <html>
+        <body>
+          <input id="file" type="file" />
+          <div id="file-name"></div>
+          <script>
+            document.getElementById("file").addEventListener("change", event => {
+              document.getElementById("file-name").textContent = event.target.files[0]?.name || "";
+            });
+          </script>
+        </body>
+      </html>`);
+  });
+
+  const fakePlatform = createServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_file_upload_success_test',
+          runnerToken: 'runner_token',
+          runnerName: 'File Upload Success Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_generic_case_file_upload_success_001',
+            taskType: 'WEB_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_file_upload_success_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 5,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {},
+            environmentSnapshot: {},
+            variableSnapshot: {},
+            scriptSnapshot: {},
+            artifactRefs: [{
+              fileId: 'avatar',
+              fileName: 'avatar.txt',
+              localPath: artifactPath,
+              mimeType: 'text/plain',
+            }],
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              caseSnapshot: {
+                caseId: 1007,
+                caseName: 'File upload success case',
+                baseUrl: targetBaseUrl,
+                headless: true,
+                defaultTimeoutMs: 5000,
+                steps: [
+                  {
+                    stepId: 'open-page',
+                    stepName: 'Open page',
+                    stepType: 'OPEN',
+                    inputValue: targetBaseUrl,
+                    enabled: true,
+                    sortOrder: 1,
+                  },
+                  {
+                    stepId: 'upload-avatar',
+                    stepName: 'Upload avatar',
+                    stepType: 'FILE_UPLOAD',
+                    locatorType: 'CSS',
+                    locatorValue: '#file',
+                    inputValue: 'artifact:avatar',
+                    enabled: true,
+                    sortOrder: 2,
+                  },
+                ],
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_case_file_upload_success_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_case_file_upload_success_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_case_file_upload_success_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_case_file_upload_success_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(targetApp, targetPort);
+  await listen(fakePlatform, platformPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const started = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'generic-case-file-upload-success-test',
+      intervalMs: 1000,
+      capabilities: ['WEB_CASE_RUN'],
+    });
+    assert.equal(started.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.steps.find(item => item.stepId === 'upload-avatar')?.status, 'SUCCESS');
+  } finally {
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await closeServer(targetApp);
+    await closeServer(fakePlatform);
+    await stopRunnerProcess(runner);
+    await rm(artifactPath, { force: true });
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 test('reports clear WEB_CASE_RUN failure when required auth state is missing', async () => {
   const runnerPort = await findAvailablePort();
   let platformPort = await findAvailablePort();
@@ -2514,6 +2722,17 @@ test('polls generic runner task and reports real API_CASE_RUN result', async () 
                   { assertionId: 'status', type: 'STATUS_CODE', expected: '200' },
                   { assertionId: 'body', type: 'BODY_CONTAINS', expected: '"PAID"' },
                 ],
+                extractors: [
+                  {
+                    extractorId: 'order-status',
+                    name: 'order-status',
+                    variableName: 'ORDER_STATUS',
+                    extractType: 'JSON_PATH',
+                    extractScope: 'BODY',
+                    expression: '$.status',
+                    enabled: true,
+                  },
+                ],
               },
             },
           },
@@ -2578,12 +2797,231 @@ test('polls generic runner task and reports real API_CASE_RUN result', async () 
     assert.equal(reports.results[0].summary.statusCode, 200);
     assert.equal(reports.results[0].summary.passedAssertions, 2);
     assert.equal(reports.results[0].reportData.response.status, 200);
+    assert.equal(reports.results[0].reportData.extractedVariables.ORDER_STATUS, 'PAID');
     assert.match(reports.results[0].reportData.response.body, /PAID/);
   } finally {
     await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
     await closeServer(targetApi);
     await closeServer(fakePlatform);
     await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('polls generic API_CASE_RUN multipart artifact upload result', async () => {
+  const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
+  let targetPort = await findAvailablePort();
+  while (targetPort === runnerPort || targetPort === platformPort) {
+    targetPort = await findAvailablePort();
+  }
+  const artifactDir = join(homedir(), '.auto-web-ui-runner', 'test-artifacts');
+  const artifactPath = join(artifactDir, `api-upload-${Date.now()}.txt`);
+  await mkdir(artifactDir, { recursive: true });
+  await writeFile(artifactPath, 'api-upload-content', 'utf8');
+
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const targetBaseUrl = `http://127.0.0.1:${targetPort}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+
+  const targetApi = createServer((request, response) => {
+    let raw = Buffer.alloc(0);
+    request.on('data', chunk => {
+      raw = Buffer.concat([raw, Buffer.from(chunk)]);
+    });
+    request.on('end', () => {
+      const body = raw.toString('utf8');
+      const contentType = String(request.headers['content-type'] || '');
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({
+        ok: contentType.includes('multipart/form-data')
+          && body.includes('api-upload-content')
+          && body.includes('filename="api-upload.txt"')
+          && body.includes('name="description"')
+          && body.includes('runner artifact'),
+      }));
+    });
+  });
+
+  const fakePlatform = createServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_api_multipart_artifact_test',
+          runnerToken: 'runner_token',
+          runnerName: 'API Multipart Artifact Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_generic_api_multipart_artifact_001',
+            taskType: 'API_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_api_multipart_artifact_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 1,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {
+              requestTimeoutMs: 5000,
+            },
+            environmentSnapshot: {
+              baseUrl: targetBaseUrl,
+            },
+            variableSnapshot: {
+              variables: {},
+            },
+            scriptSnapshot: {},
+            artifactRefs: [{
+              fileId: 'upload-file',
+              fileName: 'api-upload.txt',
+              localPath: artifactPath,
+              mimeType: 'text/plain',
+            }],
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              apiCaseSnapshot: {
+                caseId: 2011,
+                caseName: 'Local API multipart artifact case',
+                request: {
+                  method: 'POST',
+                  url: '{{baseUrl}}/upload',
+                  headers: [],
+                  queryParams: [],
+                  body: {
+                    type: 'FORM_DATA',
+                    formItems: [
+                      { key: 'description', value: 'runner artifact', enabled: true },
+                      {
+                        key: 'file',
+                        value: 'artifact:upload-file',
+                        enabled: true,
+                        fileName: 'api-upload.txt',
+                        contentType: 'text/plain',
+                      },
+                    ],
+                  },
+                },
+                assertions: [
+                  { assertionId: 'status', type: 'STATUS_CODE', expected: '200' },
+                  { assertionId: 'body', type: 'BODY_CONTAINS', expected: '"ok":true' },
+                ],
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_api_multipart_artifact_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_api_multipart_artifact_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_api_multipart_artifact_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_generic_api_multipart_artifact_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(targetApi, targetPort);
+  await listen(fakePlatform, platformPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const started = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'generic-api-multipart-artifact-test',
+      intervalMs: 1000,
+      capabilities: ['API_CASE_RUN'],
+    });
+    assert.equal(started.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.results[0].summary.passedAssertions, 2);
+    assert.match(reports.results[0].reportData.response.body, /"ok":true/);
+  } finally {
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await closeServer(targetApi);
+    await closeServer(fakePlatform);
+    await stopRunnerProcess(runner);
+    await rm(artifactPath, { force: true });
   }
 
   assert.deepEqual(stderr, []);
@@ -2720,7 +3158,15 @@ test('polls generic runner task and reports real API_SCENARIO_RUN result with ex
                         { assertionId: 'create-status', type: 'STATUS_CODE', expected: '201' },
                       ],
                       extractors: [
-                        { extractorId: 'order-id', name: 'ORDER_ID', type: 'JSON_PATH', expression: '$.orderId' },
+                        {
+                          extractorId: 'order-id',
+                          name: 'order-id',
+                          variableName: 'ORDER_ID',
+                          extractType: 'JSON_PATH',
+                          extractScope: 'BODY',
+                          expression: '$.orderId',
+                          enabled: true,
+                        },
                       ],
                     },
                   },

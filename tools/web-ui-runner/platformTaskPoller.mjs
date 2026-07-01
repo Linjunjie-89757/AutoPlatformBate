@@ -1,4 +1,7 @@
 import vm from 'node:vm';
+import { readFile } from 'node:fs/promises';
+
+import { isArtifactReference, resolveArtifactLocalPath } from './artifactManager.mjs';
 
 const DEFAULT_PROTOCOL_VERSION = '1.0';
 const DEFAULT_POLL_INTERVAL_MS = 2000;
@@ -1074,7 +1077,7 @@ async function executeApiCaseRequest(task, apiCaseSnapshot, runtimeVariables = {
     phase: 'pre',
   });
   const context = buildApiRenderContext(task, runtimeVariables);
-  const request = normalizeApiRequest(apiCaseSnapshot.request || {}, context);
+  const request = await normalizeApiRequest(task, apiCaseSnapshot.request || {}, context);
   const startedAt = Date.now();
   const response = await fetch(request.url, {
     method: request.method,
@@ -1101,6 +1104,8 @@ async function executeApiCaseRequest(task, apiCaseSnapshot, runtimeVariables = {
     body: responseBody,
     durationMs,
   };
+  const extractedVariables = extractApiVariables(apiCaseSnapshot.extractors, normalizedResponse);
+  Object.assign(runtimeVariables, extractedVariables);
   scriptResults.post = runApiScript(apiCaseSnapshot.postScript || apiCaseSnapshot.afterScript, {
     task,
     runtimeVariables,
@@ -1117,6 +1122,7 @@ async function executeApiCaseRequest(task, apiCaseSnapshot, runtimeVariables = {
     response: normalizedResponse,
     assertions,
     scriptResults,
+    extractedVariables,
     scriptVariables: { ...runtimeVariables },
     passedAssertions,
     failedAssertions,
@@ -1298,7 +1304,7 @@ function freezePlainObject(value) {
   return Object.freeze({ ...value });
 }
 
-function normalizeApiRequest(request, context) {
+async function normalizeApiRequest(task, request, context) {
   const method = optionalString(request.method).toUpperCase() || 'GET';
   const url = appendQueryParams(renderAnyTemplate(optionalString(request.url), context), request.queryParams, context);
   const headers = {};
@@ -1314,13 +1320,63 @@ function normalizeApiRequest(request, context) {
       headers[name] = renderAnyTemplate(String(header.value ?? ''), context);
     }
   }
-  const rawBody = request.body === null || request.body === undefined ? null : renderAnyTemplate(String(request.body), context);
+  const normalizedBody = await normalizeApiRequestBody(task, request.body, context, headers);
   return {
     method,
     url,
     headers,
-    body: ['GET', 'HEAD'].includes(method) ? undefined : rawBody,
+    body: ['GET', 'HEAD'].includes(method) ? undefined : normalizedBody,
   };
+}
+
+async function normalizeApiRequestBody(task, body, context, headers) {
+  if (body === null || body === undefined) {
+    return null;
+  }
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    const bodyType = optionalString(body.type).toUpperCase();
+    if (bodyType === 'FORM_DATA' || bodyType === 'MULTIPART' || bodyType === 'MULTIPART_FORM_DATA') {
+      removeContentTypeHeader(headers);
+      return buildMultipartFormData(task, body.formItems, context);
+    }
+    const rawText = body.rawText ?? body.jsonText ?? body.xmlText ?? body.plainText ?? null;
+    return rawText === null || rawText === undefined ? null : renderAnyTemplate(String(rawText), context);
+  }
+  return renderAnyTemplate(String(body), context);
+}
+
+async function buildMultipartFormData(task, formItems, context) {
+  const formData = new FormData();
+  for (const item of Array.isArray(formItems) ? formItems : []) {
+    if (!item || item.enabled === false) {
+      continue;
+    }
+    const key = optionalString(item.key || item.name);
+    if (!key) {
+      continue;
+    }
+    const value = renderAnyTemplate(String(item.value ?? ''), context);
+    if (isArtifactReference(value)) {
+      const fileId = value.replace(/^artifact:/i, '').trim();
+      const localPath = resolveArtifactLocalPath(task, fileId);
+      const buffer = await readFile(localPath);
+      const blob = new Blob([buffer], {
+        type: optionalString(item.contentType || item.mimeType) || 'application/octet-stream',
+      });
+      formData.append(key, blob, optionalString(item.fileName) || fileId);
+      continue;
+    }
+    formData.append(key, value);
+  }
+  return formData;
+}
+
+function removeContentTypeHeader(headers) {
+  for (const name of Object.keys(headers)) {
+    if (name.toLowerCase() === 'content-type') {
+      delete headers[name];
+    }
+  }
 }
 
 function appendQueryParams(url, queryParams, context) {
@@ -1441,13 +1497,14 @@ function extractApiVariables(extractors, response) {
     if (!extractor || extractor.enabled === false) {
       continue;
     }
-    const name = optionalString(extractor.name);
-    const type = optionalString(extractor.type).toUpperCase();
+    const name = optionalString(extractor.variableName || extractor.name);
+    const type = normalizeApiExtractorType(extractor);
+    const scope = normalizeApiExtractorScope(extractor);
     const expression = optionalString(extractor.expression);
-    if (!name || !expression) {
+    if (!name || (!expression && type !== 'STATUS_CODE')) {
       continue;
     }
-    if (type === 'JSON_PATH') {
+    if (type === 'JSON_PATH' && scope === 'BODY') {
       if (jsonBody === null) {
         jsonBody = parseJsonBody(response.body);
       }
@@ -1456,20 +1513,57 @@ function extractApiVariables(extractors, response) {
         result[name] = typeof value === 'string' ? value : JSON.stringify(value);
       }
     }
-    if (type === 'HEADER') {
+    if (type === 'HEADER' || scope === 'RESPONSE_HEADERS') {
       const value = response.headers[expression.toLowerCase()];
       if (value !== undefined && value !== null) {
         result[name] = String(value);
       }
     }
     if (type === 'REGEX') {
-      const match = response.body.match(new RegExp(expression));
+      const source = scope === 'RESPONSE_CODE' ? String(response.status) : response.body;
+      const match = source.match(new RegExp(expression));
       if (match) {
         result[name] = match[1] === undefined ? match[0] : match[1];
       }
     }
+    if (type === 'STATUS_CODE' || scope === 'RESPONSE_CODE') {
+      result[name] = String(response.status);
+    }
   }
   return result;
+}
+
+function normalizeApiExtractorType(extractor) {
+  const explicit = optionalString(extractor.type || extractor.extractType).toUpperCase();
+  if (explicit) {
+    return explicit;
+  }
+  const sourceType = optionalString(extractor.sourceType).toUpperCase();
+  if (sourceType === 'BODY_JSONPATH') {
+    return 'JSON_PATH';
+  }
+  if (sourceType === 'HEADER') {
+    return 'HEADER';
+  }
+  if (sourceType === 'STATUS_CODE') {
+    return 'STATUS_CODE';
+  }
+  return '';
+}
+
+function normalizeApiExtractorScope(extractor) {
+  const explicit = optionalString(extractor.extractScope).toUpperCase();
+  if (explicit) {
+    return explicit;
+  }
+  const sourceType = optionalString(extractor.sourceType).toUpperCase();
+  if (sourceType === 'HEADER') {
+    return 'RESPONSE_HEADERS';
+  }
+  if (sourceType === 'STATUS_CODE') {
+    return 'RESPONSE_CODE';
+  }
+  return 'BODY';
 }
 
 function parseJsonBody(body) {

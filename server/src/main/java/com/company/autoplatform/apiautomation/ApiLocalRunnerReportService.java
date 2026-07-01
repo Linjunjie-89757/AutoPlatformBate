@@ -46,28 +46,6 @@ public class ApiLocalRunnerReportService {
             ApiDefinitionCaseMapper caseMapper,
             ApiDefinitionCaseRunHistoryMapper caseRunHistoryMapper,
             ApiScenarioMapper scenarioMapper,
-            ApiScenarioRunHistoryMapper scenarioRunHistoryMapper
-    ) {
-        this(
-                taskMapper,
-                reportMapper,
-                stepResultMapper,
-                caseMapper,
-                caseRunHistoryMapper,
-                scenarioMapper,
-                scenarioRunHistoryMapper,
-                null,
-                null
-        );
-    }
-
-    public ApiLocalRunnerReportService(
-            TaskMapper taskMapper,
-            ReportMapper reportMapper,
-            ApiRunStepResultMapper stepResultMapper,
-            ApiDefinitionCaseMapper caseMapper,
-            ApiDefinitionCaseRunHistoryMapper caseRunHistoryMapper,
-            ApiScenarioMapper scenarioMapper,
             ApiScenarioRunHistoryMapper scenarioRunHistoryMapper,
             ApiExecutionSuiteMapper suiteMapper,
             ApiExecutionSuiteRunHistoryMapper suiteRunHistoryMapper
@@ -81,6 +59,28 @@ public class ApiLocalRunnerReportService {
         this.scenarioRunHistoryMapper = scenarioRunHistoryMapper;
         this.suiteMapper = suiteMapper;
         this.suiteRunHistoryMapper = suiteRunHistoryMapper;
+    }
+
+    public ApiLocalRunnerReportService(
+            TaskMapper taskMapper,
+            ReportMapper reportMapper,
+            ApiRunStepResultMapper stepResultMapper,
+            ApiDefinitionCaseMapper caseMapper,
+            ApiDefinitionCaseRunHistoryMapper caseRunHistoryMapper,
+            ApiScenarioMapper scenarioMapper,
+            ApiScenarioRunHistoryMapper scenarioRunHistoryMapper
+    ) {
+        this(
+                taskMapper,
+                reportMapper,
+                stepResultMapper,
+                caseMapper,
+                caseRunHistoryMapper,
+                scenarioMapper,
+                scenarioRunHistoryMapper,
+                null,
+                null
+        );
     }
 
     @EventListener

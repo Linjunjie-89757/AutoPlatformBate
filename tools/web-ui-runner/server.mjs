@@ -11,6 +11,7 @@ import { createRunnerTaskPoller } from './platformTaskPoller.mjs';
 import { resolveOpenTarget } from './session.mjs';
 import { evaluateAuthStateHealth } from './authState.mjs';
 import { ensureRunnerRuntimeDirectories, resolveRunnerRuntimeConfig } from './runnerConfig.mjs';
+import { resolveArtifactUploadPath } from './artifactManager.mjs';
 
 const VALIDATION_LOCATOR_LIMIT = 200;
 const VALIDATION_SCREENSHOT_LIMIT = 8;
@@ -946,21 +947,7 @@ function formatLocatorForMessage(step) {
 
 function resolveUploadFilePath(task, step) {
   const inputValue = optionalString(step.inputValue || step.filePath || step.value);
-  if (!inputValue) {
-    throw new Error('FILE_UPLOAD step requires inputValue');
-  }
-  if (/^artifact:/i.test(inputValue)) {
-    const fileId = inputValue.replace(/^artifact:/i, '').trim();
-    const artifact = Array.isArray(task.artifactRefs)
-      ? task.artifactRefs.find(item => optionalString(item?.fileId || item?.artifactId || item?.id) === fileId)
-      : null;
-    const localPath = optionalString(artifact?.localPath || artifact?.path);
-    if (!localPath) {
-      throw new Error(`文件上传工件未下载：${fileId}。请先由平台下发 artifactRefs.localPath，或等待后续工件仓库下载能力接入。`);
-    }
-    return localPath;
-  }
-  return inputValue;
+  return resolveArtifactUploadPath(task, inputValue);
 }
 
 function buildCaseStepResult(step, result) {

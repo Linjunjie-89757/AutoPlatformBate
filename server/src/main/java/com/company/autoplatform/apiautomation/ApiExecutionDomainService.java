@@ -89,7 +89,12 @@ public class ApiExecutionDomainService {
     public ApiRunResponse runCase(Long id, String workspaceCode, ApiRunRequest request) {
         ApiDefinitionCaseEntity apiCase = executionEngine.requireCase(id);
         workspaceScopeSupport.validateReadable(apiCase.getWorkspaceId(), workspaceCode, "Current workspace cannot run the case");
-        workspaceService.requireWritableWorkspace(workspaceService.requireWorkspaceById(apiCase.getWorkspaceId()).getWorkspaceCode());
+        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(apiCase.getWorkspaceId());
+        workspaceService.requireWritableWorkspace(workspace.getWorkspaceCode());
+
+        if (isLocalRunnerRun(request.runOn())) {
+            return createLocalRunnerCaseRun(apiCase, workspace, request);
+        }
 
         ApiExecutionRuntimeModels.ExecutionContext context = executionEngine.buildExecutionContext(apiCase.getWorkspaceId(), request.environmentId(), request.variableSetId(), request.rowVariables(), request.mockApplicationId(), request.mockEnabled(), request.mockBusinessScenarioId());
         ApiExecutionRuntimeModels.RunEnvelope envelope = executionEngine.createRunEnvelope(apiCase.getWorkspaceId(), "API", "接口用例调试", apiCase.getCaseName());
@@ -113,6 +118,57 @@ public class ApiExecutionDomainService {
                 envelope.report().getFailureSummary(),
                 List.of(),
                 List.of(step.response())
+        );
+    }
+
+    private ApiRunResponse createLocalRunnerCaseRun(
+            ApiDefinitionCaseEntity apiCase,
+            WorkspaceEntity workspace,
+            ApiRunRequest request
+    ) {
+        ApiExecutionRuntimeModels.ExecutionContext context = executionEngine.buildExecutionContext(
+                apiCase.getWorkspaceId(),
+                request.environmentId(),
+                request.variableSetId(),
+                request.rowVariables(),
+                request.mockApplicationId(),
+                request.mockEnabled(),
+                request.mockBusinessScenarioId()
+        );
+        ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector = ApiLocalRunnerPayloadSupport.artifactCollector();
+        Map<String, Object> payload = buildApiLocalRunnerCasePayload(apiCase, artifactCollector);
+
+        RunnerTaskDetailResponse task = localRunnerService.createDebugTask(new CreateRunnerTaskCommand(
+                apiCase.getWorkspaceId(),
+                workspace.getWorkspaceCode(),
+                "api_case_" + apiCase.getId() + "_" + System.currentTimeMillis(),
+                "API_CASE_RUN",
+                "LOCAL_RUNNER",
+                request.runnerId(),
+                null,
+                "1.0",
+                "MANUAL",
+                1,
+                null,
+                buildApiLocalRunnerCaseTimeoutPolicy(context.environment()),
+                buildApiLocalRunnerEnvironmentSnapshot(request.environmentId(), context.environment()),
+                buildApiLocalRunnerVariableSnapshot(request.variableSetId(), context.variables()),
+                Map.of(),
+                artifactCollector.artifactRefs(),
+                List.of(),
+                Map.of(),
+                payload
+        ));
+
+        return new ApiRunResponse(
+                null,
+                null,
+                task == null ? null : task.runId(),
+                null,
+                "PENDING",
+                "Local Runner task created",
+                List.of(),
+                List.of()
         );
     }
 
@@ -514,6 +570,9 @@ public class ApiExecutionDomainService {
                 request.mockBusinessScenarioId()
         );
 
+        ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector = ApiLocalRunnerPayloadSupport.artifactCollector();
+        Map<String, Object> payload = buildApiLocalRunnerScenarioPayload(scenario, request, artifactCollector);
+
         RunnerTaskDetailResponse task = localRunnerService.createDebugTask(new CreateRunnerTaskCommand(
                 scenario.getWorkspaceId(),
                 workspace.getWorkspaceCode(),
@@ -530,10 +589,10 @@ public class ApiExecutionDomainService {
                 buildApiLocalRunnerEnvironmentSnapshot(environmentId, context.environment()),
                 buildApiLocalRunnerVariableSnapshot(variableSetId, context.variables()),
                 Map.of(),
-                List.of(),
+                artifactCollector.artifactRefs(),
                 List.of(),
                 Map.of(),
-                buildApiLocalRunnerScenarioPayload(scenario, request)
+                payload
         ));
 
         return new ApiRunResponse(
@@ -558,6 +617,16 @@ public class ApiExecutionDomainService {
         return values;
     }
 
+    private Map<String, Object> buildApiLocalRunnerCaseTimeoutPolicy(ApiExecutionRuntimeModels.ResolvedEnvironment environment) {
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("taskTimeoutMs", 300000);
+        values.put("requestTimeoutMs", environment == null || environment.timeoutMs() == null ? 30000 : environment.timeoutMs());
+        values.put("scriptTimeoutMs", 1000);
+        values.put("stepFailureRetryCount", 0);
+        values.put("defaultStepWaitMs", 0);
+        return values;
+    }
+
     private Map<String, Object> buildApiLocalRunnerEnvironmentSnapshot(
             Long environmentId,
             ApiExecutionRuntimeModels.ResolvedEnvironment environment
@@ -578,14 +647,32 @@ public class ApiExecutionDomainService {
         return values;
     }
 
-    private Map<String, Object> buildApiLocalRunnerScenarioPayload(ApiScenarioEntity scenario, ApiRunRequest request) {
+    private Map<String, Object> buildApiLocalRunnerCasePayload(
+            ApiDefinitionCaseEntity apiCase,
+            ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("apiCaseSnapshot", ApiLocalRunnerPayloadSupport.buildApiCaseSnapshot(apiCase, artifactCollector));
+        Map<String, Object> runOptions = new LinkedHashMap<>();
+        runOptions.put("formalReport", true);
+        runOptions.put("debugMode", false);
+        payload.put("runOptions", runOptions);
+        return payload;
+    }
+
+    private Map<String, Object> buildApiLocalRunnerScenarioPayload(
+            ApiScenarioEntity scenario,
+            ApiRunRequest request,
+            ApiLocalRunnerPayloadSupport.ArtifactCollector artifactCollector
+    ) {
         Map<String, Object> scenarioSnapshot = new LinkedHashMap<>();
         scenarioSnapshot.put("scenarioId", scenario.getId());
         scenarioSnapshot.put("scenarioName", scenario.getScenarioName());
         scenarioSnapshot.put("steps", ApiLocalRunnerPayloadSupport.buildScenarioSteps(
                 readScenarioSteps(scenario.getStepsJson()),
                 Boolean.TRUE.equals(scenario.getContinueOnFailure()),
-                caseMapper
+                caseMapper,
+                artifactCollector
         ));
         scenarioSnapshot.put("assertions", readScenarioAssertions(scenario.getScenarioAssertionsJson()));
 
