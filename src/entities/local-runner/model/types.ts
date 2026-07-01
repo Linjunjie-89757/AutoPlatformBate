@@ -59,5 +59,16 @@ export interface LocalRunnerTaskDetailResponse {
   startedAt: string | null
   completedAt: string | null
   lastReportedAt: string | null
+  envelope?: Record<string, unknown> | null
   result: Record<string, unknown>
+  logs: LocalRunnerTaskLogEntry[]
+}
+
+export interface LocalRunnerTaskLogEntry {
+  sequenceNo: number | null
+  level: string
+  message: string | null
+  stepId: string | null
+  data: Record<string, unknown>
+  loggedAt: string | null
 }

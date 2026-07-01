@@ -6,6 +6,7 @@ import type {
   RunnerOfflineScanResult,
   RunnerTaskAckResponse,
 } from '../model/types'
+import { normalizeLocalRunnerTaskDetail } from '../lib/taskDetailView'
 
 export interface RunnerNodeQuery {
   taskType?: string | null
@@ -17,29 +18,6 @@ function unwrapApiResponse<T>(payload: ApiResponse<T>) {
     throw new Error(payload.message || '请求失败')
   }
   return payload.data
-}
-
-function normalizeLocalRunnerTaskDetail(item: LocalRunnerTaskDetailResponse): LocalRunnerTaskDetailResponse {
-  return {
-    ...item,
-    runId: item.runId || '',
-    taskType: item.taskType || '',
-    runnerId: item.runnerId || null,
-    status: item.status || 'PENDING',
-    currentStage: item.currentStage || null,
-    progress: {
-      current: Number(item.progress?.current || 0),
-      total: Number(item.progress?.total || 0),
-      percent: Number(item.progress?.percent || 0),
-    },
-    statusMessage: item.statusMessage || null,
-    errorMessage: item.errorMessage || null,
-    assignedAt: item.assignedAt || null,
-    startedAt: item.startedAt || null,
-    completedAt: item.completedAt || null,
-    lastReportedAt: item.lastReportedAt || null,
-    result: item.result || {},
-  }
 }
 
 export const localRunnerApi = {

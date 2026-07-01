@@ -1,10 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { CircleClose, Connection, DocumentCopy, RefreshRight, Warning } from '@element-plus/icons-vue'
+import { CircleClose, Connection, DocumentCopy, RefreshRight, View, Warning } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { ConfigStatCard, ConfigTypeBadge, type ConfigStat } from '@/entities/config'
-import { localRunnerApi, type RunnerActiveTaskSummary, type RunnerNodeSummary } from '@/entities/local-runner'
+import {
+  buildRunnerTaskLogCopyText,
+  localRunnerApi,
+  readRunnerTaskDurationMs,
+  readRunnerTaskSummary,
+  type LocalRunnerTaskDetailResponse,
+  type LocalRunnerTaskLogEntry,
+  type RunnerActiveTaskSummary,
+  type RunnerNodeSummary,
+} from '@/entities/local-runner'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -15,6 +24,10 @@ const loading = ref(false)
 const scanning = ref(false)
 const errorMessage = ref('')
 const guideVisible = ref(false)
+const taskDetailVisible = ref(false)
+const taskDetailLoading = ref(false)
+const taskDetailErrorMessage = ref('')
+const selectedTaskDetail = ref<LocalRunnerTaskDetailResponse | null>(null)
 const autoRefresh = ref(true)
 const lastRefreshedAt = ref<Date | null>(null)
 const cancelingRunIds = ref<Set<string>>(new Set())
@@ -46,6 +59,25 @@ const refreshStatusText = computed(() => {
   }
   return `最后刷新 ${lastRefreshedAt.value.toLocaleTimeString()}`
 })
+const taskDetailSummaryItems = computed(() => {
+  const detail = selectedTaskDetail.value
+  if (!detail) {
+    return []
+  }
+  const summary = readRunnerTaskSummary(detail)
+  return [
+    { label: '总步骤', value: summary.totalSteps },
+    { label: '通过', value: summary.passedSteps },
+    { label: '失败', value: summary.failedSteps },
+    { label: '跳过', value: summary.skippedSteps },
+    { label: '错误', value: summary.errorMessage },
+  ]
+    .filter(item => item.value != null && item.value !== '')
+    .map(item => ({ label: item.label, value: formatUnknown(item.value) }))
+})
+const taskDetailDurationText = computed(() => formatDurationMs(
+  selectedTaskDetail.value ? readRunnerTaskDurationMs(selectedTaskDetail.value) : null,
+))
 
 async function loadRunners() {
   loading.value = true
@@ -85,11 +117,15 @@ function toggleAutoRefresh(value: boolean | string | number) {
 }
 
 async function copyRunnerCommand() {
+  await copyText(runnerStartCommand, '启动命令已复制')
+}
+
+async function copyText(text: string, successMessage: string) {
   try {
-    await navigator.clipboard.writeText(runnerStartCommand)
-    ElMessage.success('启动命令已复制')
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(successMessage)
   } catch {
-    ElMessage.warning('复制失败，请手动复制命令')
+    ElMessage.warning('复制失败，请手动复制')
   }
 }
 
@@ -166,6 +202,37 @@ async function cancelRunnerTask(task: RunnerActiveTaskSummary) {
   }
 }
 
+async function openTaskDetail(task: RunnerActiveTaskSummary) {
+  if (!task.runId) {
+    return
+  }
+  taskDetailVisible.value = true
+  taskDetailLoading.value = true
+  taskDetailErrorMessage.value = ''
+  selectedTaskDetail.value = null
+  try {
+    selectedTaskDetail.value = await localRunnerApi.getTaskDetail(task.runId)
+  } catch (error) {
+    taskDetailErrorMessage.value = getRequestErrorMessage(error)
+  } finally {
+    taskDetailLoading.value = false
+  }
+}
+
+async function copySelectedTaskRunId() {
+  const runId = selectedTaskDetail.value?.runId
+  if (runId) {
+    await copyText(runId, 'Run ID 已复制')
+  }
+}
+
+async function copySelectedTaskLogs() {
+  const detail = selectedTaskDetail.value
+  if (detail) {
+    await copyText(buildRunnerTaskLogCopyText(detail), '任务日志已复制')
+  }
+}
+
 function numberFromRecord(record: Record<string, unknown>, key: string) {
   const value = record?.[key]
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -187,6 +254,27 @@ function textFromRecord(record: Record<string, unknown>, key: string) {
     return String(value)
   }
   return ''
+}
+
+function hasRecordValue(record: Record<string, unknown> | null | undefined) {
+  return Boolean(record && Object.keys(record).length)
+}
+
+function formatUnknown(value: unknown) {
+  if (value == null || value === '') {
+    return '-'
+  }
+  if (typeof value === 'string') {
+    return value
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  return JSON.stringify(value)
+}
+
+function formatJson(value: unknown) {
+  return JSON.stringify(value ?? {}, null, 2)
 }
 
 function formatHeartbeat(seconds: number | null) {
@@ -213,6 +301,17 @@ function formatDuration(seconds: number | null) {
     return `${Math.floor(seconds / 60)} 分钟`
   }
   return `${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分钟`
+}
+
+function formatDurationMs(durationMs: number | null) {
+  if (durationMs == null) {
+    return '-'
+  }
+  if (durationMs < 1000) {
+    return `${durationMs} ms`
+  }
+  const seconds = Math.round(durationMs / 1000)
+  return formatDuration(seconds)
 }
 
 function formatRunnerName(item: RunnerNodeSummary) {
@@ -367,6 +466,17 @@ function getTaskStatusTone(status: string | null) {
   return 'default'
 }
 
+function getLogLevelTone(log: LocalRunnerTaskLogEntry) {
+  const level = String(log.level || '').toUpperCase()
+  if (level === 'ERROR') {
+    return 'danger'
+  }
+  if (level === 'WARN' || level === 'WARNING') {
+    return 'warning'
+  }
+  return 'default'
+}
+
 onMounted(() => {
   void loadRunners()
   restartAutoRefresh()
@@ -505,17 +615,27 @@ onBeforeUnmount(() => {
                   </div>
                   <div class="config-runner-task__footer">
                     <code :title="task.runId">{{ task.runId }}</code>
-                    <AppButton
-                      v-if="isTaskCancelable(task.status)"
-                      type="danger"
-                      size="small"
-                      plain
-                      :icon="CircleClose"
-                      :loading="isTaskCanceling(task.runId)"
-                      @click="cancelRunnerTask(task)"
-                    >
-                      取消
-                    </AppButton>
+                    <div class="config-runner-task__actions">
+                      <AppButton
+                        size="small"
+                        plain
+                        :icon="View"
+                        @click="openTaskDetail(task)"
+                      >
+                        详情
+                      </AppButton>
+                      <AppButton
+                        v-if="isTaskCancelable(task.status)"
+                        type="danger"
+                        size="small"
+                        plain
+                        :icon="CircleClose"
+                        :loading="isTaskCanceling(task.runId)"
+                        @click="cancelRunnerTask(task)"
+                      >
+                        取消
+                      </AppButton>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -578,6 +698,129 @@ onBeforeUnmount(() => {
         <section>
           <h3>状态判断</h3>
           <p>Runner 正常启动后，本页会在下一次自动刷新时显示在线节点、可用槽位和最近心跳。</p>
+        </section>
+      </div>
+    </el-drawer>
+
+    <el-drawer v-model="taskDetailVisible" title="本地任务详情" size="760px">
+      <AppLoadingState v-if="taskDetailLoading" text="正在加载任务详情..." />
+      <AppEmptyState
+        v-else-if="taskDetailErrorMessage"
+        title="任务详情加载失败"
+        :description="taskDetailErrorMessage"
+      />
+      <div v-else-if="selectedTaskDetail" class="config-runner-detail">
+        <header class="config-runner-detail__header">
+          <div>
+            <h3>{{ getTaskTypeLabel(selectedTaskDetail.taskType) }}</h3>
+            <code>{{ selectedTaskDetail.runId }}</code>
+          </div>
+          <ConfigTypeBadge
+            :label="getTaskStatusLabel(selectedTaskDetail.status)"
+            :tone="getTaskStatusTone(selectedTaskDetail.status)"
+          />
+        </header>
+
+        <div class="config-runner-detail__actions">
+          <AppButton size="small" plain :icon="DocumentCopy" @click="copySelectedTaskRunId">复制 Run ID</AppButton>
+          <AppButton
+            size="small"
+            plain
+            :icon="DocumentCopy"
+            :disabled="!selectedTaskDetail.logs.length"
+            @click="copySelectedTaskLogs"
+          >
+            复制日志
+          </AppButton>
+        </div>
+
+        <section class="config-runner-detail__section">
+          <h4>状态</h4>
+          <div class="config-runner-detail-grid">
+            <div>
+              <span>Runner</span>
+              <strong>{{ selectedTaskDetail.runnerId || '-' }}</strong>
+            </div>
+            <div>
+              <span>阶段</span>
+              <strong>{{ selectedTaskDetail.currentStage || '等待阶段上报' }}</strong>
+            </div>
+            <div>
+              <span>进度</span>
+              <strong>{{ selectedTaskDetail.progress.percent }}%</strong>
+            </div>
+            <div>
+              <span>耗时</span>
+              <strong>{{ taskDetailDurationText }}</strong>
+            </div>
+          </div>
+          <el-progress :percentage="selectedTaskDetail.progress.percent" :stroke-width="8" />
+        </section>
+
+        <section class="config-runner-detail__section">
+          <h4>时间线</h4>
+          <div class="config-runner-detail-timeline">
+            <div>
+              <span>分配</span>
+              <strong>{{ selectedTaskDetail.assignedAt || '-' }}</strong>
+            </div>
+            <div>
+              <span>开始</span>
+              <strong>{{ selectedTaskDetail.startedAt || '-' }}</strong>
+            </div>
+            <div>
+              <span>完成</span>
+              <strong>{{ selectedTaskDetail.completedAt || '-' }}</strong>
+            </div>
+            <div>
+              <span>最近上报</span>
+              <strong>{{ selectedTaskDetail.lastReportedAt || '-' }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section
+          v-if="selectedTaskDetail.errorMessage || selectedTaskDetail.statusMessage"
+          class="config-runner-detail__section"
+        >
+          <h4>消息</h4>
+          <p v-if="selectedTaskDetail.statusMessage">{{ selectedTaskDetail.statusMessage }}</p>
+          <pre v-if="selectedTaskDetail.errorMessage">{{ selectedTaskDetail.errorMessage }}</pre>
+        </section>
+
+        <section v-if="taskDetailSummaryItems.length" class="config-runner-detail__section">
+          <h4>结果摘要</h4>
+          <div class="config-runner-detail-summary">
+            <div v-for="item in taskDetailSummaryItems" :key="item.label">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="config-runner-detail__section">
+          <h4>最近日志</h4>
+          <div v-if="selectedTaskDetail.logs.length" class="config-runner-detail-logs">
+            <article
+              v-for="log in selectedTaskDetail.logs"
+              :key="`${log.sequenceNo}-${log.loggedAt}-${log.message}`"
+              class="config-runner-detail-log"
+            >
+              <div class="config-runner-detail-log__head">
+                <ConfigTypeBadge :label="log.level" :tone="getLogLevelTone(log)" />
+                <span>{{ log.loggedAt || '-' }}</span>
+                <code v-if="log.stepId">{{ log.stepId }}</code>
+              </div>
+              <p>{{ log.message || '-' }}</p>
+              <pre v-if="hasRecordValue(log.data)">{{ formatJson(log.data) }}</pre>
+            </article>
+          </div>
+          <span v-else class="config-runner-muted">暂无日志</span>
+        </section>
+
+        <section v-if="hasRecordValue(selectedTaskDetail.result)" class="config-runner-detail__section">
+          <h4>原始结果</h4>
+          <pre>{{ formatJson(selectedTaskDetail.result) }}</pre>
         </section>
       </div>
     </el-drawer>
@@ -886,6 +1129,13 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 
+.config-runner-task__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
 .config-runner-runtime code {
   display: inline-block;
   max-width: 100%;
@@ -898,6 +1148,151 @@ onBeforeUnmount(() => {
   font-size: var(--app-font-size-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.config-runner-detail {
+  display: grid;
+  gap: var(--app-space-4);
+}
+
+.config-runner-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+}
+
+.config-runner-detail__header h3 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-lg);
+  line-height: var(--app-line-height-lg);
+}
+
+.config-runner-detail__header code,
+.config-runner-detail-log__head code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-family: Consolas, Monaco, monospace;
+  font-size: var(--app-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+}
+
+.config-runner-detail__section {
+  display: grid;
+  gap: var(--app-space-3);
+  min-width: 0;
+  padding: var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-panel);
+}
+
+.config-runner-detail__section h4 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-md);
+  line-height: var(--app-line-height-md);
+}
+
+.config-runner-detail__section p {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-md);
+}
+
+.config-runner-detail__section pre,
+.config-runner-detail-log pre {
+  overflow: auto;
+  max-height: 220px;
+  margin: 0;
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-page);
+  color: var(--app-text-secondary);
+  font-family: Consolas, Monaco, monospace;
+  font-size: var(--app-font-size-xs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.config-runner-detail-grid,
+.config-runner-detail-summary,
+.config-runner-detail-timeline {
+  display: grid;
+  gap: var(--app-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.config-runner-detail-grid div,
+.config-runner-detail-summary div,
+.config-runner-detail-timeline div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.config-runner-detail-grid span,
+.config-runner-detail-summary span,
+.config-runner-detail-timeline span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-detail-grid strong,
+.config-runner-detail-summary strong,
+.config-runner-detail-timeline strong {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-detail-logs {
+  display: grid;
+  gap: var(--app-space-3);
+}
+
+.config-runner-detail-log {
+  display: grid;
+  gap: var(--app-space-2);
+  min-width: 0;
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-subtle);
+}
+
+.config-runner-detail-log__head {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.config-runner-detail-log__head span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-detail-log p {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-md);
 }
 
 .config-runner-guide {
@@ -1013,6 +1408,12 @@ onBeforeUnmount(() => {
 
 @media (max-width: 720px) {
   .config-runner-panel__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .config-runner-detail-grid,
+  .config-runner-detail-summary,
+  .config-runner-detail-timeline {
     grid-template-columns: 1fr;
   }
 }

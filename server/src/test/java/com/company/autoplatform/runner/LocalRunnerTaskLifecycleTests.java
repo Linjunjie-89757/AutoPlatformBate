@@ -7,6 +7,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 import static com.company.autoplatform.runner.LocalRunnerModels.RunnerFinalResultReport;
@@ -121,14 +122,66 @@ class LocalRunnerTaskLifecycleTests {
         assertThat(event.result()).containsKey("reportData");
     }
 
+    @Test
+    void getTaskDetailIncludesRecentRunnerLogs() {
+        LocalRunnerTaskMapper taskMapper = mock(LocalRunnerTaskMapper.class);
+        LocalRunnerTaskLogMapper taskLogMapper = mock(LocalRunnerTaskLogMapper.class);
+        LocalRunnerTaskEntity task = task("run-logs", "FAILED");
+        task.setResultJson("{\"summary\":{\"failedSteps\":1}}");
+        LocalRunnerTaskLogEntity firstLog = log("run-logs", 1L, "INFO", "Start API request", "step-1", "{\"url\":\"/orders\"}");
+        LocalRunnerTaskLogEntity secondLog = log("run-logs", 2L, "ERROR", "Assertion failed", "step-1", "{\"status\":500}");
+        when(taskMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(task);
+        when(taskLogMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of(firstLog, secondLog));
+        LocalRunnerService service = service(taskMapper, taskLogMapper, mock(ApplicationEventPublisher.class));
+
+        var detail = service.getTaskDetail("run-logs");
+
+        assertThat(detail.result()).containsKey("summary");
+        assertThat(detail.logs()).hasSize(2);
+        assertThat(detail.logs().get(0).sequenceNo()).isEqualTo(1L);
+        assertThat(detail.logs().get(0).level()).isEqualTo("INFO");
+        assertThat(detail.logs().get(0).data()).containsEntry("url", "/orders");
+        assertThat(detail.logs().get(1).level()).isEqualTo("ERROR");
+        assertThat(detail.logs().get(1).message()).isEqualTo("Assertion failed");
+        assertThat(detail.logs().get(1).data()).containsEntry("status", 500);
+    }
+
     private LocalRunnerService service(LocalRunnerTaskMapper taskMapper, ApplicationEventPublisher eventPublisher) {
+        return service(taskMapper, mock(LocalRunnerTaskLogMapper.class), eventPublisher);
+    }
+
+    private LocalRunnerService service(
+            LocalRunnerTaskMapper taskMapper,
+            LocalRunnerTaskLogMapper taskLogMapper,
+            ApplicationEventPublisher eventPublisher
+    ) {
         return new LocalRunnerService(
                 mock(LocalRunnerNodeMapper.class),
                 taskMapper,
-                mock(LocalRunnerTaskLogMapper.class),
+                taskLogMapper,
                 new ObjectMapper(),
                 eventPublisher
         );
+    }
+
+    private LocalRunnerTaskLogEntity log(
+            String runId,
+            Long sequenceNo,
+            String level,
+            String message,
+            String stepId,
+            String dataJson
+    ) {
+        LocalRunnerTaskLogEntity entity = new LocalRunnerTaskLogEntity();
+        entity.setRunId(runId);
+        entity.setRunnerId("runner-a");
+        entity.setSequenceNo(sequenceNo);
+        entity.setLevel(level);
+        entity.setMessage(message);
+        entity.setStepId(stepId);
+        entity.setDataJson(dataJson);
+        entity.setLoggedAt(LocalDateTime.now().minusSeconds(10 - sequenceNo));
+        return entity;
     }
 
     private LocalRunnerTaskEntity task(String runId, String status) {

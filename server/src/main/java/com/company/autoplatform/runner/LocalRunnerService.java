@@ -24,6 +24,7 @@ import static com.company.autoplatform.runner.LocalRunnerModels.*;
 public class LocalRunnerService {
 
     private static final int DEFAULT_POLL_INTERVAL_MS = 2000;
+    private static final int TASK_DETAIL_LOG_LIMIT = 200;
     private static final String ONLINE = "ONLINE";
     private static final String PENDING = "PENDING";
     private static final String ASSIGNED = "ASSIGNED";
@@ -682,7 +683,30 @@ public class LocalRunnerService {
                 task.getCompletedAt(),
                 task.getLastReportedAt(),
                 toEnvelope(task),
-                readMap(task.getResultJson())
+                readMap(task.getResultJson()),
+                recentTaskLogs(task.getRunId())
+        );
+    }
+
+    private List<RunnerTaskLogEntry> recentTaskLogs(String runId) {
+        List<LocalRunnerTaskLogEntity> logs = taskLogMapper.selectList(new LambdaQueryWrapper<LocalRunnerTaskLogEntity>()
+                .eq(LocalRunnerTaskLogEntity::getRunId, runId)
+                .orderByAsc(LocalRunnerTaskLogEntity::getSequenceNo)
+                .orderByAsc(LocalRunnerTaskLogEntity::getLoggedAt)
+                .last("LIMIT " + TASK_DETAIL_LOG_LIMIT));
+        return (logs == null ? List.<LocalRunnerTaskLogEntity>of() : logs).stream()
+                .map(this::toTaskLogEntry)
+                .toList();
+    }
+
+    private RunnerTaskLogEntry toTaskLogEntry(LocalRunnerTaskLogEntity log) {
+        return new RunnerTaskLogEntry(
+                log.getSequenceNo(),
+                blankToDefault(log.getLevel(), "INFO"),
+                blankToNull(log.getMessage()),
+                blankToNull(log.getStepId()),
+                readMap(log.getDataJson()),
+                log.getLoggedAt()
         );
     }
 

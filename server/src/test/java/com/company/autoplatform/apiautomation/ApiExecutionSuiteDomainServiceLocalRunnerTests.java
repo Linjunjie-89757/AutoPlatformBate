@@ -145,7 +145,8 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
                 null,
                 null,
                 null,
-                Map.of()
+                Map.of(),
+                List.of()
         ));
 
         ApiExecutionSuiteDomainService service = new ApiExecutionSuiteDomainService(
@@ -357,7 +358,8 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
                 null,
                 null,
                 null,
-                Map.of()
+                Map.of(),
+                List.of()
         ));
 
         ApiExecutionSuiteDomainService service = new ApiExecutionSuiteDomainService(

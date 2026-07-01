@@ -188,7 +188,18 @@ public final class LocalRunnerModels {
             LocalDateTime completedAt,
             LocalDateTime lastReportedAt,
             RunnerTaskEnvelope envelope,
-            Map<String, Object> result
+            Map<String, Object> result,
+            List<RunnerTaskLogEntry> logs
+    ) {
+    }
+
+    public record RunnerTaskLogEntry(
+            Long sequenceNo,
+            String level,
+            String message,
+            String stepId,
+            Map<String, Object> data,
+            LocalDateTime loggedAt
     ) {
     }
 

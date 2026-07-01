@@ -3250,6 +3250,7 @@ async function runScenario() {
             completedAt: null,
             lastReportedAt: null,
             result: {},
+            logs: [],
           }
         : null
       if (runId) {

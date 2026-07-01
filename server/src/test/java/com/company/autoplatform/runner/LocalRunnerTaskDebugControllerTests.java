@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -190,7 +191,8 @@ class LocalRunnerTaskDebugControllerTests {
                         Map.of(),
                         Map.of()
                 ),
-                Map.of()
+                Map.of(),
+                List.of()
         );
     }
 
