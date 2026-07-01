@@ -23,6 +23,7 @@ import java.util.Map;
 import static com.company.autoplatform.runner.LocalRunnerModels.CreateRunnerDebugTaskRequest;
 import static com.company.autoplatform.runner.LocalRunnerModels.CreateRunnerTaskCommand;
 import static com.company.autoplatform.runner.LocalRunnerModels.RunnerOfflineScanResponse;
+import static com.company.autoplatform.runner.LocalRunnerModels.RunnerTaskAckResponse;
 import static com.company.autoplatform.runner.LocalRunnerModels.RunnerTaskDetailResponse;
 
 @RestController
@@ -93,6 +94,14 @@ public class LocalRunnerTaskDebugController {
         RunnerTaskDetailResponse detail = localRunnerService.getTaskDetail(runId);
         workspaceService.requireReadableWorkspace(detail.envelope().workspaceCode());
         return ApiResponse.ok(detail);
+    }
+
+    @PostMapping("/{runId}/cancel")
+    public ApiResponse<RunnerTaskAckResponse> cancelTask(@PathVariable String runId) {
+        CurrentUserContext.require();
+        RunnerTaskDetailResponse detail = localRunnerService.getTaskDetail(runId);
+        workspaceService.requireWritableWorkspace(detail.envelope().workspaceCode());
+        return ApiResponse.ok(localRunnerService.cancelTask(runId), "Runner task canceled");
     }
 
     @PostMapping("/offline-scan")

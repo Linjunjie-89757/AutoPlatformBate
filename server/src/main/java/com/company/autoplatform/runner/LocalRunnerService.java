@@ -32,6 +32,7 @@ public class LocalRunnerService {
             "SUCCESS",
             "FAILED",
             "CANCELED",
+            "CANCELLED",
             "DEGRADED",
             "TIMEOUT",
             "RUNNER_OFFLINE"
@@ -264,6 +265,9 @@ public class LocalRunnerService {
     public RunnerTaskAckResponse reportStatus(String runId, RunnerTaskStatusReport report) {
         LocalRunnerTaskEntity task = requireTask(runId);
         validateExecutionToken(task, report.runnerId(), report.executionToken());
+        if (isTerminalTask(task)) {
+            return terminalTaskAck(task);
+        }
         LocalDateTime now = report.reportedAt() == null ? LocalDateTime.now() : report.reportedAt();
         String status = normalizeStatus(report.status(), RUNNING);
         task.setStatus(status);
@@ -290,6 +294,9 @@ public class LocalRunnerService {
     public RunnerTaskAckResponse appendLog(String runId, RunnerTaskLogReport report) {
         LocalRunnerTaskEntity task = requireTask(runId);
         validateExecutionToken(task, report.runnerId(), report.executionToken());
+        if (isTerminalTask(task)) {
+            return terminalTaskAck(task);
+        }
         Long sequenceNo = report.sequenceNo() == null ? System.currentTimeMillis() : report.sequenceNo();
         Long existing = taskLogMapper.selectCount(new LambdaQueryWrapper<LocalRunnerTaskLogEntity>()
                 .eq(LocalRunnerTaskLogEntity::getRunId, runId)
@@ -316,6 +323,9 @@ public class LocalRunnerService {
     public RunnerTaskAckResponse reportStepResult(String runId, RunnerStepResultReport report) {
         LocalRunnerTaskEntity task = requireTask(runId);
         validateExecutionToken(task, report.runnerId(), report.executionToken());
+        if (isTerminalTask(task)) {
+            return terminalTaskAck(task);
+        }
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("stepId", report.stepId());
         data.put("status", blankToDefault(report.status(), "UNKNOWN"));
@@ -342,6 +352,9 @@ public class LocalRunnerService {
     public RunnerTaskAckResponse reportFinalResult(String runId, RunnerFinalResultReport report) {
         LocalRunnerTaskEntity task = requireTask(runId);
         validateExecutionToken(task, report.runnerId(), report.executionToken());
+        if (isTerminalTask(task)) {
+            return terminalTaskAck(task);
+        }
         LocalDateTime now = LocalDateTime.now();
         String status = normalizeStatus(report.status(), "SUCCESS");
         task.setStatus(status);
@@ -397,12 +410,12 @@ public class LocalRunnerService {
                 .le(LocalRunnerTaskEntity::getDeadlineAt, now));
         int changed = 0;
         for (LocalRunnerTaskEntity task : tasks == null ? List.<LocalRunnerTaskEntity>of() : tasks) {
-            task.setStatus("TIMEOUT");
-            task.setErrorMessage("Runner task timed out: deadline " + task.getDeadlineAt());
-            task.setCompletedAt(now);
-            task.setLastReportedAt(now);
-            task.setUpdatedAt(now);
-            taskMapper.updateById(task);
+            completeTaskWithForcedTerminalStatus(
+                    task,
+                    "TIMEOUT",
+                    "Runner task timed out: deadline " + task.getDeadlineAt(),
+                    now
+            );
             changed += 1;
         }
         return changed;
@@ -459,12 +472,12 @@ public class LocalRunnerService {
         int changed = 0;
         LocalDateTime now = LocalDateTime.now();
         for (LocalRunnerTaskEntity task : tasks == null ? List.<LocalRunnerTaskEntity>of() : tasks) {
-            task.setStatus("RUNNER_OFFLINE");
-            task.setErrorMessage("Runner offline: " + normalizedRunnerId);
-            task.setCompletedAt(now);
-            task.setLastReportedAt(now);
-            task.setUpdatedAt(now);
-            taskMapper.updateById(task);
+            completeTaskWithForcedTerminalStatus(
+                    task,
+                    "RUNNER_OFFLINE",
+                    "Runner offline: " + normalizedRunnerId,
+                    now
+            );
             changed += 1;
         }
         return changed;
@@ -609,6 +622,22 @@ public class LocalRunnerService {
         return toTaskDetail(requireTask(runId));
     }
 
+    @Transactional
+    public RunnerTaskAckResponse cancelTask(String runId) {
+        LocalRunnerTaskEntity task = requireTask(runId);
+        if (isTerminalTask(task)) {
+            return terminalTaskAck(task);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        completeTaskWithForcedTerminalStatus(
+                task,
+                "CANCELED",
+                "Runner task canceled by platform",
+                now
+        );
+        return new RunnerTaskAckResponse(task.getRunId(), task.getStatus(), true, "Task canceled");
+    }
+
     public RunnerTaskEnvelope toEnvelope(LocalRunnerTaskEntity task) {
         return new RunnerTaskEnvelope(
                 task.getRunId(),
@@ -655,6 +684,85 @@ public class LocalRunnerService {
                 toEnvelope(task),
                 readMap(task.getResultJson())
         );
+    }
+
+    private void completeTaskWithForcedTerminalStatus(
+            LocalRunnerTaskEntity task,
+            String status,
+            String errorMessage,
+            LocalDateTime now
+    ) {
+        task.setStatus(status);
+        task.setStatusMessage(errorMessage);
+        task.setErrorMessage(errorMessage);
+        task.setCompletedAt(now);
+        task.setLastReportedAt(now);
+        task.setUpdatedAt(now);
+        taskMapper.updateById(task);
+        eventPublisher.publishEvent(new LocalRunnerTaskFinalResultEvent(
+                task.getRunId(),
+                task.getTaskType(),
+                task.getStatus(),
+                task.getWorkspaceId(),
+                task.getWorkspaceCode(),
+                task.getRunnerId(),
+                readMap(task.getPayloadJson()),
+                buildForcedTerminalResult(task, errorMessage, now)
+        ));
+    }
+
+    private Map<String, Object> buildForcedTerminalResult(
+            LocalRunnerTaskEntity task,
+            String errorMessage,
+            LocalDateTime now
+    ) {
+        Map<String, Object> stepResult = new LinkedHashMap<>();
+        stepResult.put("stepId", "local-runner-terminal");
+        stepResult.put("stepName", "Local Runner terminal state");
+        stepResult.put("status", "FAILED");
+        stepResult.put("durationMs", 0);
+        stepResult.put("errorMessage", errorMessage);
+        stepResult.put("request", Map.of());
+        stepResult.put("response", Map.of());
+        stepResult.put("assertions", List.of());
+        stepResult.put("extractedVariables", Map.of());
+        stepResult.put("scriptResults", Map.of());
+        stepResult.put("extra", Map.of("sortOrder", 1));
+
+        Map<String, Object> reportData = new LinkedHashMap<>();
+        reportData.put("request", Map.of());
+        reportData.put("response", Map.of());
+        reportData.put("assertions", List.of());
+        reportData.put("extractedVariables", Map.of());
+        reportData.put("scriptResults", Map.of());
+        reportData.put("stepResults", List.of(stepResult));
+        reportData.put("itemSnapshots", List.of());
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalSteps", 1);
+        summary.put("passedSteps", 0);
+        summary.put("failedSteps", 1);
+        summary.put("skippedSteps", 0);
+        summary.put("errorMessage", errorMessage);
+        summary.put("forcedByPlatform", true);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("summary", summary);
+        result.put("durationMs", forcedDurationMs(task, now));
+        result.put("errorMessage", errorMessage);
+        result.put("reportData", reportData);
+        return result;
+    }
+
+    private long forcedDurationMs(LocalRunnerTaskEntity task, LocalDateTime now) {
+        LocalDateTime startedAt = task.getStartedAt();
+        if (startedAt == null) {
+            startedAt = task.getAssignedAt();
+        }
+        if (startedAt == null) {
+            startedAt = task.getCreatedAt();
+        }
+        return startedAt == null ? 0L : Math.max(0L, Duration.between(startedAt, now).toMillis());
     }
 
     private LocalRunnerNodeEntity requireRunner(String runnerId) {
@@ -725,9 +833,27 @@ public class LocalRunnerService {
         return TERMINAL_STATUSES.contains(status);
     }
 
+    private boolean isTerminalTask(LocalRunnerTaskEntity task) {
+        return isTerminalStatus(normalizeStatus(task.getStatus(), ""));
+    }
+
+    private RunnerTaskAckResponse terminalTaskAck(LocalRunnerTaskEntity task) {
+        String status = normalizeStatus(task.getStatus(), "");
+        return new RunnerTaskAckResponse(
+                task.getRunId(),
+                status,
+                false,
+                "Task already reached terminal status: " + status
+        );
+    }
+
     private String normalizeStatus(String status, String fallback) {
         String normalized = blankToNull(status);
-        return normalized == null ? fallback : normalized.toUpperCase();
+        if (normalized == null) {
+            return fallback;
+        }
+        String upper = normalized.toUpperCase();
+        return "CANCELLED".equals(upper) ? "CANCELED" : upper;
     }
 
     private String resolveRunnerName(Map<String, Object> machineHint, String fallback) {
