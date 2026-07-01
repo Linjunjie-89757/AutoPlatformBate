@@ -25,6 +25,54 @@ final class ApiLocalRunnerPayloadSupport {
         return new ArtifactCollector();
     }
 
+    static List<Map<String, Object>> defaultMaskingRules() {
+        List<Map<String, Object>> rules = new ArrayList<>();
+        for (String fieldName : List.of(
+                "authorization",
+                "proxy-authorization",
+                "cookie",
+                "set-cookie",
+                "password",
+                "passwd",
+                "pwd",
+                "token",
+                "access_token",
+                "refresh_token",
+                "secret",
+                "credential",
+                "api_key",
+                "apikey",
+                "x-api-key",
+                "x-auth-token"
+        )) {
+            rules.add(maskingRule("field_" + fieldName.replace("-", "_"), "FIELD_NAME", fieldName, "******", null));
+        }
+        rules.add(maskingRule("json_sensitive_field", "REGEX",
+                "(\"(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|api[_-]?key|apikey)\"\\s*:\\s*\")[^\"\\\\]*(\")",
+                "$1******$2",
+                "gi"));
+        rules.add(maskingRule("url_sensitive_query", "REGEX",
+                "([?&](?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|api[_-]?key|apikey)=)[^&#\\s]+",
+                "$1******",
+                "gi"));
+        rules.add(maskingRule("bearer_authorization", "REGEX", "(Bearer\\s+)[A-Za-z0-9._~+\\-/]+=*", "$1******", "gi"));
+        rules.add(maskingRule("basic_authorization", "REGEX", "(Basic\\s+)[A-Za-z0-9+/=]+", "$1******", "gi"));
+        return List.copyOf(rules);
+    }
+
+    private static Map<String, Object> maskingRule(String ruleId, String type, String pattern, String replacement, String flags) {
+        Map<String, Object> rule = new LinkedHashMap<>();
+        rule.put("ruleId", ruleId);
+        rule.put("type", type);
+        rule.put("pattern", pattern);
+        rule.put("replacement", replacement);
+        rule.put("enabled", true);
+        if (flags != null) {
+            rule.put("flags", flags);
+        }
+        return rule;
+    }
+
     static List<Map<String, Object>> buildScenarioSteps(
             List<ApiScenarioStepInput> steps,
             boolean continueOnFailure,

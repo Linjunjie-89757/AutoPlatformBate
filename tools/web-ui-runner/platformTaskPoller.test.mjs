@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { buildRunnerResourceSnapshot, runApiScript } from './platformTaskPoller.mjs';
+import { buildRunnerResourceSnapshot, maskRunnerReportValue, runApiScript } from './platformTaskPoller.mjs';
 
 test('buildRunnerResourceSnapshot reports web tasks as high resource cost', () => {
   const snapshot = buildRunnerResourceSnapshot({
@@ -74,4 +74,81 @@ test('runApiScript blocks constructor constructor escape', () => {
     runtimeVariables: {},
     phase: 'pre',
   }), /constructor is not defined|blocked unsafe/);
+});
+
+test('maskRunnerReportValue redacts default sensitive fields and strings', () => {
+  const report = {
+    status: 'FAILED',
+    statusCode: 500,
+    request: {
+      method: 'GET',
+      url: 'https://api.example.test/orders?token=raw-token&traceId=ok',
+      headers: {
+        Authorization: 'Bearer raw-secret-token',
+        Cookie: 'SESSION=raw-cookie',
+        'X-Trace-Id': 'trace-001',
+      },
+      body: '{"password":"raw-password","name":"codex"}',
+    },
+    response: {
+      headers: {
+        'set-cookie': 'SESSION=next-cookie',
+        'content-type': 'application/json',
+      },
+      body: '{"access_token":"raw-access","value":"ok"}',
+    },
+    extractedVariables: {
+      ORDER_ID: '42',
+      SERVER_TOKEN: 'raw-server-token',
+    },
+    assertions: [
+      { expected: 'raw-server-token', actual: 'raw-server-token' },
+    ],
+  };
+
+  const masked = maskRunnerReportValue(report);
+
+  assert.equal(masked.status, 'FAILED');
+  assert.equal(masked.statusCode, 500);
+  assert.equal(masked.request.headers.Authorization, '******');
+  assert.equal(masked.request.headers.Cookie, '******');
+  assert.equal(masked.request.headers['X-Trace-Id'], 'trace-001');
+  assert.equal(masked.request.url, 'https://api.example.test/orders?token=******&traceId=ok');
+  assert.equal(masked.request.body, '{"password":"******","name":"codex"}');
+  assert.equal(masked.response.headers['set-cookie'], '******');
+  assert.equal(masked.response.headers['content-type'], 'application/json');
+  assert.equal(masked.response.body, '{"access_token":"******","value":"ok"}');
+  assert.equal(masked.extractedVariables.ORDER_ID, '42');
+  assert.equal(masked.extractedVariables.SERVER_TOKEN, '******');
+  assert.equal(masked.assertions[0].expected, '******');
+  assert.equal(masked.assertions[0].actual, '******');
+  assert.equal(report.request.headers.Authorization, 'Bearer raw-secret-token');
+});
+
+test('maskRunnerReportValue applies task masking rules in addition to defaults', () => {
+  const masked = maskRunnerReportValue({
+    message: 'created order SO-123456 for user',
+    data: {
+      customerCode: 'plain-value',
+      publicValue: 'visible',
+    },
+  }, [
+    {
+      type: 'REGEX',
+      pattern: 'SO-\\d+',
+      replacement: 'SO-******',
+      flags: 'g',
+      enabled: true,
+    },
+    {
+      type: 'FIELD_NAME',
+      pattern: 'customerCode',
+      replacement: '[masked]',
+      enabled: true,
+    },
+  ]);
+
+  assert.equal(masked.message, 'created order SO-****** for user');
+  assert.equal(masked.data.customerCode, '[masked]');
+  assert.equal(masked.data.publicValue, 'visible');
 });

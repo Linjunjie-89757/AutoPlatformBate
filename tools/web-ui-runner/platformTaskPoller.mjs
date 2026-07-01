@@ -8,6 +8,41 @@ const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_CAPABILITIES = ['WEB_ELEMENT_VALIDATE', 'WEB_CASE_RUN', 'API_CASE_RUN', 'API_SCENARIO_RUN', 'API_SUITE_RUN'];
 const DEFAULT_SCRIPT_TIMEOUT_MS = 1000;
 const DEFAULT_MAX_RESOURCE_SLOTS = 5;
+const MASK_REPLACEMENT = '******';
+const DEFAULT_MASKING_RULES = [
+  { ruleId: 'field_authorization', type: 'FIELD_NAME', pattern: 'authorization', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_proxy_authorization', type: 'FIELD_NAME', pattern: 'proxy-authorization', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_cookie', type: 'FIELD_NAME', pattern: 'cookie', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_set_cookie', type: 'FIELD_NAME', pattern: 'set-cookie', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_password', type: 'FIELD_NAME', pattern: 'password', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_passwd', type: 'FIELD_NAME', pattern: 'passwd', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_pwd', type: 'FIELD_NAME', pattern: 'pwd', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_token', type: 'FIELD_NAME', pattern: 'token', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_access_token', type: 'FIELD_NAME', pattern: 'access_token', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_refresh_token', type: 'FIELD_NAME', pattern: 'refresh_token', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_secret', type: 'FIELD_NAME', pattern: 'secret', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_credential', type: 'FIELD_NAME', pattern: 'credential', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_api_key', type: 'FIELD_NAME', pattern: 'api_key', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_apikey', type: 'FIELD_NAME', pattern: 'apikey', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_x_api_key', type: 'FIELD_NAME', pattern: 'x-api-key', replacement: MASK_REPLACEMENT },
+  { ruleId: 'field_x_auth_token', type: 'FIELD_NAME', pattern: 'x-auth-token', replacement: MASK_REPLACEMENT },
+  {
+    ruleId: 'json_sensitive_field',
+    type: 'REGEX',
+    pattern: '("(?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|api[_-]?key|apikey)"\\s*:\\s*")[^"\\\\]*(")',
+    replacement: '$1******$2',
+    flags: 'gi',
+  },
+  {
+    ruleId: 'url_sensitive_query',
+    type: 'REGEX',
+    pattern: '([?&](?:password|passwd|pwd|token|access[_-]?token|refresh[_-]?token|secret|api[_-]?key|apikey)=)[^&#\\s]+',
+    replacement: '$1******',
+    flags: 'gi',
+  },
+  { ruleId: 'bearer_authorization', type: 'REGEX', pattern: '(Bearer\\s+)[A-Za-z0-9._~+\\-/]+=*', replacement: '$1******', flags: 'gi' },
+  { ruleId: 'basic_authorization', type: 'REGEX', pattern: '(Basic\\s+)[A-Za-z0-9+/=]+', replacement: '$1******', flags: 'gi' },
+];
 
 export function createRunnerTaskPoller(options = {}) {
   const runnerVersion = options.runnerVersion || '0.1.0';
@@ -47,7 +82,7 @@ export function createRunnerTaskPoller(options = {}) {
       lastTickAt: null,
       lastSuccessAt: null,
       lastError: null,
-      lastMessage: '通用任务后台轮询已启动',
+      lastMessage: '本地自动验证已启动',
       lastStoppedMessage: null,
       stoppedCount: 0,
       pulledCount: 0,
@@ -270,7 +305,7 @@ export function createRunnerTaskPoller(options = {}) {
         status: 'RUNNING',
         currentStage: 'VALIDATING',
         progress: { current: results.length, total: results.length, percent: 100 },
-        message: `真机验证完成：通过 ${passed} 个，失败 ${failed} 个`,
+        message: `本地页面验证完成：通过 ${passed} 个，失败 ${failed} 个`,
       });
       await reportFinalResult(current, task, {
         status: failed > 0 ? 'DEGRADED' : 'SUCCESS',
@@ -295,7 +330,7 @@ export function createRunnerTaskPoller(options = {}) {
       const message = error instanceof Error ? error.message : String(error);
       const durationMs = Date.now() - startedAt;
 
-      await appendLog(current, task, 'ERROR', 'WEB_ELEMENT_VALIDATE 真机验证失败', {
+      await appendLog(current, task, 'ERROR', 'WEB_ELEMENT_VALIDATE 本地页面验证失败', {
         errorMessage: message,
       });
       await reportStepResult(current, task, {
@@ -830,11 +865,12 @@ export function createRunnerTaskPoller(options = {}) {
     if (current.stoppedRunIds?.has(task.runId)) {
       return null;
     }
+    const safeBody = maskRunnerReportValue(body, task.maskingRules);
     return checkTaskAck(task, await postPlatformJson(current, `/public/local-runner/tasks/${encodeURIComponent(task.runId)}/status`, {
       runnerId: current.runnerId,
       executionToken: task.executionToken,
       reportedAt: new Date().toISOString(),
-      ...body,
+      ...safeBody,
     }));
   }
 
@@ -843,13 +879,15 @@ export function createRunnerTaskPoller(options = {}) {
       return null;
     }
     current.sequenceNo += 1;
+    const safeMessage = maskRunnerReportValue(message, task.maskingRules);
+    const safeData = maskRunnerReportValue(data, task.maskingRules);
     return checkTaskAck(task, await postPlatformJson(current, `/public/local-runner/tasks/${encodeURIComponent(task.runId)}/logs`, {
       runnerId: current.runnerId,
       executionToken: task.executionToken,
       sequenceNo: current.sequenceNo,
       level,
-      message,
-      data,
+      message: safeMessage,
+      data: safeData,
       timestamp: new Date().toISOString(),
     }));
   }
@@ -858,12 +896,13 @@ export function createRunnerTaskPoller(options = {}) {
     if (current.stoppedRunIds?.has(task.runId)) {
       return null;
     }
+    const safeBody = maskRunnerReportValue(body, task.maskingRules);
     return checkTaskAck(task, await postPlatformJson(current, `/public/local-runner/tasks/${encodeURIComponent(task.runId)}/steps`, {
       runnerId: current.runnerId,
       executionToken: task.executionToken,
       startedAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
-      ...body,
+      ...safeBody,
     }));
   }
 
@@ -871,12 +910,13 @@ export function createRunnerTaskPoller(options = {}) {
     if (current.stoppedRunIds?.has(task.runId) && body?.status !== 'FAILED') {
       return null;
     }
+    const safeBody = maskRunnerReportValue(body, task.maskingRules);
     return postPlatformJson(current, `/public/local-runner/tasks/${encodeURIComponent(task.runId)}/result`, {
       runnerId: current.runnerId,
       executionToken: task.executionToken,
       startedAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
-      ...body,
+      ...safeBody,
     });
   }
 
@@ -1001,6 +1041,167 @@ function estimateTaskResourceCost(taskType) {
 
 function optionalString(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+export function maskRunnerReportValue(value, maskingRules = []) {
+  const rules = normalizeMaskingRules(maskingRules);
+  rules.sensitiveLiterals = collectSensitiveLiterals(value, rules);
+  return maskReportValue(value, rules, new WeakMap());
+}
+
+function maskReportValue(value, rules, seen) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    return maskReportString(value, rules);
+  }
+  if (typeof value !== 'object') {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (seen.has(value)) {
+    return '[Circular]';
+  }
+  if (Array.isArray(value)) {
+    const masked = [];
+    seen.set(value, masked);
+    for (const item of value) {
+      masked.push(maskReportValue(item, rules, seen));
+    }
+    return masked;
+  }
+  const masked = {};
+  seen.set(value, masked);
+  for (const [key, item] of Object.entries(value)) {
+    const fieldRule = findFieldMaskingRule(key, rules.fieldRules);
+    if (fieldRule) {
+      masked[key] = fieldRule.replacement;
+      continue;
+    }
+    masked[key] = maskReportValue(item, rules, seen);
+  }
+  return masked;
+}
+
+function maskReportString(value, rules) {
+  let masked = value;
+  for (const rule of rules.regexRules) {
+    rule.regex.lastIndex = 0;
+    masked = masked.replace(rule.regex, rule.replacement);
+  }
+  for (const literal of rules.sensitiveLiterals || []) {
+    masked = masked.split(literal).join(MASK_REPLACEMENT);
+  }
+  return masked;
+}
+
+function collectSensitiveLiterals(value, rules) {
+  const literals = new Set();
+  collectSensitiveLiteralValues(value, rules, new WeakSet(), literals, false);
+  return [...literals]
+    .filter(item => item.length >= 4 && item !== MASK_REPLACEMENT)
+    .sort((left, right) => right.length - left.length);
+}
+
+function collectSensitiveLiteralValues(value, rules, seen, literals, sensitiveScope) {
+  if (value === null || value === undefined) {
+    return;
+  }
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (sensitiveScope && text.length >= 4) {
+      literals.add(text);
+    }
+    return;
+  }
+  if (typeof value !== 'object') {
+    return;
+  }
+  if (seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectSensitiveLiteralValues(item, rules, seen, literals, sensitiveScope);
+    }
+    return;
+  }
+  for (const [key, item] of Object.entries(value)) {
+    const fieldRule = findFieldMaskingRule(key, rules.fieldRules);
+    collectSensitiveLiteralValues(item, rules, seen, literals, Boolean(fieldRule) || sensitiveScope);
+  }
+}
+
+function normalizeMaskingRules(maskingRules) {
+  const sourceRules = [
+    ...DEFAULT_MASKING_RULES,
+    ...(Array.isArray(maskingRules) ? maskingRules : []),
+  ];
+  const fieldRules = [];
+  const regexRules = [];
+  for (const rule of sourceRules) {
+    if (!rule || typeof rule !== 'object' || rule.enabled === false) {
+      continue;
+    }
+    const type = optionalString(rule.type).toUpperCase();
+    const pattern = optionalString(rule.pattern || rule.fieldName || rule.name);
+    if (!pattern) {
+      continue;
+    }
+    const replacement = typeof rule.replacement === 'string' ? rule.replacement : MASK_REPLACEMENT;
+    if (type === 'FIELD_NAME') {
+      fieldRules.push({
+        pattern,
+        compactPattern: compactMaskingFieldName(pattern),
+        replacement,
+      });
+      continue;
+    }
+    if (type === 'REGEX') {
+      const regex = compileMaskingRegex(pattern, rule.flags);
+      if (regex) {
+        regexRules.push({ regex, replacement });
+      }
+    }
+  }
+  return { fieldRules, regexRules };
+}
+
+function compileMaskingRegex(pattern, flags) {
+  const rawFlags = optionalString(flags) || 'g';
+  const uniqueFlags = [];
+  for (const flag of rawFlags) {
+    if ('gimsuy'.includes(flag) && !uniqueFlags.includes(flag)) {
+      uniqueFlags.push(flag);
+    }
+  }
+  if (!uniqueFlags.includes('g')) {
+    uniqueFlags.push('g');
+  }
+  try {
+    return new RegExp(pattern, uniqueFlags.join(''));
+  } catch {
+    return null;
+  }
+}
+
+function findFieldMaskingRule(key, fieldRules) {
+  const text = optionalString(key).toLowerCase();
+  const compact = compactMaskingFieldName(key);
+  return fieldRules.find(rule => {
+    const ruleText = rule.pattern.toLowerCase();
+    return text === ruleText
+      || compact === rule.compactPattern
+      || Boolean(rule.compactPattern && compact.includes(rule.compactPattern));
+  }) || null;
+}
+
+function compactMaskingFieldName(value) {
+  return optionalString(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 function normalizeCaseSnapshot(payload) {
@@ -1763,7 +1964,7 @@ function humanizeRunnerError(error) {
     return `目标页面打开失败：连接被拒绝。请确认目标服务已启动且本机可访问，原始错误：${message}`;
   }
   if (/Timeout/i.test(message)) {
-    return `本地执行超时：页面加载或步骤等待超过限制。请检查页面响应速度、登录态和定位器，原始错误：${message}`;
+    return `本地执行超时：页面加载或步骤等待超过限制。请检查页面响应速度、登录状态和定位器，原始错误：${message}`;
   }
   return message;
 }

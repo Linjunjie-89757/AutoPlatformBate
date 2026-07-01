@@ -134,6 +134,7 @@ class ApiExecutionDomainServiceLocalRunnerTests {
         assertThat(command.taskType()).isEqualTo("API_SCENARIO_RUN");
         assertThat(command.executionLocation()).isEqualTo("LOCAL_RUNNER");
         assertThat(command.runnerId()).isEqualTo("runner-api-1");
+        assertApiLocalRunnerMaskingRules(command);
         assertThat(command.timeoutPolicy()).containsEntry("requestTimeoutMs", 30000);
         assertThat(command.timeoutPolicy()).containsEntry("scriptTimeoutMs", 1000);
         assertThat(command.environmentSnapshot()).containsEntry("environmentId", 21L);
@@ -445,6 +446,7 @@ class ApiExecutionDomainServiceLocalRunnerTests {
         CreateRunnerTaskCommand command = commandCaptor.getValue();
 
         assertThat(command.taskType()).isEqualTo("API_CASE_RUN");
+        assertApiLocalRunnerMaskingRules(command);
         assertThat(command.artifactRefs()).singleElement()
                 .satisfies(artifact -> {
                     assertThat(artifact).containsEntry("fileName", "contract.txt");
@@ -625,5 +627,21 @@ class ApiExecutionDomainServiceLocalRunnerTests {
         assertThat(formItems).extracting(item -> item.get("value"))
                 .contains("avatar")
                 .anySatisfy(value -> assertThat(String.valueOf(value)).startsWith("artifact:"));
+    }
+
+    private static void assertApiLocalRunnerMaskingRules(CreateRunnerTaskCommand command) {
+        assertThat(command.maskingRules()).isNotEmpty()
+                .anySatisfy(rule -> {
+                    assertThat(rule).containsEntry("type", "FIELD_NAME");
+                    assertThat(rule).containsEntry("pattern", "authorization");
+                })
+                .anySatisfy(rule -> {
+                    assertThat(rule).containsEntry("type", "FIELD_NAME");
+                    assertThat(rule).containsEntry("pattern", "cookie");
+                })
+                .anySatisfy(rule -> {
+                    assertThat(rule).containsEntry("type", "REGEX");
+                    assertThat(String.valueOf(rule.get("pattern"))).contains("password", "token");
+                });
     }
 }

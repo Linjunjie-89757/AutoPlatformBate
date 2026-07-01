@@ -155,7 +155,7 @@ public class ApiExecutionDomainService {
                 buildApiLocalRunnerVariableSnapshot(request.variableSetId(), context.variables()),
                 Map.of(),
                 artifactCollector.artifactRefs(),
-                List.of(),
+                ApiLocalRunnerPayloadSupport.defaultMaskingRules(),
                 Map.of(),
                 payload
         ));
@@ -610,7 +610,7 @@ public class ApiExecutionDomainService {
                 buildApiLocalRunnerVariableSnapshot(variableSetId, context.variables()),
                 Map.of(),
                 artifactCollector.artifactRefs(),
-                List.of(),
+                ApiLocalRunnerPayloadSupport.defaultMaskingRules(),
                 Map.of(),
                 payload
         ));

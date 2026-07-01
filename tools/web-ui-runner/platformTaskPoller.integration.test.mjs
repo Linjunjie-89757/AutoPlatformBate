@@ -1665,9 +1665,9 @@ test('reports clear WEB_CASE_RUN failure when required auth state is missing', a
 
     assert.equal(reports.steps.length, 1);
     assert.equal(reports.steps[0].status, 'FAILED');
-    assert.match(reports.steps[0].errorMessage, /登录态/);
+    assert.match(reports.steps[0].errorMessage, /登录状态/);
     assert.equal(reports.results[0].status, 'FAILED');
-    assert.match(reports.results[0].errorMessage, /登录态/);
+    assert.match(reports.results[0].errorMessage, /登录状态/);
     assert.equal(reports.steps[0].extra.screenshot || null, null);
   } finally {
     await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
@@ -2066,9 +2066,9 @@ test('reports WEB_CASE_RUN failure when saved auth state lands on login page', a
 
     assert.equal(reports.steps.length, 1);
     assert.equal(reports.steps[0].status, 'FAILED');
-    assert.match(reports.steps[0].errorMessage, /登录页|登录态已失效/);
+    assert.match(reports.steps[0].errorMessage, /登录页|登录状态已失效/);
     assert.equal(reports.results[0].status, 'FAILED');
-    assert.match(reports.results[0].errorMessage, /登录页|登录态已失效/);
+    assert.match(reports.results[0].errorMessage, /登录页|登录状态已失效/);
   } finally {
     await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
     await closeServer(targetApp);
@@ -4012,8 +4012,10 @@ test('runs API scripts with controlled variables and preserves continue policy',
     assert.equal(reports.steps[2].status, 'SUCCESS');
     assert.equal(reports.results[0].summary.passedSteps, 2);
     assert.equal(reports.results[0].summary.failedSteps, 1);
-    assert.equal(reports.results[0].reportData.extractedVariables.SERVER_TOKEN, 'server-token-42');
-    assert.equal(reports.results[0].reportData.extractedVariables.ECHO_TOKEN, 'alpha-token');
+    assert.equal(reports.results[0].reportData.extractedVariables.SERVER_TOKEN, '******');
+    assert.equal(reports.results[0].reportData.extractedVariables.ECHO_TOKEN, '******');
+    assert.equal(JSON.stringify(reports.results[0]).includes('server-token-42'), false);
+    assert.equal(JSON.stringify(reports.results[0]).includes('alpha-token'), false);
     assert.equal(reports.results[0].reportData.stepResults[0].scriptResults.pre.status, 'SUCCESS');
     assert.equal(reports.results[0].reportData.stepResults[0].scriptResults.post.status, 'SUCCESS');
   } finally {
@@ -4405,7 +4407,8 @@ test('runs API_CASE_RUN scripts and reports script variables', async () => {
     assert.equal(reports.results[0].status, 'SUCCESS');
     assert.equal(reports.results[0].reportData.scriptResults.pre.status, 'SUCCESS');
     assert.equal(reports.results[0].reportData.scriptResults.post.status, 'SUCCESS');
-    assert.equal(reports.results[0].reportData.extractedVariables.CASE_ECHO, 'case-token');
+    assert.equal(reports.results[0].reportData.extractedVariables.CASE_ECHO, '******');
+    assert.equal(JSON.stringify(reports.results[0]).includes('case-token'), false);
   } finally {
     await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
     await closeServer(targetApi);
