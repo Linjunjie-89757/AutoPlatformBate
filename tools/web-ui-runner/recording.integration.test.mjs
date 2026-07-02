@@ -309,6 +309,58 @@ test('pauses resumes and undoes recorded page steps', async () => {
   assert.deepEqual(stderr, []);
 });
 
+test('deduplicates noisy input and repeated clicks while recording', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildNoisyRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    await waitFor(async () => {
+      const status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 2;
+    }, 5000);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(stopped.steps[0].locatorValue, '#name');
+    assert.equal(stopped.steps[0].inputValue, 'Alice');
+    assert.equal(stopped.steps[1].locatorType, 'TEST_ID');
+    assert.equal(stopped.steps[1].locatorValue, 'save-order');
+    assert.equal(stopped.events.length, 2);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 function buildRecordingPageHtml({ autoInteract }) {
   return [
     '<!doctype html>',
@@ -336,6 +388,33 @@ function buildRecordingPageHtml({ autoInteract }) {
       '  document.querySelector("#save").click();',
       '}, 1000);',
     ].join('') : '',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildNoisyRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Noisy Recording</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<button id="save" data-testid="save-order">Save order</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '}',
+    'window.setTimeout(() => inputValue("A"), 1000);',
+    'window.setTimeout(() => inputValue("Ali"), 1050);',
+    'window.setTimeout(() => inputValue("Alice"), 1100);',
+    'window.setTimeout(() => document.querySelector("#save").click(), 1200);',
+    'window.setTimeout(() => document.querySelector("#save").click(), 1240);',
+    'window.setTimeout(() => document.querySelector("#save").click(), 1280);',
     '</script>',
     '</body>',
     '</html>',

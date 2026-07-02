@@ -20,6 +20,7 @@ const VALIDATION_HIGHLIGHT_DURATION_MS = 3000;
 const AUTH_STALE_MINUTES = 24 * 60;
 const RECORDER_BINDING_NAME = '__autoWebRunnerRecordEvent';
 const RECORDER_MAX_EVENTS = 300;
+const RECORDER_DUPLICATE_CLICK_WINDOW_MS = 500;
 const runtimeConfig = resolveRunnerRuntimeConfig({
   env: process.env,
   argv: process.argv.slice(2),
@@ -655,7 +656,26 @@ function appendRecordedEvent(events, event) {
     events[events.length - 1] = event;
     return;
   }
+  if (
+    last
+    && event.kind === 'CLICK'
+    && last.kind === 'CLICK'
+    && sameRecordedLocator(last.target?.locator, event.target?.locator)
+    && isWithinRecordedEventWindow(last, event, RECORDER_DUPLICATE_CLICK_WINDOW_MS)
+  ) {
+    events[events.length - 1] = event;
+    return;
+  }
   events.push(event);
+}
+
+function isWithinRecordedEventWindow(left, right, windowMs) {
+  const leftTime = Date.parse(optionalString(left?.timestamp));
+  const rightTime = Date.parse(optionalString(right?.timestamp));
+  if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) {
+    return false;
+  }
+  return Math.abs(rightTime - leftTime) <= windowMs;
 }
 
 function sameRecordedLocator(left, right) {
