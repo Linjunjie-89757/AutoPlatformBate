@@ -117,7 +117,7 @@ public class AiCaseController {
             @PathVariable Long id,
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
     ) {
-        return ApiResponse.ok(aiCaseService.testProvider(id, workspaceCode), "AI provider connection tested");
+        return ApiResponse.ok(aiCaseService.testProvider(id, workspaceCode), "AI 服务连接测试完成");
     }
 
     @PostMapping("/providers/{id}/fetch-models")
@@ -166,7 +166,7 @@ public class AiCaseController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
             @Valid @RequestBody SaveAiCaseConfigRequest request
     ) {
-        return ApiResponse.ok(aiCaseService.testConfig(workspaceCode, request), "AI config connection tested");
+        return ApiResponse.ok(aiCaseService.testConfig(workspaceCode, request), "AI 配置连接测试完成");
     }
 
     @PostMapping("/review")

@@ -1137,7 +1137,7 @@ async function runCaseWithLocalRunner() {
     return
   }
   if (!props.caseId) {
-    ElMessage.warning('请先保存用例，再使用本地 Runner 正式运行')
+    ElMessage.warning('请先保存用例，再进行本地调试运行')
     return
   }
   if (hasUnsavedChanges()) {
@@ -1158,12 +1158,12 @@ async function runCaseWithLocalRunner() {
     })
     await loadRunnerNodes()
     if (!selectedRunnerId.value) {
-      ElMessage.warning('未检测到支持 Web UI 用例运行的在线 Local Runner，请先启动本地执行器')
+      ElMessage.warning('未检测到支持 Web UI 用例运行的本地 Runner，请先启动本地调试 Runner')
       return
     }
     const selectedRunner = runnerNodes.value.find(item => item.runnerId === selectedRunnerId.value)
     if (!selectedRunner || !isRunnerSelectable(selectedRunner, WEB_CASE_RUNNER_TASK_TYPE)) {
-      ElMessage.warning(`当前 Local Runner 不可用：${selectedRunner ? runnerUnselectableReason(selectedRunner, WEB_CASE_RUNNER_TASK_TYPE) || '请重新选择' : '请重新选择'}`)
+      ElMessage.warning(`当前本地 Runner 不可用：${selectedRunner ? runnerUnselectableReason(selectedRunner, WEB_CASE_RUNNER_TASK_TYPE) || '请重新选择' : '请重新选择'}`)
       return
     }
     const response = await webUiAutomationApi.createLocalRunnerRun(props.workspaceCode, props.caseId, {
@@ -1174,7 +1174,7 @@ async function runCaseWithLocalRunner() {
     localRunnerFormalRunId.value = response.run.runId
     localRunnerTask.value = response.runnerTask
     scheduleLocalRunnerTaskRefresh(response.runnerTask.runId)
-    ElMessage.success(`本地 Runner 正式运行已创建：${response.runnerTask.runId}`)
+    ElMessage.success(`本地调试任务已创建：${response.runnerTask.runId}`)
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
@@ -1374,13 +1374,13 @@ onBeforeUnmount(() => {
           <el-form-item label="默认超时">
             <el-input-number v-model="form.defaultTimeoutMs" :min="1000" :max="60000" :step="1000" controls-position="right" />
           </el-form-item>
-          <el-form-item label="Local Runner">
+          <el-form-item label="本地调试 Runner">
             <el-select
               v-model="selectedRunnerId"
               clearable
               filterable
               :loading="loadingRunnerNodes"
-              placeholder="选择可用本地执行器"
+              placeholder="选择可用本地 Runner"
             >
               <el-option
                 v-for="runner in runnerNodes"

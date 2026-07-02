@@ -634,18 +634,13 @@ async function ensureDirectoryPath(path: string) {
   for (const segment of segments) {
     let matchedNode = siblings.find(item => item.name === segment) ?? null
     if (!matchedNode) {
-      await caseApi.createCaseDirectory(targetWorkspaceCode.value, {
+      matchedNode = await caseApi.createCaseDirectory(targetWorkspaceCode.value, {
         workspaceCode: selectedWorkspaceCode.value === 'ALL' ? targetWorkspaceCode.value : undefined,
         parentId,
         name: segment,
       })
-      await loadDirectoryOptions()
       createdAny = true
-      siblings = getWorkspaceChildren()
-      matchedNode = siblings.find(item => item.name === segment) ?? null
-      if (!matchedNode) {
-        throw new Error(`目录创建后未找到：${segment}`)
-      }
+      siblings.push(matchedNode)
     }
     currentNode = matchedNode
     parentId = matchedNode.id

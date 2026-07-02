@@ -7,6 +7,7 @@ import {
   LOCAL_RUNNER_START_COMMAND,
   mapRunnerCandidateToCollectCandidate,
   normalizeRunnerHealth,
+  startLocalRunnerTaskPolling,
   validateLocalRunnerLocators,
 } from '../src/entities/web-ui-automation/lib/localRunnerClient.ts'
 
@@ -65,6 +66,10 @@ test('mapRunnerCandidateToCollectCandidate maps runner candidates as static unve
         value: 'login-username',
         framePath: [{ selector: 'iframe#login' }],
         shadowPath: ['login-shell'],
+        alternatives: [
+          { strategy: 'LABEL', value: '用户名' },
+          { strategy: 'CSS', value: '#username' },
+        ],
       },
       text: '',
       placeholder: 'Input username',
@@ -82,10 +87,54 @@ test('mapRunnerCandidateToCollectCandidate maps runner candidates as static unve
   assert.equal(candidate.candidateSource, 'STATIC_RULE')
   assert.equal(candidate.validationStatus, 'UNVERIFIED')
   assert.equal(candidate.matchCount, null)
-  assert.equal(candidate.validationMessage, '静态生成，尚未经过 Runner 真机验证')
+  assert.equal(candidate.validationMessage, '静态生成，尚未经过本地页面验证')
   assert.equal(candidate.screenshotBase64, 'screen')
   assert.deepEqual(candidate.framePath, [{ selector: 'iframe#login' }])
   assert.deepEqual(candidate.shadowPath, ['login-shell'])
+  assert.deepEqual(candidate.locatorCandidates?.map(item => [item.locatorType, item.locatorValue]), [
+    ['TEST_ID', 'login-username'],
+    ['LABEL', '用户名'],
+    ['CSS', '#username'],
+  ])
+})
+
+test('startLocalRunnerTaskPolling posts task polling options to local runner', async () => {
+  const originalFetch = globalThis.fetch
+  let requestUrl = ''
+  let requestBody: Record<string, unknown> = {}
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requestUrl = String(url)
+    requestBody = JSON.parse(String(init?.body || '{}'))
+    return {
+      ok: true,
+      json: async () => ({
+        success: true,
+        poller: {
+          runnerId: 'runner_local',
+          capabilities: requestBody.capabilities,
+          workspaceCodes: requestBody.workspaceCodes,
+          running: true,
+        },
+      }),
+    } as Response
+  }) as typeof fetch
+
+  try {
+    await startLocalRunnerTaskPolling({
+      installId: 'api-scenario-risk-ops',
+      capabilities: ['API_CASE_RUN', 'API_SCENARIO_RUN', 'API_SUITE_RUN'],
+      workspaceCodes: ['risk-ops'],
+      intervalMs: 1000,
+    })
+
+    assert.equal(requestUrl, `${LOCAL_RUNNER_BASE_URL}/tasks/poll/start`)
+    assert.equal(requestBody.installId, 'api-scenario-risk-ops')
+    assert.deepEqual(requestBody.capabilities, ['API_CASE_RUN', 'API_SCENARIO_RUN', 'API_SUITE_RUN'])
+    assert.deepEqual(requestBody.workspaceCodes, ['risk-ops'])
+    assert.equal(requestBody.intervalMs, 1000)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })
 
 test('validateLocalRunnerLocators posts locators and normalizes validation results', async () => {
@@ -126,7 +175,7 @@ test('validateLocalRunnerLocators posts locators and normalizes validation resul
       { locatorType: 'CSS', locatorValue: '#search', framePath: [{ selector: 'iframe#orders' }], shadowPath: ['order-shell'] },
       { locatorType: 'TEXT', locatorValue: 'Submit' },
       { locatorType: 'CSS', locatorValue: '' },
-    ])
+    ], { highlight: true })
 
     assert.equal(requestUrl, `${LOCAL_RUNNER_BASE_URL}/collect/validate`)
     assert.equal(requestSignal instanceof AbortSignal, true)
@@ -135,6 +184,7 @@ test('validateLocalRunnerLocators posts locators and normalizes validation resul
         { locatorType: 'CSS', locatorValue: '#search', framePath: [{ selector: 'iframe#orders' }], shadowPath: ['order-shell'] },
         { locatorType: 'TEXT', locatorValue: 'Submit' },
       ],
+      highlight: true,
     })
     assert.deepEqual(results, [
       {

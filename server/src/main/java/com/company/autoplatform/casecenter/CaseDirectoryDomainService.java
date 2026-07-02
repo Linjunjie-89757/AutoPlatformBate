@@ -95,12 +95,12 @@ public class CaseDirectoryDomainService {
 
         CaseDirectoryEntity targetParent = requireParentDirectory(workspace, request.targetParentId());
         if (targetParent != null && targetParent.getId().equals(entity.getId())) {
-            throw new BadRequestException("鐩綍涓嶈兘绉诲姩鍒拌嚜宸变笅闈?");
+            throw new BadRequestException("目录不能移动到自己下面");
         }
         if (targetParent != null) {
             Set<Long> descendantIds = collectDescendantIds(entity.getWorkspaceId(), entity.getId());
             if (descendantIds.contains(targetParent.getId())) {
-                throw new BadRequestException("鐩綍涓嶈兘绉诲姩鍒拌嚜宸辩殑瀛愯妭鐐逛笅闈?");
+                throw new BadRequestException("目录不能移动到自己的子节点下面");
             }
         }
 
@@ -118,13 +118,13 @@ public class CaseDirectoryDomainService {
         long childCount = caseDirectoryMapper.selectCount(new LambdaQueryWrapper<CaseDirectoryEntity>()
                 .eq(CaseDirectoryEntity::getParentId, entity.getId()));
         if (childCount > 0) {
-            throw new BadRequestException("褰撳墠鐩綍涓嬭繕鏈夊瓙妯″潡锛屾殏涓嶅厑璁稿垹闄?");
+            throw new BadRequestException("当前目录下还有子模块，暂不允许删除");
         }
 
         long boundCaseCount = caseMapper.selectCount(new LambdaQueryWrapper<CaseEntity>()
                 .eq(CaseEntity::getCaseDirectoryId, entity.getId()));
         if (boundCaseCount > 0) {
-            throw new BadRequestException("褰撳墠鐩綍涓嬭繕鏈夌敤渚嬶紝鏆備笉鍏佽鍒犻櫎");
+            throw new BadRequestException("当前目录下还有用例，暂不允许删除");
         }
 
         caseDirectoryMapper.deleteById(id);
@@ -133,7 +133,7 @@ public class CaseDirectoryDomainService {
     public CaseDirectoryEntity requireDirectory(Long id) {
         CaseDirectoryEntity entity = caseDirectoryMapper.selectById(id);
         if (entity == null) {
-            throw new NotFoundException("鐩綍涓嶅瓨鍦?");
+            throw new NotFoundException("目录不存在");
         }
         return entity;
     }
@@ -144,7 +144,7 @@ public class CaseDirectoryDomainService {
         }
         CaseDirectoryEntity directory = requireDirectory(directoryId);
         if (!directory.getWorkspaceId().equals(workspace.getId())) {
-            throw new BadRequestException("鐩綍涓嶅睘浜庡綋鍓嶅伐浣滅┖闂?");
+            throw new BadRequestException("目录不属于当前工作空间");
         }
         return directory;
     }
@@ -175,13 +175,13 @@ public class CaseDirectoryDomainService {
         if (WorkspaceScope.isAll(normalized)) {
             if (!workspaceService.isPlatformAdmin()
                     && !workspaceService.listReadableWorkspaceIds().contains(entity.getWorkspaceId())) {
-                throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐩綍");
+                throw new BadRequestException("当前空间上下文不可访问该目录");
             }
             return;
         }
         WorkspaceEntity workspace = workspaceService.requireReadableWorkspace(normalized);
         if (!workspace.getId().equals(entity.getWorkspaceId())) {
-            throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐩綍");
+            throw new BadRequestException("当前空间上下文不可访问该目录");
         }
     }
 

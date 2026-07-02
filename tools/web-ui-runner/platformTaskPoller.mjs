@@ -434,7 +434,7 @@ export function createRunnerTaskPoller(options = {}) {
       const finalStatus = failed > 0 ? 'FAILED' : 'SUCCESS';
 
       await reportStatus(current, task, {
-        status: finalStatus,
+        status: 'RUNNING',
         currentStage: 'COMPLETED',
         progress: buildProgress(stepResults.length, steps.length),
         message: `本地用例执行完成：成功 ${passed} 步，失败 ${failed} 步`,
@@ -527,7 +527,7 @@ export function createRunnerTaskPoller(options = {}) {
         },
       });
       await reportStatus(current, task, {
-        status: execution.success ? 'SUCCESS' : 'FAILED',
+        status: 'RUNNING',
         currentStage: 'COMPLETED',
         progress: { current: 1, total: 1, percent: 100 },
         message: execution.success ? '本地接口用例执行成功' : '本地接口用例执行失败',
@@ -603,7 +603,7 @@ export function createRunnerTaskPoller(options = {}) {
       const passedSteps = stepResults.filter(item => item.status === 'SUCCESS').length;
       const finalStatus = failedSteps > 0 ? 'FAILED' : 'SUCCESS';
       await reportStatus(current, task, {
-        status: finalStatus,
+        status: 'RUNNING',
         currentStage: 'COMPLETED',
         progress: buildProgress(stepResults.length, steps.length),
         message: `本地接口场景执行完成：成功 ${passedSteps} 步，失败 ${failedSteps} 步`,
@@ -703,7 +703,7 @@ export function createRunnerTaskPoller(options = {}) {
       const passedSteps = stepResults.filter(item => item.status === 'SUCCESS').length;
       const finalStatus = failedSteps > 0 ? 'FAILED' : 'SUCCESS';
       await reportStatus(current, task, {
-        status: finalStatus,
+        status: 'RUNNING',
         currentStage: 'COMPLETED',
         progress: buildProgress(stepResults.length, totalSteps),
         message: `本地接口套件执行完成：成功 ${passedSteps} 步，失败 ${failedSteps} 步`,

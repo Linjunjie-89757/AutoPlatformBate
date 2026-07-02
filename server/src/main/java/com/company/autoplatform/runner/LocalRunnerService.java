@@ -365,6 +365,7 @@ public class LocalRunnerService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("summary", report.summary() == null ? Map.of() : report.summary());
         result.put("durationMs", report.durationMs());
+        result.put("errorMessage", blankToNull(report.errorMessage()));
         result.put("reportData", report.reportData() == null ? Map.of() : report.reportData());
         task.setResultJson(writeJson(result));
         task.setLastReportedAt(now);
@@ -378,6 +379,8 @@ public class LocalRunnerService {
                 task.getWorkspaceCode(),
                 task.getRunnerId(),
                 readMap(task.getPayloadJson()),
+                readMap(task.getEnvironmentSnapshotJson()),
+                readMap(task.getVariableSnapshotJson()),
                 result
         ));
         return new RunnerTaskAckResponse(runId, task.getStatus(), true, "Final result accepted");
@@ -731,6 +734,8 @@ public class LocalRunnerService {
                 task.getWorkspaceCode(),
                 task.getRunnerId(),
                 readMap(task.getPayloadJson()),
+                readMap(task.getEnvironmentSnapshotJson()),
+                readMap(task.getVariableSnapshotJson()),
                 buildForcedTerminalResult(task, errorMessage, now)
         ));
     }

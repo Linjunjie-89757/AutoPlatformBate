@@ -99,7 +99,7 @@ const pageCopy = computed(() => {
   if (activeSection.value === 'caseDetail') {
     return {
       title: 'Web UI 用例工作台',
-      description: '编辑用例步骤、运行调试，并为 Local Runner 录制入口预留控制台。',
+      description: '编辑用例步骤、运行调试，并为本地 Runner 录制入口预留控制台。',
     }
   }
   return {

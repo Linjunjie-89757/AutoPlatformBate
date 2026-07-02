@@ -120,13 +120,13 @@ public class CaseExecutionAttachmentSupport {
         if (WorkspaceScope.isAll(normalized)) {
             if (!workspaceService.isPlatformAdmin()
                     && !workspaceService.listReadableWorkspaceIds().contains(entity.getWorkspaceId())) {
-                throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐢ㄤ緥");
+                throw new BadRequestException("当前空间上下文不可访问该用例");
             }
             return;
         }
         WorkspaceEntity workspace = workspaceService.requireReadableWorkspace(normalized);
         if (!workspace.getId().equals(entity.getWorkspaceId())) {
-            throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐢ㄤ緥");
+            throw new BadRequestException("当前空间上下文不可访问该用例");
         }
     }
 

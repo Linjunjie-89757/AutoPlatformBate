@@ -17,7 +17,7 @@ export function evaluateAuthStateHealth(input = {}) {
     return failure(
       'MISSING',
       'AUTH_STATE_MISSING',
-      `本地登录态不存在：当前用例要求登录态，请先在 Local Runner 中打开目标环境页面并保存登录态（工作空间：${workspaceId}，环境：${environmentId}）`,
+      `本地登录状态不存在：当前用例要求登录状态，请先在本地 Runner 中打开目标环境页面并保存登录状态（工作空间：${workspaceId}，环境：${environmentId}）`,
     );
   }
 
@@ -40,7 +40,7 @@ export function evaluateAuthStateHealth(input = {}) {
     return failure(
       'EXPIRED',
       'AUTH_STATE_EXPIRED',
-      `本地登录态已过期：当前用例要求登录态，请重新打开目标环境页面并保存登录态（过期时间：${expiresAt}）`,
+      `本地登录状态已过期：当前用例要求登录状态，请重新打开目标环境页面并保存登录状态（过期时间：${expiresAt}）`,
       { expiresAt, remainingMs: 0 },
     );
   }
@@ -50,7 +50,7 @@ export function evaluateAuthStateHealth(input = {}) {
     return failure(
       'EXPIRING_SOON',
       'AUTH_STATE_EXPIRING_SOON',
-      `本地登录态即将过期：剩余约 ${Math.ceil(remainingMs / 60_000)} 分钟，低于本次执行要求，请重新保存登录态后再执行`,
+      `本地登录状态即将过期：剩余约 ${Math.ceil(remainingMs / 60_000)} 分钟，低于本次执行要求，请重新保存登录状态后再执行`,
       { expiresAt, remainingMs },
     );
   }

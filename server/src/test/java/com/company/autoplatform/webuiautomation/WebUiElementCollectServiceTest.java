@@ -45,7 +45,7 @@ class WebUiElementCollectServiceTest {
                     assertThat(candidate.elementName()).isEqualTo("密码输入框");
                     assertThat(candidate.locatorType()).isEqualTo("TEST_ID");
                     assertThat(candidate.locatorValue()).isEqualTo("password-input");
-                    assertThat(candidate.groupName()).isEqualTo("表单区");
+                    assertThat(candidate.groupName()).isEqualTo("筛选表单区");
                     assertThat(candidate.confidence()).isGreaterThanOrEqualTo(90);
                     assertThat(candidate.tagName()).isEqualTo("input");
                     assertThat(candidate.elementType()).isEqualTo("FORM");
@@ -86,6 +86,7 @@ class WebUiElementCollectServiceTest {
                             original.locatorValue(),
                             original.framePath(),
                             original.shadowPath(),
+                            original.locatorCandidates(),
                             98,
                             "AI 识别为登录账号字段，原始定位器稳定",
                             original.tagName(),
@@ -117,7 +118,7 @@ class WebUiElementCollectServiceTest {
         assertThat(result.fallbackReason()).isNull();
         assertThat(result.message()).isEqualTo("AI 已优化元素名称和分组");
         assertThat(result.candidates()).singleElement().satisfies(candidate -> {
-            assertThat(candidate.groupName()).isEqualTo("登录表单");
+            assertThat(candidate.groupName()).isEqualTo("筛选表单区");
             assertThat(candidate.elementName()).isEqualTo("账号输入框");
             assertThat(candidate.locatorType()).isEqualTo("CSS");
             assertThat(candidate.locatorValue()).isEqualTo("#username");
@@ -152,6 +153,7 @@ class WebUiElementCollectServiceTest {
                     "导出按钮",
                     "TEXT",
                     "导出",
+                    null,
                     null,
                     null,
                     76,
@@ -254,7 +256,7 @@ class WebUiElementCollectServiceTest {
                 .filteredOn(candidate -> "#search".equals(candidate.locatorValue()))
                 .singleElement()
                 .satisfies(candidate -> {
-            assertThat(candidate.groupName()).isEqualTo("筛选区");
+            assertThat(candidate.groupName()).isEqualTo("筛选表单区");
             assertThat(candidate.elementName()).isEqualTo("订单搜索按钮");
             assertThat(candidate.locatorType()).isEqualTo("CSS");
             assertThat(candidate.locatorValue()).isEqualTo("#search");
@@ -266,7 +268,7 @@ class WebUiElementCollectServiceTest {
                 .filteredOn(candidate -> "AI_SUPPLEMENT".equals(candidate.candidateSource()))
                 .singleElement()
                 .satisfies(candidate -> {
-                    assertThat(candidate.groupName()).isEqualTo("操作区");
+                    assertThat(candidate.groupName()).isEqualTo("操作按钮区");
                     assertThat(candidate.elementName()).isEqualTo("导出按钮");
                     assertThat(candidate.locatorType()).isEqualTo("CSS");
                     assertThat(candidate.locatorValue()).isEqualTo("#ai-added");
@@ -303,6 +305,7 @@ class WebUiElementCollectServiceTest {
                 elementName,
                 locatorType,
                 locatorValue,
+                null,
                 null,
                 null,
                 confidence,

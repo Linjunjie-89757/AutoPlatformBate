@@ -6,6 +6,7 @@ import type {
   BatchDeleteCasesPayload,
   BatchMoveCasesPayload,
   CaseDetail,
+  CaseDirectoryNode,
   CaseExecutionAttachment,
   CaseExecutionHistoryItem,
   CaseDirectoryWorkspace,
@@ -84,7 +85,7 @@ export const caseApi = {
   },
 
   async createCaseDirectory(workspaceCode = 'ALL', payload: CreateCaseDirectoryPayload) {
-    const response = await httpPost<ApiResponse<CaseDirectoryWorkspace>, CreateCaseDirectoryPayload>(
+    const response = await httpPost<ApiResponse<CaseDirectoryNode>, CreateCaseDirectoryPayload>(
       '/cases/directories',
       payload,
       {

@@ -148,7 +148,7 @@ const emit = defineEmits<{
     </div>
     <template #footer>
       <AppButton @click="emit('update:validateVisible', false)">关闭</AppButton>
-      <AppButton :loading="localRunnerValidating" :disabled="validating" @click="emit('submit-local-runner-validate')">本地 Runner 验证当前页</AppButton>
+      <AppButton :loading="localRunnerValidating" :disabled="validating" @click="emit('submit-local-runner-validate')">本地验证当前页</AppButton>
       <AppButton type="primary" :loading="validating" :disabled="localRunnerValidating" @click="emit('submit-validate')">开始验证</AppButton>
     </template>
   </el-dialog>

@@ -64,7 +64,7 @@ const taskWarning = computed(() => {
     return {
       type: 'warning' as const,
       title: props.task.message || '采集任务已降级',
-      description: '当前候选可能没有经过本地真机验证，保存前建议重新连接 Runner 或重新进入目标页面采集。',
+      description: '当前候选可能没有经过本地页面验证，保存前建议重新连接 Runner 或重新进入目标页面采集。',
     }
   }
   if (props.task.status === 'CANCELED') {
@@ -82,8 +82,8 @@ function formatCollectTaskStatus(status?: string | null) {
   if (status === 'UPLOADED') return '快照已上传'
   if (status === 'RULE_CLEANING') return '规则清洗中'
   if (status === 'AI_ANALYZING') return 'AI 分析中'
-  if (status === 'WAITING_LOCAL_VALIDATION') return '等待真机验证'
-  if (status === 'VALIDATING') return '真机验证中'
+  if (status === 'WAITING_LOCAL_VALIDATION') return '等待本地验证'
+  if (status === 'VALIDATING') return '本地验证中'
   if (status === 'PROCESSING') return '处理中'
   if (status === 'PENDING') return '待处理'
   if (status === 'FAILED') return '失败'

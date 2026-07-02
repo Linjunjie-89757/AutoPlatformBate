@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CollectionTag, Cpu, RefreshRight, Search } from '@element-plus/icons-vue'
+import { Cpu, MoreFilled, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
 
 import { WEB_UI_CASE_STATUS_OPTIONS, type WebUiCaseStatus } from '@/entities/web-ui-automation'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
@@ -19,6 +19,7 @@ const emit = defineEmits<{
   'update:status': [value: WebUiCaseStatus | '']
   search: []
   reset: []
+  create: []
   import: []
   export: []
   'quality-check': []
@@ -28,6 +29,21 @@ const emit = defineEmits<{
   'open-collect-task-list': []
   'ai-collect': []
 }>()
+
+function handleMoreCommand(command: string | number | object) {
+  const value = String(command)
+  if (value === 'import') {
+    emit('import')
+    return
+  }
+  if (value === 'export') {
+    emit('export')
+    return
+  }
+  if (value === 'quality-check') {
+    emit('quality-check')
+  }
+}
 </script>
 
 <template>
@@ -56,9 +72,8 @@ const emit = defineEmits<{
         <AppButton :icon="RefreshRight" @click="emit('reset')">重置</AppButton>
       </div>
       <div class="web-ui-filter-toolbar__actions">
-        <AppButton @click="emit('import')">导入</AppButton>
-        <AppButton @click="emit('export')">导出</AppButton>
-        <AppButton :icon="CollectionTag" :loading="qualityChecking" @click="emit('quality-check')">质量检查</AppButton>
+        <AppButton class="web-ui-filter-toolbar__ai" type="primary" :icon="Cpu" @click="emit('ai-collect')">AI 采集</AppButton>
+        <AppButton :icon="Plus" @click="emit('create')">新增元素</AppButton>
         <WebUiElementCollectRecentTasks
           :tasks="recentCollectTasks"
           @open="emit('open-recent-task', $event)"
@@ -66,7 +81,16 @@ const emit = defineEmits<{
           @clear="emit('clear-recent-tasks')"
           @all="emit('open-collect-task-list')"
         />
-        <AppButton class="web-ui-filter-toolbar__ai" :icon="Cpu" @click="emit('ai-collect')">AI 采集</AppButton>
+        <el-dropdown trigger="click" @command="handleMoreCommand">
+          <AppButton :icon="MoreFilled" :loading="qualityChecking">更多</AppButton>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="import">导入 JSON</el-dropdown-item>
+              <el-dropdown-item command="export">导出当前范围</el-dropdown-item>
+              <el-dropdown-item command="quality-check">质量检查</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
   </header>

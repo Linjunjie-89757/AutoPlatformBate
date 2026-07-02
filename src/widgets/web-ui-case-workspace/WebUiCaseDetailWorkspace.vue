@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   CopyDocument,
   Delete,
   Plus,
@@ -12,7 +14,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
-  formatStepType,
+  formatLocatorType,
   requiresInput,
   requiresLocator,
   webUiAutomationApi,
@@ -20,12 +22,13 @@ import {
   WEB_UI_LOCATOR_OPTIONS,
   WEB_UI_SCREENSHOT_POLICY_OPTIONS,
   WEB_UI_STEP_TYPE_OPTIONS,
-  WebUiStepTypeBadge,
   type SaveWebUiCasePayload,
   type WebUiBrowserType,
   type WebUiCaseDetail,
+  type WebUiElementItem,
   type WebUiCaseStatus,
   type WebUiCaseStepItem,
+  type WebUiLocatorContextPathItem,
   type WebUiLocatorType,
   type WebUiScreenshotPolicy,
   type WebUiStepType,
@@ -43,6 +46,8 @@ interface EditableStep {
   elementName: string | null
   locatorType: WebUiLocatorType | null
   locatorValue: string
+  framePath: WebUiLocatorContextPathItem[] | null
+  shadowPath: WebUiLocatorContextPathItem[] | null
   inputValue: string
   timeoutMs: number | null
   continueOnFailure: boolean
@@ -82,6 +87,16 @@ const localRunning = ref(false)
 const errorMessage = ref('')
 const selectedStepIndex = ref(0)
 const form = ref<CaseForm>(createEmptyForm())
+const elementPickerVisible = ref(false)
+const elementPickerLoading = ref(false)
+const elementPickerKeyword = ref('')
+const elementPickerLocatorType = ref<WebUiLocatorType | ''>('')
+const elementPickerItems = ref<WebUiElementItem[]>([])
+const elementPickerTotal = ref(0)
+const elementPickerPageNo = ref(1)
+const elementPickerPageSize = 20
+let elementPickerSearchTimer: ReturnType<typeof window.setTimeout> | null = null
+let elementPickerRequestSeq = 0
 
 const caseId = computed(() => {
   const raw = Array.isArray(route.params.caseId) ? route.params.caseId[0] : route.params.caseId
@@ -119,6 +134,8 @@ function createStep(sortOrder = form.value.steps.length + 1): EditableStep {
     elementName: null,
     locatorType: null,
     locatorValue: '',
+    framePath: null,
+    shadowPath: null,
     inputValue: '',
     timeoutMs: null,
     continueOnFailure: false,
@@ -137,6 +154,8 @@ function toEditableStep(item: WebUiCaseStepItem, index: number): EditableStep {
     elementName: item.elementName || null,
     locatorType: item.locatorType || null,
     locatorValue: item.locatorValue || '',
+    framePath: item.framePath || null,
+    shadowPath: item.shadowPath || null,
     inputValue: item.inputValue || '',
     timeoutMs: item.timeoutMs ?? null,
     continueOnFailure: Boolean(item.continueOnFailure),
@@ -209,6 +228,8 @@ function buildPayload(): SaveWebUiCasePayload {
       elementName: step.elementName || null,
       locatorType: step.locatorType,
       locatorValue: step.locatorValue.trim() || null,
+      framePath: step.framePath || null,
+      shadowPath: step.shadowPath || null,
       inputValue: step.inputValue.trim() || null,
       timeoutMs: step.timeoutMs ?? null,
       continueOnFailure: step.continueOnFailure,
@@ -289,31 +310,40 @@ function backToList() {
 }
 
 function addStep() {
-  form.value.steps.push(createStep())
-  selectedStepIndex.value = form.value.steps.length - 1
+  const insertIndex = form.value.steps.length ? Math.min(selectedStepIndex.value + 1, form.value.steps.length) : 0
+  form.value.steps.splice(insertIndex, 0, createStep(insertIndex + 1))
+  selectedStepIndex.value = insertIndex
   reorderSteps()
 }
 
 function copySelectedStep() {
-  const step = selectedStep.value
+  copyStepAt(selectedStepIndex.value)
+}
+
+function copyStepAt(index: number) {
+  const step = form.value.steps[index]
   if (!step) {
     return
   }
-  form.value.steps.splice(selectedStepIndex.value + 1, 0, {
+  form.value.steps.splice(index + 1, 0, {
     ...step,
     id: null,
     name: step.name ? `${step.name}副本` : '',
   })
-  selectedStepIndex.value += 1
+  selectedStepIndex.value = index + 1
   reorderSteps()
 }
 
 async function removeSelectedStep() {
-  if (!selectedStep.value) {
+  await removeStepAt(selectedStepIndex.value)
+}
+
+async function removeStepAt(index: number) {
+  if (!form.value.steps[index]) {
     return
   }
   try {
-    await ElMessageBox.confirm('删除当前步骤后需要保存才会生效，确认删除？', '删除步骤', {
+    await ElMessageBox.confirm(`删除第 ${index + 1} 步后需要保存才会生效，确认删除？`, '删除步骤', {
       type: 'warning',
       confirmButtonText: '删除',
       cancelButtonText: '取消',
@@ -321,9 +351,114 @@ async function removeSelectedStep() {
   } catch {
     return
   }
-  form.value.steps.splice(selectedStepIndex.value, 1)
-  selectedStepIndex.value = Math.max(0, Math.min(selectedStepIndex.value, form.value.steps.length - 1))
+  form.value.steps.splice(index, 1)
+  selectedStepIndex.value = Math.max(0, Math.min(index, form.value.steps.length - 1))
   reorderSteps()
+}
+
+function moveStep(index: number, direction: -1 | 1) {
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= form.value.steps.length) {
+    return
+  }
+  const [step] = form.value.steps.splice(index, 1)
+  form.value.steps.splice(targetIndex, 0, step)
+  selectedStepIndex.value = targetIndex
+  reorderSteps()
+}
+
+function clearStepElementAssociation(step: EditableStep) {
+  step.elementId = null
+  step.elementName = null
+  step.framePath = null
+  step.shadowPath = null
+}
+
+function handleManualLocatorChange(step: EditableStep) {
+  if (step.elementId || step.elementName) {
+    clearStepElementAssociation(step)
+  }
+}
+
+function openElementPicker() {
+  const step = selectedStep.value
+  if (!step || !requiresLocator(step.type)) {
+    ElMessage.warning('请先选择需要元素定位的步骤')
+    return
+  }
+  elementPickerVisible.value = true
+  elementPickerPageNo.value = 1
+  void loadElementPickerItems(false)
+}
+
+async function loadElementPickerItems(append: boolean) {
+  const requestId = ++elementPickerRequestSeq
+  const pageNo = append ? elementPickerPageNo.value + 1 : 1
+  elementPickerLoading.value = true
+  try {
+    const result = await webUiAutomationApi.getElements(props.workspaceCode, {
+      keyword: elementPickerKeyword.value.trim() || undefined,
+      status: 'ENABLED',
+      pageNo,
+      pageSize: elementPickerPageSize,
+      ...(elementPickerLocatorType.value ? { locatorType: elementPickerLocatorType.value } : {}),
+    })
+    if (requestId !== elementPickerRequestSeq) {
+      return
+    }
+    elementPickerPageNo.value = pageNo
+    elementPickerTotal.value = result.total
+    elementPickerItems.value = append ? [...elementPickerItems.value, ...result.items] : result.items
+  } catch (error) {
+    if (requestId === elementPickerRequestSeq) {
+      ElMessage.error(getRequestErrorMessage(error))
+    }
+  } finally {
+    if (requestId === elementPickerRequestSeq) {
+      elementPickerLoading.value = false
+    }
+  }
+}
+
+function refreshElementPicker() {
+  elementPickerPageNo.value = 1
+  void loadElementPickerItems(false)
+}
+
+function applyElementToSelectedStep(item: WebUiElementItem) {
+  const step = selectedStep.value
+  if (!step || !requiresLocator(step.type)) {
+    ElMessage.warning('请先选择需要元素定位的步骤')
+    return
+  }
+  step.elementId = item.id
+  step.elementName = item.elementName
+  step.locatorType = item.locatorType
+  step.locatorValue = item.locatorValue
+  step.framePath = item.framePath || null
+  step.shadowPath = item.shadowPath || null
+  elementPickerVisible.value = false
+  ElMessage.success(`已选用元素：${item.elementName}`)
+}
+
+function getElementLocationText(item: WebUiElementItem) {
+  return [item.pageName, item.groupName].filter(Boolean).join(' / ') || '未分组'
+}
+
+function formatElementValidation(item: WebUiElementItem) {
+  if (item.lastValidateResult === 'PASSED') {
+    return `通过 ${item.lastMatchCount ?? 0}`
+  }
+  if (item.lastValidateResult === 'FAILED') {
+    return '失败'
+  }
+  return '未验证'
+}
+
+function getElementValidationTagType(item: WebUiElementItem) {
+  if (item.lastValidateResult === 'PASSED') return 'success'
+  if (item.lastValidateResult === 'FAILED') return 'danger'
+  return 'info'
 }
 
 function reorderSteps() {
@@ -338,6 +473,8 @@ function handleStepTypeChange(step: EditableStep) {
     step.elementName = null
     step.locatorType = null
     step.locatorValue = ''
+    step.framePath = null
+    step.shadowPath = null
   } else if (!step.locatorType) {
     step.locatorType = 'CSS'
   }
@@ -392,16 +529,83 @@ function shouldUseTextarea(type: WebUiStepType) {
   return ['FILL', 'ASSERT_TEXT'].includes(type)
 }
 
+function truncateText(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value
+}
+
+function getStepTargetText(step: EditableStep, maxLength = 12) {
+  const value = (step.elementName || step.locatorValue || '').trim()
+  return value ? truncateText(value, maxLength) : ''
+}
+
+function getStepInputPreview(step: EditableStep, maxLength = 12) {
+  const value = step.inputValue.trim()
+  return value ? truncateText(value, maxLength) : ''
+}
+
+function getStepCardTypeLabel(type: WebUiStepType) {
+  if (type === 'OPEN') return '打开'
+  if (['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK'].includes(type)) return '点击'
+  if (type === 'FILL') return '输入'
+  if (['ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL', 'ASSERT_TITLE', 'ASSERT_ATTRIBUTE', 'ASSERT_COUNT'].includes(type)) return '断言'
+  if (['WAIT_FOR'].includes(type)) return '等待'
+  if (type === 'CLEAR') return '清空'
+  if (type === 'HOVER') return '悬停'
+  if (type === 'PRESS_KEY') return '按键'
+  if (type === 'SELECT') return '选择'
+  if (type === 'FILE_UPLOAD') return '上传'
+  if (type === 'SCREENSHOT') return '截图'
+  return '步骤'
+}
+
+function getStepCardTypeTone(type: WebUiStepType) {
+  if (['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'HOVER', 'CLEAR'].includes(type)) return 'success'
+  if (['FILL', 'SELECT', 'FILE_UPLOAD', 'PRESS_KEY'].includes(type)) return 'primary'
+  if (['ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL', 'ASSERT_TITLE', 'ASSERT_ATTRIBUTE', 'ASSERT_COUNT'].includes(type)) return 'warning'
+  return 'default'
+}
+
+function getStepSummary(step: EditableStep) {
+  const target = getStepTargetText(step)
+  const input = getStepInputPreview(step)
+
+  if (step.type === 'OPEN') return input ? `打开 ${input}` : '打开页面'
+  if (step.type === 'CLICK') return `点击 ${target || '元素'}`
+  if (step.type === 'DOUBLE_CLICK') return `双击 ${target || '元素'}`
+  if (step.type === 'RIGHT_CLICK') return `右键 ${target || '元素'}`
+  if (step.type === 'HOVER') return `悬停 ${target || '元素'}`
+  if (step.type === 'CLEAR') return `清空 ${target || '输入框'}`
+  if (step.type === 'FILL') return `输入 ${input || '文本'}`
+  if (step.type === 'SELECT') return `选择 ${input || '选项'}`
+  if (step.type === 'FILE_UPLOAD') return `上传 ${input || '文件'}`
+  if (step.type === 'PRESS_KEY') return `按下 ${input || '按键'}`
+  if (step.type === 'WAIT_FOR') return `等待 ${target || '元素'} 出现`
+  if (step.type === 'ASSERT_VISIBLE') return `断言 ${target || '元素'} 可见`
+  if (step.type === 'ASSERT_TEXT') return `断言文本包含 ${input || '期望文本'}`
+  if (step.type === 'ASSERT_URL') return `断言 URL 包含 ${input || '关键字'}`
+  if (step.type === 'ASSERT_TITLE') return `断言标题包含 ${input || '关键字'}`
+  if (step.type === 'ASSERT_ATTRIBUTE') return `断言属性 ${input || '期望值'}`
+  if (step.type === 'ASSERT_COUNT') return `断言数量 ${input || '表达式'}`
+  if (step.type === 'SCREENSHOT') return '保存当前页面截图'
+  return '未配置步骤'
+}
+
 function showRecordingPlaceholder() {
-  ElMessage.info('录制会由 Local Runner 打开真实浏览器完成。当前页面先预留录制控制台入口，后续接入录制会话协议。')
+  ElMessage.info('录制会由本地 Runner 打开真实浏览器完成。当前页面先预留录制控制台入口，后续接入录制流程。')
 }
 
 function showStepFeaturePlaceholder(featureName: string) {
-  ElMessage.info(`${featureName}需要后端步骤字段和 Local Runner 执行逻辑配套，当前先预留配置入口。`)
+  ElMessage.info(`${featureName}需要后端步骤字段和本地 Runner 执行逻辑配套，当前先预留配置入口。`)
 }
 
 onMounted(() => {
   void loadDetail()
+})
+
+onBeforeUnmount(() => {
+  if (elementPickerSearchTimer) {
+    window.clearTimeout(elementPickerSearchTimer)
+  }
 })
 
 watch(
@@ -410,6 +614,26 @@ watch(
     void loadDetail()
   },
 )
+
+watch(elementPickerKeyword, () => {
+  if (!elementPickerVisible.value) {
+    return
+  }
+  if (elementPickerSearchTimer) {
+    window.clearTimeout(elementPickerSearchTimer)
+  }
+  elementPickerSearchTimer = window.setTimeout(() => {
+    if (elementPickerVisible.value) {
+      refreshElementPicker()
+    }
+  }, 300)
+})
+
+watch(elementPickerLocatorType, () => {
+  if (elementPickerVisible.value) {
+    refreshElementPicker()
+  }
+})
 </script>
 
 <template>
@@ -445,21 +669,43 @@ watch(
           <AppButton type="primary" :icon="Plus" @click="addStep">新增</AppButton>
         </div>
         <div v-if="form.steps.length" class="web-ui-step-list">
-          <button
+          <div
             v-for="(step, index) in form.steps"
             :key="`${step.id || 'new'}-${index}`"
-            type="button"
+            role="button"
+            tabindex="0"
             class="web-ui-step-list__item"
             :class="{ 'is-active': selectedStepIndex === index, 'is-disabled': !step.enabled }"
+            :aria-current="selectedStepIndex === index ? 'step' : undefined"
             @click="selectedStepIndex = index"
+            @keydown.enter.prevent="selectedStepIndex = index"
+            @keydown.space.prevent="selectedStepIndex = index"
           >
             <span class="web-ui-step-list__order">{{ index + 1 }}</span>
             <span class="web-ui-step-list__content">
-              <strong>{{ step.name || formatStepType(step.type) }}</strong>
-              <small>{{ step.locatorValue || step.inputValue || '暂无定位或输入' }}</small>
+              <span
+                class="web-ui-step-list__type"
+                :class="`is-${getStepCardTypeTone(step.type)}`"
+              >
+                {{ getStepCardTypeLabel(step.type) }}
+              </span>
+              <small>{{ getStepSummary(step) }}</small>
             </span>
-            <WebUiStepTypeBadge :type="step.type" />
-          </button>
+            <span class="web-ui-step-list__actions" aria-label="步骤操作">
+              <button type="button" title="上移" aria-label="上移" :disabled="index === 0" @click.stop="moveStep(index, -1)">
+                <el-icon><ArrowUp /></el-icon>
+              </button>
+              <button type="button" title="下移" aria-label="下移" :disabled="index === form.steps.length - 1" @click.stop="moveStep(index, 1)">
+                <el-icon><ArrowDown /></el-icon>
+              </button>
+              <button type="button" title="复制" aria-label="复制" @click.stop="copyStepAt(index)">
+                <el-icon><CopyDocument /></el-icon>
+              </button>
+              <button type="button" title="删除" aria-label="删除" @click.stop="removeStepAt(index)">
+                <el-icon><Delete /></el-icon>
+              </button>
+            </span>
+          </div>
         </div>
         <AppEmptyState v-else title="还没有步骤" description="新增第一步后即可配置打开页面、点击、输入和断言。" />
       </aside>
@@ -496,7 +742,7 @@ watch(
             <section v-if="requiresLocator(selectedStep.type)" class="web-ui-step-config">
               <h4>元素定位</h4>
               <el-form-item label="定位方式">
-                <el-radio-group v-model="selectedStep.locatorType" class="web-ui-locator-radio">
+                <el-radio-group v-model="selectedStep.locatorType" class="web-ui-locator-radio" @change="handleManualLocatorChange(selectedStep)">
                   <el-radio
                     v-for="item in WEB_UI_LOCATOR_OPTIONS"
                     :key="item.value"
@@ -511,7 +757,12 @@ watch(
                   v-model="selectedStep.locatorValue"
                   placeholder="输入 CSS、文本、角色、XPath 等定位值"
                   clearable
-                />
+                  @input="handleManualLocatorChange(selectedStep)"
+                >
+                  <template #append>
+                    <el-button @click="openElementPicker">元素库</el-button>
+                  </template>
+                </el-input>
               </el-form-item>
             </section>
 
@@ -586,7 +837,7 @@ watch(
             <el-form-item label="默认超时">
               <el-input-number v-model="form.defaultTimeoutMs" :min="1000" :max="60000" :step="1000" controls-position="right" />
             </el-form-item>
-            <el-form-item label="运行模式">
+            <el-form-item label="浏览器模式">
               <el-switch v-model="form.headless" active-text="无头" inactive-text="有界面" />
             </el-form-item>
           </div>
@@ -596,13 +847,73 @@ watch(
           <h3>录制控制台</h3>
           <div class="web-ui-recording-placeholder">
             <el-icon><VideoPlay /></el-icon>
-            <strong>Local Runner 真实浏览器录制</strong>
-            <p>后续点击开始录制后，由 Local Runner 在本机打开浏览器并实时回传操作步骤、截图和候选断言。</p>
+            <strong>本地 Runner 真实浏览器录制</strong>
+            <p>后续点击开始录制后，由本地 Runner 在本机打开浏览器，并实时回传操作步骤、截图和候选断言。</p>
             <AppButton :icon="VideoCamera" @click="showRecordingPlaceholder">预留入口</AppButton>
           </div>
         </section>
       </aside>
     </div>
+
+    <el-dialog
+      v-model="elementPickerVisible"
+      title="选择元素库元素"
+      width="720px"
+      destroy-on-close
+    >
+      <div class="web-ui-element-picker">
+        <div class="web-ui-element-picker__toolbar">
+          <el-input
+            v-model="elementPickerKeyword"
+            placeholder="搜索元素名称、页面、分组或定位值"
+            clearable
+          />
+          <el-select v-model="elementPickerLocatorType" placeholder="定位方式" clearable>
+            <el-option v-for="item in WEB_UI_LOCATOR_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+
+        <AppLoadingState v-if="elementPickerLoading && !elementPickerItems.length" title="正在加载元素" description="正在读取当前工作区的元素库。" />
+        <AppEmptyState v-else-if="!elementPickerItems.length" title="暂无可选元素" description="可以调整搜索条件，或先到元素库维护页面新增元素。" />
+        <div v-else class="web-ui-element-picker__list">
+          <button
+            v-for="item in elementPickerItems"
+            :key="item.id"
+            type="button"
+            class="web-ui-element-picker__item"
+            @click="applyElementToSelectedStep(item)"
+          >
+            <span class="web-ui-element-picker__main">
+              <strong>{{ item.elementName }}</strong>
+              <small>{{ getElementLocationText(item) }}</small>
+            </span>
+            <span class="web-ui-element-picker__locator">
+              <el-tag effect="light" size="small">{{ formatLocatorType(item.locatorType) }}</el-tag>
+              <small>{{ item.locatorValue }}</small>
+            </span>
+            <el-tag :type="getElementValidationTagType(item)" effect="light" size="small">
+              {{ formatElementValidation(item) }}
+            </el-tag>
+          </button>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="web-ui-element-picker__footer">
+          <span>已显示 {{ elementPickerItems.length }} / {{ elementPickerTotal }} 个元素</span>
+          <div>
+            <AppButton @click="elementPickerVisible = false">取消</AppButton>
+            <AppButton
+              :disabled="elementPickerItems.length >= elementPickerTotal"
+              :loading="elementPickerLoading && elementPickerItems.length > 0"
+              @click="loadElementPickerItems(true)"
+            >
+              加载更多
+            </AppButton>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -673,7 +984,7 @@ watch(
 .web-ui-case-detail__body {
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(200px, 240px) minmax(360px, 1fr) minmax(240px, 280px);
+  grid-template-columns: minmax(280px, 300px) minmax(360px, 1fr) minmax(240px, 280px);
   gap: var(--app-space-4);
 }
 
@@ -730,17 +1041,24 @@ watch(
 
 .web-ui-step-list__item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  position: relative;
+  grid-template-columns: 24px minmax(0, 1fr);
   gap: var(--app-space-2);
-  align-items: center;
+  align-items: flex-start;
   width: 100%;
-  padding: var(--app-space-2);
+  min-height: 64px;
+  padding: var(--app-space-3);
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-md);
   background: var(--app-bg-panel);
   color: var(--app-text-main);
   cursor: pointer;
   text-align: left;
+}
+
+.web-ui-step-list__item:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
 }
 
 .web-ui-step-list__item:hover,
@@ -757,36 +1075,121 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--app-bg-muted);
   color: var(--app-text-secondary);
   font-size: var(--app-font-size-xs);
   font-weight: 700;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.web-ui-step-list__item.is-active .web-ui-step-list__order {
+  background: var(--app-primary);
+  color: #fff;
 }
 
 .web-ui-step-list__content {
   display: grid;
-  gap: 2px;
+  justify-items: start;
+  gap: var(--app-space-1);
   min-width: 0;
 }
 
-.web-ui-step-list__content strong,
 .web-ui-step-list__content small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.web-ui-step-list__content strong {
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
+.web-ui-step-list__type {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 var(--app-space-2);
+  border-radius: 999px;
+  background: var(--app-bg-muted);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-xs);
+  font-weight: 600;
+  line-height: var(--app-line-height-xs);
+}
+
+.web-ui-step-list__type.is-primary {
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
+}
+
+.web-ui-step-list__type.is-success {
+  background: var(--app-success-soft);
+  color: var(--app-success);
+}
+
+.web-ui-step-list__type.is-warning {
+  background: var(--app-warning-soft);
+  color: var(--app-warning);
+}
+
+.web-ui-step-list__type.is-default {
+  background: var(--app-bg-muted);
+  color: var(--app-text-secondary);
 }
 
 .web-ui-step-list__content small {
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-sm);
+}
+
+.web-ui-step-list__actions {
+  position: absolute;
+  top: 50%;
+  right: var(--app-space-3);
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-panel);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.12s ease;
+}
+
+.web-ui-step-list__item:hover .web-ui-step-list__actions,
+.web-ui-step-list__item:focus-within .web-ui-step-list__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.web-ui-step-list__actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--app-radius-xs);
+  background: transparent;
   color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
+  cursor: pointer;
+}
+
+.web-ui-step-list__actions button:hover:not(:disabled),
+.web-ui-step-list__actions button:focus-visible {
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
+  outline: none;
+}
+
+.web-ui-step-list__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .web-ui-step-editor {
@@ -941,9 +1344,96 @@ watch(
   line-height: var(--app-line-height-md);
 }
 
-@media (max-width: 1100px) {
+.web-ui-element-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  min-height: 280px;
+}
+
+.web-ui-element-picker__toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: var(--app-space-3);
+}
+
+.web-ui-element-picker__list {
+  display: grid;
+  gap: var(--app-space-2);
+  max-height: 420px;
+  overflow: auto;
+}
+
+.web-ui-element-picker__item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.2fr) auto;
+  align-items: center;
+  gap: var(--app-space-3);
+  width: 100%;
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-panel);
+  color: var(--app-text-main);
+  cursor: pointer;
+  text-align: left;
+}
+
+.web-ui-element-picker__item:hover,
+.web-ui-element-picker__item:focus-visible {
+  border-color: var(--app-primary);
+  background: var(--app-primary-soft);
+  outline: none;
+}
+
+.web-ui-element-picker__main,
+.web-ui-element-picker__locator {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.web-ui-element-picker__main strong,
+.web-ui-element-picker__main small,
+.web-ui-element-picker__locator small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-element-picker__main strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-element-picker__main small,
+.web-ui-element-picker__locator small {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.web-ui-element-picker__locator {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.web-ui-element-picker__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-element-picker__footer > div {
+  display: flex;
+  gap: var(--app-space-2);
+}
+
+@media (max-width: 1240px) {
   .web-ui-case-detail__body {
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
   }
 
   .web-ui-case-detail__inspector {
@@ -964,6 +1454,11 @@ watch(
 
   .web-ui-case-detail__body,
   .web-ui-step-config__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .web-ui-element-picker__toolbar,
+  .web-ui-element-picker__item {
     grid-template-columns: 1fr;
   }
 }

@@ -316,6 +316,7 @@ export interface WebUiElementCollectCandidate {
   locatorValue: string
   framePath?: WebUiLocatorContextPathItem[] | null
   shadowPath?: WebUiLocatorContextPathItem[] | null
+  locatorCandidates?: WebUiElementCollectLocatorCandidate[] | null
   confidence: number
   reason: string
   tagName: string | null
@@ -335,6 +336,15 @@ export interface WebUiElementCollectCandidate {
   validationMessage: string | null
   screenshotBase64: string | null
   saveBlockedReason?: string | null
+}
+
+export interface WebUiElementCollectLocatorCandidate {
+  locatorType: WebUiLocatorType
+  locatorValue: string
+  framePath?: WebUiLocatorContextPathItem[] | null
+  shadowPath?: WebUiLocatorContextPathItem[] | null
+  confidence?: number | null
+  reason?: string | null
 }
 
 export interface WebUiElementCollectValidationResult {
@@ -357,6 +367,7 @@ export interface LocalRunnerCollectValidationResultPayload {
 export interface LocalRunnerCollectValidationCommandPayload {
   runnerId?: string | null
   sessionId?: string | null
+  currentUrl?: string | null
   locators?: WebUiElementCollectValidationTarget[]
 }
 
@@ -577,6 +588,7 @@ export interface WebUiElementListQuery {
   groupId?: number | null
   pageName?: string
   groupName?: string
+  locatorType?: WebUiLocatorType | ''
   status?: WebUiCaseStatus | ''
   collectTaskId?: number | null
   pageNo?: number

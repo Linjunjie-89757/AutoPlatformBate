@@ -1795,7 +1795,7 @@ watch(
               <WebUiRunStatusBadge :status="row.status" />
             </template>
           </el-table-column>
-          <el-table-column label="执行位置" width="128">
+          <el-table-column label="执行来源" width="128">
             <template #default="{ row }">
               <el-tag
                 v-if="row.executionLocation === 'LOCAL_RUNNER'"

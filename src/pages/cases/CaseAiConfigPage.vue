@@ -897,6 +897,7 @@ onBeforeUnmount(() => {
 
 .case-ai-config-page__grid {
   display: grid;
+  flex: 1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--app-space-6);
   align-items: stretch;
@@ -904,7 +905,7 @@ onBeforeUnmount(() => {
 
 .case-ai-role-card {
   display: flex;
-  height: calc(100dvh - 270px);
+  height: calc(100dvh - 205px);
   min-height: 520px;
   overflow: visible;
   flex-direction: column;

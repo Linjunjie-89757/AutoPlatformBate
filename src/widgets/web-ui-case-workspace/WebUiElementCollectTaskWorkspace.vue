@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, RefreshRight } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
-  formatWebUiDateTime,
+  WEB_UI_LOCATOR_OPTIONS,
   webUiAutomationApi,
   type WebUiElementCollectFilterDetail,
   type WebUiElementCollectTaskResponse,
@@ -13,24 +13,25 @@ import {
   type WebUiElementItem,
   type WebUiElementModuleItem,
   type WebUiElementPageItem,
+  type WebUiElementCollectLocatorCandidate,
   type WebUiLocatorType,
 } from '@/entities/web-ui-automation'
 import {
   buildCollectCandidateSaveSummary,
   buildCollectSaveResultNavigationQuery,
   buildCollectCandidateValidationLocators,
-  buildCollectCandidateValidationSummary,
   isCollectCandidateSaveable,
   isCollectTaskTerminalStatus,
-  shouldShowCollectCandidateForFilter,
-  sortCollectCandidatesForReview,
-  type WebUiCollectCandidateFilter,
 } from '@/entities/web-ui-automation/lib/collectTask'
+import { formatWebUiDateTime } from '@/entities/web-ui-automation/lib/format'
 import {
   buildLocalRunnerStatusView,
+  bindLocalRunnerSession,
+  captureLocalRunnerPage,
   checkLocalRunnerHealth,
   getLocalRunnerHeartbeat,
   getLocalRunnerPlatformPollingStatus,
+  mapRunnerCandidateToCollectCandidate,
   releaseLocalRunnerSession,
   startLocalRunnerPlatformPolling,
   stopLocalRunnerPlatformPolling,
@@ -42,9 +43,7 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import WebUiElementCollectCandidateTable from './WebUiElementCollectCandidateTable.vue'
 import WebUiElementCollectFilterDetailsPanel from './WebUiElementCollectFilterDetailsPanel.vue'
-import WebUiElementCollectTracePanel from './WebUiElementCollectTracePanel.vue'
 import WebUiElementCollectTaskPanel from './WebUiElementCollectTaskPanel.vue'
 import {
   mapCollectCandidatesToViews,
@@ -52,6 +51,24 @@ import {
 } from './elementCollectTypes'
 
 type LocalRunnerPlatformPoller = NonNullable<LocalRunnerPlatformPollStatus['poller']>
+
+type CandidateAiSnapshot = Pick<WebUiElementCollectCandidateView, 'elementName' | 'groupName' | 'locatorType' | 'locatorValue'>
+
+interface CandidateRegionGroup {
+  key: string
+  name: string
+  items: WebUiElementCollectCandidateView[]
+}
+
+const STANDARD_CANDIDATE_GROUPS = [
+  '顶部导航区',
+  '筛选表单区',
+  '操作按钮区',
+  '数据表格区',
+  '弹窗区',
+  '侧边栏区',
+  '未分类',
+] as const
 
 const props = defineProps<{
   workspaceCode: string
@@ -64,7 +81,6 @@ const router = useRouter()
 const task = ref<WebUiElementCollectTaskResponse | null>(null)
 const candidates = ref<WebUiElementCollectCandidateView[]>([])
 const filterDetails = ref<WebUiElementCollectFilterDetail[]>([])
-const savedElements = ref<WebUiElementItem[]>([])
 const modules = ref<WebUiElementModuleItem[]>([])
 const pages = ref<WebUiElementPageItem[]>([])
 const groups = ref<WebUiElementGroupItem[]>([])
@@ -72,9 +88,9 @@ const loading = ref(false)
 const refreshing = ref(false)
 const polling = ref(false)
 const filterDetailsLoading = ref(false)
-const savedElementsLoading = ref(false)
 const localRunnerChecking = ref(false)
 const localRunnerValidating = ref(false)
+const localRunnerRecollecting = ref(false)
 const localRunnerHealth = ref<LocalRunnerHealthView | null>(null)
 const localRunnerErrorMessage = ref('')
 const localRunnerPlatformPoller = ref<LocalRunnerPlatformPoller | null>(null)
@@ -86,7 +102,10 @@ const localRunnerValidationProgress = ref({
   batchFailed: 0,
 })
 const saving = ref(false)
-const candidateFilter = ref<WebUiCollectCandidateFilter>('ALL')
+const candidateSearchKeyword = ref('')
+const activeCandidateId = ref('')
+const candidateAiSnapshots = ref(new Map<string, CandidateAiSnapshot>())
+const collapsedCandidateGroupKeys = ref(new Set<string>())
 const autoValidationTaskIds = new Set<number>()
 const canceledTaskIds = new Set<number>()
 let pollingTimer: ReturnType<typeof window.setTimeout> | null = null
@@ -116,50 +135,54 @@ const routeGroupName = computed(() => {
   return value || ''
 })
 
-const visibleCandidates = computed(() =>
-  sortCollectCandidatesForReview(
-    candidates.value.filter(item => shouldShowCollectCandidateForFilter(item, candidateFilter.value)),
-  ),
+const filteredCandidates = computed(() =>
+  candidates.value.filter(item => matchesCandidateSearch(item, candidateSearchKeyword.value)),
 )
-const selectedCandidates = computed(() => candidates.value.filter(item => item.selected))
-const candidateSummary = computed(() => buildCollectCandidateValidationSummary(candidates.value))
+const visibleCandidates = computed(() =>
+  [...filteredCandidates.value].sort((left, right) => left.sourceIndex - right.sourceIndex),
+)
+const groupedVisibleCandidates = computed<CandidateRegionGroup[]>(() => {
+  const regionMap = new Map<string, WebUiElementCollectCandidateView[]>()
+  visibleCandidates.value.forEach((candidate) => {
+    const regionName = normalizeCandidateBusinessGroupName(candidate)
+    const items = regionMap.get(regionName) || []
+    items.push(candidate)
+    regionMap.set(regionName, items)
+  })
+  return [...regionMap.entries()].map(([name, items]) => ({
+    key: `region-${name}`,
+    name,
+    items,
+  }))
+})
+const activeCandidate = computed(() =>
+  candidates.value.find(item => item.id === activeCandidateId.value)
+  || visibleCandidates.value[0]
+  || null,
+)
+const candidateGroupOptions = computed(() => {
+  const names = new Set<string>()
+  STANDARD_CANDIDATE_GROUPS.forEach(name => names.add(name))
+  for (const candidate of candidates.value) {
+    const name = normalizeCandidateBusinessGroupName(candidate)
+    if (name) {
+      names.add(name)
+    }
+  }
+  return [...names]
+})
+const selectedCandidates = computed(() => candidates.value.filter(item => item.selected && !item.markedInvalid))
 const selectedModule = computed(() => modules.value.find(item => item.id === moduleId.value) || null)
 const selectedPage = computed(() => pageId.value ? pages.value.find(item => item.id === pageId.value) || null : null)
-const largePageNotice = computed(() => {
-  const count = candidates.value.length || task.value?.finalCount || task.value?.rawCount || 0
-  if (count < 80) {
-    return null
-  }
-  return {
-    type: 'warning' as const,
-    title: `当前页面候选较多：${count} 个`,
-    description: '建议优先使用“可保存 / 验证通过 / 低稳定性”等筛选，并按按钮、表单、表格等范围分次采集，避免一次保存过多低价值元素。',
-  }
-})
-const pageContextNotice = computed(() => {
-  if (!task.value?.actualUrl || !routePageUrl.value) {
-    return null
-  }
-  const taskUrl = normalizeCollectUrl(task.value.actualUrl)
-  const expectedUrl = normalizeCollectUrl(routePageUrl.value)
-  if (!taskUrl || !expectedUrl || taskUrl === expectedUrl) {
-    return null
-  }
-  return {
-    type: 'warning' as const,
-    title: '采集页面和目标地址不一致',
-    description: `任务实际页面为 ${task.value.actualUrl}，目标地址为 ${routePageUrl.value}。如果页面跳到了登录页或首页，请重新进入目标业务页后再采集或验证。`,
-  }
-})
 const validationProgressText = computed(() => {
   const poller = localRunnerPlatformPoller.value
   if (poller?.running || poller?.tickRunning) {
     const total = poller.locatorCount || localRunnerValidationProgress.value.total
     const done = poller.validatedCount || 0
     if (total) {
-      return `后台验证 ${done}/${total}`
+      return `自动验证 ${done}/${total}`
     }
-    return '后台轮询验证中'
+    return '自动验证中'
   }
   const progress = localRunnerValidationProgress.value
   if (!localRunnerValidating.value || !progress.total) {
@@ -169,143 +192,439 @@ const validationProgressText = computed(() => {
     ? `验证中 ${progress.done}/${progress.total}，失败批次 ${progress.batchFailed}`
     : `验证中 ${progress.done}/${progress.total}`
 })
-const localValidationNotice = computed(() => {
-  const poller = localRunnerPlatformPoller.value
-  if (poller?.running || poller?.tickRunning || poller?.lastError) {
-    const total = poller.locatorCount || localRunnerValidationProgress.value.total || candidates.value.length
-    const done = poller.validatedCount || 0
-    const progressText = total ? `已回传 ${done} / ${total} 个定位器` : '正在等待平台下发验证指令'
-    return {
-      type: poller.lastError ? 'warning' as const : 'info' as const,
-      title: poller.lastError ? 'Runner 后台轮询异常' : 'Runner 后台轮询已接管真机验证',
-      description: poller.lastError
-        ? `最近错误：${poller.lastError}。Runner 会继续重试；如果长时间无变化，请检测 Runner 或重新进入目标页面。`
-        : `${progressText}。可以离开工作台，但请保持本地 Runner 和目标业务页面打开。`,
-    }
-  }
-  if (localRunnerValidating.value) {
-    const progress = localRunnerValidationProgress.value
-    const progressText = progress.total
-      ? `已验证 ${progress.done} / ${progress.total} 个定位器`
-      : `将验证 ${visibleCandidates.value.length || candidates.value.length} 个候选定位器`
-    const failedText = progress.batchFailed ? `，${progress.batchFailed} 个批次失败已保留为失败候选` : ''
-    return {
-      type: 'info' as const,
-      title: '正在调用本地 Runner 真机验证',
-      description: `${progressText}${failedText}。请保持 Runner 浏览器停留在采集页面。`,
-    }
-  }
-  if (!candidates.value.length) {
-    return null
-  }
-  const validatedCandidates = candidates.value.filter(item => (
-    item.validationStatus === 'PASSED'
-    || item.validationStatus === 'FAILED'
-    || item.validationStatus === 'MULTIPLE'
-  ))
-  const allNotFound = validatedCandidates.length > 0
-    && validatedCandidates.every(item => item.validationStatus === 'FAILED' && Number(item.matchCount || 0) === 0)
-  if (allNotFound) {
-    return {
-      type: 'warning' as const,
-      title: '所有定位器都未找到',
-      description: '页面上下文可能已经变化，或 Runner 当前页不是采集时的目标页面。请重新打开目标页后再重新验证。',
-    }
-  }
-  if (task.value?.status === 'DEGRADED') {
-    return {
-      type: 'warning' as const,
-      title: '当前任务已降级',
-      description: '候选可查看，但没有完整真机验证结果。保存前建议重新连接 Runner 并重新验证。',
-    }
-  }
-  return null
-})
 const runnerStatusView = computed(() => buildLocalRunnerStatusView({
   checking: localRunnerChecking.value,
   health: localRunnerHealth.value,
   errorMessage: localRunnerErrorMessage.value,
   expectedUrl: task.value?.actualUrl || routePageUrl.value,
 }))
-const runnerPlatformPollTag = computed(() => {
-  const poller = localRunnerPlatformPoller.value
-  if (!poller) {
-    const lastPoller = localRunnerLastPlatformPoller.value
-    if (lastPoller?.lastError) {
-      return {
-        type: 'warning' as const,
-        text: '最近轮询异常',
-      }
-    }
-    if (lastPoller?.lastSuccessAt || lastPoller?.validatedCount) {
-      return {
-        type: 'success' as const,
-        text: '最近验证完成',
-      }
-    }
-    return {
-      type: 'info' as const,
-      text: '后台轮询未启动',
-    }
-  }
-  if (poller.lastError) {
-    return {
-      type: 'warning' as const,
-      text: '后台轮询异常',
-    }
-  }
-  if (poller.tickRunning) {
-    return {
-      type: 'primary' as const,
-      text: '后台验证中',
-    }
-  }
-  if (poller.running) {
-    return {
-      type: 'success' as const,
-      text: '后台轮询中',
-    }
-  }
-  return {
-    type: 'info' as const,
-    text: '后台轮询已停止',
-  }
-})
-const runnerPlatformPollDescription = computed(() => {
-  const poller = localRunnerPlatformPoller.value || localRunnerLastPlatformPoller.value
-  if (!poller) {
-    return 'Runner 后台轮询启动后，会自动领取平台验证指令并回传结果。'
-  }
-  const parts = [
-    poller.lastMessage || '',
-    `任务 #${poller.taskId}`,
-    poller.locatorCount ? `待验证 ${poller.locatorCount} 个` : '',
-    poller.locatorCount ? `已回传 ${poller.validatedCount || 0} 个` : '',
-    poller.lastSuccessAt ? `最近成功 ${formatWebUiDateTime(poller.lastSuccessAt)}` : '',
-    poller.lastError ? `错误：${poller.lastError}` : '',
-  ]
-  return parts.filter(Boolean).join(' / ')
-})
-const canStopRunnerPlatformPolling = computed(() => Boolean(localRunnerPlatformPoller.value))
-const canRetryRunnerPlatformValidation = computed(() => Boolean(
-  candidates.value.length
-  && (!localRunnerPlatformPoller.value || localRunnerPlatformPoller.value.lastError),
+const canCancelTask = computed(() => Boolean(
+  task.value && !['COMPLETED', 'FAILED', 'DEGRADED', 'CANCELED'].includes(task.value.status || ''),
 ))
+const canStopRunnerPlatformPolling = computed(() => Boolean(localRunnerPlatformPoller.value))
 
-const stats = computed(() => [
-  { label: '候选总数', value: candidateSummary.value.total, type: 'info' },
-  { label: '推荐保存', value: candidateSummary.value.recommended, type: 'primary' },
-  { label: '验证通过', value: candidateSummary.value.passed, type: 'success' },
-  { label: '验证异常', value: candidateSummary.value.abnormal, type: candidateSummary.value.abnormal ? 'warning' : 'info' },
-  { label: '禁止保存', value: candidateSummary.value.blocked, type: candidateSummary.value.blocked ? 'danger' : 'info' },
-])
+const taskPageLabel = computed(() =>
+  task.value?.pageTitle || selectedPage.value?.pageName || routePageName.value || '未命名页面',
+)
+const taskRecognizedCount = computed(() =>
+  candidates.value.length || task.value?.finalCount || task.value?.rawCount || 0,
+)
+const taskPendingReviewCount = computed(() =>
+  candidates.value.filter(item => isCollectCandidateSaveable(item)).length,
+)
+
+function setActiveCandidate(candidate: WebUiElementCollectCandidateView) {
+  activeCandidateId.value = candidate.id
+}
+
+function isCandidateGroupCollapsed(group: CandidateRegionGroup) {
+  return collapsedCandidateGroupKeys.value.has(group.key)
+}
+
+function toggleCandidateGroup(group: CandidateRegionGroup) {
+  const next = new Set(collapsedCandidateGroupKeys.value)
+  if (next.has(group.key)) {
+    next.delete(group.key)
+  } else {
+    next.add(group.key)
+  }
+  collapsedCandidateGroupKeys.value = next
+}
+
+function formatLocatorTypeLabel(type?: string | null) {
+  const option = WEB_UI_LOCATOR_OPTIONS.find(item => item.value === type)
+  return option?.label || type || '-'
+}
+
+function formatValidationStatus(status?: string | null) {
+  if (status === 'AI_UNVERIFIED') return 'AI 待验证'
+  if (status === 'UNVERIFIED') return '未验证'
+  if (status === 'PASSED') return '通过'
+  if (status === 'FAILED') return '失败'
+  if (status === 'MULTIPLE') return '多匹配'
+  if (status === 'SKIPPED') return '跳过'
+  return status || '未验证'
+}
+
+function getValidationTagType(status?: string | null) {
+  if (status === 'PASSED') return 'success'
+  if (status === 'FAILED') return 'danger'
+  if (status === 'MULTIPLE' || status === 'AI_UNVERIFIED' || status === 'UNVERIFIED') return 'warning'
+  return 'info'
+}
+
+function getConfidenceTagType(confidence: number) {
+  if (confidence >= 85) return 'success'
+  if (confidence >= 70) return 'warning'
+  return 'danger'
+}
+
+function getCandidateQualityScore(candidate: WebUiElementCollectCandidateView) {
+  const locatorScore = getLocatorStabilityScore(candidate.locatorType)
+  const semanticScore = getSemanticClarityScore(candidate)
+  const validationScore = getValidationResultScore(candidate.validationStatus)
+  return {
+    locatorScore,
+    semanticScore,
+    validationScore,
+    total: Math.min(100, locatorScore + semanticScore + validationScore),
+  }
+}
+
+function getLocatorStabilityScore(locatorType?: string | null) {
+  if (locatorType === 'TEST_ID') return 50
+  if (locatorType === 'LABEL') return 45
+  if (locatorType === 'ROLE') return 42
+  if (locatorType === 'CSS') return 38
+  if (locatorType === 'TEXT') return 35
+  if (locatorType === 'PLACEHOLDER') return 34
+  if (locatorType === 'XPATH') return 30
+  return 25
+}
+
+function getSemanticClarityScore(candidate: WebUiElementCollectCandidateView) {
+  if (normalizeSemanticText(candidate.labelText || candidate.text || candidate.ariaLabel)) return 30
+  if (normalizeSemanticText(candidate.placeholder)) return 25
+  if (normalizeSemanticText(candidate.businessMeaning)) return 22
+  if (isReadableCandidateName(candidate.elementName)) return 18
+  return 10
+}
+
+function getValidationResultScore(status?: string | null) {
+  if (status === 'PASSED') return 20
+  if (status === 'MULTIPLE') return 10
+  return 0
+}
+
+function isPrimaryLocatorCandidate(
+  candidate: WebUiElementCollectCandidateView,
+  locator: WebUiElementCollectLocatorCandidate,
+) {
+  return candidate.locatorType === locator.locatorType && candidate.locatorValue === locator.locatorValue
+}
+
+function useLocatorCandidate(
+  candidate: WebUiElementCollectCandidateView,
+  locator: WebUiElementCollectLocatorCandidate,
+) {
+  candidate.locatorType = locator.locatorType
+  candidate.locatorValue = locator.locatorValue
+  candidate.framePath = locator.framePath || null
+  candidate.shadowPath = locator.shadowPath || null
+  candidate.confidence = Number(locator.confidence ?? candidate.confidence ?? 0)
+  candidate.stabilityNote = locator.reason || candidate.stabilityNote
+  candidate.validationStatus = 'UNVERIFIED'
+  candidate.matchCount = null
+  candidate.validationMessage = '已切换主定位器，请重新验证'
+  ElMessage.success('已设为主定位器，请重新验证')
+}
+
+function formatElementType(type?: string | null) {
+  if (type === 'FORM') return '表单'
+  if (type === 'BUTTON') return '按钮'
+  if (type === 'TABLE') return '表格'
+  if (type === 'DIALOG') return '弹窗'
+  if (type === 'LINK') return '链接'
+  if (type === 'TEXT') return '文本'
+  return type || '-'
+}
+
+function normalizeSemanticText(value?: string | null) {
+  return (value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^(请输入|请填写|请选择|输入|选择)\s*/u, '')
+    .replace(/[：:，,。；;]+$/u, '')
+    .trim()
+}
+
+function extractLocatorSemanticText(candidate: WebUiElementCollectCandidateView) {
+  const value = candidate.locatorValue || ''
+  const match = value.match(/(?:#|data-testid=['"]?|id=['"]?|name=['"]?)([A-Za-z0-9_-]{3,})/i)
+  const raw = match?.[1] || ''
+  if (!raw) {
+    return ''
+  }
+  const text = raw
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+  return normalizeSemanticText(text)
+}
+
+function getCandidateElementKind(candidate: WebUiElementCollectCandidateView) {
+  const type = String(candidate.elementType || '').toUpperCase()
+  const tagName = String(candidate.tagName || '').toLowerCase()
+  const locatorValue = String(candidate.locatorValue || '').toLowerCase()
+  if (type.includes('TABLE') || tagName === 'table') return 'table'
+  if (type.includes('DIALOG') || /dialog|modal|drawer/.test(locatorValue)) return 'dialog'
+  if (type.includes('FORM') || tagName === 'form') return 'form'
+  if (type.includes('SELECT') || tagName === 'select') return 'select'
+  if (type.includes('TEXTAREA') || tagName === 'textarea') return 'textarea'
+  if (type.includes('INPUT') || tagName === 'input') return 'input'
+  if (type.includes('BUTTON') || tagName === 'button' || /role=['"]?button/.test(locatorValue)) return 'button'
+  if (type.includes('LINK') || tagName === 'a') return 'link'
+  return 'element'
+}
+
+function getCandidateKindSuffix(kind: string) {
+  if (kind === 'button') return '按钮'
+  if (kind === 'select') return '下拉框'
+  if (kind === 'input' || kind === 'textarea') return '输入框'
+  if (kind === 'table') return '表格'
+  if (kind === 'dialog') return '弹窗'
+  if (kind === 'form') return '表单'
+  if (kind === 'link') return '链接'
+  return '元素'
+}
+
+function isReadableCandidateName(name?: string | null) {
+  const value = (name || '').trim()
+  if (!value || /^(未命名|页面元素)/.test(value)) {
+    return false
+  }
+  if (/^(button|input|select|textarea|link|element|div|span)[\s_-]*\d*$/i.test(value)) {
+    return false
+  }
+  if (/^[#.]/.test(value) || /\/\/|\[|>|:has|nth-child/.test(value)) {
+    return false
+  }
+  return value.length >= 2
+}
+
+function hasElementKindSuffix(value: string) {
+  return /按钮|输入框|下拉框|表格|弹窗|表单|链接|元素(?:\s*\d+)?$/u.test(value)
+}
+
+function buildRuleCandidateName(candidate: WebUiElementCollectCandidateView) {
+  const kind = getCandidateElementKind(candidate)
+  const suffix = getCandidateKindSuffix(kind)
+  const semantic = [
+    candidate.labelText,
+    candidate.text,
+    candidate.ariaLabel,
+    candidate.placeholder,
+    candidate.businessMeaning,
+    extractLocatorSemanticText(candidate),
+  ]
+    .map(value => normalizeSemanticText(value))
+    .find(Boolean)
+  if (!semantic) {
+    return `${suffix} ${candidate.sourceIndex + 1}`
+  }
+  const base = semantic || suffix
+  if (base.endsWith(suffix)) {
+    return base
+  }
+  if (suffix !== '元素' && /按钮|输入框|下拉框|表格|弹窗|表单|链接$/.test(base)) {
+    return base
+  }
+  return `${base}${suffix}`
+}
+
+function normalizeCandidateElementName(candidate: WebUiElementCollectCandidateView) {
+  const current = normalizeSemanticText(candidate.elementName)
+  if (isReadableCandidateName(current)) {
+    if (hasElementKindSuffix(current)) {
+      return current
+    }
+    const suffix = getCandidateKindSuffix(getCandidateElementKind(candidate))
+    return suffix === '元素' ? current : `${current}${suffix}`
+  }
+  return buildRuleCandidateName(candidate)
+}
+
+function buildCandidateRecognitionDescription(candidate: WebUiElementCollectCandidateView) {
+  const regionName = normalizeCandidateBusinessGroupName(candidate)
+  const kindSuffix = getCandidateKindSuffix(getCandidateElementKind(candidate))
+  const meaning = normalizeSemanticText(candidate.businessMeaning)
+  let subject = meaning || normalizeCandidateElementName(candidate)
+
+  if (meaning && kindSuffix !== '元素' && !hasElementKindSuffix(subject)) {
+    subject = `${subject}${kindSuffix}`
+  }
+
+  if (!subject) {
+    return '-'
+  }
+  if (!regionName || regionName === '未分类') {
+    return subject
+  }
+
+  const compactRegionName = regionName.replace(/区$/u, '')
+  if (subject.includes(regionName) || subject.includes(compactRegionName)) {
+    return subject
+  }
+  return `${regionName} ${subject}`
+}
+
+function formatCandidateRecognitionTime() {
+  return formatWebUiDateTime(task.value?.createdAt || null)
+}
+
+function formatCollectTaskStatus(status?: string | null) {
+  if (status === 'COMPLETED') return '采集完成'
+  if (status === 'UPLOADED') return '快照已上传'
+  if (status === 'RULE_CLEANING') return '规则清洗中'
+  if (status === 'AI_ANALYZING') return 'AI 分析中'
+  if (status === 'WAITING_LOCAL_VALIDATION') return '等待本地验证'
+  if (status === 'VALIDATING') return '本地验证中'
+  if (status === 'PROCESSING') return '处理中'
+  if (status === 'PENDING') return '待处理'
+  if (status === 'FAILED') return '采集失败'
+  if (status === 'DEGRADED') return '采集降级'
+  if (status === 'CANCELED') return '已取消'
+  return status || '未知状态'
+}
+
+function getCollectTaskStatusTagType(status?: string | null) {
+  if (status === 'COMPLETED') return 'success'
+  if (status === 'FAILED') return 'danger'
+  if (status === 'DEGRADED') return 'warning'
+  if (status === 'WAITING_LOCAL_VALIDATION' || status === 'VALIDATING') return 'primary'
+  return 'info'
+}
+
+function isCandidateActive(candidate: WebUiElementCollectCandidateView) {
+  return activeCandidate.value?.id === candidate.id
+}
+
+function normalizeCandidateBusinessGroupName(candidate: WebUiElementCollectCandidateView) {
+  const groupName = candidate.groupName?.trim()
+  if (groupStrategy.value === 'CUSTOM' && routeGroupName.value.trim()) {
+    return routeGroupName.value.trim()
+  }
+  const normalizedGroup = normalizeStandardCandidateGroupName(groupName)
+  if (normalizedGroup) {
+    return normalizedGroup
+  }
+  const heading = candidate.nearbyHeading?.trim()
+  if (heading) {
+    return normalizeStandardCandidateGroupName(heading) || '未分类'
+  }
+  return inferCandidateRegionName(candidate)
+}
+
+function normalizeStandardCandidateGroupName(value?: string | null) {
+  const text = (value || '').trim()
+  if (!text || ['页面元素', '未分组', '默认分组'].includes(text)) {
+    return ''
+  }
+  if (STANDARD_CANDIDATE_GROUPS.includes(text as typeof STANDARD_CANDIDATE_GROUPS[number])) {
+    return text
+  }
+  if (/顶部|导航|菜单|页头|header|nav|menu/i.test(text)) return '顶部导航区'
+  if (/筛选|查询|搜索|检索|过滤|表单|输入|选择|filter|search|form/i.test(text)) return '筛选表单区'
+  if (/操作|按钮|工具栏|新增|添加|编辑|删除|提交|保存|确定|取消|关闭|批量|action|button|toolbar/i.test(text)) return '操作按钮区'
+  if (/表格|列表|清单|数据|table|list|grid/i.test(text)) return '数据表格区'
+  if (/弹窗|抽屉|浮层|对话框|modal|dialog|drawer|popup/i.test(text)) return '弹窗区'
+  if (/侧边|侧栏|边栏|aside|sidebar/i.test(text)) return '侧边栏区'
+  return ''
+}
+
+function inferCandidateRegionName(candidate: WebUiElementCollectCandidateView) {
+  const text = [
+    candidate.elementName,
+    candidate.text,
+    candidate.placeholder,
+    candidate.ariaLabel,
+    candidate.labelText,
+    candidate.locatorValue,
+  ].filter(Boolean).join(' ')
+  const normalizedGroup = normalizeStandardCandidateGroupName(text)
+  if (normalizedGroup) {
+    return normalizedGroup
+  }
+  const type = String(candidate.elementType || '').toUpperCase()
+  const tagName = String(candidate.tagName || '').toLowerCase()
+  if (type.includes('TABLE') || tagName === 'table') return '数据表格区'
+  if (type.includes('DIALOG')) return '弹窗区'
+  if (type.includes('INPUT') || type.includes('SELECT') || tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
+    return '筛选表单区'
+  }
+  if (type.includes('BUTTON') || tagName === 'button') return '操作按钮区'
+  if (type.includes('LINK') || tagName === 'a') return '顶部导航区'
+  return '未分类'
+}
+
+function matchesCandidateSearch(candidate: WebUiElementCollectCandidateView, keyword: string) {
+  const value = keyword.trim().toLowerCase()
+  if (!value) {
+    return true
+  }
+  const searchText = [
+    candidate.elementName,
+    normalizeCandidateBusinessGroupName(candidate),
+    candidate.locatorType,
+    candidate.locatorValue,
+    candidate.text,
+    candidate.placeholder,
+    candidate.ariaLabel,
+    candidate.labelText,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return searchText.includes(value)
+}
+
+function createCandidateAiSnapshot(candidate: WebUiElementCollectCandidateView): CandidateAiSnapshot {
+  return {
+    elementName: candidate.elementName,
+    groupName: candidate.groupName,
+    locatorType: candidate.locatorType,
+    locatorValue: candidate.locatorValue,
+  }
+}
+
+function syncCandidateAiSnapshots(items: WebUiElementCollectCandidateView[]) {
+  candidateAiSnapshots.value = new Map(items.map(item => [item.id, createCandidateAiSnapshot(item)]))
+}
+
+function rememberCandidateAiSnapshots(items: WebUiElementCollectCandidateView[]) {
+  const next = new Map(candidateAiSnapshots.value)
+  items.forEach(item => next.set(item.id, createCandidateAiSnapshot(item)))
+  candidateAiSnapshots.value = next
+}
+
+function resetCandidateToAiResult(candidate: WebUiElementCollectCandidateView) {
+  const snapshot = candidateAiSnapshots.value.get(candidate.id)
+  if (!snapshot) {
+    ElMessage.warning('当前元素没有可恢复的 AI 原始结果')
+    return
+  }
+  candidate.elementName = snapshot.elementName
+  candidate.groupName = normalizeStandardCandidateGroupName(snapshot.groupName) || '未分类'
+  candidate.locatorType = snapshot.locatorType
+  candidate.locatorValue = snapshot.locatorValue
+  ElMessage.success('已重置为 AI 识别结果')
+}
+
+function toggleCandidateInvalid(candidate: WebUiElementCollectCandidateView) {
+  candidate.markedInvalid = !candidate.markedInvalid
+  if (candidate.markedInvalid) {
+    candidate.selected = false
+  }
+}
+
+function clearInvalidCandidates() {
+  for (const candidate of selectedCandidates.value) {
+    candidate.markedInvalid = true
+    candidate.selected = false
+  }
+  ElMessage.success('已将选中元素标记为无效')
+}
 
 function normalizeCollectUrl(url: string) {
   try {
     const parsed = new URL(url)
-    return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '')
+    return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '').toLowerCase()
   } catch {
-    return url.trim().replace(/\/+$/, '')
+    return url
+      .trim()
+      .replace(/^https?:\/\//i, '')
+      .split(/[?#]/)[0]
+      .replace(/\/+$/, '')
+      .toLowerCase()
   }
 }
 
@@ -319,10 +638,16 @@ function getCustomGroupName() {
 
 function applyTaskDetail(nextTask: WebUiElementCollectTaskResponse) {
   task.value = nextTask
-  candidates.value = mapCollectCandidatesToViews(nextTask.candidates, {
+  const nextCandidates = mapCollectCandidatesToViews(nextTask.candidates, {
     groupStrategy: groupStrategy.value,
     customGroupName: getCustomGroupName(),
-  })
+  }).map(candidate => ({
+    ...candidate,
+    groupName: normalizeCandidateBusinessGroupName(candidate),
+    elementName: normalizeCandidateElementName(candidate),
+  }))
+  candidates.value = nextCandidates
+  syncCandidateAiSnapshots(nextCandidates)
   updateLastRunnerPlatformPollerFromTask(nextTask)
   if (isCollectTaskTerminalStatus(nextTask.status)) {
     localRunnerValidating.value = false
@@ -345,7 +670,7 @@ function updateLastRunnerPlatformPollerFromTask(nextTask: WebUiElementCollectTas
     tickRunning: false,
     lastSuccessAt: lastPoller.lastSuccessAt || nextTask.completedAt || new Date().toISOString(),
     lastMessage: nextTask.status === 'COMPLETED'
-      ? '后台真机验证已完成'
+      ? '本地自动验证已完成'
       : nextTask.message || lastPoller.lastMessage,
     validatedCount: Math.max(lastPoller.validatedCount || 0, validatedCount),
     locatorCount: Math.max(lastPoller.locatorCount || 0, nextTask.finalCount || nextTask.candidates.length),
@@ -378,7 +703,6 @@ async function loadTask(options: { silent?: boolean } = {}) {
     applyTaskDetail(effectiveTask)
     void refreshRunnerPlatformPollStatus({ silent: true, syncTaskWhenStopped: false })
     await loadFilterDetails(effectiveTask, true)
-    await loadSavedElements(effectiveTask, true)
     maybeAutoValidateCurrentTask()
   } catch (error) {
     if (!options.silent) {
@@ -443,51 +767,28 @@ function resolveHeartbeatDegradeReason(
   health: LocalRunnerHealthView,
 ) {
   if (!health.online || !health.sessionId || !health.currentUrl) {
-    return 'Runner 当前没有可用页面会话，已降级为未验证候选'
+    return '当前没有可用页面，已保留为未验证候选'
   }
-  if (nextTask.sessionId && health.sessionId !== nextTask.sessionId) {
-    return 'Runner 当前会话与采集任务不一致，已降级为未验证候选'
+  if (nextTask.sessionId && health.sessionId !== nextTask.sessionId && nextTask.actualUrl && normalizeCollectUrl(nextTask.actualUrl) !== normalizeCollectUrl(health.currentUrl)) {
+    return '当前页面与采集任务不一致，已保留为未验证候选'
   }
   if (health.boundTaskId && health.boundTaskId !== String(nextTask.taskId)) {
-    return `Runner 当前页面已绑定任务 #${health.boundTaskId}，当前任务已降级为未验证候选`
+    return `当前页面正在处理采集任务 #${health.boundTaskId}，当前任务已保留为未验证候选`
   }
   if (health.expired) {
-    return 'Runner 页面会话已过期，已降级为未验证候选'
+    return '当前页面已过期，已保留为未验证候选'
   }
   if (!health.pageAlive) {
-    return 'Runner 页面已关闭，已降级为未验证候选'
+    return '当前页面已关闭，已保留为未验证候选'
   }
   const status = buildLocalRunnerStatusView({
     health,
     expectedUrl: nextTask.actualUrl || routePageUrl.value,
   })
   if (status.kind === 'LOGIN_PAGE') {
-    return 'Runner 当前页面疑似登录页，已降级为未验证候选'
+    return '当前页面疑似登录页，已保留为未验证候选'
   }
   return ''
-}
-
-async function loadSavedElements(nextTask = task.value, silent = true) {
-  if (!nextTask) {
-    savedElements.value = []
-    return
-  }
-  savedElementsLoading.value = true
-  try {
-    const response = await webUiAutomationApi.getElements(queryWorkspaceCode.value, {
-      collectTaskId: nextTask.taskId,
-      pageNo: 1,
-      pageSize: 200,
-    })
-    savedElements.value = response.items
-  } catch (error) {
-    savedElements.value = []
-    if (!silent) {
-      ElMessage.warning(`已入库元素加载失败：${getRequestErrorMessage(error)}`)
-    }
-  } finally {
-    savedElementsLoading.value = false
-  }
 }
 
 async function loadFilterDetails(nextTask = task.value, silent = true) {
@@ -615,7 +916,7 @@ async function refreshRunnerPlatformPollStatus(options: { silent?: boolean; sync
   } catch (error) {
     localRunnerPlatformPoller.value = null
     if (!options.silent) {
-      ElMessage.warning(`Runner 后台轮询状态读取失败：${getRequestErrorMessage(error)}`)
+      ElMessage.warning(`本地自动验证状态读取失败：${getRequestErrorMessage(error)}`)
     }
   } finally {
     if (!options.silent) {
@@ -650,10 +951,10 @@ async function stopRunnerPlatformPollingManually() {
     localRunnerPlatformPoller.value = null
     localRunnerValidating.value = false
     stopRunnerPlatformPollStatusPolling()
-    ElMessage.success(stopped.poller ? 'Runner 后台轮询已停止' : '当前没有正在运行的后台轮询')
+    ElMessage.success(stopped.poller ? '本地自动验证已停止' : '当前没有正在运行的自动验证')
     await loadTask({ silent: true })
   } catch (error) {
-    ElMessage.error(`停止 Runner 后台轮询失败：${getRequestErrorMessage(error)}`)
+    ElMessage.error(`停止本地自动验证失败：${getRequestErrorMessage(error)}`)
   }
 }
 
@@ -664,7 +965,7 @@ async function cancelTask() {
   const taskIdToCancel = task.value.taskId
   try {
     await ElMessageBox.confirm(
-      '取消后会停止任务刷新，并尝试释放本地 Runner 当前页面会话。已生成的候选仍可查看。是否继续？',
+      '取消后会停止任务刷新，并尝试关闭当前本地页面。已生成的候选仍可查看。是否继续？',
       '取消采集任务',
       {
         confirmButtonText: '取消任务',
@@ -700,7 +1001,7 @@ async function stopRunnerPlatformPollingForCanceledTask() {
     localRunnerPlatformPoller.value = null
     stopRunnerPlatformPollStatusPolling()
   } catch (error) {
-    ElMessage.warning(`任务已取消，但 Runner 后台轮询停止失败：${getRequestErrorMessage(error)}`)
+    ElMessage.warning(`任务已取消，但本地自动验证停止失败：${getRequestErrorMessage(error)}`)
   }
 }
 
@@ -714,7 +1015,7 @@ async function releaseRunnerSessionForCanceledTask(canceledTask: WebUiElementCol
     await releaseLocalRunnerSession()
     localRunnerHealth.value = await checkLocalRunnerHealth()
   } catch (error) {
-    ElMessage.warning(`任务已取消，但 Runner 页面会话释放失败：${getRequestErrorMessage(error)}`)
+    ElMessage.warning(`任务已取消，但当前本地页面关闭失败：${getRequestErrorMessage(error)}`)
   }
 }
 
@@ -734,7 +1035,10 @@ function shouldReleaseRunnerSession(
   return normalizeCollectUrl(canceledTask.actualUrl) === normalizeCollectUrl(health.currentUrl)
 }
 
-async function validateCandidates(targetCandidates: Pick<WebUiElementCollectCandidateView, 'locatorType' | 'locatorValue'>[]) {
+async function validateCandidates(
+  targetCandidates: Pick<WebUiElementCollectCandidateView, 'locatorType' | 'locatorValue'>[],
+  options: { highlight?: boolean } = {},
+) {
   if (!task.value) {
     ElMessage.warning('暂无可验证的采集任务')
     return null
@@ -754,27 +1058,30 @@ async function validateCandidates(targetCandidates: Pick<WebUiElementCollectCand
     return null
   }
 
-  try {
-    const pollStatus = await startLocalRunnerPlatformPolling({
-      workspaceCode: queryWorkspaceCode.value,
-      taskId: validatingTaskId,
-      runnerId: task.value.runnerId || 'local-runner',
-      sessionId: localRunnerHealth.value?.sessionId || task.value.sessionId || null,
-      locators: requestedLocators,
-    })
-    applyRunnerPlatformPoller(pollStatus.poller)
-    localRunnerValidating.value = true
-    localRunnerValidationProgress.value = {
-      done: 0,
-      total: requestedLocators.length,
-      batchFailed: 0,
+  if (!options.highlight) {
+    try {
+      const pollStatus = await startLocalRunnerPlatformPolling({
+        workspaceCode: queryWorkspaceCode.value,
+        taskId: validatingTaskId,
+        runnerId: task.value.runnerId || 'local-runner',
+        sessionId: localRunnerHealth.value?.sessionId || task.value.sessionId || null,
+        currentUrl: localRunnerHealth.value?.currentUrl || null,
+        locators: requestedLocators,
+      })
+      applyRunnerPlatformPoller(pollStatus.poller)
+      localRunnerValidating.value = true
+      localRunnerValidationProgress.value = {
+        done: 0,
+        total: requestedLocators.length,
+        batchFailed: 0,
+      }
+      schedulePolling()
+      scheduleRunnerPlatformPollStatusPolling(500)
+      ElMessage.success(pollStatus.poller?.lastMessage || '已启动本地自动验证')
+      return task.value
+    } catch (startError) {
+      ElMessage.warning(`本地自动验证启动失败，已切换为页面直连验证：${getRequestErrorMessage(startError)}`)
     }
-    schedulePolling()
-    scheduleRunnerPlatformPollStatusPolling(500)
-    ElMessage.success(pollStatus.poller?.lastMessage || '已启动 Runner 后台真机验证')
-    return task.value
-  } catch (startError) {
-    ElMessage.warning(`Runner 后台轮询启动失败，已切换为前端直连验证：${getRequestErrorMessage(startError)}`)
   }
 
   try {
@@ -784,6 +1091,7 @@ async function validateCandidates(targetCandidates: Pick<WebUiElementCollectCand
       {
         runnerId: task.value.runnerId || 'local-runner',
         sessionId: localRunnerHealth.value?.sessionId || task.value.sessionId || null,
+        currentUrl: localRunnerHealth.value?.currentUrl || null,
         locators: requestedLocators,
       },
     )
@@ -798,6 +1106,7 @@ async function validateCandidates(targetCandidates: Pick<WebUiElementCollectCand
       batchFailed: 0,
     }
     const results = await validateLocalRunnerLocators(command.locators, {
+      highlight: options.highlight === true,
       onProgress: (progress) => {
         localRunnerValidationProgress.value = progress
       },
@@ -813,7 +1122,7 @@ async function validateCandidates(targetCandidates: Pick<WebUiElementCollectCand
     applyTaskDetail(validatedTask)
     await loadFilterDetails(validatedTask)
     await refreshRunnerPlatformPollStatus({ silent: true })
-    ElMessage.success(`已重新验证 ${command.locators.length} 个候选定位器`)
+    ElMessage.success(options.highlight ? '已验证定位，并在浏览器中高亮匹配元素' : `已重新验证 ${command.locators.length} 个候选定位器`)
     return validatedTask
   } catch (error) {
     if (canceledTaskIds.has(validatingTaskId)) {
@@ -823,17 +1132,17 @@ async function validateCandidates(targetCandidates: Pick<WebUiElementCollectCand
     const timedOut = errorMessage.includes('超时') || errorMessage.includes('timeout')
     const contextChanged = errorMessage.includes('页面') || errorMessage.includes('Target page') || errorMessage.includes('closed')
     const reason = timedOut
-      ? 'Runner 真机验证超时，已降级为未验证候选'
+      ? '本地页面验证超时，已保留为未验证候选'
       : contextChanged
-        ? 'Runner 页面上下文已变化或页面已关闭，已降级为未验证候选'
-        : `Runner 真机验证失败：${errorMessage}`
+        ? '本地页面已变化或关闭，已保留为未验证候选'
+        : `本地页面验证失败：${errorMessage}`
     try {
       const degradedTask = timedOut
         ? await webUiAutomationApi.timeoutLocalRunnerCollectValidation(queryWorkspaceCode.value, validatingTaskId, { reason })
         : await webUiAutomationApi.degradeLocalRunnerCollectTask(queryWorkspaceCode.value, validatingTaskId, { reason })
       applyTaskDetail(degradedTask)
       await loadFilterDetails(degradedTask)
-      ElMessage.warning(timedOut ? 'Runner 真机验证超时，当前任务已降级' : '采集成功，但本地真机验证失败，当前任务已降级')
+      ElMessage.warning(timedOut ? '本地页面验证超时，当前任务已保留为未验证' : '采集成功，但本地页面验证失败，当前任务已保留为未验证')
       return degradedTask
     } catch (degradeError) {
       ElMessage.error(`重新验证失败：${reason}；降级同步失败：${getRequestErrorMessage(degradeError)}`)
@@ -844,8 +1153,12 @@ async function validateCandidates(targetCandidates: Pick<WebUiElementCollectCand
   }
 }
 
-function revalidateVisibleCandidates() {
-  void validateCandidates(visibleCandidates.value)
+function revalidateActiveCandidate() {
+  if (!activeCandidate.value) {
+    ElMessage.warning('请先选择一个候选元素')
+    return
+  }
+  void validateCandidates([activeCandidate.value], { highlight: true })
 }
 
 function revalidateAllCandidates() {
@@ -891,23 +1204,27 @@ function restoreFilteredDetail(detail: WebUiElementCollectFilterDetail) {
       notRecommendedReason: detail.message || '从过滤明细恢复，需重新验证后再保存',
       validationStatus: 'UNVERIFIED',
       matchCount: null,
-      validationMessage: '从过滤明细恢复，等待本地 Runner 重新验证',
+      validationMessage: '从过滤明细恢复，等待本地页面重新验证',
       saveBlockedReason: '从过滤明细恢复，需重新验证通过后才能保存',
     },
   ], {
     groupStrategy: groupStrategy.value,
     customGroupName: getCustomGroupName(),
     idPrefix: `restored-${detail.id}-`,
-  })
+  }).map(candidate => ({
+    ...candidate,
+    elementName: normalizeCandidateElementName(candidate),
+  }))
   candidates.value = [...restored, ...candidates.value]
-  candidateFilter.value = 'UNVERIFIED'
+  rememberCandidateAiSnapshots(restored)
+  candidateSearchKeyword.value = ''
   ElMessage.success('已恢复到候选列表，请执行重新验证')
 }
 
 function selectRecommendedPassedCandidates() {
   let selectedCount = 0
   for (const candidate of candidates.value) {
-    const shouldSelect = isCollectCandidateSaveable(candidate)
+    const shouldSelect = !candidate.markedInvalid && isCollectCandidateSaveable(candidate)
     candidate.selected = shouldSelect
     if (shouldSelect) {
       selectedCount += 1
@@ -919,7 +1236,8 @@ function selectRecommendedPassedCandidates() {
 function unselectRiskyCandidates() {
   let unselectedCount = 0
   for (const candidate of candidates.value) {
-    const risky = candidate.confidence < 70
+    const risky = candidate.markedInvalid
+      || candidate.confidence < 70
       || candidate.validationStatus === 'FAILED'
       || candidate.validationStatus === 'MULTIPLE'
       || Boolean(candidate.saveBlockedReason)
@@ -964,14 +1282,6 @@ function previewCandidateScreenshot(candidate: WebUiElementCollectCandidateView)
   window.open(`data:image/png;base64,${candidate.screenshotBase64}`, '_blank', 'noopener,noreferrer')
 }
 
-function previewGlobalScreenshot() {
-  if (!task.value?.globalScreenshotBase64) {
-    ElMessage.warning('当前采集任务没有全局截图证据')
-    return
-  }
-  window.open(`data:image/png;base64,${task.value.globalScreenshotBase64}`, '_blank', 'noopener,noreferrer')
-}
-
 function buildCandidateDescription(candidate: WebUiElementCollectCandidateView) {
   const parts = [
     '来源：智能采集',
@@ -987,7 +1297,7 @@ function buildCandidateDescription(candidate: WebUiElementCollectCandidateView) 
   return parts.filter(Boolean).join('；')
 }
 
-function isDuplicateCandidate(existingElements: WebUiElementItem[], pageId: number, groupName: string, candidate: WebUiElementCollectCandidateView) {
+function isExistingElementDuplicateCandidate(existingElements: WebUiElementItem[], pageId: number, groupName: string, candidate: WebUiElementCollectCandidateView) {
   const elementName = candidate.elementName.trim()
   const locatorValue = candidate.locatorValue.trim()
   return existingElements.some(item => (
@@ -1022,7 +1332,7 @@ async function confirmSaveSummary(summary: ReturnType<typeof buildCollectCandida
     summary.unverifiedCount ? `未验证：${summary.unverifiedCount} 个，保存后可能不可用` : '',
     summary.lowConfidenceCount ? `低稳定性：${summary.lowConfidenceCount} 个，后续页面改版时更容易失效` : '',
     summary.aiSupplementCount
-      ? `AI 补充：${summary.aiSupplementCount} 个，其中真机验证通过 ${summary.aiSupplementUnlockedCount} 个，未验证 ${summary.aiSupplementUnverifiedCount} 个`
+      ? `AI 补充：${summary.aiSupplementCount} 个，其中本地验证通过 ${summary.aiSupplementUnlockedCount} 个，未验证 ${summary.aiSupplementUnverifiedCount} 个`
       : '',
   ].filter(Boolean)
   const detailItems = [
@@ -1062,7 +1372,7 @@ async function saveSelectedCandidates() {
     ElMessage.warning('请补全已选候选元素的分组、名称和定位器')
     return
   }
-  const blockedCandidate = selectedCandidates.value.find(item => !isCollectCandidateSaveable(item))
+  const blockedCandidate = selectedCandidates.value.find(item => item.markedInvalid || !isCollectCandidateSaveable(item))
   if (blockedCandidate) {
     ElMessage.warning(blockedCandidate.saveBlockedReason || '仅推荐且未被阻止的候选元素可以入库')
     return
@@ -1114,7 +1424,7 @@ async function saveSelectedCandidates() {
         groups.value.push(group)
       }
 
-      if (isDuplicateCandidate(existingElements, page.id, group.groupName, candidate)) {
+      if (isExistingElementDuplicateCandidate(existingElements, page.id, group.groupName, candidate)) {
         skippedCount += 1
         continue
       }
@@ -1185,18 +1495,76 @@ function goBackToElements() {
   })
 }
 
-function openSavedElement(element: WebUiElementItem) {
-  void router.push({
-    path: '/automation/web/elements',
-    query: {
-      workspace: element.workspaceCode,
-      elementId: String(element.id),
-      pageId: element.pageId ? String(element.pageId) : undefined,
-      groupId: element.groupId ? String(element.groupId) : undefined,
-      collectTaskId: task.value?.taskId ? String(task.value.taskId) : undefined,
-      keyword: element.elementName,
-    },
-  })
+async function recollectCurrentRunnerPage() {
+  const currentTask = task.value
+  const moduleItem = selectedModule.value
+  if (!currentTask) {
+    ElMessage.warning('当前采集任务不存在')
+    return
+  }
+  if (!moduleItem) {
+    ElMessage.warning('当前任务缺少所属模块，请从元素库重新进入采集任务')
+    return
+  }
+  if (!currentTask.aiModelConfigId || !currentTask.aiModelName) {
+    ElMessage.warning('当前任务缺少 AI 模型配置，请从元素库重新发起采集')
+    return
+  }
+
+  localRunnerRecollecting.value = true
+  try {
+    const result = await captureLocalRunnerPage(300)
+    if (result.page?.isProbablyLoginPage) {
+      ElMessage.warning('当前浏览器页面疑似登录页，不建议作为业务元素采集目标')
+    }
+    const groupName = getCustomGroupName() || routeGroupName.value || '页面元素'
+    const collectCandidates = result.candidates.map(candidate => mapRunnerCandidateToCollectCandidate({
+      candidate,
+      groupName,
+      screenshotBase64: result.screenshotBase64 || null,
+    }))
+    const pageName = routePageName.value || selectedPage.value?.pageName || currentTask.pageTitle || result.page?.title || '智能采集页面'
+    const newTask = await webUiAutomationApi.createLocalRunnerCollectTask(moduleItem.workspaceCode, {
+      runnerId: 'local-runner',
+      sessionId: result.session?.sessionId || null,
+      actualUrl: result.page?.url || localRunnerHealth.value?.currentUrl || currentTask.actualUrl || null,
+      pageTitle: result.page?.title || currentTask.pageTitle || null,
+      moduleId: moduleItem.id,
+      pageId: pageId.value,
+      pageName,
+      scope: 'ALL',
+      providerConnectionId: currentTask.aiModelConfigId,
+      modelName: currentTask.aiModelName,
+      rawCount: result.rawCount,
+      screenshotBase64: result.screenshotBase64 || null,
+      candidates: collectCandidates,
+    })
+    try {
+      await bindLocalRunnerSession({
+        taskId: newTask.taskId,
+        sessionId: result.session?.sessionId || null,
+      })
+    } catch (error) {
+      ElMessage.warning(`新采集任务已创建，但当前页面关联失败：${getRequestErrorMessage(error)}`)
+    }
+    ElMessage.success(`已重新采集当前页面，任务 #${newTask.taskId} 已创建`)
+    await router.push({
+      path: `/automation/web/elements/collect-tasks/${newTask.taskId}`,
+      query: {
+        workspaceCode: moduleItem.workspaceCode,
+        moduleId: String(moduleItem.id),
+        pageId: pageId.value ? String(pageId.value) : undefined,
+        pageName,
+        pageUrl: result.page?.url || currentTask.actualUrl || routePageUrl.value || undefined,
+        groupStrategy: groupStrategy.value || 'AI',
+        groupName: routeGroupName.value || undefined,
+      },
+    })
+  } catch (error) {
+    ElMessage.error(`重新采集失败：${getRequestErrorMessage(error)}`)
+  } finally {
+    localRunnerRecollecting.value = false
+  }
 }
 
 onMounted(async () => {
@@ -1245,6 +1613,20 @@ watch(
   },
 )
 
+watch(
+  visibleCandidates,
+  (items) => {
+    if (!items.length) {
+      activeCandidateId.value = ''
+      return
+    }
+    if (!items.some(item => item.id === activeCandidateId.value)) {
+      activeCandidateId.value = items[0].id
+    }
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => {
   stopPolling()
   stopRunnerPlatformPollStatusPolling()
@@ -1255,25 +1637,48 @@ onBeforeUnmount(() => {
   <section class="web-ui-collect-workspace">
     <header class="web-ui-collect-workspace__header">
       <div class="web-ui-collect-workspace__title">
-        <AppButton :icon="ArrowLeft" @click="goBackToElements">返回元素库</AppButton>
-        <div>
-          <h2>AI 采集工作台</h2>
-          <p>
-            <span v-if="task">任务 #{{ task.taskId }}</span>
-            <span v-if="task?.pageTitle"> / {{ task.pageTitle }}</span>
-            <span v-if="task?.createdAt"> / {{ formatWebUiDateTime(task.createdAt) }}</span>
-          </p>
+        <AppButton :icon="ArrowLeft" size="small" @click="goBackToElements">返回</AppButton>
+        <div v-if="task" class="web-ui-collect-workspace__summary-main">
+          <el-tag :type="getCollectTaskStatusTagType(task.status)" effect="light">
+            {{ formatCollectTaskStatus(task.status) }}
+          </el-tag>
+          <span>页面：{{ taskPageLabel }}</span>
+          <span>共识别 {{ taskRecognizedCount }} 个元素</span>
+          <span>待审核 {{ taskPendingReviewCount }} 个</span>
+          <span v-if="validationProgressText">{{ validationProgressText }}</span>
+          <span v-else-if="polling">自动刷新中</span>
         </div>
       </div>
-      <div class="web-ui-collect-workspace__actions">
-        <AppButton :icon="RefreshRight" :loading="refreshing" @click="refreshTask">刷新</AppButton>
+      <div v-if="task" class="web-ui-collect-workspace__actions">
+        <AppButton :icon="RefreshRight" size="small" :loading="refreshing" @click="refreshTask">刷新</AppButton>
+        <AppButton size="small" :loading="localRunnerChecking" @click="checkRunnerStatus()">
+          检测 Runner
+        </AppButton>
+        <AppButton size="small" :loading="localRunnerRecollecting" @click="recollectCurrentRunnerPage">
+          重新采集
+        </AppButton>
         <AppButton
+          size="small"
           type="primary"
-          :loading="saving"
-          :disabled="!selectedCandidates.length"
-          @click="saveSelectedCandidates"
+          :loading="localRunnerValidating"
+          :disabled="!candidates.length"
+          @click="revalidateAllCandidates"
         >
-          保存已选元素
+          批量验证
+        </AppButton>
+        <AppButton
+          v-if="canStopRunnerPlatformPolling"
+          size="small"
+          @click="stopRunnerPlatformPollingManually"
+        >
+          停止自动验证
+        </AppButton>
+        <AppButton
+          v-if="canCancelTask"
+          size="small"
+          @click="cancelTask"
+        >
+          取消任务
         </AppButton>
       </div>
     </header>
@@ -1285,191 +1690,278 @@ onBeforeUnmount(() => {
       description="请从元素库重新创建 AI 采集任务。"
     />
     <template v-else>
-      <WebUiElementCollectTaskPanel
-        :task="task"
-        :refreshing="refreshing"
-        :polling="polling"
-        @refresh="refreshTask"
-        @cancel="cancelTask"
-      />
+      <section class="web-ui-collect-workspace__review">
+        <div class="web-ui-collect-workspace__review-body">
+          <aside class="web-ui-collect-workspace__candidate-list">
+            <div class="web-ui-collect-workspace__candidate-list-head">
+              <div>
+                <strong>候选元素</strong>
+                <span>{{ visibleCandidates.length }} / {{ candidates.length }}</span>
+              </div>
+              <el-input
+                v-model="candidateSearchKeyword"
+                size="small"
+                clearable
+                placeholder="搜索元素名称 / 定位器"
+              />
+            </div>
+            <el-scrollbar class="web-ui-collect-workspace__candidate-scroll">
+              <template v-if="groupedVisibleCandidates.length">
+                <section
+                  v-for="group in groupedVisibleCandidates"
+                  :key="group.key"
+                  class="web-ui-collect-workspace__candidate-group"
+                >
+                  <button
+                    type="button"
+                    class="web-ui-collect-workspace__candidate-group-title"
+                    @click="toggleCandidateGroup(group)"
+                  >
+                    <el-icon
+                      class="web-ui-collect-workspace__candidate-group-arrow"
+                      :class="{ 'web-ui-collect-workspace__candidate-group-arrow--expanded': !isCandidateGroupCollapsed(group) }"
+                    >
+                      <ArrowRight />
+                    </el-icon>
+                    <span class="web-ui-collect-workspace__candidate-group-name">{{ group.name }}</span>
+                    <span class="web-ui-collect-workspace__candidate-group-count">{{ group.items.length }}</span>
+                  </button>
+                  <template v-if="!isCandidateGroupCollapsed(group)">
+                    <button
+                      v-for="candidate in group.items"
+                      :key="candidate.id"
+                      type="button"
+                      class="web-ui-collect-workspace__candidate-card"
+                      :class="{
+                        'web-ui-collect-workspace__candidate-card--active': isCandidateActive(candidate),
+                        'web-ui-collect-workspace__candidate-card--invalid': candidate.markedInvalid,
+                      }"
+                      @click="setActiveCandidate(candidate)"
+                    >
+                      <el-checkbox
+                        v-model="candidate.selected"
+                        :disabled="candidate.markedInvalid || !isCollectCandidateSaveable(candidate)"
+                        @click.stop
+                      />
+                      <div class="web-ui-collect-workspace__candidate-main">
+                        <strong>{{ candidate.elementName || '未命名元素' }}</strong>
+                      </div>
+                      <div class="web-ui-collect-workspace__candidate-tags">
+                        <el-tag size="small" :type="getConfidenceTagType(getCandidateQualityScore(candidate).total)" effect="light">
+                          {{ getCandidateQualityScore(candidate).total }}%
+                        </el-tag>
+                        <el-tag size="small" :type="getValidationTagType(candidate.validationStatus)" effect="light">
+                          {{ formatValidationStatus(candidate.validationStatus) }}
+                        </el-tag>
+                        <el-tag size="small" type="info" effect="plain">
+                          {{ formatLocatorTypeLabel(candidate.locatorType) }}
+                        </el-tag>
+                      </div>
+                    </button>
+                  </template>
+                </section>
+              </template>
+              <AppEmptyState
+                v-else
+                title="暂无匹配候选"
+                description="换个关键词或刷新采集任务后再查看。"
+              />
+            </el-scrollbar>
+          </aside>
 
-      <section class="web-ui-collect-workspace__runner">
-        <div class="web-ui-collect-workspace__runner-main">
-          <el-tag :type="runnerStatusView.tagType" effect="light">
-            {{ runnerStatusView.label }}
-          </el-tag>
-          <strong>{{ runnerStatusView.title }}</strong>
-          <span v-if="runnerStatusView.runnerVersion">Runner {{ runnerStatusView.runnerVersion }}</span>
-          <small>{{ runnerStatusView.description }}</small>
-          <div v-if="runnerStatusView.currentUrl" class="web-ui-collect-workspace__runner-url">
-            当前页面：{{ runnerStatusView.currentUrl }}
-          </div>
-          <div v-if="localRunnerHealth?.boundTaskId" class="web-ui-collect-workspace__runner-url">
-            绑定任务：#{{ localRunnerHealth.boundTaskId }}
-            <span v-if="localRunnerHealth.boundAt"> / 绑定时间：{{ formatWebUiDateTime(localRunnerHealth.boundAt) }}</span>
-          </div>
-          <div v-if="localRunnerHealth?.online && localRunnerHealth.currentUrl && localRunnerHealth.pageAlive === false" class="web-ui-collect-workspace__runner-warning">
-            Runner 页面已关闭，当前任务后续真机验证会降级为未验证候选。
-          </div>
-          <div class="web-ui-collect-workspace__runner-poll">
-            <el-tag :type="runnerPlatformPollTag.type" effect="plain">
-              {{ runnerPlatformPollTag.text }}
-            </el-tag>
-            <span>{{ runnerPlatformPollDescription }}</span>
-          </div>
-          <div v-if="runnerStatusView.commands.length" class="web-ui-collect-workspace__runner-commands">
-            <span>处理命令：</span>
-            <code v-for="command in runnerStatusView.commands" :key="command">{{ command }}</code>
-          </div>
+          <main class="web-ui-collect-workspace__editor">
+            <el-scrollbar class="web-ui-collect-workspace__editor-scroll">
+              <el-tabs class="web-ui-collect-workspace__editor-tabs">
+                <el-tab-pane label="元素详情">
+                  <template v-if="activeCandidate">
+                    <section class="web-ui-collect-workspace__editor-section">
+                      <div class="web-ui-collect-workspace__section-title">基础信息</div>
+                      <div class="web-ui-collect-workspace__form-grid">
+                        <label>
+                          <span>元素名称</span>
+                          <el-input v-model="activeCandidate.elementName" maxlength="80" />
+                        </label>
+                        <label>
+                          <span>所属分组</span>
+                          <el-select
+                            v-model="activeCandidate.groupName"
+                            filterable
+                            placeholder="选择标准区域"
+                          >
+                            <el-option
+                              v-for="groupName in candidateGroupOptions"
+                              :key="groupName"
+                              :label="groupName"
+                              :value="groupName"
+                            />
+                          </el-select>
+                        </label>
+                        <label>
+                          <span>元素类型</span>
+                          <el-input :model-value="formatElementType(activeCandidate.elementType)" disabled />
+                        </label>
+                        <label>
+                          <span>保存状态</span>
+                          <el-tag :type="isCollectCandidateSaveable(activeCandidate) ? 'success' : 'danger'" effect="light">
+                            {{ isCollectCandidateSaveable(activeCandidate) ? '可入库' : '不可入库' }}
+                          </el-tag>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section class="web-ui-collect-workspace__editor-section">
+                      <div class="web-ui-collect-workspace__section-title">定位配置</div>
+                      <div class="web-ui-collect-workspace__form-grid">
+                        <label>
+                          <span>定位方式</span>
+                          <el-select v-model="activeCandidate.locatorType">
+                            <el-option v-for="item in WEB_UI_LOCATOR_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+                          </el-select>
+                        </label>
+                        <label class="web-ui-collect-workspace__form-full">
+                          <span>定位器</span>
+                          <el-input v-model="activeCandidate.locatorValue" type="textarea" :rows="3" maxlength="1000" />
+                        </label>
+                      </div>
+                      <div
+                        v-if="activeCandidate.locatorCandidates.length > 1"
+                        class="web-ui-collect-workspace__locator-candidates"
+                      >
+                        <div class="web-ui-collect-workspace__locator-candidates-title">
+                          <span>备用定位器</span>
+                          <small>可切换为主定位后重新验证</small>
+                        </div>
+                        <button
+                          v-for="locator in activeCandidate.locatorCandidates"
+                          :key="`${locator.locatorType}-${locator.locatorValue}`"
+                          type="button"
+                          class="web-ui-collect-workspace__locator-candidate"
+                          :class="{ 'web-ui-collect-workspace__locator-candidate--active': isPrimaryLocatorCandidate(activeCandidate, locator) }"
+                          @click="useLocatorCandidate(activeCandidate, locator)"
+                        >
+                          <el-tag size="small" :type="isPrimaryLocatorCandidate(activeCandidate, locator) ? 'primary' : 'info'" effect="light">
+                            {{ isPrimaryLocatorCandidate(activeCandidate, locator) ? '主' : '备' }}
+                          </el-tag>
+                          <span>{{ formatLocatorTypeLabel(locator.locatorType) }}</span>
+                          <strong>{{ locator.locatorValue }}</strong>
+                          <small>{{ locator.confidence ?? '-' }}% · {{ locator.reason || '备选定位' }}</small>
+                        </button>
+                      </div>
+                      <div class="web-ui-collect-workspace__editor-actions">
+                        <AppButton size="small" @click="toggleCandidateInvalid(activeCandidate)">
+                          {{ activeCandidate.markedInvalid ? '恢复有效' : '标记无效' }}
+                        </AppButton>
+                        <AppButton size="small" :loading="localRunnerValidating" @click="revalidateActiveCandidate">
+                          验证定位
+                        </AppButton>
+                        <AppButton size="small" @click="resetCandidateToAiResult(activeCandidate)">
+                          重置AI结果
+                        </AppButton>
+                        <AppButton
+                          v-if="activeCandidate.screenshotBase64"
+                          size="small"
+                          @click="previewCandidateScreenshot(activeCandidate)"
+                        >
+                          查看截图证据
+                        </AppButton>
+                      </div>
+                    </section>
+
+                    <section class="web-ui-collect-workspace__editor-section">
+                      <div class="web-ui-collect-workspace__section-title">AI 识别信息</div>
+                      <dl class="web-ui-collect-workspace__ai-meta">
+                        <div>
+                          <dt>置信度</dt>
+                          <dd
+                            class="web-ui-collect-workspace__confidence-text"
+                            :class="`web-ui-collect-workspace__confidence-text--${getConfidenceTagType(getCandidateQualityScore(activeCandidate).total)}`"
+                          >
+                            {{ getCandidateQualityScore(activeCandidate).total }}%
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>识别描述</dt>
+                          <dd>{{ buildCandidateRecognitionDescription(activeCandidate) }}</dd>
+                        </div>
+                        <div>
+                          <dt>识别时间</dt>
+                          <dd>{{ formatCandidateRecognitionTime() }}</dd>
+                        </div>
+                      </dl>
+                    </section>
+                  </template>
+                  <AppEmptyState
+                    v-else
+                    title="请选择候选元素"
+                    description="从左侧候选列表选择元素后，在这里编辑名称、分组和定位器。"
+                  />
+                </el-tab-pane>
+                <el-tab-pane label="过滤明细">
+                  <WebUiElementCollectFilterDetailsPanel
+                    :details="filterDetails"
+                    :loading="filterDetailsLoading"
+                    @restore="restoreFilteredDetail"
+                  />
+                </el-tab-pane>
+                <el-tab-pane label="任务信息">
+                  <div class="web-ui-collect-workspace__detail-stack">
+                    <WebUiElementCollectTaskPanel
+                      :task="task"
+                      :refreshing="refreshing"
+                      :polling="polling"
+                      @refresh="refreshTask"
+                      @cancel="cancelTask"
+                    />
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </el-scrollbar>
+          </main>
         </div>
-        <div class="web-ui-collect-workspace__runner-actions">
-          <AppButton size="small" :loading="localRunnerChecking" @click="checkRunnerStatus()">
-            检测 Runner
-          </AppButton>
-          <AppButton
-            size="small"
-            :loading="localRunnerPlatformPollRefreshing"
-            @click="refreshRunnerPlatformPollStatus()"
-          >
-            轮询状态
-          </AppButton>
-          <AppButton
-            v-if="canStopRunnerPlatformPolling"
-            size="small"
-            @click="stopRunnerPlatformPollingManually"
-          >
-            停止轮询
-          </AppButton>
-          <AppButton
-            v-if="canRetryRunnerPlatformValidation"
-            size="small"
-            type="primary"
-            @click="revalidateAllCandidates"
-          >
-            重新验证
-          </AppButton>
-        </div>
+
+        <footer class="web-ui-collect-workspace__save-bar">
+          <div>
+            已选 <strong>{{ selectedCandidates.length }}</strong> / 共 {{ candidates.length }} 个元素
+            <span v-if="validationProgressText">{{ validationProgressText }}</span>
+          </div>
+          <div class="web-ui-collect-workspace__save-actions">
+            <AppButton size="small" @click="selectRecommendedPassedCandidates">选择推荐且通过</AppButton>
+            <AppButton size="small" @click="unselectRiskyCandidates">取消风险候选</AppButton>
+            <AppButton size="small" @click="batchUpdateCandidateGroup">批量改分组</AppButton>
+            <AppButton size="small" :disabled="!selectedCandidates.length" @click="clearInvalidCandidates">标记无效</AppButton>
+            <AppButton
+              type="primary"
+              :loading="saving"
+              :disabled="!selectedCandidates.length"
+              @click="saveSelectedCandidates"
+            >
+              确认入库
+            </AppButton>
+          </div>
+        </footer>
       </section>
-
-      <div class="web-ui-collect-workspace__stats">
-        <el-tag
-          v-for="item in stats"
-          :key="item.label"
-          :type="item.type"
-          effect="light"
-        >
-          {{ item.label }} {{ item.value }}
-        </el-tag>
-      </div>
-
-      <el-alert
-        v-if="pageContextNotice"
-        class="web-ui-collect-workspace__notice"
-        :type="pageContextNotice.type"
-        :title="pageContextNotice.title"
-        :description="pageContextNotice.description"
-        show-icon
-        :closable="false"
-      />
-
-      <el-alert
-        v-if="largePageNotice"
-        class="web-ui-collect-workspace__notice"
-        :type="largePageNotice.type"
-        :title="largePageNotice.title"
-        :description="largePageNotice.description"
-        show-icon
-        :closable="false"
-      />
-
-      <el-alert
-        v-if="localValidationNotice"
-        class="web-ui-collect-workspace__notice"
-        :type="localValidationNotice.type"
-        :title="localValidationNotice.title"
-        :description="localValidationNotice.description"
-        show-icon
-        :closable="false"
-      />
-
-      <div class="web-ui-collect-workspace__toolbar">
-        <div class="web-ui-collect-workspace__batch">
-          <AppButton size="small" @click="selectRecommendedPassedCandidates">选择推荐且通过</AppButton>
-          <AppButton size="small" @click="unselectRiskyCandidates">取消风险候选</AppButton>
-          <AppButton size="small" @click="batchUpdateCandidateGroup">批量改分组</AppButton>
-          <AppButton
-            size="small"
-            :loading="localRunnerValidating"
-            @click="revalidateVisibleCandidates"
-          >
-            重新验证当前筛选
-          </AppButton>
-          <span v-if="validationProgressText" class="web-ui-collect-workspace__progress">
-            {{ validationProgressText }}
-          </span>
-        </div>
-        <div class="web-ui-collect-workspace__filters">
-          <AppButton size="small" :type="candidateFilter === 'ALL' ? 'primary' : 'default'" @click="candidateFilter = 'ALL'">全部</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'RECOMMENDED' ? 'primary' : 'default'" @click="candidateFilter = 'RECOMMENDED'">可保存</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'PASSED' ? 'primary' : 'default'" @click="candidateFilter = 'PASSED'">验证通过</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'FAILED' ? 'primary' : 'default'" @click="candidateFilter = 'FAILED'">验证失败</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'MULTIPLE' ? 'primary' : 'default'" @click="candidateFilter = 'MULTIPLE'">多匹配</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'UNVERIFIED' ? 'primary' : 'default'" @click="candidateFilter = 'UNVERIFIED'">未验证</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'BLOCKED' ? 'primary' : 'default'" @click="candidateFilter = 'BLOCKED'">禁止保存</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'AI_SUPPLEMENT' ? 'primary' : 'default'" @click="candidateFilter = 'AI_SUPPLEMENT'">AI 补充</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'AI_UNVERIFIED' ? 'primary' : 'default'" @click="candidateFilter = 'AI_UNVERIFIED'">AI 待验证</AppButton>
-          <AppButton size="small" :type="candidateFilter === 'LOW_CONFIDENCE' ? 'primary' : 'default'" @click="candidateFilter = 'LOW_CONFIDENCE'">低稳定性</AppButton>
-          <span>已选 {{ selectedCandidates.length }} / {{ candidates.length }}</span>
-        </div>
-      </div>
-
-      <el-tabs class="web-ui-collect-workspace__tabs">
-        <el-tab-pane label="有效候选">
-          <WebUiElementCollectCandidateTable
-            :candidates="visibleCandidates"
-            @preview-screenshot="previewCandidateScreenshot"
-          />
-        </el-tab-pane>
-        <el-tab-pane label="过滤明细">
-          <WebUiElementCollectFilterDetailsPanel
-            :details="filterDetails"
-            :loading="filterDetailsLoading"
-            @restore="restoreFilteredDetail"
-          />
-        </el-tab-pane>
-        <el-tab-pane label="任务信息">
-          <WebUiElementCollectTracePanel
-            :task="task"
-            :module-item="selectedModule"
-            :page-item="selectedPage"
-            :route-page-name="routePageName"
-            :route-page-url="routePageUrl"
-            :group-strategy="groupStrategy"
-            :route-group-name="routeGroupName"
-            :saved-elements="savedElements"
-            :saved-elements-loading="savedElementsLoading"
-            @preview-global-screenshot="previewGlobalScreenshot"
-            @open-element="openSavedElement"
-          />
-        </el-tab-pane>
-      </el-tabs>
     </template>
   </section>
 </template>
 
 <style scoped>
 .web-ui-collect-workspace {
-  display: grid;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: var(--app-space-4);
   min-width: 0;
+  min-height: 0;
+  height: calc(100dvh - 64px - var(--app-space-6) * 2);
+  max-height: calc(100dvh - 64px - var(--app-space-6) * 2);
+  overflow: hidden;
 }
 
 .web-ui-collect-workspace__header,
 .web-ui-collect-workspace__title,
 .web-ui-collect-workspace__actions,
-.web-ui-collect-workspace__stats,
-.web-ui-collect-workspace__batch,
-.web-ui-collect-workspace__filters {
+.web-ui-collect-workspace__summary-main,
+.web-ui-collect-workspace__batch {
   display: flex;
   align-items: center;
   gap: var(--app-space-3);
@@ -1477,21 +1969,31 @@ onBeforeUnmount(() => {
 }
 
 .web-ui-collect-workspace__header {
+  gap: var(--app-space-3);
+  flex-shrink: 0;
   justify-content: space-between;
 }
 
-.web-ui-collect-workspace__title h2 {
-  margin: 0;
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-xl);
+.web-ui-collect-workspace__title {
+  min-width: 0;
+  flex: 1;
 }
 
-.web-ui-collect-workspace__title p,
-.web-ui-collect-workspace__filters span,
-.web-ui-collect-workspace__progress {
-  margin: var(--app-space-1) 0 0;
-  color: var(--app-text-muted);
+.web-ui-collect-workspace__actions {
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.web-ui-collect-workspace__summary-main {
+  min-width: 0;
+  color: var(--app-text-secondary);
   font-size: var(--app-font-size-sm);
+  overflow: hidden;
+}
+
+.web-ui-collect-workspace__summary-main > span {
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .web-ui-collect-workspace__progress {
@@ -1503,88 +2005,394 @@ onBeforeUnmount(() => {
   gap: var(--app-space-3);
 }
 
-.web-ui-collect-workspace__runner {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--app-space-3);
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border-color);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-soft);
+.web-ui-collect-workspace__review {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 52px;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-bg-panel);
+  overflow: hidden;
 }
 
-.web-ui-collect-workspace__runner-main {
+.web-ui-collect-workspace__review-body {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.web-ui-collect-workspace__candidate-list {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--app-border);
+  background: var(--app-bg-panel);
+  overflow: hidden;
+}
+
+.web-ui-collect-workspace__candidate-list-head,
+.web-ui-collect-workspace__candidate-group-title,
+.web-ui-collect-workspace__candidate-card,
+.web-ui-collect-workspace__candidate-tags,
+.web-ui-collect-workspace__editor-actions,
+.web-ui-collect-workspace__save-bar,
+.web-ui-collect-workspace__save-actions {
   display: flex;
   align-items: center;
   gap: var(--app-space-2);
-  min-width: 0;
-  flex: 1;
-  flex-wrap: wrap;
 }
 
-.web-ui-collect-workspace__runner-main small,
-.web-ui-collect-workspace__runner-url,
-.web-ui-collect-workspace__runner-warning,
-.web-ui-collect-workspace__runner-poll,
-.web-ui-collect-workspace__runner-commands {
-  flex-basis: 100%;
+.web-ui-collect-workspace__candidate-list-head {
+  display: grid;
+  grid-template-columns: 1fr;
+  padding: var(--app-space-3);
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-bg-card);
+}
+
+.web-ui-collect-workspace__candidate-list-head > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+}
+
+.web-ui-collect-workspace__candidate-list-head span,
+.web-ui-collect-workspace__candidate-group-title,
+.web-ui-collect-workspace__candidate-main span {
   color: var(--app-text-muted);
   font-size: var(--app-font-size-sm);
 }
 
-.web-ui-collect-workspace__runner-actions,
-.web-ui-collect-workspace__runner-poll {
-  display: flex;
+.web-ui-collect-workspace__candidate-scroll {
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
+}
+
+.web-ui-collect-workspace__candidate-scroll :deep(.el-scrollbar__view) {
+  display: grid;
+  align-content: start;
+  box-sizing: border-box;
+  gap: var(--app-space-1);
+  min-height: 100%;
+  padding: var(--app-space-2);
+}
+
+.web-ui-collect-workspace__candidate-group {
+  display: grid;
+  gap: var(--app-space-1);
+}
+
+.web-ui-collect-workspace__candidate-group-title {
+  width: 100%;
+  padding: 7px 4px 5px;
+  border: 0;
+  background: transparent;
+  color: var(--app-text-muted);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+  transition: color .18s ease, background-color .18s ease;
+}
+
+.web-ui-collect-workspace__candidate-group-title:hover {
+  color: var(--el-color-primary);
+}
+
+.web-ui-collect-workspace__candidate-group-arrow {
+  flex-shrink: 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  transition: transform .18s ease, color .18s ease;
+}
+
+.web-ui-collect-workspace__candidate-group-arrow--expanded {
+  transform: rotate(90deg);
+}
+
+.web-ui-collect-workspace__candidate-group-title:hover .web-ui-collect-workspace__candidate-group-arrow {
+  color: var(--el-color-primary);
+}
+
+.web-ui-collect-workspace__candidate-group-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-collect-workspace__candidate-group-count {
+  flex-shrink: 0;
+  min-width: 18px;
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  text-align: right;
+}
+
+.web-ui-collect-workspace__candidate-card {
+  width: 100%;
+  min-width: 0;
   align-items: center;
-  gap: var(--app-space-2);
-  flex-wrap: wrap;
+  min-height: 32px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--app-radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
 }
 
-.web-ui-collect-workspace__runner-actions {
-  justify-content: flex-end;
+.web-ui-collect-workspace__candidate-card:hover,
+.web-ui-collect-workspace__candidate-card--active {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
 }
 
-.web-ui-collect-workspace__runner-warning {
-  color: var(--el-color-warning-dark-2);
+.web-ui-collect-workspace__candidate-card--invalid {
+  color: var(--app-text-muted);
+  background: var(--app-bg-soft);
 }
 
-.web-ui-collect-workspace__runner-url {
+.web-ui-collect-workspace__candidate-card--invalid .web-ui-collect-workspace__candidate-main {
+  opacity: .72;
+}
+
+.web-ui-collect-workspace__candidate-main {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.web-ui-collect-workspace__candidate-main strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 400;
+}
+
+.web-ui-collect-workspace__candidate-main strong,
+.web-ui-collect-workspace__candidate-main span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.web-ui-collect-workspace__runner-commands {
-  display: grid;
-  gap: var(--app-space-1);
+.web-ui-collect-workspace__candidate-tags {
+  justify-content: flex-end;
+  flex: 0 0 142px;
+  flex-wrap: nowrap;
+  gap: 4px;
 }
 
-.web-ui-collect-workspace__runner-commands code {
-  display: block;
-  padding: 6px 8px;
-  border: 1px solid var(--app-border-color);
+.web-ui-collect-workspace__candidate-tags :deep(.el-tag) {
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.web-ui-collect-workspace__editor {
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.web-ui-collect-workspace__editor-scroll {
+  height: 100%;
+}
+
+.web-ui-collect-workspace__editor-scroll :deep(.el-scrollbar__view) {
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: var(--app-space-4);
+}
+
+.web-ui-collect-workspace__editor-tabs {
+  min-width: 0;
+}
+
+.web-ui-collect-workspace__editor-section {
+  display: grid;
+  gap: var(--app-space-3);
+  padding-bottom: var(--app-space-4);
+}
+
+.web-ui-collect-workspace__section-title {
+  padding-bottom: var(--app-space-2);
+  border-bottom: 1px solid var(--app-border);
+  color: var(--app-text-primary);
+  font-weight: 600;
+}
+
+.web-ui-collect-workspace__form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-3);
+}
+
+.web-ui-collect-workspace__form-grid label {
+  display: grid;
+  gap: var(--app-space-2);
+  min-width: 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-collect-workspace__form-full {
+  grid-column: 1 / -1;
+}
+
+.web-ui-collect-workspace__editor-actions,
+.web-ui-collect-workspace__save-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.web-ui-collect-workspace__locator-candidates {
+  display: grid;
+  gap: var(--app-space-2);
+}
+
+.web-ui-collect-workspace__locator-candidates-title,
+.web-ui-collect-workspace__locator-candidate {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  min-width: 0;
+}
+
+.web-ui-collect-workspace__locator-candidates-title {
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-collect-workspace__locator-candidates-title small,
+.web-ui-collect-workspace__locator-candidate small {
+  color: var(--app-text-muted);
+}
+
+.web-ui-collect-workspace__locator-candidate {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--app-border);
   border-radius: var(--app-radius-sm);
   background: var(--app-bg-card);
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.web-ui-collect-workspace__locator-candidate:hover,
+.web-ui-collect-workspace__locator-candidate--active {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.web-ui-collect-workspace__locator-candidate strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
   color: var(--app-text-primary);
-  font-size: var(--app-font-size-xs);
-  white-space: normal;
-  word-break: break-all;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-collect-workspace__ai-meta {
+  display: grid;
+  gap: var(--app-space-2);
+  margin: 0;
+}
+
+.web-ui-collect-workspace__ai-meta div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--app-space-3);
+}
+
+.web-ui-collect-workspace__ai-meta dt {
+  color: var(--app-text-muted);
+}
+
+.web-ui-collect-workspace__ai-meta dd {
+  margin: 0;
+  color: var(--app-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.web-ui-collect-workspace__confidence-text {
+  font-weight: 600;
+}
+
+.web-ui-collect-workspace__confidence-text--success {
+  color: var(--el-color-success);
+}
+
+.web-ui-collect-workspace__confidence-text--warning {
+  color: var(--el-color-warning);
+}
+
+.web-ui-collect-workspace__confidence-text--danger {
+  color: var(--el-color-danger);
+}
+
+.web-ui-collect-workspace__detail-stack {
+  display: grid;
+  gap: var(--app-space-4);
+}
+
+.web-ui-collect-workspace__save-bar {
+  z-index: 2;
+  min-height: 0;
+  justify-content: space-between;
+  padding: 0 var(--app-space-4);
+  border-top: 1px solid var(--app-border);
+  background: var(--app-bg-card);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  flex-wrap: wrap;
+}
+
+.web-ui-collect-workspace__save-bar strong {
+  color: var(--app-text-primary);
 }
 
 .web-ui-collect-workspace__tabs {
   min-width: 0;
 }
 
-.web-ui-collect-workspace__meta {
-  display: grid;
-  gap: var(--app-space-2);
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border-color);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-soft);
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
+@media (max-width: 1100px) {
+  .web-ui-collect-workspace__review-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(220px, 360px) minmax(0, 1fr);
+  }
+
+  .web-ui-collect-workspace__candidate-list {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .web-ui-collect-workspace__form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .web-ui-collect-workspace__candidate-card {
+    transition: none;
+  }
 }
 
 :global(.web-ui-ai-save-confirm) {

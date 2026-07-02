@@ -425,6 +425,7 @@ public final class WebUiAutomationModels {
             String locatorValue,
             List<Map<String, Object>> framePath,
             List<Object> shadowPath,
+            List<WebUiElementCollectLocatorCandidate> locatorCandidates,
             Integer confidence,
             String reason,
             String tagName,
@@ -445,6 +446,16 @@ public final class WebUiAutomationModels {
             String screenshotBase64,
             String candidateSource,
             String saveBlockedReason
+    ) {
+    }
+
+    public record WebUiElementCollectLocatorCandidate(
+            String locatorType,
+            String locatorValue,
+            List<Map<String, Object>> framePath,
+            List<Object> shadowPath,
+            Integer confidence,
+            String reason
     ) {
     }
 
@@ -536,6 +547,7 @@ public final class WebUiAutomationModels {
     public record LocalRunnerCollectValidationCommandRequest(
             String runnerId,
             String sessionId,
+            String currentUrl,
             List<WebUiElementCollectValidationTarget> locators
     ) {
     }

@@ -263,6 +263,7 @@ const validateTarget = ref<WebUiElementItem | null>(null)
 const detailTarget = ref<WebUiElementItem | null>(null)
 const consumedElementDeepLinkKey = ref('')
 const consumedCollectSaveResultKey = ref('')
+const consumedRecollectActionKey = ref('')
 const validateEnvironmentId = ref<number | null>(null)
 const validateBaseUrl = ref('')
 const validateResult = ref<ValidateWebUiLocatorResponse | null>(null)
@@ -771,6 +772,7 @@ async function loadElements() {
     total.value = page.total
     consumeElementDeepLink()
     consumeCollectSaveResultNotice()
+    consumeRecollectAction()
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
@@ -926,6 +928,34 @@ function consumeCollectSaveResultNotice() {
   }
   if (skippedCount > 0) {
     ElMessage.warning(`本次没有新增元素，已跳过 ${skippedCount} 个重复候选${taskText}`)
+  }
+}
+
+function consumeRecollectAction() {
+  const action = Array.isArray(route.query.collectAction) ? route.query.collectAction[0] : route.query.collectAction
+  if (action !== 'recollect') {
+    consumedRecollectActionKey.value = ''
+    return
+  }
+
+  const key = `${props.workspaceCode}:${route.query.pageId || ''}:${route.query.pageName || ''}:${route.query.pageUrl || ''}`
+  if (consumedRecollectActionKey.value === key) {
+    return
+  }
+
+  consumedRecollectActionKey.value = key
+  openAiCollectLaunchDialog()
+  if (typeof route.query.pageName === 'string' && route.query.pageName.trim()) {
+    aiCollectForm.pageName = route.query.pageName
+  }
+  if (typeof route.query.pageUrl === 'string') {
+    aiCollectForm.pageUrl = route.query.pageUrl
+  }
+  if (route.query.groupStrategy === 'CUSTOM') {
+    aiCollectForm.groupStrategy = 'CUSTOM'
+  }
+  if (typeof route.query.groupName === 'string' && route.query.groupName.trim()) {
+    aiCollectForm.groupName = route.query.groupName
   }
 }
 
@@ -1251,6 +1281,24 @@ function getAiCustomGroupName() {
   return (aiCollectForm.groupName || group?.groupName || '').trim()
 }
 
+function inferAiCollectPageName() {
+  const title = localRunnerHealth.value?.pageTitle?.trim()
+  if (title) {
+    return title.slice(0, 50)
+  }
+  const url = localRunnerHealth.value?.currentUrl || aiCollectForm.pageUrl
+  if (!url) {
+    return '智能采集页面'
+  }
+  try {
+    const parsed = new URL(url)
+    const pathName = parsed.pathname.split('/').filter(Boolean).pop()
+    return (pathName || parsed.hostname || '智能采集页面').slice(0, 50)
+  } catch {
+    return '智能采集页面'
+  }
+}
+
 function loadRecentCollectTasks() {
   if (typeof window === 'undefined') return
   try {
@@ -1545,6 +1593,7 @@ async function validateCurrentCollectTaskWithLocalRunner(
       {
         runnerId: taskDetail.runnerId || 'local-runner',
         sessionId: localRunnerHealth.value?.sessionId || taskDetail.sessionId || null,
+        currentUrl: localRunnerHealth.value?.currentUrl || null,
         locators: requestedLocators,
       },
     )
@@ -1566,15 +1615,15 @@ async function validateCurrentCollectTaskWithLocalRunner(
     stopCollectTaskPolling()
     const errorMessage = getRequestErrorMessage(error)
     const timedOut = errorMessage.includes('超时')
-    const reason = timedOut ? 'Runner 真机验证超时，已降级为未验证候选' : `Runner 真机验证失败：${errorMessage}`
+    const reason = timedOut ? '本地页面验证超时，已降级为未验证候选' : `本地页面验证失败：${errorMessage}`
     try {
       const degradedTask = timedOut
         ? await webUiAutomationApi.timeoutLocalRunnerCollectValidation(workspaceCode, taskDetail.taskId, { reason })
         : await webUiAutomationApi.degradeLocalRunnerCollectTask(workspaceCode, taskDetail.taskId, { reason })
       applyCollectTaskDetail(degradedTask, customGroupName)
       ElMessage.warning(timedOut
-        ? '采集成功，但本地真机验证超时，已降级为未验证候选'
-        : '采集成功，但本地真机验证失败，已降级为未验证候选')
+        ? '采集成功，但本地页面验证超时，已降级为未验证候选'
+        : '采集成功，但本地页面验证失败，已降级为未验证候选')
       return degradedTask
     } catch (degradeError) {
       ElMessage.warning(`${reason}。降级状态同步失败：${getRequestErrorMessage(degradeError)}`)
@@ -1611,7 +1660,7 @@ async function revalidateVisibleAiCandidates() {
     if (validatedTask.status === 'COMPLETED') {
       ElMessage.success(`已重新验证 ${locators.length} 个候选定位器`)
     } else if (validatedTask.status === 'DEGRADED') {
-      ElMessage.warning('本地真机验证未完成，当前任务已降级为未验证候选')
+      ElMessage.warning('本地页面验证未完成，当前任务已降级为未验证候选')
     }
   } catch (error) {
     ElMessage.error(`重新验证失败：${getRequestErrorMessage(error)}`)
@@ -2005,7 +2054,7 @@ async function openLocalRunnerCollectPage() {
     localRunnerHealth.value = await checkLocalRunnerHealth()
     await refreshLocalRunnerAuthStatus()
     if (result.page?.isProbablyLoginPage) {
-      ElMessage.warning('页面可能需要登录，请在本地浏览器完成登录后点击继续采集')
+      ElMessage.warning('当前是登录页。请先在本地浏览器完成登录，再进入业务页面开始采集')
       return
     }
     ElMessage.success('已在本地浏览器打开页面，可继续采集')
@@ -2027,9 +2076,9 @@ async function startLocalRunnerGenericTaskPolling() {
       workspaceCodes: workspaceCode === 'ALL' ? [] : [workspaceCode],
       intervalMs: 2000,
     })
-    ElMessage.success('Runner 通用任务轮询已启动')
+    ElMessage.success('本地自动验证已启动')
   } catch (error) {
-    ElMessage.error(`启动 Runner 任务轮询失败：${getRequestErrorMessage(error)}`)
+    ElMessage.error(`启动本地自动验证失败：${getRequestErrorMessage(error)}`)
   } finally {
     localRunnerTaskPollingStarting.value = false
   }
@@ -2083,7 +2132,7 @@ async function createLocalRunnerDebugValidateTask() {
     const polling = await ensureLocalRunnerGenericTaskPolling(moduleItem.workspaceCode)
     const runnerId = polling.poller?.runnerId
     if (!runnerId) {
-      throw new Error('Runner 任务轮询未返回 runnerId')
+      throw new Error('本地自动验证未返回 runnerId')
     }
 
     const result = await captureLocalRunnerPage(100)
@@ -2164,9 +2213,9 @@ async function saveCurrentLocalRunnerAuth() {
     })
     localRunnerHealth.value = await checkLocalRunnerHealth()
     await refreshLocalRunnerAuthStatus()
-    ElMessage.success('已保存当前 Runner 登录态')
+    ElMessage.success('已保存当前环境的登录状态')
   } catch (error) {
-    ElMessage.error(`保存 Runner 登录态失败：${getRequestErrorMessage(error)}`)
+    ElMessage.error(`保存登录状态失败：${getRequestErrorMessage(error)}`)
   } finally {
     localRunnerAuthSaving.value = false
   }
@@ -2185,10 +2234,10 @@ async function clearCurrentLocalRunnerAuth() {
 
   try {
     await ElMessageBox.confirm(
-      '清空后，Runner 下次打开该环境页面将不再自动复用已保存登录态。是否继续？',
-      '清空 Runner 登录态',
+      '清空后，下次打开该环境页面将不再自动复用已保存的登录状态。是否继续？',
+      '清空登录状态',
       {
-        confirmButtonText: '清空登录态',
+        confirmButtonText: '清空登录状态',
         cancelButtonText: '取消',
         type: 'warning',
       },
@@ -2205,9 +2254,9 @@ async function clearCurrentLocalRunnerAuth() {
     })
     localRunnerHealth.value = await checkLocalRunnerHealth()
     await refreshLocalRunnerAuthStatus()
-    ElMessage.success('已清空当前环境登录态')
+    ElMessage.success('已清空当前环境登录状态')
   } catch (error) {
-    ElMessage.error(`清空 Runner 登录态失败：${getRequestErrorMessage(error)}`)
+    ElMessage.error(`清空登录状态失败：${getRequestErrorMessage(error)}`)
   } finally {
     localRunnerAuthClearing.value = false
   }
@@ -2219,16 +2268,16 @@ async function releaseCurrentLocalRunnerSession() {
     return
   }
   if (!localRunnerHealth.value.currentUrl) {
-    ElMessage.warning('当前没有可释放的 Runner 页面会话')
+    ElMessage.warning('当前没有打开的本地页面')
     return
   }
 
   try {
     await ElMessageBox.confirm(
-      '释放后会关闭 Runner 当前打开的业务页面，但不会删除已保存的登录态。下次采集需要重新打开目标页。是否继续？',
-      '释放 Runner 页面会话',
+      '关闭后不会删除已保存的登录状态。下次采集需要重新打开目标页。是否继续？',
+      '关闭本地页面',
       {
-        confirmButtonText: '释放页面会话',
+        confirmButtonText: '关闭页面',
         cancelButtonText: '取消',
         type: 'warning',
       },
@@ -2242,9 +2291,9 @@ async function releaseCurrentLocalRunnerSession() {
     await releaseLocalRunnerSession()
     localRunnerHealth.value = await checkLocalRunnerHealth()
     await refreshLocalRunnerAuthStatus()
-    ElMessage.success('已释放当前 Runner 页面会话')
+    ElMessage.success('已关闭当前本地页面')
   } catch (error) {
-    ElMessage.error(`释放 Runner 页面会话失败：${getRequestErrorMessage(error)}`)
+    ElMessage.error(`关闭本地页面失败：${getRequestErrorMessage(error)}`)
   } finally {
     localRunnerSessionReleasing.value = false
   }
@@ -2262,8 +2311,8 @@ async function confirmLocalRunnerPageMismatch() {
 
   try {
     await ElMessageBox.confirm(
-      `Runner 当前页面是：${status.currentUrl || '-'}。采集会以 Runner 当前页面为准，而不是表单里的目标页地址。是否继续？`,
-      'Runner 当前页面和目标页不一致',
+      `本地浏览器当前页面是：${status.currentUrl || '-'}。采集会以当前页面为准，而不是表单里的目标页地址。是否继续？`,
+      '当前页面和目标页不一致',
       {
         confirmButtonText: '继续采集当前页',
         cancelButtonText: '返回检查',
@@ -2283,7 +2332,7 @@ async function confirmLocalRunnerSessionFreshness() {
     return true
   }
   if (health.expired) {
-    ElMessage.warning('Runner 页面会话已过期，请重新打开目标页后再采集')
+    ElMessage.warning('当前本地页面已过期，请重新打开目标页后再采集')
     return false
   }
   if (typeof health.remainingSeconds !== 'number' || health.remainingSeconds > 120) {
@@ -2292,8 +2341,8 @@ async function confirmLocalRunnerSessionFreshness() {
 
   try {
     await ElMessageBox.confirm(
-      'Runner 当前页面会话即将过期。继续采集可能在采集或真机验证时失效，建议重新打开目标页刷新会话。是否仍继续？',
-      'Runner 页面会话即将过期',
+      '当前本地页面即将过期。继续采集可能在采集或本地验证时失效，建议重新打开目标页。是否仍继续？',
+      '当前页面即将过期',
       {
         confirmButtonText: '仍然继续',
         cancelButtonText: '返回刷新页面',
@@ -2315,8 +2364,8 @@ async function confirmLocalRunnerTaskAvailable() {
 
   try {
     await ElMessageBox.confirm(
-      `Runner 当前页面已经绑定采集任务 #${boundTaskId}。为避免新采集覆盖页面上下文，请先打开当前任务继续处理，或释放页面会话后重新打开目标页。`,
-      'Runner 页面会话已被占用',
+      `当前页面正在处理采集任务 #${boundTaskId}。为避免影响正在处理的任务，请先打开当前任务继续处理，或关闭本地页面后重新打开目标页。`,
+      '当前页面已有采集任务',
       {
         confirmButtonText: '打开当前任务',
         cancelButtonText: '返回处理',
@@ -2340,15 +2389,15 @@ async function confirmLocalRunnerAuthReadiness() {
     return true
   }
 
-  const title = status?.exists ? '登录态保存时间较久' : '当前环境未保存登录态'
+  const title = status?.exists ? '登录状态保存时间较久' : '当前环境未保存登录状态'
   const message = status?.exists
-    ? '当前环境已有登录态快照，但保存时间较久。如果业务系统登录态已过期，采集可能进入登录页。建议重新登录并保存一次登录态。是否仍继续采集？'
-    : '当前环境还没有保存登录态。如果目标页面需要登录，请先打开目标页，在 Runner 浏览器里完成登录，并点击“保存登录态”。是否仍继续采集当前页面？'
+    ? '当前环境已有登录状态，但保存时间较久。如果业务系统登录已过期，采集可能进入登录页。建议重新登录并保存一次登录状态。是否仍继续采集？'
+    : '当前环境还没有保存登录状态。如果目标页面需要登录，请先打开目标页，在本地浏览器里完成登录，并点击“保存登录状态”。是否仍继续采集当前页面？'
 
   try {
     await ElMessageBox.confirm(message, title, {
       confirmButtonText: '仍然继续采集',
-      cancelButtonText: '返回处理登录态',
+      cancelButtonText: '返回处理登录状态',
       type: 'warning',
     })
     return true
@@ -2366,16 +2415,17 @@ async function startCollectTaskWorkbench() {
     ElMessage.warning('请选择所属模块')
     return
   }
+  aiCollectForm.groupStrategy = 'AI'
+  aiCollectForm.scope = 'ALL'
+  if (!aiCollectForm.pageId && !aiCollectForm.pageName.trim()) {
+    aiCollectForm.pageName = inferAiCollectPageName()
+  }
   if (!aiCollectForm.pageName.trim() && !aiCollectForm.pageId) {
     ElMessage.warning('请选择或填写页面对象名称')
     return
   }
 
   const customGroupName = getAiCustomGroupName()
-  if (aiCollectForm.groupStrategy === 'CUSTOM' && !customGroupName) {
-    ElMessage.warning('请选择或填写自选分组')
-    return
-  }
 
   const moduleItem = modules.value.find(item => item.id === aiCollectForm.moduleId)
   if (!moduleItem) {
@@ -2455,7 +2505,7 @@ async function startCollectTaskWorkbench() {
     const message = getRequestErrorMessage(error)
     if (isLocalRunnerSessionLostMessage(message)) {
       await refreshLocalRunnerHealth({ silent: true })
-      ElMessage.warning('Runner 当前页面会话已失效，请重新打开目标页或在本地浏览器进入目标页面后再开始采集')
+      ElMessage.warning('当前本地页面已失效，请重新打开目标页或在本地浏览器进入目标页面后再开始采集')
     } else {
       ElMessage.error(`本地采集失败：${message}`)
     }
@@ -2544,14 +2594,14 @@ async function captureLocalRunnerCandidates() {
     localRunnerHealth.value = await checkLocalRunnerHealth()
 
     if (!candidates.length) {
-      ElMessage.warning('本地执行器未采集到候选元素，请确认已进入目标业务页面')
+      ElMessage.warning('本地 Runner 未采集到候选元素，请确认已进入目标业务页面')
       return
     }
 
     const validationDone = validatedTaskDetail.status === 'COMPLETED'
     ElMessage.success(validationDone
-      ? `本地 Runner 已完成采集任务 #${task.taskId}，生成并验证 ${candidates.length} 个候选元素`
-      : task.message || `本地 Runner 已创建采集任务 #${task.taskId}，生成 ${candidates.length} 个静态候选`)
+      ? `本地采集任务 #${task.taskId} 已完成，生成并验证 ${candidates.length} 个候选元素`
+      : task.message || `本地采集任务 #${task.taskId} 已创建，生成 ${candidates.length} 个静态候选`)
   } catch (error) {
     aiCandidates.value = []
     aiCollectFilterSummary.value = null
@@ -2570,7 +2620,7 @@ async function bindCurrentRunnerSessionToTask(taskId: number, sessionId: string 
     })
     localRunnerHealth.value = await checkLocalRunnerHealth()
   } catch (error) {
-    ElMessage.warning(`采集任务已创建，但 Runner 会话绑定失败：${getRequestErrorMessage(error)}`)
+    ElMessage.warning(`采集任务已创建，但当前页面关联失败：${getRequestErrorMessage(error)}`)
   }
 }
 
@@ -2997,7 +3047,7 @@ async function copyBatchValidateLocator(item: WebUiElementValidateResultItem) {
 
 async function reopenBatchValidateRunnerPage(item: WebUiElementValidateResultItem) {
   if (!item.runnerPageUrl) {
-    ElMessage.warning('该结果没有 Runner 页面地址')
+    ElMessage.warning('该结果没有本地页面地址')
     return
   }
   try {
@@ -3008,9 +3058,9 @@ async function reopenBatchValidateRunnerPage(item: WebUiElementValidateResultIte
       environmentId: aiCollectForm.environmentId || 'manual',
     })
     await refreshLocalRunnerHealth({ silent: true })
-    ElMessage.success('已重新打开 Runner 页面')
+    ElMessage.success('已重新打开本地页面')
   } catch (error) {
-    ElMessage.error(`重新打开 Runner 页面失败：${getRequestErrorMessage(error)}`)
+    ElMessage.error(`重新打开本地页面失败：${getRequestErrorMessage(error)}`)
   }
 }
 
@@ -3041,15 +3091,15 @@ function formatValidateFailureHint(message?: string | null) {
     return '未返回具体失败原因，可先确认页面地址是否正确、元素是否在当前页面渲染。'
   }
   if (text.includes('timeout') || text.includes('timed out') || text.includes('超时')) {
-    return '可能是页面加载或元素出现超时，建议检查网络、登录态、等待时间和页面跳转。'
+    return '可能是页面加载或元素出现超时，建议检查网络、登录状态、等待时间和页面跳转。'
   }
   if (text.includes('invalid') || text.includes('syntax') || text.includes('selector')) {
     return '可能是定位器语法不正确，建议先检查 CSS/XPath/文本定位写法。'
   }
   if (text.includes('navigation') || text.includes('net::') || text.includes('failed to load')) {
-    return '可能是验证地址无法打开，建议确认环境 baseUrl、路径和登录态。'
+    return '可能是验证地址无法打开，建议确认环境 baseUrl、路径和登录状态。'
   }
-  return '建议优先确认页面地址、登录态、元素是否在当前页面，以及定位器是否足够稳定。'
+  return '建议优先确认页面地址、登录状态、元素是否在当前页面，以及定位器是否足够稳定。'
 }
 
 function getValidateFailureHint(result?: ValidateWebUiLocatorResponse | WebUiElementValidateResultItem | null) {
@@ -3875,7 +3925,7 @@ async function submitValidateElementWithLocalRunner() {
       return
     }
     if (localRunnerHealth.value.pageAlive === false) {
-      ElMessage.warning('Runner 当前页面已失效，请重新打开目标页后再验证')
+      ElMessage.warning('当前本地页面已失效，请重新打开目标页后再验证')
       return
     }
 
@@ -3883,7 +3933,7 @@ async function submitValidateElementWithLocalRunner() {
     const polling = await ensureLocalRunnerGenericTaskPolling(workspaceCode)
     const runnerId = polling.poller?.runnerId
     if (!runnerId) {
-      throw new Error('Runner 任务轮询未返回 runnerId')
+      throw new Error('本地自动验证未返回 runnerId')
     }
 
     const task = await webUiAutomationApi.createLocalRunnerDebugTask(workspaceCode, {
@@ -3992,7 +4042,7 @@ async function confirmLocalRunnerBatchValidation(options: {
       : '已勾选元素'
   const pageTitle = options.pageTitle?.trim() || '-'
   const message = [
-    `<p>本次会在 <strong>Runner 当前页面</strong> 上执行真机验证，请确认页面是否正确。</p>`,
+    `<p>本次会在 <strong>当前本地页面</strong> 上执行本地页面验证，请确认页面是否正确。</p>`,
     `<p>当前页面：<span class="web-ui-local-runner-confirm-url">${escapeLocalRunnerConfirmHtml(options.currentUrl)}</span></p>`,
     `<p>页面标题：${escapeLocalRunnerConfirmHtml(pageTitle)}</p>`,
     `<p>验证范围：${scopeText}，元素 ${options.targetCount} 个，定位器 ${options.locatorCount} 个。</p>`,
@@ -4047,7 +4097,7 @@ async function batchValidateWithLocalRunner(scope: 'SELECTED' | 'ALL_RESULTS' | 
       return
     }
     if (localRunnerHealth.value.pageAlive === false) {
-      ElMessage.warning('Runner 当前页面已失效，请重新打开目标页后再验证')
+      ElMessage.warning('当前本地页面已失效，请重新打开目标页后再验证')
       return
     }
     const confirmed = await confirmLocalRunnerBatchValidation({
@@ -4070,7 +4120,7 @@ async function batchValidateWithLocalRunner(scope: 'SELECTED' | 'ALL_RESULTS' | 
     const polling = await ensureLocalRunnerGenericTaskPolling(taskWorkspaceCode)
     const runnerId = polling.poller?.runnerId
     if (!runnerId) {
-      throw new Error('Runner 任务轮询未返回 runnerId')
+      throw new Error('本地自动验证未返回 runnerId')
     }
 
     const validationPageUrl = localRunnerHealth.value.currentUrl
@@ -4247,7 +4297,6 @@ onBeforeUnmount(() => {
       :expanded-tree-keys="expandedTreeKeys"
       :selected-tree-id="selectedTree.id"
       :get-node-icon="getNodeIcon"
-      @create="openCreateDialog"
       @node-click="handleTreeNodeClick"
       @node-add="handleNodeAdd"
     />
@@ -4260,6 +4309,7 @@ onBeforeUnmount(() => {
         :recent-collect-tasks="recentCollectTasks"
         @search="searchElements"
         @reset="resetFilters"
+        @create="openCreateDialog"
         @import="openImportDialog"
         @export="exportCurrentElements"
         @quality-check="runQualityCheck"
@@ -4275,11 +4325,21 @@ onBeforeUnmount(() => {
       </div>
 
       <AppLoadingState v-if="loading && !elements.length" text="正在加载元素库..." />
-      <AppEmptyState
+      <div
         v-else-if="!loading && !elements.length"
-        title="暂无 Web UI 元素"
-        description="先按空间、模块、页面和分组整理元素，再在用例步骤中复用。"
-      />
+        class="web-ui-element-empty"
+      >
+        <AppEmptyState
+          title="暂无 Web UI 元素"
+          description="可以通过 AI 采集、JSON 导入或手动新增建立第一批元素。"
+        />
+        <div class="web-ui-element-empty__actions">
+          <AppButton type="primary" @click="openAiCollectDrawer">AI 采集元素</AppButton>
+          <AppButton @click="openImportDialog">导入 JSON</AppButton>
+          <AppButton @click="openCreateDialog">手动新增</AppButton>
+        </div>
+        <p>如果还没有页面对象，可在左侧空间、模块或页面节点右侧点击加号创建目录。</p>
+      </div>
       <template v-else>
         <div v-if="selectedElements.length" class="web-ui-element-batch-toolbar">
           <span>已选 {{ selectedElements.length }} 个元素</span>
@@ -4575,6 +4635,30 @@ onBeforeUnmount(() => {
 }
 
 .web-ui-element-library__scope {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-element-empty {
+  display: grid;
+  gap: var(--app-space-3);
+  justify-items: center;
+  padding: var(--app-space-6);
+  border: 1px dashed var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-bg-panel);
+}
+
+.web-ui-element-empty__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--app-space-3);
+  flex-wrap: wrap;
+}
+
+.web-ui-element-empty p {
+  margin: 0;
   color: var(--app-text-muted);
   font-size: var(--app-font-size-sm);
 }

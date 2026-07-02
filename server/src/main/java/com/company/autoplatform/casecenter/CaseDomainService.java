@@ -221,7 +221,7 @@ public class CaseDomainService {
     private CaseDirectoryEntity requireDirectory(Long id) {
         CaseDirectoryEntity entity = caseDirectoryMapper.selectById(id);
         if (entity == null) {
-            throw new NotFoundException("鐩綍涓嶅瓨鍦?");
+            throw new NotFoundException("目录不存在");
         }
         return entity;
     }
@@ -231,13 +231,13 @@ public class CaseDomainService {
         if (WorkspaceScope.isAll(normalized)) {
             if (!workspaceService.isPlatformAdmin()
                     && !workspaceService.listReadableWorkspaceIds().contains(entity.getWorkspaceId())) {
-                throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐢ㄤ緥");
+                throw new BadRequestException("当前空间上下文不可访问该用例");
             }
             return;
         }
         WorkspaceEntity workspace = workspaceService.requireReadableWorkspace(normalized);
         if (!workspace.getId().equals(entity.getWorkspaceId())) {
-            throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐢ㄤ緥");
+            throw new BadRequestException("当前空间上下文不可访问该用例");
         }
     }
 
@@ -246,13 +246,13 @@ public class CaseDomainService {
         if (WorkspaceScope.isAll(normalized)) {
             if (!workspaceService.isPlatformAdmin()
                     && !workspaceService.listReadableWorkspaceIds().contains(entity.getWorkspaceId())) {
-                throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐩綍");
+                throw new BadRequestException("当前空间上下文不可访问该目录");
             }
             return;
         }
         WorkspaceEntity workspace = workspaceService.requireReadableWorkspace(normalized);
         if (!workspace.getId().equals(entity.getWorkspaceId())) {
-            throw new BadRequestException("褰撳墠绌洪棿涓婁笅鏂囦笉鍙闂鐩綍");
+            throw new BadRequestException("当前空间上下文不可访问该目录");
         }
     }
 
@@ -262,7 +262,7 @@ public class CaseDomainService {
         }
         CaseDirectoryEntity directory = requireDirectory(directoryId);
         if (!directory.getWorkspaceId().equals(workspace.getId())) {
-            throw new BadRequestException("鐩綍涓嶅睘浜庡綋鍓嶅伐浣滅┖闂?");
+            throw new BadRequestException("目录不属于当前工作空间");
         }
         return directory;
     }

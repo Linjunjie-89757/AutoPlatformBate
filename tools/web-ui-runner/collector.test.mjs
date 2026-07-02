@@ -171,7 +171,7 @@ test('normalizeLocatorValidationResult maps match counts to validation statuses'
       editable: false,
       clickable: true,
       inputtable: false,
-      validationMessage: '真机验证通过',
+      validationMessage: '本地页面验证通过',
       screenshotBase64: 'png',
     },
   );

@@ -690,6 +690,7 @@ export interface ApiScenarioRunHistoryItem {
 }
 
 export interface ApiScenarioRunHistoryDetail extends ApiScenarioRunHistoryItem {
+  contextSnapshotJson?: string | null
   dataIterations: ApiExecutionSuiteDataIteration[]
   stepResults: ApiRunStepResult[]
 }

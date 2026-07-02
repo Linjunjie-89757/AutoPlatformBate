@@ -333,7 +333,7 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.success").value(true))
                 .andExpect(jsonPath("$.data.provider").value("OPENAI_COMPATIBLE_CHAT"))
                 .andExpect(jsonPath("$.data.model").value("gpt-5.1"))
-                .andExpect(jsonPath("$.data.message").value("AI connection is available"));
+                .andExpect(jsonPath("$.data.message").value("AI 连接可用"));
     }
 
     @Test

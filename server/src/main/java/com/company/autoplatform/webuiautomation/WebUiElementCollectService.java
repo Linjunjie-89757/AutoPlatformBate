@@ -23,6 +23,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -255,14 +256,8 @@ public class WebUiElementCollectService {
         WebUiElementCollectTaskEntity entity = requireTask(taskId, workspace.getId());
         String runnerId = blankToNull(request == null ? null : request.runnerId());
         String sessionId = blankToNull(request == null ? null : request.sessionId());
-        String taskRunnerId = blankToNull(entity.getRunnerId());
-        String taskSessionId = blankToNull(entity.getSessionId());
-        if (taskRunnerId != null && runnerId != null && !taskRunnerId.equals(runnerId)) {
-            throw new BadRequestException("Runner 与采集任务不匹配");
-        }
-        if (taskSessionId != null && sessionId != null && !taskSessionId.equals(sessionId)) {
-            throw new BadRequestException("Runner 会话与采集任务不匹配");
-        }
+        String currentUrl = blankToNull(request == null ? null : request.currentUrl());
+        reconcileLocalRunnerTaskBinding(entity, runnerId, sessionId, currentUrl, false);
 
         List<WebUiElementCollectCandidate> candidates = readCandidates(entity.getCandidatesJson());
         if (isTerminalStatus(entity.getStatus())) {
@@ -291,7 +286,12 @@ public class WebUiElementCollectService {
             LocalRunnerCollectValidationCommandRequest request
     ) {
         ensureTaskDependencies();
-        WebUiElementCollectTaskEntity entity = requireTaskForRunner(taskId, request == null ? null : request.runnerId(), request == null ? null : request.sessionId());
+        WebUiElementCollectTaskEntity entity = requireTaskForRunner(
+                taskId,
+                request == null ? null : request.runnerId(),
+                request == null ? null : request.sessionId(),
+                request == null ? null : request.currentUrl()
+        );
         return prepareLocalRunnerValidationCommand(entity, request);
     }
 
@@ -330,7 +330,7 @@ public class WebUiElementCollectService {
             LocalRunnerCollectValidationResultRequest request
     ) {
         ensureTaskDependencies();
-        WebUiElementCollectTaskEntity entity = requireTaskForRunner(taskId, request == null ? null : request.runnerId(), request == null ? null : request.sessionId());
+        WebUiElementCollectTaskEntity entity = requireTaskForRunner(taskId, request == null ? null : request.runnerId(), request == null ? null : request.sessionId(), null);
         List<WebUiElementCollectCandidate> candidates = readCandidates(entity.getCandidatesJson());
         WebUiElementCollectFilterSummary filterSummary = readFilterSummary(entity.getFilterSummaryJson(), candidates.size());
         if (isTerminalStatus(entity.getStatus())) {
@@ -600,12 +600,13 @@ public class WebUiElementCollectService {
 
     private WebUiElementCollectCandidate normalizeLocalRunnerCandidate(WebUiElementCollectCandidate candidate, int confidence) {
         WebUiElementCollectCandidate normalized = new WebUiElementCollectCandidate(
-                candidate.groupName(),
+                normalizeStandardGroupName(candidate.groupName()),
                 candidate.elementName(),
                 candidate.locatorType(),
                 candidate.locatorValue(),
                 candidate.framePath(),
                 candidate.shadowPath(),
+                candidate.locatorCandidates(),
                 confidence,
                 candidate.reason(),
                 candidate.tagName(),
@@ -763,6 +764,42 @@ public class WebUiElementCollectService {
             return 0;
         }
         return Math.max(0, Math.min(100, confidence));
+    }
+
+    private String normalizeStandardGroupName(String value) {
+        String normalized = blankToNull(value);
+        if (normalized == null) {
+            return "未分类";
+        }
+        if ("顶部导航区".equals(normalized)
+                || "筛选表单区".equals(normalized)
+                || "操作按钮区".equals(normalized)
+                || "数据表格区".equals(normalized)
+                || "弹窗区".equals(normalized)
+                || "侧边栏区".equals(normalized)
+                || "未分类".equals(normalized)) {
+            return normalized;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if (lower.matches(".*(顶部|导航|菜单|页头|header|nav|menu).*")) {
+            return "顶部导航区";
+        }
+        if (lower.matches(".*(筛选|查询|搜索|检索|过滤|表单|输入|选择|filter|search|form).*")) {
+            return "筛选表单区";
+        }
+        if (lower.matches(".*(操作|按钮|工具栏|新增|添加|编辑|删除|提交|保存|确定|取消|关闭|批量|action|button|toolbar).*")) {
+            return "操作按钮区";
+        }
+        if (lower.matches(".*(表格|列表|清单|数据|table|list|grid).*")) {
+            return "数据表格区";
+        }
+        if (lower.matches(".*(弹窗|抽屉|浮层|对话框|modal|dialog|drawer|popup).*")) {
+            return "弹窗区";
+        }
+        if (lower.matches(".*(侧边|侧栏|边栏|aside|sidebar).*")) {
+            return "侧边栏区";
+        }
+        return "未分类";
     }
 
     private WebUiElementCollectTaskResponse toTaskResponse(
@@ -972,7 +1009,7 @@ public class WebUiElementCollectService {
         return entity;
     }
 
-    private WebUiElementCollectTaskEntity requireTaskForRunner(Long taskId, String runnerId, String sessionId) {
+    private WebUiElementCollectTaskEntity requireTaskForRunner(Long taskId, String runnerId, String sessionId, String currentUrl) {
         if (taskId == null) {
             throw new BadRequestException("采集任务 ID 不能为空");
         }
@@ -980,17 +1017,84 @@ public class WebUiElementCollectService {
         if (entity == null) {
             throw new NotFoundException("采集任务不存在");
         }
+        reconcileLocalRunnerTaskBinding(entity, runnerId, sessionId, currentUrl, true);
+        return entity;
+    }
+
+    private void reconcileLocalRunnerTaskBinding(
+            WebUiElementCollectTaskEntity entity,
+            String runnerId,
+            String sessionId,
+            String currentUrl,
+            boolean requireRunner
+    ) {
         String taskRunnerId = blankToNull(entity.getRunnerId());
         String normalizedRunnerId = blankToNull(runnerId);
-        if (taskRunnerId != null && !taskRunnerId.equals(normalizedRunnerId)) {
+        if (taskRunnerId != null && (requireRunner || normalizedRunnerId != null) && !taskRunnerId.equals(normalizedRunnerId)) {
             throw new BadRequestException("Runner 与采集任务不匹配");
+        }
+        String normalizedCurrentUrl = blankToNull(currentUrl);
+        String taskActualUrl = blankToNull(entity.getActualUrl());
+        if (normalizedCurrentUrl != null && taskActualUrl != null && !isSameCollectPage(taskActualUrl, normalizedCurrentUrl)) {
+            throw new BadRequestException("Runner 当前页面与采集任务页面不一致，请在目标业务页重新采集当前页");
         }
         String taskSessionId = blankToNull(entity.getSessionId());
         String normalizedSessionId = blankToNull(sessionId);
-        if (taskSessionId == null || normalizedSessionId == null || !taskSessionId.equals(normalizedSessionId)) {
-            throw new BadRequestException("Runner 会话与采集任务不匹配");
+        boolean changed = false;
+        if (taskRunnerId == null && normalizedRunnerId != null) {
+            entity.setRunnerId(normalizedRunnerId);
+            changed = true;
         }
-        return entity;
+        if (normalizedSessionId != null && !normalizedSessionId.equals(taskSessionId)) {
+            entity.setSessionId(normalizedSessionId);
+            changed = true;
+        }
+        if (changed) {
+            entity.setUpdatedAt(LocalDateTime.now());
+            collectTaskMapper.updateById(entity);
+        }
+    }
+
+    private boolean isSameCollectPage(String taskUrl, String currentUrl) {
+        String normalizedTaskUrl = normalizeCollectPageUrl(taskUrl);
+        String normalizedCurrentUrl = normalizeCollectPageUrl(currentUrl);
+        return normalizedTaskUrl != null && normalizedTaskUrl.equals(normalizedCurrentUrl);
+    }
+
+    private String normalizeCollectPageUrl(String value) {
+        String trimmed = blankToNull(value);
+        if (trimmed == null) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(trimmed);
+            String host = blankToNull(uri.getHost());
+            if (host != null) {
+                String path = blankToNull(uri.getPath());
+                String port = uri.getPort() > 0 ? ":" + uri.getPort() : "";
+                return stripTrailingSlash(host.toLowerCase(Locale.ROOT) + port + (path == null ? "" : path));
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Fall back to normalized string comparison below.
+        }
+        String normalized = trimmed.replaceFirst("(?i)^https?://", "");
+        int queryIndex = normalized.indexOf('?');
+        if (queryIndex >= 0) {
+            normalized = normalized.substring(0, queryIndex);
+        }
+        int hashIndex = normalized.indexOf('#');
+        if (hashIndex >= 0) {
+            normalized = normalized.substring(0, hashIndex);
+        }
+        return stripTrailingSlash(normalized.toLowerCase(Locale.ROOT));
+    }
+
+    private String stripTrailingSlash(String value) {
+        String normalized = value;
+        while (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     private LocalRunnerCollectValidationCommandResponse prepareLocalRunnerValidationCommand(
@@ -1308,10 +1412,11 @@ public class WebUiElementCollectService {
             String reason
     ) {
         return new WebUiElementCollectCandidate(
-                groupName,
+                normalizeStandardGroupName(groupName),
                 elementName,
                 locatorType,
                 locatorValue,
+                null,
                 null,
                 null,
                 confidence,
@@ -1429,12 +1534,13 @@ public class WebUiElementCollectService {
             byte[] screenshot
     ) {
         return new WebUiElementCollectCandidate(
-                candidate.groupName(),
+                normalizeStandardGroupName(candidate.groupName()),
                 candidate.elementName(),
                 candidate.locatorType(),
                 candidate.locatorValue(),
                 candidate.framePath(),
                 candidate.shadowPath(),
+                candidate.locatorCandidates(),
                 candidate.confidence(),
                 candidate.reason(),
                 candidate.tagName(),
@@ -1470,12 +1576,13 @@ public class WebUiElementCollectService {
             String saveBlockedReason
     ) {
         return new WebUiElementCollectCandidate(
-                candidate.groupName(),
+                normalizeStandardGroupName(candidate.groupName()),
                 candidate.elementName(),
                 candidate.locatorType(),
                 candidate.locatorValue(),
                 candidate.framePath(),
                 candidate.shadowPath(),
+                candidate.locatorCandidates(),
                 candidate.confidence(),
                 candidate.reason(),
                 candidate.tagName(),

@@ -24,7 +24,7 @@ const tone = computed(() => getDefectPriorityTone(props.priority))
   justify-content: center;
   min-height: 20px;
   padding: 2px 8px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -34,17 +34,29 @@ const tone = computed(() => getDefectPriorityTone(props.priority))
 
 .defect-badge--critical,
 .defect-badge--p1 {
+  border-color: #fecaca;
+}
+
+.defect-badge--critical {
   background: #fee2e2;
   color: #b91c1c;
 }
 
+.defect-badge--p1 {
+  border-color: #fed7aa;
+  background: #ffedd5;
+  color: #c2410c;
+}
+
 .defect-badge--p2 {
-  background: #fef9c3;
-  color: #a16207;
+  border-color: #c7d7fe;
+  background: #eef4ff;
+  color: #3557a3;
 }
 
 .defect-badge--low,
 .defect-badge--neutral {
+  border-color: #e5e7eb;
   background: #f3f4f6;
   color: #374151;
 }

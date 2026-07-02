@@ -6693,7 +6693,7 @@ onBeforeUnmount(() => {
       <section class="api-automation-settings-card">
         <div>
           <strong>接口自动化设置</strong>
-          <p>这里后续承载请求超时、重试、代理、SSL、通知和远程执行器等全局配置。</p>
+          <p>这里后续承载请求超时、重试、代理、SSL、通知和本地调试等全局配置。</p>
         </div>
         <el-tag type="info" effect="plain">规划中</el-tag>
       </section>
@@ -6711,8 +6711,8 @@ onBeforeUnmount(() => {
           <span>套件运行完成、失败告警、报告推送等通知规则。</span>
         </div>
         <div class="api-automation-settings-item">
-          <strong>远程执行器</strong>
-          <span>后续维护可用执行节点、心跳状态和运行范围。</span>
+          <strong>本地调试</strong>
+          <span>维护本地 Runner 状态、任务心跳和调试范围；服务端执行使用后端默认配置。</span>
         </div>
       </section>
     </div>

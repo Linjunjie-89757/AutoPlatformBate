@@ -53,11 +53,15 @@ public class AiPromptBuilderSupport {
             }
         }
         builder.append("[Smart Generation Policy]\n");
-        builder.append("- Generate enough high-value cases according to requirement complexity.\n");
-        builder.append("- Do not pad duplicated or low-value cases just to reach a number.\n");
-        builder.append("- Initial generation must return at most ").append(maxCases).append(" cases.\n");
-        builder.append("- If fewer cases are enough, return fewer cases.\n");
-        builder.append("- If full coverage needs more than ").append(maxCases).append(" cases, return the highest-value cases first and report remainingCoverageGaps.\n");
+        builder.append("- ").append(maxCases).append(" is a hard maximum cap. There is no mandatory minimum case count.\n");
+        builder.append("- Quantity must come from full test-design decomposition, not from padding. Do not fabricate meaningless, duplicate, or hypothetical business scenarios just to reach a number.\n");
+        builder.append("- Before writing cases, traverse all relevant coverage dimensions and split every distinguishable valid test point into an independent case: normal flows, exception flows, boundary values, equivalence classes, state transitions, multi-condition combinations/decision tables, error guessing, missing required data, multi-role differences, data dependencies, scheduled-task timing anomalies, third-party interaction exceptions, end-to-end links, non-functional risks, and test data initialization/cleanup.\n");
+        builder.append("- Never return only one happy-path case when the requirement contains any branch, parameter, state, role, external dependency, scheduled behavior, UI/API flow, or abnormal condition.\n");
+        builder.append("- For every explicit judgment rule, parameter validation, and state switch, generate positive matching, negative mismatch, boundary threshold, and missing-field variants when they are meaningful.\n");
+        builder.append("- Cases with the same core trigger condition, execution steps, and expected result are duplicates. Minor changes to irrelevant field values cannot be treated as independent cases.\n");
+        builder.append("- If the requirement is thin and only contains limited distinguishable test points, output all valid high-value cases truthfully even if the total is small. When the output format supports remainingCoverageGaps, explain that no more expandable scenarios exist.\n");
+        builder.append("- If all distinguishable valid scenarios exceed ").append(maxCases).append(", output the highest-value ")
+                .append(maxCases).append(" cases first, prioritizing high business risk, exception/boundary/state/combination coverage, third-party or scheduled-task failures, then normal and non-functional risks. When supported, report omitted branches in remainingCoverageGaps.\n");
         if (config.getReviewChecklist() != null && !config.getReviewChecklist().isBlank()) {
             builder.append("[Extra Checklist]\n").append(config.getReviewChecklist().trim()).append("\n\n");
         }
@@ -86,7 +90,7 @@ public class AiPromptBuilderSupport {
                        - Do not fabricate exact requirement wording. If unsure, summarize instead of quoting.
                     7. Keep titles, steps, expected results, generationReason, and requirementEvidence concrete, executable, and verifiable.
                     8. Cover useful test points first. Do not pad with duplicate or low-value cases.
-                    9. If the requirement only supports fewer valid cases than the limit, return only the reasonable count.
+                    9. There is no fixed minimum count. The only hard quantity rule is the maximum cap in Smart Generation Policy; however, all relevant coverage dimensions must be decomposed into independent cases, and a single happy-path-only answer is not acceptable when expandable test points exist.
                     10. When text and images both provide information, combine them and do not ignore key UI or flow details.
                     """);
         } else {
@@ -119,7 +123,7 @@ public class AiPromptBuilderSupport {
                        - Do not fabricate exact requirement wording. If unsure, summarize instead of quoting.
                     7. Keep titles, steps, expected results, generationReason, and requirementEvidence concrete, executable, and verifiable.
                     8. Cover useful test points first. Do not pad with duplicate or low-value cases.
-                    9. If the requirement only supports fewer valid cases than the limit, return only the reasonable count.
+                    9. There is no fixed minimum count. The only hard quantity rule is the maximum cap in Smart Generation Policy; however, all relevant coverage dimensions must be decomposed into independent cases, and a single happy-path-only answer is not acceptable when expandable test points exist.
                     10. When text and images both provide information, combine them and do not ignore key UI or flow details.
                     """);
         }

@@ -3265,6 +3265,8 @@ test('polls generic runner task and reports real API_SCENARIO_RUN result with ex
 
     await waitFor(() => reports.results.length > 0);
 
+    assert.equal(reports.status.at(-1).status, 'RUNNING');
+    assert.equal(reports.status.at(-1).currentStage, 'COMPLETED');
     assert.equal(reports.results[0].status, 'SUCCESS');
     assert.equal(reports.steps.length, 2);
     assert.equal(reports.results[0].summary.totalSteps, 2);

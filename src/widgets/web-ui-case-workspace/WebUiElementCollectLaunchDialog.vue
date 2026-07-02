@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Cpu, InfoFilled } from '@element-plus/icons-vue'
 
 import type { AiProviderConnectionItem } from '@/entities/ai-provider'
@@ -36,6 +36,9 @@ const props = defineProps<{
   localRunnerAuthStatus: LocalRunnerAuthStatus | null
 }>()
 
+const pageObjectExpanded = ref(false)
+const selectedRunnerId = ref('local-runner')
+
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'module-change': []
@@ -43,9 +46,6 @@ const emit = defineEmits<{
   'group-change': [value: number | null]
   'check-local-runner': []
   'open-local-runner-page': []
-  'save-local-runner-auth': []
-  'clear-local-runner-auth': []
-  'release-local-runner-session': []
   'open-bound-task': []
   start: []
   offline: []
@@ -58,189 +58,70 @@ const runnerState = computed(() => buildLocalRunnerStatusView({
 }))
 
 const canStartCollect = computed(() => runnerState.value.canCollect && !isRunnerTaskOccupied.value && !props.localRunnerCapturing)
-const canManageAuth = computed(() => Boolean(props.localRunnerHealth?.online))
-const canReleaseSession = computed(() => Boolean(props.localRunnerHealth?.online && props.localRunnerHealth.currentUrl))
-const showRunnerAlert = computed(() => runnerState.value.kind !== 'READY' && runnerState.value.kind !== 'NO_PAGE')
 const boundCollectTaskId = computed(() => props.localRunnerHealth?.boundTaskId || '')
 const isRunnerTaskOccupied = computed(() => Boolean(boundCollectTaskId.value))
-const runnerCapabilityTags = computed(() => {
-  const capabilities = props.localRunnerHealth?.capabilities || []
-  return capabilities.length
-    ? capabilities
-    : [
-        {
-          key: 'LEGACY_RUNNER',
-          label: '基础采集',
-          enabled: Boolean(props.localRunnerHealth?.online),
-          description: '当前 Runner 未返回能力清单，请重启 Runner 获取完整诊断信息。',
-        },
-      ]
-})
-const runnerLimitDescription = computed(() => {
-  const diagnostics = props.localRunnerHealth?.diagnostics
-  if (!props.localRunnerHealth?.online || !diagnostics) {
-    return ''
-  }
-  const parts = []
-  if (diagnostics.sessionTtlMinutes) {
-    parts.push(`页面会话 ${diagnostics.sessionTtlMinutes} 分钟过期`)
-  }
-  if (diagnostics.validationLocatorLimit) {
-    parts.push(`单次最多验证 ${diagnostics.validationLocatorLimit} 个定位器`)
-  }
-  if (diagnostics.validationScreenshotLimit) {
-    parts.push(`最多返回 ${diagnostics.validationScreenshotLimit} 张截图证据`)
-  }
-  return parts.join('，')
-})
-
-const authStateTag = computed(() => {
-  if (!props.localRunnerHealth?.online) {
-    return null
-  }
-  if (!props.localRunnerAuthStatus) {
+const localRunnerOption = computed(() => {
+  if (props.localRunnerChecking) {
     return {
-      type: props.localRunnerHealth.authStateExists ? 'success' : 'info',
-      text: props.localRunnerHealth.authStateExists ? '已保存登录态' : '未保存登录态',
-    } as const
+      id: 'local-runner',
+      name: '本机 Runner',
+      status: '检测中',
+      tagType: 'info' as const,
+      description: '正在检测本地 Runner 连接状态',
+    }
   }
-  if (!props.localRunnerAuthStatus.exists) {
+  if (props.localRunnerHealth?.online) {
     return {
-      type: 'info',
-      text: '未保存登录态',
-    } as const
+      id: 'local-runner',
+      name: '本机 Runner',
+      status: isRunnerTaskOccupied.value ? '处理中' : '在线',
+      tagType: isRunnerTaskOccupied.value ? 'warning' as const : 'success' as const,
+      description: runnerState.value.currentUrl ? `当前页：${runnerState.value.currentUrl}` : '未打开页面',
+    }
   }
   return {
-    type: props.localRunnerAuthStatus.stale ? 'warning' : 'success',
-    text: props.localRunnerAuthStatus.stale ? '登录态建议刷新' : '已保存登录态',
-  } as const
+    id: 'local-runner',
+    name: '本机 Runner',
+    status: '离线',
+    tagType: 'danger' as const,
+    description: '请先启动本地 Runner',
+  }
 })
-
-const authStatusDescription = computed(() => {
-  const status = props.localRunnerAuthStatus
-  if (!props.localRunnerHealth?.online) {
-    return ''
+const runnerOptions = computed(() => [localRunnerOption.value])
+const selectedPageName = computed(() =>
+  props.pageOptions.find(item => item.id === props.form.pageId)?.pageName || '',
+)
+const inferredPageName = computed(() => {
+  const pageTitle = props.localRunnerHealth?.pageTitle?.trim()
+  if (pageTitle) {
+    return pageTitle.slice(0, 50)
   }
-  if (!props.form.environmentId) {
-    return '未选择运行环境时，会使用 Runner 默认环境保存或复用登录态。'
-  }
-  if (!status) {
-    return '检测 Runner 后会显示当前环境的登录态快照状态。'
-  }
-  if (!status.exists) {
-    return '当前环境还没有保存登录态。需要登录的页面，请先打开目标页并手动登录，再点击“保存登录态”。'
-  }
-  const savedAt = formatDateTime(status.savedAt)
-  const age = formatAge(status.ageMinutes)
-  const staleText = status.stale ? '，保存时间较久，建议重新登录后保存一次' : ''
-  return `保存于 ${savedAt}${age ? `，约 ${age}` : ''}${staleText}。`
-})
-
-const authSavedUrl = computed(() => props.localRunnerAuthStatus?.savedUrl || '')
-
-const authSourceMismatchHint = computed(() => {
-  const savedHost = parseUrlHost(props.localRunnerAuthStatus?.savedUrl)
-  const currentHost = parseUrlHost(props.localRunnerHealth?.currentUrl)
-  if (!savedHost || !currentHost || savedHost === currentHost) {
-    return ''
-  }
-  return `登录态来源域名为 ${savedHost}，当前页面域名为 ${currentHost}，请确认该登录态是否适用于当前页面。`
-})
-
-const sessionStateTag = computed(() => {
-  if (!props.localRunnerHealth?.online || !props.localRunnerHealth.currentUrl) {
-    return null
-  }
-  if (props.localRunnerHealth.expired) {
-    return {
-      type: 'danger',
-      text: '页面会话已过期',
-    } as const
-  }
-  const remainingSeconds = props.localRunnerHealth.remainingSeconds
-  if (typeof remainingSeconds === 'number' && remainingSeconds <= 120) {
-    return {
-      type: 'warning',
-      text: '页面会话即将过期',
-    } as const
-  }
-  return {
-    type: 'success',
-    text: '页面会话有效',
-  } as const
-})
-
-const sessionStatusDescription = computed(() => {
-  const health = props.localRunnerHealth
-  if (!health?.online || !health.currentUrl) {
-    return ''
-  }
-  if (health.expired) {
-    return '当前 Runner 页面会话已过期，请释放后重新打开目标页。'
-  }
-  const remaining = formatRemaining(health.remainingSeconds)
-  const ttlText = health.ttlMinutes ? `，TTL ${health.ttlMinutes} 分钟` : ''
-  return remaining ? `当前页面会话剩余 ${remaining}${ttlText}。` : `当前页面会话已创建${ttlText}。`
-})
-
-function formatDateTime(value?: string | null) {
-  if (!value) {
-    return '-'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function formatAge(value?: number | null) {
-  if (typeof value !== 'number') {
-    return ''
-  }
-  if (value < 60) {
-    return `${value} 分钟前`
-  }
-  if (value < 24 * 60) {
-    return `${Math.floor(value / 60)} 小时前`
-  }
-  return `${Math.floor(value / 1440)} 天前`
-}
-
-function formatRemaining(value?: number | null) {
-  if (typeof value !== 'number') {
-    return ''
-  }
-  if (value <= 0) {
-    return '0 分钟'
-  }
-  if (value < 60) {
-    return `${value} 秒`
-  }
-  return `${Math.ceil(value / 60)} 分钟`
-}
-
-function parseUrlHost(value?: string | null) {
-  if (!value) {
-    return ''
+  const url = props.localRunnerHealth?.currentUrl || props.form.pageUrl
+  if (!url) {
+    return '智能采集页面'
   }
   try {
-    return new URL(value).host
+    const parsed = new URL(url)
+    const pathName = parsed.pathname.split('/').filter(Boolean).pop()
+    return (pathName || parsed.hostname || '智能采集页面').slice(0, 50)
   } catch {
-    return ''
+    return '智能采集页面'
   }
-}
+})
+const pageObjectSummary = computed(() => {
+  if (selectedPageName.value) {
+    return `使用已有：${selectedPageName.value}`
+  }
+  const pageName = props.form.pageName.trim() || inferredPageName.value
+  return `自动新建：${pageName}`
+})
 </script>
 
 <template>
   <el-dialog
     :model-value="modelValue"
-    width="780px"
+    width="640px"
+    top="6vh"
     class="web-ui-collect-launch"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -255,6 +136,59 @@ function parseUrlHost(value?: string | null) {
         </el-tooltip>
       </div>
     </template>
+
+    <el-form class="web-ui-collect-launch__runner-form" label-width="112px">
+      <el-form-item label="本地 Runner" required>
+        <div class="web-ui-collect-launch__runner-select-row">
+          <el-select v-model="selectedRunnerId" placeholder="选择可用 Runner">
+            <el-option
+              v-for="item in runnerOptions"
+              :key="item.id"
+              :label="`${item.name} · ${item.status}`"
+              :value="item.id"
+            >
+              <div class="web-ui-collect-launch__runner-option">
+                <span>{{ item.name }}</span>
+                <el-tag :type="item.tagType" effect="light" size="small">
+                  {{ item.status }}
+                </el-tag>
+              </div>
+            </el-option>
+          </el-select>
+          <AppButton size="small" :loading="localRunnerChecking" @click="emit('check-local-runner')">
+            检测
+          </AppButton>
+        </div>
+      </el-form-item>
+
+      <el-form-item label="目标页地址">
+        <div class="web-ui-collect-launch__open-page-row">
+          <el-input
+            v-model="form.pageUrl"
+            clearable
+            placeholder="输入目标页地址，例如 https://example.com/orders"
+          />
+          <AppButton
+            size="small"
+            :loading="localRunnerOpening"
+            :disabled="!runnerState.canOpenPage && runnerState.kind !== 'OFFLINE'"
+            @click="emit('open-local-runner-page')"
+          >
+            打开页面
+          </AppButton>
+        </div>
+      </el-form-item>
+    </el-form>
+
+    <div class="web-ui-collect-launch__runner-status">
+      <template v-if="isRunnerTaskOccupied">
+        <span>当前页面正在处理采集任务 #{{ boundCollectTaskId }}</span>
+        <el-button link type="primary" @click="emit('open-bound-task')">打开任务</el-button>
+      </template>
+      <template v-else>
+        <span>{{ localRunnerOption.description }}</span>
+      </template>
+    </div>
 
     <el-form class="web-ui-collect-launch__form" label-width="112px">
       <el-form-item label="AI 采集模型" required>
@@ -280,173 +214,10 @@ function parseUrlHost(value?: string | null) {
       </el-form-item>
 
       <el-form-item label="运行环境">
-        <el-select v-model="form.environmentId" clearable filterable placeholder="选择登录态或运行环境">
+        <el-select v-model="form.environmentId" clearable filterable placeholder="选择登录环境">
           <el-option v-for="item in enabledEnvironments" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
       </el-form-item>
-
-      <el-form-item label="目标页地址">
-        <el-input v-model="form.pageUrl" clearable placeholder="可选：用于让本地 Runner 打开页面，例如 https://example.com/orders" />
-      </el-form-item>
-
-      <el-form-item label="本地 Runner">
-        <div class="web-ui-collect-launch__runner">
-          <div class="web-ui-collect-launch__runner-sections">
-            <div class="web-ui-collect-launch__runner-section">
-              <div class="web-ui-collect-launch__runner-section-head">
-                <span class="web-ui-collect-launch__runner-section-label">Runner</span>
-                <el-tag :type="runnerState.tagType" effect="light">
-                  {{ runnerState.label }}
-                </el-tag>
-              </div>
-              <div class="web-ui-collect-launch__runner-section-body">
-                <strong>{{ runnerState.title }}</strong>
-                <span>{{ runnerState.description }}</span>
-                <div v-if="localRunnerHealth?.online" class="web-ui-collect-launch__runner-meta">
-                  <span v-if="runnerState.runnerVersion">Runner {{ runnerState.runnerVersion }}</span>
-                  <span>Playwright {{ localRunnerHealth.playwrightAvailable ? '可用' : '不可用' }}</span>
-                  <span>Chromium {{ localRunnerHealth.chromiumInstalled ? '已安装' : '未安装' }}</span>
-                </div>
-                <div v-if="localRunnerHealth?.online" class="web-ui-collect-launch__capabilities">
-                  <el-tooltip
-                    v-for="item in runnerCapabilityTags"
-                    :key="item.key"
-                    :content="item.description || item.label"
-                    placement="top"
-                  >
-                    <el-tag
-                      :type="item.enabled ? 'success' : 'info'"
-                      effect="plain"
-                      size="small"
-                    >
-                      {{ item.label }}
-                    </el-tag>
-                  </el-tooltip>
-                </div>
-                <span v-if="runnerLimitDescription" class="web-ui-collect-launch__runner-limit">
-                  {{ runnerLimitDescription }}
-                </span>
-                <div v-if="runnerState.commands.length" class="web-ui-collect-launch__commands">
-                  <span>处理命令：</span>
-                  <code v-for="command in runnerState.commands" :key="command">{{ command }}</code>
-                </div>
-              </div>
-            </div>
-
-            <div class="web-ui-collect-launch__runner-section">
-              <div class="web-ui-collect-launch__runner-section-head">
-                <span class="web-ui-collect-launch__runner-section-label">页面</span>
-                <el-tag
-                  v-if="sessionStateTag"
-                  :type="sessionStateTag.type"
-                  effect="plain"
-                >
-                  {{ sessionStateTag.text }}
-                </el-tag>
-                <el-tag v-else type="info" effect="plain">
-                  未打开页面
-                </el-tag>
-              </div>
-              <div class="web-ui-collect-launch__runner-section-body">
-                <div v-if="runnerState.currentUrl" class="web-ui-collect-launch__runner-url">
-                  当前页面：{{ runnerState.currentUrl }}
-                </div>
-                <span v-else>打开目标页后，Runner 会复用当前页面进行采集和真机验证。</span>
-                <span v-if="sessionStatusDescription">{{ sessionStatusDescription }}</span>
-                <div v-if="boundCollectTaskId" class="web-ui-collect-launch__bound-task">
-                  <span>已绑定采集任务 #{{ boundCollectTaskId }}。继续新采集前，请先打开当前任务或释放页面会话。</span>
-                  <AppButton size="small" @click="emit('open-bound-task')">
-                    打开当前任务
-                  </AppButton>
-                </div>
-                <span v-if="localRunnerHealth?.online && localRunnerHealth.currentUrl && localRunnerHealth.pageAlive === false" class="web-ui-collect-launch__auth-warning">
-                  Runner 页面已关闭，请重新打开目标页。
-                </span>
-              </div>
-            </div>
-
-            <div class="web-ui-collect-launch__runner-section">
-              <div class="web-ui-collect-launch__runner-section-head">
-                <span class="web-ui-collect-launch__runner-section-label">登录态</span>
-                <el-tag
-                  v-if="authStateTag"
-                  :type="authStateTag.type"
-                  effect="plain"
-                >
-                  {{ authStateTag.text }}
-                </el-tag>
-                <el-tag v-else type="info" effect="plain">
-                  待检测
-                </el-tag>
-              </div>
-              <div class="web-ui-collect-launch__runner-section-body">
-                <span>{{ authStatusDescription || '连接 Runner 后会显示登录态快照状态。' }}</span>
-                <span v-if="authSavedUrl" class="web-ui-collect-launch__runner-url">保存页面：{{ authSavedUrl }}</span>
-                <span v-if="authSourceMismatchHint" class="web-ui-collect-launch__auth-warning">
-                  {{ authSourceMismatchHint }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div class="web-ui-collect-launch__runner-actions">
-            <AppButton size="small" :loading="localRunnerChecking" @click="emit('check-local-runner')">
-              检测
-            </AppButton>
-            <AppButton
-              size="small"
-              :loading="localRunnerOpening"
-              :disabled="!runnerState.canOpenPage && runnerState.kind !== 'OFFLINE'"
-              @click="emit('open-local-runner-page')"
-            >
-              打开目标页
-            </AppButton>
-            <AppButton
-              size="small"
-              :loading="localRunnerAuthSaving"
-              :disabled="!canManageAuth"
-              @click="emit('save-local-runner-auth')"
-            >
-              保存登录态
-            </AppButton>
-            <AppButton
-              size="small"
-              :loading="localRunnerAuthClearing"
-              :disabled="!canManageAuth"
-              @click="emit('clear-local-runner-auth')"
-            >
-              清空登录态
-            </AppButton>
-            <AppButton
-              size="small"
-              :loading="localRunnerSessionReleasing"
-              :disabled="!canReleaseSession"
-              @click="emit('release-local-runner-session')"
-            >
-              释放页面会话
-            </AppButton>
-          </div>
-        </div>
-      </el-form-item>
-
-      <el-alert
-        v-if="isRunnerTaskOccupied"
-        class="web-ui-collect-launch__context"
-        type="warning"
-        title="Runner 当前页面已被采集任务占用"
-        :description="`当前会话绑定任务 #${boundCollectTaskId}。为避免真机验证拿到错误页面，请先打开当前任务继续处理，或释放页面会话后重新打开目标页。`"
-        show-icon
-        :closable="false"
-      />
-
-      <el-alert
-        v-if="showRunnerAlert"
-        class="web-ui-collect-launch__context"
-        :type="runnerState.alertType"
-        :title="runnerState.title"
-        :description="runnerState.description"
-        show-icon
-        :closable="false"
-      />
 
       <el-form-item label="所属模块" required>
         <el-select
@@ -461,51 +232,26 @@ function parseUrlHost(value?: string | null) {
       </el-form-item>
 
       <el-form-item label="页面对象" required>
-        <div class="web-ui-collect-launch__page-target">
-          <el-select
-            v-model="form.pageId"
-            clearable
-            filterable
-            placeholder="选择已有页面对象"
-            @change="emit('page-change', $event as number | null)"
-          >
-            <el-option v-for="item in pageOptions" :key="item.id" :label="item.pageName" :value="item.id" />
-          </el-select>
-          <el-input v-model="form.pageName" clearable placeholder="或填写新页面对象名称" />
+        <div class="web-ui-collect-launch__page-object">
+          <div class="web-ui-collect-launch__page-object-summary">
+            <span>{{ pageObjectSummary }}</span>
+            <el-button link type="primary" @click="pageObjectExpanded = !pageObjectExpanded">
+              {{ pageObjectExpanded ? '收起' : '更换' }}
+            </el-button>
+          </div>
+          <div v-if="pageObjectExpanded" class="web-ui-collect-launch__page-target">
+            <el-select
+              v-model="form.pageId"
+              clearable
+              filterable
+              placeholder="选择已有页面对象"
+              @change="emit('page-change', $event as number | null)"
+            >
+              <el-option v-for="item in pageOptions" :key="item.id" :label="item.pageName" :value="item.id" />
+            </el-select>
+            <el-input v-model="form.pageName" clearable :placeholder="`新建页面对象：${inferredPageName}`" />
+          </div>
         </div>
-      </el-form-item>
-
-      <el-form-item label="分组策略">
-        <el-radio-group v-model="form.groupStrategy">
-          <el-radio-button value="AI">AI 建议分组</el-radio-button>
-          <el-radio-button value="CUSTOM">自选分组</el-radio-button>
-        </el-radio-group>
-      </el-form-item>
-
-      <el-form-item v-if="form.groupStrategy === 'CUSTOM'" label="自选分组" required>
-        <div class="web-ui-collect-launch__group-target">
-          <el-select
-            v-model="form.groupId"
-            clearable
-            filterable
-            placeholder="选择已有分组"
-            :disabled="!form.pageId"
-            @change="emit('group-change', $event as number | null)"
-          >
-            <el-option v-for="item in groupOptions" :key="item.id" :label="item.groupName" :value="item.id" />
-          </el-select>
-          <el-input v-model="form.groupName" clearable placeholder="或填写新分组名称" />
-        </div>
-      </el-form-item>
-
-      <el-form-item label="采集范围">
-        <el-radio-group v-model="form.scope">
-          <el-radio-button value="ALL">全部</el-radio-button>
-          <el-radio-button value="FORM">表单</el-radio-button>
-          <el-radio-button value="BUTTON">按钮</el-radio-button>
-          <el-radio-button value="TABLE">表格</el-radio-button>
-          <el-radio-button value="DIALOG">弹窗</el-radio-button>
-        </el-radio-group>
       </el-form-item>
     </el-form>
 
@@ -516,7 +262,7 @@ function parseUrlHost(value?: string | null) {
         <AppButton @click="emit('update:modelValue', false)">取消</AppButton>
         <el-tooltip
           :disabled="canStartCollect"
-          :content="isRunnerTaskOccupied ? 'Runner 当前页面已绑定采集任务，请先打开当前任务或释放页面会话。' : '请先启动 Runner，并在 Runner 浏览器中进入可采集的目标业务页面。'"
+          :content="isRunnerTaskOccupied ? '当前 Runner 正在处理已有采集任务，请先打开任务继续处理。' : '请先启动 Runner，并在 Runner 浏览器中进入可采集的目标业务页面。'"
           placement="top"
         >
           <span>
@@ -549,9 +295,19 @@ function parseUrlHost(value?: string | null) {
   cursor: help;
 }
 
+.web-ui-collect-launch :deep(.el-dialog__body) {
+  max-height: calc(88vh - 150px);
+  overflow-y: auto;
+}
+
+.web-ui-collect-launch :deep(.el-dialog__footer) {
+  border-top: 1px solid var(--app-border-color);
+}
+
 .web-ui-collect-launch__form {
   display: grid;
   gap: var(--app-space-1);
+  margin-top: var(--app-space-3);
 }
 
 .web-ui-collect-launch__provider-option,
@@ -573,119 +329,41 @@ function parseUrlHost(value?: string | null) {
   font-size: var(--app-font-size-sm);
 }
 
-.web-ui-collect-launch__runner {
-  display: grid;
-  gap: var(--app-space-3);
-  width: 100%;
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border-color);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-soft);
-}
-
-.web-ui-collect-launch__runner-sections {
-  display: grid;
-  gap: var(--app-space-3);
-}
-
-.web-ui-collect-launch__runner-section {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: var(--app-space-3);
-  align-items: flex-start;
-}
-
-.web-ui-collect-launch__runner-section + .web-ui-collect-launch__runner-section {
-  padding-top: var(--app-space-3);
-  border-top: 1px dashed var(--app-border-color);
-}
-
-.web-ui-collect-launch__runner-section-head,
-.web-ui-collect-launch__runner-section-body,
-.web-ui-collect-launch__runner-meta,
-.web-ui-collect-launch__capabilities {
-  display: flex;
-  gap: var(--app-space-2);
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.web-ui-collect-launch__runner-section-head {
-  justify-content: space-between;
-}
-
-.web-ui-collect-launch__runner-section-label {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
-}
-
-.web-ui-collect-launch__runner-section-body {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-}
-
-.web-ui-collect-launch__runner-section-body strong {
-  color: var(--app-text-primary);
-}
-
-.web-ui-collect-launch__runner-meta {
-  width: 100%;
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-}
-
-.web-ui-collect-launch__runner-limit {
-  width: 100%;
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-}
-
-.web-ui-collect-launch__runner-url {
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--app-text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.web-ui-collect-launch__auth-warning {
-  width: 100%;
-  color: var(--el-color-warning-dark-2);
-}
-
-.web-ui-collect-launch__bound-task {
-  display: flex;
-  width: 100%;
-  gap: var(--app-space-2);
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px;
-  border: 1px solid var(--el-color-warning-light-5);
-  border-radius: var(--app-radius-sm);
-  background: var(--el-color-warning-light-9);
-  color: var(--el-color-warning-dark-2);
-}
-
-.web-ui-collect-launch__bound-task span {
-  min-width: 0;
-}
-
-.web-ui-collect-launch__commands {
+.web-ui-collect-launch__runner-form {
   display: grid;
   gap: var(--app-space-1);
 }
 
-.web-ui-collect-launch__commands code {
-  display: block;
-  padding: 6px 8px;
-  border: 1px solid var(--app-border-color);
-  border-radius: var(--app-radius-sm);
-  background: var(--app-bg-card);
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-xs);
-  white-space: normal;
-  word-break: break-all;
+.web-ui-collect-launch__runner-select-row,
+.web-ui-collect-launch__open-page-row,
+.web-ui-collect-launch__runner-status,
+.web-ui-collect-launch__runner-option {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.web-ui-collect-launch__runner-select-row,
+.web-ui-collect-launch__open-page-row {
+  width: 100%;
+}
+
+.web-ui-collect-launch__runner-select-row .el-select,
+.web-ui-collect-launch__open-page-row .el-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.web-ui-collect-launch__runner-option {
+  justify-content: space-between;
+}
+
+.web-ui-collect-launch__runner-status {
+  min-height: 24px;
+  margin-top: calc(var(--app-space-1) * -1);
+  padding-left: 112px;
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-sm);
 }
 
 .web-ui-collect-launch__page-target,
@@ -694,6 +372,33 @@ function parseUrlHost(value?: string | null) {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--app-space-3);
   width: 100%;
+}
+
+.web-ui-collect-launch__page-object {
+  display: grid;
+  gap: var(--app-space-2);
+  width: 100%;
+}
+
+.web-ui-collect-launch__page-object-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--app-border-color);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-soft);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-collect-launch__page-object-summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .web-ui-collect-launch__footer {
@@ -709,19 +414,20 @@ function parseUrlHost(value?: string | null) {
 }
 
 @media (max-width: 700px) {
-  .web-ui-collect-launch__runner-section,
+  .web-ui-collect-launch__runner-select-row,
+  .web-ui-collect-launch__open-page-row,
+  .web-ui-collect-launch__runner-status {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .web-ui-collect-launch__runner-status {
+    padding-left: 0;
+  }
+
   .web-ui-collect-launch__page-target,
   .web-ui-collect-launch__group-target {
     grid-template-columns: 1fr;
-  }
-
-  .web-ui-collect-launch__runner-section-head {
-    justify-content: flex-start;
-  }
-
-  .web-ui-collect-launch__bound-task {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }
 </style>

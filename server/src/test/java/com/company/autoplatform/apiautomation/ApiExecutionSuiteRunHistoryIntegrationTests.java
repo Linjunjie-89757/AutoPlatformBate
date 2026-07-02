@@ -70,7 +70,7 @@ class ApiExecutionSuiteRunHistoryIntegrationTests extends IntegrationTestSupport
                             .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                {"workspaceCode":"risk-ops","runOn":"REMOTE"}
+                                {"workspaceCode":"risk-ops","runOn":"SERVER"}
                                     """))
                     .andExpect(status().isOk());
         }

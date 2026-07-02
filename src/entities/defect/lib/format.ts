@@ -33,10 +33,10 @@ export function getDefectStatusMeta(status: string) {
   const option = defectStatusOptions.find((item) => item.value === status)
 
   if (status === 'CLOSED') {
-    return { label: option?.label || status || '-', tone: 'success' as const }
+    return { label: option?.label || status || '-', tone: 'closed' as const }
   }
   if (status === 'REJECTED') {
-    return { label: option?.label || status || '-', tone: 'muted' as const }
+    return { label: option?.label || status || '-', tone: 'hold' as const }
   }
   if (status === 'IN_PROGRESS') {
     return { label: option?.label || status || '-', tone: 'processing' as const }
@@ -46,6 +46,9 @@ export function getDefectStatusMeta(status: string) {
   }
   if (status === 'ASSIGNED') {
     return { label: option?.label || status || '-', tone: 'assigned' as const }
+  }
+  if (status === 'TODO') {
+    return { label: option?.label || status || '-', tone: 'new' as const }
   }
 
   return { label: option?.label || status || '-', tone: 'neutral' as const }

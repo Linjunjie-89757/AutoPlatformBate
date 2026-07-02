@@ -98,7 +98,7 @@ public class AiCaseConfigDomainService {
                     request.maxCases()
             );
             aiProviderClient.testConnection(profile, apiKey);
-            return new TestAiCaseConfigResponse(true, profile.provider(), profile.model(), "AI connection is available");
+            return new TestAiCaseConfigResponse(true, profile.provider(), profile.model(), "AI 连接可用");
         }
         String apiKey = blankToNull(request.apiKey());
         if (apiKey == null) {
@@ -115,7 +115,7 @@ public class AiCaseConfigDomainService {
         }
         AiProviderRequestProfile profile = buildLegacyProfile(roleType, request, findByOwnerUserIdAndRoleType(ownerUserId, roleType));
         aiProviderClient.testConnection(profile, apiKey);
-        return new TestAiCaseConfigResponse(true, profile.provider(), profile.model(), "AI connection is available");
+        return new TestAiCaseConfigResponse(true, profile.provider(), profile.model(), "AI 连接可用");
     }
 
     public AiCaseConfigSecretResponse getConfigSecret(Long id, String headerWorkspaceCode) {

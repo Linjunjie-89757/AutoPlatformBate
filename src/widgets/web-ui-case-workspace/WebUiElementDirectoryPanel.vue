@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { Plus, Search } from '@element-plus/icons-vue'
 
-import AppButton from '@/shared/ui/app-button/AppButton.vue'
-
 type DirectoryNodeType = 'ALL' | 'WORKSPACE' | 'MODULE' | 'PAGE' | 'GROUP'
 
 export interface WebUiElementDirectoryNode {
@@ -27,7 +25,6 @@ defineProps<{
 
 const emit = defineEmits<{
   'update:directoryKeyword': [value: string]
-  create: []
   'node-click': [node: WebUiElementDirectoryNode]
   'node-add': [node: WebUiElementDirectoryNode]
 }>()
@@ -35,10 +32,6 @@ const emit = defineEmits<{
 
 <template>
   <aside class="web-ui-element-tree">
-    <AppButton class="web-ui-element-tree__create" type="primary" :icon="Plus" @click="emit('create')">
-      新增元素
-    </AppButton>
-
     <el-input
       :model-value="directoryKeyword"
       class="web-ui-element-tree__search"
@@ -96,11 +89,6 @@ const emit = defineEmits<{
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-lg);
   background: var(--app-bg-panel);
-}
-
-.web-ui-element-tree__create {
-  width: 100%;
-  justify-content: center;
 }
 
 .web-ui-element-tree__title,

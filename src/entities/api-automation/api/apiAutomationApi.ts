@@ -217,7 +217,7 @@ function normalizeScenario(item: ApiScenarioItem): ApiScenarioItem {
     stepCount: Number(item.stepCount || 0),
     defaultEnvironmentId: item.defaultEnvironmentId ?? null,
     variableSetId: item.variableSetId ?? null,
-    runOn: item.runOn || 'LOCAL',
+    runOn: item.runOn || 'SERVER',
     continueOnFailure: Boolean(item.continueOnFailure),
     globalTimeoutMs: Number(item.globalTimeoutMs || 300000),
     stepFailureRetryCount: Number(item.stepFailureRetryCount || 0),
@@ -329,6 +329,7 @@ function normalizeScenarioRunHistoryItem(item: ApiScenarioRunHistoryItem): ApiSc
 function normalizeScenarioRunHistoryDetail(item: ApiScenarioRunHistoryDetail): ApiScenarioRunHistoryDetail {
   return {
     ...normalizeScenarioRunHistoryItem(item),
+    contextSnapshotJson: item.contextSnapshotJson || null,
     dataIterations: Array.isArray(item.dataIterations) ? item.dataIterations.map(normalizeDataIteration) : [],
     stepResults: Array.isArray(item.stepResults) ? item.stepResults : [],
   }

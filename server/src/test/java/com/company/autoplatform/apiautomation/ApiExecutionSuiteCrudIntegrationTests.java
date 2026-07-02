@@ -63,7 +63,7 @@ class ApiExecutionSuiteCrudIntegrationTests extends IntegrationTestSupport {
                                   "status":"INACTIVE",
                                   "description":"updated description",
                                   "runMode":"PARALLEL",
-                                  "runOn":"REMOTE",
+                                  "runOn":"SERVER",
                                   "notifyEnabled":false,
                                   "continueOnFailure":true,
                                   "globalTimeoutMs":120000,
@@ -81,7 +81,7 @@ class ApiExecutionSuiteCrudIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.priority").value("P2"))
                 .andExpect(jsonPath("$.data.status").value("INACTIVE"))
                 .andExpect(jsonPath("$.data.runMode").value("PARALLEL"))
-                .andExpect(jsonPath("$.data.runOn").value("REMOTE"))
+                .andExpect(jsonPath("$.data.runOn").value("SERVER"))
                 .andExpect(jsonPath("$.data.notifyEnabled").value(false))
                 .andExpect(jsonPath("$.data.continueOnFailure").value(true))
                 .andExpect(jsonPath("$.data.globalTimeoutMs").value(120000))

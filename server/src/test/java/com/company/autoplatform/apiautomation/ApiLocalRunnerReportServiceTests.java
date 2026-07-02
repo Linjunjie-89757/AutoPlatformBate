@@ -204,6 +204,8 @@ class ApiLocalRunnerReportServiceTests {
                         "scenarioId", 3001,
                         "scenarioName", "Local API scenario"
                 )),
+                Map.of("environmentId", 8137),
+                Map.of("variableSetId", 915),
                 Map.of(
                         "durationMs", 456,
                         "summary", Map.of("totalSteps", 2, "passedSteps", 1, "failedSteps", 1),
@@ -246,7 +248,13 @@ class ApiLocalRunnerReportServiceTests {
         assertThat(historyCaptor.getValue().getTotalCount()).isEqualTo(2);
         assertThat(historyCaptor.getValue().getSuccessCount()).isEqualTo(1);
         assertThat(historyCaptor.getValue().getFailedCount()).isEqualTo(1);
+        assertThat(historyCaptor.getValue().getEnvironmentId()).isEqualTo(8137L);
+        assertThat(historyCaptor.getValue().getVariableSetId()).isEqualTo(915L);
         assertThat(historyCaptor.getValue().getContextSnapshotJson()).contains("LOCAL_RUNNER", "run_api_scenario_001");
+        assertThat(historyCaptor.getValue().getDetailJson())
+                .startsWith("[")
+                .contains("\"stepName\":\"Create order\"", "\"stepName\":\"Get order\"", "\"errorMessage\":\"not found\"")
+                .doesNotContain("\"stepResults\"");
         assertThat(scenario.getLastRunResult()).isEqualTo("FAILED");
     }
 
@@ -412,7 +420,9 @@ class ApiLocalRunnerReportServiceTests {
         assertThat(stepCaptor.getValue().getExtractionResultsJson())
                 .contains("\"name\":\"STEP_TOKEN\"", "\"value\":\"step-token\"");
         assertThat(historyCaptor.getValue().getDetailJson())
-                .contains("GLOBAL_TOKEN", "STEP_TOKEN", "scriptResults");
+                .startsWith("[")
+                .contains("STEP_TOKEN", "processorResults")
+                .doesNotContain("scriptResults");
     }
 
     @Test

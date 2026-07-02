@@ -150,7 +150,7 @@ function buildRunReportSummary() {
     `- Run ID：${summary.id}`,
     `- 批次 ID：${summary.batchId || '-'}`,
     `- 结果：${summary.status}`,
-    `- 执行位置：${formatExecutionLocation(current.context?.executionLocation || summary.executionLocation)}`,
+    `- 执行来源：${formatExecutionLocation(current.context?.executionLocation || summary.executionLocation)}`,
     `- 环境：${summary.environmentName || current.context?.environment?.name || '-'}`,
     `- Base URL：${summary.baseUrl || current.context?.environment?.baseUrl || '-'}`,
     `- 浏览器：${formatBrowserType(summary.browserType)}`,
@@ -254,7 +254,7 @@ onBeforeUnmount(() => {
             <strong>{{ formatBrowserType(detail.summary.browserType) }}</strong>
           </div>
           <div>
-            <span>执行位置</span>
+            <span>执行来源</span>
             <strong>{{ formatExecutionLocation(executionLocation) }}</strong>
           </div>
           <div>
@@ -297,11 +297,11 @@ onBeforeUnmount(() => {
               <dd>{{ detail.context?.variableSetName || '未使用变量集' }}</dd>
             </div>
             <div>
-              <dt>执行位置</dt>
+              <dt>执行来源</dt>
               <dd>{{ formatExecutionLocation(executionLocation) }}</dd>
             </div>
             <div>
-              <dt>Runner 任务</dt>
+              <dt>本地任务</dt>
               <dd>{{ localRunnerRunId || '-' }}</dd>
             </div>
             <div>

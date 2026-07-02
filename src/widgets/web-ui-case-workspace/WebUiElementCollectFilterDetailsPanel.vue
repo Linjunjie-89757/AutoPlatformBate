@@ -58,7 +58,7 @@ function isRestored(detail: WebUiElementCollectFilterDetail) {
 function formatStage(stage?: string | null) {
   if (stage === 'STATIC_RULE') return '规则清洗'
   if (stage === 'AI_ANALYZE') return 'AI 分析'
-  if (stage === 'LOCAL_VALIDATE') return '真机验证'
+  if (stage === 'LOCAL_VALIDATE') return '本地验证'
   if (stage === 'FINALIZE') return '最终候选'
   return stage || '未知阶段'
 }

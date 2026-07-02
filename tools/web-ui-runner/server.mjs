@@ -15,6 +15,8 @@ import { resolveArtifactUploadPath } from './artifactManager.mjs';
 
 const VALIDATION_LOCATOR_LIMIT = 200;
 const VALIDATION_SCREENSHOT_LIMIT = 8;
+const VALIDATION_HIGHLIGHT_LIMIT = 8;
+const VALIDATION_HIGHLIGHT_DURATION_MS = 3000;
 const AUTH_STALE_MINUTES = 24 * 60;
 const runtimeConfig = resolveRunnerRuntimeConfig({
   env: process.env,
@@ -28,6 +30,7 @@ const DATA_DIR = runtimeConfig.dataDir;
 const AUTH_DIR = runtimeConfig.authDir;
 
 let browser;
+let browserHeaded;
 let context;
 let page;
 let activeSession;
@@ -239,7 +242,7 @@ function buildRunnerCapabilities(input) {
     },
     {
       key: 'AUTH_STATE',
-      label: '登录态快照',
+      label: '登录状态',
       enabled: browserReady,
       description: '保存 Cookie、LocalStorage 和 SessionStorage，后续采集可复用。',
     },
@@ -251,21 +254,21 @@ function buildRunnerCapabilities(input) {
     },
     {
       key: 'LOCAL_VALIDATE',
-      label: '真机验证',
+      label: '本地页面验证',
       enabled: browserReady,
       description: '在当前页面上下文批量校验 locator，并返回匹配数和截图证据。',
     },
     {
       key: 'PLATFORM_POLLING',
-      label: '后台轮询',
+      label: '本地自动验证',
       enabled: browserReady,
       description: 'Runner 可拉取平台下发的验证指令并回传验证结果。',
     },
     {
       key: 'SESSION_TTL',
-      label: '会话 TTL',
+      label: '本地页面有效期',
       enabled: true,
-      description: `页面会话默认 ${sessionTtlMinutes} 分钟后过期，避免长期占用本地浏览器。`,
+      description: `本地页面默认 ${sessionTtlMinutes} 分钟后过期，避免长期占用本地浏览器。`,
     },
   ];
 }
@@ -282,6 +285,7 @@ async function openCollectPage(payload) {
   const environmentId = optionalString(payload.environmentId) || 'default-environment';
   const headed = payload.headless === true ? false : true;
   const playwright = await ensurePlaywright();
+  await ensureBrowserMode(playwright, headed);
   clearClosedSession();
   const target = resolveOpenTarget({
     requestedUrl: payload.url,
@@ -316,10 +320,6 @@ async function openCollectPage(payload) {
     context = undefined;
     page = undefined;
   }
-
-  browser ||= await playwright.chromium.launch({
-    headless: !headed,
-  });
 
   const storageStatePath = getStorageStatePath(workspaceId, environmentId);
   const contextOptions = existsSync(storageStatePath) ? { storageState: storageStatePath } : {};
@@ -424,6 +424,7 @@ async function validateCurrentPageLocators(payload) {
   ensurePage();
   await ensureSessionFresh();
   const locators = Array.isArray(payload.locators) ? payload.locators : [];
+  const shouldHighlight = payload.highlight === true;
   const results = [];
   let screenshotCount = 0;
 
@@ -456,6 +457,12 @@ async function validateCurrentPageLocators(payload) {
         visible = await first.isVisible({ timeout: 1000 }).catch(() => false);
         editable = await first.isEditable({ timeout: 1000 }).catch(() => false);
         enabled = await first.isEnabled({ timeout: 1000 }).catch(() => false);
+        if (shouldHighlight) {
+          await highlightLocatorMatches(locator, {
+            limit: VALIDATION_HIGHLIGHT_LIMIT,
+            durationMs: VALIDATION_HIGHLIGHT_DURATION_MS,
+          }).catch(() => {});
+        }
         if (screenshotCount < VALIDATION_SCREENSHOT_LIMIT) {
           const screenshot = await first.screenshot({ timeout: 1200 }).catch(() => null);
           screenshotBase64 = screenshot ? screenshot.toString('base64') : null;
@@ -815,7 +822,7 @@ async function assertPageStillAuthenticated(caseSnapshot) {
   }
   const pageInfo = await getPageInfo(page);
   if (pageInfo.isProbablyLoginPage) {
-    throw new Error(`本地登录态已失效：打开目标页面后跳转到登录页（当前 URL：${pageInfo.url}），请重新保存登录态后再执行`);
+    throw new Error(`本地登录状态已失效：打开目标页面后跳转到登录页（当前 URL：${pageInfo.url}），请重新保存登录状态后再执行`);
   }
 }
 
@@ -1059,6 +1066,72 @@ function resolveLocatorTarget(rootPage, framePath, shadowPath) {
   return target;
 }
 
+async function highlightLocatorMatches(locator, options = {}) {
+  const limit = Math.max(1, Math.min(Number(options.limit || VALIDATION_HIGHLIGHT_LIMIT), 20));
+  const durationMs = Math.max(1000, Math.min(Number(options.durationMs || VALIDATION_HIGHLIGHT_DURATION_MS), 10_000));
+  await locator.evaluateAll((elements, payload) => {
+    const marker = 'data-auto-web-ui-highlight';
+    const badgeMarker = 'data-auto-web-ui-highlight-badge';
+    const styleAttr = 'data-auto-web-ui-highlight-style';
+    const timerKey = '__autoWebUiHighlightTimer';
+
+    const cleanup = () => {
+      document.querySelectorAll(`[${badgeMarker}="true"]`).forEach(item => item.remove());
+      document.querySelectorAll(`[${marker}="true"]`).forEach(item => {
+        const originalStyle = item.getAttribute(styleAttr);
+        if (originalStyle && originalStyle !== '__AUTO_EMPTY__') {
+          item.setAttribute('style', originalStyle);
+        } else {
+          item.removeAttribute('style');
+        }
+        item.removeAttribute(marker);
+        item.removeAttribute(styleAttr);
+      });
+    };
+
+    cleanup();
+    window.clearTimeout(window[timerKey]);
+
+    elements.slice(0, payload.limit).forEach((item, index) => {
+      if (!(item instanceof Element) || !('style' in item)) {
+        return;
+      }
+      const rect = item.getBoundingClientRect();
+      const originalStyle = item.getAttribute('style');
+      item.setAttribute(marker, 'true');
+      item.setAttribute(styleAttr, originalStyle || '__AUTO_EMPTY__');
+      item.style.outline = '3px solid #409eff';
+      item.style.outlineOffset = '2px';
+      item.style.boxShadow = '0 0 0 6px rgba(64, 158, 255, 0.22), 0 8px 24px rgba(64, 158, 255, 0.3)';
+      item.style.backgroundColor = 'rgba(64, 158, 255, 0.12)';
+      item.style.transition = 'outline 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease';
+
+      const badge = document.createElement('div');
+      badge.setAttribute(badgeMarker, 'true');
+      badge.textContent = String(index + 1);
+      badge.style.position = 'fixed';
+      badge.style.left = `${Math.max(8, rect.left)}px`;
+      badge.style.top = `${Math.max(8, rect.top - 24)}px`;
+      badge.style.zIndex = '2147483647';
+      badge.style.minWidth = '18px';
+      badge.style.height = '18px';
+      badge.style.padding = '0 5px';
+      badge.style.borderRadius = '999px';
+      badge.style.background = '#409eff';
+      badge.style.color = '#fff';
+      badge.style.fontSize = '12px';
+      badge.style.fontWeight = '600';
+      badge.style.lineHeight = '18px';
+      badge.style.textAlign = 'center';
+      badge.style.boxShadow = '0 4px 12px rgba(64, 158, 255, 0.35)';
+      badge.style.pointerEvents = 'none';
+      document.body.appendChild(badge);
+    });
+
+    window[timerKey] = window.setTimeout(cleanup, payload.durationMs);
+  }, { limit, durationMs });
+}
+
 function normalizeFramePath(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -1210,6 +1283,7 @@ async function startPlatformValidationPolling(payload) {
     throw new Error('sessionId does not match active runner session');
   }
   const runnerId = optionalString(payload.runnerId) || 'local-runner';
+  const currentUrl = getActivePageUrl() || optionalString(payload.currentUrl) || activeSession?.currentUrl || '';
   const requestedLocators = Array.isArray(payload.locators) ? payload.locators : [];
   const intervalMs = Math.max(1000, Math.min(Number(payload.intervalMs || 2000), 15000));
   const headers = normalizePlatformHeaders(payload);
@@ -1228,6 +1302,7 @@ async function startPlatformValidationPolling(payload) {
     workspaceCode,
     runnerId,
     sessionId,
+    currentUrl,
     locators: requestedLocators,
     intervalMs,
     headers,
@@ -1237,7 +1312,7 @@ async function startPlatformValidationPolling(payload) {
     lastTickAt: null,
     lastSuccessAt: null,
     lastError: null,
-    lastMessage: '后台轮询已启动',
+    lastMessage: '本地自动验证已启动',
     validatedCount: 0,
     timer: null,
   };
@@ -1285,9 +1360,11 @@ async function runPlatformPollTick() {
   try {
     ensurePage();
     await ensureSessionFresh();
+    poller.currentUrl = getActivePageUrl() || activeSession?.currentUrl || poller.currentUrl || '';
     const command = await fetchPlatformJson(poller, `/public/automation/web/element-collect-tasks/${encodeURIComponent(poller.taskId)}/local-validation-command`, {
       runnerId: poller.runnerId,
       sessionId: poller.sessionId || activeSession?.sessionId || null,
+      currentUrl: poller.currentUrl || null,
       locators: poller.locators,
     });
     if (isTerminalCollectStatus(command.status)) {
@@ -1386,6 +1463,7 @@ function collectElementsInPage(context = {}) {
     const rect = element.getBoundingClientRect();
     const style = window.getComputedStyle(element);
     const label = findLabelText(element);
+    const region = inferRegion(element);
     return {
       tagName: element.tagName,
       type: element.getAttribute('type') || '',
@@ -1402,6 +1480,8 @@ function collectElementsInPage(context = {}) {
       href: element.getAttribute('href') || '',
       role: element.getAttribute('role') || '',
       label,
+      regionName: region.name,
+      regionType: region.type,
       cssPath: buildCssPath(element),
       xpath: buildXPath(element),
       framePath: baseFramePath,
@@ -1421,6 +1501,85 @@ function collectElementsInPage(context = {}) {
       return wrapperLabel.textContent;
     }
     return '';
+  }
+
+  function inferRegion(element) {
+    const container = element.closest([
+      'dialog',
+      '[role="dialog"]',
+      '.el-dialog',
+      '.el-drawer',
+      'form',
+      'table',
+      '.el-table',
+      'header',
+      'nav',
+      'aside',
+      'footer',
+      'main',
+      'section',
+    ].join(','));
+    if (!container) {
+      return { name: inferRegionByElement(element), type: 'element' };
+    }
+
+    const tagName = container.tagName.toLowerCase();
+    const role = (container.getAttribute('role') || '').toLowerCase();
+    const className = String(container.className || '').toLowerCase();
+    const heading = findRegionHeading(container);
+
+    if (tagName === 'dialog' || role === 'dialog' || className.includes('dialog') || className.includes('drawer')) {
+      return { name: heading ? `${heading}弹窗区` : '弹窗抽屉区', type: 'dialog' };
+    }
+    if (tagName === 'form' || role === 'search' || /search|filter|query|筛选|查询/.test(className)) {
+      return { name: heading ? `${heading}表单区` : '查询筛选区', type: 'form' };
+    }
+    if (tagName === 'table' || className.includes('table')) {
+      return { name: heading ? `${heading}表格区` : '表格列表区', type: 'table' };
+    }
+    if (tagName === 'header' || tagName === 'nav') {
+      return { name: '顶部导航区', type: 'nav' };
+    }
+    if (tagName === 'aside') {
+      return { name: '侧边菜单区', type: 'aside' };
+    }
+    if (tagName === 'footer') {
+      return { name: '底部操作区', type: 'footer' };
+    }
+    return { name: heading ? `${heading}区域` : inferRegionByElement(element), type: tagName || 'section' };
+  }
+
+  function findRegionHeading(container) {
+    const heading = container.querySelector?.('h1,h2,h3,h4,.el-dialog__title,.modal-title,.title,[data-title]');
+    return normalizeRegionText(heading?.textContent || heading?.getAttribute?.('data-title') || '');
+  }
+
+  function inferRegionByElement(element) {
+    const text = normalizeRegionText([
+      element.getAttribute('aria-label'),
+      element.getAttribute('placeholder'),
+      element.innerText,
+      element.textContent,
+    ].filter(Boolean).join(' '));
+    if (/查询|搜索|筛选|重置/.test(text)) {
+      return '查询筛选区';
+    }
+    if (/提交|保存|确定|取消|关闭|删除|新增|添加|编辑/.test(text)) {
+      return '按钮操作区';
+    }
+    const tagName = element.tagName.toLowerCase();
+    const type = String(element.getAttribute('type') || '').toLowerCase();
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select' || type === 'text') {
+      return '表单输入区';
+    }
+    if (tagName === 'a') {
+      return '链接导航区';
+    }
+    return '未分类';
+  }
+
+  function normalizeRegionText(value) {
+    return String(value || '').replace(/\s+/g, '').slice(0, 16);
   }
 
   function buildCssPath(element) {
@@ -1613,6 +1772,7 @@ function sanitizePlatformPoller(poller) {
     workspaceCode: poller.workspaceCode,
     runnerId: poller.runnerId,
     sessionId: poller.sessionId || null,
+    currentUrl: poller.currentUrl || null,
     running: Boolean(poller.running),
     tickRunning: Boolean(poller.tickRunning),
     startedAt: poller.startedAt,
@@ -1642,7 +1802,7 @@ function humanizeRunnerError(error) {
     return `目标页面打开失败：连接被拒绝。请确认目标服务已启动且本机可访问，原始错误：${message}`;
   }
   if (/Timeout/i.test(message)) {
-    return `本地执行超时：页面加载或步骤等待超过限制。请检查页面响应速度、登录态和定位器，原始错误：${message}`;
+    return `本地执行超时：页面加载或步骤等待超过限制。请检查页面响应速度、登录状态和定位器，原始错误：${message}`;
   }
   return message;
 }
@@ -1781,4 +1941,23 @@ async function shutdown() {
   await context?.close().catch(() => {});
   await browser?.close().catch(() => {});
   process.exit(0);
+}
+
+async function ensureBrowserMode(playwright, headed) {
+  if (browser && browserHeaded !== headed) {
+    await context?.close().catch(() => {});
+    await browser.close().catch(() => {});
+    browser = undefined;
+    browserHeaded = undefined;
+    context = undefined;
+    page = undefined;
+    activeSession = undefined;
+  }
+
+  if (!browser) {
+    browser = await playwright.chromium.launch({
+      headless: !headed,
+    });
+    browserHeaded = headed;
+  }
 }

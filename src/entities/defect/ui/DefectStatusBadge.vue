@@ -25,46 +25,52 @@ const meta = computed(() => getDefectStatusMeta(props.status))
   min-height: 22px;
   padding: 2px 10px;
   border: 1px solid transparent;
-  border-radius: 9999px;
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
   line-height: 16px;
   white-space: nowrap;
 }
 
-.defect-status-pill--assigned {
+.defect-status-pill--new {
   border-color: #bfdbfe;
-  background: #eff6ff;
+  background: #dbeafe;
   color: #1d4ed8;
 }
 
-.defect-status-pill--processing {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #15803d;
-}
-
-.defect-status-pill--verify {
+.defect-status-pill--assigned {
   border-color: #fed7aa;
-  background: #fff7ed;
+  background: #ffedd5;
   color: #c2410c;
 }
 
-.defect-status-pill--success {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #047857;
+.defect-status-pill--processing {
+  border-color: #bae6fd;
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
-.defect-status-pill--muted {
-  border-color: #e2e8f0;
-  background: #f8fafc;
-  color: #64748b;
+.defect-status-pill--verify {
+  border-color: #ddd6fe;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.defect-status-pill--closed {
+  border-color: #d1d5db;
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.defect-status-pill--hold {
+  border-color: #e5e7eb;
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .defect-status-pill--neutral {
-  border-color: #e2e8f0;
-  background: #f1f5f9;
-  color: #64748b;
+  border-color: #e5e7eb;
+  background: #f3f4f6;
+  color: #374151;
 }
 </style>

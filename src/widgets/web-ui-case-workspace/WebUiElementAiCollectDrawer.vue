@@ -153,7 +153,7 @@ const emit = defineEmits<{
 
 function formatAiValidationStatus(status?: string | null) {
   if (status === 'AI_UNVERIFIED') return 'AI 补充待验证'
-  if (status === 'UNVERIFIED') return '未真机验证'
+  if (status === 'UNVERIFIED') return '未本地验证'
   if (status === 'PASSED') return '已验证'
   if (status === 'FAILED') return '未找到'
   if (status === 'MULTIPLE') return '多匹配'
@@ -332,14 +332,14 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
 
           <template v-if="aiCollectMode === 'ONLINE'">
             <el-form-item label="运行环境">
-              <el-select v-model="aiCollectForm.environmentId" clearable filterable placeholder="选择登录态/环境">
+              <el-select v-model="aiCollectForm.environmentId" clearable filterable placeholder="选择登录环境">
                 <el-option v-for="item in enabledEnvironments" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="目标页地址">
               <el-input v-model="aiCollectForm.pageUrl" clearable placeholder="可选：用于让本地 Runner 打开页面，例如 https://example.com/orders" />
             </el-form-item>
-            <el-form-item label="本地执行器">
+            <el-form-item label="本地 Runner">
               <div class="web-ui-ai-collect__runner">
                 <div class="web-ui-ai-collect__runner-status">
                   <el-tag :type="localRunnerHealth?.online ? 'success' : 'info'" effect="light">
@@ -350,8 +350,8 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
                     Playwright {{ localRunnerHealth.playwrightAvailable ? '可用' : '不可用' }} /
                     Chromium {{ localRunnerHealth.chromiumInstalled ? '已安装' : '未安装' }}
                   </span>
-                  <small v-if="localRunnerHealth?.currentUrl">Runner 当前页：{{ localRunnerHealth.currentUrl }}</small>
-                  <small v-else>先启动 npm run runner，再检测本地执行器；目标页地址只用于打开页面，采集以 Runner 当前页为准。</small>
+                  <small v-if="localRunnerHealth?.currentUrl">当前页面：{{ localRunnerHealth.currentUrl }}</small>
+                  <small v-else>先启动 npm run runner，再检测本地 Runner；目标页地址只用于打开页面，采集以当前页为准。</small>
                 </div>
                 <div class="web-ui-ai-collect__runner-actions">
                   <AppButton size="small" :loading="localRunnerChecking" @click="emit('check-local-runner')">
@@ -361,7 +361,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
                     打开目标页
                   </AppButton>
                   <AppButton size="small" :loading="localRunnerTaskPollingStarting" @click="emit('start-task-polling')">
-                    启动任务轮询
+                    启动本地调试
                   </AppButton>
                   <AppButton
                     size="small"
@@ -381,7 +381,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
                   </template>
                   <template v-else>
                     <el-tag type="info" effect="light">任务轮询未启动</el-tag>
-                    <small>用于调试新的 Local Runner 通用任务链路：后端创建任务，Runner 自动拉取并真机验证。</small>
+                    <small>用于调试本地自动验证链路：平台创建任务，本地 Runner 自动处理并回传结果。</small>
                   </template>
                 </div>
                 <div v-if="localRunnerDebugTask" class="web-ui-ai-collect__runner-task-status">
@@ -565,8 +565,8 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
 
         <el-alert
           v-if="localRunnerValidating"
-          title="正在进行本地真机验证"
-          description="Runner 会在当前页面批量校验候选定位器，完成后自动更新通过、失败和多匹配状态。"
+          title="正在进行本地页面验证"
+          description="本地 Runner 会在当前页面批量校验候选定位器，完成后自动更新通过、失败和多匹配状态。"
           type="info"
           show-icon
           :closable="false"
@@ -655,7 +655,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
             :loading="aiCollectMode === 'ONLINE' ? (localRunnerCapturing || localRunnerValidating) : collecting"
             @click="aiCollectMode === 'ONLINE' ? emit('capture-local-runner-page') : emit('generate')"
           >
-            {{ localRunnerValidating ? '正在真机验证' : aiCollectMode === 'ONLINE' ? '采集当前页' : '生成候选元素' }}
+            {{ localRunnerValidating ? '正在本地验证' : aiCollectMode === 'ONLINE' ? '采集当前页' : '生成候选元素' }}
           </AppButton>
           <div v-if="candidates.length" class="web-ui-ai-collect__batch-actions">
             <AppButton size="small" @click="emit('select-recommended')">选择推荐且通过</AppButton>

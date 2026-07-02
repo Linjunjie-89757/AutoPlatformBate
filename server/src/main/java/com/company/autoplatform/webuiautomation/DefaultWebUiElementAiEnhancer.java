@@ -123,7 +123,7 @@ class DefaultWebUiElementAiEnhancer implements WebUiElementAiEnhancer {
                 约束：
                 1. 对已有候选：优先返回输入中已经存在的 locatorType + locatorValue，用于优化命名、分组和说明。
                 2. elementName 使用简洁中文业务名，例如“用户名输入框”“查询按钮”“订单列表表格”。
-                3. groupName 使用页面内稳定分区，例如“登录表单”“筛选区”“操作区”“列表区”“弹窗区”。
+                3. groupName 只能从以下标准区域中选择一个：顶部导航区、筛选表单区、操作按钮区、数据表格区、弹窗区、侧边栏区、未分类。不要自由创造“查询区”“搜索区”等近义分组。
                 4. recommendedToSave 表示是否建议保存到元素库，纯布局容器、重复图标、无稳定语义的元素建议 false。
                 5. maintenanceSuggestion 给出可维护建议，例如“建议研发补充 data-testid”。
                 6. confidence 为 0-100 的整数，reason 用一句中文说明稳定性和语义依据。
@@ -143,7 +143,7 @@ class DefaultWebUiElementAiEnhancer implements WebUiElementAiEnhancer {
                     {
                       "locatorType": "CSS",
                       "locatorValue": "#username",
-                      "groupName": "登录表单",
+                      "groupName": "筛选表单区",
                       "elementName": "用户名输入框",
                       "confidence": 95,
                       "reason": "id 定位稳定，语义为登录用户名",
@@ -208,12 +208,13 @@ class DefaultWebUiElementAiEnhancer implements WebUiElementAiEnhancer {
                 continue;
             }
             merged.add(new WebUiElementCollectCandidate(
-                    defaultText(aiCandidate.groupName(), ruleCandidate.groupName()),
+                    normalizeStandardGroupName(defaultText(aiCandidate.groupName(), ruleCandidate.groupName())),
                     defaultText(aiCandidate.elementName(), ruleCandidate.elementName()),
                     ruleCandidate.locatorType(),
                     ruleCandidate.locatorValue(),
                     ruleCandidate.framePath(),
                     ruleCandidate.shadowPath(),
+                    ruleCandidate.locatorCandidates(),
                     aiCandidate.confidence() == null ? ruleCandidate.confidence() : aiCandidate.confidence(),
                     defaultText(aiCandidate.reason(), ruleCandidate.reason()),
                     ruleCandidate.tagName(),
@@ -251,10 +252,11 @@ class DefaultWebUiElementAiEnhancer implements WebUiElementAiEnhancer {
             return null;
         }
         return new WebUiElementCollectCandidate(
-                defaultText(item.groupName(), null),
+                normalizeStandardGroupName(item.groupName()),
                 defaultText(item.elementName(), null),
                 locatorType,
                 locatorValue,
+                null,
                 null,
                 null,
                 normalizeConfidence(item.confidence()),
@@ -282,12 +284,13 @@ class DefaultWebUiElementAiEnhancer implements WebUiElementAiEnhancer {
 
     private WebUiElementCollectCandidate toBlockedAiSupplement(WebUiElementCollectCandidate candidate) {
         return new WebUiElementCollectCandidate(
-                defaultText(candidate.groupName(), "页面元素"),
+                normalizeStandardGroupName(candidate.groupName()),
                 defaultText(candidate.elementName(), "AI 补充元素"),
                 candidate.locatorType(),
                 candidate.locatorValue(),
                 candidate.framePath(),
                 candidate.shadowPath(),
+                candidate.locatorCandidates(),
                 candidate.confidence(),
                 defaultText(candidate.reason(), "AI 补充可能漏采的候选元素"),
                 candidate.tagName(),
@@ -339,6 +342,42 @@ class DefaultWebUiElementAiEnhancer implements WebUiElementAiEnhancer {
     private String defaultText(String value, String fallback) {
         String normalized = blankToNull(value);
         return normalized == null ? fallback : normalized;
+    }
+
+    private String normalizeStandardGroupName(String value) {
+        String normalized = blankToNull(value);
+        if (normalized == null) {
+            return "未分类";
+        }
+        if ("顶部导航区".equals(normalized)
+                || "筛选表单区".equals(normalized)
+                || "操作按钮区".equals(normalized)
+                || "数据表格区".equals(normalized)
+                || "弹窗区".equals(normalized)
+                || "侧边栏区".equals(normalized)
+                || "未分类".equals(normalized)) {
+            return normalized;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if (lower.matches(".*(顶部|导航|菜单|页头|header|nav|menu).*")) {
+            return "顶部导航区";
+        }
+        if (lower.matches(".*(筛选|查询|搜索|检索|过滤|表单|输入|选择|filter|search|form).*")) {
+            return "筛选表单区";
+        }
+        if (lower.matches(".*(操作|按钮|工具栏|新增|添加|编辑|删除|提交|保存|确定|取消|关闭|批量|action|button|toolbar).*")) {
+            return "操作按钮区";
+        }
+        if (lower.matches(".*(表格|列表|清单|数据|table|list|grid).*")) {
+            return "数据表格区";
+        }
+        if (lower.matches(".*(弹窗|抽屉|浮层|对话框|modal|dialog|drawer|popup).*")) {
+            return "弹窗区";
+        }
+        if (lower.matches(".*(侧边|侧栏|边栏|aside|sidebar).*")) {
+            return "侧边栏区";
+        }
+        return "未分类";
     }
 
     private String readableReason(RuntimeException exception, String fallback) {

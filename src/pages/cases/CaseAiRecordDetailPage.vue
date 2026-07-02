@@ -107,6 +107,8 @@ const errorMessage = ref('')
 const detailRecord = ref<AiGenerationTaskItem | null>(null)
 const requirementExpanded = ref(false)
 const outputExpanded = ref(false)
+const outputLogRef = ref<HTMLElement | null>(null)
+const outputAutoFollow = ref(true)
 const previewVisible = ref(false)
 const previewActiveTab = ref<'detail' | 'analysis'>('detail')
 const activeCaseCursor = ref(-1)
@@ -223,10 +225,6 @@ const optimizedCaseCount = computed(() => detailCases.value.filter(item => item.
 const supplementedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'SUPPLEMENTED' || item.aiSource === 'REVIEW_SUPPLEMENTED').length)
 const confirmRequiredCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'CONFIRM_REQUIRED').length)
 const notRecommendedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'NOT_RECOMMENDED').length)
-const reviewResultSummary = computed(() => detailRecord.value?.reviewResult?.summary?.trim() || '')
-const unresolvedCoverageGaps = computed(() => (detailRecord.value?.reviewResult?.unresolvedCoverageGaps ?? []).filter(Boolean))
-const supplementCaseCount = computed(() => detailRecord.value?.reviewResult?.supplementCases?.length ?? 0)
-
 const outputEvents = computed(() => [...(detailRecord.value?.events ?? [])].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0)))
 const showTaskOutputBoard = computed(() => Boolean(detailRecord.value && (
   detailRecord.value.status === 'FAILED'
@@ -761,6 +759,37 @@ function shouldRefreshForEvent(event: AiGenerationTaskEventItem) {
     'TASK_FAILED',
     'TASK_CANCELED',
   ].includes(event.eventType)
+}
+
+function isOutputLogAtBottom(element: HTMLElement) {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= 24
+}
+
+function scrollOutputLogToBottom() {
+  const element = outputLogRef.value
+  if (!element) {
+    return
+  }
+  element.scrollTop = element.scrollHeight
+}
+
+function scheduleOutputAutoScroll(force = false) {
+  if (!force && !outputAutoFollow.value) {
+    return
+  }
+  void nextTick(() => {
+    if (force || outputAutoFollow.value) {
+      scrollOutputLogToBottom()
+    }
+  })
+}
+
+function handleOutputLogScroll(event: Event) {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) {
+    return
+  }
+  outputAutoFollow.value = isOutputLogAtBottom(target)
 }
 
 function mergeTaskEvent(event: AiGenerationTaskEventItem) {
@@ -1420,8 +1449,18 @@ watch(
   () => detailRecord.value ? `${detailRecord.value.taskId}:${detailRecord.value.status}` : '',
   () => {
     syncOutputExpandedState(detailRecord.value)
+    outputAutoFollow.value = true
+    scheduleOutputAutoScroll(true)
   },
   { immediate: true },
+)
+
+watch(
+  () => {
+    const latestEvent = outputEvents.value.at(-1)
+    return `${outputEvents.value.length}:${latestEvent?.seq ?? latestEvent?.id ?? ''}`
+  },
+  () => scheduleOutputAutoScroll(),
 )
 
 watch(detailCases, (rows) => {
@@ -1598,7 +1637,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
-            <div class="case-ai-record-detail-page__output-log">
+            <div ref="outputLogRef" class="case-ai-record-detail-page__output-log" @scroll="handleOutputLogScroll">
               <div v-if="!outputEvents.length" class="case-ai-record-detail-page__output-empty">等待任务输出事件...</div>
               <div
                 v-for="event in outputEvents"
@@ -1612,42 +1651,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
           </template>
-        </div>
-      </AppCard>
-
-      <AppCard
-        v-if="reviewResultSummary || supplementCaseCount || unresolvedCoverageGaps.length || detailRecord.reviewResult?.issues?.length || detailRecord.reviewResult?.suggestions?.length"
-        class="case-ai-record-detail-page__review-summary-card"
-      >
-        <div class="case-ai-record-detail-page__review-summary-grid">
-          <section v-if="reviewResultSummary" class="case-ai-record-detail-page__review-summary-section">
-            <div class="case-ai-record-detail-page__detail-label">评审总结</div>
-            <div class="case-ai-record-detail-page__detail-text">{{ reviewResultSummary }}</div>
-          </section>
-          <section v-if="supplementCaseCount" class="case-ai-record-detail-page__review-summary-section">
-            <div class="case-ai-record-detail-page__detail-label">补充情况</div>
-            <div class="case-ai-record-detail-page__detail-text">
-              本次评审补充了 {{ supplementCaseCount }} 条用例，已合并进入当前结果列表。
-            </div>
-          </section>
-          <section v-if="unresolvedCoverageGaps.length" class="case-ai-record-detail-page__review-summary-section case-ai-record-detail-page__review-summary-section--full">
-            <div class="case-ai-record-detail-page__detail-label">覆盖缺口</div>
-            <ul class="case-ai-record-detail-page__review-summary-list">
-              <li v-for="item in unresolvedCoverageGaps" :key="item">{{ item }}</li>
-            </ul>
-          </section>
-          <section v-if="detailRecord.reviewResult?.issues?.length" class="case-ai-record-detail-page__review-summary-section">
-            <div class="case-ai-record-detail-page__detail-label">评审问题</div>
-            <ul class="case-ai-record-detail-page__review-summary-list">
-              <li v-for="item in detailRecord.reviewResult?.issues" :key="item">{{ item }}</li>
-            </ul>
-          </section>
-          <section v-if="detailRecord.reviewResult?.suggestions?.length" class="case-ai-record-detail-page__review-summary-section">
-            <div class="case-ai-record-detail-page__detail-label">处理建议</div>
-            <ul class="case-ai-record-detail-page__review-summary-list">
-              <li v-for="item in detailRecord.reviewResult?.suggestions" :key="item">{{ item }}</li>
-            </ul>
-          </section>
         </div>
       </AppCard>
 
@@ -2656,37 +2659,6 @@ onBeforeUnmount(() => {
   padding: 0 20px;
 }
 
-.case-ai-record-detail-page__review-summary-card {
-  min-width: 0;
-}
-
-.case-ai-record-detail-page__review-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.case-ai-record-detail-page__review-summary-section {
-  display: grid;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: rgba(248, 250, 252, 0.72);
-}
-
-.case-ai-record-detail-page__review-summary-section--full {
-  grid-column: 1 / -1;
-}
-
-.case-ai-record-detail-page__review-summary-list {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--app-text-main);
-  font-size: 13px;
-  line-height: 22px;
-}
-
 .case-ai-record-detail-page__toolbar-actions {
   display: flex;
   align-items: center;
@@ -3286,8 +3258,7 @@ onBeforeUnmount(() => {
 
   .case-ai-record-detail-page__preview-grid,
   .case-ai-record-detail-page__analysis-stack,
-  .case-ai-record-detail-page__version-compare,
-  .case-ai-record-detail-page__review-summary-grid {
+  .case-ai-record-detail-page__version-compare {
     grid-template-columns: 1fr;
   }
 }

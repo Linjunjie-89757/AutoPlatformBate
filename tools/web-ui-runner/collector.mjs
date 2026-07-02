@@ -38,6 +38,8 @@ export function buildCandidatesFromElements(elements) {
         tempId: `candidate-${index + 1}`,
         name: inferElementName(element, index),
         elementType: inferElementType(element),
+        regionName: trimText(element.regionName),
+        regionType: trimText(element.regionType),
         locator: {
           ...locator,
           framePath,
@@ -84,10 +86,10 @@ export function normalizeLocatorValidationResult(result) {
   const matchCount = Number(result.matchCount || 0);
   const validationStatus = matchCount === 1 ? 'PASSED' : matchCount > 1 ? 'MULTIPLE' : 'FAILED';
   const validationMessage = validationStatus === 'PASSED'
-    ? '真机验证通过'
+    ? '本地页面验证通过'
     : validationStatus === 'MULTIPLE'
       ? `定位器匹配到 ${matchCount} 个元素，建议人工确认唯一性`
-      : '真机验证未找到元素';
+      : '本地页面验证未找到元素';
   const framePath = normalizePathMetadata(result.framePath);
   const shadowPath = normalizePathMetadata(result.shadowPath);
 

@@ -133,7 +133,7 @@ export function getCollectCandidateReviewMessage(candidate: CandidateReviewShape
     return candidate.saveBlockedReason
   }
   if (candidate.validationStatus === 'FAILED') {
-    return candidate.validationMessage || '真机验证未找到元素，暂不建议保存'
+    return candidate.validationMessage || '本地页面验证未找到元素，暂不建议保存'
   }
   if (candidate.validationStatus === 'MULTIPLE') {
     const countText = candidate.matchCount === null || candidate.matchCount === undefined ? '多个' : `${candidate.matchCount} 个`
@@ -145,14 +145,14 @@ export function getCollectCandidateReviewMessage(candidate: CandidateReviewShape
     || candidate.validationStatus === 'SKIPPED'
     || !candidate.validationStatus
   ) {
-    return '尚未经过本地 Runner 真机验证'
+    return '尚未经过本地页面验证'
   }
   if (Number(candidate.confidence || 0) < 70) {
     return '稳定性评分偏低，建议确认定位器是否足够稳定'
   }
   if (candidate.validationStatus === 'PASSED') {
     const count = candidate.matchCount === null || candidate.matchCount === undefined ? 1 : candidate.matchCount
-    return `真机验证通过，定位器匹配 ${count} 个元素`
+    return `本地页面验证通过，定位器匹配 ${count} 个元素`
   }
   return candidate.validationMessage || '确认候选元素名称、分组和定位器后保存'
 }
@@ -162,7 +162,7 @@ export function getCollectCandidateValidationMeta(status?: string | null): WebUi
     return {
       label: '验证通过',
       tagType: 'success',
-      description: 'Runner 已在当前页面确认定位器可命中。',
+      description: '本地浏览器已在当前页面确认定位器可命中。',
     }
   }
   if (status === 'FAILED') {
@@ -183,21 +183,21 @@ export function getCollectCandidateValidationMeta(status?: string | null): WebUi
     return {
       label: 'AI 建议未验证',
       tagType: 'warning',
-      description: '这是 AI 补充的候选，还没有经过本地真机验证。',
+      description: '这是 AI 补充的候选，还没有经过本地页面验证。',
     }
   }
   if (status === 'UNVERIFIED') {
     return {
       label: '未验证',
       tagType: 'warning',
-      description: '候选尚未经过本地 Runner 真机验证。',
+      description: '候选尚未经过本地页面验证。',
     }
   }
   if (status === 'SKIPPED') {
     return {
       label: '跳过验证',
       tagType: 'info',
-      description: '当前流程没有执行真机验证。',
+      description: '当前流程没有执行本地页面验证。',
     }
   }
   return {
@@ -212,7 +212,7 @@ export function getCollectCandidateSourceMeta(source?: string | null): WebUiColl
     return {
       label: 'AI 补充',
       tagType: 'warning',
-      description: '规则可能漏掉的元素，由 AI 提出，需真机验证通过后再保存。',
+      description: '规则可能漏掉的元素，由 AI 提出，需本地页面验证通过后再保存。',
     }
   }
   if (source === 'STATIC_RULE') {
@@ -560,7 +560,7 @@ export function buildCollectTaskStages(task: WebUiElementCollectTaskResponse | n
       key: 'UPLOAD_SNAPSHOT',
       title: '上传快照',
       status: resolveStageStatus('UPLOAD_SNAPSHOT'),
-      description: task?.actualUrl || '等待本地 Runner 上传页面素材',
+      description: task?.actualUrl || '等待本地 Runner 读取页面素材',
     },
     {
       key: 'RULE_CLEAN',
@@ -576,17 +576,17 @@ export function buildCollectTaskStages(task: WebUiElementCollectTaskResponse | n
     },
     {
       key: 'LOCAL_VALIDATE',
-      title: '真机验证',
+      title: '本地验证',
       status: resolveStageStatus('LOCAL_VALIDATE'),
       description: degraded
-        ? task?.message || '本地 Runner 不可用，已降级为未验证候选'
+        ? task?.message || '本地 Runner 不可用，已保留为未验证候选'
         : status === 'WAITING_LOCAL_VALIDATION'
-          ? `等待本地 Runner 验证 ${finalCount || task?.candidates.length || 0} 个定位器`
+          ? `等待本地页面验证 ${finalCount || task?.candidates.length || 0} 个定位器`
           : status === 'VALIDATING'
-            ? `本地 Runner 正在验证 ${finalCount || task?.candidates.length || 0} 个定位器`
+            ? `正在本地页面验证 ${finalCount || task?.candidates.length || 0} 个定位器`
             : status === 'COMPLETED'
-              ? 'Runner 真机验证完成'
-              : '本地 Runner 真机验证已接入',
+              ? '本地页面验证完成'
+              : '本地页面验证已接入',
     },
     {
       key: 'FINALIZE',

@@ -71,7 +71,7 @@ class ApiExecutionSuiteRunIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"workspaceCode":"risk-ops","runOn":"REMOTE"}
+                                {"workspaceCode":"risk-ops","runOn":"SERVER"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -118,7 +118,7 @@ class ApiExecutionSuiteRunIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"workspaceCode":"risk-ops","runOn":"REMOTE"}
+                                {"workspaceCode":"risk-ops","runOn":"SERVER"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -143,7 +143,7 @@ class ApiExecutionSuiteRunIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"workspaceCode":"risk-ops","runOn":"REMOTE"}
+                                {"workspaceCode":"risk-ops","runOn":"SERVER"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -175,7 +175,7 @@ class ApiExecutionSuiteRunIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"workspaceCode":"risk-ops","runOn":"REMOTE"}
+                                {"workspaceCode":"risk-ops","runOn":"SERVER"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))

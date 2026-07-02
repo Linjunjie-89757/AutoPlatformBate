@@ -44,7 +44,7 @@ public class CaseBatchDomainService {
         Long workspaceId = assertSingleWorkspace(entities);
         CaseDirectoryEntity targetDirectory = request.targetDirectoryId() == null ? null : caseDirectoryDomainService.requireDirectory(request.targetDirectoryId());
         if (targetDirectory != null && !targetDirectory.getWorkspaceId().equals(workspaceId)) {
-            throw new BadRequestException("鎵归噺绉诲姩鐩爣鐩綍涓庣敤渚嬩笉鍦ㄥ悓涓€绌洪棿");
+            throw new BadRequestException("批量移动目标目录与用例不在同一空间");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -61,7 +61,7 @@ public class CaseBatchDomainService {
         if (blankToNull(request.priority()) == null
                 && blankToNull(request.reviewStatus()) == null
                 && blankToNull(request.executionStatus()) == null) {
-            throw new BadRequestException("鎵归噺缂栬緫鑷冲皯閫夋嫨涓€涓彲淇敼瀛楁");
+            throw new BadRequestException("批量编辑至少选择一个可修改字段");
         }
         List<CaseEntity> entities = requireWritableCases(request.caseIds(), workspaceCode);
         LocalDateTime now = LocalDateTime.now();
@@ -109,7 +109,7 @@ public class CaseBatchDomainService {
     private Long assertSingleWorkspace(List<CaseEntity> entities) {
         Set<Long> workspaceIds = entities.stream().map(CaseEntity::getWorkspaceId).collect(Collectors.toSet());
         if (workspaceIds.size() != 1) {
-            throw new BadRequestException("鎵归噺鎿嶄綔鏆備笉鏀寔璺ㄧ┖闂存贩鍚堟彁浜?");
+            throw new BadRequestException("批量操作暂不支持跨空间混合提交");
         }
         return entities.getFirst().getWorkspaceId();
     }

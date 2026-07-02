@@ -23,7 +23,7 @@ test('evaluateAuthStateHealth blocks missing required auth state', () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.status, 'MISSING');
-  assert.match(result.message, /登录态不存在/);
+  assert.match(result.message, /登录状态不存在/);
   assert.equal(result.reasonCode, 'AUTH_STATE_MISSING');
 });
 

@@ -153,6 +153,7 @@ public class ApiLocalRunnerReportService {
     private void persistScenarioResult(LocalRunnerTaskFinalResultEvent event) {
         Map<String, Object> payload = safeMap(event.payload());
         Map<String, Object> scenarioSnapshot = safeMap(payload.get("scenarioSnapshot"));
+        Map<String, Object> runOptions = safeMap(payload.get("runOptions"));
         Map<String, Object> result = safeMap(event.result());
         Map<String, Object> summary = safeMap(result.get("summary"));
         Map<String, Object> reportData = safeMap(result.get("reportData"));
@@ -164,22 +165,47 @@ public class ApiLocalRunnerReportService {
 
         RunArtifacts artifacts = createRunArtifacts(workspaceId, "接口场景本地执行", scenarioName, event);
         int order = 1;
+        List<ApiRunStepResultResponse> stepResponses = new java.util.ArrayList<>();
         for (Map<String, Object> stepResult : stepResults) {
+            String stepName = firstText(stringValue(stepResult.get("stepName")), stringValue(stepResult.get("stepId")), "API step");
+            boolean success = "SUCCESS".equals(stringValue(stepResult.get("status")));
+            Long durationMs = longValue(stepResult.get("durationMs"));
+            String errorMessage = stringValue(stepResult.get("errorMessage"));
+            Map<String, Object> request = safeMap(stepResult.get("request"));
+            Map<String, Object> response = safeMap(stepResult.get("response"));
+            List<Map<String, Object>> assertions = safeList(stepResult.get("assertions"));
+            Map<String, Object> extractedVariables = safeMap(stepResult.get("extractedVariables"));
+            Map<String, Object> scriptResults = safeMap(stepResult.get("scriptResults"));
             stepResultMapper.insert(toStepEntity(
                     workspaceId,
                     artifacts.report().getId(),
-                    order++,
-                    firstText(stringValue(stepResult.get("stepName")), stringValue(stepResult.get("stepId")), "API step"),
+                    order,
+                    stepName,
                     null,
-                    "SUCCESS".equals(stringValue(stepResult.get("status"))),
-                    longValue(stepResult.get("durationMs")),
-                    stringValue(stepResult.get("errorMessage")),
-                    safeMap(stepResult.get("request")),
-                    safeMap(stepResult.get("response")),
-                    safeList(stepResult.get("assertions")),
-                    safeMap(stepResult.get("extractedVariables")),
-                    safeMap(stepResult.get("scriptResults"))
+                    success,
+                    durationMs,
+                    errorMessage,
+                    request,
+                    response,
+                    assertions,
+                    extractedVariables,
+                    scriptResults
             ));
+            stepResponses.add(toStepResponse(
+                    artifacts.report().getId(),
+                    order,
+                    stepName,
+                    null,
+                    success,
+                    durationMs,
+                    errorMessage,
+                    request,
+                    response,
+                    assertions,
+                    extractedVariables,
+                    scriptResults
+            ));
+            order++;
         }
 
         if (scenario != null) {
@@ -200,10 +226,12 @@ public class ApiLocalRunnerReportService {
             history.setFailedCount(integerValue(summary.get("failedSteps"), countStatus(stepResults, "FAILED")));
             history.setSkippedCount(integerValue(summary.get("skippedSteps"), countStatus(stepResults, "SKIPPED")));
             history.setDurationMs(longValue(result.get("durationMs"), 0L));
+            history.setEnvironmentId(resolveRunEnvironmentId(runOptions, event));
+            history.setVariableSetId(resolveRunVariableSetId(runOptions, event));
             history.setLoopCount(1);
             history.setThreadCount(1);
             history.setDataIterationJson("[]");
-            history.setDetailJson(ApiAutomationJsonSupport.toJson(reportData, "Failed to serialize Local Runner API scenario report detail"));
+            history.setDetailJson(ApiAutomationJsonSupport.toJson(stepResponses, "Failed to serialize Local Runner API scenario step detail"));
             history.setContextSnapshotJson(contextSnapshot(event));
             history.setOperatorName("Local Runner");
             history.setCreatedAt(LocalDateTime.now());
@@ -267,8 +295,8 @@ public class ApiLocalRunnerReportService {
             history.setFailedCount(integerValue(summary.get("failedSteps"), countStatus(suiteStepResults, "FAILED")));
             history.setSkippedCount(integerValue(summary.get("skippedSteps"), countStatus(suiteStepResults, "SKIPPED")));
             history.setDurationMs(longValue(result.get("durationMs"), 0L));
-            history.setEnvironmentId(longValue(runOptions.get("environmentId")));
-            history.setVariableSetId(longValue(runOptions.get("variableSetId")));
+            history.setEnvironmentId(resolveRunEnvironmentId(runOptions, event));
+            history.setVariableSetId(resolveRunVariableSetId(runOptions, event));
             history.setRunMode(firstText(suite.getRunMode(), stringValue(suiteSnapshot.get("runMode")), "SERIAL"));
             history.setRunOn(EXECUTION_LOCATION_LOCAL_RUNNER);
             history.setContinueOnFailure(suite.getContinueOnFailure());
@@ -348,6 +376,38 @@ public class ApiLocalRunnerReportService {
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         return entity;
+    }
+
+    private ApiRunStepResultResponse toStepResponse(
+            Long reportId,
+            int stepOrder,
+            String stepName,
+            Long definitionId,
+            boolean success,
+            Long durationMs,
+            String errorMessage,
+            Map<String, Object> request,
+            Map<String, Object> response,
+            List<Map<String, Object>> assertions,
+            Map<String, Object> extractedVariables,
+            Map<String, Object> scriptResults
+    ) {
+        return new ApiRunStepResultResponse(
+                null,
+                reportId,
+                stepOrder,
+                stepName,
+                definitionId,
+                success,
+                durationMs == null ? 0L : durationMs,
+                toRequestSnapshot(request),
+                toResponseSnapshot(response),
+                toAssertionResults(assertions),
+                toExtractionResults(extractedVariables),
+                toProcessorResults(scriptResults),
+                errorMessage,
+                LocalDateTime.now()
+        );
     }
 
     private ApiRequestSnapshot toRequestSnapshot(Map<String, Object> request) {
@@ -435,6 +495,22 @@ public class ApiLocalRunnerReportService {
                 "runnerId", Optional.ofNullable(event.runnerId()).orElse(""),
                 "taskType", event.taskType()
         ), "Failed to serialize Local Runner API context snapshot");
+    }
+
+    private Long resolveRunEnvironmentId(Map<String, Object> runOptions, LocalRunnerTaskFinalResultEvent event) {
+        Map<String, Object> environmentSnapshot = safeMap(event.environmentSnapshot());
+        return longValue(firstPresent(
+                runOptions.get("environmentId"),
+                environmentSnapshot.get("environmentId")
+        ));
+    }
+
+    private Long resolveRunVariableSetId(Map<String, Object> runOptions, LocalRunnerTaskFinalResultEvent event) {
+        Map<String, Object> variableSnapshot = safeMap(event.variableSnapshot());
+        return longValue(firstPresent(
+                runOptions.get("variableSetId"),
+                variableSnapshot.get("variableSetId")
+        ));
     }
 
     private List<Map<String, Object>> enrichSuiteStepResults(

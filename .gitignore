@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Playwright CLI artifacts
+.playwright-cli/
+
 # Backend local artifacts
 server/target/
 server/logs/

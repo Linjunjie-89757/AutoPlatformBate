@@ -53,6 +53,41 @@ class LocalRunnerTaskLifecycleTests {
     }
 
     @Test
+    void reportFinalResultIncludesErrorMessageInResultEvent() {
+        LocalRunnerTaskMapper taskMapper = mock(LocalRunnerTaskMapper.class);
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        LocalRunnerTaskEntity task = task("run-active", "RUNNING");
+        task.setEnvironmentSnapshotJson("{\"environmentId\":8137}");
+        task.setVariableSnapshotJson("{\"variableSetId\":915}");
+        when(taskMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(task);
+        LocalRunnerService service = service(taskMapper, eventPublisher);
+
+        var ack = service.reportFinalResult("run-active", new RunnerFinalResultReport(
+                "runner-a",
+                "exec-run-active",
+                "FAILED",
+                LocalDateTime.now().minusSeconds(10),
+                LocalDateTime.now(),
+                200L,
+                Map.of("failedSteps", 1),
+                "Expected status 200 but got 500",
+                Map.of("stepResults", List.of())
+        ));
+
+        assertThat(ack.accepted()).isTrue();
+        assertThat(ack.status()).isEqualTo("FAILED");
+        assertThat(task.getStatus()).isEqualTo("FAILED");
+        assertThat(task.getErrorMessage()).isEqualTo("Expected status 200 but got 500");
+        assertThat(task.getResultJson()).contains("\"errorMessage\":\"Expected status 200 but got 500\"");
+        verify(taskMapper).updateById(task);
+        ArgumentCaptor<LocalRunnerTaskFinalResultEvent> eventCaptor = ArgumentCaptor.forClass(LocalRunnerTaskFinalResultEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().result()).containsEntry("errorMessage", "Expected status 200 but got 500");
+        assertThat(eventCaptor.getValue().environmentSnapshot()).containsEntry("environmentId", 8137);
+        assertThat(eventCaptor.getValue().variableSnapshot()).containsEntry("variableSetId", 915);
+    }
+
+    @Test
     void reportStatusReturnsCanceledAckWithoutReopeningTask() {
         LocalRunnerTaskMapper taskMapper = mock(LocalRunnerTaskMapper.class);
         LocalRunnerTaskEntity task = task("run-canceled", "CANCELED");

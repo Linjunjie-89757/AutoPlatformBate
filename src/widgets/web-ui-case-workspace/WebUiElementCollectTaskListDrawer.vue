@@ -40,7 +40,7 @@ const statusOptions = [
   { label: 'AI 分析', value: 'AI_ANALYZING' },
   { label: '处理中', value: 'PROCESSING' },
   { label: '等待本地验证', value: 'WAITING_LOCAL_VALIDATION' },
-  { label: '真机验证中', value: 'VALIDATING' },
+  { label: '本地验证中', value: 'VALIDATING' },
   { label: '已完成', value: 'COMPLETED' },
   { label: '已降级', value: 'DEGRADED' },
   { label: '已失败', value: 'FAILED' },
@@ -64,7 +64,7 @@ function formatTaskStatus(status?: string | null) {
   if (status === 'AI_ANALYZING') return 'AI 分析'
   if (status === 'PROCESSING') return '处理中'
   if (status === 'WAITING_LOCAL_VALIDATION') return '等待本地验证'
-  if (status === 'VALIDATING') return '真机验证中'
+  if (status === 'VALIDATING') return '本地验证中'
   if (status === 'COMPLETED') return '已完成'
   if (status === 'DEGRADED') return '已降级'
   if (status === 'FAILED') return '已失败'
@@ -110,7 +110,7 @@ function formatValidationSummary(task: WebUiElementCollectTaskListItem) {
   const total = getValidationTotalCount(task)
   const verified = getValidationVerifiedCount(task)
   if (total <= 0) return '暂无候选'
-  if (verified <= 0) return `未真机验证 / ${total}`
+  if (verified <= 0) return `未本地验证 / ${total}`
   return `已验证 ${verified} / ${total}`
 }
 

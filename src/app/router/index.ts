@@ -249,7 +249,7 @@ const routes: RouteRecordRaw[] = [
         component: WebAutomationPage,
         meta: {
           title: 'Web UI 用例工作台',
-          description: '编辑 Web UI 用例步骤、运行调试，并预留 Local Runner 录制入口。',
+          description: '编辑 Web UI 用例步骤、运行调试，并预留本地 Runner 录制入口。',
         },
       },
       {

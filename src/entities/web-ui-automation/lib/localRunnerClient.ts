@@ -1,5 +1,6 @@
 import type {
   WebUiElementCollectCandidate,
+  WebUiElementCollectLocatorCandidate,
   WebUiElementCollectValidationTarget,
   WebUiElementCollectValidationResult,
   WebUiLocatorContextPathItem,
@@ -91,6 +92,7 @@ export interface LocalRunnerPlatformPollPayload {
   workspaceCode: string
   runnerId?: string | null
   sessionId?: string | null
+  currentUrl?: string | null
   locators?: WebUiElementCollectValidationTarget[]
 }
 
@@ -102,6 +104,7 @@ export interface LocalRunnerPlatformPollStatus {
     workspaceCode: string
     runnerId: string
     sessionId: string | null
+    currentUrl?: string | null
     running: boolean
     tickRunning: boolean
     startedAt: string | null
@@ -203,17 +206,27 @@ export interface LocalRunnerCaptureResult {
 export interface LocalRunnerCandidate {
   name: string
   elementType: string | null
+  regionName?: string | null
+  regionType?: string | null
   locator: {
     strategy: string
     value: string
     framePath?: WebUiLocatorContextPathItem[] | null
     shadowPath?: WebUiLocatorContextPathItem[] | null
+    alternatives?: LocalRunnerLocatorCandidate[] | null
   }
   text?: string | null
   placeholder?: string | null
   tagName?: string | null
   stabilityScore?: number | null
   source?: string | null
+}
+
+export interface LocalRunnerLocatorCandidate {
+  strategy: string
+  value: string
+  framePath?: WebUiLocatorContextPathItem[] | null
+  shadowPath?: WebUiLocatorContextPathItem[] | null
 }
 
 export interface LocalRunnerValidateLocatorInput {
@@ -297,8 +310,8 @@ export function buildLocalRunnerStatusView(input: {
       tagType: 'info',
       alertType: 'info',
       label: '检测中',
-      title: '正在检测本地 Runner',
-      description: '正在读取 Runner、Playwright、Chromium 和当前页面状态。',
+      title: '正在检测本地调试环境',
+      description: '正在读取本地 Runner、浏览器内核和当前页面状态。',
       currentUrl,
       runnerVersion,
     })
@@ -311,8 +324,8 @@ export function buildLocalRunnerStatusView(input: {
       tagType: 'danger',
       alertType: 'error',
       label: '未连接',
-      title: '本地 Runner 未启动或无法访问',
-      description: `${reason} 请在前端项目目录启动 Runner，然后重新检测。`,
+      title: '本地调试 Runner 未启动或无法访问',
+      description: `${reason} 请在前端项目目录启动本地 Runner，然后重新检测。`,
       commands: [LOCAL_RUNNER_START_COMMAND],
     })
   }
@@ -323,7 +336,7 @@ export function buildLocalRunnerStatusView(input: {
       tagType: 'warning',
       alertType: 'warning',
       label: '依赖缺失',
-      title: 'Runner 已连接，但 Playwright 不可用',
+      title: '本地 Runner 已连接，但 Playwright 不可用',
       description: '请先安装前端依赖，确认当前项目可以加载 playwright 包，再重新启动 Runner。',
       commands: ['npm.cmd install', LOCAL_RUNNER_START_COMMAND],
       currentUrl,
@@ -337,7 +350,7 @@ export function buildLocalRunnerStatusView(input: {
       tagType: 'warning',
       alertType: 'warning',
       label: '浏览器缺失',
-      title: 'Runner 已连接，但 Chromium 未安装',
+      title: '本地 Runner 已连接，但 Chromium 未安装',
       description: '请安装 Playwright 的 Chromium 浏览器内核，安装后重新启动 Runner。',
       commands: [LOCAL_RUNNER_INSTALL_CHROMIUM_COMMAND, LOCAL_RUNNER_START_COMMAND],
       currentUrl,
@@ -351,8 +364,8 @@ export function buildLocalRunnerStatusView(input: {
       tagType: 'warning',
       alertType: 'warning',
       label: '未打开页面',
-      title: 'Runner 已连接，请先打开目标业务页面',
-      description: '可以填写页面 URL 后点击“打开目标页”，也可以在 Runner 浏览器里手动进入目标页面。',
+      title: '请先打开目标业务页面',
+      description: '可以填写页面 URL 后点击“打开页面”，也可以在本地浏览器里手动进入目标页面。',
       currentUrl,
       runnerVersion,
       canOpenPage: true,
@@ -365,8 +378,8 @@ export function buildLocalRunnerStatusView(input: {
       tagType: 'warning',
       alertType: 'warning',
       label: '疑似登录页',
-      title: 'Runner 当前页面可能是登录页',
-      description: '请先在 Runner 浏览器中完成登录，并进入真正要采集的业务页面后再开始采集。',
+      title: '当前页面可能是登录页',
+      description: '登录页不作为采集目标。请先完成登录，再进入要采集的业务页面。',
       currentUrl,
       runnerVersion,
       canOpenPage: true,
@@ -380,8 +393,8 @@ export function buildLocalRunnerStatusView(input: {
       tagType: 'warning',
       alertType: 'warning',
       label: '页面不一致',
-      title: 'Runner 当前页面和目标页面地址不一致',
-      description: '采集会以 Runner 浏览器当前页面为准。如果这不是目标业务页面，请重新打开目标页或手动切回正确页面。',
+      title: '当前页面和目标地址不一致',
+      description: '采集会以本地浏览器当前页面为准。如果这不是目标业务页面，请重新打开或手动切回正确页面。',
       currentUrl,
       runnerVersion,
       canOpenPage: true,
@@ -394,7 +407,7 @@ export function buildLocalRunnerStatusView(input: {
     tagType: 'success',
     alertType: 'success',
     label: '可采集',
-    title: 'Runner 已就绪',
+    title: '当前页面可采集',
     description: `将采集当前页面：${currentUrl}`,
     currentUrl,
     runnerVersion,
@@ -426,6 +439,7 @@ export async function validateLocalRunnerLocators(
   locators: LocalRunnerValidateLocatorInput[],
   options: {
     onProgress?: (progress: LocalRunnerValidationProgress) => void
+    highlight?: boolean
   } = {},
 ) {
   const normalizedLocators = locators
@@ -447,6 +461,7 @@ export async function validateLocalRunnerLocators(
         timeoutMs: LOCAL_RUNNER_VALIDATION_TIMEOUT_MS,
         body: {
           locators: batch,
+          highlight: options.highlight === true,
         },
       })
       if (Array.isArray(payload.results)) {
@@ -460,7 +475,7 @@ export async function validateLocalRunnerLocators(
         locatorValue: item.locatorValue,
         validationStatus: 'FAILED',
         matchCount: 0,
-        validationMessage: `本批真机验证失败：${getLocalRunnerErrorMessage(error)}`,
+        validationMessage: `本批本地页面验证失败：${getLocalRunnerErrorMessage(error)}`,
         screenshotBase64: null,
         ...buildLocatorContext(item),
       })))
@@ -527,6 +542,7 @@ export async function startLocalRunnerPlatformPolling(payload: LocalRunnerPlatfo
       taskId: payload.taskId,
       runnerId: payload.runnerId || 'local-runner',
       sessionId: payload.sessionId || null,
+      currentUrl: payload.currentUrl || null,
       locators: payload.locators || [],
       intervalMs: 2000,
     },
@@ -576,14 +592,16 @@ export function mapRunnerCandidateToCollectCandidate(input: {
   const locatorType = normalizeLocatorType(input.candidate.locator?.strategy)
   const confidence = clampConfidence(input.candidate.stabilityScore)
   const hasLocator = Boolean(input.candidate.locator?.value)
+  const locatorCandidates = buildCollectLocatorCandidates(input.candidate, locatorType, confidence)
 
   return {
-    groupName: input.groupName || '页面元素',
+    groupName: input.candidate.regionName || input.groupName || '页面元素',
     candidateSource: 'STATIC_RULE',
     elementName: input.candidate.name || '页面元素',
     locatorType,
     locatorValue: input.candidate.locator?.value || '',
     ...buildLocatorContext(input.candidate.locator),
+    locatorCandidates,
     confidence,
     reason: '本地 Runner 静态规则采集',
     tagName: input.candidate.tagName || null,
@@ -596,14 +614,93 @@ export function mapRunnerCandidateToCollectCandidate(input: {
     businessMeaning: input.candidate.text || input.candidate.placeholder || null,
     recommendedToSave: hasLocator,
     notRecommendedReason: hasLocator ? null : '未生成可用定位器',
-    maintenanceSuggestion: '来自本地 Runner 静态采集，当前阶段尚未接入真机验证，保存前请确认名称、分组和定位器。',
+    maintenanceSuggestion: '来自本地 Runner 静态采集，当前阶段尚未接入本地页面验证，保存前请确认名称、分组和定位器。',
     stabilityNote: `定位器稳定性评分 ${confidence}%`,
     validationStatus: 'UNVERIFIED',
     matchCount: null,
-    validationMessage: '静态生成，尚未经过 Runner 真机验证',
+    validationMessage: '静态生成，尚未经过本地页面验证',
     screenshotBase64: input.screenshotBase64 || null,
     saveBlockedReason: hasLocator ? null : '缺少定位器',
   }
+}
+
+function buildCollectLocatorCandidates(
+  candidate: LocalRunnerCandidate,
+  primaryLocatorType: WebUiLocatorType,
+  primaryConfidence: number,
+): WebUiElementCollectLocatorCandidate[] {
+  const result: WebUiElementCollectLocatorCandidate[] = []
+  const seen = new Set<string>()
+  const pushLocator = (
+    strategy?: string | null,
+    value?: string | null,
+    confidence?: number | null,
+    reason?: string | null,
+    framePath?: WebUiLocatorContextPathItem[] | null,
+    shadowPath?: WebUiLocatorContextPathItem[] | null,
+  ) => {
+    const locatorValue = value?.trim()
+    if (!locatorValue) {
+      return
+    }
+    const locatorType = normalizeLocatorType(strategy) || primaryLocatorType
+    const key = `${locatorType}::${locatorValue}`
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    result.push({
+      locatorType,
+      locatorValue,
+      framePath: framePath || candidate.locator?.framePath || null,
+      shadowPath: shadowPath || candidate.locator?.shadowPath || null,
+      confidence: confidence ?? confidenceByLocatorType(locatorType),
+      reason: reason || `${formatLocatorTypeForReason(locatorType)} 备选定位`,
+    })
+  }
+
+  pushLocator(
+    candidate.locator?.strategy,
+    candidate.locator?.value,
+    primaryConfidence,
+    '主定位器',
+    candidate.locator?.framePath,
+    candidate.locator?.shadowPath,
+  )
+  for (const item of candidate.locator?.alternatives || []) {
+    pushLocator(item.strategy, item.value, null, null, item.framePath, item.shadowPath)
+  }
+  return result
+}
+
+function confidenceByLocatorType(locatorType: WebUiLocatorType) {
+  switch (locatorType) {
+    case 'TEST_ID':
+      return 96
+    case 'LABEL':
+      return 90
+    case 'ROLE':
+      return 86
+    case 'CSS':
+      return 78
+    case 'TEXT':
+      return 72
+    case 'XPATH':
+      return 62
+    default:
+      return 50
+  }
+}
+
+function formatLocatorTypeForReason(locatorType: WebUiLocatorType) {
+  if (locatorType === 'TEST_ID') return '测试属性'
+  if (locatorType === 'LABEL') return '标签文本'
+  if (locatorType === 'ROLE') return '角色'
+  if (locatorType === 'CSS') return 'CSS'
+  if (locatorType === 'TEXT') return '文本'
+  if (locatorType === 'PLACEHOLDER') return '占位符'
+  if (locatorType === 'XPATH') return 'XPath'
+  return locatorType
 }
 
 async function requestLocalRunner<T = any>(
@@ -709,9 +806,14 @@ function createLocalRunnerStatus(input: Partial<LocalRunnerStatusView> & Pick<Lo
 function normalizeComparableUrl(url: string) {
   try {
     const parsed = new URL(url)
-    return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '')
+    return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '').toLowerCase()
   } catch {
-    return String(url || '').trim().replace(/\/+$/, '')
+    return String(url || '')
+      .trim()
+      .replace(/^https?:\/\//i, '')
+      .split(/[?#]/)[0]
+      .replace(/\/+$/, '')
+      .toLowerCase()
   }
 }
 
