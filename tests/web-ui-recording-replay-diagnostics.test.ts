@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   buildRecordingReplayDiagnostics,
+  buildRecordingReplayRepairActions,
   classifyRecordingReplayFailure,
   type RecordingReplayTaskSnapshot,
 } from '../src/entities/web-ui-automation/lib/recordingReplayDiagnostics.ts'
@@ -66,6 +67,30 @@ test('classifies common replay failure categories', () => {
   assert.equal(classifyRecordingReplayFailure('Timeout 30000ms exceeded waiting for load state', 'CLICK'), 'WAIT')
   assert.equal(classifyRecordingReplayFailure('page closed during navigation', 'OPEN'), 'PAGE_STATE')
   assert.equal(classifyRecordingReplayFailure('unexpected failure', 'CLICK'), 'UNKNOWN')
+})
+
+test('builds repair actions from replay diagnostics issue type', () => {
+  assert.deepEqual(buildRecordingReplayRepairActions({
+    issueType: 'LOCATOR',
+    failedStepSortOrder: 2,
+  }), {
+    collectLocatorCandidate: true,
+    applyTimeoutSuggestion: false,
+  })
+  assert.deepEqual(buildRecordingReplayRepairActions({
+    issueType: 'WAIT',
+    failedStepSortOrder: 3,
+  }), {
+    collectLocatorCandidate: false,
+    applyTimeoutSuggestion: true,
+  })
+  assert.deepEqual(buildRecordingReplayRepairActions({
+    issueType: 'LOCATOR',
+    failedStepSortOrder: null,
+  }), {
+    collectLocatorCandidate: false,
+    applyTimeoutSuggestion: false,
+  })
 })
 
 function taskSnapshot(overrides: Partial<RecordingReplayTaskSnapshot>): RecordingReplayTaskSnapshot {

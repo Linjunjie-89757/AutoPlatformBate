@@ -52,7 +52,10 @@ import {
   shouldRestoreWebUiRecordingDraft,
   type WebUiRecordingDraftPayload,
 } from '@/entities/web-ui-automation/lib/recordingDraft'
-import { buildRecordingReplayDiagnostics } from '@/entities/web-ui-automation/lib/recordingReplayDiagnostics'
+import {
+  buildRecordingReplayDiagnostics,
+  buildRecordingReplayRepairActions,
+} from '@/entities/web-ui-automation/lib/recordingReplayDiagnostics'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -134,6 +137,7 @@ const recordingPausing = ref(false)
 const recordingResuming = ref(false)
 const recordingUndoing = ref(false)
 const recordingStatusRefreshing = ref(false)
+const recordingReplayRepairing = ref(false)
 const recordingActive = ref(false)
 const recordingStatus = ref<RecordingStatus>('IDLE')
 const recordingEventCount = ref(0)
@@ -197,6 +201,7 @@ const recordingReplayDiagnostics = computed(() => buildRecordingReplayDiagnostic
   task: localRunnerTask.value,
   runDetail: localRunnerRunDetail.value,
 }))
+const recordingReplayRepairActions = computed(() => buildRecordingReplayRepairActions(recordingReplayDiagnostics.value))
 const focusedStepId = computed(() => {
   const raw = Array.isArray(route.query.stepId) ? route.query.stepId[0] : route.query.stepId
   const numeric = Number(raw)
@@ -919,6 +924,73 @@ function focusRecordingReplayFailedStep() {
   }
   const index = form.value.steps.findIndex(step => Number(step.sortOrder || 0) === Number(sortOrder))
   selectedStepIndex.value = index >= 0 ? index : Math.max(0, Math.min(sortOrder - 1, form.value.steps.length - 1))
+}
+
+function getRecordingReplayFailedEditableStep() {
+  const sortOrder = recordingReplayDiagnostics.value?.failedStepSortOrder
+  if (!sortOrder) {
+    return null
+  }
+  return form.value.steps.find(step => Number(step.sortOrder || 0) === Number(sortOrder))
+    || form.value.steps[sortOrder - 1]
+    || null
+}
+
+async function createRecordingReplayFailedStepCollectTask() {
+  const failedStep = getRecordingReplayFailedEditableStep()
+  if (!failedStep || !requiresLocator(failedStep.type) || !failedStep.locatorType || !failedStep.locatorValue.trim()) {
+    ElMessage.warning('失败步骤缺少可采集的定位信息')
+    return
+  }
+
+  const candidates = toWebUiCollectCandidatesFromRecordedSteps([failedStep], {
+    groupName: getRecordingCandidateGroupName(),
+  })
+  if (!candidates.length) {
+    ElMessage.warning('失败步骤暂不能生成候选元素')
+    return
+  }
+
+  focusRecordingReplayFailedStep()
+  recordingReplayRepairing.value = true
+  try {
+    const task = await webUiAutomationApi.createLocalRunnerCollectTask(props.workspaceCode, {
+      runnerId: 'local-runner-recording-replay',
+      sessionId: null,
+      actualUrl: lastRecordingPageUrl.value || form.value.baseUrl.trim() || null,
+      pageTitle: null,
+      moduleId: null,
+      pageId: null,
+      pageName: form.value.name.trim() || null,
+      scope: 'ALL',
+      providerConnectionId: null,
+      modelName: null,
+      rawCount: candidates.length,
+      screenshotBase64: null,
+      candidates,
+    })
+    lastCollectTaskId.value = task.taskId
+    lastCollectTaskReturnSource.value = WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN
+    markRecordedStepAsElementCandidate(failedStep)
+    ElMessage.success(`已为失败步骤创建候选入库任务：#${task.taskId}`)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingReplayRepairing.value = false
+  }
+}
+
+function applyRecordingReplayTimeoutSuggestion() {
+  const failedStep = getRecordingReplayFailedEditableStep()
+  if (!failedStep) {
+    ElMessage.warning('暂无可调整的失败步骤')
+    return
+  }
+
+  focusRecordingReplayFailedStep()
+  const currentTimeout = Number(failedStep.timeoutMs || form.value.defaultTimeoutMs || 10000)
+  failedStep.timeoutMs = Math.min(60000, Math.max(20000, currentTimeout + 5000))
+  ElMessage.success(`已将第 ${failedStep.sortOrder} 步超时调整为 ${failedStep.timeoutMs}ms，请保存后重新回放`)
 }
 
 function backToList() {
@@ -1787,6 +1859,21 @@ watch(elementPickerLocatorType, () => {
               @click="focusRecordingReplayFailedStep"
             >
               定位失败步骤
+            </AppButton>
+            <AppButton
+              v-if="recordingReplayRepairActions.collectLocatorCandidate"
+              size="small"
+              :loading="recordingReplayRepairing"
+              @click="createRecordingReplayFailedStepCollectTask"
+            >
+              生成失败步骤候选
+            </AppButton>
+            <AppButton
+              v-if="recordingReplayRepairActions.applyTimeoutSuggestion"
+              size="small"
+              @click="applyRecordingReplayTimeoutSuggestion"
+            >
+              应用超时建议
             </AppButton>
             <AppButton
               v-if="recordingReplayDiagnostics.reportAvailable && localRunnerFormalRunId"

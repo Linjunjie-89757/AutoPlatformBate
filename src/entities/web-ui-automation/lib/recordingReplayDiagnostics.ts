@@ -1,7 +1,7 @@
 import type { WebUiRunDetail, WebUiRunStepResult, WebUiStepType } from '../model/types'
 
 type ReplayTone = 'primary' | 'success' | 'warning' | 'danger' | 'info'
-type ReplayIssueType = 'LOCATOR' | 'WAIT' | 'ASSERTION' | 'PAGE_STATE' | 'UNKNOWN'
+export type ReplayIssueType = 'LOCATOR' | 'WAIT' | 'ASSERTION' | 'PAGE_STATE' | 'UNKNOWN'
 
 export interface RecordingReplayTaskSnapshot {
   runId: string
@@ -27,6 +27,11 @@ export interface RecordingReplayDiagnostics {
   failedStepLabel: string | null
   failedStepDetail: string | null
   reportAvailable: boolean
+}
+
+export interface RecordingReplayRepairActions {
+  collectLocatorCandidate: boolean
+  applyTimeoutSuggestion: boolean
 }
 
 export function buildRecordingReplayDiagnostics(input: {
@@ -100,6 +105,16 @@ export function buildRecordingReplayDiagnostics(input: {
     failedStepLabel: null,
     failedStepDetail: null,
     reportAvailable,
+  }
+}
+
+export function buildRecordingReplayRepairActions(
+  diagnostics: Pick<RecordingReplayDiagnostics, 'issueType' | 'failedStepSortOrder'> | null | undefined,
+): RecordingReplayRepairActions {
+  const hasFailedStep = Boolean(diagnostics?.failedStepSortOrder)
+  return {
+    collectLocatorCandidate: hasFailedStep && diagnostics?.issueType === 'LOCATOR',
+    applyTimeoutSuggestion: hasFailedStep && diagnostics?.issueType === 'WAIT',
   }
 }
 
