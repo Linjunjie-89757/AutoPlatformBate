@@ -7,7 +7,10 @@ import {
   LOCAL_RUNNER_START_COMMAND,
   mapRunnerCandidateToCollectCandidate,
   normalizeRunnerHealth,
+  getLocalRunnerRecordingStatus,
   startLocalRunnerTaskPolling,
+  startLocalRunnerRecording,
+  stopLocalRunnerRecording,
   validateLocalRunnerLocators,
 } from '../src/entities/web-ui-automation/lib/localRunnerClient.ts'
 
@@ -132,6 +135,60 @@ test('startLocalRunnerTaskPolling posts task polling options to local runner', a
     assert.deepEqual(requestBody.capabilities, ['API_CASE_RUN', 'API_SCENARIO_RUN', 'API_SUITE_RUN'])
     assert.deepEqual(requestBody.workspaceCodes, ['risk-ops'])
     assert.equal(requestBody.intervalMs, 1000)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('local runner recording client calls recording endpoints', async () => {
+  const originalFetch = globalThis.fetch
+  const requests: Array<{ url: string, method: string, body: unknown }> = []
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requests.push({
+      url: String(url),
+      method: String(init?.method || 'GET'),
+      body: init?.body ? JSON.parse(String(init.body)) : null,
+    })
+    return {
+      ok: true,
+      json: async () => ({
+        success: true,
+        recording: {
+          active: String(url).endsWith('/record/start'),
+          recorderId: 'rec-1',
+          sessionId: 'session-1',
+          startedAt: '2026-07-02T12:00:00.000Z',
+          stoppedAt: null,
+          eventCount: 0,
+          overflow: false,
+        },
+        steps: [],
+      }),
+    } as Response
+  }) as typeof fetch
+
+  try {
+    await startLocalRunnerRecording({ workspaceId: 'account-open', environmentId: 'manual' })
+    await stopLocalRunnerRecording()
+    await getLocalRunnerRecordingStatus()
+
+    assert.deepEqual(requests, [
+      {
+        url: `${LOCAL_RUNNER_BASE_URL}/record/start`,
+        method: 'POST',
+        body: { workspaceId: 'account-open', environmentId: 'manual' },
+      },
+      {
+        url: `${LOCAL_RUNNER_BASE_URL}/record/stop`,
+        method: 'POST',
+        body: null,
+      },
+      {
+        url: `${LOCAL_RUNNER_BASE_URL}/record/status`,
+        method: 'GET',
+        body: null,
+      },
+    ])
   } finally {
     globalThis.fetch = originalFetch
   }

@@ -5,6 +5,7 @@ import type {
   WebUiElementCollectValidationResult,
   WebUiLocatorContextPathItem,
   WebUiLocatorType,
+  WebUiStepType,
 } from '../model/types'
 import { env } from '../../../shared/config/env.ts'
 
@@ -201,6 +202,65 @@ export interface LocalRunnerCaptureResult {
   candidates: LocalRunnerCandidate[]
   rawCount: number
   screenshotBase64?: string | null
+}
+
+export interface LocalRunnerRecordingView {
+  active: boolean
+  recorderId: string | null
+  sessionId: string | null
+  startedAt: string | null
+  stoppedAt: string | null
+  eventCount: number
+  overflow: boolean
+}
+
+export interface LocalRunnerRecordedEvent {
+  eventId: string
+  kind: WebUiStepType
+  timestamp: string | null
+  pageUrl: string | null
+  pageTitle: string | null
+  inputValue?: string | null
+  key?: string | null
+}
+
+export interface LocalRunnerRecordedStep {
+  id: null
+  name: string | null
+  type: WebUiStepType
+  stepType: WebUiStepType
+  elementId: null
+  elementName: string | null
+  locatorType: WebUiLocatorType | null
+  locatorValue: string | null
+  framePath?: WebUiLocatorContextPathItem[] | null
+  shadowPath?: WebUiLocatorContextPathItem[] | null
+  inputValue: string | null
+  timeoutMs: number | null
+  continueOnFailure: boolean
+  screenshotPolicy: 'NONE' | 'ON_FAILURE' | 'ALWAYS'
+  enabled: boolean
+  sortOrder: number
+  source?: string | null
+  pageUrl?: string | null
+  recordedAt?: string | null
+}
+
+export interface LocalRunnerRecordingResult {
+  success: boolean
+  session?: {
+    sessionId: string
+    currentUrl: string
+    authStateExists: boolean
+  } | null
+  page?: {
+    url: string
+    title: string
+    isProbablyLoginPage: boolean
+  } | null
+  recording: LocalRunnerRecordingView
+  events?: LocalRunnerRecordedEvent[]
+  steps?: LocalRunnerRecordedStep[]
 }
 
 export interface LocalRunnerCandidate {
@@ -433,6 +493,23 @@ export async function captureLocalRunnerPage(waitMs = 300) {
     method: 'POST',
     body: { waitMs },
   })
+}
+
+export async function startLocalRunnerRecording(payload: Omit<LocalRunnerOpenPayload, 'url'> = {}) {
+  return requestLocalRunner<LocalRunnerRecordingResult>('/record/start', {
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export async function stopLocalRunnerRecording() {
+  return requestLocalRunner<LocalRunnerRecordingResult>('/record/stop', {
+    method: 'POST',
+  })
+}
+
+export async function getLocalRunnerRecordingStatus() {
+  return requestLocalRunner<LocalRunnerRecordingResult>('/record/status')
 }
 
 export async function validateLocalRunnerLocators(

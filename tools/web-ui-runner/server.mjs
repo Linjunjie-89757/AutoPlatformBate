@@ -18,6 +18,8 @@ const VALIDATION_SCREENSHOT_LIMIT = 8;
 const VALIDATION_HIGHLIGHT_LIMIT = 8;
 const VALIDATION_HIGHLIGHT_DURATION_MS = 3000;
 const AUTH_STALE_MINUTES = 24 * 60;
+const RECORDER_BINDING_NAME = '__autoWebRunnerRecordEvent';
+const RECORDER_MAX_EVENTS = 300;
 const runtimeConfig = resolveRunnerRuntimeConfig({
   env: process.env,
   argv: process.argv.slice(2),
@@ -36,6 +38,10 @@ let page;
 let activeSession;
 let playwrightModule;
 let platformPoller;
+let activeRecorder;
+let recorderBindingContext;
+let recorderScriptContext;
+let recorderNavigationPage;
 
 const port = runtimeConfig.port;
 const allowedOrigins = parseAllowedOrigins(process.env.WEB_UI_RUNNER_ORIGINS);
@@ -91,6 +97,22 @@ const server = createServer(async (request, response) => {
       const payload = await readJson(request);
       const result = await validateCurrentPageLocators(payload);
       return sendJson(response, 200, result);
+    }
+
+    if (route === 'POST /record/start') {
+      const payload = await readJson(request);
+      const result = await startPageRecording(payload);
+      return sendJson(response, 200, result);
+    }
+
+    if (route === 'POST /record/stop') {
+      const payload = await readJson(request);
+      const result = await stopPageRecording(payload);
+      return sendJson(response, 200, result);
+    }
+
+    if (route === 'GET /record/status') {
+      return sendJson(response, 200, await getPageRecordingStatus());
     }
 
     if (route === 'POST /session/release') {
@@ -371,6 +393,311 @@ async function captureCurrentPage(payload) {
     rawCount: rawElements.length,
     screenshotBase64: screenshot.toString('base64'),
   };
+}
+
+async function startPageRecording(payload = {}) {
+  ensureContext();
+  ensurePage();
+  await ensureSessionFresh();
+  await ensureRecorderInstalled();
+  await refreshActiveSessionPageSnapshot();
+
+  activeRecorder = {
+    recorderId: randomUUID(),
+    sessionId: activeSession?.sessionId || null,
+    workspaceId: optionalString(payload.workspaceId) || activeSession?.workspaceId || null,
+    environmentId: optionalString(payload.environmentId) || activeSession?.environmentId || null,
+    startedAt: new Date().toISOString(),
+    stoppedAt: null,
+    active: true,
+    events: [],
+    overflow: false,
+  };
+
+  return {
+    success: true,
+    session: buildSessionView(),
+    page: await getPageInfo(page),
+    recording: buildRecorderView(activeRecorder),
+  };
+}
+
+async function stopPageRecording() {
+  const recorder = activeRecorder;
+  activeRecorder = undefined;
+
+  if (!recorder) {
+    return {
+      success: true,
+      session: buildSessionView(),
+      page: hasUsablePage() ? await getPageInfo(page) : null,
+      recording: buildRecorderView(null),
+      events: [],
+      steps: [],
+    };
+  }
+
+  recorder.active = false;
+  recorder.stoppedAt = new Date().toISOString();
+  const events = recorder.events.slice();
+
+  return {
+    success: true,
+    session: buildSessionView(),
+    page: hasUsablePage() ? await getPageInfo(page) : null,
+    recording: buildRecorderView(recorder),
+    events,
+    steps: buildRecordedSteps(events),
+  };
+}
+
+async function getPageRecordingStatus() {
+  await refreshActiveSessionPageSnapshot();
+  return {
+    success: true,
+    session: buildSessionView(),
+    page: hasUsablePage() ? await getPageInfo(page) : null,
+    recording: buildRecorderView(activeRecorder || null),
+  };
+}
+
+async function ensureRecorderInstalled() {
+  ensureContext();
+  ensurePage();
+
+  if (recorderBindingContext !== context) {
+    await context.exposeBinding(RECORDER_BINDING_NAME, async (source, event) => {
+      await recordBrowserEvent(source, event);
+      return { accepted: Boolean(activeRecorder?.active) };
+    });
+    recorderBindingContext = context;
+  }
+
+  if (recorderScriptContext !== context) {
+    await context.addInitScript(installBrowserRecorderScript);
+    recorderScriptContext = context;
+  }
+
+  if (recorderNavigationPage !== page) {
+    page.on('framenavigated', frame => {
+      if (frame === page?.mainFrame()) {
+        void refreshActiveSessionPageSnapshot();
+      }
+    });
+    recorderNavigationPage = page;
+  }
+
+  await Promise.all(page.frames().map(frame => frame.evaluate(installBrowserRecorderScript).catch(() => null)));
+}
+
+async function recordBrowserEvent(source, event) {
+  const recorder = activeRecorder;
+  if (!recorder?.active || !event || typeof event !== 'object') {
+    return;
+  }
+  const normalized = await normalizeRecordedBrowserEvent(source, event);
+  if (!normalized) {
+    return;
+  }
+  if (recorder.events.length >= RECORDER_MAX_EVENTS) {
+    recorder.overflow = true;
+    return;
+  }
+  appendRecordedEvent(recorder.events, normalized);
+}
+
+async function normalizeRecordedBrowserEvent(source, event) {
+  const kind = optionalString(event.kind).toUpperCase();
+  if (!['CLICK', 'FILL', 'SELECT', 'PRESS_KEY'].includes(kind)) {
+    return null;
+  }
+  const target = normalizeRecordedTarget(event.target);
+  if (!target?.locator && kind !== 'PRESS_KEY') {
+    return null;
+  }
+  if ((kind === 'FILL' || kind === 'SELECT') && event.inputValue === undefined) {
+    return null;
+  }
+  const framePath = await resolveFramePath(source?.frame).catch(() => []);
+  if (target?.locator && framePath.length > 0) {
+    target.locator.framePath = framePath;
+    target.framePath = framePath;
+  }
+
+  return {
+    eventId: randomUUID(),
+    kind,
+    timestamp: optionalString(event.timestamp) || new Date().toISOString(),
+    pageUrl: optionalString(event.url) || getActivePageUrl() || null,
+    pageTitle: optionalString(event.title) || activeSession?.pageTitle || null,
+    inputValue: event.inputValue === undefined || event.inputValue === null ? null : String(event.inputValue),
+    key: optionalString(event.key) || null,
+    target,
+  };
+}
+
+function normalizeRecordedTarget(target) {
+  if (!target || typeof target !== 'object') {
+    return null;
+  }
+  const locator = normalizeRecordedLocator(target.locator);
+  return {
+    tagName: optionalString(target.tagName).toLowerCase() || null,
+    elementType: optionalString(target.elementType).toUpperCase() || null,
+    text: truncateText(target.text, 160),
+    label: truncateText(target.label, 160),
+    placeholder: truncateText(target.placeholder, 160),
+    role: optionalString(target.role) || null,
+    testId: optionalString(target.testId) || null,
+    locator,
+    framePath: locator?.framePath || [],
+    shadowPath: locator?.shadowPath || [],
+  };
+}
+
+function normalizeRecordedLocator(locator) {
+  if (!locator || typeof locator !== 'object') {
+    return null;
+  }
+  const locatorType = optionalString(locator.strategy || locator.locatorType).toUpperCase();
+  const locatorValue = optionalString(locator.value || locator.locatorValue);
+  if (!locatorType || !locatorValue) {
+    return null;
+  }
+  return {
+    locatorType,
+    locatorValue,
+    framePath: normalizeFramePath(locator.framePath),
+    shadowPath: normalizeShadowPath(locator.shadowPath),
+  };
+}
+
+function appendRecordedEvent(events, event) {
+  const last = events[events.length - 1];
+  if (
+    last
+    && ['FILL', 'SELECT'].includes(event.kind)
+    && last.kind === event.kind
+    && sameRecordedLocator(last.target?.locator, event.target?.locator)
+  ) {
+    events[events.length - 1] = event;
+    return;
+  }
+  events.push(event);
+}
+
+function sameRecordedLocator(left, right) {
+  return Boolean(
+    left
+    && right
+    && left.locatorType === right.locatorType
+    && left.locatorValue === right.locatorValue
+    && JSON.stringify(left.framePath || []) === JSON.stringify(right.framePath || [])
+    && JSON.stringify(left.shadowPath || []) === JSON.stringify(right.shadowPath || []),
+  );
+}
+
+function buildRecordedSteps(events) {
+  const steps = [];
+  for (const event of events) {
+    const step = buildRecordedStep(event, steps.length + 1);
+    if (step) {
+      steps.push(step);
+    }
+  }
+  return steps;
+}
+
+function buildRecordedStep(event, sortOrder) {
+  const locator = event.target?.locator || null;
+  let type = event.kind;
+  let inputValue = event.inputValue;
+  if (type === 'FILL' && String(inputValue ?? '') === '') {
+    type = 'CLEAR';
+    inputValue = null;
+  }
+  if (type === 'PRESS_KEY') {
+    inputValue = event.key || event.inputValue || '';
+  }
+  if (['CLICK', 'FILL', 'CLEAR', 'SELECT'].includes(type) && !locator) {
+    return null;
+  }
+  if (['FILL', 'SELECT', 'PRESS_KEY'].includes(type) && !optionalString(inputValue)) {
+    return null;
+  }
+
+  const targetName = buildRecordedTargetName(event.target);
+  return {
+    id: null,
+    name: buildRecordedStepName(type, targetName, sortOrder),
+    type,
+    stepType: type,
+    elementId: null,
+    elementName: targetName || null,
+    locatorType: locator?.locatorType || null,
+    locatorValue: locator?.locatorValue || null,
+    framePath: locator?.framePath?.length ? locator.framePath : null,
+    shadowPath: locator?.shadowPath?.length ? locator.shadowPath : null,
+    inputValue: inputValue === null || inputValue === undefined ? null : String(inputValue),
+    timeoutMs: null,
+    continueOnFailure: false,
+    screenshotPolicy: 'ON_FAILURE',
+    enabled: true,
+    sortOrder,
+    source: 'LOCAL_RUNNER_RECORDING',
+    pageUrl: event.pageUrl || null,
+    recordedAt: event.timestamp || null,
+  };
+}
+
+function buildRecordedTargetName(target) {
+  return truncateText(
+    target?.label
+      || target?.placeholder
+      || target?.text
+      || target?.testId
+      || target?.locator?.locatorValue
+      || '',
+    60,
+  );
+}
+
+function buildRecordedStepName(type, targetName, sortOrder) {
+  const suffix = targetName ? ` ${targetName}` : '';
+  if (type === 'CLICK') return `点击${suffix}`.trim();
+  if (type === 'FILL') return `输入${suffix}`.trim();
+  if (type === 'CLEAR') return `清空${suffix}`.trim();
+  if (type === 'SELECT') return `选择${suffix}`.trim();
+  if (type === 'PRESS_KEY') return `按键${suffix}`.trim();
+  return `录制步骤 ${sortOrder}`;
+}
+
+function buildRecorderView(recorder) {
+  if (!recorder) {
+    return {
+      active: false,
+      recorderId: null,
+      sessionId: null,
+      startedAt: null,
+      stoppedAt: null,
+      eventCount: 0,
+      overflow: false,
+    };
+  }
+  return {
+    active: Boolean(recorder.active),
+    recorderId: recorder.recorderId,
+    sessionId: recorder.sessionId || null,
+    startedAt: recorder.startedAt || null,
+    stoppedAt: recorder.stoppedAt || null,
+    eventCount: recorder.events.length,
+    overflow: Boolean(recorder.overflow),
+  };
+}
+
+function truncateText(value, maxLength) {
+  const text = optionalString(value).replace(/\s+/g, ' ');
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
 }
 
 async function collectRawElementsFromPage() {
@@ -1427,6 +1754,270 @@ async function getPageInfo(targetPage) {
       hasPasswordInput: info.hasPasswordInput,
     }),
   };
+}
+
+function installBrowserRecorderScript() {
+  if (window.__autoWebRunnerRecorderInstalled) {
+    return;
+  }
+  window.__autoWebRunnerRecorderInstalled = true;
+
+  document.addEventListener('click', event => {
+    const target = findRecordableTarget(event);
+    if (!target || isTextEntryElement(target) || target.tagName.toLowerCase() === 'select') {
+      return;
+    }
+    sendRecordedEvent('CLICK', event, target);
+  }, true);
+
+  document.addEventListener('input', event => {
+    const target = findRecordableTarget(event);
+    if (!target || !isTextEntryElement(target)) {
+      return;
+    }
+    sendRecordedEvent('FILL', event, target, {
+      inputValue: readElementValue(target),
+    });
+  }, true);
+
+  document.addEventListener('change', event => {
+    const target = findRecordableTarget(event);
+    if (!target || target.tagName.toLowerCase() !== 'select') {
+      return;
+    }
+    sendRecordedEvent('SELECT', event, target, {
+      inputValue: readElementValue(target),
+    });
+  }, true);
+
+  document.addEventListener('keydown', event => {
+    if (event.repeat || !['Enter', 'Escape', 'Tab'].includes(event.key)) {
+      return;
+    }
+    const target = findRecordableTarget(event);
+    sendRecordedEvent('PRESS_KEY', event, target, {
+      key: event.key,
+      inputValue: event.key,
+    });
+  }, true);
+
+  function sendRecordedEvent(kind, event, target, extra = {}) {
+    const binding = window.__autoWebRunnerRecordEvent;
+    if (typeof binding !== 'function') {
+      return;
+    }
+    const element = target || findRecordableTarget(event);
+    binding({
+      kind,
+      timestamp: new Date().toISOString(),
+      url: window.location.href,
+      title: document.title,
+      target: element ? buildRecordTarget(element) : null,
+      ...extra,
+    }).catch(() => {});
+  }
+
+  function findRecordableTarget(event) {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    for (const item of path) {
+      if (item instanceof Element && isRecordableElement(item)) {
+        return item;
+      }
+    }
+    const raw = event.target instanceof Element ? event.target : event.target?.parentElement;
+    return raw?.closest?.([
+      'a',
+      'button',
+      'input',
+      'select',
+      'textarea',
+      '[role]',
+      '[data-testid]',
+      '[data-test]',
+      '[data-qa]',
+      '[contenteditable="true"]',
+    ].join(',')) || null;
+  }
+
+  function isRecordableElement(element) {
+    return Boolean(element?.matches?.([
+      'a',
+      'button',
+      'input',
+      'select',
+      'textarea',
+      '[role]',
+      '[data-testid]',
+      '[data-test]',
+      '[data-qa]',
+      '[contenteditable="true"]',
+    ].join(',')));
+  }
+
+  function isTextEntryElement(element) {
+    const tagName = element.tagName.toLowerCase();
+    if (tagName === 'textarea' || element.isContentEditable) {
+      return true;
+    }
+    if (tagName !== 'input') {
+      return false;
+    }
+    const type = String(element.getAttribute('type') || 'text').toLowerCase();
+    return [
+      'text',
+      'search',
+      'email',
+      'password',
+      'number',
+      'tel',
+      'url',
+      'date',
+      'datetime-local',
+      'month',
+      'time',
+      'week',
+    ].includes(type);
+  }
+
+  function readElementValue(element) {
+    if (element instanceof HTMLSelectElement) {
+      return element.value || element.selectedOptions?.[0]?.textContent || '';
+    }
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      return element.value || '';
+    }
+    if (element?.isContentEditable) {
+      return element.innerText || element.textContent || '';
+    }
+    return '';
+  }
+
+  function buildRecordTarget(element) {
+    const locator = buildRecordLocator(element);
+    return {
+      tagName: element.tagName.toLowerCase(),
+      elementType: inferElementType(element),
+      text: normalizeText(element.innerText || element.textContent || ''),
+      label: findLabelText(element),
+      placeholder: element.getAttribute('placeholder') || '',
+      role: element.getAttribute('role') || inferRole(element) || '',
+      testId: element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa') || '',
+      locator,
+    };
+  }
+
+  function buildRecordLocator(element) {
+    const testId = element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa');
+    if (testId) {
+      return { strategy: 'TEST_ID', value: testId };
+    }
+    if (element.id) {
+      return { strategy: 'CSS', value: `#${cssEscape(element.id)}` };
+    }
+    const role = element.getAttribute('role') || inferRole(element);
+    const roleName = findAccessibleName(element);
+    if (role && roleName) {
+      return { strategy: 'ROLE', value: `${role}[name="${escapeLocatorName(roleName)}"]` };
+    }
+    const placeholder = element.getAttribute('placeholder');
+    if (placeholder) {
+      return { strategy: 'PLACEHOLDER', value: placeholder };
+    }
+    const label = findLabelText(element);
+    if (label) {
+      return { strategy: 'LABEL', value: label };
+    }
+    const text = normalizeText(element.innerText || element.textContent || '');
+    if (text && ['a', 'button'].includes(element.tagName.toLowerCase())) {
+      return { strategy: 'TEXT', value: text };
+    }
+    return { strategy: 'CSS', value: buildCssPath(element) };
+  }
+
+  function inferElementType(element) {
+    const tagName = element.tagName.toLowerCase();
+    if (tagName === 'a') return 'LINK';
+    if (tagName === 'button') return 'BUTTON';
+    if (tagName === 'select') return 'SELECT';
+    if (tagName === 'textarea') return 'TEXTAREA';
+    if (tagName === 'input') return String(element.getAttribute('type') || 'text').toUpperCase();
+    return tagName.toUpperCase();
+  }
+
+  function inferRole(element) {
+    const tagName = element.tagName.toLowerCase();
+    const type = String(element.getAttribute('type') || '').toLowerCase();
+    if (tagName === 'button') return 'button';
+    if (tagName === 'a' && element.getAttribute('href')) return 'link';
+    if (tagName === 'select') return 'combobox';
+    if (tagName === 'textarea') return 'textbox';
+    if (tagName === 'input' && type === 'checkbox') return 'checkbox';
+    if (tagName === 'input' && type === 'radio') return 'radio';
+    if (tagName === 'input') return 'textbox';
+    return '';
+  }
+
+  function findAccessibleName(element) {
+    return normalizeText([
+      element.getAttribute('aria-label'),
+      findLabelText(element),
+      element.getAttribute('title'),
+      element.getAttribute('alt'),
+      element.innerText,
+      element.textContent,
+    ].find(Boolean) || '');
+  }
+
+  function findLabelText(element) {
+    if (element.id) {
+      const label = document.querySelector(`label[for="${cssEscape(element.id)}"]`);
+      if (label?.textContent) {
+        return normalizeText(label.textContent);
+      }
+    }
+    const closestLabel = element.closest?.('label');
+    if (closestLabel?.textContent) {
+      return normalizeText(closestLabel.textContent);
+    }
+    return '';
+  }
+
+  function buildCssPath(element) {
+    const parts = [];
+    let current = element;
+    while (current && current.nodeType === Node.ELEMENT_NODE && parts.length < 5) {
+      const tag = current.tagName.toLowerCase();
+      if (current.id) {
+        parts.unshift(`#${cssEscape(current.id)}`);
+        break;
+      }
+      const parent = current.parentElement;
+      if (!parent) {
+        parts.unshift(tag);
+        break;
+      }
+      const siblings = Array.from(parent.children).filter(child => child.tagName === current.tagName);
+      const index = siblings.indexOf(current) + 1;
+      parts.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag);
+      current = parent;
+    }
+    return parts.join(' > ');
+  }
+
+  function normalizeText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+  }
+
+  function escapeLocatorName(value) {
+    return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
+  function cssEscape(value) {
+    if (window.CSS?.escape) {
+      return window.CSS.escape(value);
+    }
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+  }
 }
 
 function collectElementsInPage(context = {}) {

@@ -45,7 +45,10 @@ import {
   captureLocalRunnerPage,
   mapRunnerCandidateToCollectCandidate,
   openLocalRunnerPage,
+  startLocalRunnerRecording,
   startLocalRunnerTaskPolling,
+  stopLocalRunnerRecording,
+  type LocalRunnerRecordedStep,
 } from '@/entities/web-ui-automation/lib/localRunnerClient'
 
 interface EditableStep {
@@ -96,6 +99,10 @@ const running = ref(false)
 const localRunning = ref(false)
 const recordingOpening = ref(false)
 const recordingCapturing = ref(false)
+const recordingStarting = ref(false)
+const recordingStopping = ref(false)
+const recordingActive = ref(false)
+const recordingEventCount = ref(0)
 const lastCollectTaskId = ref<number | null>(null)
 const lastRecordingPageUrl = ref<string | null>(null)
 const localRunnerTask = ref<LocalRunnerTaskDetailResponse | null>(null)
@@ -523,6 +530,107 @@ async function captureRecordingPage() {
   } finally {
     recordingCapturing.value = false
   }
+}
+
+async function startRecordingSteps() {
+  recordingStarting.value = true
+  try {
+    const result = await startLocalRunnerRecording({
+      workspaceId: props.workspaceCode,
+      environmentId: 'manual',
+    })
+    recordingActive.value = result.recording.active
+    recordingEventCount.value = result.recording.eventCount
+    lastRecordingPageUrl.value = result.page?.url || result.session?.currentUrl || lastRecordingPageUrl.value
+    ElMessage.success('本地录制已开始')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingStarting.value = false
+  }
+}
+
+async function stopRecordingSteps() {
+  recordingStopping.value = true
+  try {
+    const result = await stopLocalRunnerRecording()
+    recordingActive.value = false
+    recordingEventCount.value = result.recording.eventCount
+    lastRecordingPageUrl.value = result.page?.url || result.session?.currentUrl || lastRecordingPageUrl.value
+    const appendedCount = appendRecordedSteps(result.steps || [])
+    if (appendedCount > 0) {
+      ElMessage.success(`已生成 ${appendedCount} 个录制步骤，保存后生效`)
+    } else {
+      ElMessage.warning('本次录制没有生成可用步骤')
+    }
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingStopping.value = false
+  }
+}
+
+function appendRecordedSteps(steps: LocalRunnerRecordedStep[]) {
+  const mappedSteps = steps
+    .map((step, index) => toEditableRecordedStep(step, form.value.steps.length + index + 1))
+    .filter((step): step is EditableStep => Boolean(step))
+  if (!mappedSteps.length) {
+    return 0
+  }
+  const insertIndex = form.value.steps.length
+  form.value.steps.push(...mappedSteps)
+  selectedStepIndex.value = insertIndex
+  reorderSteps()
+  return mappedSteps.length
+}
+
+function toEditableRecordedStep(step: LocalRunnerRecordedStep, sortOrder: number): EditableStep | null {
+  const type = normalizeRecordedStepType(step.type || step.stepType)
+  if (!type) {
+    return null
+  }
+  const locatorType = normalizeRecordedLocatorType(step.locatorType)
+  const locatorValue = step.locatorValue?.trim() || ''
+  if (requiresLocator(type) && (!locatorType || !locatorValue)) {
+    return null
+  }
+  const inputValue = step.inputValue?.trim() || ''
+  if (requiresInput(type) && !inputValue) {
+    return null
+  }
+
+  return {
+    id: null,
+    name: step.name?.trim() || '',
+    type,
+    elementId: null,
+    elementName: step.elementName || null,
+    locatorType,
+    locatorValue,
+    framePath: step.framePath || null,
+    shadowPath: step.shadowPath || null,
+    inputValue,
+    timeoutMs: step.timeoutMs ?? null,
+    continueOnFailure: Boolean(step.continueOnFailure),
+    screenshotPolicy: normalizeRecordedScreenshotPolicy(step.screenshotPolicy),
+    enabled: step.enabled !== false,
+    sortOrder,
+  }
+}
+
+function normalizeRecordedStepType(value?: string | null): WebUiStepType | null {
+  const normalized = String(value || '').toUpperCase() as WebUiStepType
+  return WEB_UI_STEP_TYPE_OPTIONS.some(item => item.value === normalized) ? normalized : null
+}
+
+function normalizeRecordedLocatorType(value?: string | null): WebUiLocatorType | null {
+  const normalized = String(value || '').toUpperCase() as WebUiLocatorType
+  return WEB_UI_LOCATOR_OPTIONS.some(item => item.value === normalized) ? normalized : null
+}
+
+function normalizeRecordedScreenshotPolicy(value?: string | null): WebUiScreenshotPolicy {
+  const normalized = String(value || '').toUpperCase() as WebUiScreenshotPolicy
+  return WEB_UI_SCREENSHOT_POLICY_OPTIONS.some(item => item.value === normalized) ? normalized : 'ON_FAILURE'
 }
 
 function openCollectTask(taskId: number) {
@@ -1104,9 +1212,16 @@ watch(elementPickerLocatorType, () => {
             <el-icon><VideoPlay /></el-icon>
             <strong>本地 Runner 页面采集</strong>
             <p>{{ lastRecordingPageUrl || '打开目标页后，可采集当前页候选元素。' }}</p>
+            <div v-if="recordingActive" class="web-ui-recording-placeholder__status">
+              <span />
+              <strong>录制中</strong>
+              <small>{{ recordingEventCount > 0 ? `已捕获 ${recordingEventCount} 个事件` : '等待页面操作' }}</small>
+            </div>
             <div class="web-ui-recording-placeholder__actions">
-              <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="recordingCapturing" @click="openRecordingPage">打开目标页</AppButton>
-              <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening" @click="captureRecordingPage">采集当前页</AppButton>
+              <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="recordingCapturing || recordingActive" @click="openRecordingPage">打开目标页</AppButton>
+              <AppButton :icon="VideoPlay" :loading="recordingStarting" :disabled="recordingOpening || recordingCapturing || recordingActive" @click="startRecordingSteps">开始录制</AppButton>
+              <AppButton type="primary" :loading="recordingStopping" :disabled="!recordingActive" @click="stopRecordingSteps">停止并生成步骤</AppButton>
+              <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening || recordingActive" @click="captureRecordingPage">采集当前页</AppButton>
               <AppButton v-if="lastCollectTaskId" @click="openCollectTask(lastCollectTaskId)">查看采集任务</AppButton>
             </div>
           </div>
@@ -1639,6 +1754,24 @@ watch(elementPickerLocatorType, () => {
 .web-ui-recording-placeholder p {
   margin: 0;
   line-height: var(--app-line-height-md);
+}
+
+.web-ui-recording-placeholder__status {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-1);
+  color: var(--app-text-primary);
+}
+
+.web-ui-recording-placeholder__status span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--app-success);
+}
+
+.web-ui-recording-placeholder__status small {
+  color: var(--app-text-secondary);
 }
 
 .web-ui-recording-placeholder__actions {
