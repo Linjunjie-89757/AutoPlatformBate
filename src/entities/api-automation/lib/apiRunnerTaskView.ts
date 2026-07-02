@@ -1,8 +1,24 @@
-import type { ApiRunResult } from '../model/types'
+import type { ApiRunResult, ApiRuntimeContextSnapshot } from '../model/types'
 
 export function extractRunnerRunId(response: Pick<ApiRunResult, 'result' | 'taskName' | 'failureSummary'> | null | undefined) {
   if (!response || response.result !== 'PENDING') return null
   return response.taskName || null
+}
+
+export function parseApiRunnerContext(input: string | ApiRuntimeContextSnapshot | null | undefined): ApiRuntimeContextSnapshot | null {
+  if (!input) return null
+  if (typeof input !== 'string') return input
+  try {
+    return JSON.parse(input) as ApiRuntimeContextSnapshot
+  } catch {
+    return null
+  }
+}
+
+export function isApiRunnerReportForRun(input: string | ApiRuntimeContextSnapshot | null | undefined, runId: string | null | undefined) {
+  if (!runId) return false
+  const context = parseApiRunnerContext(input)
+  return context?.executionLocation === 'LOCAL_RUNNER' && context.runnerRunId === runId
 }
 
 export function isApiRunnerTaskTerminal(status?: string | null) {

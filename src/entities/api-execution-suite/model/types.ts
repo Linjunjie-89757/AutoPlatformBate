@@ -174,6 +174,7 @@ export interface ApiExecutionSuiteRunItemSnapshot {
 }
 
 export interface ApiExecutionSuiteRunHistoryDetail extends ApiExecutionSuiteRunHistoryItem {
+  contextSnapshotJson?: string | null
   dataIterations: Array<{
     rowIndex: number
     caseDesc: string | null

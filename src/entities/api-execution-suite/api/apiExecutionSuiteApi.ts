@@ -84,7 +84,7 @@ function normalizeSuite(item: ApiExecutionSuiteItem): ApiExecutionSuiteItem {
     environmentId: item.environmentId ?? null,
     variableSetId: item.variableSetId ?? null,
     runMode: item.runMode || 'SERIAL',
-    runOn: item.runOn || 'LOCAL',
+    runOn: item.runOn || 'SERVER',
     notifyEnabled: item.notifyEnabled !== false,
     continueOnFailure: Boolean(item.continueOnFailure),
     globalTimeoutMs: Number(item.globalTimeoutMs || 300000),
@@ -180,6 +180,7 @@ function normalizeRunItemSnapshot(item: ApiExecutionSuiteRunItemSnapshot): ApiEx
 function normalizeRunHistoryDetail(item: ApiExecutionSuiteRunHistoryDetail): ApiExecutionSuiteRunHistoryDetail {
   return {
     ...normalizeRunHistoryItem(item),
+    contextSnapshotJson: item.contextSnapshotJson || null,
     dataIterations: Array.isArray(item.dataIterations) ? item.dataIterations : [],
     itemSnapshots: Array.isArray(item.itemSnapshots) ? item.itemSnapshots.map(normalizeRunItemSnapshot) : [],
     stepResults: Array.isArray(item.stepResults) ? item.stepResults : [],

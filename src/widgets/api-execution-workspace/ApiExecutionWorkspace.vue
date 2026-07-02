@@ -36,7 +36,7 @@ import type {
   ApiScenarioItem,
   ApiAutomationVariableSetItem,
 } from '@/entities/api-automation'
-import { apiAutomationApi, extractRunnerRunId } from '@/entities/api-automation'
+import { apiAutomationApi, extractRunnerRunId, isApiRunnerReportForRun } from '@/entities/api-automation'
 import {
   apiExecutionSuiteApi,
   buildApiSuiteLocalRunNotice,
@@ -59,6 +59,7 @@ import {
   selectDefaultRunnerId,
   type RunnerNodeSummary,
 } from '@/entities/local-runner'
+import { startLocalRunnerTaskPolling } from '@/entities/web-ui-automation/lib/localRunnerClient'
 import type { WorkspaceItem } from '@/entities/workspace'
 import ApiRunStepDetailViewer from '../api-scenario-workspace/ApiRunStepDetailViewer.vue'
 
@@ -172,6 +173,7 @@ const suiteRunnerNodesLoading = ref(false)
 const suiteRunnerNodes = ref<RunnerNodeSummary[]>([])
 const selectedSuiteRunnerId = ref<string | null>(null)
 const latestSuiteLocalRunnerRunId = ref<string | null>(null)
+const matchedSuiteLocalRunnerHistory = ref<ApiExecutionSuiteRunHistoryItem | null>(null)
 const dirtySuiteDraftIds = ref<Set<number>>(new Set())
 const suiteHeaderNameEditing = ref(false)
 const suiteHeaderNameDraft = ref('')
@@ -179,11 +181,12 @@ let draftSuiteSeed = 0
 
 const visibleEnvironmentOptions = computed(() => props.environments || [])
 const API_SUITE_RUNNER_TASK_TYPE = 'API_SUITE_RUN'
+const API_SUITE_LOCAL_RUNNER_TASK_CAPABILITIES = ['WEB_ELEMENT_VALIDATE', 'WEB_CASE_RUN', 'API_CASE_RUN', 'API_SCENARIO_RUN', 'API_SUITE_RUN']
 const API_SUITE_LOCAL_RUNNER_NOTE = '当前会创建本地执行器任务，执行完成后写入套件报告。'
 const latestSuiteLocalRunnerHistory = computed(() => findLatestSuiteLocalRunnerHistory(suiteRunHistories.value))
 const suiteLocalRunNotice = computed(() => buildApiSuiteLocalRunNotice({
   runId: latestSuiteLocalRunnerRunId.value,
-  history: latestSuiteLocalRunnerHistory.value,
+  history: latestSuiteLocalRunnerRunId.value ? matchedSuiteLocalRunnerHistory.value : latestSuiteLocalRunnerHistory.value,
 }))
 
 const executionSuiteTree = computed<ExecutionSuiteNode[]>(() => {
@@ -1140,8 +1143,40 @@ async function openLatestSuiteRunReportTab() {
   }
 }
 
+async function findSuiteRunReportForRunnerRunId(runId: string | null | undefined) {
+  if (!runId) return null
+  for (const item of suiteRunHistories.value) {
+    if (String(item.runOn || '').toUpperCase() !== 'LOCAL_RUNNER') continue
+    try {
+      const detail = await apiExecutionSuiteApi.getSuiteRunHistoryDetail(item.workspaceCode, item.id)
+      if (isApiRunnerReportForRun(detail.contextSnapshotJson, runId)) {
+        return detail
+      }
+    } catch {
+      // Ignore stale history rows while polling for the freshly written report.
+    }
+  }
+  return null
+}
+
 async function refreshSuiteLocalRunnerReport(showMessage = true) {
   await loadSuiteRunHistories()
+  if (latestSuiteLocalRunnerRunId.value) {
+    const matchedHistory = await findSuiteRunReportForRunnerRunId(latestSuiteLocalRunnerRunId.value)
+    matchedSuiteLocalRunnerHistory.value = matchedHistory
+    if (matchedHistory) {
+      await selectSuiteRunHistory(matchedHistory)
+      if (showMessage) {
+        ElMessage.success('本地执行报告已刷新')
+      }
+      return
+    }
+    if (showMessage) {
+      ElMessage.info('本次本地执行结果还未回写，请稍后刷新')
+    }
+    return
+  }
+  matchedSuiteLocalRunnerHistory.value = null
   const localHistory = latestSuiteLocalRunnerHistory.value
   if (localHistory) {
     await selectSuiteRunHistory(localHistory)
@@ -1156,6 +1191,18 @@ async function refreshSuiteLocalRunnerReport(showMessage = true) {
 }
 
 async function openSuiteLocalRunnerReport() {
+  if (latestSuiteLocalRunnerRunId.value) {
+    await loadSuiteRunHistories()
+    const matchedHistory = await findSuiteRunReportForRunnerRunId(latestSuiteLocalRunnerRunId.value)
+    matchedSuiteLocalRunnerHistory.value = matchedHistory
+    activeExecutionSubTab.value = 'result'
+    if (matchedHistory) {
+      await openSuiteRunReportTab(matchedHistory)
+      return
+    }
+    ElMessage.info('本次本地执行结果还未回写，请稍后刷新')
+    return
+  }
   if (suiteLocalRunNotice.value.reportKey && latestSuiteLocalRunnerHistory.value) {
     await openSuiteRunReportTab(latestSuiteLocalRunnerHistory.value)
     activeExecutionSubTab.value = 'result'
@@ -1477,6 +1524,7 @@ async function handleRunSuite() {
   try {
     const runOn = executionVisualRunOn.value.toUpperCase()
     if (runOn === 'LOCAL') {
+      await ensureSuiteLocalRunnerTaskPolling(activeSuiteDetail.value.workspaceCode)
       await loadSuiteRunnerNodes()
       if (!selectedSuiteRunnerId.value) {
         ElMessage.warning('未检测到支持接口套件运行的本地 Runner，请先启动本地 Runner')
@@ -1499,6 +1547,7 @@ async function handleRunSuite() {
       runnerId: runOn === 'LOCAL' ? selectedSuiteRunnerId.value : null,
     })
     latestSuiteLocalRunnerRunId.value = runOn === 'LOCAL' ? extractRunnerRunId(response) : null
+    matchedSuiteLocalRunnerHistory.value = null
     ElMessage.success(runOn === 'LOCAL' ? '本地套件任务已创建' : '套件运行已触发')
     await loadSuiteDetail(activeSuiteDetail.value.workspaceCode, activeSuiteDetail.value.id)
     activeExecutionSubTab.value = 'result'
@@ -1522,8 +1571,9 @@ async function runSuiteFromList(suite: ApiExecutionSuiteItem) {
   }
   suiteRunning.value = true
   try {
-    const runOn = suite.runOn || 'SERVER'
+    const runOn = String(suite.runOn || 'SERVER').toUpperCase()
     if (runOn === 'LOCAL') {
+      await ensureSuiteLocalRunnerTaskPolling(suite.workspaceCode)
       await loadSuiteRunnerNodes()
       if (!selectedSuiteRunnerId.value) {
         ElMessage.warning('未检测到支持接口套件运行的本地 Runner，请先启动本地 Runner')
@@ -1546,6 +1596,7 @@ async function runSuiteFromList(suite: ApiExecutionSuiteItem) {
       runnerId: runOn === 'LOCAL' ? selectedSuiteRunnerId.value : null,
     })
     latestSuiteLocalRunnerRunId.value = runOn === 'LOCAL' ? extractRunnerRunId(response) : null
+    matchedSuiteLocalRunnerHistory.value = null
     ElMessage.success(runOn === 'LOCAL' ? '本地套件任务已创建' : '套件运行已触发')
     await loadExecutionSuiteDirectory()
     if (activeSuiteDetail.value?.id === suite.id) {
@@ -1564,6 +1615,15 @@ async function runSuiteFromList(suite: ApiExecutionSuiteItem) {
   } finally {
     suiteRunning.value = false
   }
+}
+
+async function ensureSuiteLocalRunnerTaskPolling(workspaceCode: string) {
+  await startLocalRunnerTaskPolling({
+    installId: `api-suite-${workspaceCode}`,
+    capabilities: API_SUITE_LOCAL_RUNNER_TASK_CAPABILITIES,
+    workspaceCodes: [workspaceCode],
+    intervalMs: 1000,
+  })
 }
 
 async function loadSuiteRunnerNodes() {
