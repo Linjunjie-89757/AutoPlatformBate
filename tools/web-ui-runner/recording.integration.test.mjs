@@ -361,6 +361,59 @@ test('deduplicates noisy input and repeated clicks while recording', async () =>
   assert.deepEqual(stderr, []);
 });
 
+test('keeps recorded steps available after session release interrupts recording', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildNoisyRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    let recordedStatus;
+    await waitFor(async () => {
+      recordedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return recordedStatus?.steps?.length === 2;
+    }, 5000);
+
+    const released = await postJson(runnerBaseUrl, '/session/release', {});
+    assert.equal(released.success, true);
+
+    const recovered = await getJson(runnerBaseUrl, '/record/status');
+    assert.equal(recovered.recording.status, 'STOPPED');
+    assert.equal(recovered.recording.active, false);
+    assert.deepEqual(recovered.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(recovered.steps[0].inputValue, 'Alice');
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 function buildRecordingPageHtml({ autoInteract }) {
   return [
     '<!doctype html>',

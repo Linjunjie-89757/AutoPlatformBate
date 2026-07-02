@@ -40,6 +40,7 @@ let activeSession;
 let playwrightModule;
 let platformPoller;
 let activeRecorder;
+let lastStoppedRecorder;
 let recorderBindingContext;
 let recorderScriptContext;
 let recorderNavigationPage;
@@ -421,6 +422,7 @@ async function startPageRecording(payload = {}) {
   await ensureRecorderInstalled();
   await refreshActiveSessionPageSnapshot();
 
+  lastStoppedRecorder = undefined;
   activeRecorder = {
     recorderId: randomUUID(),
     sessionId: activeSession?.sessionId || null,
@@ -445,16 +447,11 @@ async function startPageRecording(payload = {}) {
 }
 
 async function stopPageRecording() {
-  const recorder = activeRecorder;
-  activeRecorder = undefined;
+  const recorder = finalizeActiveRecorder();
 
   if (!recorder) {
-    return buildPageRecordingResult(null);
+    return buildPageRecordingResult(lastStoppedRecorder || null);
   }
-
-  recorder.active = false;
-  recorder.status = 'STOPPED';
-  recorder.stoppedAt = new Date().toISOString();
 
   return buildPageRecordingResult(recorder);
 }
@@ -519,7 +516,23 @@ async function undoLastRecordedStep() {
 
 async function getPageRecordingStatus() {
   await refreshActiveSessionPageSnapshot();
-  return buildPageRecordingResult(activeRecorder || null);
+  if (activeRecorder && !hasUsablePage()) {
+    finalizeActiveRecorder();
+  }
+  return buildPageRecordingResult(activeRecorder || lastStoppedRecorder || null);
+}
+
+function finalizeActiveRecorder() {
+  const recorder = activeRecorder;
+  activeRecorder = undefined;
+  if (!recorder) {
+    return null;
+  }
+  recorder.active = false;
+  recorder.status = 'STOPPED';
+  recorder.stoppedAt = recorder.stoppedAt || new Date().toISOString();
+  lastStoppedRecorder = recorder;
+  return recorder;
 }
 
 async function buildPageRecordingResult(recorder) {
@@ -1657,6 +1670,7 @@ async function clearAuthState(payload) {
 }
 
 async function releaseCurrentSession(reason = 'manual') {
+  finalizeActiveRecorder();
   const releasedSession = buildSessionView();
   if (context) {
     await context.close().catch(() => {});

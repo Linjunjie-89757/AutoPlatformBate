@@ -44,6 +44,14 @@ import {
   WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY,
   WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN,
 } from '@/entities/web-ui-automation/lib/collectTask'
+import {
+  buildWebUiRecordingDraftStorageKey,
+  createWebUiRecordingDraft,
+  parseWebUiRecordingDraft,
+  shouldOfferWebUiRecordingDraftReplay,
+  shouldRestoreWebUiRecordingDraft,
+  type WebUiRecordingDraftPayload,
+} from '@/entities/web-ui-automation/lib/recordingDraft'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -52,6 +60,7 @@ import {
   captureLocalRunnerPage,
   mapRunnerCandidateToCollectCandidate,
   openLocalRunnerPage,
+  getLocalRunnerRecordingStatus,
   pauseLocalRunnerRecording,
   resumeLocalRunnerRecording,
   startLocalRunnerRecording,
@@ -123,11 +132,20 @@ const recordingStopping = ref(false)
 const recordingPausing = ref(false)
 const recordingResuming = ref(false)
 const recordingUndoing = ref(false)
+const recordingStatusRefreshing = ref(false)
 const recordingActive = ref(false)
 const recordingStatus = ref<RecordingStatus>('IDLE')
 const recordingEventCount = ref(0)
 const recordingStepCount = ref(0)
 const recordingStartedAt = ref<string | null>(null)
+const recordingRecoveryMessage = ref('')
+const recordingStatusErrorMessage = ref('')
+const recordingDraftMessage = ref('')
+const recordingDraftActive = ref(false)
+const appliedRecordingRecorderId = ref<string | null>(null)
+const appliedRecordingStepCount = ref(0)
+const currentCaseUpdatedAt = ref<string | null>(null)
+const savedCaseStepCount = ref(0)
 const recordingElapsedNow = ref(Date.now())
 const lastCollectTaskId = ref<number | null>(null)
 const lastCollectTaskReturnSource = ref<CollectTaskReturnSource>(null)
@@ -149,7 +167,10 @@ const elementPickerPageSize = 20
 let elementPickerSearchTimer: ReturnType<typeof window.setTimeout> | null = null
 let localRunnerTaskTimer: ReturnType<typeof window.setTimeout> | null = null
 let recordingElapsedTimer: ReturnType<typeof window.setInterval> | null = null
+let recordingStatusTimer: ReturnType<typeof window.setTimeout> | null = null
+let recordingDraftPersistTimer: ReturnType<typeof window.setTimeout> | null = null
 let elementPickerRequestSeq = 0
+let suppressRecordingDraftPersist = false
 
 const caseId = computed(() => {
   const raw = Array.isArray(route.params.caseId) ? route.params.caseId[0] : route.params.caseId
@@ -198,6 +219,13 @@ const recordingStatusDescription = computed(() => {
   }
   return '打开目标页后，可开始录制页面操作'
 })
+const recordingRecoveryHint = computed(() => recordingStatusErrorMessage.value || recordingRecoveryMessage.value || recordingDraftMessage.value)
+const recordingReplayAvailable = computed(() => shouldOfferWebUiRecordingDraftReplay({
+  draftActive: recordingDraftActive.value,
+  savedStepCount: savedCaseStepCount.value,
+  draftStepCount: form.value.steps.length,
+  recorderId: appliedRecordingRecorderId.value,
+}))
 const recordingElapsedText = computed(() => {
   if (!recordingStartedAt.value || !recordingInProgress.value) {
     return ''
@@ -247,7 +275,7 @@ function createStep(sortOrder = form.value.steps.length + 1): EditableStep {
 }
 
 function toEditableStep(item: WebUiCaseStepItem, index: number): EditableStep {
-  return {
+  const step: EditableStep = {
     id: item.id ?? null,
     name: item.name || '',
     type: item.type || 'OPEN',
@@ -264,10 +292,52 @@ function toEditableStep(item: WebUiCaseStepItem, index: number): EditableStep {
     enabled: item.enabled !== false,
     sortOrder: Number(item.sortOrder || index + 1),
   }
+  const raw = item as WebUiCaseStepItem & Partial<EditableStep>
+  if (raw.recordingElementMatchStatus === 'MATCHED' || raw.recordingElementMatchStatus === 'CANDIDATE') {
+    step.recordingElementMatchStatus = raw.recordingElementMatchStatus
+  }
+  if (raw.recordingElementCandidateName) {
+    step.recordingElementCandidateName = raw.recordingElementCandidateName
+  }
+  return step
 }
 
-function fillForm(item: WebUiCaseDetail) {
+function cloneCaseFormForRecordingDraft(value: CaseForm): CaseForm {
+  return {
+    ...value,
+    steps: value.steps.map((step, index) => ({
+      ...step,
+      framePath: step.framePath ? [...step.framePath] : null,
+      shadowPath: step.shadowPath ? [...step.shadowPath] : null,
+      sortOrder: index + 1,
+    })),
+  }
+}
+
+function toCaseFormFromRecordingDraft(value: unknown, fallback: CaseForm): CaseForm {
+  const raw = value && typeof value === 'object' ? value as Partial<CaseForm> : {}
+  return {
+    name: typeof raw.name === 'string' ? raw.name : fallback.name,
+    moduleName: typeof raw.moduleName === 'string' ? raw.moduleName : fallback.moduleName,
+    description: typeof raw.description === 'string' ? raw.description : fallback.description,
+    baseUrl: typeof raw.baseUrl === 'string' ? raw.baseUrl : fallback.baseUrl,
+    browserType: raw.browserType || fallback.browserType,
+    headless: typeof raw.headless === 'boolean' ? raw.headless : fallback.headless,
+    defaultTimeoutMs: Number(raw.defaultTimeoutMs || fallback.defaultTimeoutMs || 10000),
+    status: raw.status || fallback.status,
+    steps: Array.isArray(raw.steps) ? raw.steps.map((step, index) => toEditableStep(step as WebUiCaseStepItem, index)) : fallback.steps,
+  }
+}
+
+function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: boolean } = {}) {
   resetLocalRunnerState()
+  currentCaseUpdatedAt.value = item.updatedAt || null
+  savedCaseStepCount.value = Array.isArray(item.steps) ? item.steps.length : 0
+  recordingDraftActive.value = false
+  recordingDraftMessage.value = ''
+  appliedRecordingRecorderId.value = null
+  appliedRecordingStepCount.value = 0
+  suppressRecordingDraftPersist = true
   form.value = {
     name: item.name || '',
     moduleName: item.moduleName || '',
@@ -280,6 +350,129 @@ function fillForm(item: WebUiCaseDetail) {
     steps: Array.isArray(item.steps) ? item.steps.map(toEditableStep) : [],
   }
   selectInitialStep()
+  suppressRecordingDraftPersist = false
+  if (options.restoreRecordingDraft !== false) {
+    restoreRecordingDraft(item)
+  }
+}
+
+function getRecordingDraftStorageKey() {
+  return caseId.value ? buildWebUiRecordingDraftStorageKey(props.workspaceCode, caseId.value) : ''
+}
+
+function readRecordingDraft() {
+  const key = getRecordingDraftStorageKey()
+  if (!key || typeof window === 'undefined') {
+    return null
+  }
+  try {
+    return parseWebUiRecordingDraft<CaseForm>(window.localStorage.getItem(key))
+  } catch {
+    return null
+  }
+}
+
+function persistRecordingDraftNow() {
+  const key = getRecordingDraftStorageKey()
+  if (!key || !caseId.value || typeof window === 'undefined') {
+    return
+  }
+  try {
+    const previousDraft = readRecordingDraft()
+    const draft = createWebUiRecordingDraft({
+      workspaceCode: props.workspaceCode,
+      caseId: caseId.value,
+      caseUpdatedAt: currentCaseUpdatedAt.value,
+      savedStepCount: savedCaseStepCount.value,
+      draftStepCount: form.value.steps.length,
+      recorderId: appliedRecordingRecorderId.value,
+      recordedStepCount: appliedRecordingStepCount.value,
+      form: cloneCaseFormForRecordingDraft(form.value),
+      previousDraft,
+    })
+    window.localStorage.setItem(key, JSON.stringify(draft))
+    recordingDraftActive.value = true
+    recordingDraftMessage.value = `录制草稿已本地保存，${form.value.steps.length} 个步骤待保存`
+  } catch {
+    recordingDraftMessage.value = '录制草稿本地保存失败，请尽快保存用例'
+  }
+}
+
+function schedulePersistRecordingDraft() {
+  if (!recordingDraftActive.value || suppressRecordingDraftPersist) {
+    return
+  }
+  if (recordingDraftPersistTimer) {
+    window.clearTimeout(recordingDraftPersistTimer)
+  }
+  recordingDraftPersistTimer = window.setTimeout(() => {
+    recordingDraftPersistTimer = null
+    persistRecordingDraftNow()
+  }, 400)
+}
+
+function flushRecordingDraftPersist() {
+  if (!recordingDraftPersistTimer) {
+    return
+  }
+  window.clearTimeout(recordingDraftPersistTimer)
+  recordingDraftPersistTimer = null
+  if (recordingDraftActive.value && !suppressRecordingDraftPersist) {
+    persistRecordingDraftNow()
+  }
+}
+
+function activateRecordingDraftPersistence() {
+  recordingDraftActive.value = true
+  persistRecordingDraftNow()
+}
+
+function clearRecordingDraft() {
+  const key = getRecordingDraftStorageKey()
+  if (recordingDraftPersistTimer) {
+    window.clearTimeout(recordingDraftPersistTimer)
+    recordingDraftPersistTimer = null
+  }
+  if (key && typeof window !== 'undefined') {
+    try {
+      window.localStorage.removeItem(key)
+    } catch {
+      // localStorage can be unavailable in restricted browser modes.
+    }
+  }
+  recordingDraftActive.value = false
+  recordingDraftMessage.value = ''
+}
+
+function restoreRecordingDraft(item: WebUiCaseDetail) {
+  const draft = readRecordingDraft()
+  if (!shouldRestoreWebUiRecordingDraft(draft, {
+    workspaceCode: props.workspaceCode,
+    caseId: item.id,
+    caseUpdatedAt: item.updatedAt || null,
+  })) {
+    return
+  }
+
+  const recordingDraft = draft as WebUiRecordingDraftPayload<CaseForm>
+  suppressRecordingDraftPersist = true
+  form.value = toCaseFormFromRecordingDraft(recordingDraft.form, form.value)
+  selectInitialStep()
+  suppressRecordingDraftPersist = false
+  recordingDraftActive.value = true
+  appliedRecordingRecorderId.value = recordingDraft.recorderId || null
+  appliedRecordingStepCount.value = Math.max(
+    0,
+    Number(recordingDraft.recordedStepCount || (recordingDraft.recorderId ? recordingDraft.draftStepCount - recordingDraft.savedStepCount : 0)),
+  )
+  recordingDraftMessage.value = `已恢复本地录制草稿，${form.value.steps.length} 个步骤待保存`
+  ElMessage.warning('已恢复未保存的录制草稿，保存用例后会自动清除')
+}
+
+function discardRecordingDraft() {
+  clearRecordingDraft()
+  ElMessage.success('已丢弃本地录制草稿')
+  void loadDetail()
 }
 
 function selectInitialStep() {
@@ -440,6 +633,112 @@ function syncRecordingState(result: LocalRunnerRecordingResult) {
   }
 }
 
+function getRecordingRecorderId(result: LocalRunnerRecordingResult) {
+  return result.recording?.recorderId || result.recording?.startedAt || null
+}
+
+function resetRecordingDraftProtection() {
+  appliedRecordingRecorderId.value = null
+  appliedRecordingStepCount.value = 0
+  recordingRecoveryMessage.value = ''
+  recordingStatusErrorMessage.value = ''
+}
+
+function stopRecordingStatusRefresh() {
+  if (recordingStatusTimer) {
+    window.clearTimeout(recordingStatusTimer)
+    recordingStatusTimer = null
+  }
+}
+
+function scheduleRecordingStatusRefresh(delayMs = 2500) {
+  stopRecordingStatusRefresh()
+  if (recordingStatus.value !== 'RECORDING' && recordingStatus.value !== 'PAUSED') {
+    return
+  }
+  recordingStatusTimer = window.setTimeout(() => {
+    recordingStatusTimer = null
+    void refreshRecordingStatus({ silent: true })
+  }, delayMs)
+}
+
+async function refreshRecordingStatus(options: { silent?: boolean; recoverStopped?: boolean } = {}) {
+  if (recordingStatusRefreshing.value) {
+    return
+  }
+
+  recordingStatusRefreshing.value = true
+  try {
+    const result = await getLocalRunnerRecordingStatus()
+    syncRecordingState(result)
+    recordingStatusErrorMessage.value = ''
+    if (options.recoverStopped !== false && normalizeRecordingStatus(result) === 'STOPPED' && result.steps?.length) {
+      const summary = await appendRecordingResultSteps(result)
+      if (summary.appendedCount > 0) {
+        recordingRecoveryMessage.value = `已保护性恢复 ${summary.appendedCount} 个录制步骤，保存后生效`
+        ElMessage.success(recordingRecoveryMessage.value)
+      }
+      return
+    }
+    scheduleRecordingStatusRefresh()
+  } catch (error) {
+    const message = `录制状态同步异常：${getRequestErrorMessage(error)}`
+    if (!options.silent || recordingInProgress.value) {
+      recordingStatusErrorMessage.value = message
+    }
+    if (!options.silent) {
+      ElMessage.warning(message)
+    }
+    scheduleRecordingStatusRefresh(5000)
+  } finally {
+    recordingStatusRefreshing.value = false
+  }
+}
+
+async function appendRecordingResultSteps(result: LocalRunnerRecordingResult) {
+  const steps = result.steps || []
+  const recorderId = getRecordingRecorderId(result)
+  const alreadyAppliedCount = recorderId && recorderId === appliedRecordingRecorderId.value
+    ? appliedRecordingStepCount.value
+    : 0
+  const stepsToAppend = steps.slice(alreadyAppliedCount)
+  if (!stepsToAppend.length) {
+    return {
+      appendedCount: 0,
+      matchedCount: 0,
+      candidateCount: 0,
+      matchFailed: false,
+    }
+  }
+
+  const summary = await appendRecordedSteps(stepsToAppend, { activateDraft: false })
+  if (recorderId) {
+    appliedRecordingRecorderId.value = recorderId
+    appliedRecordingStepCount.value = steps.length
+  }
+  if (summary.appendedCount > 0) {
+    activateRecordingDraftPersistence()
+  }
+  return summary
+}
+
+async function recoverRecordingDraftFromStatus(reason: string) {
+  try {
+    const result = await getLocalRunnerRecordingStatus()
+    syncRecordingState(result)
+    const summary = await appendRecordingResultSteps(result)
+    if (summary.appendedCount > 0) {
+      recordingRecoveryMessage.value = `已从 Runner 状态恢复 ${summary.appendedCount} 个录制步骤，保存后生效`
+      ElMessage.warning(`${reason}，${recordingRecoveryMessage.value}`)
+      return
+    }
+    ElMessage.error(`${reason}，且未获取到可恢复的录制步骤`)
+  } catch (statusError) {
+    recordingStatusErrorMessage.value = `录制状态同步异常：${getRequestErrorMessage(statusError)}`
+    ElMessage.error(`${reason}，状态同步也失败：${getRequestErrorMessage(statusError)}`)
+  }
+}
+
 function ensureRecordingElapsedTimer() {
   recordingElapsedNow.value = Date.now()
   if (recordingElapsedTimer) {
@@ -519,22 +818,39 @@ function validateBeforeSave() {
 
 async function saveCase() {
   if (!caseId.value || !validateBeforeSave()) {
-    return
+    return null
   }
 
   saving.value = true
   try {
     const saved = await webUiAutomationApi.updateCase(props.workspaceCode, caseId.value, buildPayload())
-    fillForm(saved)
+    clearRecordingDraft()
+    fillForm(saved, { restoreRecordingDraft: false })
     ElMessage.success('Web UI 用例已保存')
+    return saved
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
+    return null
   } finally {
     saving.value = false
   }
 }
 
-async function runCase(localRunner: boolean) {
+async function saveCaseAndRunRecordingReplay() {
+  if (recordingInProgress.value) {
+    ElMessage.warning('请先停止录制，再保存并本地回放')
+    return
+  }
+  const saved = await saveCase()
+  if (!saved) {
+    return
+  }
+  await runCase(true, {
+    localSuccessMessage: '录制回放任务已创建',
+  })
+}
+
+async function runCase(localRunner: boolean, options: { localSuccessMessage?: string } = {}) {
   if (!caseId.value) {
     return
   }
@@ -564,7 +880,7 @@ async function runCase(localRunner: boolean) {
       } else {
         scheduleLocalRunnerTaskRefresh(response.runnerTask.runId)
       }
-      ElMessage.success(`本地运行任务已创建：${response.runnerTask.runId}`)
+      ElMessage.success(`${options.localSuccessMessage || '本地运行任务已创建'}：${response.runnerTask.runId}`)
       return
     }
 
@@ -751,11 +1067,13 @@ async function maybeAutoRematchRecordedElements() {
 async function startRecordingSteps() {
   recordingStarting.value = true
   try {
+    resetRecordingDraftProtection()
     const result = await startLocalRunnerRecording({
       workspaceId: props.workspaceCode,
       environmentId: 'manual',
     })
     syncRecordingState(result)
+    scheduleRecordingStatusRefresh()
     ElMessage.success('本地录制已开始')
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
@@ -766,10 +1084,11 @@ async function startRecordingSteps() {
 
 async function stopRecordingSteps() {
   recordingStopping.value = true
+  stopRecordingStatusRefresh()
   try {
     const result = await stopLocalRunnerRecording()
     syncRecordingState(result)
-    const appendSummary = await appendRecordedSteps(result.steps || [])
+    const appendSummary = await appendRecordingResultSteps(result)
     if (appendSummary.appendedCount > 0) {
       const matchSummary = appendSummary.matchFailed
         ? '，元素库匹配失败，可稍后手动选择'
@@ -779,7 +1098,7 @@ async function stopRecordingSteps() {
       ElMessage.warning('本次录制没有生成可用步骤')
     }
   } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
+    await recoverRecordingDraftFromStatus(`停止录制失败：${getRequestErrorMessage(error)}`)
   } finally {
     recordingStopping.value = false
   }
@@ -790,6 +1109,7 @@ async function pauseRecordingSteps() {
   try {
     const result = await pauseLocalRunnerRecording()
     syncRecordingState(result)
+    scheduleRecordingStatusRefresh()
     if (recordingPaused.value) {
       ElMessage.success('本地录制已暂停')
     } else {
@@ -807,6 +1127,7 @@ async function resumeRecordingSteps() {
   try {
     const result = await resumeLocalRunnerRecording()
     syncRecordingState(result)
+    scheduleRecordingStatusRefresh()
     if (recordingActive.value) {
       ElMessage.success('本地录制已继续')
     } else {
@@ -824,6 +1145,8 @@ async function undoRecordingStep() {
   try {
     const result = await undoLocalRunnerRecordingStep()
     syncRecordingState(result)
+    appliedRecordingStepCount.value = Math.min(appliedRecordingStepCount.value, Number(result.steps?.length || 0))
+    scheduleRecordingStatusRefresh()
     if (result.undone) {
       ElMessage.success('已撤销最后一步录制')
     } else {
@@ -836,7 +1159,7 @@ async function undoRecordingStep() {
   }
 }
 
-async function appendRecordedSteps(steps: LocalRunnerRecordedStep[]) {
+async function appendRecordedSteps(steps: LocalRunnerRecordedStep[], options: { activateDraft?: boolean } = {}) {
   const mappedSteps = steps
     .map((step, index) => toEditableRecordedStep(step, form.value.steps.length + index + 1))
     .filter((step): step is EditableStep => Boolean(step))
@@ -853,6 +1176,9 @@ async function appendRecordedSteps(steps: LocalRunnerRecordedStep[]) {
   form.value.steps.push(...mappedSteps)
   selectedStepIndex.value = insertIndex
   reorderSteps()
+  if (options.activateDraft !== false) {
+    activateRecordingDraftPersistence()
+  }
   return {
     appendedCount: mappedSteps.length,
     ...matchSummary,
@@ -1317,6 +1643,7 @@ function showStepFeaturePlaceholder(featureName: string) {
 
 onMounted(() => {
   void loadDetail()
+  void refreshRecordingStatus({ silent: true, recoverStopped: false })
 })
 
 onBeforeUnmount(() => {
@@ -1324,7 +1651,9 @@ onBeforeUnmount(() => {
     window.clearTimeout(elementPickerSearchTimer)
   }
   stopLocalRunnerTaskRefresh()
+  stopRecordingStatusRefresh()
   stopRecordingElapsedTimer()
+  flushRecordingDraftPersist()
 })
 
 watch(
@@ -1332,6 +1661,14 @@ watch(
   () => {
     void loadDetail()
   },
+)
+
+watch(
+  form,
+  () => {
+    schedulePersistRecordingDraft()
+  },
+  { deep: true },
 )
 
 watch(elementPickerKeyword, () => {
@@ -1366,6 +1703,7 @@ watch(elementPickerLocatorType, () => {
         <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="saving || running || localRunning || recordingCapturing || recordingInProgress" @click="openRecordingPage">打开目标页</AppButton>
         <AppButton :loading="localRunning" :disabled="saving || running" @click="runCase(true)">本地运行</AppButton>
         <AppButton :loading="running" :disabled="saving || localRunning" @click="runCase(false)">调试运行</AppButton>
+        <AppButton v-if="recordingReplayAvailable" :loading="saving" :disabled="loading || running || localRunning || recordingInProgress" @click="saveCaseAndRunRecordingReplay">保存并本地回放</AppButton>
         <AppButton type="primary" :loading="saving" :disabled="loading || running || localRunning" @click="saveCase">保存</AppButton>
       </div>
     </div>
@@ -1619,6 +1957,7 @@ watch(elementPickerLocatorType, () => {
               <strong>{{ recordingStatusLabel }}</strong>
               <small>{{ recordingStatusDescription }}</small>
               <small v-if="recordingElapsedText">{{ recordingElapsedText }}</small>
+              <small v-if="recordingRecoveryHint">{{ recordingRecoveryHint }}</small>
               <small v-if="recordingEventCount > 0">事件 {{ recordingEventCount }}</small>
               <small v-if="recordingElementCandidateCount > 0">新候选 {{ recordingElementCandidateCount }}</small>
               <small v-if="recordingElementUnboundLocatorCount > 0">未绑定 {{ recordingElementUnboundLocatorCount }}</small>
@@ -1629,6 +1968,8 @@ watch(elementPickerLocatorType, () => {
               <AppButton v-if="recordingActive" :loading="recordingPausing" :disabled="recordingStopping" @click="pauseRecordingSteps">暂停录制</AppButton>
               <AppButton v-else-if="recordingPaused" :loading="recordingResuming" :disabled="recordingStopping" @click="resumeRecordingSteps">继续录制</AppButton>
               <AppButton :loading="recordingUndoing" :disabled="!recordingInProgress || recordingStepCount <= 0" @click="undoRecordingStep">撤销上一步</AppButton>
+              <AppButton :loading="recordingStatusRefreshing" :disabled="recordingStarting || recordingStopping" @click="() => refreshRecordingStatus({ silent: false })">同步状态</AppButton>
+              <AppButton v-if="recordingDraftActive" :disabled="saving" @click="discardRecordingDraft">丢弃草稿</AppButton>
               <AppButton type="primary" :loading="recordingStopping" :disabled="!recordingInProgress" @click="stopRecordingSteps">停止并生成步骤</AppButton>
               <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening || recordingInProgress" @click="captureRecordingPage">采集当前页</AppButton>
               <AppButton :loading="recordingCandidateTaskCreating" :disabled="recordingElementUnboundLocatorCount <= 0" @click="createRecordingCandidateCollectTask">候选入库</AppButton>
