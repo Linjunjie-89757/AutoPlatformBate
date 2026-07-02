@@ -20,6 +20,7 @@ import {
   formatLocatorType,
   requiresInput,
   requiresLocator,
+  toWebUiCollectCandidatesFromRecordedSteps,
   toWebUiCaseStepFromRecordedStep,
   webUiAutomationApi,
   WEB_UI_BROWSER_OPTIONS,
@@ -110,6 +111,8 @@ const running = ref(false)
 const localRunning = ref(false)
 const recordingOpening = ref(false)
 const recordingCapturing = ref(false)
+const recordingCandidateTaskCreating = ref(false)
+const recordingCandidateRematching = ref(false)
 const recordingStarting = ref(false)
 const recordingStopping = ref(false)
 const recordingPausing = ref(false)
@@ -157,6 +160,10 @@ const focusedStepId = computed(() => {
 })
 const recordingInProgress = computed(() => recordingStatus.value === 'RECORDING' || recordingStatus.value === 'PAUSED')
 const recordingPaused = computed(() => recordingStatus.value === 'PAUSED')
+const recordingElementUnboundLocatorSteps = computed(() => form.value.steps.filter(isUnboundLocatorStep))
+const recordingElementUnboundLocatorCount = computed(() => recordingElementUnboundLocatorSteps.value.length)
+const recordingElementCandidateSteps = computed(() => form.value.steps.filter(isRecordingElementCandidateStep))
+const recordingElementCandidateCount = computed(() => recordingElementCandidateSteps.value.length)
 const recordingStatusLabel = computed(() => {
   if (recordingStatus.value === 'RECORDING') return '录制中'
   if (recordingStatus.value === 'PAUSED') return '已暂停'
@@ -628,6 +635,68 @@ async function captureRecordingPage() {
   }
 }
 
+async function createRecordingCandidateCollectTask() {
+  const candidateSteps = recordingElementCandidateSteps.value.length
+    ? recordingElementCandidateSteps.value
+    : recordingElementUnboundLocatorSteps.value
+  const candidates = toWebUiCollectCandidatesFromRecordedSteps(candidateSteps, {
+    groupName: getRecordingCandidateGroupName(),
+  })
+  if (!candidates.length) {
+    ElMessage.warning('暂无可入库的未绑定定位步骤')
+    return
+  }
+
+  recordingCandidateTaskCreating.value = true
+  try {
+    const task = await webUiAutomationApi.createLocalRunnerCollectTask(props.workspaceCode, {
+      runnerId: 'local-runner-recording',
+      sessionId: null,
+      actualUrl: lastRecordingPageUrl.value || form.value.baseUrl.trim() || null,
+      pageTitle: null,
+      moduleId: null,
+      pageId: null,
+      pageName: form.value.name.trim() || null,
+      scope: 'ALL',
+      providerConnectionId: null,
+      modelName: null,
+      rawCount: candidates.length,
+      screenshotBase64: null,
+      candidates,
+    })
+    lastCollectTaskId.value = task.taskId
+    ElMessage.success(`已创建 ${candidates.length} 个录制候选入库任务：#${task.taskId}，请保存用例后再查看审核`)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingCandidateTaskCreating.value = false
+  }
+}
+
+async function rematchRecordingElementSteps() {
+  const targetSteps = recordingElementUnboundLocatorSteps.value
+  if (!targetSteps.length) {
+    ElMessage.warning('暂无需要重新匹配的未绑定步骤')
+    return
+  }
+
+  recordingCandidateRematching.value = true
+  try {
+    const summary = await enrichRecordedStepsWithElementMatches(targetSteps)
+    if (summary.matchFailed) {
+      ElMessage.warning('元素库匹配失败，可稍后重试或手动选择元素')
+      return
+    }
+    if (summary.matchedCount > 0) {
+      ElMessage.success(`已回填 ${summary.matchedCount} 个元素库绑定，保存后生效`)
+      return
+    }
+    ElMessage.warning(`暂未匹配到元素库，仍有 ${summary.candidateCount} 个候选待入库`)
+  } finally {
+    recordingCandidateRematching.value = false
+  }
+}
+
 async function startRecordingSteps() {
   recordingStarting.value = true
   try {
@@ -814,6 +883,18 @@ function markRecordedStepAsElementCandidate(step: EditableStep) {
   step.recordingElementCandidateName = step.elementName || step.name || step.locatorValue || null
 }
 
+function isUnboundLocatorStep(step: EditableStep) {
+  return requiresLocator(step.type) && !step.elementId && Boolean(step.locatorType) && Boolean(step.locatorValue.trim())
+}
+
+function isRecordingElementCandidateStep(step: EditableStep) {
+  return step.recordingElementMatchStatus === 'CANDIDATE' && isUnboundLocatorStep(step)
+}
+
+function getRecordingCandidateGroupName() {
+  return form.value.moduleName.trim() || form.value.name.trim() || '录制候选元素'
+}
+
 function toEditableRecordedStep(step: LocalRunnerRecordedStep, sortOrder: number): EditableStep | null {
   const draft = toWebUiCaseStepFromRecordedStep(step, sortOrder)
   if (!draft) {
@@ -842,7 +923,7 @@ function toEditableRecordedStep(step: LocalRunnerRecordedStep, sortOrder: number
 function openCollectTask(taskId: number) {
   void router.push({
     path: `/automation/web/elements/collect-tasks/${taskId}`,
-    query: { workspace: props.workspaceCode },
+    query: { workspaceCode: props.workspaceCode },
   })
 }
 
@@ -1473,6 +1554,8 @@ watch(elementPickerLocatorType, () => {
               <small>{{ recordingStatusDescription }}</small>
               <small v-if="recordingElapsedText">{{ recordingElapsedText }}</small>
               <small v-if="recordingEventCount > 0">事件 {{ recordingEventCount }}</small>
+              <small v-if="recordingElementCandidateCount > 0">新候选 {{ recordingElementCandidateCount }}</small>
+              <small v-if="recordingElementUnboundLocatorCount > 0">未绑定 {{ recordingElementUnboundLocatorCount }}</small>
             </div>
             <div class="web-ui-recording-placeholder__actions">
               <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="recordingCapturing || recordingInProgress" @click="openRecordingPage">打开目标页</AppButton>
@@ -1482,6 +1565,8 @@ watch(elementPickerLocatorType, () => {
               <AppButton :loading="recordingUndoing" :disabled="!recordingInProgress || recordingStepCount <= 0" @click="undoRecordingStep">撤销上一步</AppButton>
               <AppButton type="primary" :loading="recordingStopping" :disabled="!recordingInProgress" @click="stopRecordingSteps">停止并生成步骤</AppButton>
               <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening || recordingInProgress" @click="captureRecordingPage">采集当前页</AppButton>
+              <AppButton :loading="recordingCandidateTaskCreating" :disabled="recordingElementUnboundLocatorCount <= 0" @click="createRecordingCandidateCollectTask">候选入库</AppButton>
+              <AppButton :loading="recordingCandidateRematching" :disabled="recordingElementUnboundLocatorCount <= 0" @click="rematchRecordingElementSteps">重新匹配</AppButton>
               <AppButton v-if="lastCollectTaskId" @click="openCollectTask(lastCollectTaskId)">查看采集任务</AppButton>
             </div>
           </div>

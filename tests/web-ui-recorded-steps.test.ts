@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildRecordedLocatorKey,
   findMatchingWebUiElementForRecordedStep,
+  toWebUiCollectCandidatesFromRecordedSteps,
   toWebUiCaseStepFromRecordedStep,
 } from '../src/entities/web-ui-automation/lib/recordedSteps.ts'
 
@@ -90,6 +91,66 @@ test('does not match recorded locators when context differs or locator is empty'
     shadowPath: null,
   }, elements), null)
   assert.equal(buildRecordedLocatorKey('CSS', '', null, null), '')
+})
+
+test('maps unmatched recorded locators into collect candidates', () => {
+  const candidates = toWebUiCollectCandidatesFromRecordedSteps([
+    {
+      name: 'Click submit',
+      type: 'CLICK',
+      elementName: null,
+      locatorType: 'CSS',
+      locatorValue: ' button.submit ',
+      framePath: [{ selector: 'iframe#checkout' }],
+      shadowPath: null,
+    },
+  ], {
+    groupName: 'Checkout',
+  })
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].candidateSource, 'RECORDED_STEP')
+  assert.equal(candidates[0].groupName, 'Checkout')
+  assert.equal(candidates[0].elementName, 'Click submit')
+  assert.equal(candidates[0].locatorValue, 'button.submit')
+  assert.deepEqual(candidates[0].framePath, [{ selector: 'iframe#checkout', url: null, name: null, index: null }])
+  assert.equal(candidates[0].recommendedToSave, true)
+  assert.equal(candidates[0].validationStatus, 'UNVERIFIED')
+})
+
+test('skips duplicate or invalid recorded collect candidates', () => {
+  const candidates = toWebUiCollectCandidatesFromRecordedSteps([
+    {
+      name: 'Submit',
+      type: 'CLICK',
+      elementName: null,
+      locatorType: 'CSS',
+      locatorValue: '#submit',
+      framePath: null,
+      shadowPath: null,
+    },
+    {
+      name: 'Submit again',
+      type: 'CLICK',
+      elementName: null,
+      locatorType: 'CSS',
+      locatorValue: ' #submit ',
+      framePath: null,
+      shadowPath: null,
+    },
+    {
+      name: 'Missing locator',
+      type: 'CLICK',
+      elementName: null,
+      locatorType: 'CSS',
+      locatorValue: '',
+      framePath: null,
+      shadowPath: null,
+    },
+  ])
+
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].elementName, 'Submit')
 })
 
 function recordedStep(overrides: Partial<LocalRunnerRecordedStep>): LocalRunnerRecordedStep {

@@ -222,6 +222,13 @@ export function getCollectCandidateSourceMeta(source?: string | null): WebUiColl
       description: '由后端静态规则从页面素材中提取。',
     }
   }
+  if (source === 'RECORDED_STEP') {
+    return {
+      label: '录制步骤',
+      tagType: 'primary',
+      description: '由本地录制步骤生成，适合审核后入库并回填用例步骤。',
+    }
+  }
   if (source === 'RULE') {
     return {
       label: '规则候选',

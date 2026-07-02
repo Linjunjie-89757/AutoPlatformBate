@@ -4,6 +4,7 @@ import { requiresInput, requiresLocator } from './format.ts'
 import type { LocalRunnerRecordedStep } from './localRunnerClient'
 import type {
   WebUiCaseStepItem,
+  WebUiElementCollectCandidate,
   WebUiElementItem,
   WebUiLocatorContextPathItem,
   WebUiLocatorType,
@@ -64,6 +65,88 @@ export function findMatchingWebUiElementForRecordedStep(
   )) || null
 }
 
+export function toWebUiCollectCandidatesFromRecordedSteps(
+  steps: Pick<WebUiCaseStepItem, 'name' | 'type' | 'elementName' | 'locatorType' | 'locatorValue' | 'framePath' | 'shadowPath'>[],
+  options: {
+    groupName?: string | null
+    screenshotBase64?: string | null
+  } = {},
+) {
+  const seen = new Set<string>()
+  const candidates: WebUiElementCollectCandidate[] = []
+
+  steps.forEach((step) => {
+    const candidate = toWebUiCollectCandidateFromRecordedStep(step, options)
+    if (!candidate) {
+      return
+    }
+    const key = buildRecordedLocatorKey(candidate.locatorType, candidate.locatorValue, candidate.framePath, candidate.shadowPath)
+    if (!key || seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    candidates.push(candidate)
+  })
+
+  return candidates
+}
+
+export function toWebUiCollectCandidateFromRecordedStep(
+  step: Pick<WebUiCaseStepItem, 'name' | 'type' | 'elementName' | 'locatorType' | 'locatorValue' | 'framePath' | 'shadowPath'>,
+  options: {
+    groupName?: string | null
+    screenshotBase64?: string | null
+  } = {},
+): WebUiElementCollectCandidate | null {
+  const locatorType = normalizeRecordedLocatorType(step.locatorType)
+  const locatorValue = String(step.locatorValue || '').trim()
+  if (!locatorType || !locatorValue) {
+    return null
+  }
+
+  const framePath = normalizeLocatorContextPath(step.framePath)
+  const shadowPath = normalizeLocatorContextPath(step.shadowPath)
+  const confidence = 80
+  const elementName = buildRecordedCollectCandidateName(step, locatorValue)
+
+  return {
+    candidateSource: 'RECORDED_STEP',
+    groupName: String(options.groupName || '').trim() || '录制候选元素',
+    elementName,
+    locatorType,
+    locatorValue,
+    framePath: framePath.length ? framePath : null,
+    shadowPath: shadowPath.length ? shadowPath : null,
+    locatorCandidates: [{
+      locatorType,
+      locatorValue,
+      framePath: framePath.length ? framePath : null,
+      shadowPath: shadowPath.length ? shadowPath : null,
+      confidence,
+      reason: '录制步骤主定位器',
+    }],
+    confidence,
+    reason: '本地录制步骤生成',
+    tagName: null,
+    elementType: null,
+    text: null,
+    placeholder: null,
+    ariaLabel: null,
+    labelText: null,
+    nearbyHeading: null,
+    businessMeaning: elementName,
+    recommendedToSave: true,
+    notRecommendedReason: null,
+    maintenanceSuggestion: '来自本地录制步骤，保存前请确认元素名称、分组和定位器。',
+    stabilityNote: `录制定位器候选，初始稳定性评分 ${confidence}%`,
+    validationStatus: 'UNVERIFIED',
+    matchCount: null,
+    validationMessage: '由本地录制生成，尚未经过本地页面验证',
+    screenshotBase64: options.screenshotBase64 || null,
+    saveBlockedReason: null,
+  }
+}
+
 export function buildRecordedLocatorKey(
   locatorType?: WebUiLocatorType | string | null,
   locatorValue?: string | null,
@@ -82,6 +165,13 @@ export function buildRecordedLocatorKey(
     JSON.stringify(normalizeLocatorContextPath(framePath)),
     JSON.stringify(normalizeLocatorContextPath(shadowPath)),
   ].join('::')
+}
+
+function buildRecordedCollectCandidateName(
+  step: Pick<WebUiCaseStepItem, 'name' | 'elementName'>,
+  locatorValue: string,
+) {
+  return String(step.elementName || step.name || locatorValue || '录制元素').trim()
 }
 
 function normalizeLocatorContextPath(value?: WebUiLocatorContextPathItem[] | null) {
@@ -106,8 +196,8 @@ function normalizeRecordedStepType(value?: string | null): WebUiStepType | null 
   return WEB_UI_STEP_TYPE_OPTIONS.some(item => item.value === normalized) ? normalized : null
 }
 
-function normalizeRecordedLocatorType(value?: string | null): WebUiLocatorType | null {
-  const normalized = String(value || '').toUpperCase() as WebUiLocatorType
+function normalizeRecordedLocatorType(value?: WebUiLocatorType | string | null): WebUiLocatorType | null {
+  const normalized = String(value || '').trim().toUpperCase() as WebUiLocatorType
   return WEB_UI_LOCATOR_OPTIONS.some(item => item.value === normalized) ? normalized : null
 }
 
