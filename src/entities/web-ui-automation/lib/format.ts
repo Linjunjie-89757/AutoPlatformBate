@@ -7,7 +7,7 @@ import {
   getWebUiRunStepStatusOption,
   getWebUiScreenshotPolicyOption,
   getWebUiStepTypeOption,
-} from '../model/options'
+} from '../model/options.ts'
 
 import type { WebUiStepType } from '../model/types'
 

@@ -1,6 +1,7 @@
 export * from './api/webUiAutomationApi'
 export * from './lib/caseReuse'
 export * from './lib/format'
+export * from './lib/recordedSteps'
 export * from './model/options'
 export * from './model/types'
 export { default as WebUiCaseStatusBadge } from './ui/WebUiCaseStatusBadge.vue'

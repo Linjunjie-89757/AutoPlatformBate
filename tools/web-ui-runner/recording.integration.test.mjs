@@ -1,29 +1,162 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
 import { test } from 'node:test';
 
 test('records page input, select and click events as runnable web ui steps', async () => {
   const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
   const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
-  const pageHtml = [
-    '<label for="name">Name</label>',
-    '<input id="name" placeholder="Name" />',
-    '<select id="role"><option value="">Choose</option><option value="admin">Admin</option></select>',
-    '<button id="save" data-testid="save-order">Save order</button>',
-    '<script>',
-    'window.setTimeout(() => {',
-    '  const input = document.querySelector("#name");',
-    '  input.value = "Alice";',
-    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "Alice" }));',
-    '  const select = document.querySelector("#role");',
-    '  select.value = "admin";',
-    '  select.dispatchEvent(new Event("change", { bubbles: true }));',
-    '  document.querySelector("#save").click();',
-    '}, 1000);',
-    '</script>',
-  ].join('');
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildRecordingPageHtml({ autoInteract: true }))}`;
+  const playbackPageUrl = `data:text/html,${encodeURIComponent(buildRecordingPageHtml({ autoInteract: false }))}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+  let recordedSteps = [];
+
+  const fakePlatform = createHttpServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_recording_replay_test',
+          runnerToken: 'runner_token',
+          runnerName: 'Recording Replay Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_recording_replay_001',
+            taskType: 'WEB_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_recording_replay_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 5,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {},
+            environmentSnapshot: {},
+            variableSnapshot: {},
+            scriptSnapshot: {},
+            artifactRefs: [],
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              caseSnapshot: {
+                caseId: 1002,
+                caseName: 'Recorded replay case',
+                baseUrl: '',
+                headless: true,
+                defaultTimeoutMs: 5000,
+                steps: [
+                  {
+                    stepId: 'open-recorded-page',
+                    stepName: 'Open recorded playback page',
+                    stepType: 'OPEN',
+                    inputValue: playbackPageUrl,
+                    enabled: true,
+                    sortOrder: 1,
+                  },
+                  ...recordedSteps.map((step, index) => ({
+                    ...step,
+                    stepId: `recorded-${index + 1}`,
+                    stepName: step.name || `Recorded step ${index + 1}`,
+                    stepType: step.stepType || step.type,
+                    enabled: true,
+                    sortOrder: index + 2,
+                  })),
+                  {
+                    stepId: 'assert-recorded-result',
+                    stepName: 'Assert recorded replay result',
+                    stepType: 'ASSERT_TEXT',
+                    locatorType: 'CSS',
+                    locatorValue: '#result',
+                    inputValue: 'Saved Alice admin',
+                    enabled: true,
+                    sortOrder: recordedSteps.length + 2,
+                  },
+                ],
+              },
+              runOptions: {
+                debugMode: true,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_replay_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_replay_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_replay_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_replay_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(fakePlatform, platformPort);
 
   const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
     cwd: process.cwd(),
@@ -40,7 +173,7 @@ test('records page input, select and click events as runnable web ui steps', asy
   try {
     await waitForRunnerHealth(runnerBaseUrl);
     const opened = await postJson(runnerBaseUrl, '/collect/open', {
-      url: `data:text/html,${encodeURIComponent(pageHtml)}`,
+      url: recordingPageUrl,
       workspaceId: 'account-open',
       environmentId: 'recording',
       headless: true,
@@ -59,6 +192,7 @@ test('records page input, select and click events as runnable web ui steps', asy
     assert.equal(stopped.recording.active, false);
     assert.equal(stopped.steps.length, 3);
     assert.deepEqual(stopped.steps.map(item => item.type), ['FILL', 'SELECT', 'CLICK']);
+    recordedSteps = stopped.steps;
 
     const [fillStep, selectStep, clickStep] = stopped.steps;
     assert.equal(fillStep.locatorType, 'CSS');
@@ -69,14 +203,69 @@ test('records page input, select and click events as runnable web ui steps', asy
     assert.equal(selectStep.inputValue, 'admin');
     assert.equal(clickStep.locatorType, 'TEST_ID');
     assert.equal(clickStep.locatorValue, 'save-order');
+
+    await postJson(runnerBaseUrl, '/session/release', {});
+    const startedReplay = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'recording-replay-test',
+      intervalMs: 1000,
+      capabilities: ['WEB_CASE_RUN'],
+    });
+    assert.equal(startedReplay.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.register.length, 1);
+    assert.equal(reports.pull[0].capabilities.includes('WEB_CASE_RUN'), true);
+    assert.equal(reports.steps.length, 5);
+    assert.deepEqual(reports.steps.map(item => item.status), ['SUCCESS', 'SUCCESS', 'SUCCESS', 'SUCCESS', 'SUCCESS']);
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.results[0].summary.total, 5);
+    assert.equal(reports.results[0].summary.passed, 5);
+    assert.equal(reports.results[0].summary.failed, 0);
   } finally {
     await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
     await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await closeServer(fakePlatform);
     await stopRunnerProcess(runner);
   }
 
   assert.deepEqual(stderr, []);
 });
+
+function buildRecordingPageHtml({ autoInteract }) {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Recording Replay</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<select id="role"><option value="">Choose</option><option value="admin">Admin</option></select>',
+    '<button id="save" data-testid="save-order">Save order</button>',
+    '<div id="result"></div>',
+    '<script>',
+    'function saveOrder() {',
+    '  document.querySelector("#result").textContent = `Saved ${document.querySelector("#name").value} ${document.querySelector("#role").value}`;',
+    '}',
+    'document.querySelector("#save").addEventListener("click", saveOrder);',
+    autoInteract ? [
+      'window.setTimeout(() => {',
+      '  const input = document.querySelector("#name");',
+      '  input.value = "Alice";',
+      '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "Alice" }));',
+      '  const select = document.querySelector("#role");',
+      '  select.value = "admin";',
+      '  select.dispatchEvent(new Event("change", { bubbles: true }));',
+      '  document.querySelector("#save").click();',
+      '}, 1000);',
+    ].join('') : '',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
 
 async function waitForRunnerHealth(baseUrl) {
   await waitFor(async () => {
@@ -124,6 +313,33 @@ async function postJson(baseUrl, path, body) {
   return payload;
 }
 
+async function readJson(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
+  return raw ? JSON.parse(raw) : {};
+}
+
+function sendJson(response, statusCode, payload) {
+  response.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  response.end(JSON.stringify(payload));
+}
+
+async function listen(server, port) {
+  server.listen(port, '127.0.0.1');
+  await once(server, 'listening');
+}
+
+async function closeServer(server) {
+  if (!server.listening) {
+    return;
+  }
+  server.close();
+  await once(server, 'close');
+}
+
 async function stopRunnerProcess(runner) {
   if (runner.exitCode !== null || runner.signalCode !== null) {
     return;
@@ -143,7 +359,7 @@ async function stopRunnerProcess(runner) {
 }
 
 async function findAvailablePort() {
-  const server = createServer();
+  const server = createNetServer();
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();

@@ -19,6 +19,7 @@ import {
   formatLocatorType,
   requiresInput,
   requiresLocator,
+  toWebUiCaseStepFromRecordedStep,
   webUiAutomationApi,
   WEB_UI_BROWSER_OPTIONS,
   WEB_UI_LOCATOR_OPTIONS,
@@ -585,52 +586,28 @@ function appendRecordedSteps(steps: LocalRunnerRecordedStep[]) {
 }
 
 function toEditableRecordedStep(step: LocalRunnerRecordedStep, sortOrder: number): EditableStep | null {
-  const type = normalizeRecordedStepType(step.type || step.stepType)
-  if (!type) {
-    return null
-  }
-  const locatorType = normalizeRecordedLocatorType(step.locatorType)
-  const locatorValue = step.locatorValue?.trim() || ''
-  if (requiresLocator(type) && (!locatorType || !locatorValue)) {
-    return null
-  }
-  const inputValue = step.inputValue?.trim() || ''
-  if (requiresInput(type) && !inputValue) {
+  const draft = toWebUiCaseStepFromRecordedStep(step, sortOrder)
+  if (!draft) {
     return null
   }
 
   return {
-    id: null,
-    name: step.name?.trim() || '',
-    type,
-    elementId: null,
-    elementName: step.elementName || null,
-    locatorType,
-    locatorValue,
-    framePath: step.framePath || null,
-    shadowPath: step.shadowPath || null,
-    inputValue,
-    timeoutMs: step.timeoutMs ?? null,
-    continueOnFailure: Boolean(step.continueOnFailure),
-    screenshotPolicy: normalizeRecordedScreenshotPolicy(step.screenshotPolicy),
-    enabled: step.enabled !== false,
-    sortOrder,
+    id: draft.id ?? null,
+    name: draft.name || '',
+    type: draft.type,
+    elementId: draft.elementId ?? null,
+    elementName: draft.elementName || null,
+    locatorType: draft.locatorType ?? null,
+    locatorValue: draft.locatorValue || '',
+    framePath: draft.framePath || null,
+    shadowPath: draft.shadowPath || null,
+    inputValue: draft.inputValue || '',
+    timeoutMs: draft.timeoutMs ?? null,
+    continueOnFailure: draft.continueOnFailure,
+    screenshotPolicy: draft.screenshotPolicy,
+    enabled: draft.enabled,
+    sortOrder: draft.sortOrder,
   }
-}
-
-function normalizeRecordedStepType(value?: string | null): WebUiStepType | null {
-  const normalized = String(value || '').toUpperCase() as WebUiStepType
-  return WEB_UI_STEP_TYPE_OPTIONS.some(item => item.value === normalized) ? normalized : null
-}
-
-function normalizeRecordedLocatorType(value?: string | null): WebUiLocatorType | null {
-  const normalized = String(value || '').toUpperCase() as WebUiLocatorType
-  return WEB_UI_LOCATOR_OPTIONS.some(item => item.value === normalized) ? normalized : null
-}
-
-function normalizeRecordedScreenshotPolicy(value?: string | null): WebUiScreenshotPolicy {
-  const normalized = String(value || '').toUpperCase() as WebUiScreenshotPolicy
-  return WEB_UI_SCREENSHOT_POLICY_OPTIONS.some(item => item.value === normalized) ? normalized : 'ON_FAILURE'
 }
 
 function openCollectTask(taskId: number) {
