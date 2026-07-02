@@ -1297,7 +1297,7 @@ async function executeApiCaseRequest(task, apiCaseSnapshot, runtimeVariables = {
     body: responseBody,
     headers: responseHeaders,
     durationMs,
-  });
+  }, context);
   const normalizedResponse = {
     status: response.status,
     statusText: response.statusText,
@@ -1598,7 +1598,7 @@ function appendQueryParams(url, queryParams, context) {
   return parsed.toString();
 }
 
-function evaluateApiAssertions(assertions, response) {
+function evaluateApiAssertions(assertions, response, context = {}) {
   const safeAssertions = Array.isArray(assertions) ? assertions : [];
   if (safeAssertions.length === 0) {
     return [{
@@ -1610,23 +1610,59 @@ function evaluateApiAssertions(assertions, response) {
   }
   return safeAssertions
     .filter(assertion => assertion && assertion.enabled !== false)
-    .map((assertion, index) => evaluateApiAssertion(assertion, response, index));
+    .map((assertion, index) => evaluateApiAssertion(assertion, response, index, context));
 }
 
-function evaluateApiAssertion(assertion, response, index) {
-  const type = optionalString(assertion.type).toUpperCase();
-  const expected = String(assertion.expected ?? '');
+function evaluateApiAssertion(assertion, response, index, context = {}) {
+  const type = normalizeApiAssertionType(assertion);
+  const expected = resolveApiAssertionExpected(assertion, context);
   const assertionId = optionalString(assertion.assertionId || assertion.id) || `assertion-${index + 1}`;
-  if (type === 'STATUS_CODE') {
-    const passed = String(response.status) === expected;
-    return {
+  if (type === 'STATUS_CODE' || type === 'RESPONSE_CODE') {
+    const actual = String(response.status);
+    const condition = normalizeApiAssertionCondition(assertion.condition || assertion.operator, 'EQUALS');
+    return buildApiAssertionResult({
+      assertionId,
+      type: type === 'STATUS_CODE' ? 'STATUS_CODE' : 'RESPONSE_CODE',
+      subject: 'statusCode',
+      condition,
+      expected,
+      actual,
+      comparison: compareApiAssertionValue(actual, condition, expected),
+      failurePrefix: '状态码断言失败',
+    });
+  }
+  if (type === 'RESPONSE_HEADER') {
+    const subject = resolveApiAssertionSubject(assertion);
+    const actual = subject ? String(response.headers[subject.toLowerCase()] ?? '') : '';
+    const condition = normalizeApiAssertionCondition(assertion.condition || assertion.operator, 'EQUALS');
+    return buildApiAssertionResult({
       assertionId,
       type,
+      subject,
+      condition,
       expected,
-      actual: String(response.status),
-      status: passed ? 'PASSED' : 'FAILED',
-      message: passed ? null : `状态码断言失败：期望 ${expected}，实际 ${response.status}`,
-    };
+      actual,
+      comparison: compareApiAssertionValue(actual, condition, expected),
+      failurePrefix: '响应头断言失败',
+    });
+  }
+  if (type === 'RESPONSE_BODY') {
+    const subject = resolveApiAssertionSubject(assertion);
+    const actualValue = subject.startsWith('$.')
+      ? readSimpleJsonPath(parseJsonBody(response.body), subject)
+      : response.body;
+    const actual = formatApiAssertionActual(actualValue);
+    const condition = normalizeApiAssertionCondition(assertion.condition || assertion.operator, 'EQUALS');
+    return buildApiAssertionResult({
+      assertionId,
+      type,
+      subject: subject || 'body',
+      condition,
+      expected,
+      actual,
+      comparison: compareApiAssertionValue(actual, condition, expected),
+      failurePrefix: '响应体断言失败',
+    });
   }
   if (type === 'BODY_CONTAINS') {
     const passed = response.body.includes(expected);
@@ -1665,18 +1701,22 @@ function evaluateApiAssertion(assertion, response, index) {
       message: passed ? null : `JSON 断言失败：${expression || '-'} 期望 ${expected}，实际 ${actual || '空'}`,
     };
   }
-  if (type === 'RESPONSE_TIME_LESS_THAN') {
-    const expectedMs = Number(expected);
+  if (type === 'RESPONSE_TIME' || type === 'RESPONSE_TIME_LESS_THAN') {
     const actualMs = Number(response.durationMs || 0);
-    const passed = Number.isFinite(expectedMs) && actualMs < expectedMs;
-    return {
+    const condition = normalizeApiAssertionCondition(
+      assertion.condition || assertion.operator,
+      type === 'RESPONSE_TIME_LESS_THAN' ? 'LT' : 'LT_OR_EQUALS',
+    );
+    return buildApiAssertionResult({
       assertionId,
       type,
+      subject: 'durationMs',
+      condition,
       expected,
       actual: String(actualMs),
-      status: passed ? 'PASSED' : 'FAILED',
-      message: passed ? null : `响应耗时断言失败：期望小于 ${expected} ms，实际 ${actualMs} ms`,
-    };
+      comparison: compareApiAssertionValue(String(actualMs), condition, expected),
+      failurePrefix: '响应耗时断言失败',
+    });
   }
   return {
     assertionId,
@@ -1685,6 +1725,128 @@ function evaluateApiAssertion(assertion, response, index) {
     status: 'FAILED',
     message: `暂不支持的接口断言类型：${type || 'UNKNOWN'}`,
   };
+}
+
+function buildApiAssertionResult(input) {
+  const passed = input.comparison.passed;
+  const message = passed ? null : `${input.failurePrefix}：${input.comparison.message}`;
+  return {
+    assertionId: input.assertionId,
+    type: input.type,
+    subject: input.subject,
+    condition: input.condition,
+    expected: input.expected,
+    expectedValue: input.expected,
+    actual: input.actual,
+    actualValue: input.actual,
+    status: passed ? 'PASSED' : 'FAILED',
+    message,
+  };
+}
+
+function normalizeApiAssertionType(assertion) {
+  const type = optionalString(assertion.assertionType || assertion.type).toUpperCase();
+  if (type === 'STATUS_CODE') {
+    return 'STATUS_CODE';
+  }
+  if (type === 'RESPONSE_CODE') {
+    return 'RESPONSE_CODE';
+  }
+  return type;
+}
+
+function resolveApiAssertionExpected(assertion, context = {}) {
+  const value = assertion.expectedValue ?? assertion.expected ?? '';
+  return renderAnyTemplate(String(value), context);
+}
+
+function resolveApiAssertionSubject(assertion) {
+  return optionalString(
+    assertion.subject
+      || assertion.headerName
+      || assertion.header
+      || assertion.expression
+      || assertion.jsonPath
+      || assertion.name,
+  );
+}
+
+function normalizeApiAssertionCondition(condition, fallback = 'EQUALS') {
+  const normalized = optionalString(condition || fallback).toUpperCase();
+  if (normalized === '=' || normalized === '==' || normalized === 'EQUAL') return 'EQUALS';
+  if (normalized === '!=' || normalized === '<>' || normalized === 'NOT_EQUAL') return 'NOT_EQUALS';
+  if (normalized === 'NOTCONTAINS') return 'NOT_CONTAINS';
+  if (normalized === 'STARTS_WITH') return 'START_WITH';
+  if (normalized === 'ENDS_WITH') return 'END_WITH';
+  if (normalized === 'GTE' || normalized === '>=') return 'GT_OR_EQUALS';
+  if (normalized === 'LTE' || normalized === '<=') return 'LT_OR_EQUALS';
+  if (normalized === '>') return 'GT';
+  if (normalized === '<') return 'LT';
+  return normalized || 'EQUALS';
+}
+
+function compareApiAssertionValue(actual, condition, expected) {
+  const safeActual = String(actual ?? '');
+  const safeExpected = String(expected ?? '');
+  try {
+    switch (condition) {
+      case 'UNCHECKED':
+        return { passed: true, message: null };
+      case 'EQUALS':
+        return comparisonResult(safeActual === safeExpected, safeActual, safeExpected);
+      case 'NOT_EQUALS':
+        return comparisonResult(safeActual !== safeExpected, safeActual, safeExpected);
+      case 'CONTAINS':
+        return comparisonResult(safeActual.includes(safeExpected), safeActual, safeExpected);
+      case 'NOT_CONTAINS':
+        return comparisonResult(!safeActual.includes(safeExpected), safeActual, safeExpected);
+      case 'EMPTY':
+        return comparisonResult(safeActual.length === 0, safeActual, safeExpected);
+      case 'NOT_EMPTY':
+        return comparisonResult(safeActual.length > 0, safeActual, safeExpected);
+      case 'START_WITH':
+        return comparisonResult(safeActual.startsWith(safeExpected), safeActual, safeExpected);
+      case 'END_WITH':
+        return comparisonResult(safeActual.endsWith(safeExpected), safeActual, safeExpected);
+      case 'REGEX':
+        return comparisonResult(new RegExp(safeExpected, 's').test(safeActual), safeActual, safeExpected);
+      case 'GT':
+        return comparisonResult(compareApiAssertionNumber(safeActual, safeExpected) > 0, safeActual, safeExpected);
+      case 'GT_OR_EQUALS':
+        return comparisonResult(compareApiAssertionNumber(safeActual, safeExpected) >= 0, safeActual, safeExpected);
+      case 'LT':
+        return comparisonResult(compareApiAssertionNumber(safeActual, safeExpected) < 0, safeActual, safeExpected);
+      case 'LT_OR_EQUALS':
+        return comparisonResult(compareApiAssertionNumber(safeActual, safeExpected) <= 0, safeActual, safeExpected);
+      default:
+        return { passed: false, message: `暂不支持的断言条件 ${condition}` };
+    }
+  } catch (error) {
+    return { passed: false, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function comparisonResult(passed, actual, expected) {
+  return {
+    passed,
+    message: passed ? null : `期望 ${expected}，实际 ${actual}`,
+  };
+}
+
+function compareApiAssertionNumber(actual, expected) {
+  const actualNumber = Number(actual);
+  const expectedNumber = Number(expected);
+  if (!Number.isFinite(actualNumber) || !Number.isFinite(expectedNumber)) {
+    throw new Error('实际值和期望值必须是数字');
+  }
+  return actualNumber === expectedNumber ? 0 : actualNumber > expectedNumber ? 1 : -1;
+}
+
+function formatApiAssertionActual(value) {
+  if (value === undefined || value === null) {
+    return '';
+  }
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
 function extractApiVariables(extractors, response) {

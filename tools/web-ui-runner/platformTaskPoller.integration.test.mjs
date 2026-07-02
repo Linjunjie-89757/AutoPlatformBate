@@ -2719,7 +2719,7 @@ test('polls generic runner task and reports real API_CASE_RUN result', async () 
                   body: '{"name":"{{NAME}}"}',
                 },
                 assertions: [
-                  { assertionId: 'status', type: 'STATUS_CODE', expected: '200' },
+                  { assertionId: 'status', type: 'RESPONSE_CODE', condition: 'EQUALS', expectedValue: '200' },
                   { assertionId: 'body', type: 'BODY_CONTAINS', expected: '"PAID"' },
                 ],
                 extractors: [
@@ -2797,6 +2797,19 @@ test('polls generic runner task and reports real API_CASE_RUN result', async () 
     assert.equal(reports.results[0].summary.statusCode, 200);
     assert.equal(reports.results[0].summary.passedAssertions, 2);
     assert.equal(reports.results[0].reportData.response.status, 200);
+    assert.deepEqual({
+      type: reports.results[0].reportData.assertions[0].type,
+      condition: reports.results[0].reportData.assertions[0].condition,
+      expectedValue: reports.results[0].reportData.assertions[0].expectedValue,
+      actualValue: reports.results[0].reportData.assertions[0].actualValue,
+      status: reports.results[0].reportData.assertions[0].status,
+    }, {
+      type: 'RESPONSE_CODE',
+      condition: 'EQUALS',
+      expectedValue: '200',
+      actualValue: '200',
+      status: 'PASSED',
+    });
     assert.equal(reports.results[0].reportData.extractedVariables.ORDER_STATUS, 'PAID');
     assert.match(reports.results[0].reportData.response.body, /PAID/);
   } finally {
@@ -3641,7 +3654,7 @@ test('continues API_SCENARIO_RUN after soft failure and supports richer assertio
                       },
                       assertions: [
                         { assertionId: 'trace-status', type: 'STATUS_CODE', expected: '200' },
-                        { assertionId: 'trace-header', type: 'HEADER_EQUALS', headerName: 'x-trace-id', expected: 'trace-7788' },
+                        { assertionId: 'trace-header', type: 'RESPONSE_HEADER', subject: 'x-trace-id', condition: 'EQUALS', expectedValue: 'trace-7788' },
                         { assertionId: 'trace-json-soft-fail', type: 'JSON_EQUALS', expression: '$.nested.status', expected: 'NOT_READY' },
                       ],
                       extractors: [
@@ -3666,8 +3679,8 @@ test('continues API_SCENARIO_RUN after soft failure and supports richer assertio
                       },
                       assertions: [
                         { assertionId: 'ticket-status', type: 'STATUS_CODE', expected: '200' },
-                        { assertionId: 'ticket-json', type: 'JSON_EQUALS', expression: '$.nested.status', expected: 'DONE' },
-                        { assertionId: 'ticket-time', type: 'RESPONSE_TIME_LESS_THAN', expected: '5000' },
+                        { assertionId: 'ticket-json', type: 'RESPONSE_BODY', subject: '$.nested.status', condition: 'EQUALS', expectedValue: 'DONE' },
+                        { assertionId: 'ticket-time', type: 'RESPONSE_TIME', condition: 'LT_OR_EQUALS', expectedValue: '5000' },
                       ],
                     },
                   },
@@ -3744,7 +3757,13 @@ test('continues API_SCENARIO_RUN after soft failure and supports richer assertio
     assert.equal(reports.results[0].summary.failedSteps, 1);
     assert.equal(reports.results[0].reportData.extractedVariables.TRACE_ID, 'trace-7788');
     assert.equal(reports.results[0].reportData.extractedVariables.TICKET_ID, 'T-900');
+    assert.equal(reports.results[0].reportData.stepResults[0].assertions[1].type, 'RESPONSE_HEADER');
+    assert.equal(reports.results[0].reportData.stepResults[0].assertions[1].actualValue, 'trace-7788');
     assert.equal(reports.results[0].reportData.stepResults[1].assertions.length, 3);
+    assert.equal(reports.results[0].reportData.stepResults[1].assertions[1].type, 'RESPONSE_BODY');
+    assert.equal(reports.results[0].reportData.stepResults[1].assertions[1].actualValue, 'DONE');
+    assert.equal(reports.results[0].reportData.stepResults[1].assertions[2].type, 'RESPONSE_TIME');
+    assert.equal(reports.results[0].reportData.stepResults[1].assertions[2].condition, 'LT_OR_EQUALS');
     assert.notEqual(reports.results[0].reportData.stepResults[1].assertions[2].actual, '0');
   } finally {
     await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
