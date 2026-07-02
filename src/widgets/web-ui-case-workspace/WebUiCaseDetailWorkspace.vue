@@ -52,6 +52,7 @@ import {
   shouldRestoreWebUiRecordingDraft,
   type WebUiRecordingDraftPayload,
 } from '@/entities/web-ui-automation/lib/recordingDraft'
+import { buildRecordingReplayDiagnostics } from '@/entities/web-ui-automation/lib/recordingReplayDiagnostics'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -153,6 +154,7 @@ const lastRecordingPageUrl = ref<string | null>(null)
 const localRunnerTask = ref<LocalRunnerTaskDetailResponse | null>(null)
 const localRunnerFormalRunId = ref<number | null>(null)
 const localRunnerRunDetail = ref<WebUiRunDetail | null>(null)
+const recordingReplayRunId = ref<string | null>(null)
 const errorMessage = ref('')
 const selectedStepIndex = ref(0)
 const form = ref<CaseForm>(createEmptyForm())
@@ -190,6 +192,11 @@ function getRouteQueryNumber(name: string) {
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
 const localRunnerRunSummary = computed(() => localRunnerRunDetail.value?.summary ?? null)
+const recordingReplayDiagnostics = computed(() => buildRecordingReplayDiagnostics({
+  replayRunId: recordingReplayRunId.value,
+  task: localRunnerTask.value,
+  runDetail: localRunnerRunDetail.value,
+}))
 const focusedStepId = computed(() => {
   const raw = Array.isArray(route.query.stepId) ? route.query.stepId[0] : route.query.stepId
   const numeric = Number(raw)
@@ -511,6 +518,7 @@ function resetLocalRunnerState() {
   localRunnerTask.value = null
   localRunnerFormalRunId.value = null
   localRunnerRunDetail.value = null
+  recordingReplayRunId.value = null
 }
 
 function isLocalRunnerTaskTerminal(status?: string | null) {
@@ -847,10 +855,11 @@ async function saveCaseAndRunRecordingReplay() {
   }
   await runCase(true, {
     localSuccessMessage: '录制回放任务已创建',
+    recordingReplay: true,
   })
 }
 
-async function runCase(localRunner: boolean, options: { localSuccessMessage?: string } = {}) {
+async function runCase(localRunner: boolean, options: { localSuccessMessage?: string; recordingReplay?: boolean } = {}) {
   if (!caseId.value) {
     return
   }
@@ -863,6 +872,7 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
       localRunnerTask.value = null
       localRunnerFormalRunId.value = null
       localRunnerRunDetail.value = null
+      recordingReplayRunId.value = null
       await startLocalRunnerTaskPolling({
         installId: `web-ui-case-${props.workspaceCode}`,
         capabilities: ['WEB_CASE_RUN', 'WEB_ELEMENT_VALIDATE'],
@@ -874,6 +884,9 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
       })
       localRunnerFormalRunId.value = response.run.runId
       localRunnerTask.value = response.runnerTask
+      if (options.recordingReplay) {
+        recordingReplayRunId.value = response.runnerTask.runId
+      }
       if (isLocalRunnerTaskTerminal(response.runnerTask.status)) {
         localRunning.value = false
         await refreshLocalRunnerFormalRun()
@@ -897,6 +910,15 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
       loadingRef.value = false
     }
   }
+}
+
+function focusRecordingReplayFailedStep() {
+  const sortOrder = recordingReplayDiagnostics.value?.failedStepSortOrder
+  if (!sortOrder) {
+    return
+  }
+  const index = form.value.steps.findIndex(step => Number(step.sortOrder || 0) === Number(sortOrder))
+  selectedStepIndex.value = index >= 0 ? index : Math.max(0, Math.min(sortOrder - 1, form.value.steps.length - 1))
 }
 
 function backToList() {
@@ -1734,6 +1756,49 @@ watch(elementPickerLocatorType, () => {
           :percentage="localRunnerTask.progress.percent"
           :status="localRunnerTask.status === 'FAILED' ? 'exception' : localRunnerTask.status === 'SUCCESS' ? 'success' : undefined"
         />
+        <div v-if="recordingReplayDiagnostics" class="web-ui-recording-replay-diagnostics" :class="`is-${recordingReplayDiagnostics.tone}`">
+          <div class="web-ui-recording-replay-diagnostics__summary">
+            <el-tag :type="recordingReplayDiagnostics.tone" effect="light" size="small">
+              {{ recordingReplayDiagnostics.title }}
+            </el-tag>
+            <span>{{ recordingReplayDiagnostics.summary }}</span>
+          </div>
+          <div class="web-ui-recording-replay-diagnostics__grid">
+            <div>
+              <span>失败步骤</span>
+              <strong>{{ recordingReplayDiagnostics.failedStepLabel || '暂无失败步骤' }}</strong>
+              <small v-if="recordingReplayDiagnostics.failedStepDetail">{{ recordingReplayDiagnostics.failedStepDetail }}</small>
+            </div>
+            <div>
+              <span>问题类型</span>
+              <strong>{{ recordingReplayDiagnostics.issueLabel || '等待结果' }}</strong>
+              <small>{{ recordingReplayDiagnostics.suggestion || '完成后会给出诊断建议' }}</small>
+            </div>
+            <div>
+              <span>下一步</span>
+              <strong>{{ recordingReplayDiagnostics.reportAvailable ? '查看报告或定位步骤' : '等待正式报告生成' }}</strong>
+              <small>正式报告会保留截图、错误信息和步骤明细</small>
+            </div>
+          </div>
+          <div class="web-ui-recording-replay-diagnostics__actions">
+            <AppButton
+              v-if="recordingReplayDiagnostics.failedStepSortOrder"
+              size="small"
+              @click="focusRecordingReplayFailedStep"
+            >
+              定位失败步骤
+            </AppButton>
+            <AppButton
+              v-if="recordingReplayDiagnostics.reportAvailable && localRunnerFormalRunId"
+              size="small"
+              type="primary"
+              :icon="View"
+              @click="openLocalRunnerFormalReport"
+            >
+              查看回放报告
+            </AppButton>
+          </div>
+        </div>
         <div class="web-ui-local-runner-result__actions">
           <span>阶段：{{ localRunnerTask.currentStage || '-' }}</span>
           <span>步骤：{{ localRunnerTask.progress.current }}/{{ localRunnerTask.progress.total }}</span>
@@ -2150,6 +2215,64 @@ watch(elementPickerLocatorType, () => {
 
 .web-ui-local-runner-result__actions {
   justify-content: flex-start;
+}
+
+.web-ui-recording-replay-diagnostics {
+  display: grid;
+  gap: var(--app-space-3);
+  max-width: 920px;
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-muted);
+}
+
+.web-ui-recording-replay-diagnostics.is-success {
+  border-color: var(--app-success);
+  background: var(--app-success-soft);
+}
+
+.web-ui-recording-replay-diagnostics.is-danger {
+  border-color: var(--app-danger);
+  background: var(--app-danger-soft);
+}
+
+.web-ui-recording-replay-diagnostics__summary,
+.web-ui-recording-replay-diagnostics__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-recording-replay-diagnostics__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--app-space-3);
+}
+
+.web-ui-recording-replay-diagnostics__grid div {
+  display: grid;
+  gap: var(--app-space-1);
+  min-width: 0;
+}
+
+.web-ui-recording-replay-diagnostics__grid span,
+.web-ui-recording-replay-diagnostics__grid small {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--app-line-height-xs);
+}
+
+.web-ui-recording-replay-diagnostics__grid strong {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .web-ui-case-detail__steps,
