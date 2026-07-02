@@ -41,7 +41,12 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import { startLocalRunnerTaskPolling } from '@/entities/web-ui-automation/lib/localRunnerClient'
+import {
+  captureLocalRunnerPage,
+  mapRunnerCandidateToCollectCandidate,
+  openLocalRunnerPage,
+  startLocalRunnerTaskPolling,
+} from '@/entities/web-ui-automation/lib/localRunnerClient'
 
 interface EditableStep {
   id?: number | null
@@ -89,6 +94,10 @@ const loading = ref(false)
 const saving = ref(false)
 const running = ref(false)
 const localRunning = ref(false)
+const recordingOpening = ref(false)
+const recordingCapturing = ref(false)
+const lastCollectTaskId = ref<number | null>(null)
+const lastRecordingPageUrl = ref<string | null>(null)
 const localRunnerTask = ref<LocalRunnerTaskDetailResponse | null>(null)
 const localRunnerFormalRunId = ref<number | null>(null)
 const localRunnerRunDetail = ref<WebUiRunDetail | null>(null)
@@ -318,6 +327,10 @@ function openLocalRunnerFormalReport() {
   })
 }
 
+function readRecordingTargetUrl() {
+  return form.value.baseUrl.trim()
+}
+
 function buildPayload(): SaveWebUiCasePayload {
   return {
     workspaceCode: props.workspaceCode,
@@ -445,6 +458,78 @@ async function runCase(localRunner: boolean) {
 
 function backToList() {
   void router.push({ path: '/automation/web/cases', query: { workspace: props.workspaceCode } })
+}
+
+async function openRecordingPage() {
+  const url = readRecordingTargetUrl()
+  if (!url) {
+    ElMessage.warning('请先填写基础地址')
+    return
+  }
+
+  recordingOpening.value = true
+  try {
+    const result = await openLocalRunnerPage({
+      url,
+      workspaceId: props.workspaceCode,
+      environmentId: 'manual',
+    })
+    lastRecordingPageUrl.value = result.page?.url || result.session?.currentUrl || url
+    if (result.page?.isProbablyLoginPage) {
+      ElMessage.warning('本地浏览器已打开，当前页面疑似登录页')
+      return
+    }
+    ElMessage.success('本地浏览器已打开目标页')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingOpening.value = false
+  }
+}
+
+async function captureRecordingPage() {
+  recordingCapturing.value = true
+  try {
+    const result = await captureLocalRunnerPage(300)
+    const candidates = (result.candidates || []).map(candidate => mapRunnerCandidateToCollectCandidate({
+      candidate,
+      groupName: form.value.moduleName.trim() || form.value.name.trim() || '页面元素',
+      screenshotBase64: result.screenshotBase64 || null,
+    }))
+    if (!candidates.length) {
+      ElMessage.warning('本地 Runner 未采集到候选元素')
+      return
+    }
+    const task = await webUiAutomationApi.createLocalRunnerCollectTask(props.workspaceCode, {
+      runnerId: 'local-runner',
+      sessionId: result.session?.sessionId || null,
+      actualUrl: result.page?.url || result.session?.currentUrl || lastRecordingPageUrl.value || null,
+      pageTitle: result.page?.title || null,
+      moduleId: null,
+      pageId: null,
+      pageName: form.value.name.trim() || result.page?.title || null,
+      scope: 'ALL',
+      providerConnectionId: null,
+      modelName: null,
+      rawCount: result.rawCount,
+      screenshotBase64: result.screenshotBase64 || null,
+      candidates,
+    })
+    lastCollectTaskId.value = task.taskId
+    ElMessage.success(`采集任务已创建：#${task.taskId}`)
+    openCollectTask(task.taskId)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingCapturing.value = false
+  }
+}
+
+function openCollectTask(taskId: number) {
+  void router.push({
+    path: `/automation/web/elements/collect-tasks/${taskId}`,
+    query: { workspace: props.workspaceCode },
+  })
 }
 
 function addStep() {
@@ -728,10 +813,6 @@ function getStepSummary(step: EditableStep) {
   return '未配置步骤'
 }
 
-function showRecordingPlaceholder() {
-  ElMessage.info('录制会由本地 Runner 打开真实浏览器完成。当前页面先预留录制控制台入口，后续接入录制流程。')
-}
-
 function showStepFeaturePlaceholder(featureName: string) {
   ElMessage.info(`${featureName}需要后端步骤字段和本地 Runner 执行逻辑配套，当前先预留配置入口。`)
 }
@@ -783,7 +864,7 @@ watch(elementPickerLocatorType, () => {
         <h2>{{ form.name || 'Web UI 用例详情' }}</h2>
       </div>
       <div class="web-ui-case-detail__actions">
-        <AppButton :icon="VideoCamera" @click="showRecordingPlaceholder">开始录制</AppButton>
+        <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="saving || running || localRunning || recordingCapturing" @click="openRecordingPage">打开目标页</AppButton>
         <AppButton :loading="localRunning" :disabled="saving || running" @click="runCase(true)">本地运行</AppButton>
         <AppButton :loading="running" :disabled="saving || localRunning" @click="runCase(false)">调试运行</AppButton>
         <AppButton type="primary" :loading="saving" :disabled="loading || running || localRunning" @click="saveCase">保存</AppButton>
@@ -1021,9 +1102,13 @@ watch(elementPickerLocatorType, () => {
           <h3>录制控制台</h3>
           <div class="web-ui-recording-placeholder">
             <el-icon><VideoPlay /></el-icon>
-            <strong>本地 Runner 真实浏览器录制</strong>
-            <p>后续点击开始录制后，由本地 Runner 在本机打开浏览器，并实时回传操作步骤、截图和候选断言。</p>
-            <AppButton :icon="VideoCamera" @click="showRecordingPlaceholder">预留入口</AppButton>
+            <strong>本地 Runner 页面采集</strong>
+            <p>{{ lastRecordingPageUrl || '打开目标页后，可采集当前页候选元素。' }}</p>
+            <div class="web-ui-recording-placeholder__actions">
+              <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="recordingCapturing" @click="openRecordingPage">打开目标页</AppButton>
+              <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening" @click="captureRecordingPage">采集当前页</AppButton>
+              <AppButton v-if="lastCollectTaskId" @click="openCollectTask(lastCollectTaskId)">查看采集任务</AppButton>
+            </div>
           </div>
         </section>
       </aside>
@@ -1554,6 +1639,12 @@ watch(elementPickerLocatorType, () => {
 .web-ui-recording-placeholder p {
   margin: 0;
   line-height: var(--app-line-height-md);
+}
+
+.web-ui-recording-placeholder__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
 }
 
 .web-ui-element-picker {
