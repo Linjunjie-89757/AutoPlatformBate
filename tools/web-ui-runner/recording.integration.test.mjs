@@ -234,6 +234,81 @@ test('records page input, select and click events as runnable web ui steps', asy
   assert.deepEqual(stderr, []);
 });
 
+test('pauses resumes and undoes recorded page steps', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildPauseResumeRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+    assert.equal(started.recording.active, true);
+
+    const paused = await postJson(runnerBaseUrl, '/record/pause', {});
+    assert.equal(paused.recording.status, 'PAUSED');
+    assert.equal(paused.recording.active, false);
+    assert.equal(paused.recording.paused, true);
+
+    await new Promise(resolve => setTimeout(resolve, 1250));
+    const pausedStatus = await getJson(runnerBaseUrl, '/record/status');
+    assert.equal(pausedStatus.recording.status, 'PAUSED');
+    assert.equal(pausedStatus.recording.eventCount, 0);
+    assert.deepEqual(pausedStatus.steps, []);
+
+    const resumed = await postJson(runnerBaseUrl, '/record/resume', {});
+    assert.equal(resumed.recording.status, 'RECORDING');
+    assert.equal(resumed.recording.active, true);
+
+    let recordedStatus;
+    await waitFor(async () => {
+      recordedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return recordedStatus?.steps?.length === 2;
+    }, 5000);
+    assert.deepEqual(recordedStatus.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(recordedStatus.steps[0].inputValue, 'kept');
+
+    const undone = await postJson(runnerBaseUrl, '/record/undo', {});
+    assert.equal(undone.undone, true);
+    assert.equal(undone.recording.status, 'RECORDING');
+    assert.equal(undone.steps.length, 1);
+    assert.deepEqual(undone.steps.map(item => item.type), ['FILL']);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.equal(stopped.recording.active, false);
+    assert.equal(stopped.steps.length, 1);
+    assert.equal(stopped.steps[0].type, 'FILL');
+    assert.equal(stopped.steps[0].inputValue, 'kept');
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 function buildRecordingPageHtml({ autoInteract }) {
   return [
     '<!doctype html>',
@@ -261,6 +336,30 @@ function buildRecordingPageHtml({ autoInteract }) {
       '  document.querySelector("#save").click();',
       '}, 1000);',
     ].join('') : '',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildPauseResumeRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Recording Controls</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<button id="save" data-testid="save-order">Save order</button>',
+    '<script>',
+    'function perform(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '  document.querySelector("#save").click();',
+    '}',
+    'window.setTimeout(() => perform("ignored"), 1000);',
+    'window.setTimeout(() => perform("kept"), 1700);',
     '</script>',
     '</body>',
     '</html>',

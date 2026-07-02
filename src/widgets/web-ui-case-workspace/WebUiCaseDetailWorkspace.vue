@@ -46,11 +46,17 @@ import {
   captureLocalRunnerPage,
   mapRunnerCandidateToCollectCandidate,
   openLocalRunnerPage,
+  pauseLocalRunnerRecording,
+  resumeLocalRunnerRecording,
   startLocalRunnerRecording,
   startLocalRunnerTaskPolling,
   stopLocalRunnerRecording,
+  undoLocalRunnerRecordingStep,
   type LocalRunnerRecordedStep,
+  type LocalRunnerRecordingResult,
 } from '@/entities/web-ui-automation/lib/localRunnerClient'
+
+type RecordingStatus = 'IDLE' | 'RECORDING' | 'PAUSED' | 'STOPPED'
 
 interface EditableStep {
   id?: number | null
@@ -102,8 +108,15 @@ const recordingOpening = ref(false)
 const recordingCapturing = ref(false)
 const recordingStarting = ref(false)
 const recordingStopping = ref(false)
+const recordingPausing = ref(false)
+const recordingResuming = ref(false)
+const recordingUndoing = ref(false)
 const recordingActive = ref(false)
+const recordingStatus = ref<RecordingStatus>('IDLE')
 const recordingEventCount = ref(0)
+const recordingStepCount = ref(0)
+const recordingStartedAt = ref<string | null>(null)
+const recordingElapsedNow = ref(Date.now())
 const lastCollectTaskId = ref<number | null>(null)
 const lastRecordingPageUrl = ref<string | null>(null)
 const localRunnerTask = ref<LocalRunnerTaskDetailResponse | null>(null)
@@ -122,6 +135,7 @@ const elementPickerPageNo = ref(1)
 const elementPickerPageSize = 20
 let elementPickerSearchTimer: ReturnType<typeof window.setTimeout> | null = null
 let localRunnerTaskTimer: ReturnType<typeof window.setTimeout> | null = null
+let recordingElapsedTimer: ReturnType<typeof window.setInterval> | null = null
 let elementPickerRequestSeq = 0
 
 const caseId = computed(() => {
@@ -136,6 +150,39 @@ const focusedStepId = computed(() => {
   const raw = Array.isArray(route.query.stepId) ? route.query.stepId[0] : route.query.stepId
   const numeric = Number(raw)
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null
+})
+const recordingInProgress = computed(() => recordingStatus.value === 'RECORDING' || recordingStatus.value === 'PAUSED')
+const recordingPaused = computed(() => recordingStatus.value === 'PAUSED')
+const recordingStatusLabel = computed(() => {
+  if (recordingStatus.value === 'RECORDING') return '录制中'
+  if (recordingStatus.value === 'PAUSED') return '已暂停'
+  if (recordingStatus.value === 'STOPPED') return '已停止'
+  return '未开始'
+})
+const recordingStatusDescription = computed(() => {
+  if (recordingStatus.value === 'RECORDING') {
+    return recordingStepCount.value > 0 ? `已生成 ${recordingStepCount.value} 步` : '等待页面操作'
+  }
+  if (recordingStatus.value === 'PAUSED') {
+    return recordingStepCount.value > 0 ? `已暂停，当前 ${recordingStepCount.value} 步` : '已暂停，尚未生成步骤'
+  }
+  if (recordingStatus.value === 'STOPPED') {
+    return recordingStepCount.value > 0 ? `已停止，最近生成 ${recordingStepCount.value} 步` : '已停止'
+  }
+  return '打开目标页后，可开始录制页面操作'
+})
+const recordingElapsedText = computed(() => {
+  if (!recordingStartedAt.value || !recordingInProgress.value) {
+    return ''
+  }
+  const startedAt = Date.parse(recordingStartedAt.value)
+  if (!Number.isFinite(startedAt)) {
+    return ''
+  }
+  const totalSeconds = Math.max(0, Math.floor((recordingElapsedNow.value - startedAt) / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 })
 
 function createEmptyForm(): CaseForm {
@@ -339,6 +386,50 @@ function readRecordingTargetUrl() {
   return form.value.baseUrl.trim()
 }
 
+function normalizeRecordingStatus(result: LocalRunnerRecordingResult): RecordingStatus {
+  const status = String(result.recording?.status || '').toUpperCase()
+  if (status === 'RECORDING' || status === 'PAUSED' || status === 'STOPPED') {
+    return status
+  }
+  return result.recording?.active ? 'RECORDING' : 'IDLE'
+}
+
+function syncRecordingState(result: LocalRunnerRecordingResult) {
+  const status = normalizeRecordingStatus(result)
+  recordingStatus.value = status
+  recordingActive.value = status === 'RECORDING'
+  recordingEventCount.value = Number(result.recording?.eventCount || 0)
+  recordingStepCount.value = Number(result.recording?.stepCount ?? result.steps?.length ?? 0)
+  recordingStartedAt.value = result.recording?.startedAt || null
+  if (result.page?.url || result.session?.currentUrl) {
+    lastRecordingPageUrl.value = result.page?.url || result.session?.currentUrl || lastRecordingPageUrl.value
+  }
+
+  if (status === 'RECORDING' || status === 'PAUSED') {
+    ensureRecordingElapsedTimer()
+  } else {
+    stopRecordingElapsedTimer()
+  }
+}
+
+function ensureRecordingElapsedTimer() {
+  recordingElapsedNow.value = Date.now()
+  if (recordingElapsedTimer) {
+    return
+  }
+  recordingElapsedTimer = window.setInterval(() => {
+    recordingElapsedNow.value = Date.now()
+  }, 1000)
+}
+
+function stopRecordingElapsedTimer() {
+  if (!recordingElapsedTimer) {
+    return
+  }
+  window.clearInterval(recordingElapsedTimer)
+  recordingElapsedTimer = null
+}
+
 function buildPayload(): SaveWebUiCasePayload {
   return {
     workspaceCode: props.workspaceCode,
@@ -540,9 +631,7 @@ async function startRecordingSteps() {
       workspaceId: props.workspaceCode,
       environmentId: 'manual',
     })
-    recordingActive.value = result.recording.active
-    recordingEventCount.value = result.recording.eventCount
-    lastRecordingPageUrl.value = result.page?.url || result.session?.currentUrl || lastRecordingPageUrl.value
+    syncRecordingState(result)
     ElMessage.success('本地录制已开始')
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
@@ -555,9 +644,7 @@ async function stopRecordingSteps() {
   recordingStopping.value = true
   try {
     const result = await stopLocalRunnerRecording()
-    recordingActive.value = false
-    recordingEventCount.value = result.recording.eventCount
-    lastRecordingPageUrl.value = result.page?.url || result.session?.currentUrl || lastRecordingPageUrl.value
+    syncRecordingState(result)
     const appendedCount = appendRecordedSteps(result.steps || [])
     if (appendedCount > 0) {
       ElMessage.success(`已生成 ${appendedCount} 个录制步骤，保存后生效`)
@@ -568,6 +655,57 @@ async function stopRecordingSteps() {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
     recordingStopping.value = false
+  }
+}
+
+async function pauseRecordingSteps() {
+  recordingPausing.value = true
+  try {
+    const result = await pauseLocalRunnerRecording()
+    syncRecordingState(result)
+    if (recordingPaused.value) {
+      ElMessage.success('本地录制已暂停')
+    } else {
+      ElMessage.warning('当前没有正在录制的任务')
+    }
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingPausing.value = false
+  }
+}
+
+async function resumeRecordingSteps() {
+  recordingResuming.value = true
+  try {
+    const result = await resumeLocalRunnerRecording()
+    syncRecordingState(result)
+    if (recordingActive.value) {
+      ElMessage.success('本地录制已继续')
+    } else {
+      ElMessage.warning('当前没有可继续的录制任务')
+    }
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingResuming.value = false
+  }
+}
+
+async function undoRecordingStep() {
+  recordingUndoing.value = true
+  try {
+    const result = await undoLocalRunnerRecordingStep()
+    syncRecordingState(result)
+    if (result.undone) {
+      ElMessage.success('已撤销最后一步录制')
+    } else {
+      ElMessage.warning('暂无可撤销的录制步骤')
+    }
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingUndoing.value = false
   }
 }
 
@@ -911,6 +1049,7 @@ onBeforeUnmount(() => {
     window.clearTimeout(elementPickerSearchTimer)
   }
   stopLocalRunnerTaskRefresh()
+  stopRecordingElapsedTimer()
 })
 
 watch(
@@ -949,7 +1088,7 @@ watch(elementPickerLocatorType, () => {
         <h2>{{ form.name || 'Web UI 用例详情' }}</h2>
       </div>
       <div class="web-ui-case-detail__actions">
-        <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="saving || running || localRunning || recordingCapturing" @click="openRecordingPage">打开目标页</AppButton>
+        <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="saving || running || localRunning || recordingCapturing || recordingInProgress" @click="openRecordingPage">打开目标页</AppButton>
         <AppButton :loading="localRunning" :disabled="saving || running" @click="runCase(true)">本地运行</AppButton>
         <AppButton :loading="running" :disabled="saving || localRunning" @click="runCase(false)">调试运行</AppButton>
         <AppButton type="primary" :loading="saving" :disabled="loading || running || localRunning" @click="saveCase">保存</AppButton>
@@ -1189,16 +1328,21 @@ watch(elementPickerLocatorType, () => {
             <el-icon><VideoPlay /></el-icon>
             <strong>本地 Runner 页面采集</strong>
             <p>{{ lastRecordingPageUrl || '打开目标页后，可采集当前页候选元素。' }}</p>
-            <div v-if="recordingActive" class="web-ui-recording-placeholder__status">
+            <div class="web-ui-recording-placeholder__status" :class="`is-${recordingStatus.toLowerCase()}`">
               <span />
-              <strong>录制中</strong>
-              <small>{{ recordingEventCount > 0 ? `已捕获 ${recordingEventCount} 个事件` : '等待页面操作' }}</small>
+              <strong>{{ recordingStatusLabel }}</strong>
+              <small>{{ recordingStatusDescription }}</small>
+              <small v-if="recordingElapsedText">{{ recordingElapsedText }}</small>
+              <small v-if="recordingEventCount > 0">事件 {{ recordingEventCount }}</small>
             </div>
             <div class="web-ui-recording-placeholder__actions">
-              <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="recordingCapturing || recordingActive" @click="openRecordingPage">打开目标页</AppButton>
-              <AppButton :icon="VideoPlay" :loading="recordingStarting" :disabled="recordingOpening || recordingCapturing || recordingActive" @click="startRecordingSteps">开始录制</AppButton>
-              <AppButton type="primary" :loading="recordingStopping" :disabled="!recordingActive" @click="stopRecordingSteps">停止并生成步骤</AppButton>
-              <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening || recordingActive" @click="captureRecordingPage">采集当前页</AppButton>
+              <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="recordingCapturing || recordingInProgress" @click="openRecordingPage">打开目标页</AppButton>
+              <AppButton :icon="VideoPlay" :loading="recordingStarting" :disabled="recordingOpening || recordingCapturing || recordingInProgress" @click="startRecordingSteps">开始录制</AppButton>
+              <AppButton v-if="recordingActive" :loading="recordingPausing" :disabled="recordingStopping" @click="pauseRecordingSteps">暂停录制</AppButton>
+              <AppButton v-else-if="recordingPaused" :loading="recordingResuming" :disabled="recordingStopping" @click="resumeRecordingSteps">继续录制</AppButton>
+              <AppButton :loading="recordingUndoing" :disabled="!recordingInProgress || recordingStepCount <= 0" @click="undoRecordingStep">撤销上一步</AppButton>
+              <AppButton type="primary" :loading="recordingStopping" :disabled="!recordingInProgress" @click="stopRecordingSteps">停止并生成步骤</AppButton>
+              <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening || recordingInProgress" @click="captureRecordingPage">采集当前页</AppButton>
               <AppButton v-if="lastCollectTaskId" @click="openCollectTask(lastCollectTaskId)">查看采集任务</AppButton>
             </div>
           </div>
@@ -1744,7 +1888,19 @@ watch(elementPickerLocatorType, () => {
   width: 8px;
   height: 8px;
   border-radius: 999px;
+  background: var(--app-text-muted);
+}
+
+.web-ui-recording-placeholder__status.is-recording span {
   background: var(--app-success);
+}
+
+.web-ui-recording-placeholder__status.is-paused span {
+  background: var(--app-warning);
+}
+
+.web-ui-recording-placeholder__status.is-stopped span {
+  background: var(--app-text-secondary);
 }
 
 .web-ui-recording-placeholder__status small {

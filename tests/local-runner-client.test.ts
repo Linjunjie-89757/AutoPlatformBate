@@ -8,9 +8,12 @@ import {
   mapRunnerCandidateToCollectCandidate,
   normalizeRunnerHealth,
   getLocalRunnerRecordingStatus,
+  pauseLocalRunnerRecording,
+  resumeLocalRunnerRecording,
   startLocalRunnerTaskPolling,
   startLocalRunnerRecording,
   stopLocalRunnerRecording,
+  undoLocalRunnerRecordingStep,
   validateLocalRunnerLocators,
 } from '../src/entities/web-ui-automation/lib/localRunnerClient.ts'
 
@@ -155,11 +158,21 @@ test('local runner recording client calls recording endpoints', async () => {
         success: true,
         recording: {
           active: String(url).endsWith('/record/start'),
+          status: String(url).endsWith('/record/start') || String(url).endsWith('/record/resume')
+            ? 'RECORDING'
+            : String(url).endsWith('/record/pause')
+              ? 'PAUSED'
+              : String(url).endsWith('/record/stop')
+                ? 'STOPPED'
+                : 'IDLE',
           recorderId: 'rec-1',
           sessionId: 'session-1',
           startedAt: '2026-07-02T12:00:00.000Z',
           stoppedAt: null,
+          pausedAt: null,
+          resumedAt: null,
           eventCount: 0,
+          stepCount: 0,
           overflow: false,
         },
         steps: [],
@@ -169,6 +182,9 @@ test('local runner recording client calls recording endpoints', async () => {
 
   try {
     await startLocalRunnerRecording({ workspaceId: 'account-open', environmentId: 'manual' })
+    await pauseLocalRunnerRecording()
+    await resumeLocalRunnerRecording()
+    await undoLocalRunnerRecordingStep()
     await stopLocalRunnerRecording()
     await getLocalRunnerRecordingStatus()
 
@@ -177,6 +193,21 @@ test('local runner recording client calls recording endpoints', async () => {
         url: `${LOCAL_RUNNER_BASE_URL}/record/start`,
         method: 'POST',
         body: { workspaceId: 'account-open', environmentId: 'manual' },
+      },
+      {
+        url: `${LOCAL_RUNNER_BASE_URL}/record/pause`,
+        method: 'POST',
+        body: null,
+      },
+      {
+        url: `${LOCAL_RUNNER_BASE_URL}/record/resume`,
+        method: 'POST',
+        body: null,
+      },
+      {
+        url: `${LOCAL_RUNNER_BASE_URL}/record/undo`,
+        method: 'POST',
+        body: null,
       },
       {
         url: `${LOCAL_RUNNER_BASE_URL}/record/stop`,

@@ -206,11 +206,16 @@ export interface LocalRunnerCaptureResult {
 
 export interface LocalRunnerRecordingView {
   active: boolean
+  status?: 'IDLE' | 'RECORDING' | 'PAUSED' | 'STOPPED'
+  paused?: boolean
   recorderId: string | null
   sessionId: string | null
   startedAt: string | null
   stoppedAt: string | null
+  pausedAt?: string | null
+  resumedAt?: string | null
   eventCount: number
+  stepCount?: number
   overflow: boolean
 }
 
@@ -504,6 +509,24 @@ export async function startLocalRunnerRecording(payload: Omit<LocalRunnerOpenPay
 
 export async function stopLocalRunnerRecording() {
   return requestLocalRunner<LocalRunnerRecordingResult>('/record/stop', {
+    method: 'POST',
+  })
+}
+
+export async function pauseLocalRunnerRecording() {
+  return requestLocalRunner<LocalRunnerRecordingResult>('/record/pause', {
+    method: 'POST',
+  })
+}
+
+export async function resumeLocalRunnerRecording() {
+  return requestLocalRunner<LocalRunnerRecordingResult>('/record/resume', {
+    method: 'POST',
+  })
+}
+
+export async function undoLocalRunnerRecordingStep() {
+  return requestLocalRunner<LocalRunnerRecordingResult & { undone?: boolean }>('/record/undo', {
     method: 'POST',
   })
 }

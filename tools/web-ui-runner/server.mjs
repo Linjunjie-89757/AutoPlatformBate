@@ -111,6 +111,24 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, result);
     }
 
+    if (route === 'POST /record/pause') {
+      const payload = await readJson(request);
+      const result = await pausePageRecording(payload);
+      return sendJson(response, 200, result);
+    }
+
+    if (route === 'POST /record/resume') {
+      const payload = await readJson(request);
+      const result = await resumePageRecording(payload);
+      return sendJson(response, 200, result);
+    }
+
+    if (route === 'POST /record/undo') {
+      const payload = await readJson(request);
+      const result = await undoLastRecordedStep(payload);
+      return sendJson(response, 200, result);
+    }
+
     if (route === 'GET /record/status') {
       return sendJson(response, 200, await getPageRecordingStatus());
     }
@@ -409,6 +427,9 @@ async function startPageRecording(payload = {}) {
     environmentId: optionalString(payload.environmentId) || activeSession?.environmentId || null,
     startedAt: new Date().toISOString(),
     stoppedAt: null,
+    pausedAt: null,
+    resumedAt: null,
+    status: 'RECORDING',
     active: true,
     events: [],
     overflow: false,
@@ -427,20 +448,81 @@ async function stopPageRecording() {
   activeRecorder = undefined;
 
   if (!recorder) {
-    return {
-      success: true,
-      session: buildSessionView(),
-      page: hasUsablePage() ? await getPageInfo(page) : null,
-      recording: buildRecorderView(null),
-      events: [],
-      steps: [],
-    };
+    return buildPageRecordingResult(null);
   }
 
   recorder.active = false;
+  recorder.status = 'STOPPED';
   recorder.stoppedAt = new Date().toISOString();
-  const events = recorder.events.slice();
 
+  return buildPageRecordingResult(recorder);
+}
+
+async function pausePageRecording() {
+  const recorder = activeRecorder;
+  if (!recorder) {
+    return buildPageRecordingResult(null);
+  }
+
+  if (recorder.status !== 'PAUSED') {
+    recorder.active = false;
+    recorder.status = 'PAUSED';
+    recorder.pausedAt = new Date().toISOString();
+  }
+
+  return buildPageRecordingResult(recorder);
+}
+
+async function resumePageRecording() {
+  const recorder = activeRecorder;
+  if (!recorder) {
+    return buildPageRecordingResult(null);
+  }
+
+  ensureContext();
+  ensurePage();
+  await ensureSessionFresh();
+  await ensureRecorderInstalled();
+  await refreshActiveSessionPageSnapshot();
+  recorder.active = true;
+  recorder.status = 'RECORDING';
+  recorder.resumedAt = new Date().toISOString();
+
+  return buildPageRecordingResult(recorder);
+}
+
+async function undoLastRecordedStep() {
+  const recorder = activeRecorder;
+  if (!recorder) {
+    return {
+      ...(await buildPageRecordingResult(null)),
+      undone: false,
+    };
+  }
+
+  const previousStepCount = buildRecordedSteps(recorder.events).length;
+  let undone = false;
+  while (recorder.events.length > 0) {
+    recorder.events.pop();
+    undone = true;
+    if (buildRecordedSteps(recorder.events).length < previousStepCount || previousStepCount === 0) {
+      break;
+    }
+  }
+
+  return {
+    ...(await buildPageRecordingResult(recorder)),
+    undone,
+  };
+}
+
+async function getPageRecordingStatus() {
+  await refreshActiveSessionPageSnapshot();
+  return buildPageRecordingResult(activeRecorder || null);
+}
+
+async function buildPageRecordingResult(recorder) {
+  const events = recorder?.events?.slice() || [];
   return {
     success: true,
     session: buildSessionView(),
@@ -448,16 +530,6 @@ async function stopPageRecording() {
     recording: buildRecorderView(recorder),
     events,
     steps: buildRecordedSteps(events),
-  };
-}
-
-async function getPageRecordingStatus() {
-  await refreshActiveSessionPageSnapshot();
-  return {
-    success: true,
-    session: buildSessionView(),
-    page: hasUsablePage() ? await getPageInfo(page) : null,
-    recording: buildRecorderView(activeRecorder || null),
   };
 }
 
@@ -492,7 +564,7 @@ async function ensureRecorderInstalled() {
 
 async function recordBrowserEvent(source, event) {
   const recorder = activeRecorder;
-  if (!recorder?.active || !event || typeof event !== 'object') {
+  if (recorder?.status !== 'RECORDING' || !recorder.active || !event || typeof event !== 'object') {
     return;
   }
   const normalized = await normalizeRecordedBrowserEvent(source, event);
@@ -676,21 +748,33 @@ function buildRecorderView(recorder) {
   if (!recorder) {
     return {
       active: false,
+      status: 'IDLE',
+      paused: false,
       recorderId: null,
       sessionId: null,
       startedAt: null,
       stoppedAt: null,
+      pausedAt: null,
+      resumedAt: null,
       eventCount: 0,
+      stepCount: 0,
       overflow: false,
     };
   }
+  const status = recorder.status || (recorder.active ? 'RECORDING' : recorder.stoppedAt ? 'STOPPED' : 'PAUSED');
+  const steps = buildRecordedSteps(recorder.events);
   return {
-    active: Boolean(recorder.active),
+    active: status === 'RECORDING',
+    status,
+    paused: status === 'PAUSED',
     recorderId: recorder.recorderId,
     sessionId: recorder.sessionId || null,
     startedAt: recorder.startedAt || null,
     stoppedAt: recorder.stoppedAt || null,
+    pausedAt: recorder.pausedAt || null,
+    resumedAt: recorder.resumedAt || null,
     eventCount: recorder.events.length,
+    stepCount: steps.length,
     overflow: Boolean(recorder.overflow),
   };
 }
