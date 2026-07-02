@@ -8,12 +8,14 @@ import {
   CopyDocument,
   Delete,
   Plus,
+  View,
   VideoCamera,
   VideoPlay,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
+  formatRunStatus,
   formatLocatorType,
   requiresInput,
   requiresLocator,
@@ -28,8 +30,10 @@ import {
   type WebUiElementItem,
   type WebUiCaseStatus,
   type WebUiCaseStepItem,
+  type LocalRunnerTaskDetailResponse,
   type WebUiLocatorContextPathItem,
   type WebUiLocatorType,
+  type WebUiRunDetail,
   type WebUiScreenshotPolicy,
   type WebUiStepType,
 } from '@/entities/web-ui-automation'
@@ -37,6 +41,7 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
+import { startLocalRunnerTaskPolling } from '@/entities/web-ui-automation/lib/localRunnerClient'
 
 interface EditableStep {
   id?: number | null
@@ -84,6 +89,9 @@ const loading = ref(false)
 const saving = ref(false)
 const running = ref(false)
 const localRunning = ref(false)
+const localRunnerTask = ref<LocalRunnerTaskDetailResponse | null>(null)
+const localRunnerFormalRunId = ref<number | null>(null)
+const localRunnerRunDetail = ref<WebUiRunDetail | null>(null)
 const errorMessage = ref('')
 const selectedStepIndex = ref(0)
 const form = ref<CaseForm>(createEmptyForm())
@@ -96,6 +104,7 @@ const elementPickerTotal = ref(0)
 const elementPickerPageNo = ref(1)
 const elementPickerPageSize = 20
 let elementPickerSearchTimer: ReturnType<typeof window.setTimeout> | null = null
+let localRunnerTaskTimer: ReturnType<typeof window.setTimeout> | null = null
 let elementPickerRequestSeq = 0
 
 const caseId = computed(() => {
@@ -105,6 +114,7 @@ const caseId = computed(() => {
 })
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
+const localRunnerRunSummary = computed(() => localRunnerRunDetail.value?.summary ?? null)
 const focusedStepId = computed(() => {
   const raw = Array.isArray(route.query.stepId) ? route.query.stepId[0] : route.query.stepId
   const numeric = Number(raw)
@@ -166,6 +176,7 @@ function toEditableStep(item: WebUiCaseStepItem, index: number): EditableStep {
 }
 
 function fillForm(item: WebUiCaseDetail) {
+  resetLocalRunnerState()
   form.value = {
     name: item.name || '',
     moduleName: item.moduleName || '',
@@ -207,6 +218,104 @@ async function loadDetail() {
   } finally {
     loading.value = false
   }
+}
+
+function resetLocalRunnerState() {
+  stopLocalRunnerTaskRefresh()
+  localRunning.value = false
+  localRunnerTask.value = null
+  localRunnerFormalRunId.value = null
+  localRunnerRunDetail.value = null
+}
+
+function isLocalRunnerTaskTerminal(status?: string | null) {
+  return ['SUCCESS', 'FAILED', 'DEGRADED', 'CANCELED'].includes(String(status || '').toUpperCase())
+}
+
+function formatLocalRunnerTaskStatus(status?: string | null) {
+  if (status === 'SUCCESS') return '成功'
+  if (status === 'FAILED') return '失败'
+  if (status === 'DEGRADED') return '降级'
+  if (status === 'CANCELED') return '已取消'
+  if (status === 'RUNNING') return '运行中'
+  if (status === 'ASSIGNED') return '已分配'
+  if (status === 'PENDING') return '等待中'
+  return status || '暂无任务'
+}
+
+function getLocalRunnerTaskStatusType(status?: string | null) {
+  if (status === 'SUCCESS') return 'success'
+  if (status === 'FAILED') return 'danger'
+  if (status === 'DEGRADED') return 'warning'
+  if (status === 'CANCELED') return 'info'
+  return 'primary'
+}
+
+function stopLocalRunnerTaskRefresh() {
+  if (localRunnerTaskTimer) {
+    window.clearTimeout(localRunnerTaskTimer)
+    localRunnerTaskTimer = null
+  }
+}
+
+function scheduleLocalRunnerTaskRefresh(runId: string) {
+  stopLocalRunnerTaskRefresh()
+  if (!runId || isLocalRunnerTaskTerminal(localRunnerTask.value?.status)) {
+    localRunning.value = false
+    return
+  }
+  localRunnerTaskTimer = window.setTimeout(async () => {
+    localRunnerTaskTimer = null
+    await refreshLocalRunnerTask(true)
+    if (localRunnerTask.value?.runId === runId && !isLocalRunnerTaskTerminal(localRunnerTask.value.status)) {
+      scheduleLocalRunnerTaskRefresh(runId)
+    }
+  }, 1500)
+}
+
+async function refreshLocalRunnerTask(silent = false) {
+  const runId = localRunnerTask.value?.runId
+  if (!runId) {
+    return
+  }
+
+  try {
+    const task = await webUiAutomationApi.getLocalRunnerDebugTask(runId)
+    localRunnerTask.value = task
+    if (isLocalRunnerTaskTerminal(task.status)) {
+      localRunning.value = false
+      await refreshLocalRunnerFormalRun()
+    }
+    if (!silent) {
+      ElMessage.success('本地运行任务状态已刷新')
+    }
+  } catch (error) {
+    if (!silent) {
+      ElMessage.error(getRequestErrorMessage(error))
+    }
+  }
+}
+
+async function refreshLocalRunnerFormalRun() {
+  if (!localRunnerFormalRunId.value) {
+    return
+  }
+  localRunnerRunDetail.value = await webUiAutomationApi.getRunDetail(props.workspaceCode, localRunnerFormalRunId.value)
+}
+
+function openLocalRunnerFormalReport() {
+  if (!localRunnerFormalRunId.value) {
+    ElMessage.warning('暂无可查看的正式报告')
+    return
+  }
+  void router.push({
+    path: '/automation/web/runs',
+    query: {
+      workspace: props.workspaceCode,
+      tab: 'runs',
+      runId: String(localRunnerFormalRunId.value),
+    },
+  })
 }
 
 function buildPayload(): SaveWebUiCasePayload {
@@ -293,15 +402,44 @@ async function runCase(localRunner: boolean) {
   const loadingRef = localRunner ? localRunning : running
   loadingRef.value = true
   try {
-    const result = localRunner
-      ? (await webUiAutomationApi.createLocalRunnerRun(props.workspaceCode, caseId.value, {})).run
-      : await webUiAutomationApi.runCase(props.workspaceCode, caseId.value, {})
+    if (localRunner) {
+      stopLocalRunnerTaskRefresh()
+      localRunnerTask.value = null
+      localRunnerFormalRunId.value = null
+      localRunnerRunDetail.value = null
+      await startLocalRunnerTaskPolling({
+        installId: `web-ui-case-${props.workspaceCode}`,
+        capabilities: ['WEB_CASE_RUN', 'WEB_ELEMENT_VALIDATE'],
+        workspaceCodes: [props.workspaceCode],
+        intervalMs: 1000,
+      })
+      const response = await webUiAutomationApi.createLocalRunnerRun(props.workspaceCode, caseId.value, {
+        headless: form.value.headless,
+      })
+      localRunnerFormalRunId.value = response.run.runId
+      localRunnerTask.value = response.runnerTask
+      if (isLocalRunnerTaskTerminal(response.runnerTask.status)) {
+        localRunning.value = false
+        await refreshLocalRunnerFormalRun()
+      } else {
+        scheduleLocalRunnerTaskRefresh(response.runnerTask.runId)
+      }
+      ElMessage.success(`本地运行任务已创建：${response.runnerTask.runId}`)
+      return
+    }
+
+    const result = await webUiAutomationApi.runCase(props.workspaceCode, caseId.value, {})
     void result
-    ElMessage.success(localRunner ? '已创建本地运行任务' : '调试运行完成')
+    ElMessage.success('调试运行完成')
   } catch (error) {
+    if (localRunner) {
+      loadingRef.value = false
+    }
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
-    loadingRef.value = false
+    if (!localRunner) {
+      loadingRef.value = false
+    }
   }
 }
 
@@ -606,6 +744,7 @@ onBeforeUnmount(() => {
   if (elementPickerSearchTimer) {
     window.clearTimeout(elementPickerSearchTimer)
   }
+  stopLocalRunnerTaskRefresh()
 })
 
 watch(
@@ -659,7 +798,42 @@ watch(elementPickerLocatorType, () => {
       </template>
     </AppEmptyState>
 
-    <div v-else class="web-ui-case-detail__body">
+    <template v-else>
+      <section v-if="localRunnerTask" class="web-ui-local-runner-result">
+        <div class="web-ui-local-runner-result__main">
+          <el-tag :type="getLocalRunnerTaskStatusType(localRunnerTask.status)" effect="light">
+            {{ formatLocalRunnerTaskStatus(localRunnerTask.status) }}
+          </el-tag>
+          <span class="web-ui-local-runner-result__run-id">{{ localRunnerTask.runId }}</span>
+          <span v-if="localRunnerFormalRunId">报告 #{{ localRunnerFormalRunId }}</span>
+          <el-tag v-if="localRunnerRunSummary" size="small" effect="light">
+            正式报告：{{ formatRunStatus(localRunnerRunSummary.status) }}
+          </el-tag>
+          <span>{{ localRunnerTask.statusMessage || localRunnerTask.errorMessage || '本地运行任务已创建，等待 Runner 回传结果' }}</span>
+        </div>
+        <el-progress
+          class="web-ui-local-runner-result__progress"
+          :percentage="localRunnerTask.progress.percent"
+          :status="localRunnerTask.status === 'FAILED' ? 'exception' : localRunnerTask.status === 'SUCCESS' ? 'success' : undefined"
+        />
+        <div class="web-ui-local-runner-result__actions">
+          <span>阶段：{{ localRunnerTask.currentStage || '-' }}</span>
+          <span>步骤：{{ localRunnerTask.progress.current }}/{{ localRunnerTask.progress.total }}</span>
+          <span v-if="localRunnerRunSummary">报告步骤：{{ localRunnerRunSummary.passedSteps }}/{{ localRunnerRunSummary.failedSteps }}/{{ localRunnerRunSummary.skippedSteps }}</span>
+          <AppButton size="small" @click="() => refreshLocalRunnerTask(false)">刷新</AppButton>
+          <AppButton
+            v-if="localRunnerFormalRunId"
+            size="small"
+            type="primary"
+            :icon="View"
+            @click="openLocalRunnerFormalReport"
+          >
+            查看正式报告
+          </AppButton>
+        </div>
+      </section>
+
+      <div class="web-ui-case-detail__body">
       <aside class="web-ui-case-detail__steps" aria-label="步骤列表">
         <div class="web-ui-case-detail__panel-header">
           <div>
@@ -853,7 +1027,8 @@ watch(elementPickerLocatorType, () => {
           </div>
         </section>
       </aside>
-    </div>
+      </div>
+    </template>
 
     <el-dialog
       v-model="elementPickerVisible"
@@ -986,6 +1161,43 @@ watch(elementPickerLocatorType, () => {
   flex: 1;
   grid-template-columns: minmax(280px, 300px) minmax(360px, 1fr) minmax(240px, 280px);
   gap: var(--app-space-4);
+}
+
+.web-ui-local-runner-result {
+  display: grid;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-panel);
+}
+
+.web-ui-local-runner-result__main,
+.web-ui-local-runner-result__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  min-width: 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-local-runner-result__run-id {
+  max-width: 280px;
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-family: var(--app-font-family-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-local-runner-result__progress {
+  max-width: 720px;
+}
+
+.web-ui-local-runner-result__actions {
+  justify-content: flex-start;
 }
 
 .web-ui-case-detail__steps,
