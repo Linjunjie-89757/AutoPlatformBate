@@ -78,6 +78,16 @@ export interface WebUiCollectSaveNavigationInput {
   skippedCount: number
 }
 
+export interface WebUiRecordedCaseCollectSaveNavigationInput {
+  workspaceCode: string
+  collectTaskId?: number | null
+  savedCount: number
+  skippedCount: number
+}
+
+export const WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN = 'web-ui-case-recording'
+export const WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY = 'autoRematchRecordedElements'
+
 type CandidateReviewShape = Pick<
   WebUiElementCollectCandidate,
   'validationStatus' | 'matchCount' | 'validationMessage' | 'confidence' | 'saveBlockedReason'
@@ -278,6 +288,20 @@ export function buildCollectSaveResultNavigationQuery(input: WebUiCollectSaveNav
   }
   if (input.groupId) {
     query.groupId = String(input.groupId)
+  }
+  if (input.collectTaskId) {
+    query.collectTaskId = String(input.collectTaskId)
+  }
+  return query
+}
+
+export function buildRecordedCaseCollectSaveNavigationQuery(input: WebUiRecordedCaseCollectSaveNavigationInput): Record<string, string> {
+  const query: Record<string, string> = {
+    workspace: input.workspaceCode,
+    workspaceCode: input.workspaceCode,
+    [WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY]: '1',
+    saved: String(input.savedCount),
+    skipped: String(input.skippedCount),
   }
   if (input.collectTaskId) {
     query.collectTaskId = String(input.collectTaskId)

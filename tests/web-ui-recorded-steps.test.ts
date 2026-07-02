@@ -7,6 +7,10 @@ import {
   toWebUiCollectCandidatesFromRecordedSteps,
   toWebUiCaseStepFromRecordedStep,
 } from '../src/entities/web-ui-automation/lib/recordedSteps.ts'
+import {
+  WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY,
+  buildRecordedCaseCollectSaveNavigationQuery,
+} from '../src/entities/web-ui-automation/lib/collectTask.ts'
 
 import type { LocalRunnerRecordedStep } from '../src/entities/web-ui-automation/lib/localRunnerClient.ts'
 import type { WebUiElementItem } from '../src/entities/web-ui-automation/model/types.ts'
@@ -151,6 +155,22 @@ test('skips duplicate or invalid recorded collect candidates', () => {
 
   assert.equal(candidates.length, 1)
   assert.equal(candidates[0].elementName, 'Submit')
+})
+
+test('builds recorded case collect save query with auto rematch marker', () => {
+  assert.deepEqual(buildRecordedCaseCollectSaveNavigationQuery({
+    workspaceCode: 'account-open',
+    collectTaskId: 42,
+    savedCount: 2,
+    skippedCount: 1,
+  }), {
+    workspace: 'account-open',
+    workspaceCode: 'account-open',
+    [WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY]: '1',
+    collectTaskId: '42',
+    saved: '2',
+    skipped: '1',
+  })
 })
 
 function recordedStep(overrides: Partial<LocalRunnerRecordedStep>): LocalRunnerRecordedStep {

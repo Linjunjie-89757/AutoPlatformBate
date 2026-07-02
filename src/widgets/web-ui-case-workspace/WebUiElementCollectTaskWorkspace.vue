@@ -19,9 +19,11 @@ import {
 import {
   buildCollectCandidateSaveSummary,
   buildCollectSaveResultNavigationQuery,
+  buildRecordedCaseCollectSaveNavigationQuery,
   buildCollectCandidateValidationLocators,
   isCollectCandidateSaveable,
   isCollectTaskTerminalStatus,
+  WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN,
 } from '@/entities/web-ui-automation/lib/collectTask'
 import { formatWebUiDateTime } from '@/entities/web-ui-automation/lib/format'
 import {
@@ -111,13 +113,21 @@ const canceledTaskIds = new Set<number>()
 let pollingTimer: ReturnType<typeof window.setTimeout> | null = null
 let platformPollStatusTimer: ReturnType<typeof window.setTimeout> | null = null
 
+function getRouteQueryString(name: string) {
+  const value = route.query[name]
+  return Array.isArray(value) ? value[0] || '' : value || ''
+}
+
 const taskId = computed(() => Number(route.params.taskId || 0))
 const queryWorkspaceCode = computed(() => {
-  const value = Array.isArray(route.query.workspaceCode) ? route.query.workspaceCode[0] : route.query.workspaceCode
+  const value = getRouteQueryString('workspaceCode')
   return value || props.workspaceCode || 'ALL'
 })
 const moduleId = computed(() => Number(route.query.moduleId || 0) || null)
 const pageId = computed(() => Number(route.query.pageId || 0) || null)
+const returnOrigin = computed(() => getRouteQueryString('origin'))
+const returnCaseId = computed(() => Number(getRouteQueryString('returnCaseId') || 0) || null)
+const returnWorkspaceCode = computed(() => getRouteQueryString('returnWorkspaceCode') || queryWorkspaceCode.value)
 const groupStrategy = computed(() => {
   const value = Array.isArray(route.query.groupStrategy) ? route.query.groupStrategy[0] : route.query.groupStrategy
   return value === 'CUSTOM' ? 'CUSTOM' : 'AI'
@@ -1464,13 +1474,27 @@ async function saveSelectedCandidates() {
       ElMessage.success(`已保存 ${savedCount} 个元素${traceText}`)
     }
 
+    const collectTaskId = task.value?.taskId || null
+    if (returnOrigin.value === WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN && returnCaseId.value) {
+      await router.push({
+        path: `/automation/web/cases/${returnCaseId.value}`,
+        query: buildRecordedCaseCollectSaveNavigationQuery({
+          workspaceCode: returnWorkspaceCode.value || page.workspaceCode,
+          collectTaskId,
+          savedCount,
+          skippedCount,
+        }),
+      })
+      return
+    }
+
     await router.push({
       path: '/automation/web/elements',
       query: buildCollectSaveResultNavigationQuery({
         workspaceCode: page.workspaceCode,
         pageId: page.id,
         groupId: firstSavedGroupId,
-        collectTaskId: task.value?.taskId || null,
+        collectTaskId,
         savedCount,
         skippedCount,
       }),

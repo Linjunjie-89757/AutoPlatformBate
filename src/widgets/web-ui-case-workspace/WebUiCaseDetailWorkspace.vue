@@ -40,6 +40,10 @@ import {
   type WebUiScreenshotPolicy,
   type WebUiStepType,
 } from '@/entities/web-ui-automation'
+import {
+  WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY,
+  WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN,
+} from '@/entities/web-ui-automation/lib/collectTask'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -60,6 +64,7 @@ import {
 
 type RecordingStatus = 'IDLE' | 'RECORDING' | 'PAUSED' | 'STOPPED'
 type RecordingElementMatchStatus = 'MATCHED' | 'CANDIDATE'
+type CollectTaskReturnSource = typeof WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN | null
 
 interface EditableStep {
   id?: number | null
@@ -125,6 +130,7 @@ const recordingStepCount = ref(0)
 const recordingStartedAt = ref<string | null>(null)
 const recordingElapsedNow = ref(Date.now())
 const lastCollectTaskId = ref<number | null>(null)
+const lastCollectTaskReturnSource = ref<CollectTaskReturnSource>(null)
 const lastRecordingPageUrl = ref<string | null>(null)
 const localRunnerTask = ref<LocalRunnerTaskDetailResponse | null>(null)
 const localRunnerFormalRunId = ref<number | null>(null)
@@ -150,6 +156,16 @@ const caseId = computed(() => {
   const numeric = Number(raw)
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null
 })
+
+function getRouteQueryString(name: string) {
+  const value = route.query[name]
+  return Array.isArray(value) ? value[0] || '' : value || ''
+}
+
+function getRouteQueryNumber(name: string) {
+  const numeric = Number(getRouteQueryString(name))
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null
+}
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
 const localRunnerRunSummary = computed(() => localRunnerRunDetail.value?.summary ?? null)
@@ -288,6 +304,7 @@ async function loadDetail() {
   try {
     const caseDetail = await webUiAutomationApi.getCaseDetail(props.workspaceCode, caseId.value)
     fillForm(caseDetail)
+    await maybeAutoRematchRecordedElements()
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
@@ -626,6 +643,7 @@ async function captureRecordingPage() {
       candidates,
     })
     lastCollectTaskId.value = task.taskId
+    lastCollectTaskReturnSource.value = null
     ElMessage.success(`采集任务已创建：#${task.taskId}`)
     openCollectTask(task.taskId)
   } catch (error) {
@@ -665,6 +683,7 @@ async function createRecordingCandidateCollectTask() {
       candidates,
     })
     lastCollectTaskId.value = task.taskId
+    lastCollectTaskReturnSource.value = WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN
     ElMessage.success(`已创建 ${candidates.length} 个录制候选入库任务：#${task.taskId}，请保存用例后再查看审核`)
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
@@ -674,9 +693,17 @@ async function createRecordingCandidateCollectTask() {
 }
 
 async function rematchRecordingElementSteps() {
+  await rematchRecordingElementStepsWithFeedback(false)
+}
+
+async function rematchRecordingElementStepsWithFeedback(autoRematch: boolean) {
   const targetSteps = recordingElementUnboundLocatorSteps.value
   if (!targetSteps.length) {
-    ElMessage.warning('暂无需要重新匹配的未绑定步骤')
+    if (autoRematch) {
+      ElMessage.info('录制候选已返回，当前用例暂无需要回填的未绑定步骤')
+    } else {
+      ElMessage.warning('暂无需要重新匹配的未绑定步骤')
+    }
     return
   }
 
@@ -684,16 +711,40 @@ async function rematchRecordingElementSteps() {
   try {
     const summary = await enrichRecordedStepsWithElementMatches(targetSteps)
     if (summary.matchFailed) {
-      ElMessage.warning('元素库匹配失败，可稍后重试或手动选择元素')
+      ElMessage.warning(autoRematch ? '元素库自动匹配失败，可手动点击重新匹配' : '元素库匹配失败，可稍后重试或手动选择元素')
       return
     }
     if (summary.matchedCount > 0) {
-      ElMessage.success(`已回填 ${summary.matchedCount} 个元素库绑定，保存后生效`)
+      ElMessage.success(autoRematch ? `已自动回填 ${summary.matchedCount} 个元素库绑定，保存用例后生效` : `已回填 ${summary.matchedCount} 个元素库绑定，保存后生效`)
       return
     }
-    ElMessage.warning(`暂未匹配到元素库，仍有 ${summary.candidateCount} 个候选待入库`)
+    ElMessage.warning(autoRematch ? `录制候选已入库，但暂未匹配到当前步骤，仍有 ${summary.candidateCount} 个候选待入库` : `暂未匹配到元素库，仍有 ${summary.candidateCount} 个候选待入库`)
   } finally {
     recordingCandidateRematching.value = false
+  }
+}
+
+async function maybeAutoRematchRecordedElements() {
+  if (getRouteQueryString(WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY) !== '1') {
+    return
+  }
+
+  const collectTaskId = getRouteQueryNumber('collectTaskId')
+  if (collectTaskId) {
+    lastCollectTaskId.value = collectTaskId
+    lastCollectTaskReturnSource.value = WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN
+  }
+
+  try {
+    await rematchRecordingElementStepsWithFeedback(true)
+  } finally {
+    const query = { ...route.query }
+    delete query[WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY]
+    void router.replace({
+      path: route.path,
+      query,
+      hash: route.hash,
+    })
   }
 }
 
@@ -920,11 +971,26 @@ function toEditableRecordedStep(step: LocalRunnerRecordedStep, sortOrder: number
   }
 }
 
-function openCollectTask(taskId: number) {
+function openCollectTask(taskId: number, returnSource: CollectTaskReturnSource = null) {
+  const query: Record<string, string> = {
+    workspaceCode: props.workspaceCode,
+  }
+  if (returnSource === WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN && caseId.value) {
+    query.origin = WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN
+    query.returnCaseId = String(caseId.value)
+    query.returnWorkspaceCode = props.workspaceCode
+  }
+
   void router.push({
     path: `/automation/web/elements/collect-tasks/${taskId}`,
-    query: { workspaceCode: props.workspaceCode },
+    query,
   })
+}
+
+function openLastCollectTask() {
+  if (lastCollectTaskId.value) {
+    openCollectTask(lastCollectTaskId.value, lastCollectTaskReturnSource.value)
+  }
 }
 
 function addStep() {
@@ -1567,7 +1633,7 @@ watch(elementPickerLocatorType, () => {
               <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening || recordingInProgress" @click="captureRecordingPage">采集当前页</AppButton>
               <AppButton :loading="recordingCandidateTaskCreating" :disabled="recordingElementUnboundLocatorCount <= 0" @click="createRecordingCandidateCollectTask">候选入库</AppButton>
               <AppButton :loading="recordingCandidateRematching" :disabled="recordingElementUnboundLocatorCount <= 0" @click="rematchRecordingElementSteps">重新匹配</AppButton>
-              <AppButton v-if="lastCollectTaskId" @click="openCollectTask(lastCollectTaskId)">查看采集任务</AppButton>
+              <AppButton v-if="lastCollectTaskId" @click="openLastCollectTask">查看采集任务</AppButton>
             </div>
           </div>
         </section>
