@@ -1,9 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { toWebUiCaseStepFromRecordedStep } from '../src/entities/web-ui-automation/lib/recordedSteps.ts'
+import {
+  buildRecordedLocatorKey,
+  findMatchingWebUiElementForRecordedStep,
+  toWebUiCaseStepFromRecordedStep,
+} from '../src/entities/web-ui-automation/lib/recordedSteps.ts'
 
 import type { LocalRunnerRecordedStep } from '../src/entities/web-ui-automation/lib/localRunnerClient.ts'
+import type { WebUiElementItem } from '../src/entities/web-ui-automation/model/types.ts'
 
 test('maps local runner recorded steps into save-compatible web ui case steps', () => {
   const step = toWebUiCaseStepFromRecordedStep(recordedStep({
@@ -59,6 +64,34 @@ test('keeps global key recordings without forcing a locator', () => {
   assert.equal(step?.inputValue, 'Enter')
 })
 
+test('matches recorded steps to existing elements by exact locator context', () => {
+  const matched = findMatchingWebUiElementForRecordedStep({
+    locatorType: 'CSS',
+    locatorValue: ' #name ',
+    framePath: [{ selector: 'iframe#profile' }],
+    shadowPath: null,
+  }, [
+    element({ id: 1, locatorValue: '#name' }),
+    element({ id: 2, locatorValue: '#name', framePath: [{ selector: 'iframe#profile' }] }),
+  ])
+
+  assert.equal(matched?.id, 2)
+})
+
+test('does not match recorded locators when context differs or locator is empty', () => {
+  const elements = [
+    element({ id: 1, locatorValue: '#submit', shadowPath: ['toolbar-shell'] }),
+  ]
+
+  assert.equal(findMatchingWebUiElementForRecordedStep({
+    locatorType: 'CSS',
+    locatorValue: '#submit',
+    framePath: null,
+    shadowPath: null,
+  }, elements), null)
+  assert.equal(buildRecordedLocatorKey('CSS', '', null, null), '')
+})
+
 function recordedStep(overrides: Partial<LocalRunnerRecordedStep>): LocalRunnerRecordedStep {
   return {
     id: null,
@@ -79,4 +112,31 @@ function recordedStep(overrides: Partial<LocalRunnerRecordedStep>): LocalRunnerR
     sortOrder: 1,
     ...overrides,
   } as LocalRunnerRecordedStep
+}
+
+function element(overrides: Partial<WebUiElementItem>): WebUiElementItem {
+  return {
+    id: 1,
+    workspaceCode: 'account-open',
+    workspaceName: 'Account Open',
+    pageId: null,
+    groupId: null,
+    pageName: 'Profile',
+    groupName: 'Form',
+    elementName: 'Name',
+    locatorType: 'CSS',
+    locatorValue: '#target',
+    framePath: null,
+    shadowPath: null,
+    description: null,
+    status: 'ENABLED',
+    lastValidateResult: null,
+    lastValidateAt: null,
+    lastValidateMessage: null,
+    lastMatchCount: null,
+    createdAt: null,
+    updatedAt: null,
+    usageCount: 0,
+    ...overrides,
+  } as WebUiElementItem
 }

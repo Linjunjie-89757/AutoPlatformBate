@@ -15,6 +15,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
+  findMatchingWebUiElementForRecordedStep,
   formatRunStatus,
   formatLocatorType,
   requiresInput,
@@ -57,6 +58,7 @@ import {
 } from '@/entities/web-ui-automation/lib/localRunnerClient'
 
 type RecordingStatus = 'IDLE' | 'RECORDING' | 'PAUSED' | 'STOPPED'
+type RecordingElementMatchStatus = 'MATCHED' | 'CANDIDATE'
 
 interface EditableStep {
   id?: number | null
@@ -74,6 +76,8 @@ interface EditableStep {
   screenshotPolicy: WebUiScreenshotPolicy
   enabled: boolean
   sortOrder: number
+  recordingElementMatchStatus?: RecordingElementMatchStatus | null
+  recordingElementCandidateName?: string | null
 }
 
 interface CaseForm {
@@ -645,9 +649,12 @@ async function stopRecordingSteps() {
   try {
     const result = await stopLocalRunnerRecording()
     syncRecordingState(result)
-    const appendedCount = appendRecordedSteps(result.steps || [])
-    if (appendedCount > 0) {
-      ElMessage.success(`已生成 ${appendedCount} 个录制步骤，保存后生效`)
+    const appendSummary = await appendRecordedSteps(result.steps || [])
+    if (appendSummary.appendedCount > 0) {
+      const matchSummary = appendSummary.matchFailed
+        ? '，元素库匹配失败，可稍后手动选择'
+        : `，匹配元素库 ${appendSummary.matchedCount} 个，新候选 ${appendSummary.candidateCount} 个`
+      ElMessage.success(`已生成 ${appendSummary.appendedCount} 个录制步骤${matchSummary}，保存后生效`)
     } else {
       ElMessage.warning('本次录制没有生成可用步骤')
     }
@@ -709,18 +716,102 @@ async function undoRecordingStep() {
   }
 }
 
-function appendRecordedSteps(steps: LocalRunnerRecordedStep[]) {
+async function appendRecordedSteps(steps: LocalRunnerRecordedStep[]) {
   const mappedSteps = steps
     .map((step, index) => toEditableRecordedStep(step, form.value.steps.length + index + 1))
     .filter((step): step is EditableStep => Boolean(step))
   if (!mappedSteps.length) {
-    return 0
+    return {
+      appendedCount: 0,
+      matchedCount: 0,
+      candidateCount: 0,
+      matchFailed: false,
+    }
   }
+  const matchSummary = await enrichRecordedStepsWithElementMatches(mappedSteps)
   const insertIndex = form.value.steps.length
   form.value.steps.push(...mappedSteps)
   selectedStepIndex.value = insertIndex
   reorderSteps()
-  return mappedSteps.length
+  return {
+    appendedCount: mappedSteps.length,
+    ...matchSummary,
+  }
+}
+
+async function enrichRecordedStepsWithElementMatches(steps: EditableStep[]) {
+  const summary = {
+    matchedCount: 0,
+    candidateCount: 0,
+    matchFailed: false,
+  }
+  const stepsWithLocator = steps.filter(step => requiresLocator(step.type) && step.locatorType && step.locatorValue.trim())
+  if (!stepsWithLocator.length) {
+    return summary
+  }
+
+  let elements: WebUiElementItem[]
+  try {
+    elements = await loadEnabledElementsForRecordedStepMatching()
+  } catch {
+    summary.matchFailed = true
+    return summary
+  }
+
+  stepsWithLocator.forEach((step) => {
+    const match = findMatchingWebUiElementForRecordedStep(step, elements)
+    if (match) {
+      applyElementMatchToRecordedStep(step, match)
+      summary.matchedCount += 1
+      return
+    }
+    markRecordedStepAsElementCandidate(step)
+    summary.candidateCount += 1
+  })
+
+  return summary
+}
+
+async function loadEnabledElementsForRecordedStepMatching() {
+  const pageSize = 500
+  const firstPage = await webUiAutomationApi.getElements(props.workspaceCode, {
+    status: 'ENABLED',
+    pageNo: 1,
+    pageSize,
+  })
+  const elements = [...firstPage.items]
+  let pageNo = 1
+
+  while (elements.length < firstPage.total) {
+    pageNo += 1
+    const page = await webUiAutomationApi.getElements(props.workspaceCode, {
+      status: 'ENABLED',
+      pageNo,
+      pageSize,
+    })
+    if (!page.items.length) {
+      break
+    }
+    elements.push(...page.items)
+  }
+
+  return elements
+}
+
+function applyElementMatchToRecordedStep(step: EditableStep, item: WebUiElementItem) {
+  step.elementId = item.id
+  step.elementName = item.elementName
+  step.locatorType = item.locatorType
+  step.locatorValue = item.locatorValue
+  step.framePath = item.framePath || null
+  step.shadowPath = item.shadowPath || null
+  step.recordingElementMatchStatus = 'MATCHED'
+  step.recordingElementCandidateName = null
+}
+
+function markRecordedStepAsElementCandidate(step: EditableStep) {
+  step.recordingElementMatchStatus = 'CANDIDATE'
+  step.recordingElementCandidateName = step.elementName || step.name || step.locatorValue || null
 }
 
 function toEditableRecordedStep(step: LocalRunnerRecordedStep, sortOrder: number): EditableStep | null {
@@ -818,10 +909,16 @@ function clearStepElementAssociation(step: EditableStep) {
   step.elementName = null
   step.framePath = null
   step.shadowPath = null
+  clearRecordedElementMatchState(step)
+}
+
+function clearRecordedElementMatchState(step: EditableStep) {
+  step.recordingElementMatchStatus = null
+  step.recordingElementCandidateName = null
 }
 
 function handleManualLocatorChange(step: EditableStep) {
-  if (step.elementId || step.elementName) {
+  if (step.elementId || step.elementName || step.recordingElementMatchStatus) {
     clearStepElementAssociation(step)
   }
 }
@@ -883,6 +980,10 @@ function applyElementToSelectedStep(item: WebUiElementItem) {
   step.locatorValue = item.locatorValue
   step.framePath = item.framePath || null
   step.shadowPath = item.shadowPath || null
+  if (step.recordingElementMatchStatus) {
+    step.recordingElementMatchStatus = 'MATCHED'
+    step.recordingElementCandidateName = null
+  }
   elementPickerVisible.value = false
   ElMessage.success(`已选用元素：${item.elementName}`)
 }
@@ -921,6 +1022,7 @@ function handleStepTypeChange(step: EditableStep) {
     step.locatorValue = ''
     step.framePath = null
     step.shadowPath = null
+    clearRecordedElementMatchState(step)
   } else if (!step.locatorType) {
     step.locatorType = 'CSS'
   }
@@ -1009,6 +1111,32 @@ function getStepCardTypeTone(type: WebUiStepType) {
   if (['FILL', 'SELECT', 'FILE_UPLOAD', 'PRESS_KEY'].includes(type)) return 'primary'
   if (['ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL', 'ASSERT_TITLE', 'ASSERT_ATTRIBUTE', 'ASSERT_COUNT'].includes(type)) return 'warning'
   return 'default'
+}
+
+function getRecordingElementMatchTagType(step: EditableStep) {
+  return step.recordingElementMatchStatus === 'MATCHED' ? 'success' : 'warning'
+}
+
+function getRecordingElementMatchLabel(step: EditableStep) {
+  if (step.recordingElementMatchStatus === 'MATCHED') {
+    return '已匹配元素库'
+  }
+  if (step.recordingElementMatchStatus === 'CANDIDATE') {
+    return '新元素候选'
+  }
+  return ''
+}
+
+function getRecordingElementMatchHint(step: EditableStep) {
+  if (step.recordingElementMatchStatus === 'MATCHED') {
+    return step.elementName ? `已按定位器匹配到元素库：${step.elementName}` : '已按定位器匹配到元素库'
+  }
+  if (step.recordingElementMatchStatus === 'CANDIDATE') {
+    return step.recordingElementCandidateName
+      ? `元素库未找到相同定位器，可后续入库：${step.recordingElementCandidateName}`
+      : '元素库未找到相同定位器，可后续入库'
+  }
+  return ''
 }
 
 function getStepSummary(step: EditableStep) {
@@ -1169,6 +1297,9 @@ watch(elementPickerLocatorType, () => {
                 {{ getStepCardTypeLabel(step.type) }}
               </span>
               <small>{{ getStepSummary(step) }}</small>
+              <el-tag v-if="step.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(step)" effect="light" size="small">
+                {{ getRecordingElementMatchLabel(step) }}
+              </el-tag>
             </span>
             <span class="web-ui-step-list__actions" aria-label="步骤操作">
               <button type="button" title="上移" aria-label="上移" :disabled="index === 0" @click.stop="moveStep(index, -1)">
@@ -1219,7 +1350,15 @@ watch(elementPickerLocatorType, () => {
             </section>
 
             <section v-if="requiresLocator(selectedStep.type)" class="web-ui-step-config">
-              <h4>元素定位</h4>
+              <div class="web-ui-step-config__title-row">
+                <h4>元素定位</h4>
+                <el-tag v-if="selectedStep.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(selectedStep)" effect="light" size="small">
+                  {{ getRecordingElementMatchLabel(selectedStep) }}
+                </el-tag>
+              </div>
+              <p v-if="selectedStep.recordingElementMatchStatus" class="web-ui-step-config__hint">
+                {{ getRecordingElementMatchHint(selectedStep) }}
+              </p>
               <el-form-item label="定位方式">
                 <el-radio-group v-model="selectedStep.locatorType" class="web-ui-locator-radio" @change="handleManualLocatorChange(selectedStep)">
                   <el-radio
@@ -1744,6 +1883,13 @@ watch(elementPickerLocatorType, () => {
   border-bottom: 0;
 }
 
+.web-ui-step-config__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
 .web-ui-step-config h4 {
   display: flex;
   align-items: center;
@@ -1760,6 +1906,13 @@ watch(elementPickerLocatorType, () => {
   border-radius: 50%;
   background: var(--app-primary);
   content: '';
+}
+
+.web-ui-step-config__hint {
+  margin: calc(var(--app-space-2) * -1) 0 0;
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-sm);
 }
 
 .web-ui-step-config__grid {

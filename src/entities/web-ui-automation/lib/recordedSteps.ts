@@ -2,7 +2,14 @@ import { WEB_UI_LOCATOR_OPTIONS, WEB_UI_SCREENSHOT_POLICY_OPTIONS, WEB_UI_STEP_T
 import { requiresInput, requiresLocator } from './format.ts'
 
 import type { LocalRunnerRecordedStep } from './localRunnerClient'
-import type { WebUiCaseStepItem, WebUiLocatorType, WebUiScreenshotPolicy, WebUiStepType } from '../model/types'
+import type {
+  WebUiCaseStepItem,
+  WebUiElementItem,
+  WebUiLocatorContextPathItem,
+  WebUiLocatorType,
+  WebUiScreenshotPolicy,
+  WebUiStepType,
+} from '../model/types'
 
 export function toWebUiCaseStepFromRecordedStep(
   step: LocalRunnerRecordedStep,
@@ -41,6 +48,57 @@ export function toWebUiCaseStepFromRecordedStep(
     enabled: step.enabled !== false,
     sortOrder,
   }
+}
+
+export function findMatchingWebUiElementForRecordedStep(
+  step: Pick<WebUiCaseStepItem, 'locatorType' | 'locatorValue' | 'framePath' | 'shadowPath'>,
+  elements: WebUiElementItem[],
+) {
+  const key = buildRecordedLocatorKey(step.locatorType, step.locatorValue, step.framePath, step.shadowPath)
+  if (!key) {
+    return null
+  }
+
+  return elements.find(element => (
+    buildRecordedLocatorKey(element.locatorType, element.locatorValue, element.framePath, element.shadowPath) === key
+  )) || null
+}
+
+export function buildRecordedLocatorKey(
+  locatorType?: WebUiLocatorType | string | null,
+  locatorValue?: string | null,
+  framePath?: WebUiLocatorContextPathItem[] | null,
+  shadowPath?: WebUiLocatorContextPathItem[] | null,
+) {
+  const normalizedType = String(locatorType || '').trim().toUpperCase()
+  const normalizedValue = String(locatorValue || '').trim()
+  if (!normalizedType || !normalizedValue) {
+    return ''
+  }
+
+  return [
+    normalizedType,
+    normalizedValue,
+    JSON.stringify(normalizeLocatorContextPath(framePath)),
+    JSON.stringify(normalizeLocatorContextPath(shadowPath)),
+  ].join('::')
+}
+
+function normalizeLocatorContextPath(value?: WebUiLocatorContextPathItem[] | null) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.map(item => {
+    if (typeof item === 'string') {
+      return item
+    }
+    return {
+      selector: item?.selector ?? null,
+      url: item?.url ?? null,
+      name: item?.name ?? null,
+      index: item?.index ?? null,
+    }
+  })
 }
 
 function normalizeRecordedStepType(value?: string | null): WebUiStepType | null {
