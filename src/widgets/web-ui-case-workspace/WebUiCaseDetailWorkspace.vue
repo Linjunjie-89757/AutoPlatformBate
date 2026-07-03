@@ -60,6 +60,11 @@ import {
   buildRecordingAssertionDraft,
   type RecordingAssertionType,
 } from '@/entities/web-ui-automation/lib/recordingAssertions'
+import {
+  artifactFileIdFromInputValue,
+  buildWebUiFileUploadArtifactRefs,
+  type WebUiFileUploadArtifactBinding,
+} from '@/entities/web-ui-automation/lib/fileUploadArtifacts'
 import { buildRecordingQualityCheck } from '@/entities/web-ui-automation/lib/recordingQuality'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
@@ -83,6 +88,7 @@ import {
 type RecordingStatus = 'IDLE' | 'RECORDING' | 'PAUSED' | 'STOPPED'
 type RecordingElementMatchStatus = 'MATCHED' | 'CANDIDATE'
 type CollectTaskReturnSource = typeof WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN | null
+type UploadArtifactBinding = WebUiFileUploadArtifactBinding & { updatedAt: number }
 
 interface EditableStep {
   id?: number | null
@@ -167,6 +173,8 @@ const recordingReplayRunId = ref<string | null>(null)
 const errorMessage = ref('')
 const selectedStepIndex = ref(0)
 const form = ref<CaseForm>(createEmptyForm())
+const uploadArtifactBindings = ref<Record<string, UploadArtifactBinding>>({})
+const uploadFileInputRef = ref<HTMLInputElement | null>(null)
 const elementPickerVisible = ref(false)
 const elementPickerLoading = ref(false)
 const elementPickerKeyword = ref('')
@@ -200,6 +208,15 @@ function getRouteQueryNumber(name: string) {
 }
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
+const selectedStepUploadFileId = computed(() => {
+  const step = selectedStep.value
+  return step?.type === 'FILE_UPLOAD' ? artifactFileIdFromInputValue(step.inputValue) : null
+})
+const selectedStepUploadBinding = computed(() => {
+  const fileId = selectedStepUploadFileId.value
+  return fileId ? uploadArtifactBindings.value[fileId] || null : null
+})
+const selectedStepUploadBindingMissing = computed(() => Boolean(selectedStepUploadFileId.value && !selectedStepUploadBinding.value))
 const localRunnerRunSummary = computed(() => localRunnerRunDetail.value?.summary ?? null)
 const recordingReplayDiagnostics = computed(() => buildRecordingReplayDiagnostics({
   replayRunId: recordingReplayRunId.value,
@@ -810,6 +827,113 @@ function buildPayload(): SaveWebUiCasePayload {
   }
 }
 
+function buildFileUploadArtifactId(step: EditableStep, index = selectedStepIndex.value) {
+  const existingFileId = artifactFileIdFromInputValue(step.inputValue)
+  if (existingFileId) {
+    return existingFileId
+  }
+  const stepIdentity = step.id ? `step-${step.id}` : `draft-${index + 1}`
+  return `web-ui-upload-${caseId.value || 'case'}-${stepIdentity}`
+}
+
+function triggerSelectedStepFileUpload() {
+  if (!selectedStep.value || selectedStep.value.type !== 'FILE_UPLOAD') {
+    return
+  }
+  if (uploadFileInputRef.value) {
+    uploadFileInputRef.value.value = ''
+    uploadFileInputRef.value.click()
+  }
+}
+
+async function handleUploadFileSelected(event: Event) {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  const step = selectedStep.value
+  if (!file || !step || step.type !== 'FILE_UPLOAD') {
+    return
+  }
+
+  try {
+    const fileId = buildFileUploadArtifactId(step)
+    const contentBase64 = await readFileAsBase64(file)
+    step.inputValue = `artifact:${fileId}`
+    uploadArtifactBindings.value = {
+      ...uploadArtifactBindings.value,
+      [fileId]: {
+        fileId,
+        fileName: file.name || fileId,
+        contentType: file.type || 'application/octet-stream',
+        contentBase64,
+        size: file.size,
+        updatedAt: Date.now(),
+      },
+    }
+    ElMessage.success(`已绑定文件：${file.name || fileId}`)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    if (input) {
+      input.value = ''
+    }
+  }
+}
+
+function clearSelectedStepUploadArtifact() {
+  const step = selectedStep.value
+  if (!step || step.type !== 'FILE_UPLOAD') {
+    return
+  }
+  const fileId = artifactFileIdFromInputValue(step.inputValue)
+  if (fileId) {
+    const nextBindings = { ...uploadArtifactBindings.value }
+    delete nextBindings[fileId]
+    uploadArtifactBindings.value = nextBindings
+  }
+  step.inputValue = ''
+}
+
+function buildLocalRunnerUploadArtifactRefs(): Record<string, unknown>[] | null {
+  const result = buildWebUiFileUploadArtifactRefs(form.value.steps, uploadArtifactBindings.value)
+  if (result.missingFileIds.length) {
+    const missingFileId = result.missingFileIds[0]
+    const missingStepIndex = form.value.steps.findIndex(step => artifactFileIdFromInputValue(step.inputValue) === missingFileId)
+    if (missingStepIndex >= 0) {
+      selectedStepIndex.value = missingStepIndex
+    }
+    ElMessage.warning(`第 ${missingStepIndex >= 0 ? missingStepIndex + 1 : '?'} 步文件内容未绑定，请重新选择文件`)
+    return null
+  }
+  return result.artifactRefs.map(ref => ({ ...ref }))
+}
+
+function readFileAsBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result)
+    }
+    reader.onerror = () => reject(reader.error || new Error('读取文件失败'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function formatFileSize(size: number | null | undefined) {
+  const value = Number(size || 0)
+  if (!Number.isFinite(value) || value <= 0) {
+    return '0 B'
+  }
+  if (value < 1024) {
+    return `${value} B`
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`
+  }
+  return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
 function validateBeforeSave() {
   if (!form.value.name.trim()) {
     ElMessage.warning('请填写用例名称')
@@ -878,6 +1002,11 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
     return
   }
 
+  const artifactRefs = localRunner ? buildLocalRunnerUploadArtifactRefs() : []
+  if (artifactRefs === null) {
+    return
+  }
+
   const loadingRef = localRunner ? localRunning : running
   loadingRef.value = true
   try {
@@ -895,6 +1024,7 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
       })
       const response = await webUiAutomationApi.createLocalRunnerRun(props.workspaceCode, caseId.value, {
         headless: form.value.headless,
+        artifactRefs,
       })
       localRunnerFormalRunId.value = response.run.runId
       localRunnerTask.value = response.runnerTask
@@ -1828,6 +1958,13 @@ onBeforeUnmount(() => {
 })
 
 watch(
+  () => [props.workspaceCode, caseId.value] as const,
+  () => {
+    uploadArtifactBindings.value = {}
+  },
+)
+
+watch(
   () => [props.workspaceReady, props.workspaceCode, caseId.value, route.query.stepId] as const,
   () => {
     void loadDetail()
@@ -1865,6 +2002,13 @@ watch(elementPickerLocatorType, () => {
 
 <template>
   <div class="web-ui-case-detail">
+    <input
+      ref="uploadFileInputRef"
+      class="web-ui-case-detail__hidden-file"
+      type="file"
+      @change="handleUploadFileSelected"
+    />
+
     <div class="web-ui-case-detail__toolbar">
       <div class="web-ui-case-detail__title">
         <AppButton :icon="ArrowLeft" @click="backToList">返回列表</AppButton>
@@ -2130,6 +2274,28 @@ watch(elementPickerLocatorType, () => {
                   clearable
                 />
               </el-form-item>
+              <div v-if="selectedStep.type === 'FILE_UPLOAD'" class="web-ui-upload-artifact">
+                <div class="web-ui-upload-artifact__main">
+                  <strong>
+                    {{ selectedStepUploadBinding?.fileName || (selectedStepUploadFileId ? '等待重新选择文件' : '未绑定本地文件') }}
+                  </strong>
+                  <span v-if="selectedStepUploadBinding">
+                    {{ formatFileSize(selectedStepUploadBinding.size) }} · {{ selectedStepUploadBinding.contentType || 'application/octet-stream' }}
+                  </span>
+                  <span v-else-if="selectedStepUploadFileId">artifact:{{ selectedStepUploadFileId }}</span>
+                  <span v-else>支持本机绝对路径，或选择文件生成 artifact 引用</span>
+                </div>
+                <div class="web-ui-upload-artifact__actions">
+                  <AppButton @click="triggerSelectedStepFileUpload">{{ selectedStepUploadBinding ? '更换文件' : '选择文件' }}</AppButton>
+                  <AppButton :disabled="!selectedStep.inputValue" @click="clearSelectedStepUploadArtifact">清除</AppButton>
+                </div>
+                <small
+                  class="web-ui-upload-artifact__note"
+                  :class="{ 'is-warning': selectedStepUploadBindingMissing }"
+                >
+                  {{ selectedStepUploadBindingMissing ? '文件内容未绑定，本地运行前需要重新选择' : '本地运行会携带已选择文件，保存用例不写入文件内容' }}
+                </small>
+              </div>
             </section>
 
             <section class="web-ui-step-config">
@@ -2381,6 +2547,10 @@ watch(elementPickerLocatorType, () => {
 .web-ui-case-detail__actions {
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.web-ui-case-detail__hidden-file {
+  display: none;
 }
 
 .web-ui-case-detail__body {
@@ -2769,6 +2939,56 @@ watch(elementPickerLocatorType, () => {
   width: 100%;
 }
 
+.web-ui-upload-artifact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--app-space-2) var(--app-space-3);
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary-soft);
+}
+
+.web-ui-upload-artifact__main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.web-ui-upload-artifact__main strong {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+  line-height: var(--app-line-height-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-upload-artifact__main span,
+.web-ui-upload-artifact__note {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--app-line-height-xs);
+}
+
+.web-ui-upload-artifact__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--app-space-2);
+}
+
+.web-ui-upload-artifact__note {
+  grid-column: 1 / -1;
+}
+
+.web-ui-upload-artifact__note.is-warning {
+  color: var(--app-warning);
+}
+
 .web-ui-step-config__action-row {
   display: flex;
   flex-wrap: wrap;
@@ -3063,7 +3283,8 @@ watch(elementPickerLocatorType, () => {
   }
 
   .web-ui-case-detail__body,
-  .web-ui-step-config__grid {
+  .web-ui-step-config__grid,
+  .web-ui-upload-artifact {
     grid-template-columns: 1fr;
   }
 
