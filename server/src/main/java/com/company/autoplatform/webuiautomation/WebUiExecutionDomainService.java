@@ -179,6 +179,10 @@ public class WebUiExecutionDomainService {
         WebUiRunEntity run = createRun(webCase, profile, runtimeSteps.size(), null, null, CurrentUserContext.require().displayName());
         run.setContextSnapshotJson(profile.contextSnapshotJson());
         runMapper.updateById(run);
+        List<Map<String, Object>> artifactRefs = buildLocalRunnerArtifactRefs(
+                runtimeSteps,
+                request == null ? null : request.artifactRefs()
+        );
 
         CreateRunnerTaskCommand command = new CreateRunnerTaskCommand(
                 workspace.getId(),
@@ -196,7 +200,7 @@ public class WebUiExecutionDomainService {
                 buildLocalRunnerVariableSnapshot(profile),
                 Map.of(),
                 Map.of(),
-                List.of(),
+                artifactRefs,
                 List.of(),
                 Map.of(
                         "screenshotPolicy", "ON_FAILURE",
@@ -625,6 +629,63 @@ public class WebUiExecutionDomainService {
                         })
                         .toList()
         );
+    }
+
+    private List<Map<String, Object>> buildLocalRunnerArtifactRefs(
+            List<WebUiCaseStepEntity> runtimeSteps,
+            List<Map<String, Object>> requestArtifactRefs
+    ) {
+        if (requestArtifactRefs == null || requestArtifactRefs.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Map<String, Object>> refsById = new LinkedHashMap<>();
+        for (Map<String, Object> artifactRef : requestArtifactRefs) {
+            String fileId = artifactRefFileId(artifactRef);
+            if (fileId != null) {
+                refsById.putIfAbsent(fileId, new LinkedHashMap<>(artifactRef));
+            }
+        }
+        if (refsById.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Map<String, Object>> referencedRefs = new LinkedHashMap<>();
+        for (WebUiCaseStepEntity step : runtimeSteps) {
+            if (step == null || !"FILE_UPLOAD".equalsIgnoreCase(step.getStepType())) {
+                continue;
+            }
+            String fileId = artifactReferenceFileId(step.getInputValue());
+            if (fileId == null) {
+                continue;
+            }
+            Map<String, Object> artifactRef = refsById.get(fileId);
+            if (artifactRef != null) {
+                referencedRefs.putIfAbsent(fileId, artifactRef);
+            }
+        }
+        return List.copyOf(referencedRefs.values());
+    }
+
+    private String artifactRefFileId(Map<String, Object> artifactRef) {
+        if (artifactRef == null) {
+            return null;
+        }
+        String fileId = stringValue(artifactRef.get("fileId"));
+        if (fileId != null) {
+            return fileId;
+        }
+        fileId = stringValue(artifactRef.get("artifactId"));
+        if (fileId != null) {
+            return fileId;
+        }
+        return stringValue(artifactRef.get("id"));
+    }
+
+    private String artifactReferenceFileId(String inputValue) {
+        String value = blankToNull(inputValue);
+        if (value == null || !value.regionMatches(true, 0, "artifact:", 0, "artifact:".length())) {
+            return null;
+        }
+        return blankToNull(value.substring("artifact:".length()));
     }
 
     private Map<String, Object> buildLocalRunnerEnvironmentSnapshot(RunProfile profile) {

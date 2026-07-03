@@ -740,6 +740,7 @@ export interface WebUiRunRequest {
   mockApplicationId?: number | null
   runtimeVariables?: Record<string, string> | null
   runnerId?: string | null
+  artifactRefs?: Record<string, unknown>[] | null
 }
 
 export interface WebUiRunStepResult {

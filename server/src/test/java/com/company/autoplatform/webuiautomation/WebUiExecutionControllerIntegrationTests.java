@@ -226,6 +226,47 @@ class WebUiExecutionControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void localRunnerCaseRunPassesReferencedFileUploadArtifacts() throws Exception {
+        Long caseId = createCase(uniquePrefix("local-runner-upload"), List.of(
+                openStep("Open page", "https://example.com/upload", 1),
+                fileUploadStep("Upload avatar", "CSS", "input[type=file]", "artifact:avatar", 2),
+                fileUploadStep("Upload local file", "CSS", "#local-file", "D:/tmp/local-file.txt", 3)
+        ));
+        registerRunner("runner-web-upload", "[\"WEB_CASE_RUN\"]");
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("runnerId", "runner-web-upload");
+        request.put("artifactRefs", List.of(
+                Map.of(
+                        "fileId", "avatar",
+                        "artifactId", "avatar",
+                        "fileName", "avatar.txt",
+                        "contentType", "text/plain",
+                        "contentBase64", "YXZhdGFy"
+                ),
+                Map.of(
+                        "fileId", "unreferenced",
+                        "artifactId", "unreferenced",
+                        "fileName", "unused.txt",
+                        "contentBase64", "dW51c2Vk"
+                )
+        ));
+
+        mockMvc.perform(post("/api/automation/web/cases/{id}/local-runner-run", caseId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.runnerTask.taskType").value("WEB_CASE_RUN"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs.length()").value(1))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs[0].fileId").value("avatar"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs[0].contentBase64").value("YXZhdGFy"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.payload.caseSnapshot.steps[1].inputValue").value("artifact:avatar"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.payload.caseSnapshot.steps[2].inputValue").value("D:/tmp/local-file.txt"));
+    }
+
+    @Test
     void artifactDownloadRequiresArtifactToBelongToRun() throws Exception {
         mockMvc.perform(get("/api/automation/web/runs/{runId}/artifacts/{artifactId}/download", 999999, 888888)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
@@ -967,6 +1008,18 @@ class WebUiExecutionControllerIntegrationTests extends IntegrationTestSupport {
         return Map.of(
                 "stepName", name,
                 "stepType", "fill",
+                "locatorType", locatorType,
+                "locatorValue", locatorValue,
+                "inputValue", inputValue,
+                "enabled", true,
+                "sortOrder", sortOrder
+        );
+    }
+
+    private Map<String, Object> fileUploadStep(String name, String locatorType, String locatorValue, String inputValue, int sortOrder) {
+        return Map.of(
+                "stepName", name,
+                "stepType", "file_upload",
                 "locatorType", locatorType,
                 "locatorValue", locatorValue,
                 "inputValue", inputValue,

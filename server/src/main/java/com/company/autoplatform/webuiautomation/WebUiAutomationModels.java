@@ -221,7 +221,8 @@ public final class WebUiAutomationModels {
             Boolean mockEnabled,
             Long mockApplicationId,
             Map<String, String> runtimeVariables,
-            String runnerId
+            String runnerId,
+            List<Map<String, Object>> artifactRefs
     ) {
     }
 
