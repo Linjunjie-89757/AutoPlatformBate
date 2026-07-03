@@ -10,13 +10,14 @@ export interface RecordingQualityStep {
   elementId?: number | null
   locatorType?: WebUiLocatorType | string | null
   locatorValue?: string | null
+  inputValue?: string | null
   timeoutMs?: number | null
   enabled?: boolean | null
   recordingElementMatchStatus?: string | null
 }
 
 export interface RecordingQualityCheckItem {
-  key: 'ASSERTIONS' | 'ELEMENTS' | 'LOCATORS' | 'TIMING' | 'REPLAY'
+  key: 'ASSERTIONS' | 'ELEMENTS' | 'LOCATORS' | 'TIMING' | 'UPLOADS' | 'REPLAY'
   label: string
   status: RecordingQualityCheckStatus
   summary: string
@@ -34,6 +35,7 @@ export interface RecordingQualityResult {
   unboundLocatorCount: number
   fragileLocatorCount: number
   timingRiskCount: number
+  fileUploadPathRiskCount: number
 }
 
 export function buildRecordingQualityCheck(input: {
@@ -45,11 +47,13 @@ export function buildRecordingQualityCheck(input: {
   const unboundLocatorCount = enabledSteps.filter(isUnboundLocatorStep).length
   const fragileLocatorCount = enabledSteps.filter(isFragileLocatorStep).length
   const timingRiskCount = enabledSteps.filter(hasTimingRisk).length
+  const fileUploadPathRiskCount = enabledSteps.filter(hasFileUploadPathRisk).length
   const checks: RecordingQualityCheckItem[] = [
     buildAssertionCheck(assertionCount),
     buildElementCheck(unboundLocatorCount),
     buildLocatorCheck(fragileLocatorCount),
     buildTimingCheck(timingRiskCount),
+    buildFileUploadCheck(fileUploadPathRiskCount),
     buildReplayCheck(input.replayPassed),
   ]
   const passCount = checks.filter(item => item.status === 'PASS').length
@@ -69,6 +73,7 @@ export function buildRecordingQualityCheck(input: {
     unboundLocatorCount,
     fragileLocatorCount,
     timingRiskCount,
+    fileUploadPathRiskCount,
   }
 }
 
@@ -112,6 +117,25 @@ export function hasTimingRisk(step: RecordingQualityStep) {
   return timeoutMs > 45000
 }
 
+export function hasFileUploadPathRisk(step: RecordingQualityStep) {
+  if (String(step.type || '').toUpperCase() !== 'FILE_UPLOAD') {
+    return false
+  }
+  return !isReplayableFileUploadValue(step.inputValue)
+}
+
+function isReplayableFileUploadValue(value: string | null | undefined) {
+  const normalized = value?.trim() || ''
+  if (!normalized) {
+    return false
+  }
+  return /^artifact:.+/.test(normalized)
+    || /^[A-Za-z]:[\\/].+/.test(normalized)
+    || /^\\\\[^\\]+\\[^\\]+/.test(normalized)
+    || /^\/\/[^/]+\/[^/]+/.test(normalized)
+    || /^\/.+/.test(normalized)
+}
+
 function buildAssertionCheck(assertionCount: number): RecordingQualityCheckItem {
   return {
     key: 'ASSERTIONS',
@@ -149,6 +173,16 @@ function buildTimingCheck(timingRiskCount: number): RecordingQualityCheckItem {
     status: timingRiskCount === 0 ? 'PASS' : 'WARN',
     summary: timingRiskCount === 0 ? '未发现明显等待风险' : `${timingRiskCount} 个步骤等待或超时需要复核`,
     suggestion: timingRiskCount === 0 ? null : '短等待可能导致偶发失败，过长超时会拖慢回归，建议按页面实际耗时调整。',
+  }
+}
+
+function buildFileUploadCheck(fileUploadPathRiskCount: number): RecordingQualityCheckItem {
+  return {
+    key: 'UPLOADS',
+    label: '文件上传路径',
+    status: fileUploadPathRiskCount === 0 ? 'PASS' : 'WARN',
+    summary: fileUploadPathRiskCount === 0 ? '未发现不可回放的文件上传路径' : `${fileUploadPathRiskCount} 个文件上传步骤需要补可回放路径`,
+    suggestion: fileUploadPathRiskCount === 0 ? null : '录制只能拿到浏览器可见文件名，请改成本机绝对路径或 artifact:<fileId> 后再回放。',
   }
 }
 

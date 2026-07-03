@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   buildRecordingQualityCheck,
+  hasFileUploadPathRisk,
   hasTimingRisk,
   isFragileLocatorStep,
   isUnboundLocatorStep,
@@ -39,7 +40,8 @@ test('reports missing assertions unbound elements fragile locators timing risks 
   assert.equal(result.unboundLocatorCount, 1)
   assert.equal(result.fragileLocatorCount, 1)
   assert.equal(result.timingRiskCount, 1)
-  assert.deepEqual(result.checks.map(item => item.status), ['WARN', 'WARN', 'WARN', 'WARN', 'WARN'])
+  assert.equal(result.fileUploadPathRiskCount, 0)
+  assert.deepEqual(result.checks.map(item => item.status), ['WARN', 'WARN', 'WARN', 'WARN', 'PASS', 'WARN'])
 })
 
 test('detects unbound locator steps only when locator data exists', () => {
@@ -60,6 +62,28 @@ test('detects short wait and excessive timeout risks', () => {
   assert.equal(hasTimingRisk(step({ type: 'WAIT_FOR', timeoutMs: 5000 })), false)
 })
 
+test('flags recorded file upload names that are not replayable paths or artifacts', () => {
+  const result = buildRecordingQualityCheck({
+    replayPassed: true,
+    steps: [
+      step({ type: 'FILE_UPLOAD', locatorType: 'CSS', locatorValue: '#file', inputValue: 'upload-demo.txt' }),
+      step({ type: 'ASSERT_VISIBLE', elementId: 1, locatorType: 'TEST_ID', locatorValue: 'done' }),
+    ],
+  })
+
+  assert.equal(result.fileUploadPathRiskCount, 1)
+  assert.equal(result.ready, false)
+  assert.equal(result.checks.some(item => item.key === 'UPLOADS' && item.status === 'WARN'), true)
+})
+
+test('accepts file upload artifacts and absolute paths as replayable values', () => {
+  assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'artifact:file-1' })), false)
+  assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'D:/test/upload-demo.txt' })), false)
+  assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: '/tmp/upload-demo.txt' })), false)
+  assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'upload-demo.txt' })), true)
+  assert.equal(hasFileUploadPathRisk(step({ type: 'CLICK', inputValue: 'upload-demo.txt' })), false)
+})
+
 function step(overrides: Partial<RecordingQualityStep>): RecordingQualityStep {
   return {
     name: 'step',
@@ -67,6 +91,7 @@ function step(overrides: Partial<RecordingQualityStep>): RecordingQualityStep {
     elementId: 1,
     locatorType: 'CSS',
     locatorValue: '#target',
+    inputValue: null,
     timeoutMs: null,
     enabled: true,
     ...overrides,
