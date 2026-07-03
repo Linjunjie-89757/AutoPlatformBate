@@ -1,4 +1,4 @@
-import { requiresLocator } from './format'
+import { requiresLocator } from './format.ts'
 import type { WebUiLocatorType, WebUiStepType } from '../model/types'
 
 export type RecordingQualityCheckStatus = 'PASS' | 'WARN'
