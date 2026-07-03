@@ -1,0 +1,104 @@
+[
+  {
+    "menu": "订单质检",
+    "ok": true,
+    "clickResult": {
+      "clicked": true,
+      "count": 5
+    },
+    "url": "http://traffic-test.integrity.com.cn/traffic/dashboard",
+    "requests": []
+  },
+  {
+    "menu": "订单统计",
+    "ok": true,
+    "clickResult": {
+      "clicked": true,
+      "count": 2
+    },
+    "url": "http://traffic-test.integrity.com.cn/traffic/live-compliance/order-inspection/statistics/index",
+    "requests": [
+      {
+        "method": "POST",
+        "url": "https://japi-test.integrity.com.cn/system-management/admin/system/dictData/list",
+        "status": 200,
+        "postData": "{\"dictType\":\"page_help_live_compliance_order_inspection_statistics_index\",\"enabled\":\"1\"}",
+        "resourceType": "xhr",
+        "elapsedMs": 417
+      },
+      {
+        "method": "POST",
+        "url": "https://japi-test.integrity.com.cn/order-admin/admin/riskManagement/orderInspection/topCard",
+        "status": 200,
+        "postData": "{\"startDate\":1780416000000,\"endDate\":1783007999999,\"deptCode\":\"\"}",
+        "resourceType": "xhr",
+        "elapsedMs": 1426
+      },
+      {
+        "method": "POST",
+        "url": "https://japi-test.integrity.com.cn/order-admin/admin/riskManagement/orderInspection/chart",
+        "status": 200,
+        "postData": "{\"startDate\":1780416000000,\"endDate\":1783007999999,\"deptCode\":\"\"}",
+        "resourceType": "xhr",
+        "elapsedMs": 1428
+      },
+      {
+        "method": "POST",
+        "url": "https://japi-test.integrity.com.cn/order-admin/admin/riskManagement/orderInspection/statsPage",
+        "status": 200,
+        "postData": "{\"pageIndex\":1,\"pageSize\":10,\"time\":[1780416000000,1783007999999],\"startDate\":1780416000000,\"endDate\":1783007999999,\"deptCode\":\"\",\"deptCodeLabel\":\"\",\"responsibleUserCode\":\"\",\"assigned\":\"\",\"reviewStatus\":\"\",\"assignTime\":\"\",\"assignTimeStart\":\"\",\"assignTimeEnd\":\"\",\"manualInspectionTime\":\"\",\"manualInspectionTimeStart\":\"\",\"manualInspectionTimeEnd\":\"\",\"inspectionType\":1,\"autoInspectionPass\":false}",
+        "resourceType": "xhr",
+        "elapsedMs": 1762
+      }
+    ]
+  },
+  {
+    "menu": "电话质检",
+    "ok": true,
+    "clickResult": {
+      "clicked": true,
+      "count": 2
+    },
+    "url": "http://traffic-test.integrity.com.cn/traffic/iframe/wecom-ai-alarm-hts-stock-com-convoGuardAi-phoneFollowchannelXMAN",
+    "requests": []
+  },
+  {
+    "menu": "质检规则",
+    "ok": true,
+    "clickResult": {
+      "clicked": true,
+      "count": 2
+    },
+    "url": "http://traffic-test.integrity.com.cn/traffic/iframe/wecom-ai-alarm-hts-stock-com-convoGuardAi-rulechannelXMAN",
+    "requests": []
+  },
+  {
+    "menu": "会话质检",
+    "ok": true,
+    "clickResult": {
+      "clicked": true,
+      "count": 2
+    },
+    "url": "http://traffic-test.integrity.com.cn/traffic/iframe/wecom-ai-alarm-hts-stock-com-convoGuardAi-resultchannelXMAN",
+    "requests": [
+      {
+        "method": "POST",
+        "url": "https://wecom-api.integrity.com.cn/api/v1.0/qualityInspectionWarningWorkOrder/unfinishedOrderNum",
+        "status": 401,
+        "postData": "{}",
+        "resourceType": "xhr",
+        "elapsedMs": 618
+      }
+    ]
+  },
+  {
+    "menu": "素材质检",
+    "ok": true,
+    "clickResult": {
+      "clicked": true,
+      "count": 2
+    },
+    "url": "http://traffic-test.integrity.com.cn/traffic/iframe/wecom-web-hts-stock-com--systemcontentmaterialAuditsignchannelXMAN",
+    "requests": []
+  }
+]

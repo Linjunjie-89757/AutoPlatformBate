@@ -3,9 +3,12 @@ package com.company.autoplatform.webuiautomation;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.apiautomation.ApiWorkspaceScopeSupport;
 import com.company.autoplatform.auth.CurrentUserContext;
+import com.company.autoplatform.auth.CurrentUserPrincipal;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
+import com.company.autoplatform.notification.NotificationDomainService;
+import com.company.autoplatform.notification.NotificationModels;
 import com.company.autoplatform.runner.LocalRunnerModels.CreateRunnerTaskCommand;
 import com.company.autoplatform.runner.LocalRunnerService;
 import com.company.autoplatform.runner.LocalRunnerTaskFinalResultEvent;
@@ -83,6 +86,7 @@ public class WebUiExecutionDomainService {
     private final WebUiArtifactStorageService artifactStorageService;
     private final WebUiExecutionContextSupport executionContextSupport;
     private final WebUiLocatorContextSupport locatorContextSupport;
+    private final NotificationDomainService notificationDomainService;
     private final String mockPublicBaseUrl;
 
     public WebUiExecutionDomainService(
@@ -104,6 +108,7 @@ public class WebUiExecutionDomainService {
             WebUiArtifactStorageService artifactStorageService,
             WebUiExecutionContextSupport executionContextSupport,
             WebUiLocatorContextSupport locatorContextSupport,
+            NotificationDomainService notificationDomainService,
             @Value("${autoplatform.mock.public-base-url:http://localhost:${server.port:8080}/api/mock}") String mockPublicBaseUrl
     ) {
         this.runBatchMapper = runBatchMapper;
@@ -124,6 +129,7 @@ public class WebUiExecutionDomainService {
         this.artifactStorageService = artifactStorageService;
         this.executionContextSupport = executionContextSupport;
         this.locatorContextSupport = locatorContextSupport;
+        this.notificationDomainService = notificationDomainService;
         this.mockPublicBaseUrl = trimTrailingSlash(mockPublicBaseUrl);
     }
 
@@ -529,6 +535,10 @@ public class WebUiExecutionDomainService {
             caseMapper.updateById(webCase);
         }
 
+        if (batchId == null) {
+            publishWebUiRunNotification(run);
+        }
+
         return new WebUiRunResponse(
                 run.getId(),
                 run.getBatchId(),
@@ -571,6 +581,8 @@ public class WebUiExecutionDomainService {
         run.setFailedSteps(0);
         run.setSkippedSteps(0);
         run.setOperatorName(operatorName);
+        CurrentUserPrincipal currentUser = currentUserOrNull();
+        run.setOperatorId(currentUser == null ? null : currentUser.userId());
         run.setStartedAt(now);
         run.setCreatedAt(now);
         run.setUpdatedAt(now);
@@ -816,6 +828,7 @@ public class WebUiExecutionDomainService {
         batch.setFinishedAt(finishedAt);
         batch.setUpdatedAt(finishedAt);
         runBatchMapper.updateById(batch);
+        publishWebUiBatchNotification(batch);
         return batch;
     }
 
@@ -886,6 +899,59 @@ public class WebUiExecutionDomainService {
                 webCase.setUpdatedAt(finishedAt);
                 caseMapper.updateById(webCase);
             }
+        }
+        if (run.getBatchId() == null) {
+            publishWebUiRunNotification(run);
+        }
+    }
+
+    private void publishWebUiRunNotification(WebUiRunEntity run) {
+        notificationDomainService.publishEvent(new NotificationModels.NotificationEvent(
+                run.getWorkspaceId(),
+                SUCCESS.equals(run.getStatus())
+                        ? NotificationDomainService.EVENT_WEB_UI_FINISHED
+                        : NotificationDomainService.EVENT_WEB_UI_FAILED,
+                SUCCESS.equals(run.getStatus()) ? "Web UI 执行完成" : "Web UI 执行失败",
+                "WEB_UI_RUN",
+                run.getId(),
+                run.getCaseName(),
+                run.getStatus(),
+                run.getTotalSteps(),
+                run.getPassedSteps(),
+                run.getFailedSteps(),
+                run.getDurationMs(),
+                run.getFailureSummary(),
+                "/automation/web?tab=runs&runId=" + run.getId(),
+                Map.of()
+        ));
+    }
+
+    private void publishWebUiBatchNotification(WebUiRunBatchEntity batch) {
+        notificationDomainService.publishEvent(new NotificationModels.NotificationEvent(
+                batch.getWorkspaceId(),
+                SUCCESS.equals(batch.getStatus())
+                        ? NotificationDomainService.EVENT_WEB_UI_FINISHED
+                        : NotificationDomainService.EVENT_WEB_UI_FAILED,
+                SUCCESS.equals(batch.getStatus()) ? "Web UI 执行完成" : "Web UI 执行失败",
+                "WEB_UI_BATCH",
+                batch.getId(),
+                batch.getBatchName(),
+                batch.getStatus(),
+                batch.getTotalCases(),
+                batch.getSuccessCases(),
+                batch.getFailedCases(),
+                batch.getDurationMs(),
+                batch.getFailureSummary(),
+                "/automation/web?tab=batches&batchId=" + batch.getId(),
+                Map.of()
+        ));
+    }
+
+    private CurrentUserPrincipal currentUserOrNull() {
+        try {
+            return CurrentUserContext.require();
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 

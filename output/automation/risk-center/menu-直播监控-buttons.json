@@ -1,0 +1,530 @@
+[
+  {
+    "text": "账号信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 161,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "讲师信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "文字质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "电话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 480,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "质检规则",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 480,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "会话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "素材质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "投诉复盘",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 596,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退前告知",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 683,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "自媒体台账",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 770,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "员工挂证",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 770,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "石涛",
+    "tag": "DIV",
+    "className": "flex user ac el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1359,
+      "y": 11,
+      "width": 81,
+      "height": 28
+    }
+  },
+  {
+    "text": "重置",
+    "tag": "BUTTON",
+    "className": "el-button el-button--text",
+    "disabled": false,
+    "rect": {
+      "x": 1432,
+      "y": 188,
+      "width": 30,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 372,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 372,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 560,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 560,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 748,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 748,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 936,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 936,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 1124,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 1124,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 1312,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 1312,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 1500,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 1500,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 1688,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 1688,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 1876,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 1876,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "不通过",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1376,
+      "y": 2064,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "通过",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1448,
+      "y": 2064,
+      "width": 46,
+      "height": 32
+    }
+  },
+  {
+    "text": "常见问题使用说明",
+    "tag": "BUTTON",
+    "className": "page-help-instruction-float__body",
+    "disabled": false,
+    "rect": {
+      "x": 1285,
+      "y": 795,
+      "width": 106,
+      "height": 48
+    }
+  }
+]

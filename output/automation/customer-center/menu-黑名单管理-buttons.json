@@ -1,0 +1,590 @@
+[
+  {
+    "text": "用户管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "文件管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "全部订单",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "快速查询",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退款列表",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 219,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "分配规则",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 296,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "分配计划",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 296,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "账号管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 344,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "主播管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 344,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "平台分类",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 373,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "部门分类",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 373,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "产品管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 402,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "页面管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 402,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "回传配置",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 431,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "小程序管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 431,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "链接分析",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 518,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "产品分析",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 518,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "黑名单管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 605,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "白名单管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 605,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "批次榜单",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 692,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "创意分析",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 779,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "广告主设置",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 779,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "石涛",
+    "tag": "DIV",
+    "className": "flex user ac el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1359,
+      "y": 11,
+      "width": 81,
+      "height": 28
+    }
+  },
+  {
+    "text": "新建",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 247,
+      "y": 118,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "导入",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 319,
+      "y": 118,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "查询",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 362,
+      "y": 321,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "重置",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 434,
+      "y": 321,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "收起",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-text",
+    "disabled": false,
+    "rect": {
+      "x": 1326,
+      "y": 328.5,
+      "width": 77,
+      "height": 32
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 493.09375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "启用黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 493.09375,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 564.09375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "启用黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 564.09375,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 620.203125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "解除黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 620.203125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 661.40625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "解除黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 661.40625,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 702.609375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "解除黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 702.609375,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 743.8125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "启用黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 743.8125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 785.015625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "启用黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 785.015625,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 826.21875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "启用黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 826.21875,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 867.421875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "启用黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 867.421875,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 923.515625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "解除黑名单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 923.515625,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "常见问题使用说明",
+    "tag": "BUTTON",
+    "className": "page-help-instruction-float__body",
+    "disabled": false,
+    "rect": {
+      "x": 1285,
+      "y": 795,
+      "width": 106,
+      "height": 48
+    }
+  }
+]

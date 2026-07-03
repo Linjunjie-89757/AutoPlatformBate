@@ -1,0 +1,926 @@
+[
+  {
+    "text": "风控设置",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退款协议",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品分类",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品规格",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品权益",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 219,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "优惠券管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 306,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品活动",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "优惠券记录",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 393,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "销售合同",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "付款审核",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 422,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退款审批",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 422,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "财务对账",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "发票记录",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "资金明细",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 538,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "石涛",
+    "tag": "DIV",
+    "className": "flex user ac el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1359,
+      "y": 11,
+      "width": 81,
+      "height": 28
+    }
+  },
+  {
+    "text": "创建订单",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 247,
+      "y": 130,
+      "width": 88,
+      "height": 32
+    }
+  },
+  {
+    "text": "导出",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 347,
+      "y": 130,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "售前销售模式",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary mode-switch-btn mode-presales",
+    "disabled": false,
+    "rect": {
+      "x": 1275,
+      "y": 130,
+      "width": 138,
+      "height": 32
+    }
+  },
+  {
+    "text": "查询",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 347,
+      "y": 420,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "高级查询",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 419,
+      "y": 420,
+      "width": 88,
+      "height": 32
+    }
+  },
+  {
+    "text": "重置",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 519,
+      "y": 420,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "自定义字段",
+    "tag": "A",
+    "className": "el-link el-link--primary is-hover-underline mgl-10",
+    "disabled": false,
+    "rect": {
+      "x": 1256,
+      "y": 427.5,
+      "width": 70,
+      "height": 32
+    }
+  },
+  {
+    "text": "收起",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-text",
+    "disabled": false,
+    "rect": {
+      "x": 1326,
+      "y": 427.5,
+      "width": 77,
+      "height": 32
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 247,
+      "y": 486.203125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 321,
+      "y": 486.203125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "修改售前销售",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 409,
+      "y": 486.203125,
+      "width": 90,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 574.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 575.203125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 575.203125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "重新电子签约",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 575.203125,
+      "width": 90,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1344,
+      "y": 575,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 615.296875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 616.40625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 616.40625,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "重新电子签约",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 616.40625,
+      "width": 90,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1344,
+      "y": 616.203125,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 656.5,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 657.609375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 657.609375,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "签约链接",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 657.609375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1316,
+      "y": 657.40625,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 697.703125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 698.8125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 698.8125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "聚合收款码",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 698.8125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1330,
+      "y": 698.609375,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 738.90625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 740.015625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 740.015625,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "重新电子签约",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 740.015625,
+      "width": 90,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1344,
+      "y": 739.8125,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 780.109375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 781.21875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 781.21875,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "签约链接",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 781.21875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1316,
+      "y": 781.015625,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 821.3125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 822.421875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 822.421875,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "签约链接",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 822.421875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1316,
+      "y": 822.21875,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 862.515625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 863.625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 863.625,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "重新电子签约",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 863.625,
+      "width": 90,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1344,
+      "y": 863.421875,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 903.71875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 904.828125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 904.828125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "重新电子签约",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 904.828125,
+      "width": 90,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1344,
+      "y": 904.625,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "订单详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 359,
+      "y": 944.921875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "付款明细",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1084,
+      "y": 946.03125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "指派服务人",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1158,
+      "y": 946.03125,
+      "width": 76,
+      "height": 22
+    }
+  },
+  {
+    "text": "重新电子签约",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1246,
+      "y": 946.03125,
+      "width": 90,
+      "height": 22
+    }
+  },
+  {
+    "text": "更多",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link more-button el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1344,
+      "y": 945.828125,
+      "width": 52,
+      "height": 22
+    }
+  },
+  {
+    "text": "常见问题使用说明",
+    "tag": "BUTTON",
+    "className": "page-help-instruction-float__body",
+    "disabled": false,
+    "rect": {
+      "x": 1285,
+      "y": 795,
+      "width": 106,
+      "height": 48
+    }
+  }
+]

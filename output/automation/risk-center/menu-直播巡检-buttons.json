@@ -1,0 +1,566 @@
+[
+  {
+    "text": "账号信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 161,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "讲师信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "文字质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "电话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 480,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "质检规则",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 480,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "会话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "素材质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "投诉复盘",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 596,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退前告知",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 683,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "自媒体台账",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 770,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "员工挂证",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 770,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "石涛",
+    "tag": "DIV",
+    "className": "flex user ac el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1359,
+      "y": 11,
+      "width": 81,
+      "height": 28
+    }
+  },
+  {
+    "text": "导出",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 247,
+      "y": 118,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "查询",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 347,
+      "y": 274,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "重置",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 419,
+      "y": 274,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "收起",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-text",
+    "disabled": false,
+    "rect": {
+      "x": 1326,
+      "y": 281.5,
+      "width": 77,
+      "height": 32
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 404.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 404.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 475.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 475.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 546.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 546.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 617.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 617.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 688.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 688.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 759.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 759.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 830.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 830.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 901.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 901.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 972.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 972.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除视频",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 1043.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1319,
+      "y": 1043.09375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "常见问题使用说明",
+    "tag": "BUTTON",
+    "className": "page-help-instruction-float__body",
+    "disabled": false,
+    "rect": {
+      "x": 1285,
+      "y": 795,
+      "width": 106,
+      "height": 48
+    }
+  }
+]

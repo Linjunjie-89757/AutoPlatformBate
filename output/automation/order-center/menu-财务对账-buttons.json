@@ -1,0 +1,218 @@
+[
+  {
+    "text": "风控设置",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退款协议",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品分类",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品规格",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品权益",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 219,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "优惠券管理",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 306,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "商品活动",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "优惠券记录",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 393,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "销售合同",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "付款审核",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 422,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退款审批",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 422,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "财务对账",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "发票记录",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "资金明细",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 538,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "石涛",
+    "tag": "DIV",
+    "className": "flex user ac el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1359,
+      "y": 11,
+      "width": 81,
+      "height": 28
+    }
+  },
+  {
+    "text": "查询",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 347,
+      "y": 282,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "重置",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 419,
+      "y": 282,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "收起",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-text",
+    "disabled": false,
+    "rect": {
+      "x": 1326,
+      "y": 289.5,
+      "width": 77,
+      "height": 32
+    }
+  }
+]

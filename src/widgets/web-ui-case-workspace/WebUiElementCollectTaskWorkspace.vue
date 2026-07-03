@@ -34,6 +34,7 @@ import {
   getLocalRunnerHeartbeat,
   getLocalRunnerPlatformPollingStatus,
   mapRunnerCandidateToCollectCandidate,
+  openLocalRunnerPage,
   releaseLocalRunnerSession,
   startLocalRunnerPlatformPolling,
   stopLocalRunnerPlatformPolling,
@@ -92,6 +93,7 @@ const polling = ref(false)
 const filterDetailsLoading = ref(false)
 const localRunnerChecking = ref(false)
 const localRunnerValidating = ref(false)
+const localRunnerOpening = ref(false)
 const localRunnerRecollecting = ref(false)
 const localRunnerHealth = ref<LocalRunnerHealthView | null>(null)
 const localRunnerErrorMessage = ref('')
@@ -912,6 +914,51 @@ async function checkRunnerStatus(options: { silent?: boolean } = {}) {
   }
 }
 
+function getTaskRunnerOpenUrl() {
+  return (task.value?.actualUrl || routePageUrl.value || '').trim()
+}
+
+async function reopenTaskPageInRunner() {
+  const currentTask = task.value
+  if (!currentTask) {
+    ElMessage.warning('当前采集任务不存在')
+    return
+  }
+  const url = getTaskRunnerOpenUrl()
+  if (!url) {
+    ElMessage.warning('当前任务缺少页面地址，无法重新打开')
+    return
+  }
+
+  localRunnerOpening.value = true
+  try {
+    const result = await openLocalRunnerPage({
+      url,
+      workspaceId: selectedModule.value?.workspaceCode || queryWorkspaceCode.value || props.workspaceCode || 'ALL',
+      environmentId: 'manual',
+    })
+    try {
+      await bindLocalRunnerSession({
+        taskId: currentTask.taskId,
+        sessionId: result.session?.sessionId || null,
+      })
+    } catch (error) {
+      ElMessage.warning(`页面已打开，但任务关联失败：${getRequestErrorMessage(error)}`)
+    }
+    localRunnerHealth.value = await checkLocalRunnerHealth()
+    void refreshRunnerPlatformPollStatus({ silent: true })
+    if (result.page?.isProbablyLoginPage) {
+      ElMessage.warning('已重新打开页面。当前疑似登录页，请先在本地浏览器完成登录后再继续采集或验证')
+      return
+    }
+    ElMessage.success('已重新打开页面，请在本地浏览器确认页面状态')
+  } catch (error) {
+    ElMessage.error(`重新打开页面失败：${getRequestErrorMessage(error)}`)
+  } finally {
+    localRunnerOpening.value = false
+  }
+}
+
 async function refreshRunnerPlatformPollStatus(options: { silent?: boolean; syncTaskWhenStopped?: boolean } = {}) {
   const previousPoller = localRunnerPlatformPoller.value
   if (!options.silent) {
@@ -1678,6 +1725,9 @@ onBeforeUnmount(() => {
         <AppButton size="small" :loading="localRunnerChecking" @click="checkRunnerStatus()">
           检测 Runner
         </AppButton>
+        <AppButton size="small" :loading="localRunnerOpening" @click="reopenTaskPageInRunner">
+          重新打开页面
+        </AppButton>
         <AppButton size="small" :loading="localRunnerRecollecting" @click="recollectCurrentRunnerPage">
           重新采集
         </AppButton>
@@ -2109,22 +2159,26 @@ onBeforeUnmount(() => {
 
 .web-ui-collect-workspace__candidate-group {
   display: grid;
-  gap: var(--app-space-1);
+  gap: 4px;
 }
 
 .web-ui-collect-workspace__candidate-group-title {
   width: 100%;
-  padding: 7px 4px 5px;
+  padding: 6px 8px;
   border: 0;
-  background: transparent;
-  color: var(--app-text-muted);
+  border-left: 3px solid var(--el-color-primary-light-5);
+  border-radius: var(--app-radius-sm);
+  background: var(--el-color-primary-light-9);
+  color: var(--app-text-secondary);
   font-weight: 400;
   text-align: left;
   cursor: pointer;
-  transition: color .18s ease, background-color .18s ease;
+  transition: color .18s ease, background-color .18s ease, border-color .18s ease;
 }
 
 .web-ui-collect-workspace__candidate-group-title:hover {
+  border-left-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-8);
   color: var(--el-color-primary);
 }
 
@@ -2145,7 +2199,7 @@ onBeforeUnmount(() => {
 
 .web-ui-collect-workspace__candidate-group-name {
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: hidden;
   color: inherit;
   text-overflow: ellipsis;
@@ -2154,10 +2208,10 @@ onBeforeUnmount(() => {
 
 .web-ui-collect-workspace__candidate-group-count {
   flex-shrink: 0;
-  min-width: 18px;
+  min-width: 0;
   color: var(--app-text-muted);
   font-size: var(--app-font-size-xs);
-  text-align: right;
+  text-align: left;
 }
 
 .web-ui-collect-workspace__candidate-card {
@@ -2166,9 +2220,9 @@ onBeforeUnmount(() => {
   align-items: center;
   min-height: 32px;
   padding: 7px 8px;
-  border: 1px solid transparent;
+  border: 1px solid var(--app-border);
   border-radius: var(--app-radius-sm);
-  background: transparent;
+  background: var(--app-bg-card);
   color: inherit;
   text-align: left;
   cursor: pointer;

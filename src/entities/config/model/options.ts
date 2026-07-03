@@ -40,3 +40,19 @@ export const configDbTypeOptions = [
   { value: 'REDIS', label: 'Redis', port: '6379', driver: '' },
   { value: 'MONGODB', label: 'MongoDB', port: '27017', driver: '' },
 ] as const
+
+export const notificationChannelTypeOptions = [
+  { value: 'WECOM_ROBOT', label: '企业微信机器人' },
+  { value: 'WEBHOOK', label: '通用 Webhook' },
+] as const
+
+export const notificationTriggerConditionOptions = [
+  { value: 'ALWAYS', label: '始终触发' },
+  { value: 'SUCCESS_ONLY', label: '仅成功' },
+  { value: 'FAILURE_ONLY', label: '仅失败' },
+] as const
+
+export const notificationSendStatusOptions = [
+  { value: 'SUCCESS', label: '发送成功' },
+  { value: 'FAILED', label: '发送失败' },
+] as const

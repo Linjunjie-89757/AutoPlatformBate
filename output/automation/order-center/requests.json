@@ -1,0 +1,114 @@
+[
+  {
+    "method": "GET",
+    "url": "https://portal-test.integrity.com.cn/admin/login?v=1",
+    "status": 200,
+    "postData": null,
+    "resourceType": "document"
+  },
+  {
+    "method": "GET",
+    "url": "https://passport.feishu.cn/suite/passport/sso/qr?goto=https%3A%2F%2Fpassport.feishu.cn%2Fsuite%2Fpassport%2Foauth%2Fauthorize%3Fclient_id%3Dcli_a3aaa11d33fc900d%26redirect_uri%3Dhttp%253A%252F%252Fportal-test.integrity.com.cn%252Fadmin%252Fauth%26response_type%3Dcode%26state%3DSTATE&sdk_version=1.0.3",
+    "status": 200,
+    "postData": null,
+    "resourceType": "document"
+  },
+  {
+    "method": "POST",
+    "url": "https://capi-test.integrity.com.cn/user-auth/auth/v1/back-unified-login/by-pwd",
+    "status": 200,
+    "postData": "{\"account\":\"19966468884\",\"pwdKey\":\"Shitao123@\"}",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "POST",
+    "url": "https://japi-test.integrity.com.cn/system-admin/auth/v1/secret-token/verify",
+    "status": 200,
+    "postData": "{\"secretToken\":\"88fb8203d02c494e9b273aeb68531946\"}",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "http://traffic-test.integrity.com.cn/traffic/unionlogin",
+    "status": 200,
+    "postData": null,
+    "resourceType": "document"
+  },
+  {
+    "method": "POST",
+    "url": "https://japi-test.integrity.com.cn/system-admin/auth/v1/union-passport/verify",
+    "status": 200,
+    "postData": "{\"passport\":\"yS8j%2FOuXW%2BHzOjS49R%2Fv4sQByxg%2BAltCOvnme7C%2BUO2e4VF0aIzGoA6DfbqWaN4Sg4hHJs44slb2YOXjlvW5foRQEW0HNA8pGAgQiK%2BOBSvmji6UgTzfKWmlRiPDMKxp\",\"pageUrl\":\"http://traffic-test.integrity.com.cn/traffic/unionlogin\",\"backSysCode\":\"traffic\",\"sysUserId\":\"\"}",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://japi-test.integrity.com.cn/system-management/admin/system/userMenu/list?moduleCode=traffic",
+    "status": 200,
+    "postData": null,
+    "resourceType": "xhr"
+  },
+  {
+    "method": "POST",
+    "url": "https://clklog-test.integrity.com.cn/clklog_receiver/api/gp?project=xman&token=755caf33-d114-466b-a5da-2d8ebba29252",
+    "status": 200,
+    "postData": "data=eyJpZGVudGl0aWVzIjp7IiRpZGVudGl0eV9jb29raWVfaWQiOiIxOWYyMmM0MmM1ZjI5YS0wZDBkZjlmNWJlZjZjYzgtMjYwNjEwNTEtMTI5NjAwMC0xOWYyMmM0MmM2MDQxMyJ9LCJkaXN0aW5jdF9pZCI6IjE5ZjIyYzQyYzVmMjlhLTBkMGRmOWY1YmVmNmNjOC0yNjA2MTA1MS0xMjk2MDAwLTE5ZjIyYzQyYzYwNDEzIiwibGliIjp7IiRsaWIiOiJqcyIsIiRsaWJfbWV0aG9kIjoiY29kZSIsIiRsaWJfdmVyc2lvbiI6IjEuMjUuMTUifSwicHJvcGVydGllcyI6eyIkdGltZXpvbmVfb2Zmc2V0IjotNDgwLCIkc2NyZWVuX2hlaWdodCI6OTAwLCIkc2NyZWVuX3dpZHRoIjoxNDQwLCIkdmlld3BvcnRfaGVpZ2h0Ijo5MDAsIiR2aWV3cG9ydF93aWR0aCI6MTQ0MCwiJGxpYiI6ImpzIiwiJGxpYl92ZXJzaW9uIjoiMS4yNS4xNSIsIiRsYXRlc3RfdHJhZmZpY19zb3VyY2VfdHlwZSI6IuebtOaOpea1gemHjyIsIiRsYXRlc3Rfc2VhcmNoX2tleXdvcmQiOiLmnKrlj5bliLDlgLxf55u05o6l5omT5byAIiwiJGxhdGVzdF9yZWZlcnJlciI6IiIsIiRyZWZlcnJlciI6Imh0dHA6Ly90cmFmZmljLXRlc3QuaW50ZWdyaXR5LmNvbS5jbi90cmFmZmljL3VuaW9ubG9naW4iLCIkdXJsIjoiaHR0cDovL3RyYWZmaWMtdGVzdC5pbnRlZ3JpdHkuY29tLmNuL3RyYWZmaWMvZGFzaGJvYXJkIiwiJHVybF9wYXRoIjoiL3RyYWZmaWMvZGFzaGJvYXJkIiwiJHRpdGxlIjoiWC1NQU7lop7plb%2FlvJXmk47lubPlj7AiLCIkaXNfZmlyc3RfZGF5Ijp0cnVlLCIkaXNfZmlyc3RfdGltZSI6dHJ1ZSwiJHJlZmVycmVyX2hvc3QiOiJ0cmFmZmljLXRlc3QuaW50ZWdyaXR5LmNvbS5jbiIsIiRsYXRlc3RfcmVmZXJyZXJfaG9zdCI6IiIsIiRldmVudF9zZXNzaW9uX2lkIjoiMTlmMjJjNDM0ZjUyNjkwMDJjMWZiZWQyZDcwZGQ2MjYwNjEwNTExMjk2MDAwMTlmMjJjNDM0ZjY3MTcifSwiYW5vbnltb3VzX2lkIjoiMTlmMjJjNDJjNWYyOWEtMGQwZGY5ZjViZWY2Y2M4LTI2MDYxMDUxLTEyOTYwMDAtMTlmMjJjNDJjNjA0MTMiLCJ0eXBlIjoidHJhY2siLCJldmVudCI6IiRwYWdldmlldyIsInRpbWUiOjE3ODI5OTQ3MTE3OTEsIl90cmFja19pZCI6NDA1MzUxODA0LCJfZmx1c2hfdGltZSI6MTc4Mjk5NDcxMTgwNH0%3D&ext=crc%3D-971030941",
+    "resourceType": "ping"
+  },
+  {
+    "method": "POST",
+    "url": "https://clklog-test.integrity.com.cn/clklog_receiver/api/gp?project=xman&token=755caf33-d114-466b-a5da-2d8ebba29252",
+    "status": 200,
+    "postData": "data=eyJpZGVudGl0aWVzIjp7IiRpZGVudGl0eV9jb29raWVfaWQiOiIxOWYyMmM0MmM1ZjI5YS0wZDBkZjlmNWJlZjZjYzgtMjYwNjEwNTEtMTI5NjAwMC0xOWYyMmM0MmM2MDQxMyJ9LCJkaXN0aW5jdF9pZCI6IjE5ZjIyYzQyYzVmMjlhLTBkMGRmOWY1YmVmNmNjOC0yNjA2MTA1MS0xMjk2MDAwLTE5ZjIyYzQyYzYwNDEzIiwibGliIjp7IiRsaWIiOiJqcyIsIiRsaWJfbWV0aG9kIjoiY29kZSIsIiRsaWJfdmVyc2lvbiI6IjEuMjUuMTUifSwicHJvcGVydGllcyI6eyIkZmlyc3RfdmlzaXRfdGltZSI6IjIwMjYtMDctMDIgMjA6MTg6MzEuODA4IiwiJGZpcnN0X3JlZmVycmVyIjoiIiwiJGZpcnN0X3JlZmVycmVyX2hvc3QiOiIiLCIkZmlyc3RfYnJvd3Nlcl9sYW5ndWFnZSI6InpoLWNuIiwiJGZpcnN0X2Jyb3dzZXJfY2hhcnNldCI6IlVURi04IiwiJGZpcnN0X3RyYWZmaWNfc291cmNlX3R5cGUiOiLnm7TmjqXmtYHph48iLCIkZmlyc3Rfc2VhcmNoX2tleXdvcmQiOiLmnKrlj5bliLDlgLxf55u05o6l5omT5byAIn0sImFub255bW91c19pZCI6IjE5ZjIyYzQyYzVmMjlhLTBkMGRmOWY1YmVmNmNjOC0yNjA2MTA1MS0xMjk2MDAwLTE5ZjIyYzQyYzYwNDEzIiwidHlwZSI6InByb2ZpbGVfc2V0X29uY2UiLCJ0aW1lIjoxNzgyOTk0NzExODA5LCJfdHJhY2tfaWQiOjcxMTA5MTgxMCwiX2ZsdXNoX3RpbWUiOjE3ODI5OTQ3MTE4MTB9&ext=crc%3D-1878711249",
+    "resourceType": "ping"
+  },
+  {
+    "method": "POST",
+    "url": "https://japi-test.integrity.com.cn/system-management/admin/system/dictData/list",
+    "status": 200,
+    "postData": "{\"dictType\":\"page_help_dashboard\",\"enabled\":\"1\"}",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://japi-test.integrity.com.cn/system-management/admin/system/dept/tree",
+    "status": 200,
+    "postData": null,
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://japi-test.integrity.com.cn/system-admin/admin/v1/user-system/my-system-list?backSysCode=portal",
+    "status": 200,
+    "postData": null,
+    "resourceType": "xhr"
+  },
+  {
+    "method": "POST",
+    "url": "https://japi-test.integrity.com.cn/system-management/admin/system/dictData/list",
+    "status": 200,
+    "postData": "{\"dictType\":\"office_filter_code\",\"enabled\":\"1\"}",
+    "resourceType": "xhr"
+  },
+  {
+    "method": "GET",
+    "url": "https://japi-test.integrity.com.cn/traffic-admin/admin/v1/ip/my-addr",
+    "status": 200,
+    "postData": null,
+    "resourceType": "xhr"
+  },
+  {
+    "method": "POST",
+    "url": "https://clklog-test.integrity.com.cn/clklog_receiver/api/gp?project=xman&token=755caf33-d114-466b-a5da-2d8ebba29252",
+    "status": 200,
+    "postData": "data=eyJpZGVudGl0aWVzIjp7IiRpZGVudGl0eV9jb29raWVfaWQiOiIxOWYyMmM0MmM1ZjI5YS0wZDBkZjlmNWJlZjZjYzgtMjYwNjEwNTEtMTI5NjAwMC0xOWYyMmM0MmM2MDQxMyJ9LCJkaXN0aW5jdF9pZCI6IjE5ZjIyYzQyYzVmMjlhLTBkMGRmOWY1YmVmNmNjOC0yNjA2MTA1MS0xMjk2MDAwLTE5ZjIyYzQyYzYwNDEzIiwibGliIjp7IiRsaWIiOiJqcyIsIiRsaWJfbWV0aG9kIjoiY29kZSIsIiRsaWJfdmVyc2lvbiI6IjEuMjUuMTUifSwicHJvcGVydGllcyI6eyIkdGltZXpvbmVfb2Zmc2V0IjotNDgwLCIkc2NyZWVuX2hlaWdodCI6OTAwLCIkc2NyZWVuX3dpZHRoIjoxNDQwLCIkdmlld3BvcnRfaGVpZ2h0Ijo5MDAsIiR2aWV3cG9ydF93aWR0aCI6MTQ0MCwiJGxpYiI6ImpzIiwiJGxpYl92ZXJzaW9uIjoiMS4yNS4xNSIsIiRsYXRlc3RfdHJhZmZpY19zb3VyY2VfdHlwZSI6IuebtOaOpea1gemHjyIsIiRsYXRlc3Rfc2VhcmNoX2tleXdvcmQiOiLmnKrlj5bliLDlgLxf55u05o6l5omT5byAIiwiJGxhdGVzdF9yZWZlcnJlciI6IiIsIiRvcyI6IldpbmRvd3MxMCIsIiRicm93c2VyIjoiQ2hyb21lIiwiJGVtcE5hbWUiOiLnn7PmtpsiLCIkdXNlckNvZGUiOiJBMjUwNjAwMV84MHVmIiwiJGVtcEdyb3VwIjoi5YWr6YOo5LiA57uEIiwiJGVtcERlb3QiOiLkuJrliqHlhavpg6giLCIkaXAiOiIxNzIuMTYuNTAuMTAwIiwiY2xpZW50X2NpdHkiOiLlhoXnvZFJUCIsImNsaWVudF9jb3VudHJ5IjoiMCIsImNsaWVudF9wcm92aW5jZSI6IjAiLCIkZ3JvdXAiOiLnmbvlvZVYbWFu5aKe6ZW%2F5byV5pOO5bmz5Y%2BwIiwiJHRpdGxlIjoi55m75b2VWG1hbuWinumVv%2BW8leaTjuW5s%2BWPsCIsIiRzY3JlZW5fbmFtZSI6IueCueWHu%2BeZu%2BW9lVhtYW7lop7plb%2FlvJXmk47lubPlj7AiLCIkdXJsIjoiaHR0cDovL3RyYWZmaWMtdGVzdC5pbnRlZ3JpdHkuY29tLmNuL3RyYWZmaWMvZGFzaGJvYXJkIiwiY3VycmVudF9ldmVudF90aW1lIjoxNzgyOTk0NzEyNTU4LCIkaXNfZmlyc3RfZGF5Ijp0cnVlLCIkbGF0ZXN0X3JlZmVycmVyX2hvc3QiOiIiLCIkZXZlbnRfc2Vzc2lvbl9pZCI6IjE5ZjIyYzQzNGY1MjY5MDAyYzFmYmVkMmQ3MGRkNjI2MDYxMDUxMTI5NjAwMDE5ZjIyYzQzNGY2NzE3In0sImFub255bW91c19pZCI6IjE5ZjIyYzQyYzVmMjlhLTBkMGRmOWY1YmVmNmNjOC0yNjA2MTA1MS0xMjk2MDAwLTE5ZjIyYzQyYzYwNDEzIiwidHlwZSI6InRyYWNrIiwiZXZlbnQiOiIkdXNlcl9sb2dpbiIsInRpbWUiOjE3ODI5OTQ3MTI1NTksIl90cmFja19pZCI6NzQzMDcyNTY1LCJfZmx1c2hfdGltZSI6MTc4Mjk5NDcxMjU2NX0%3D&ext=crc%3D-429919672",
+    "resourceType": "ping"
+  },
+  {
+    "method": "POST",
+    "url": "https://clklog-test.integrity.com.cn/clklog_receiver/api/gp?project=xman&token=755caf33-d114-466b-a5da-2d8ebba29252",
+    "status": 200,
+    "postData": "data=eyJpZGVudGl0aWVzIjp7IiRpZGVudGl0eV9jb29raWVfaWQiOiIxOWYyMmM0MmM1ZjI5YS0wZDBkZjlmNWJlZjZjYzgtMjYwNjEwNTEtMTI5NjAwMC0xOWYyMmM0MmM2MDQxMyJ9LCJkaXN0aW5jdF9pZCI6IjE5ZjIyYzQyYzVmMjlhLTBkMGRmOWY1YmVmNmNjOC0yNjA2MTA1MS0xMjk2MDAwLTE5ZjIyYzQyYzYwNDEzIiwibGliIjp7IiRsaWIiOiJqcyIsIiRsaWJfbWV0aG9kIjoiY29kZSIsIiRsaWJfdmVyc2lvbiI6IjEuMjUuMTUifSwicHJvcGVydGllcyI6eyIkdGltZXpvbmVfb2Zmc2V0IjotNDgwLCIkc2NyZWVuX2hlaWdodCI6OTAwLCIkc2NyZWVuX3dpZHRoIjoxNDQwLCIkdmlld3BvcnRfaGVpZ2h0Ijo5MDAsIiR2aWV3cG9ydF93aWR0aCI6MTQ0MCwiJGxpYiI6ImpzIiwiJGxpYl92ZXJzaW9uIjoiMS4yNS4xNSIsIiRsYXRlc3RfdHJhZmZpY19zb3VyY2VfdHlwZSI6IuebtOaOpea1gemHjyIsIiRsYXRlc3Rfc2VhcmNoX2tleXdvcmQiOiLmnKrlj5bliLDlgLxf55u05o6l5omT5byAIiwiJGxhdGVzdF9yZWZlcnJlciI6IiIsIiRlbGVtZW50X3R5cGUiOiJkaXYiLCIkZWxlbWVudF9pZCI6InRhYi0xOTQyODIwNzE0NTU3NzQ3MjAwIiwiJGVsZW1lbnRfY2xhc3NfbmFtZSI6ImVsLXRhYnNfX2l0ZW0gaXMtdG9wIGlzLWZvY3VzIiwiJGVsZW1lbnRfY29udGVudCI6IuiuouWNleS4reW%2FgyIsIiR1cmwiOiJodHRwOi8vdHJhZmZpYy10ZXN0LmludGVncml0eS5jb20uY24vdHJhZmZpYy9kYXNoYm9hcmQiLCIkdXJsX3BhdGgiOiIvdHJhZmZpYy9kYXNoYm9hcmQiLCIkdGl0bGUiOiJYLU1BTuWinumVv%2BW8leaTjuW5s%2BWPsCIsIiRlbGVtZW50X3NlbGVjdG9yIjoiI3RhYi0xOTQyODIwNzE0NTU3NzQ3MjAwIiwiJGVsZW1lbnRfcGF0aCI6ImRpdiN0YWItMTk0MjgyMDcxNDU1Nzc0NzIwMCIsIiRwYWdlX3giOjM0NCwiJHBhZ2VfeSI6MzAsIiRpc19maXJzdF9kYXkiOnRydWUsIiRsYXRlc3RfcmVmZXJyZXJfaG9zdCI6IiIsIiRldmVudF9zZXNzaW9uX2lkIjoiMTlmMjJjNDM0ZjUyNjkwMDJjMWZiZWQyZDcwZGQ2MjYwNjEwNTExMjk2MDAwMTlmMjJjNDM0ZjY3MTcifSwiYW5vbnltb3VzX2lkIjoiMTlmMjJjNDJjNWYyOWEtMGQwZGY5ZjViZWY2Y2M4LTI2MDYxMDUxLTEyOTYwMDAtMTlmMjJjNDJjNjA0MTMiLCJ0eXBlIjoidHJhY2siLCJldmVudCI6IiRXZWJDbGljayIsInRpbWUiOjE3ODI5OTQ3MTI1ODYsIl90cmFja19pZCI6OTIzNDEyNTkzLCJfZmx1c2hfdGltZSI6MTc4Mjk5NDcxMjU5M30%3D&ext=crc%3D-1632718487",
+    "resourceType": "ping"
+  }
+]

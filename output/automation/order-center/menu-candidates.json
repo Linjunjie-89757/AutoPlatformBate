@@ -1,0 +1,254 @@
+[
+  {
+    "index": 0,
+    "text": "风控设置",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 1,
+    "text": "退款协议",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 2,
+    "text": "商品分类",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 3,
+    "text": "商品规格",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 115,
+      "y": 190,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 4,
+    "text": "商品权益",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 219,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 5,
+    "text": "优惠券管理",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 306,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "index": 6,
+    "text": "商品活动",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 115,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 7,
+    "text": "优惠券记录",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 393,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "index": 8,
+    "text": "销售合同",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 115,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 9,
+    "text": "付款审核",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 422,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 10,
+    "text": "退款审批",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 115,
+      "y": 422,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 11,
+    "text": "财务对账",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 12,
+    "text": "发票记录",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 115,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 13,
+    "text": "资金明细",
+    "tag": "A",
+    "role": null,
+    "className": null,
+    "href": null,
+    "rect": {
+      "x": 27,
+      "y": 538,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "index": 14,
+    "text": "上传中心 0",
+    "tag": "LI",
+    "role": null,
+    "className": "",
+    "href": null,
+    "rect": {
+      "x": 8.421875,
+      "y": 860,
+      "width": 93.140625,
+      "height": 30
+    }
+  },
+  {
+    "index": 15,
+    "text": "下载中心",
+    "tag": "LI",
+    "role": null,
+    "className": "",
+    "href": null,
+    "rect": {
+      "x": 118.421875,
+      "y": 860,
+      "width": 93.140625,
+      "height": 30
+    }
+  },
+  {
+    "index": 16,
+    "text": "首页",
+    "tag": "LI",
+    "role": "menuitem",
+    "className": "el-dropdown-menu__item",
+    "href": null,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    }
+  },
+  {
+    "index": 17,
+    "text": "退出登录",
+    "tag": "LI",
+    "role": "menuitem",
+    "className": "el-dropdown-menu__item",
+    "href": null,
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    }
+  }
+]

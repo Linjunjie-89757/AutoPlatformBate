@@ -1,0 +1,1358 @@
+[
+  {
+    "text": "账号信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 161,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "讲师信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "文字质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 393,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "电话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 480,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "质检规则",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 480,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "会话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "素材质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 509,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "投诉复盘",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 596,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退前告知",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 683,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "自媒体台账",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 770,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "员工挂证",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 770,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "石涛",
+    "tag": "DIV",
+    "className": "flex user ac el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1359,
+      "y": 11,
+      "width": 81,
+      "height": 28
+    }
+  },
+  {
+    "text": "新建",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 247,
+      "y": 118,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "批量审核",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1253,
+      "y": 118,
+      "width": 88,
+      "height": 32
+    }
+  },
+  {
+    "text": "导出",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1353,
+      "y": 118,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "查询",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 347,
+      "y": 321,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "重置",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 419,
+      "y": 321,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "自定义字段",
+    "tag": "A",
+    "className": "el-link el-link--primary is-hover-underline mgl-10",
+    "disabled": false,
+    "rect": {
+      "x": 1256,
+      "y": 328.5,
+      "width": 70,
+      "height": 32
+    }
+  },
+  {
+    "text": "收起",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-text",
+    "disabled": false,
+    "rect": {
+      "x": 1326,
+      "y": 328.5,
+      "width": 77,
+      "height": 32
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 531.203125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 531.203125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "10个",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 531.203125,
+      "width": 35.578125,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 531.203125,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 531.203125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 531.203125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 531.203125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 531.203125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 572.40625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 572.40625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "124个",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 572.40625,
+      "width": 43.359375,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 572.40625,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 572.40625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "审核",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 572.40625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1217,
+      "y": 572.40625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 572.40625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1337,
+      "y": 572.40625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 613.609375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 613.609375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "1个",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 613.609375,
+      "width": 27.796875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 613.609375,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 613.609375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 613.609375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 613.609375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 613.609375,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 654.8125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 654.8125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "2个",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 654.8125,
+      "width": 27.796875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 654.8125,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 654.8125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 654.8125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 654.8125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 654.8125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 696.015625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 696.015625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "8个",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 696.015625,
+      "width": 27.796875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 696.015625,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 696.015625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "审核",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 696.015625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1217,
+      "y": 696.015625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 696.015625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1337,
+      "y": 696.015625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 737.21875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 737.21875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "1个",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 737.21875,
+      "width": 27.796875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 737.21875,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 737.21875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "审核",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 737.21875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1217,
+      "y": 737.21875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 737.21875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1337,
+      "y": 737.21875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 778.421875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 778.421875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "1个",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 778.421875,
+      "width": 27.796875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 778.421875,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 778.421875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 778.421875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 778.421875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 778.421875,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 819.625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 819.625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 819.625,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 819.625,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 819.625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 819.625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 819.625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 819.625,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 860.828125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 860.828125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 860.828125,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 860.828125,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 860.828125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 860.828125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 860.828125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 860.828125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "预览",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1333,
+      "y": 902.03125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "下载",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1379,
+      "y": 902.03125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1453,
+      "y": 902.03125,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "-",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1713,
+      "y": 902.03125,
+      "width": 10.671875,
+      "height": 22
+    }
+  },
+  {
+    "text": "编辑",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1125,
+      "y": 902.03125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "上传回放",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1171,
+      "y": 902.03125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "删除",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1245,
+      "y": 902.03125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "复制",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1291,
+      "y": 902.03125,
+      "width": 34,
+      "height": 22
+    }
+  },
+  {
+    "text": "常见问题使用说明",
+    "tag": "BUTTON",
+    "className": "page-help-instruction-float__body",
+    "disabled": false,
+    "rect": {
+      "x": 1285,
+      "y": 795,
+      "width": 106,
+      "height": 48
+    }
+  }
+]

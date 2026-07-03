@@ -6,6 +6,8 @@ import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.auth.CurrentUserPrincipal;
+import com.company.autoplatform.notification.NotificationDomainService;
+import com.company.autoplatform.notification.NotificationModels;
 import com.company.autoplatform.runner.LocalRunnerModels.CreateRunnerTaskCommand;
 import com.company.autoplatform.runner.LocalRunnerModels.RunnerTaskDetailResponse;
 import com.company.autoplatform.runner.LocalRunnerService;
@@ -47,6 +49,7 @@ public class ApiExecutionSuiteDomainService {
     private final WorkspaceService workspaceService;
     private final ApiWorkspaceScopeSupport workspaceScopeSupport;
     private final LocalRunnerService localRunnerService;
+    private final NotificationDomainService notificationDomainService;
 
     public ApiExecutionSuiteDomainService(
             ApiExecutionSuiteModuleMapper suiteModuleMapper,
@@ -59,7 +62,8 @@ public class ApiExecutionSuiteDomainService {
             ObjectProvider<ApiExecutionDomainService> executionDomainServiceProvider,
             WorkspaceService workspaceService,
             ApiWorkspaceScopeSupport workspaceScopeSupport,
-            LocalRunnerService localRunnerService
+            LocalRunnerService localRunnerService,
+            NotificationDomainService notificationDomainService
     ) {
         this.suiteModuleMapper = suiteModuleMapper;
         this.suiteMapper = suiteMapper;
@@ -72,6 +76,7 @@ public class ApiExecutionSuiteDomainService {
         this.workspaceService = workspaceService;
         this.workspaceScopeSupport = workspaceScopeSupport;
         this.localRunnerService = localRunnerService;
+        this.notificationDomainService = notificationDomainService;
     }
 
     public List<ApiExecutionSuiteModuleItem> listSuiteModules(String workspaceCode) {
@@ -343,8 +348,8 @@ public class ApiExecutionSuiteDomainService {
                 effectiveRequest.mockApplicationId(),
                 effectiveRequest.mockEnabled()
         );
-        persistSuiteRunHistory(suite, effectiveRequest, aggregate.success(), aggregate.failureSummary(), aggregate.stepResults(), aggregate.itemSnapshots(), aggregate.dataIterations(), aggregate.reportId(), contextSnapshotJson);
-        return new ApiRunResponse(
+        ApiExecutionSuiteRunHistoryEntity history = persistSuiteRunHistory(suite, effectiveRequest, aggregate.success(), aggregate.failureSummary(), aggregate.stepResults(), aggregate.itemSnapshots(), aggregate.dataIterations(), aggregate.reportId(), contextSnapshotJson);
+        ApiRunResponse response = new ApiRunResponse(
                 aggregate.taskId(),
                 aggregate.reportId(),
                 "Execution suite",
@@ -354,6 +359,8 @@ public class ApiExecutionSuiteDomainService {
                 aggregate.dataIterations(),
                 aggregate.stepResults()
         );
+        publishSuiteNotificationIfNeeded(suite, history, aggregate);
+        return response;
     }
 
     private SuiteRunAggregate runSuiteAggregate(
@@ -706,7 +713,7 @@ public class ApiExecutionSuiteDomainService {
         entity.setRunMode(normalizeRunMode(request.runMode()));
         entity.setRunOn(normalizeRunOn(request.runOn()));
         entity.setNotifyEnabled(request.notifyEnabled() == null || request.notifyEnabled());
-        entity.setContinueOnFailure(Boolean.TRUE.equals(request.continueOnFailure()));
+        entity.setContinueOnFailure(request.continueOnFailure() == null || Boolean.TRUE.equals(request.continueOnFailure()));
         entity.setGlobalTimeoutMs(normalizeRange(request.globalTimeoutMs(), 300000, 1000, 3600000));
         entity.setStepFailureRetryCount(normalizeRange(request.stepFailureRetryCount(), 0, 0, 5));
         entity.setDefaultStepWaitMs(normalizeRange(request.defaultStepWaitMs(), 0, 0, 60000));
@@ -849,7 +856,7 @@ public class ApiExecutionSuiteDomainService {
         );
     }
 
-    private void persistSuiteRunHistory(
+    private ApiExecutionSuiteRunHistoryEntity persistSuiteRunHistory(
             ApiExecutionSuiteEntity suite,
             ApiRunRequest request,
             boolean success,
@@ -906,6 +913,37 @@ public class ApiExecutionSuiteDomainService {
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         suiteRunHistoryMapper.insert(entity);
+        return entity;
+    }
+
+    private void publishSuiteNotificationIfNeeded(
+            ApiExecutionSuiteEntity suite,
+            ApiExecutionSuiteRunHistoryEntity history,
+            SuiteRunAggregate aggregate
+    ) {
+        if (!Boolean.TRUE.equals(suite.getNotifyEnabled())) {
+            return;
+        }
+        notificationDomainService.publishEvent(new NotificationModels.NotificationEvent(
+                suite.getWorkspaceId(),
+                aggregate.success()
+                        ? NotificationDomainService.EVENT_API_SUITE_FINISHED
+                        : NotificationDomainService.EVENT_API_SUITE_FAILED,
+                aggregate.success()
+                        ? "接口自动化套件执行完成"
+                        : "接口自动化套件执行失败",
+                "API_EXECUTION_SUITE",
+                suite.getId(),
+                suite.getSuiteName(),
+                aggregate.success() ? "SUCCESS" : "FAILED",
+                history.getTotalCount(),
+                history.getSuccessCount(),
+                history.getFailedCount(),
+                history.getDurationMs(),
+                aggregate.failureSummary(),
+                "/automation/api?tab=suites&suiteId=" + suite.getId(),
+                Map.of("historyId", history.getId())
+        ));
     }
 
     private ApiExecutionSuiteRunHistoryItem toSuiteRunHistoryItem(ApiExecutionSuiteRunHistoryEntity entity) {

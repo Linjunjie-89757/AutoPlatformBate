@@ -1,0 +1,374 @@
+[
+  {
+    "text": "账号信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 103,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 132,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 161,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "讲师信息",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播报备",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 248,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播监控",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "直播巡检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 277,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "文字质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "风控统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 306,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 383,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "订单统计",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 383,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "电话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 441,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "质检规则",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 441,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "会话质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 470,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "素材质检",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 470,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "投诉复盘",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 557,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "退前告知",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 644,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "自媒体台账",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 27,
+      "y": 731,
+      "width": 75,
+      "height": 23
+    }
+  },
+  {
+    "text": "员工挂证",
+    "tag": "A",
+    "className": null,
+    "disabled": false,
+    "rect": {
+      "x": 115,
+      "y": 731,
+      "width": 62,
+      "height": 23
+    }
+  },
+  {
+    "text": "石涛",
+    "tag": "DIV",
+    "className": "flex user ac el-tooltip__trigger el-tooltip__trigger",
+    "disabled": false,
+    "rect": {
+      "x": 1359,
+      "y": 11,
+      "width": 81,
+      "height": 28
+    }
+  },
+  {
+    "text": "查询",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary",
+    "disabled": false,
+    "rect": {
+      "x": 1271,
+      "y": 133,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "重置",
+    "tag": "BUTTON",
+    "className": "el-button",
+    "disabled": false,
+    "rect": {
+      "x": 1343,
+      "y": 133,
+      "width": 60,
+      "height": 32
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1325,
+      "y": 248.203125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1325,
+      "y": 289.40625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1325,
+      "y": 330.609375,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1325,
+      "y": 371.8125,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1325,
+      "y": 413.015625,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "查看详情",
+    "tag": "BUTTON",
+    "className": "el-button el-button--primary is-link",
+    "disabled": false,
+    "rect": {
+      "x": 1325,
+      "y": 454.21875,
+      "width": 62,
+      "height": 22
+    }
+  },
+  {
+    "text": "常见问题使用说明",
+    "tag": "BUTTON",
+    "className": "page-help-instruction-float__body",
+    "disabled": false,
+    "rect": {
+      "x": 1285,
+      "y": 795,
+      "width": 106,
+      "height": 48
+    }
+  }
+]

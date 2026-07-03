@@ -125,6 +125,102 @@ export interface UpdateDbConnectionStatusPayload {
   status: ConfigStatus
 }
 
+export interface NotificationEventOption {
+  value: string
+  label: string
+}
+
+export interface NotificationChannelItem {
+  id: number
+  workspaceCode: string
+  workspaceName: string
+  channelName: string
+  channelType: string
+  channelTypeName: string
+  webhookUrl: string
+  secretKeyConfigured: boolean
+  httpMethod: string
+  headersJson: string | null
+  bodyTemplate: string | null
+  timeoutMs: number
+  retryCount: number
+  status: ConfigStatus
+  remark: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface CreateNotificationChannelPayload {
+  workspaceCode?: string
+  channelName: string
+  channelType: string
+  webhookUrl: string
+  secretKey?: string | null
+  httpMethod?: string | null
+  headersJson?: string | null
+  bodyTemplate?: string | null
+  timeoutMs?: number | null
+  retryCount?: number | null
+  status?: ConfigStatus
+  remark?: string | null
+}
+
+export interface NotificationRuleItem {
+  id: number
+  workspaceCode: string
+  workspaceName: string
+  ruleName: string
+  eventType: string
+  eventName: string
+  triggerCondition: string
+  channelIds: number[]
+  channelNames: string[]
+  frequencyLimitSeconds: number
+  status: ConfigStatus
+  lastTriggeredAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface CreateNotificationRulePayload {
+  workspaceCode?: string
+  ruleName: string
+  eventType: string
+  triggerCondition?: string | null
+  channelIds: number[]
+  frequencyLimitSeconds?: number | null
+  status?: ConfigStatus
+}
+
+export interface NotificationRecordItem {
+  id: number
+  workspaceCode: string
+  workspaceName: string
+  ruleId: number | null
+  ruleName: string | null
+  channelId: number | null
+  channelName: string | null
+  eventType: string
+  eventName: string
+  eventTitle: string
+  targetType: string | null
+  targetId: number | null
+  targetName: string | null
+  sendStatus: string
+  responseBody: string | null
+  errorMessage: string | null
+  retryCount: number
+  triggeredAt: string | null
+  sentAt: string | null
+  createdAt: string | null
+}
+
+export interface NotificationSendResult {
+  success: boolean
+  message: string
+  responseBody: string | null
+}
+
 export interface MockApplicationItem {
   id: number
   workspaceCode: string

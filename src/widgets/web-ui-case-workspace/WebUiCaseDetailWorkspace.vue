@@ -60,6 +60,7 @@ import {
   buildRecordingAssertionDraft,
   type RecordingAssertionType,
 } from '@/entities/web-ui-automation/lib/recordingAssertions'
+import { buildRecordingQualityCheck } from '@/entities/web-ui-automation/lib/recordingQuality'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -206,6 +207,10 @@ const recordingReplayDiagnostics = computed(() => buildRecordingReplayDiagnostic
   runDetail: localRunnerRunDetail.value,
 }))
 const recordingReplayRepairActions = computed(() => buildRecordingReplayRepairActions(recordingReplayDiagnostics.value))
+const recordingQualityCheck = computed(() => buildRecordingQualityCheck({
+  steps: form.value.steps,
+  replayPassed: recordingReplayDiagnostics.value?.tone === 'success',
+}))
 const focusedStepId = computed(() => {
   const raw = Array.isArray(route.query.stepId) ? route.query.stepId[0] : route.query.stepId
   const numeric = Number(raw)
@@ -2223,6 +2228,31 @@ watch(elementPickerLocatorType, () => {
             </div>
           </div>
         </section>
+
+        <section v-if="form.steps.length" class="web-ui-case-detail__section">
+          <h3>录制质量</h3>
+          <div class="web-ui-recording-quality" :class="`is-${recordingQualityCheck.status.toLowerCase()}`">
+            <div class="web-ui-recording-quality__summary">
+              <strong>{{ recordingQualityCheck.score }}</strong>
+              <span>{{ recordingQualityCheck.title }}</span>
+              <small>{{ recordingQualityCheck.summary }}</small>
+            </div>
+            <div class="web-ui-recording-quality__checks">
+              <div
+                v-for="item in recordingQualityCheck.checks"
+                :key="item.key"
+                class="web-ui-recording-quality__check"
+                :class="`is-${item.status.toLowerCase()}`"
+              >
+                <el-tag :type="item.status === 'PASS' ? 'success' : 'warning'" effect="light" size="small">
+                  {{ item.label }}
+                </el-tag>
+                <span>{{ item.summary }}</span>
+                <small v-if="item.suggestion">{{ item.suggestion }}</small>
+              </div>
+            </div>
+          </div>
+        </section>
       </aside>
       </div>
     </template>
@@ -2859,6 +2889,69 @@ watch(elementPickerLocatorType, () => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--app-space-2);
+}
+
+.web-ui-recording-quality {
+  display: grid;
+  gap: var(--app-space-3);
+}
+
+.web-ui-recording-quality__summary {
+  display: grid;
+  gap: var(--app-space-1);
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-muted);
+}
+
+.web-ui-recording-quality.is-ready .web-ui-recording-quality__summary {
+  border-color: var(--app-success);
+  background: var(--app-success-soft);
+}
+
+.web-ui-recording-quality__summary strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-xl);
+  line-height: var(--app-line-height-lg);
+}
+
+.web-ui-recording-quality__summary span {
+  color: var(--app-text-primary);
+  font-weight: 700;
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-recording-quality__summary small,
+.web-ui-recording-quality__check small {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--app-line-height-xs);
+}
+
+.web-ui-recording-quality__checks {
+  display: grid;
+  gap: var(--app-space-2);
+}
+
+.web-ui-recording-quality__check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--app-space-1) var(--app-space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.web-ui-recording-quality__check span {
+  overflow: hidden;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-recording-quality__check small {
+  grid-column: 1 / -1;
 }
 
 .web-ui-element-picker {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Coin, Connection, Cpu, Key } from '@element-plus/icons-vue'
+import { Bell, Coin, Connection, Cpu, Key } from '@element-plus/icons-vue'
 
 import { configCenterTabs, type ConfigCenterTab } from '@/entities/config'
 
@@ -16,7 +16,7 @@ const icons = {
   param: Key,
   mock: Connection,
   runner: Cpu,
-  notification: Key,
+  notification: Bell,
   proxy: Connection,
   dbConnection: Coin,
 }

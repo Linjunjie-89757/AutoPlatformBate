@@ -68,6 +68,9 @@ public class WebUiRunEntity extends BaseEntity {
     @TableField("operator_name")
     private String operatorName;
 
+    @TableField("operator_id")
+    private Long operatorId;
+
     @TableField("started_at")
     private LocalDateTime startedAt;
 

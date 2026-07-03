@@ -3,6 +3,7 @@ package com.company.autoplatform.apiautomation;
 import com.company.autoplatform.runner.LocalRunnerModels.CreateRunnerTaskCommand;
 import com.company.autoplatform.runner.LocalRunnerModels.RunnerTaskDetailResponse;
 import com.company.autoplatform.runner.LocalRunnerService;
+import com.company.autoplatform.notification.NotificationDomainService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,7 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
         WorkspaceService workspaceService = mock(WorkspaceService.class);
         ApiWorkspaceScopeSupport workspaceScopeSupport = mock(ApiWorkspaceScopeSupport.class);
         LocalRunnerService localRunnerService = mock(LocalRunnerService.class);
+        NotificationDomainService notificationDomainService = mock(NotificationDomainService.class);
 
         ApiExecutionSuiteEntity suite = new ApiExecutionSuiteEntity();
         suite.setId(8001L);
@@ -160,7 +162,8 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
                 executionDomainServiceProvider,
                 workspaceService,
                 workspaceScopeSupport,
-                localRunnerService
+                localRunnerService,
+                notificationDomainService
         );
 
         var response = service.runSuite(8001L, "risk-ops", new ApiRunRequest(
@@ -221,6 +224,7 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
         WorkspaceService workspaceService = mock(WorkspaceService.class);
         ApiWorkspaceScopeSupport workspaceScopeSupport = mock(ApiWorkspaceScopeSupport.class);
         LocalRunnerService localRunnerService = mock(LocalRunnerService.class);
+        NotificationDomainService notificationDomainService = mock(NotificationDomainService.class);
 
         ApiExecutionSuiteEntity suite = new ApiExecutionSuiteEntity();
         suite.setId(8002L);
@@ -374,7 +378,8 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
                 executionDomainServiceProvider,
                 workspaceService,
                 workspaceScopeSupport,
-                localRunnerService
+                localRunnerService,
+                notificationDomainService
         );
 
         service.runSuite(8002L, "risk-ops", new ApiRunRequest(

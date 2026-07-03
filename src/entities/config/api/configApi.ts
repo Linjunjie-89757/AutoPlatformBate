@@ -9,6 +9,8 @@ import type {
   CreateMockScenarioPayload,
   CreateDbConnectionPayload,
   CreateEnvPayload,
+  CreateNotificationChannelPayload,
+  CreateNotificationRulePayload,
   CreateParamPayload,
   DbConnectionItem,
   DbConnectionTestPayload,
@@ -19,6 +21,11 @@ import type {
   MockCallLogItem,
   MockEndpointItem,
   MockScenarioItem,
+  NotificationChannelItem,
+  NotificationEventOption,
+  NotificationRecordItem,
+  NotificationRuleItem,
+  NotificationSendResult,
   ParamSetChangeHistoryItem,
   ParamSetItem,
   ParamSetVersionItem,
@@ -49,6 +56,28 @@ export interface SettingsDbConnectionQuery {
   keyword?: string
   dbType?: string
   status?: ConfigStatus
+}
+
+export interface NotificationChannelQuery {
+  keyword?: string
+  channelType?: string
+  status?: ConfigStatus
+}
+
+export interface NotificationRuleQuery {
+  keyword?: string
+  eventType?: string
+  status?: ConfigStatus
+}
+
+export interface NotificationRecordQuery {
+  eventType?: string
+  sendStatus?: string
+  channelId?: number
+  createdFrom?: string
+  createdTo?: string
+  pageNo?: number
+  pageSize?: number
 }
 
 export interface SettingsMockApplicationQuery {
@@ -301,6 +330,124 @@ export const configApi = {
         headers: workspaceHeaders(workspaceCode),
       },
     )
+
+    return unwrapApiResponse(response)
+  },
+
+  async getNotificationEventTypes() {
+    const response = await httpGet<ApiResponse<NotificationEventOption[]>>('/settings/notifications/event-types')
+    return unwrapApiResponse(response)
+  },
+
+  async getNotificationChannels(workspaceCode = 'ALL', query?: NotificationChannelQuery) {
+    const response = await httpGet<ApiResponse<PageResponse<NotificationChannelItem>>>('/settings/notifications/channels', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery(query),
+    })
+
+    return unwrapApiResponse(response)
+  },
+
+  async createNotificationChannel(workspaceCode: string, payload: CreateNotificationChannelPayload) {
+    const response = await httpPost<ApiResponse<NotificationChannelItem>, CreateNotificationChannelPayload>(
+      '/settings/notifications/channels',
+      payload,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async updateNotificationChannel(workspaceCode: string, id: number, payload: CreateNotificationChannelPayload) {
+    const response = await httpPut<ApiResponse<NotificationChannelItem>, CreateNotificationChannelPayload>(
+      `/settings/notifications/channels/${id}`,
+      payload,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async updateNotificationChannelStatus(workspaceCode: string, id: number, status: ConfigStatus) {
+    const response = await httpPut<ApiResponse<NotificationChannelItem>, { status: ConfigStatus }>(
+      `/settings/notifications/channels/${id}/status`,
+      { status },
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async deleteNotificationChannel(workspaceCode: string, id: number) {
+    const response = await httpDelete<ApiResponse<void>>(`/settings/notifications/channels/${id}`, {
+      headers: workspaceHeaders(workspaceCode),
+    })
+
+    return unwrapApiResponse(response)
+  },
+
+  async testNotificationChannel(workspaceCode: string, payload: { channelId?: number, message?: string }) {
+    const response = await httpPost<ApiResponse<NotificationSendResult>, { channelId?: number, message?: string }>(
+      '/settings/notifications/channels/test',
+      payload,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async getNotificationRules(workspaceCode = 'ALL', query?: NotificationRuleQuery) {
+    const response = await httpGet<ApiResponse<PageResponse<NotificationRuleItem>>>('/settings/notifications/rules', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery(query),
+    })
+
+    return unwrapApiResponse(response)
+  },
+
+  async createNotificationRule(workspaceCode: string, payload: CreateNotificationRulePayload) {
+    const response = await httpPost<ApiResponse<NotificationRuleItem>, CreateNotificationRulePayload>(
+      '/settings/notifications/rules',
+      payload,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async updateNotificationRule(workspaceCode: string, id: number, payload: CreateNotificationRulePayload) {
+    const response = await httpPut<ApiResponse<NotificationRuleItem>, CreateNotificationRulePayload>(
+      `/settings/notifications/rules/${id}`,
+      payload,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async updateNotificationRuleStatus(workspaceCode: string, id: number, status: ConfigStatus) {
+    const response = await httpPut<ApiResponse<NotificationRuleItem>, { status: ConfigStatus }>(
+      `/settings/notifications/rules/${id}/status`,
+      { status },
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async deleteNotificationRule(workspaceCode: string, id: number) {
+    const response = await httpDelete<ApiResponse<void>>(`/settings/notifications/rules/${id}`, {
+      headers: workspaceHeaders(workspaceCode),
+    })
+
+    return unwrapApiResponse(response)
+  },
+
+  async getNotificationRecords(workspaceCode = 'ALL', query?: NotificationRecordQuery) {
+    const response = await httpGet<ApiResponse<PageResponse<NotificationRecordItem>>>('/settings/notifications/records', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery(query),
+    })
 
     return unwrapApiResponse(response)
   },

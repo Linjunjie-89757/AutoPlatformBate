@@ -9,6 +9,7 @@ import ConfigComingSoonPanel from '@/widgets/config-coming-soon-panel/ConfigComi
 import ConfigDbPanel from '@/widgets/config-db-panel/ConfigDbPanel.vue'
 import ConfigEnvPanel from '@/widgets/config-env-panel/ConfigEnvPanel.vue'
 import ConfigMockPanel from '@/widgets/config-mock-panel/ConfigMockPanel.vue'
+import ConfigNotificationPanel from '@/widgets/config-notification-panel/ConfigNotificationPanel.vue'
 import ConfigParamPanel from '@/widgets/config-param-panel/ConfigParamPanel.vue'
 import ConfigRunnerPanel from '@/widgets/config-runner-panel/ConfigRunnerPanel.vue'
 import ConfigSidebar from '@/widgets/config-sidebar/ConfigSidebar.vue'
@@ -104,12 +105,7 @@ onMounted(() => {
         <ConfigParamPanel v-else-if="activeTab === 'param'" :workspace-code="workspaceCode" />
         <ConfigMockPanel v-else-if="activeTab === 'mock'" :workspace-code="workspaceCode" />
         <ConfigRunnerPanel v-else-if="activeTab === 'runner'" />
-        <ConfigComingSoonPanel
-          v-else-if="activeTab === 'notification'"
-          title="通知配置"
-          description="配置自动化运行失败、定时回归完成、连续失败等通知规则和通知渠道。"
-          :items="['通知渠道', '通知规则', '失败策略与补发记录']"
-        />
+        <ConfigNotificationPanel v-else-if="activeTab === 'notification'" :workspace-code="workspaceCode" />
         <ConfigComingSoonPanel
           v-else-if="activeTab === 'proxy'"
           title="网络代理"

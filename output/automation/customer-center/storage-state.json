@@ -1,0 +1,185 @@
+{
+  "cookies": [
+    {
+      "name": "acw_tc",
+      "value": "0a2117d917830035397055803e56b53a3cfaf980510cdea39d641e52ccc02e",
+      "domain": "portal-test.integrity.com.cn",
+      "path": "/",
+      "expires": 1783005339.567498,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "swp_csrf_token",
+      "value": "83f5d0f6-e098-4c3f-81e4-91ce98feff3e",
+      "domain": ".feishu.cn",
+      "path": "/",
+      "expires": 1784299540.410637,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "t_beda37",
+      "value": "522f4065b0b6ce1bf071f94e6a01a4dc6946d8854159304f3855aeb6f9b9d643",
+      "domain": ".feishu.cn",
+      "path": "/",
+      "expires": 1784299540.410719,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "passport_web_did",
+      "value": "7657941894751603930",
+      "domain": ".feishu.cn",
+      "path": "/",
+      "expires": 1814539540.410788,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "passport_trace_id",
+      "value": "7657941894772608210",
+      "domain": ".feishu.cn",
+      "path": "/",
+      "expires": 1814539540.410852,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "QXV0aHpDb250ZXh0",
+      "value": "dc1ae6f188c3447f97cd054e8ba482d3",
+      "domain": ".feishu.cn",
+      "path": "/",
+      "expires": 1814539540.411018,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "TRAFFIC_PASSPORT",
+      "value": "yS8j%252FOuXW%252BHzOjS49R%252Fv4sQByxg%252BAltCOvnme7C%252BUO36ZTXI%252F2TxpF4%252BsCXbsBV2IHKlPqBqP2fBeoE%252F6FVktRjonKhtpzhhgtmTq6Ap3Udsp8unATDId174od%252BqAZIu",
+      "domain": ".integrity.com.cn",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "acw_tc",
+      "value": "0a1b0b2117830035414197135e50dfda62900e42268cbd9e8ff49f098189a7",
+      "domain": "traffic-test.integrity.com.cn",
+      "path": "/",
+      "expires": 1783005341.282369,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "locale",
+      "value": "zh-CN",
+      "domain": ".feishu.cn",
+      "path": "/",
+      "expires": 1814539541,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "sajssdk_2015_cross_new_user",
+      "value": "1",
+      "domain": ".integrity.com.cn",
+      "path": "/",
+      "expires": 1783007999,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "sensorsdata2015jssdkcross",
+      "value": "%7B%22distinct_id%22%3A%2219f234af306529-03b2f44563f11c2-26061051-1296000-19f234af3078b4%22%2C%22first_id%22%3A%22%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E7%9B%B4%E6%8E%A5%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC_%E7%9B%B4%E6%8E%A5%E6%89%93%E5%BC%80%22%2C%22%24latest_referrer%22%3A%22%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTlmMjM0YWYzMDY1MjktMDNiMmY0NDU2M2YxMWMyLTI2MDYxMDUxLTEyOTYwMDAtMTlmMjM0YWYzMDc4YjQifQ%3D%3D%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%22%2C%22value%22%3A%22%22%7D%2C%22%24device_id%22%3A%2219f234af306529-03b2f44563f11c2-26061051-1296000-19f234af3078b4%22%7D",
+      "domain": ".integrity.com.cn",
+      "path": "/",
+      "expires": 1817563545.861278,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "sensorsdata2015jssdksession",
+      "value": "%7B%22session_id%22%3A%2219f234afd05f308266f63cd26b326061051129600019f234afd06221%22%2C%22first_session_time%22%3A1783003544834%2C%22latest_session_time%22%3A1783003599262%7D",
+      "domain": ".integrity.com.cn",
+      "path": "/",
+      "expires": 1817563599.265509,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://traffic-test.integrity.com.cn",
+      "localStorage": [
+        {
+          "name": "STORAGE_TRAFFIC_ADMIN_ACCOUNT_INFO",
+          "value": "{\"unifiedId\":0,\"accessToken\":\"2a55092ccb7a466faec939a18290e210\",\"userCode\":\"A2506001_80uf\",\"userName\":\"石涛\",\"officeCode\":\"ZHYT_XS09001\",\"officeName\":\"八部一组\",\"dept1Code\":\"ZHYT_XS09\",\"dept1Name\":\"业务八部\",\"dept2Name\":\"八部一组\",\"sex\":null,\"avatar\":null,\"sign\":null,\"sysList\":[{\"backSysCode\":\"traffic\",\"name\":null,\"iconUrl\":\"https://trade-file.9635.com.cn/ddm-assets/171040182405467.png\",\"summary\":null,\"authUrl\":\"http://traffic-test.integrity.com.cn/traffic/unionlogin\",\"currentFlag\":0,\"passport\":\"yS8j%2FOuXW%2BHzOjS49R%2Fv4sQByxg%2BAltCOvnme7C%2BUO36ZTXI%2F2TxpF4%2BsCXbsBV2IHKlPqBqP2fBeoE%2F6FVktRjonKhtpzhhgtmTq6Ap3UesPjoXGZSSDPsmkNX1uAG0\"}]}"
+        },
+        {
+          "name": "STORAGE_STORE_TAG_VIEW",
+          "value": "{\"list\":[{\"path\":\"/dashboard\",\"label\":\"工作台\",\"uniqueKey\":\"/dashboard\"},{\"path\":\"/iframe/crm-test-integrity-com-cn-web-a-sys-empUser-index\",\"label\":\"用户管理\",\"query\":{},\"uniqueKey\":\"/iframe/crm-test-integrity-com-cn-web-a-sys-empUser-index\"},{\"path\":\"/iframe/crm-test-integrity-com-cn-web-a-filemanager-index\",\"label\":\"文件管理\",\"query\":{},\"uniqueKey\":\"/iframe/crm-test-integrity-com-cn-web-a-filemanager-index\"},{\"path\":\"/marketing/order-all/index\",\"label\":\"全部订单\",\"query\":{},\"uniqueKey\":\"/marketing/order-all/index\"},{\"path\":\"/marketing/order-all-y/index\",\"label\":\"快速查询\",\"query\":{},\"uniqueKey\":\"/marketing/order-all-y/index\"},{\"path\":\"/marketing/refund-list/index\",\"label\":\"退款列表\",\"query\":{},\"uniqueKey\":\"/marketing/refund-list/index\"},{\"path\":\"/assign/automatic/index\",\"label\":\"分配计划\",\"query\":{},\"uniqueKey\":\"/assign/automatic/index\"},{\"path\":\"/account/anchor/index\",\"label\":\"主播管理\",\"query\":{},\"uniqueKey\":\"/account/anchor/index\"},{\"path\":\"/account/platform/index\",\"label\":\"平台分类\",\"query\":{},\"uniqueKey\":\"/account/platform/index\"},{\"path\":\"/account/organization/index\",\"label\":\"部门分类\",\"query\":{},\"uniqueKey\":\"/account/organization/index\"},{\"path\":\"/link/product/index\",\"label\":\"产品管理\",\"query\":{},\"uniqueKey\":\"/link/product/index\"},{\"path\":\"/link/page/index\",\"label\":\"页面管理\",\"query\":{},\"uniqueKey\":\"/link/page/index\"},{\"path\":\"/link/callback/index\",\"label\":\"回传配置\",\"query\":{},\"uniqueKey\":\"/link/callback/index\"},{\"path\":\"/link/mini-programe/index\",\"label\":\"小程序管理\",\"query\":{},\"uniqueKey\":\"/link/mini-programe/index\"},{\"path\":\"/data-board/link/index\",\"label\":\"链接分析\",\"query\":{},\"uniqueKey\":\"/data-board/link/index\"},{\"path\":\"/data-board/product-analysis/index\",\"label\":\"产品分析\",\"query\":{},\"uniqueKey\":\"/data-board/product-analysis/index\"},{\"path\":\"/system-setting/black-list/index\",\"label\":\"黑名单管理\",\"query\":{},\"uniqueKey\":\"/system-setting/black-list/index\"},{\"path\":\"/system-setting/white-list/index\",\"label\":\"白名单管理\",\"query\":{},\"uniqueKey\":\"/system-setting/white-list/index\"},{\"path\":\"/launch/ad/ad-list/index\",\"label\":\"创意分析\",\"query\":{},\"uniqueKey\":\"/launch/ad/ad-list/index\"},{\"path\":\"/launch/ad/ad-configure/index\",\"label\":\"广告主设置\",\"query\":{},\"uniqueKey\":\"/launch/ad/ad-configure/index\"},{\"path\":\"/upload-center/list/index\",\"label\":\"上传中心\",\"query\":{},\"uniqueKey\":\"/upload-center/list/index\"},{\"path\":\"/download-center/download-list/index\",\"label\":\"下载中心\",\"query\":{},\"uniqueKey\":\"/download-center/download-list/index\"}],\"active\":21}"
+        },
+        {
+          "name": "STORAGE_STORE_OFFICE_TREE_LIST",
+          "value": "{\"list\":[{\"id\":\"86\",\"officeCode\":\"ZHYT_ZJB\",\"parentCode\":\"0\",\"officeName\":\"总经办\",\"treeSort\":0,\"bizClassify\":null,\"belongId\":null,\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-23 15:12:53\",\"children\":[]},{\"id\":\"5\",\"officeCode\":\"N2O_OFF_20260415_A\",\"parentCode\":\"0\",\"officeName\":\"新到老同步测试部门A1\",\"treeSort\":10,\"bizClassify\":null,\"belongId\":\"BELONG_TEST_01\",\"leader\":\"测试负责人A\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2026-04-23 15:12:46\",\"children\":[]},{\"id\":\"6\",\"officeCode\":\"N2O_OFF_20260415_B\",\"parentCode\":\"0\",\"officeName\":\"新到老同步测试部门B\",\"treeSort\":20,\"bizClassify\":\"TEST\",\"belongId\":\"BELONG_TEST_02\",\"leader\":\"测试负责人B\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2026-04-16 18:09:31\",\"children\":[]},{\"id\":\"43\",\"officeCode\":\"ZHYT_XS\",\"parentCode\":\"0\",\"officeName\":\"业务部\",\"treeSort\":70,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2020-06-15 09:33:52\",\"children\":[{\"id\":\"44\",\"officeCode\":\"ZHYT_XS01\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务一部\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-09 13:56:50\",\"children\":[{\"id\":\"45\",\"officeCode\":\"ZHYT_XS01001\",\"parentCode\":\"ZHYT_XS01\",\"officeName\":\"一部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-09 13:57:00\",\"children\":[{\"id\":\"14\",\"officeCode\":\"sisuo1\",\"parentCode\":\"ZHYT_XS01001\",\"officeName\":\"测试\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2022-01-20 10:39:48\",\"children\":[]}]},{\"id\":\"46\",\"officeCode\":\"ZHYT_XS01002\",\"parentCode\":\"ZHYT_XS01\",\"officeName\":\"一部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-09 13:57:09\",\"children\":[{\"id\":\"47\",\"officeCode\":\"ZHYT_XS01002001\",\"parentCode\":\"ZHYT_XS01002\",\"officeName\":\"一部二组一小组\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"9\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2023-10-08 17:24:36\",\"children\":[]}]},{\"id\":\"48\",\"officeCode\":\"ZHYT_XS01003\",\"parentCode\":\"ZHYT_XS01\",\"officeName\":\"一部三组\",\"treeSort\":90,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-09 13:57:19\",\"children\":[]},{\"id\":\"49\",\"officeCode\":\"ZHYT_XS01004\",\"parentCode\":\"ZHYT_XS01\",\"officeName\":\"一部四组\",\"treeSort\":120,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-09 13:57:30\",\"children\":[]},{\"id\":\"50\",\"officeCode\":\"ZHYT_XS0100A\",\"parentCode\":\"ZHYT_XS01\",\"officeName\":\"测试\",\"treeSort\":150,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-03-31 13:30:18\",\"children\":[]},{\"id\":\"51\",\"officeCode\":\"ZHYT_XS0100A1\",\"parentCode\":\"ZHYT_XS01\",\"officeName\":\"测试1\",\"treeSort\":180,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-03-31 13:30:12\",\"children\":[]}]},{\"id\":\"52\",\"officeCode\":\"ZHYT_XS02\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务二部\",\"treeSort\":40,\"bizClassify\":\"sales\",\"belongId\":\"9\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-04-02 16:34:48\",\"children\":[{\"id\":\"53\",\"officeCode\":\"ZHYT_XS02001\",\"parentCode\":\"ZHYT_XS02\",\"officeName\":\"二部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2020-01-08 15:55:31\",\"children\":[]},{\"id\":\"54\",\"officeCode\":\"ZHYT_XS02002\",\"parentCode\":\"ZHYT_XS02\",\"officeName\":\"二部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"9\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-04-02 16:35:00\",\"children\":[{\"id\":\"55\",\"officeCode\":\"ZHYT_XS02002001\",\"parentCode\":\"ZHYT_XS02002\",\"officeName\":\"二部二组T1\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2023-02-28 09:03:42\",\"children\":[]},{\"id\":\"56\",\"officeCode\":\"ZHYT_XS02002002\",\"parentCode\":\"ZHYT_XS02002\",\"officeName\":\"二部二组T2\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2023-02-28 09:04:08\",\"children\":[]}]},{\"id\":\"57\",\"officeCode\":\"ZHYT_XS02003\",\"parentCode\":\"ZHYT_XS02\",\"officeName\":\"二部三组\",\"treeSort\":90,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-25 18:32:20\",\"children\":[]},{\"id\":\"58\",\"officeCode\":\"ZHYT_XS02004\",\"parentCode\":\"ZHYT_XS02\",\"officeName\":\"二部四组\",\"treeSort\":120,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-28 17:48:32\",\"children\":[]}]},{\"id\":\"59\",\"officeCode\":\"ZHYT_XS03\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务三部\",\"treeSort\":50,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-10-23 13:14:07\",\"children\":[{\"id\":\"60\",\"officeCode\":\"ZHYT_XS03001\",\"parentCode\":\"ZHYT_XS03\",\"officeName\":\"三部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-05-07 17:02:59\",\"children\":[{\"id\":\"61\",\"officeCode\":\"ZHYT_XS03001001\",\"parentCode\":\"ZHYT_XS03001\",\"officeName\":\"三部一组A组\",\"treeSort\":30,\"bizClassify\":null,\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2024-05-17 14:53:48\",\"children\":[]},{\"id\":\"62\",\"officeCode\":\"ZHYT_XS03001002\",\"parentCode\":\"ZHYT_XS03001\",\"officeName\":\"三部一组B组\",\"treeSort\":60,\"bizClassify\":null,\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2024-05-17 14:53:53\",\"children\":[]}]},{\"id\":\"63\",\"officeCode\":\"ZHYT_XS03002\",\"parentCode\":\"ZHYT_XS03\",\"officeName\":\"三部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-04-22 09:25:47\",\"children\":[{\"id\":\"64\",\"officeCode\":\"ZHYT_XS03002001\",\"parentCode\":\"ZHYT_XS03002\",\"officeName\":\"三部二组A\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-06-12 17:50:53\",\"children\":[]},{\"id\":\"65\",\"officeCode\":\"ZHYT_XS03002002\",\"parentCode\":\"ZHYT_XS03002\",\"officeName\":\"三部二组B\",\"treeSort\":60,\"bizClassify\":null,\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-06-12 17:51:03\",\"children\":[]}]},{\"id\":\"66\",\"officeCode\":\"ZHYT_XS03003\",\"parentCode\":\"ZHYT_XS03\",\"officeName\":\"三部三组\",\"treeSort\":90,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-04-22 09:25:58\",\"children\":[]}]},{\"id\":\"67\",\"officeCode\":\"ZHYT_XS04\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务四部\",\"treeSort\":80,\"bizClassify\":\"sales\",\"belongId\":\"ww5538c6667ea3d2cc\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2022-09-13 16:49:39\",\"children\":[{\"id\":\"68\",\"officeCode\":\"ZHYT_XS04001\",\"parentCode\":\"ZHYT_XS04\",\"officeName\":\"四部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-28 17:53:20\",\"children\":[]},{\"id\":\"69\",\"officeCode\":\"ZHYT_XS04002\",\"parentCode\":\"ZHYT_XS04\",\"officeName\":\"四部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-28 17:53:31\",\"children\":[]},{\"id\":\"70\",\"officeCode\":\"ZHYT_XS04003\",\"parentCode\":\"ZHYT_XS04\",\"officeName\":\"四部三组\",\"treeSort\":90,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-28 17:53:43\",\"children\":[]},{\"id\":\"71\",\"officeCode\":\"ZHYT_XS04004\",\"parentCode\":\"ZHYT_XS04\",\"officeName\":\"四部四组\",\"treeSort\":120,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2022-10-21 17:04:01\",\"children\":[]}]},{\"id\":\"72\",\"officeCode\":\"ZHYT_XS05\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务五部\",\"treeSort\":110,\"bizClassify\":\"sales\",\"belongId\":\"9\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-01-29 14:03:31\",\"children\":[{\"id\":\"73\",\"officeCode\":\"ZHYT_XS05001\",\"parentCode\":\"ZHYT_XS05\",\"officeName\":\"五部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"20\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-12-15 19:24:13\",\"children\":[]},{\"id\":\"20\",\"officeCode\":\"ZHYT_CH1\",\"parentCode\":\"ZHYT_XS05\",\"officeName\":\"五部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2019-09-21 14:22:08\",\"children\":[]}]},{\"id\":\"74\",\"officeCode\":\"ZHYT_XS06\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务六部\",\"treeSort\":140,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-10 10:31:12\",\"children\":[{\"id\":\"75\",\"officeCode\":\"ZHYT_XS06001\",\"parentCode\":\"ZHYT_XS06\",\"officeName\":\"六部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-10 10:28:21\",\"children\":[]},{\"id\":\"76\",\"officeCode\":\"ZHYT_XS06002\",\"parentCode\":\"ZHYT_XS06\",\"officeName\":\"六部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-01-10 10:31:25\",\"children\":[]},{\"id\":\"77\",\"officeCode\":\"ZHYT_XS06003\",\"parentCode\":\"ZHYT_XS06\",\"officeName\":\"市场拓展部\",\"treeSort\":90,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2021-03-24 14:13:22\",\"children\":[{\"id\":\"38\",\"officeCode\":\"ZHYT_SX007001\",\"parentCode\":\"ZHYT_XS06003\",\"officeName\":\"市场一部\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2021-03-24 14:12:49\",\"children\":[]}]}]},{\"id\":\"78\",\"officeCode\":\"ZHYT_XS08\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务七部\",\"treeSort\":170,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-05-15 16:53:29\",\"children\":[{\"id\":\"79\",\"officeCode\":\"ZHYT_XS08001\",\"parentCode\":\"ZHYT_XS08\",\"officeName\":\"七部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-05-15 16:53:42\",\"children\":[]},{\"id\":\"80\",\"officeCode\":\"ZHYT_XS08002\",\"parentCode\":\"ZHYT_XS08\",\"officeName\":\"七部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"11\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-05-15 16:53:52\",\"children\":[]}]},{\"id\":\"37\",\"officeCode\":\"ZHYT_SX007\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"市场拓展部\",\"treeSort\":200,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2021-03-24 14:13:45\",\"children\":[{\"id\":\"39\",\"officeCode\":\"ZHYT_SX007002\",\"parentCode\":\"ZHYT_SX007\",\"officeName\":\"市场一部\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2021-03-24 14:14:27\",\"children\":[]},{\"id\":\"40\",\"officeCode\":\"ZHYT_SX007003\",\"parentCode\":\"ZHYT_SX007\",\"officeName\":\"市场二部\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2021-03-24 14:14:43\",\"children\":[]}]},{\"id\":\"33\",\"officeCode\":\"ZHYT_SX001\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"正式一部\",\"treeSort\":230,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2022-09-21 10:57:47\",\"children\":[{\"id\":\"34\",\"officeCode\":\"ZHYT_SX001001\",\"parentCode\":\"ZHYT_SX001\",\"officeName\":\"正式一部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2022-09-21 10:58:16\",\"children\":[]}]},{\"id\":\"35\",\"officeCode\":\"ZHYT_SX006\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"正式六部\",\"treeSort\":260,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2022-09-21 10:58:02\",\"children\":[{\"id\":\"36\",\"officeCode\":\"ZHYT_SX006001\",\"parentCode\":\"ZHYT_SX006\",\"officeName\":\"正式六部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2022-09-21 10:58:27\",\"children\":[]}]},{\"id\":\"81\",\"officeCode\":\"ZHYT_XS09\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"业务八部\",\"treeSort\":290,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-04-20 10:48:39\",\"children\":[{\"id\":\"82\",\"officeCode\":\"ZHYT_XS09001\",\"parentCode\":\"ZHYT_XS09\",\"officeName\":\"八部一组\",\"treeSort\":30,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-04-22 10:22:52\",\"children\":[]},{\"id\":\"83\",\"officeCode\":\"ZHYT_XS09002\",\"parentCode\":\"ZHYT_XS09\",\"officeName\":\"八部二组\",\"treeSort\":60,\"bizClassify\":\"sales\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-04-22 10:23:13\",\"children\":[]}]},{\"id\":\"41\",\"officeCode\":\"ZHYT_SX012\",\"parentCode\":\"ZHYT_XS\",\"officeName\":\"创新一部\",\"treeSort\":320,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-08 18:10:49\",\"children\":[{\"id\":\"42\",\"officeCode\":\"ZHYT_SX012001\",\"parentCode\":\"ZHYT_SX012\",\"officeName\":\"创新一部一组\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-08 18:11:01\",\"children\":[]}]}]},{\"id\":\"22\",\"officeCode\":\"ZHYT_HG\",\"parentCode\":\"0\",\"officeName\":\"合规部\",\"treeSort\":100,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-21 11:53:03\",\"children\":[]},{\"id\":\"21\",\"officeCode\":\"ZHYT_CW\",\"parentCode\":\"0\",\"officeName\":\"财务部3\",\"treeSort\":130,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-10-10 18:09:24\",\"children\":[]},{\"id\":\"84\",\"officeCode\":\"ZHYT_XX\",\"parentCode\":\"0\",\"officeName\":\"技术部\",\"treeSort\":160,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-10-23 13:14:20\",\"children\":[{\"id\":\"85\",\"officeCode\":\"ZHYT_XX001\",\"parentCode\":\"ZHYT_XX\",\"officeName\":\"技术部\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-28 17:55:55\",\"children\":[]}]},{\"id\":\"18\",\"officeCode\":\"ZHYT_CH\",\"parentCode\":\"0\",\"officeName\":\"策划中心\",\"treeSort\":190,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-28 17:04:00\",\"children\":[{\"id\":\"19\",\"officeCode\":\"ZHYT_CH001\",\"parentCode\":\"ZHYT_CH\",\"officeName\":\"策划部\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2018-10-28 17:04:26\",\"children\":[]}]},{\"id\":\"13\",\"officeCode\":\"sisuo\",\"parentCode\":\"0\",\"officeName\":\"思索数据服务（施总）\",\"treeSort\":220,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2019-10-09 08:57:25\",\"children\":[]},{\"id\":\"15\",\"officeCode\":\"sisuo5\",\"parentCode\":\"0\",\"officeName\":\"外部集团\",\"treeSort\":250,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2020-06-15 09:33:42\",\"children\":[{\"id\":\"16\",\"officeCode\":\"sisuo5001\",\"parentCode\":\"sisuo5\",\"officeName\":\"思索\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2020-06-15 09:34:10\",\"children\":[]}]},{\"id\":\"1\",\"officeCode\":\"hegui\",\"parentCode\":\"0\",\"officeName\":\"合规部1\",\"treeSort\":280,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-09-02 20:01:57\",\"children\":[{\"id\":\"2\",\"officeCode\":\"hegui001\",\"parentCode\":\"hegui\",\"officeName\":\"1\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2020-06-16 13:18:23\",\"children\":[]},{\"id\":\"3\",\"officeCode\":\"hegui002\",\"parentCode\":\"hegui\",\"officeName\":\"合规二级部门\",\"treeSort\":60,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-09-02 20:01:29\",\"children\":[]}]},{\"id\":\"4\",\"officeCode\":\"jszx\",\"parentCode\":\"0\",\"officeName\":\"讲师中心\",\"treeSort\":280,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2025-09-02 20:02:02\",\"children\":[{\"id\":\"7\",\"officeCode\":\"qcjs\",\"parentCode\":\"jszx\",\"officeName\":\"谦才\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-05-25 16:58:44\",\"children\":[{\"id\":\"8\",\"officeCode\":\"qcteam01\",\"parentCode\":\"qcjs\",\"officeName\":\"谦才团队1\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-05-25 16:58:10\",\"children\":[{\"id\":\"9\",\"officeCode\":\"qcteam01001\",\"parentCode\":\"qcteam01\",\"officeName\":\"谦才运营1\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-05-25 16:58:06\",\"children\":[]},{\"id\":\"10\",\"officeCode\":\"qcteam01002\",\"parentCode\":\"qcteam01\",\"officeName\":\"谦才运营2\",\"treeSort\":60,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-05-25 16:58:00\",\"children\":[]}]},{\"id\":\"11\",\"officeCode\":\"qcteam02\",\"parentCode\":\"qcjs\",\"officeName\":\"谦才团队2\",\"treeSort\":60,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-05-25 16:58:36\",\"children\":[{\"id\":\"12\",\"officeCode\":\"qcteam02001\",\"parentCode\":\"qcteam02\",\"officeName\":\"谦才运营3\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-05-25 16:58:32\",\"children\":[]}]}]},{\"id\":\"17\",\"officeCode\":\"zhytjs\",\"parentCode\":\"jszx\",\"officeName\":\"中和应泰讲师\",\"treeSort\":60,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-05-25 16:58:50\",\"children\":[]}]},{\"id\":\"23\",\"officeCode\":\"ZHYT_JS002\",\"parentCode\":\"0\",\"officeName\":\"新媒体部门\",\"treeSort\":310,\"bizClassify\":\"new_media\",\"belongId\":null,\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-05-19 15:44:09\",\"children\":[{\"id\":\"24\",\"officeCode\":\"ZHYT_JS002001\",\"parentCode\":\"ZHYT_JS002\",\"officeName\":\"新媒体一部\",\"treeSort\":30,\"bizClassify\":\"new_media\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2023-06-21 13:52:59\",\"children\":[]},{\"id\":\"25\",\"officeCode\":\"ZHYT_JS002002\",\"parentCode\":\"ZHYT_JS002\",\"officeName\":\"新媒体二部\",\"treeSort\":60,\"bizClassify\":\"new_media\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2023-06-21 14:01:18\",\"children\":[{\"id\":\"26\",\"officeCode\":\"ZHYT_JS002002001\",\"parentCode\":\"ZHYT_JS002002\",\"officeName\":\"团队1\",\"treeSort\":30,\"bizClassify\":\"new_media\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-06-21 13:53:40\",\"children\":[{\"id\":\"27\",\"officeCode\":\"ZHYT_JS002002001001\",\"parentCode\":\"ZHYT_JS002002001\",\"officeName\":\"运营1\",\"treeSort\":30,\"bizClassify\":\"new_media\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-06-21 13:53:36\",\"children\":[]}]},{\"id\":\"28\",\"officeCode\":\"ZHYT_JS002002002\",\"parentCode\":\"ZHYT_JS002002\",\"officeName\":\"团队2\",\"treeSort\":60,\"bizClassify\":\"new_media\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-06-21 13:53:52\",\"children\":[{\"id\":\"29\",\"officeCode\":\"ZHYT_JS002002002001\",\"parentCode\":\"ZHYT_JS002002002\",\"officeName\":\"运营2\",\"treeSort\":30,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"0\",\"enabledName\":\"禁用\",\"updateTime\":\"2023-06-21 13:53:49\",\"children\":[]}]}]},{\"id\":\"30\",\"officeCode\":\"ZHYT_JS002003\",\"parentCode\":\"ZHYT_JS002\",\"officeName\":\"新媒体三部\",\"treeSort\":90,\"bizClassify\":\"new_media\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2023-06-21 13:54:19\",\"children\":[{\"id\":\"31\",\"officeCode\":\"ZHYT_JS002003001\",\"parentCode\":\"ZHYT_JS002003\",\"officeName\":\"团队3\",\"treeSort\":30,\"bizClassify\":\"new_media\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2023-06-21 14:52:48\",\"children\":[]}]}]},{\"id\":\"32\",\"officeCode\":\"ZHYT_JS003\",\"parentCode\":\"0\",\"officeName\":\"电销渠道\",\"treeSort\":340,\"bizClassify\":\"\",\"belongId\":\"\",\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2024-01-10 14:08:43\",\"children\":[]},{\"id\":\"87\",\"officeCode\":\"test001\",\"parentCode\":\"0\",\"officeName\":\"测试1\",\"treeSort\":370,\"bizClassify\":null,\"belongId\":null,\"leader\":\"测试\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-20 09:50:01\",\"children\":[]},{\"id\":\"88\",\"officeCode\":\"test420\",\"parentCode\":\"0\",\"officeName\":\"测试部门420\",\"treeSort\":370,\"bizClassify\":null,\"belongId\":null,\"leader\":null,\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-20 09:50:01\",\"children\":[]},{\"id\":\"89\",\"officeCode\":\"saad\",\"parentCode\":\"0\",\"officeName\":\"纤维素\",\"treeSort\":400,\"bizClassify\":null,\"belongId\":null,\"leader\":\"A2506001_80uf\",\"leaderName\":\"石涛\",\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-21 15:48:52\",\"children\":[{\"id\":\"90\",\"officeCode\":\"as\",\"parentCode\":\"saad\",\"officeName\":\"啊阿萨的\",\"treeSort\":30,\"bizClassify\":null,\"belongId\":null,\"leader\":\"A241002_jqql\",\"leaderName\":\"贾金博\",\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-21 15:49:36\",\"children\":[]}]},{\"id\":\"91\",\"officeCode\":\"ZHYT_ZJB1\",\"parentCode\":\"0\",\"officeName\":\"额为邱琦雯\",\"treeSort\":430,\"bizClassify\":null,\"belongId\":null,\"leader\":\"\",\"leaderName\":null,\"enabled\":\"1\",\"enabledName\":\"启用\",\"updateTime\":\"2026-04-23 15:13:11\",\"children\":[]}],\"newMediaOffceCode\":\"ZHYT_JS002\"}"
+        },
+        {
+          "name": "STORAGE_KEY_PORTAL_ADMIN_VERSION",
+          "value": "1782962668000"
+        }
+      ]
+    },
+    {
+      "origin": "https://portal-test.integrity.com.cn",
+      "localStorage": [
+        {
+          "name": "STORAGE_PORTAL_ADMIN_RETURN_URL",
+          "value": "\"\""
+        },
+        {
+          "name": "STORAGE_PORTAL_ACCOUNT",
+          "value": "\"\""
+        },
+        {
+          "name": "STORAGE_PORTAL_IS_SAVE",
+          "value": "null"
+        },
+        {
+          "name": "STORAGE_KEY_PORTAL_ADMIN_VERSION",
+          "value": "1777529247000"
+        },
+        {
+          "name": "STORAGE_PORTAL_ADMIN_ACCOUNT_INFO",
+          "value": "{\"unifiedId\":null,\"accessToken\":\"2a55092ccb7a466faec939a18290e210\",\"userCode\":\"A2506001_80uf\",\"userName\":\"石涛\",\"officeCode\":\"ZHYT_XS09001\",\"officeName\":\"八部一组\",\"dept1Code\":\"ZHYT_XS09\",\"dept1Name\":\"业务八部\",\"dept2Name\":\"八部一组\",\"sex\":\"\",\"avatar\":null,\"sign\":\"\",\"sysList\":[{\"backSysCode\":\"traffic\",\"name\":null,\"iconUrl\":\"https://trade-file.9635.com.cn/ddm-assets/171040182405467.png\",\"summary\":null,\"authUrl\":\"http://traffic-test.integrity.com.cn/traffic/unionlogin\",\"currentFlag\":0,\"passport\":\"yS8j%2FOuXW%2BHzOjS49R%2Fv4sQByxg%2BAltCOvnme7C%2BUO36ZTXI%2F2TxpF4%2BsCXbsBV2IHKlPqBqP2fBeoE%2F6FVktRjonKhtpzhhgtmTq6Ap3Udsp8unATDId174od%2BqAZIu\"}]}"
+        },
+        {
+          "name": "STORAGE_PORTAL_ADMIN_RETURN_SYS",
+          "value": "\"\""
+        }
+      ]
+    },
+    {
+      "origin": "https://passport.feishu.cn",
+      "localStorage": [
+        {
+          "name": "isSupportLocalStorage",
+          "value": "true"
+        }
+      ]
+    }
+  ]
+}

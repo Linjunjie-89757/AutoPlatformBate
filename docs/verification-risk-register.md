@@ -53,6 +53,7 @@ This file tracks known unverified paths and residual risks during the frontend r
 | Real-data destructive actions | Delete/status/test actions were mostly validated as stable failure or smoke paths. | Real success paths may still hide payload or permission issues. | Add targeted real-data tests with disposable records. |
 | Full UI parity | Only local alignment and stability fixes were done. | Old-project visual differences may remain. | Run the planned UI parity pass later. |
 | 401 during active form save | Hard to reliably manufacture expired session during modal save. | Some edge cases may still show generic handling. | Add mock/session-expiry Playwright scenario. |
+| Notification configuration | Pending | First notification configuration phase will use global rules for Web UI execution completion/failure; Web UI cases do not yet have a per-case notification switch. | Add a Web UI case/execution notification switch in a later iteration after the global notification rule flow is stable. |
 
 ## Case Center
 
