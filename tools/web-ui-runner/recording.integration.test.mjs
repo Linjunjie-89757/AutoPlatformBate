@@ -361,6 +361,59 @@ test('deduplicates noisy input and repeated clicks while recording', async () =>
   assert.deepEqual(stderr, []);
 });
 
+test('records hover checkbox radio and file upload interactions', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildComplexRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    await waitFor(async () => {
+      const status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 4;
+    }, 5000);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.deepEqual(stopped.steps.map(item => item.type), ['HOVER', 'CLICK', 'CLICK', 'FILE_UPLOAD']);
+    assert.equal(stopped.steps[0].locatorType, 'TEST_ID');
+    assert.equal(stopped.steps[0].locatorValue, 'orders-menu');
+    assert.equal(stopped.steps[1].locatorValue, '#send-email');
+    assert.equal(stopped.steps[2].locatorValue, '#priority-high');
+    assert.equal(stopped.steps[3].locatorValue, '#attachment');
+    assert.equal(stopped.steps[3].inputValue, 'upload-demo.txt');
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 test('keeps recorded steps available after session release interrupts recording', async () => {
   const runnerPort = await findAvailablePort();
   const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
@@ -441,6 +494,39 @@ function buildRecordingPageHtml({ autoInteract }) {
       '  document.querySelector("#save").click();',
       '}, 1000);',
     ].join('') : '',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildComplexRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Complex Recording</title></head>',
+    '<body>',
+    '<button id="orders-menu" data-testid="orders-menu">Orders menu</button>',
+    '<label for="send-email">Send email</label>',
+    '<input id="send-email" type="checkbox" />',
+    '<label for="priority-high">High priority</label>',
+    '<input id="priority-high" type="radio" name="priority" value="high" />',
+    '<label for="attachment">Attachment</label>',
+    '<input id="attachment" type="file" />',
+    '<script>',
+    'window.setTimeout(() => {',
+    '  const menu = document.querySelector("#orders-menu");',
+    '  menu.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, composed: true }));',
+    '}, 1000);',
+    'window.setTimeout(() => document.querySelector("#send-email").click(), 1150);',
+    'window.setTimeout(() => document.querySelector("#priority-high").click(), 1300);',
+    'window.setTimeout(() => {',
+    '  const input = document.querySelector("#attachment");',
+    '  const transfer = new DataTransfer();',
+    '  transfer.items.add(new File(["demo"], "upload-demo.txt", { type: "text/plain" }));',
+    '  input.files = transfer.files;',
+    '  input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));',
+    '}, 1450);',
     '</script>',
     '</body>',
     '</html>',

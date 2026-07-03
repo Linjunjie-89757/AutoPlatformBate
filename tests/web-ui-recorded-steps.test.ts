@@ -69,6 +69,36 @@ test('keeps global key recordings without forcing a locator', () => {
   assert.equal(step?.inputValue, 'Enter')
 })
 
+test('keeps complex recorded interactions when they satisfy save requirements', () => {
+  const hoverStep = toWebUiCaseStepFromRecordedStep(recordedStep({
+    type: 'HOVER',
+    stepType: 'HOVER',
+    locatorType: 'TEST_ID',
+    locatorValue: 'orders-menu',
+    inputValue: null,
+  }), 5)
+
+  const uploadStep = toWebUiCaseStepFromRecordedStep(recordedStep({
+    type: 'FILE_UPLOAD',
+    stepType: 'FILE_UPLOAD',
+    locatorType: 'CSS',
+    locatorValue: '#attachment',
+    inputValue: 'upload-demo.txt',
+  }), 6)
+
+  assert.equal(hoverStep?.type, 'HOVER')
+  assert.equal(hoverStep?.inputValue, null)
+  assert.equal(uploadStep?.type, 'FILE_UPLOAD')
+  assert.equal(uploadStep?.inputValue, 'upload-demo.txt')
+  assert.equal(toWebUiCaseStepFromRecordedStep(recordedStep({
+    type: 'FILE_UPLOAD',
+    stepType: 'FILE_UPLOAD',
+    locatorType: 'CSS',
+    locatorValue: '#attachment',
+    inputValue: '',
+  }), 7), null)
+})
+
 test('matches recorded steps to existing elements by exact locator context', () => {
   const matched = findMatchingWebUiElementForRecordedStep({
     locatorType: 'CSS',

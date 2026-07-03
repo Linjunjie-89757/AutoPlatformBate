@@ -21,6 +21,7 @@ const AUTH_STALE_MINUTES = 24 * 60;
 const RECORDER_BINDING_NAME = '__autoWebRunnerRecordEvent';
 const RECORDER_MAX_EVENTS = 300;
 const RECORDER_DUPLICATE_CLICK_WINDOW_MS = 500;
+const RECORDER_DUPLICATE_HOVER_WINDOW_MS = 500;
 const runtimeConfig = resolveRunnerRuntimeConfig({
   env: process.env,
   argv: process.argv.slice(2),
@@ -594,14 +595,14 @@ async function recordBrowserEvent(source, event) {
 
 async function normalizeRecordedBrowserEvent(source, event) {
   const kind = optionalString(event.kind).toUpperCase();
-  if (!['CLICK', 'FILL', 'SELECT', 'PRESS_KEY'].includes(kind)) {
+  if (!['CLICK', 'FILL', 'SELECT', 'PRESS_KEY', 'HOVER', 'FILE_UPLOAD'].includes(kind)) {
     return null;
   }
   const target = normalizeRecordedTarget(event.target);
   if (!target?.locator && kind !== 'PRESS_KEY') {
     return null;
   }
-  if ((kind === 'FILL' || kind === 'SELECT') && event.inputValue === undefined) {
+  if ((kind === 'FILL' || kind === 'SELECT' || kind === 'FILE_UPLOAD') && event.inputValue === undefined) {
     return null;
   }
   const framePath = await resolveFramePath(source?.frame).catch(() => []);
@@ -671,6 +672,25 @@ function appendRecordedEvent(events, event) {
   }
   if (
     last
+    && event.kind === 'FILE_UPLOAD'
+    && last.kind === 'CLICK'
+    && sameRecordedLocator(last.target?.locator, event.target?.locator)
+  ) {
+    events[events.length - 1] = event;
+    return;
+  }
+  if (
+    last
+    && event.kind === 'HOVER'
+    && last.kind === 'HOVER'
+    && sameRecordedLocator(last.target?.locator, event.target?.locator)
+    && isWithinRecordedEventWindow(last, event, RECORDER_DUPLICATE_HOVER_WINDOW_MS)
+  ) {
+    events[events.length - 1] = event;
+    return;
+  }
+  if (
+    last
     && event.kind === 'CLICK'
     && last.kind === 'CLICK'
     && sameRecordedLocator(last.target?.locator, event.target?.locator)
@@ -724,10 +744,10 @@ function buildRecordedStep(event, sortOrder) {
   if (type === 'PRESS_KEY') {
     inputValue = event.key || event.inputValue || '';
   }
-  if (['CLICK', 'FILL', 'CLEAR', 'SELECT'].includes(type) && !locator) {
+  if (['CLICK', 'FILL', 'CLEAR', 'SELECT', 'HOVER', 'FILE_UPLOAD'].includes(type) && !locator) {
     return null;
   }
-  if (['FILL', 'SELECT', 'PRESS_KEY'].includes(type) && !optionalString(inputValue)) {
+  if (['FILL', 'SELECT', 'PRESS_KEY', 'FILE_UPLOAD'].includes(type) && !optionalString(inputValue)) {
     return null;
   }
 
@@ -772,7 +792,9 @@ function buildRecordedStepName(type, targetName, sortOrder) {
   if (type === 'CLICK') return `点击${suffix}`.trim();
   if (type === 'FILL') return `输入${suffix}`.trim();
   if (type === 'CLEAR') return `清空${suffix}`.trim();
+  if (type === 'HOVER') return `悬停${suffix}`.trim();
   if (type === 'SELECT') return `选择${suffix}`.trim();
+  if (type === 'FILE_UPLOAD') return `上传${suffix}`.trim();
   if (type === 'PRESS_KEY') return `按键${suffix}`.trim();
   return `录制步骤 ${sortOrder}`;
 }
@@ -1900,12 +1922,20 @@ function installBrowserRecorderScript() {
 
   document.addEventListener('change', event => {
     const target = findRecordableTarget(event);
-    if (!target || target.tagName.toLowerCase() !== 'select') {
+    if (!target) {
       return;
     }
-    sendRecordedEvent('SELECT', event, target, {
-      inputValue: readElementValue(target),
-    });
+    if (isFileInputElement(target)) {
+      sendRecordedEvent('FILE_UPLOAD', event, target, {
+        inputValue: readElementValue(target),
+      });
+      return;
+    }
+    if (target.tagName.toLowerCase() === 'select') {
+      sendRecordedEvent('SELECT', event, target, {
+        inputValue: readElementValue(target),
+      });
+    }
   }, true);
 
   document.addEventListener('keydown', event => {
@@ -1917,6 +1947,17 @@ function installBrowserRecorderScript() {
       key: event.key,
       inputValue: event.key,
     });
+  }, true);
+
+  document.addEventListener('mouseover', event => {
+    const target = findRecordableTarget(event);
+    if (!target || !isHoverRecordableElement(target)) {
+      return;
+    }
+    if (event.relatedTarget instanceof Node && target.contains(event.relatedTarget)) {
+      return;
+    }
+    sendRecordedEvent('HOVER', event, target);
   }, true);
 
   function sendRecordedEvent(kind, event, target, extra = {}) {
@@ -1997,7 +2038,32 @@ function installBrowserRecorderScript() {
     ].includes(type);
   }
 
+  function isFileInputElement(element) {
+    return element instanceof HTMLInputElement && String(element.getAttribute('type') || '').toLowerCase() === 'file';
+  }
+
+  function isHoverRecordableElement(element) {
+    if (isTextEntryElement(element) || isFileInputElement(element)) {
+      return false;
+    }
+    const tagName = element.tagName.toLowerCase();
+    if (tagName === 'select') {
+      return false;
+    }
+    return Boolean(element.matches?.([
+      'a',
+      'button',
+      '[role]',
+      '[data-testid]',
+      '[data-test]',
+      '[data-qa]',
+    ].join(',')));
+  }
+
   function readElementValue(element) {
+    if (isFileInputElement(element)) {
+      return Array.from(element.files || []).map(file => file.name).filter(Boolean).join(', ');
+    }
     if (element instanceof HTMLSelectElement) {
       return element.value || element.selectedOptions?.[0]?.textContent || '';
     }
