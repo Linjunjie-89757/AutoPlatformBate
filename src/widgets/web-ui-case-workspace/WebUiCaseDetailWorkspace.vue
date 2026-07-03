@@ -56,6 +56,10 @@ import {
   buildRecordingReplayDiagnostics,
   buildRecordingReplayRepairActions,
 } from '@/entities/web-ui-automation/lib/recordingReplayDiagnostics'
+import {
+  buildRecordingAssertionDraft,
+  type RecordingAssertionType,
+} from '@/entities/web-ui-automation/lib/recordingAssertions'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -993,6 +997,74 @@ function applyRecordingReplayTimeoutSuggestion() {
   ElMessage.success(`已将第 ${failedStep.sortOrder} 步超时调整为 ${failedStep.timeoutMs}ms，请保存后重新回放`)
 }
 
+async function addRecordingAssertionStep(assertionType: RecordingAssertionType) {
+  let expectedValue = ''
+  if (assertionType === 'ASSERT_TEXT') {
+    const result = await promptRecordingAssertionValue('添加文本断言', '请输入期望包含的文本', selectedStep.value?.inputValue || '')
+    if (result === null) {
+      return
+    }
+    expectedValue = result
+  }
+  if (assertionType === 'ASSERT_URL') {
+    const result = await promptRecordingAssertionValue('添加 URL 断言', '请输入 URL 需要包含的片段', getDefaultUrlAssertionValue())
+    if (result === null) {
+      return
+    }
+    expectedValue = result
+  }
+
+  const draft = buildRecordingAssertionDraft({
+    steps: form.value.steps,
+    selectedIndex: selectedStepIndex.value,
+    assertionType,
+    expectedValue,
+  })
+  if (!draft) {
+    ElMessage.warning('请先选择一个带定位器的录制步骤，再添加该断言')
+    return
+  }
+
+  form.value.steps.splice(draft.insertIndex, 0, draft.step)
+  selectedStepIndex.value = draft.insertIndex
+  reorderSteps()
+  activateRecordingDraftPersistence()
+  ElMessage.success(`已添加${getAssertionActionLabel(assertionType)}，保存后生效`)
+}
+
+async function promptRecordingAssertionValue(title: string, message: string, inputValue: string) {
+  try {
+    const result = await ElMessageBox.prompt(message, title, {
+      confirmButtonText: '添加',
+      cancelButtonText: '取消',
+      inputValue,
+      inputValidator: value => Boolean(String(value || '').trim()) || '请输入断言内容',
+    })
+    return String(result.value || '').trim()
+  } catch {
+    return null
+  }
+}
+
+function getDefaultUrlAssertionValue() {
+  const value = lastRecordingPageUrl.value || form.value.baseUrl
+  if (!value) {
+    return ''
+  }
+  try {
+    const url = new URL(value)
+    return `${url.pathname || '/'}${url.search || ''}`
+  } catch {
+    return value
+  }
+}
+
+function getAssertionActionLabel(assertionType: RecordingAssertionType) {
+  if (assertionType === 'ASSERT_VISIBLE') return '可见断言'
+  if (assertionType === 'ASSERT_TEXT') return '文本断言'
+  return 'URL 断言'
+}
+
 function backToList() {
   void router.push({ path: '/automation/web/cases', query: { workspace: props.workspaceCode } })
 }
@@ -1874,6 +1946,27 @@ watch(elementPickerLocatorType, () => {
               @click="applyRecordingReplayTimeoutSuggestion"
             >
               应用超时建议
+            </AppButton>
+            <AppButton
+              v-if="recordingReplayDiagnostics.tone === 'success'"
+              size="small"
+              @click="addRecordingAssertionStep('ASSERT_VISIBLE')"
+            >
+              添加可见断言
+            </AppButton>
+            <AppButton
+              v-if="recordingReplayDiagnostics.tone === 'success'"
+              size="small"
+              @click="addRecordingAssertionStep('ASSERT_TEXT')"
+            >
+              添加文本断言
+            </AppButton>
+            <AppButton
+              v-if="recordingReplayDiagnostics.tone === 'success'"
+              size="small"
+              @click="addRecordingAssertionStep('ASSERT_URL')"
+            >
+              添加 URL 断言
             </AppButton>
             <AppButton
               v-if="recordingReplayDiagnostics.reportAvailable && localRunnerFormalRunId"
