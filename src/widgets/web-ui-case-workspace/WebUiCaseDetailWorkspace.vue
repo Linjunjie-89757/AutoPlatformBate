@@ -856,6 +856,13 @@ function buildFileUploadArtifactId(step: EditableStep, index = selectedStepIndex
   return `web-ui-upload-${caseId.value || 'case'}-${stepIdentity}`
 }
 
+function countUploadReplayIssues(
+  steps: EditableStep[],
+  bindings: Record<string, UploadArtifactBinding>,
+) {
+  return steps.filter(step => Boolean(getWebUiFileUploadReplayIssue(step, bindings))).length
+}
+
 function triggerSelectedStepFileUpload() {
   if (!selectedStep.value || selectedStep.value.type !== 'FILE_UPLOAD') {
     return
@@ -875,10 +882,12 @@ async function handleUploadFileSelected(event: Event) {
   }
 
   try {
+    const beforeIssue = getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value)
+    const beforeIssueCount = countUploadReplayIssues(form.value.steps, uploadArtifactBindings.value)
     const fileId = buildFileUploadArtifactId(step)
     const contentBase64 = await readFileAsBase64(file)
     step.inputValue = `artifact:${fileId}`
-    uploadArtifactBindings.value = {
+    const nextBindings = {
       ...uploadArtifactBindings.value,
       [fileId]: {
         fileId,
@@ -889,7 +898,20 @@ async function handleUploadFileSelected(event: Event) {
         updatedAt: Date.now(),
       },
     }
-    ElMessage.success(`已绑定文件：${file.name || fileId}`)
+    uploadArtifactBindings.value = nextBindings
+    const afterIssue = getWebUiFileUploadReplayIssue(step, nextBindings)
+    const afterIssueCount = countUploadReplayIssues(form.value.steps, nextBindings)
+    if (beforeIssue && !afterIssue) {
+      if (afterIssueCount === 0) {
+        ElMessage.success(`已绑定文件：${file.name || fileId}，所有文件上传问题已处理完成`)
+      } else {
+        ElMessage.success(`已绑定文件：${file.name || fileId}，当前步骤已可本地回放，剩余 ${afterIssueCount} 个上传问题`)
+      }
+    } else if (beforeIssueCount > 0 && afterIssueCount === 0) {
+      ElMessage.success(`已绑定文件：${file.name || fileId}，录制质量中的文件上传问题已清零`)
+    } else {
+      ElMessage.success(`已绑定文件：${file.name || fileId}`)
+    }
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
@@ -904,6 +926,7 @@ function clearSelectedStepUploadArtifact() {
   if (!step || step.type !== 'FILE_UPLOAD') {
     return
   }
+  const beforeIssue = getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value)
   const fileId = artifactFileIdFromInputValue(step.inputValue)
   if (fileId) {
     const nextBindings = { ...uploadArtifactBindings.value }
@@ -911,6 +934,9 @@ function clearSelectedStepUploadArtifact() {
     uploadArtifactBindings.value = nextBindings
   }
   step.inputValue = ''
+  if (!beforeIssue) {
+    ElMessage.warning('已清除当前上传绑定，该步骤需要重新选择文件后才能本地回放')
+  }
 }
 
 function buildLocalRunnerUploadArtifactRefs(): Record<string, unknown>[] | null {
