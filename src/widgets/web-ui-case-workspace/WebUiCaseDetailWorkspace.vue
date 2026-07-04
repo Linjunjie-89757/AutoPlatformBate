@@ -63,7 +63,9 @@ import {
 import {
   artifactFileIdFromInputValue,
   buildWebUiFileUploadArtifactRefs,
+  hasUnsavedWebUiFileUploadArtifactChanges,
   type WebUiFileUploadArtifactBinding,
+  type WebUiFileUploadArtifactStep,
 } from '@/entities/web-ui-automation/lib/fileUploadArtifacts'
 import { buildRecordingQualityCheck } from '@/entities/web-ui-automation/lib/recordingQuality'
 import { getRequestErrorMessage } from '@/shared/api/error'
@@ -162,6 +164,7 @@ const appliedRecordingRecorderId = ref<string | null>(null)
 const appliedRecordingStepCount = ref(0)
 const currentCaseUpdatedAt = ref<string | null>(null)
 const savedCaseStepCount = ref(0)
+const savedFileUploadSteps = ref<WebUiFileUploadArtifactStep[]>([])
 const recordingElapsedNow = ref(Date.now())
 const lastCollectTaskId = ref<number | null>(null)
 const lastCollectTaskReturnSource = ref<CollectTaskReturnSource>(null)
@@ -371,6 +374,13 @@ function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: bool
   resetLocalRunnerState()
   currentCaseUpdatedAt.value = item.updatedAt || null
   savedCaseStepCount.value = Array.isArray(item.steps) ? item.steps.length : 0
+  savedFileUploadSteps.value = Array.isArray(item.steps)
+    ? item.steps.map(step => ({
+      type: step.type,
+      inputValue: step.inputValue,
+      enabled: step.enabled,
+    }))
+    : []
   recordingDraftActive.value = false
   recordingDraftMessage.value = ''
   appliedRecordingRecorderId.value = null
@@ -962,7 +972,7 @@ function validateBeforeSave() {
   return true
 }
 
-async function saveCase() {
+async function saveCase(options: { successMessage?: string | null } = {}) {
   if (!caseId.value || !validateBeforeSave()) {
     return null
   }
@@ -972,7 +982,9 @@ async function saveCase() {
     const saved = await webUiAutomationApi.updateCase(props.workspaceCode, caseId.value, buildPayload())
     clearRecordingDraft()
     fillForm(saved, { restoreRecordingDraft: false })
-    ElMessage.success('Web UI 用例已保存')
+    if (options.successMessage !== null) {
+      ElMessage.success(options.successMessage || 'Web UI 用例已保存')
+    }
     return saved
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
@@ -997,9 +1009,28 @@ async function saveCaseAndRunRecordingReplay() {
   })
 }
 
+async function ensureLocalRunnerUploadArtifactsSaved() {
+  if (!hasUnsavedWebUiFileUploadArtifactChanges(form.value.steps, savedFileUploadSteps.value)) {
+    return true
+  }
+  const saved = await saveCase({ successMessage: null })
+  if (!saved) {
+    return false
+  }
+  ElMessage.success('已先保存文件上传绑定，开始创建本地运行任务')
+  return true
+}
+
 async function runCase(localRunner: boolean, options: { localSuccessMessage?: string; recordingReplay?: boolean } = {}) {
   if (!caseId.value) {
     return
+  }
+
+  if (localRunner) {
+    const saved = await ensureLocalRunnerUploadArtifactsSaved()
+    if (!saved) {
+      return
+    }
   }
 
   const artifactRefs = localRunner ? buildLocalRunnerUploadArtifactRefs() : []

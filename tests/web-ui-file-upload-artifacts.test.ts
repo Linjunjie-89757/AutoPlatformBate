@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   artifactFileIdFromInputValue,
   buildWebUiFileUploadArtifactRefs,
+  hasUnsavedWebUiFileUploadArtifactChanges,
   isFileUploadArtifactValue,
   type WebUiFileUploadArtifactBinding,
   type WebUiFileUploadArtifactStep,
@@ -59,6 +60,32 @@ test('reports missing file bindings and dedupes duplicate artifact ids', () => {
     contentType: 'application/octet-stream',
     contentBase64: 'cmVwb3J0',
   }])
+})
+
+test('detects unsaved upload artifact changes that must be persisted before local run', () => {
+  assert.equal(hasUnsavedWebUiFileUploadArtifactChanges([
+    step({ inputValue: 'artifact:avatar' }),
+  ], [
+    step({ inputValue: 'D:/fixtures/avatar.png' }),
+  ]), true)
+
+  assert.equal(hasUnsavedWebUiFileUploadArtifactChanges([
+    step({ inputValue: 'artifact:new-file' }),
+  ], []), true)
+})
+
+test('ignores already persisted upload artifact inputs', () => {
+  assert.equal(hasUnsavedWebUiFileUploadArtifactChanges([
+    step({ inputValue: ' artifact:avatar ' }),
+  ], [
+    step({ inputValue: 'artifact:avatar' }),
+  ]), false)
+
+  assert.equal(hasUnsavedWebUiFileUploadArtifactChanges([
+    step({ inputValue: 'D:/fixtures/avatar.png' }),
+  ], [
+    step({ inputValue: 'D:/fixtures/avatar.png' }),
+  ]), false)
 })
 
 function step(overrides: Partial<WebUiFileUploadArtifactStep>): WebUiFileUploadArtifactStep {

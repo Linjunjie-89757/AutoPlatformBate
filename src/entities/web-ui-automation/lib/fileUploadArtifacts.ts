@@ -76,6 +76,32 @@ export function buildWebUiFileUploadArtifactRefs(
   return { artifactRefs, missingFileIds }
 }
 
-function isEnabledFileUploadStep(step: WebUiFileUploadArtifactStep) {
-  return step.enabled !== false && String(step.type || '').toUpperCase() === 'FILE_UPLOAD'
+export function hasUnsavedWebUiFileUploadArtifactChanges(
+  currentSteps: WebUiFileUploadArtifactStep[],
+  savedSteps: WebUiFileUploadArtifactStep[],
+) {
+  for (let index = 0; index < currentSteps.length; index += 1) {
+    const currentStep = currentSteps[index]
+    if (!isEnabledFileUploadStep(currentStep)) {
+      continue
+    }
+    const currentFileId = artifactFileIdFromInputValue(currentStep.inputValue)
+    if (!currentFileId) {
+      continue
+    }
+
+    const savedStep = savedSteps[index]
+    if (!isEnabledFileUploadStep(savedStep)) {
+      return true
+    }
+    if (artifactFileIdFromInputValue(savedStep.inputValue) !== currentFileId) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function isEnabledFileUploadStep(step?: WebUiFileUploadArtifactStep | null) {
+  return step?.enabled !== false && String(step?.type || '').toUpperCase() === 'FILE_UPLOAD'
 }
