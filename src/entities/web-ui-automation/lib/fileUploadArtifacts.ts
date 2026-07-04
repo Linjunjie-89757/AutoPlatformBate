@@ -26,6 +26,14 @@ export interface WebUiFileUploadArtifactRefBuildResult {
   missingFileIds: string[]
 }
 
+export type WebUiFileUploadReplayIssue = 'MISSING_BINDING' | 'NON_REPLAYABLE_VALUE'
+
+export interface WebUiFileUploadReplayIssueMatch {
+  index: number
+  issue: WebUiFileUploadReplayIssue
+  fileId: string | null
+}
+
 export function artifactFileIdFromInputValue(value: string | null | undefined): string | null {
   const normalized = value?.trim() || ''
   if (!normalized.toLowerCase().startsWith('artifact:')) {
@@ -37,6 +45,54 @@ export function artifactFileIdFromInputValue(value: string | null | undefined): 
 
 export function isFileUploadArtifactValue(value: string | null | undefined) {
   return artifactFileIdFromInputValue(value) !== null
+}
+
+export function isReplayableWebUiFileUploadValue(value: string | null | undefined) {
+  const normalized = value?.trim() || ''
+  if (!normalized) {
+    return false
+  }
+  return /^artifact:.+/i.test(normalized)
+    || /^[A-Za-z]:[\\/].+/.test(normalized)
+    || /^\\\\[^\\]+\\[^\\]+/.test(normalized)
+    || /^\/\/[^/]+\/[^/]+/.test(normalized)
+    || /^\/.+/.test(normalized)
+}
+
+export function getWebUiFileUploadReplayIssue(
+  step: WebUiFileUploadArtifactStep | null | undefined,
+  bindings: Record<string, WebUiFileUploadArtifactBinding | undefined> = {},
+): WebUiFileUploadReplayIssue | null {
+  if (!isEnabledFileUploadStep(step)) {
+    return null
+  }
+  const inputValue = step?.inputValue?.trim() || ''
+  const fileId = artifactFileIdFromInputValue(inputValue)
+  if (fileId) {
+    return bindings[fileId]?.contentBase64 ? null : 'MISSING_BINDING'
+  }
+  return isReplayableWebUiFileUploadValue(inputValue) ? null : 'NON_REPLAYABLE_VALUE'
+}
+
+export function findFirstWebUiFileUploadReplayIssue(
+  steps: WebUiFileUploadArtifactStep[],
+  bindings: Record<string, WebUiFileUploadArtifactBinding | undefined> = {},
+): WebUiFileUploadReplayIssueMatch | null {
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index]
+    if (!step) {
+      continue
+    }
+    const issue = getWebUiFileUploadReplayIssue(step, bindings)
+    if (issue) {
+      return {
+        index,
+        issue,
+        fileId: artifactFileIdFromInputValue(step.inputValue) || null,
+      }
+    }
+  }
+  return null
 }
 
 export function buildWebUiFileUploadArtifactRefs(

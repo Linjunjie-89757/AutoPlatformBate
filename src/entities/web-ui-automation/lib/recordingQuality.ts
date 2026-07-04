@@ -1,4 +1,5 @@
 import { requiresLocator } from './format.ts'
+import { getWebUiFileUploadReplayIssue, type WebUiFileUploadArtifactBinding } from './fileUploadArtifacts.ts'
 import type { WebUiLocatorType, WebUiStepType } from '../model/types'
 
 export type RecordingQualityCheckStatus = 'PASS' | 'WARN'
@@ -41,13 +42,14 @@ export interface RecordingQualityResult {
 export function buildRecordingQualityCheck(input: {
   steps: RecordingQualityStep[]
   replayPassed: boolean
+  uploadBindings?: Record<string, WebUiFileUploadArtifactBinding | undefined>
 }): RecordingQualityResult {
   const enabledSteps = input.steps.filter(step => step.enabled !== false)
   const assertionCount = enabledSteps.filter(isAssertionStep).length
   const unboundLocatorCount = enabledSteps.filter(isUnboundLocatorStep).length
   const fragileLocatorCount = enabledSteps.filter(isFragileLocatorStep).length
   const timingRiskCount = enabledSteps.filter(hasTimingRisk).length
-  const fileUploadPathRiskCount = enabledSteps.filter(hasFileUploadPathRisk).length
+  const fileUploadPathRiskCount = enabledSteps.filter(step => hasFileUploadPathRisk(step, input.uploadBindings)).length
   const checks: RecordingQualityCheckItem[] = [
     buildAssertionCheck(assertionCount),
     buildElementCheck(unboundLocatorCount),
@@ -117,23 +119,11 @@ export function hasTimingRisk(step: RecordingQualityStep) {
   return timeoutMs > 45000
 }
 
-export function hasFileUploadPathRisk(step: RecordingQualityStep) {
-  if (String(step.type || '').toUpperCase() !== 'FILE_UPLOAD') {
-    return false
-  }
-  return !isReplayableFileUploadValue(step.inputValue)
-}
-
-function isReplayableFileUploadValue(value: string | null | undefined) {
-  const normalized = value?.trim() || ''
-  if (!normalized) {
-    return false
-  }
-  return /^artifact:.+/.test(normalized)
-    || /^[A-Za-z]:[\\/].+/.test(normalized)
-    || /^\\\\[^\\]+\\[^\\]+/.test(normalized)
-    || /^\/\/[^/]+\/[^/]+/.test(normalized)
-    || /^\/.+/.test(normalized)
+export function hasFileUploadPathRisk(
+  step: RecordingQualityStep,
+  uploadBindings: Record<string, WebUiFileUploadArtifactBinding | undefined> = {},
+) {
+  return getWebUiFileUploadReplayIssue(step, uploadBindings) !== null
 }
 
 function buildAssertionCheck(assertionCount: number): RecordingQualityCheckItem {
@@ -181,8 +171,8 @@ function buildFileUploadCheck(fileUploadPathRiskCount: number): RecordingQuality
     key: 'UPLOADS',
     label: '文件上传路径',
     status: fileUploadPathRiskCount === 0 ? 'PASS' : 'WARN',
-    summary: fileUploadPathRiskCount === 0 ? '未发现不可回放的文件上传路径' : `${fileUploadPathRiskCount} 个文件上传步骤需要补可回放路径`,
-    suggestion: fileUploadPathRiskCount === 0 ? null : '录制只能拿到浏览器可见文件名，请改成本机绝对路径或 artifact:<fileId> 后再回放。',
+    summary: fileUploadPathRiskCount === 0 ? '文件上传步骤已具备回放条件' : `${fileUploadPathRiskCount} 个文件上传步骤需要重新绑定或改成可回放路径`,
+    suggestion: fileUploadPathRiskCount === 0 ? null : '录制通常只能拿到文件名；请改成本机绝对路径，或重新选择文件生成 artifact 引用后再回放。',
   }
 }
 

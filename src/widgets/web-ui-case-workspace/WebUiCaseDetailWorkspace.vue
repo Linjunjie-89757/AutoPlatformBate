@@ -63,6 +63,8 @@ import {
 import {
   artifactFileIdFromInputValue,
   buildWebUiFileUploadArtifactRefs,
+  findFirstWebUiFileUploadReplayIssue,
+  getWebUiFileUploadReplayIssue,
   hasUnsavedWebUiFileUploadArtifactChanges,
   type WebUiFileUploadArtifactBinding,
   type WebUiFileUploadArtifactStep,
@@ -219,7 +221,7 @@ const selectedStepUploadBinding = computed(() => {
   const fileId = selectedStepUploadFileId.value
   return fileId ? uploadArtifactBindings.value[fileId] || null : null
 })
-const selectedStepUploadBindingMissing = computed(() => Boolean(selectedStepUploadFileId.value && !selectedStepUploadBinding.value))
+const selectedStepUploadReplayIssue = computed(() => getWebUiFileUploadReplayIssue(selectedStep.value, uploadArtifactBindings.value))
 const localRunnerRunSummary = computed(() => localRunnerRunDetail.value?.summary ?? null)
 const recordingReplayDiagnostics = computed(() => buildRecordingReplayDiagnostics({
   replayRunId: recordingReplayRunId.value,
@@ -230,6 +232,7 @@ const recordingReplayRepairActions = computed(() => buildRecordingReplayRepairAc
 const recordingQualityCheck = computed(() => buildRecordingQualityCheck({
   steps: form.value.steps,
   replayPassed: recordingReplayDiagnostics.value?.tone === 'success',
+  uploadBindings: uploadArtifactBindings.value,
 }))
 const focusedStepId = computed(() => {
   const raw = Array.isArray(route.query.stepId) ? route.query.stepId[0] : route.query.stepId
@@ -754,6 +757,7 @@ async function appendRecordingResultSteps(result: LocalRunnerRecordingResult) {
   if (!stepsToAppend.length) {
     return {
       appendedCount: 0,
+      fileUploadNeedsRepairCount: 0,
       matchedCount: 0,
       candidateCount: 0,
       matchFailed: false,
@@ -1011,14 +1015,28 @@ async function saveCaseAndRunRecordingReplay() {
 
 async function ensureLocalRunnerUploadArtifactsSaved() {
   if (!hasUnsavedWebUiFileUploadArtifactChanges(form.value.steps, savedFileUploadSteps.value)) {
-    return true
+    return ensureLocalRunnerUploadReplayReady()
   }
   const saved = await saveCase({ successMessage: null })
   if (!saved) {
     return false
   }
   ElMessage.success('已先保存文件上传绑定，开始创建本地运行任务')
-  return true
+  return ensureLocalRunnerUploadReplayReady()
+}
+
+function ensureLocalRunnerUploadReplayReady() {
+  const issue = findFirstWebUiFileUploadReplayIssue(form.value.steps, uploadArtifactBindings.value)
+  if (!issue) {
+    return true
+  }
+  selectedStepIndex.value = issue.index
+  if (issue.issue === 'MISSING_BINDING') {
+    ElMessage.warning('该文件上传步骤还没有绑定本地文件，请重新选择后再本地运行')
+    return false
+  }
+  ElMessage.warning('录制得到的文件上传步骤不能直接回放，请重新选择文件，或改成本机绝对路径后再运行')
+  return false
 }
 
 async function runCase(localRunner: boolean, options: { localSuccessMessage?: string; recordingReplay?: boolean } = {}) {
@@ -1425,7 +1443,10 @@ async function stopRecordingSteps() {
       const matchSummary = appendSummary.matchFailed
         ? '，元素库匹配失败，可稍后手动选择'
         : `，匹配元素库 ${appendSummary.matchedCount} 个，新候选 ${appendSummary.candidateCount} 个`
-      ElMessage.success(`已生成 ${appendSummary.appendedCount} 个录制步骤${matchSummary}，保存后生效`)
+      const uploadSummary = appendSummary.fileUploadNeedsRepairCount > 0
+        ? `，其中 ${appendSummary.fileUploadNeedsRepairCount} 个文件上传步骤需要重新绑定`
+        : ''
+      ElMessage.success(`已生成 ${appendSummary.appendedCount} 个录制步骤${matchSummary}${uploadSummary}，保存后生效`)
     } else {
       ElMessage.warning('本次录制没有生成可用步骤')
     }
@@ -1498,12 +1519,14 @@ async function appendRecordedSteps(steps: LocalRunnerRecordedStep[], options: { 
   if (!mappedSteps.length) {
     return {
       appendedCount: 0,
+      fileUploadNeedsRepairCount: 0,
       matchedCount: 0,
       candidateCount: 0,
       matchFailed: false,
     }
   }
   const matchSummary = await enrichRecordedStepsWithElementMatches(mappedSteps)
+  const fileUploadNeedsRepairCount = mappedSteps.filter(step => Boolean(getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value))).length
   const insertIndex = form.value.steps.length
   form.value.steps.push(...mappedSteps)
   selectedStepIndex.value = insertIndex
@@ -1513,6 +1536,7 @@ async function appendRecordedSteps(steps: LocalRunnerRecordedStep[], options: { 
   }
   return {
     appendedCount: mappedSteps.length,
+    fileUploadNeedsRepairCount,
     ...matchSummary,
   }
 }
@@ -1918,6 +1942,44 @@ function getStepCardTypeTone(type: WebUiStepType) {
   return 'default'
 }
 
+function getStepFileUploadReplayIssue(step: EditableStep) {
+  return getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value)
+}
+
+function getStepFileUploadReplayLabel(step: EditableStep) {
+  const issue = getStepFileUploadReplayIssue(step)
+  if (issue === 'MISSING_BINDING') {
+    return '需重绑文件'
+  }
+  if (issue === 'NON_REPLAYABLE_VALUE') {
+    return '不可直接回放'
+  }
+  return ''
+}
+
+function getSelectedStepUploadTitle() {
+  if (selectedStepUploadBinding.value?.fileName) {
+    return selectedStepUploadBinding.value.fileName
+  }
+  if (selectedStepUploadReplayIssue.value === 'MISSING_BINDING') {
+    return '等待重新选择文件'
+  }
+  if (selectedStepUploadReplayIssue.value === 'NON_REPLAYABLE_VALUE') {
+    return '需要重新绑定文件'
+  }
+  return '未绑定本地文件'
+}
+
+function getSelectedStepUploadNote() {
+  if (selectedStepUploadReplayIssue.value === 'MISSING_BINDING') {
+    return '当前 artifact 还没有绑定本地文件，本地运行前需要重新选择'
+  }
+  if (selectedStepUploadReplayIssue.value === 'NON_REPLAYABLE_VALUE') {
+    return '录制通常只会保存文件名，不能直接回放。请重新选择文件，或改成本机绝对路径后再运行'
+  }
+  return '本地运行会携带已选择文件，保存用例不写入文件内容'
+}
+
 function getRecordingElementMatchTagType(step: EditableStep) {
   return step.recordingElementMatchStatus === 'MATCHED' ? 'success' : 'warning'
 }
@@ -2207,6 +2269,9 @@ watch(elementPickerLocatorType, () => {
                 {{ getStepCardTypeLabel(step.type) }}
               </span>
               <small>{{ getStepSummary(step) }}</small>
+              <el-tag v-if="getStepFileUploadReplayLabel(step)" type="warning" effect="light" size="small">
+                {{ getStepFileUploadReplayLabel(step) }}
+              </el-tag>
               <el-tag v-if="step.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(step)" effect="light" size="small">
                 {{ getRecordingElementMatchLabel(step) }}
               </el-tag>
@@ -2308,7 +2373,7 @@ watch(elementPickerLocatorType, () => {
               <div v-if="selectedStep.type === 'FILE_UPLOAD'" class="web-ui-upload-artifact">
                 <div class="web-ui-upload-artifact__main">
                   <strong>
-                    {{ selectedStepUploadBinding?.fileName || (selectedStepUploadFileId ? '等待重新选择文件' : '未绑定本地文件') }}
+                    {{ getSelectedStepUploadTitle() }}
                   </strong>
                   <span v-if="selectedStepUploadBinding">
                     {{ formatFileSize(selectedStepUploadBinding.size) }} · {{ selectedStepUploadBinding.contentType || 'application/octet-stream' }}
@@ -2322,9 +2387,9 @@ watch(elementPickerLocatorType, () => {
                 </div>
                 <small
                   class="web-ui-upload-artifact__note"
-                  :class="{ 'is-warning': selectedStepUploadBindingMissing }"
+                  :class="{ 'is-warning': selectedStepUploadReplayIssue }"
                 >
-                  {{ selectedStepUploadBindingMissing ? '文件内容未绑定，本地运行前需要重新选择' : '本地运行会携带已选择文件，保存用例不写入文件内容' }}
+                  {{ getSelectedStepUploadNote() }}
                 </small>
               </div>
             </section>

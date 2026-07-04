@@ -4,8 +4,11 @@ import assert from 'node:assert/strict'
 import {
   artifactFileIdFromInputValue,
   buildWebUiFileUploadArtifactRefs,
+  findFirstWebUiFileUploadReplayIssue,
+  getWebUiFileUploadReplayIssue,
   hasUnsavedWebUiFileUploadArtifactChanges,
   isFileUploadArtifactValue,
+  isReplayableWebUiFileUploadValue,
   type WebUiFileUploadArtifactBinding,
   type WebUiFileUploadArtifactStep,
 } from '../src/entities/web-ui-automation/lib/fileUploadArtifacts.ts'
@@ -86,6 +89,36 @@ test('ignores already persisted upload artifact inputs', () => {
   ], [
     step({ inputValue: 'D:/fixtures/avatar.png' }),
   ]), false)
+})
+
+test('detects replay issues for recorded upload names and missing artifact bindings', () => {
+  assert.equal(getWebUiFileUploadReplayIssue(step({ inputValue: 'upload-demo.txt' })), 'NON_REPLAYABLE_VALUE')
+  assert.equal(getWebUiFileUploadReplayIssue(step({ inputValue: 'artifact:avatar' })), 'MISSING_BINDING')
+  assert.equal(getWebUiFileUploadReplayIssue(step({ inputValue: 'artifact:avatar' }), {
+    avatar: binding({ fileId: 'avatar', fileName: 'avatar.png', contentBase64: 'YWJj' }),
+  }), null)
+  assert.equal(getWebUiFileUploadReplayIssue(step({ inputValue: 'D:/fixtures/avatar.png' })), null)
+  assert.equal(isReplayableWebUiFileUploadValue('upload-demo.txt'), false)
+  assert.equal(isReplayableWebUiFileUploadValue('artifact:avatar'), true)
+})
+
+test('finds the first upload step that still needs replay repair', () => {
+  assert.deepEqual(findFirstWebUiFileUploadReplayIssue([
+    step({ type: 'CLICK', inputValue: 'ignored' }),
+    step({ inputValue: 'artifact:avatar' }),
+    step({ inputValue: 'upload-demo.txt' }),
+  ]), {
+    index: 1,
+    issue: 'MISSING_BINDING',
+    fileId: 'avatar',
+  })
+
+  assert.deepEqual(findFirstWebUiFileUploadReplayIssue([
+    step({ inputValue: 'D:/fixtures/avatar.png' }),
+    step({ inputValue: 'artifact:avatar' }),
+  ], {
+    avatar: binding({ fileId: 'avatar', fileName: 'avatar.png', contentBase64: 'YWJj' }),
+  }), null)
 })
 
 function step(overrides: Partial<WebUiFileUploadArtifactStep>): WebUiFileUploadArtifactStep {

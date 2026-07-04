@@ -76,8 +76,46 @@ test('flags recorded file upload names that are not replayable paths or artifact
   assert.equal(result.checks.some(item => item.key === 'UPLOADS' && item.status === 'WARN'), true)
 })
 
+test('flags artifact uploads that still need local file rebinding', () => {
+  const result = buildRecordingQualityCheck({
+    replayPassed: true,
+    steps: [
+      step({ type: 'FILE_UPLOAD', locatorType: 'CSS', locatorValue: '#file', inputValue: 'artifact:avatar' }),
+      step({ type: 'ASSERT_VISIBLE', elementId: 1, locatorType: 'TEST_ID', locatorValue: 'done' }),
+    ],
+  })
+
+  assert.equal(result.fileUploadPathRiskCount, 1)
+  assert.equal(result.checks.find(item => item.key === 'UPLOADS')?.status, 'WARN')
+
+  const repaired = buildRecordingQualityCheck({
+    replayPassed: true,
+    steps: [
+      step({ type: 'FILE_UPLOAD', locatorType: 'CSS', locatorValue: '#file', inputValue: 'artifact:avatar' }),
+      step({ type: 'ASSERT_VISIBLE', elementId: 1, locatorType: 'TEST_ID', locatorValue: 'done' }),
+    ],
+    uploadBindings: {
+      avatar: {
+        fileId: 'avatar',
+        fileName: 'avatar.png',
+        contentBase64: 'YWJj',
+      },
+    },
+  })
+
+  assert.equal(repaired.fileUploadPathRiskCount, 0)
+  assert.equal(repaired.checks.find(item => item.key === 'UPLOADS')?.status, 'PASS')
+})
+
 test('accepts file upload artifacts and absolute paths as replayable values', () => {
-  assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'artifact:file-1' })), false)
+  assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'artifact:file-1' })), true)
+  assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'artifact:file-1' }), {
+    'file-1': {
+      fileId: 'file-1',
+      fileName: 'file-1.txt',
+      contentBase64: 'ZmlsZS0x',
+    },
+  }), false)
   assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'D:/test/upload-demo.txt' })), false)
   assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: '/tmp/upload-demo.txt' })), false)
   assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'upload-demo.txt' })), true)
