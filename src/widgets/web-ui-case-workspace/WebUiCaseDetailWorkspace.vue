@@ -181,6 +181,9 @@ const form = ref<CaseForm>(createEmptyForm())
 const uploadArtifactBindings = ref<Record<string, UploadArtifactBinding>>({})
 const uploadFileInputRef = ref<HTMLInputElement | null>(null)
 const uploadRepairPanelRef = ref<HTMLElement | null>(null)
+const stepLocatorSectionRef = ref<HTMLElement | null>(null)
+const stepActionSectionRef = ref<HTMLElement | null>(null)
+const stepAdvancedSectionRef = ref<HTMLElement | null>(null)
 const elementPickerVisible = ref(false)
 const elementPickerLoading = ref(false)
 const elementPickerKeyword = ref('')
@@ -195,6 +198,7 @@ let recordingElapsedTimer: ReturnType<typeof window.setInterval> | null = null
 let recordingStatusTimer: ReturnType<typeof window.setTimeout> | null = null
 let recordingDraftPersistTimer: ReturnType<typeof window.setTimeout> | null = null
 let uploadRepairFocusTimer: ReturnType<typeof window.setTimeout> | null = null
+let recordingReplayRepairFocusTimer: ReturnType<typeof window.setTimeout> | null = null
 let elementPickerRequestSeq = 0
 let suppressRecordingDraftPersist = false
 
@@ -251,6 +255,7 @@ const uploadReplayIssueStepIndexes = computed(() => form.value.steps
   .map((step, index) => (getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value) ? index : -1))
   .filter(index => index >= 0))
 const uploadRepairFocusActive = ref(false)
+const recordingReplayRepairFocusSection = ref<'locator' | 'action' | 'advanced' | null>(null)
 const recordingReplayTerminalNoticeKey = ref('')
 const recordingStatusLabel = computed(() => {
   if (recordingStatus.value === 'RECORDING') return '录制中'
@@ -1174,6 +1179,7 @@ function focusRecordingReplayFailedStep() {
   }
   const index = form.value.steps.findIndex(step => Number(step.sortOrder || 0) === Number(sortOrder))
   selectedStepIndex.value = index >= 0 ? index : Math.max(0, Math.min(sortOrder - 1, form.value.steps.length - 1))
+  void focusRecordingReplayRepairArea()
 }
 
 function getRecordingReplayFailedEditableStep() {
@@ -1184,6 +1190,65 @@ function getRecordingReplayFailedEditableStep() {
   return form.value.steps.find(step => Number(step.sortOrder || 0) === Number(sortOrder))
     || form.value.steps[sortOrder - 1]
     || null
+}
+
+function resolveRecordingReplayRepairSection() {
+  const failedStep = getRecordingReplayFailedEditableStep()
+  const issueType = recordingReplayDiagnostics.value?.issueType
+  if (!failedStep || !issueType) {
+    return null
+  }
+  if (issueType === 'LOCATOR' && requiresLocator(failedStep.type)) {
+    return 'locator' as const
+  }
+  if (issueType === 'WAIT') {
+    return 'advanced' as const
+  }
+  if (issueType === 'PAGE_STATE' && failedStep.type === 'FILE_UPLOAD') {
+    return 'action' as const
+  }
+  if (issueType === 'ASSERTION' && requiresInput(failedStep.type)) {
+    return 'action' as const
+  }
+  if (issueType === 'PAGE_STATE' && requiresInput(failedStep.type)) {
+    return 'action' as const
+  }
+  return requiresLocator(failedStep.type) ? 'locator' as const : 'advanced' as const
+}
+
+async function focusRecordingReplayRepairArea() {
+  if (recordingReplayRepairFocusTimer) {
+    window.clearTimeout(recordingReplayRepairFocusTimer)
+    recordingReplayRepairFocusTimer = null
+  }
+  await nextTick()
+  const section = resolveRecordingReplayRepairSection()
+  if (!section) {
+    recordingReplayRepairFocusSection.value = null
+    return
+  }
+  if (section === 'action' && selectedStep.value?.type === 'FILE_UPLOAD') {
+    await focusSelectedUploadRepairAction()
+    return
+  }
+  const target = section === 'locator'
+    ? stepLocatorSectionRef.value
+    : section === 'action'
+      ? stepActionSectionRef.value
+      : stepAdvancedSectionRef.value
+  if (!target) {
+    return
+  }
+  target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  recordingReplayRepairFocusSection.value = section
+  const focusable = target.querySelector('input, textarea, button, [role=\"radio\"], [tabindex]')
+  if (focusable instanceof HTMLElement) {
+    focusable.focus()
+  }
+  recordingReplayRepairFocusTimer = window.setTimeout(() => {
+    recordingReplayRepairFocusSection.value = null
+    recordingReplayRepairFocusTimer = null
+  }, 2200)
 }
 
 async function createRecordingReplayFailedStepCollectTask() {
@@ -2218,6 +2283,9 @@ onBeforeUnmount(() => {
   if (uploadRepairFocusTimer) {
     window.clearTimeout(uploadRepairFocusTimer)
   }
+  if (recordingReplayRepairFocusTimer) {
+    window.clearTimeout(recordingReplayRepairFocusTimer)
+  }
   stopLocalRunnerTaskRefresh()
   stopRecordingStatusRefresh()
   stopRecordingElapsedTimer()
@@ -2498,7 +2566,12 @@ watch(elementPickerLocatorType, () => {
               </div>
             </section>
 
-            <section v-if="requiresLocator(selectedStep.type)" class="web-ui-step-config">
+            <section
+              v-if="requiresLocator(selectedStep.type)"
+              ref="stepLocatorSectionRef"
+              class="web-ui-step-config"
+              :class="{ 'is-repair-focus': recordingReplayRepairFocusSection === 'locator' }"
+            >
               <div class="web-ui-step-config__title-row">
                 <h4>元素定位</h4>
                 <el-tag v-if="selectedStep.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(selectedStep)" effect="light" size="small">
@@ -2533,7 +2606,12 @@ watch(elementPickerLocatorType, () => {
               </el-form-item>
             </section>
 
-            <section v-if="requiresInput(selectedStep.type)" class="web-ui-step-config">
+            <section
+              v-if="requiresInput(selectedStep.type)"
+              ref="stepActionSectionRef"
+              class="web-ui-step-config"
+              :class="{ 'is-repair-focus': recordingReplayRepairFocusSection === 'action' }"
+            >
               <h4>{{ getStepActionConfigTitle(selectedStep.type) }}</h4>
               <el-form-item :label="getStepInputLabel(selectedStep.type)">
                 <el-input
@@ -2576,7 +2654,11 @@ watch(elementPickerLocatorType, () => {
               </div>
             </section>
 
-            <section class="web-ui-step-config">
+            <section
+              ref="stepAdvancedSectionRef"
+              class="web-ui-step-config"
+              :class="{ 'is-repair-focus': recordingReplayRepairFocusSection === 'advanced' }"
+            >
               <h4>前置 / 后置处理</h4>
               <div class="web-ui-step-config__grid">
                 <el-form-item label="前置等待(ms)">
@@ -3193,6 +3275,13 @@ watch(elementPickerLocatorType, () => {
   gap: var(--app-space-3);
   padding-bottom: var(--app-space-4);
   border-bottom: 1px solid var(--app-border-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.web-ui-step-config.is-repair-focus {
+  border-color: color-mix(in srgb, var(--app-warning) 50%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-warning) 8%, var(--app-bg-panel));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--app-warning) 60%, transparent);
 }
 
 .web-ui-step-config:last-child {
