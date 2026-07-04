@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
@@ -180,6 +180,7 @@ const selectedStepIndex = ref(0)
 const form = ref<CaseForm>(createEmptyForm())
 const uploadArtifactBindings = ref<Record<string, UploadArtifactBinding>>({})
 const uploadFileInputRef = ref<HTMLInputElement | null>(null)
+const uploadRepairPanelRef = ref<HTMLElement | null>(null)
 const elementPickerVisible = ref(false)
 const elementPickerLoading = ref(false)
 const elementPickerKeyword = ref('')
@@ -193,6 +194,7 @@ let localRunnerTaskTimer: ReturnType<typeof window.setTimeout> | null = null
 let recordingElapsedTimer: ReturnType<typeof window.setInterval> | null = null
 let recordingStatusTimer: ReturnType<typeof window.setTimeout> | null = null
 let recordingDraftPersistTimer: ReturnType<typeof window.setTimeout> | null = null
+let uploadRepairFocusTimer: ReturnType<typeof window.setTimeout> | null = null
 let elementPickerRequestSeq = 0
 let suppressRecordingDraftPersist = false
 
@@ -248,6 +250,7 @@ const recordingElementCandidateCount = computed(() => recordingElementCandidateS
 const uploadReplayIssueStepIndexes = computed(() => form.value.steps
   .map((step, index) => (getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value) ? index : -1))
   .filter(index => index >= 0))
+const uploadRepairFocusActive = ref(false)
 const recordingStatusLabel = computed(() => {
   if (recordingStatus.value === 'RECORDING') return '录制中'
   if (recordingStatus.value === 'PAUSED') return '已暂停'
@@ -1447,9 +1450,16 @@ async function stopRecordingSteps() {
         ? '，元素库匹配失败，可稍后手动选择'
         : `，匹配元素库 ${appendSummary.matchedCount} 个，新候选 ${appendSummary.candidateCount} 个`
       const uploadSummary = appendSummary.fileUploadNeedsRepairCount > 0
-        ? `，其中 ${appendSummary.fileUploadNeedsRepairCount} 个文件上传步骤需要重新绑定`
+        ? `，其中 ${appendSummary.fileUploadNeedsRepairCount} 个文件上传步骤需要重新绑定，已定位到首个待修复步骤`
         : ''
-      ElMessage.success(`已生成 ${appendSummary.appendedCount} 个录制步骤${matchSummary}${uploadSummary}，保存后生效`)
+      if (appendSummary.fileUploadNeedsRepairCount > 0) {
+        focusUploadReplayIssueStep('first')
+      }
+      ElMessage({
+        type: appendSummary.fileUploadNeedsRepairCount > 0 ? 'warning' : 'success',
+        message: `已生成 ${appendSummary.appendedCount} 个录制步骤${matchSummary}${uploadSummary}，保存后生效`,
+        duration: appendSummary.fileUploadNeedsRepairCount > 0 ? 5000 : 3000,
+      })
     } else {
       ElMessage.warning('本次录制没有生成可用步骤')
     }
@@ -1979,10 +1989,39 @@ function focusUploadReplayIssueStep(mode: 'first' | 'next' = 'first') {
   }
   if (mode === 'first') {
     selectedStepIndex.value = indexes[0]
+    void focusSelectedUploadRepairAction()
     return
   }
   const nextIndex = indexes.find(index => index > selectedStepIndex.value)
   selectedStepIndex.value = nextIndex ?? indexes[0]
+  void focusSelectedUploadRepairAction()
+}
+
+async function focusSelectedUploadRepairAction() {
+  if (uploadRepairFocusTimer) {
+    window.clearTimeout(uploadRepairFocusTimer)
+    uploadRepairFocusTimer = null
+  }
+  await nextTick()
+  const step = selectedStep.value
+  if (!step || step.type !== 'FILE_UPLOAD' || !selectedStepUploadReplayIssue.value) {
+    uploadRepairFocusActive.value = false
+    return
+  }
+  const panel = uploadRepairPanelRef.value
+  if (!panel) {
+    return
+  }
+  panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  uploadRepairFocusActive.value = true
+  const primaryAction = panel.querySelector('button')
+  if (primaryAction instanceof HTMLButtonElement) {
+    primaryAction.focus()
+  }
+  uploadRepairFocusTimer = window.setTimeout(() => {
+    uploadRepairFocusActive.value = false
+    uploadRepairFocusTimer = null
+  }, 2200)
 }
 
 function getSelectedStepUploadTitle() {
@@ -2071,6 +2110,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (elementPickerSearchTimer) {
     window.clearTimeout(elementPickerSearchTimer)
+  }
+  if (uploadRepairFocusTimer) {
+    window.clearTimeout(uploadRepairFocusTimer)
   }
   stopLocalRunnerTaskRefresh()
   stopRecordingStatusRefresh()
@@ -2398,7 +2440,15 @@ watch(elementPickerLocatorType, () => {
                   clearable
                 />
               </el-form-item>
-              <div v-if="selectedStep.type === 'FILE_UPLOAD'" class="web-ui-upload-artifact">
+              <div
+                v-if="selectedStep.type === 'FILE_UPLOAD'"
+                ref="uploadRepairPanelRef"
+                class="web-ui-upload-artifact"
+                :class="{
+                  'is-warning': selectedStepUploadReplayIssue,
+                  'is-repair-focus': uploadRepairFocusActive,
+                }"
+              >
                 <div class="web-ui-upload-artifact__main">
                   <strong>
                     {{ getSelectedStepUploadTitle() }}
@@ -3089,6 +3139,17 @@ watch(elementPickerLocatorType, () => {
   border: 1px solid var(--app-border-soft);
   border-radius: var(--app-radius-sm);
   background: var(--app-primary-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.web-ui-upload-artifact.is-warning {
+  border-color: color-mix(in srgb, var(--app-warning) 42%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-warning) 10%, var(--app-primary-soft));
+}
+
+.web-ui-upload-artifact.is-repair-focus {
+  border-color: color-mix(in srgb, var(--app-warning) 60%, var(--app-border-soft));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-warning) 20%, transparent);
 }
 
 .web-ui-upload-artifact__main {
