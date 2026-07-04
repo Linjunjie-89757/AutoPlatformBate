@@ -245,6 +245,9 @@ const recordingElementUnboundLocatorSteps = computed(() => form.value.steps.filt
 const recordingElementUnboundLocatorCount = computed(() => recordingElementUnboundLocatorSteps.value.length)
 const recordingElementCandidateSteps = computed(() => form.value.steps.filter(isRecordingElementCandidateStep))
 const recordingElementCandidateCount = computed(() => recordingElementCandidateSteps.value.length)
+const uploadReplayIssueStepIndexes = computed(() => form.value.steps
+  .map((step, index) => (getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value) ? index : -1))
+  .filter(index => index >= 0))
 const recordingStatusLabel = computed(() => {
   if (recordingStatus.value === 'RECORDING') return '录制中'
   if (recordingStatus.value === 'PAUSED') return '已暂停'
@@ -1957,6 +1960,31 @@ function getStepFileUploadReplayLabel(step: EditableStep) {
   return ''
 }
 
+function hasRecordingQualityAction(key: string, status: string) {
+  if (status !== 'WARN') {
+    return false
+  }
+  return key === 'UPLOADS'
+}
+
+function canFocusNextUploadReplayIssueStep() {
+  return uploadReplayIssueStepIndexes.value.length > 1
+}
+
+function focusUploadReplayIssueStep(mode: 'first' | 'next' = 'first') {
+  const indexes = uploadReplayIssueStepIndexes.value
+  if (!indexes.length) {
+    ElMessage.success('当前没有需要修复的文件上传步骤')
+    return
+  }
+  if (mode === 'first') {
+    selectedStepIndex.value = indexes[0]
+    return
+  }
+  const nextIndex = indexes.find(index => index > selectedStepIndex.value)
+  selectedStepIndex.value = nextIndex ?? indexes[0]
+}
+
 function getSelectedStepUploadTitle() {
   if (selectedStepUploadBinding.value?.fileName) {
     return selectedStepUploadBinding.value.fileName
@@ -2509,7 +2537,24 @@ watch(elementPickerLocatorType, () => {
                 <el-tag :type="item.status === 'PASS' ? 'success' : 'warning'" effect="light" size="small">
                   {{ item.label }}
                 </el-tag>
-                <span>{{ item.summary }}</span>
+                <div class="web-ui-recording-quality__check-main">
+                  <span>{{ item.summary }}</span>
+                  <div
+                    v-if="hasRecordingQualityAction(item.key, item.status)"
+                    class="web-ui-recording-quality__check-actions"
+                  >
+                    <AppButton size="small" @click="focusUploadReplayIssueStep('first')">
+                      定位问题步骤
+                    </AppButton>
+                    <AppButton
+                      v-if="canFocusNextUploadReplayIssueStep()"
+                      size="small"
+                      @click="focusUploadReplayIssueStep('next')"
+                    >
+                      下一处
+                    </AppButton>
+                  </div>
+                </div>
                 <small v-if="item.suggestion">{{ item.suggestion }}</small>
               </div>
             </div>
@@ -3258,12 +3303,28 @@ watch(elementPickerLocatorType, () => {
   min-width: 0;
 }
 
-.web-ui-recording-quality__check span {
+.web-ui-recording-quality__check-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  min-width: 0;
+}
+
+.web-ui-recording-quality__check-main > span {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   color: var(--app-text-secondary);
   font-size: var(--app-font-size-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.web-ui-recording-quality__check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-1);
 }
 
 .web-ui-recording-quality__check small {
