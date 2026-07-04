@@ -2000,11 +2000,22 @@ function hasRecordingQualityAction(key: string, status: string) {
   if (status !== 'WARN') {
     return false
   }
-  return key === 'UPLOADS'
+  if (key === 'UPLOADS') {
+    return true
+  }
+  return key === 'REPLAY' && canRunRecordingReplayFromQualityCheck()
+}
+
+function canRunRecordingReplayFromQualityCheck() {
+  return Boolean(caseId.value) && uploadReplayIssueStepIndexes.value.length === 0
 }
 
 function canFocusNextUploadReplayIssueStep() {
   return uploadReplayIssueStepIndexes.value.length > 1
+}
+
+function isReplayRecordingQualityAction(key: string) {
+  return key === 'REPLAY' && canRunRecordingReplayFromQualityCheck()
 }
 
 function focusUploadReplayIssueStep(mode: 'first' | 'next' = 'first') {
@@ -2619,15 +2630,28 @@ watch(elementPickerLocatorType, () => {
                     v-if="hasRecordingQualityAction(item.key, item.status)"
                     class="web-ui-recording-quality__check-actions"
                   >
-                    <AppButton size="small" @click="focusUploadReplayIssueStep('first')">
+                    <AppButton
+                      v-if="item.key === 'UPLOADS'"
+                      size="small"
+                      @click="focusUploadReplayIssueStep('first')"
+                    >
                       定位问题步骤
                     </AppButton>
                     <AppButton
-                      v-if="canFocusNextUploadReplayIssueStep()"
+                      v-if="item.key === 'UPLOADS' && canFocusNextUploadReplayIssueStep()"
                       size="small"
                       @click="focusUploadReplayIssueStep('next')"
                     >
                       下一处
+                    </AppButton>
+                    <AppButton
+                      v-if="isReplayRecordingQualityAction(item.key)"
+                      size="small"
+                      :loading="saving"
+                      :disabled="loading || running || localRunning || recordingInProgress"
+                      @click="saveCaseAndRunRecordingReplay"
+                    >
+                      保存并本地回放
                     </AppButton>
                   </div>
                 </div>
