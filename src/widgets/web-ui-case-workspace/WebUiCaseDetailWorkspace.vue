@@ -251,6 +251,7 @@ const uploadReplayIssueStepIndexes = computed(() => form.value.steps
   .map((step, index) => (getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value) ? index : -1))
   .filter(index => index >= 0))
 const uploadRepairFocusActive = ref(false)
+const recordingReplayTerminalNoticeKey = ref('')
 const recordingStatusLabel = computed(() => {
   if (recordingStatus.value === 'RECORDING') return '录制中'
   if (recordingStatus.value === 'PAUSED') return '已暂停'
@@ -569,6 +570,7 @@ function resetLocalRunnerState() {
   localRunnerFormalRunId.value = null
   localRunnerRunDetail.value = null
   recordingReplayRunId.value = null
+  recordingReplayTerminalNoticeKey.value = ''
 }
 
 function isLocalRunnerTaskTerminal(status?: string | null) {
@@ -628,6 +630,7 @@ async function refreshLocalRunnerTask(silent = false) {
     if (isLocalRunnerTaskTerminal(task.status)) {
       localRunning.value = false
       await refreshLocalRunnerFormalRun()
+      notifyRecordingReplayTaskTerminal(task)
     }
     if (!silent) {
       ElMessage.success('本地运行任务状态已刷新')
@@ -854,6 +857,33 @@ function buildFileUploadArtifactId(step: EditableStep, index = selectedStepIndex
   }
   const stepIdentity = step.id ? `step-${step.id}` : `draft-${index + 1}`
   return `web-ui-upload-${caseId.value || 'case'}-${stepIdentity}`
+}
+
+function notifyRecordingReplayTaskTerminal(task: LocalRunnerTaskDetailResponse) {
+  if (!recordingReplayRunId.value || task.runId !== recordingReplayRunId.value) {
+    return
+  }
+  const status = String(task.status || '').toUpperCase()
+  const noticeKey = `${task.runId}:${status}`
+  if (recordingReplayTerminalNoticeKey.value === noticeKey) {
+    return
+  }
+  recordingReplayTerminalNoticeKey.value = noticeKey
+  if (status === 'SUCCESS') {
+    ElMessage.success('录制回放已通过，质量区与诊断区已同步更新')
+    return
+  }
+  if (status === 'FAILED') {
+    ElMessage.warning('录制回放失败，质量区与诊断区已更新，可直接定位失败步骤继续修复')
+    return
+  }
+  if (status === 'DEGRADED') {
+    ElMessage.warning('录制回放未完全通过，请查看质量区和诊断区中的修复建议')
+    return
+  }
+  if (status === 'CANCELED') {
+    ElMessage.warning('录制回放已取消')
+  }
 }
 
 function countUploadReplayIssues(
@@ -1997,13 +2027,13 @@ function getStepFileUploadReplayLabel(step: EditableStep) {
 }
 
 function hasRecordingQualityAction(key: string, status: string) {
-  if (status !== 'WARN') {
-    return false
-  }
   if (key === 'UPLOADS') {
-    return true
+    return status === 'WARN'
   }
-  return key === 'REPLAY' && canRunRecordingReplayFromQualityCheck()
+  if (key === 'REPLAY') {
+    return hasReplayRecordingQualityAction(status)
+  }
+  return false
 }
 
 function canRunRecordingReplayFromQualityCheck() {
@@ -2016,6 +2046,43 @@ function canFocusNextUploadReplayIssueStep() {
 
 function isReplayRecordingQualityAction(key: string) {
   return key === 'REPLAY' && canRunRecordingReplayFromQualityCheck()
+}
+
+function hasReplayRecordingQualityAction(status: string) {
+  if (recordingReplayDiagnostics.value?.failedStepSortOrder) {
+    return true
+  }
+  if (recordingReplayDiagnostics.value?.reportAvailable && Boolean(localRunnerFormalRunId.value)) {
+    return true
+  }
+  return status === 'WARN' && canRunRecordingReplayFromQualityCheck()
+}
+
+function getRecordingQualityCheckSummary(
+  item: { key: string; summary: string },
+) {
+  if (item.key !== 'REPLAY' || !recordingReplayDiagnostics.value) {
+    return item.summary
+  }
+  if (recordingReplayDiagnostics.value.tone === 'primary') {
+    return `回放运行中：${recordingReplayDiagnostics.value.summary}`
+  }
+  if (recordingReplayDiagnostics.value.tone === 'danger') {
+    return `最近一次回放失败：${recordingReplayDiagnostics.value.failedStepLabel || recordingReplayDiagnostics.value.issueLabel || recordingReplayDiagnostics.value.summary}`
+  }
+  if (recordingReplayDiagnostics.value.tone === 'success') {
+    return `最近一次回放已通过：${recordingReplayDiagnostics.value.summary}`
+  }
+  return recordingReplayDiagnostics.value.summary || item.summary
+}
+
+function getRecordingQualityCheckSuggestion(
+  item: { key: string; suggestion: string | null },
+) {
+  if (item.key !== 'REPLAY') {
+    return item.suggestion
+  }
+  return recordingReplayDiagnostics.value?.suggestion || item.suggestion
 }
 
 function focusUploadReplayIssueStep(mode: 'first' | 'next' = 'first') {
@@ -2625,7 +2692,7 @@ watch(elementPickerLocatorType, () => {
                   {{ item.label }}
                 </el-tag>
                 <div class="web-ui-recording-quality__check-main">
-                  <span>{{ item.summary }}</span>
+                  <span>{{ getRecordingQualityCheckSummary(item) }}</span>
                   <div
                     v-if="hasRecordingQualityAction(item.key, item.status)"
                     class="web-ui-recording-quality__check-actions"
@@ -2653,9 +2720,23 @@ watch(elementPickerLocatorType, () => {
                     >
                       保存并本地回放
                     </AppButton>
+                    <AppButton
+                      v-if="item.key === 'REPLAY' && recordingReplayDiagnostics?.failedStepSortOrder"
+                      size="small"
+                      @click="focusRecordingReplayFailedStep"
+                    >
+                      定位失败步骤
+                    </AppButton>
+                    <AppButton
+                      v-if="item.key === 'REPLAY' && recordingReplayDiagnostics?.reportAvailable && localRunnerFormalRunId"
+                      size="small"
+                      @click="openLocalRunnerFormalReport"
+                    >
+                      查看回放报告
+                    </AppButton>
                   </div>
                 </div>
-                <small v-if="item.suggestion">{{ item.suggestion }}</small>
+                <small v-if="getRecordingQualityCheckSuggestion(item)">{{ getRecordingQualityCheckSuggestion(item) }}</small>
               </div>
             </div>
           </div>
