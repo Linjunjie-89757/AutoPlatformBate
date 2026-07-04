@@ -414,6 +414,62 @@ test('records hover checkbox radio and file upload interactions', async () => {
   assert.deepEqual(stderr, []);
 });
 
+test('records keyboard double click and right click interactions', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildAdvancedInteractionRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    await waitFor(async () => {
+      const status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 5;
+    }, 6000);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILL', 'PRESS_KEY', 'PRESS_KEY', 'DOUBLE_CLICK', 'RIGHT_CLICK']);
+    assert.equal(stopped.steps[0].locatorValue, '#search');
+    assert.equal(stopped.steps[0].inputValue, 'Alice');
+    assert.equal(stopped.steps[1].locatorValue, '#search');
+    assert.equal(stopped.steps[1].inputValue, 'Enter');
+    assert.equal(stopped.steps[2].locatorValue, null);
+    assert.equal(stopped.steps[2].inputValue, 'Tab');
+    assert.equal(stopped.steps[3].locatorType, 'TEST_ID');
+    assert.equal(stopped.steps[3].locatorValue, 'advanced-double');
+    assert.equal(stopped.steps[4].locatorType, 'TEST_ID');
+    assert.equal(stopped.steps[4].locatorValue, 'advanced-right');
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 test('keeps recorded steps available after session release interrupts recording', async () => {
   const runnerPort = await findAvailablePort();
   const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
@@ -458,6 +514,289 @@ test('keeps recorded steps available after session release interrupts recording'
     assert.equal(recovered.recording.active, false);
     assert.deepEqual(recovered.steps.map(item => item.type), ['FILL', 'CLICK']);
     assert.equal(recovered.steps[0].inputValue, 'Alice');
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('browser overlay panel controls recording without polluting recorded steps', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildOverlayControlRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    let stoppedStatus;
+    await waitFor(async () => {
+      stoppedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return stoppedStatus?.recording?.status === 'STOPPED';
+    }, 7000);
+
+    assert.equal(stoppedStatus.recording.active, false);
+    assert.deepEqual(stoppedStatus.steps.map(item => item.type), ['FILL', 'CLICK', 'FILL']);
+    assert.deepEqual(stoppedStatus.steps.map(item => item.locatorValue), ['#name', 'save-order', '#name']);
+    assert.equal(stoppedStatus.steps.some(item => item.inputValue === 'ignored'), false);
+    assert.equal(stoppedStatus.steps.some(item => String(item.locatorValue || '').includes('auto-web-runner-overlay')), false);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('browser overlay panel appends quick assertion steps from current context', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildOverlayAssertionRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    let stoppedStatus;
+    await waitFor(async () => {
+      stoppedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return stoppedStatus?.recording?.status === 'STOPPED';
+    }, 7000);
+
+    assert.deepEqual(stoppedStatus.steps.map(item => item.type), ['FILL', 'ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL']);
+    assert.deepEqual(stoppedStatus.steps.slice(0, 3).map(item => item.locatorValue), ['#name', '#name', '#name']);
+    assert.equal(stoppedStatus.steps[0].inputValue, 'Alice');
+    assert.equal(stoppedStatus.steps[1].inputValue, null);
+    assert.equal(stoppedStatus.steps[2].inputValue, 'Alice');
+    assert.equal(stoppedStatus.steps[3].locatorType, null);
+    assert.equal(stoppedStatus.steps[3].locatorValue, null);
+    assert.equal(String(stoppedStatus.steps[3].inputValue || '').startsWith('data:text/html,'), true);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('browser overlay panel shows current assertion target and highlights page element', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildOverlayTargetHintRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    let stoppedStatus;
+    await waitFor(async () => {
+      stoppedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return stoppedStatus?.recording?.status === 'STOPPED';
+    }, 7000);
+
+    assert.deepEqual(stoppedStatus.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(stoppedStatus.steps[1].locatorType, 'TEST_ID');
+    assert.equal(stoppedStatus.steps[1].locatorValue, 'overlay-proof-pass');
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('browser overlay panel collapses to compact status without polluting recorded steps', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildOverlayCompactRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    let stoppedStatus;
+    await waitFor(async () => {
+      stoppedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return stoppedStatus?.recording?.status === 'STOPPED';
+    }, 7000);
+
+    assert.deepEqual(stoppedStatus.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(stoppedStatus.steps[0].locatorValue, '#name');
+    assert.equal(stoppedStatus.steps[1].locatorType, 'TEST_ID');
+    assert.equal(stoppedStatus.steps[1].locatorValue, 'overlay-compact-pass');
+    assert.equal(stoppedStatus.steps.some(item => String(item.locatorValue || '').includes('auto-web-runner-overlay')), false);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('browser overlay panel can be dragged and keeps position without polluting recorded steps', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildOverlayDragRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    let stoppedStatus;
+    await waitFor(async () => {
+      stoppedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return stoppedStatus?.recording?.status === 'STOPPED';
+    }, 8000);
+
+    assert.deepEqual(stoppedStatus.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(stoppedStatus.steps[0].locatorValue, '#name');
+    assert.equal(stoppedStatus.steps[1].locatorType, 'TEST_ID');
+    assert.equal(stoppedStatus.steps[1].locatorValue, 'overlay-drag-pass');
+    assert.equal(stoppedStatus.steps.some(item => String(item.locatorValue || '').includes('auto-web-runner-overlay')), false);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('browser overlay panel can reset dragged position without polluting recorded steps', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildOverlayResetPositionRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    let stoppedStatus;
+    await waitFor(async () => {
+      stoppedStatus = await getJson(runnerBaseUrl, '/record/status');
+      return stoppedStatus?.recording?.status === 'STOPPED';
+    }, 8000);
+
+    assert.deepEqual(stoppedStatus.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(stoppedStatus.steps[0].locatorValue, '#name');
+    assert.equal(stoppedStatus.steps[1].locatorType, 'TEST_ID');
+    assert.equal(stoppedStatus.steps[1].locatorValue, 'overlay-reset-pass');
+    assert.equal(stoppedStatus.steps.some(item => String(item.locatorValue || '').includes('auto-web-runner-overlay')), false);
   } finally {
     await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
     await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
@@ -533,6 +872,44 @@ function buildComplexRecordingPageHtml() {
   ].join('');
 }
 
+function buildAdvancedInteractionRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Advanced Recording</title></head>',
+    '<body>',
+    '<label for="search">Search</label>',
+    '<input id="search" placeholder="Search" />',
+    '<button id="double" data-testid="advanced-double">Double</button>',
+    '<button id="right" data-testid="advanced-right">Right</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#search");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: value }));',
+    '}',
+    'function keydown(target, key) {',
+    '  target.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, composed: true, key }));',
+    '}',
+    'function mouse(target, type) {',
+    '  target.dispatchEvent(new MouseEvent(type, { bubbles: true, composed: true, button: type === "contextmenu" ? 2 : 0 }));',
+    '}',
+    'window.setTimeout(() => inputValue("Alice"), 1000);',
+    'window.setTimeout(() => keydown(document.querySelector("#search"), "Enter"), 1200);',
+    'window.setTimeout(() => keydown(document.body, "Tab"), 1400);',
+    'window.setTimeout(() => {',
+    '  const button = document.querySelector("#double");',
+    '  mouse(button, "click");',
+    '  mouse(button, "click");',
+    '  mouse(button, "dblclick");',
+    '}, 1650);',
+    'window.setTimeout(() => mouse(document.querySelector("#right"), "contextmenu"), 1950);',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
 function buildNoisyRecordingPageHtml() {
   return [
     '<!doctype html>',
@@ -578,6 +955,412 @@ function buildPauseResumeRecordingPageHtml() {
     '}',
     'window.setTimeout(() => perform("ignored"), 1000);',
     'window.setTimeout(() => perform("kept"), 1700);',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildOverlayControlRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Overlay Recording Controls</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<button id="save" data-testid="save-order">Save order</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '}',
+    'function clickAction(shadowRoot, action) {',
+    '  shadowRoot.querySelector(`[data-action="${action}"]`)?.click();',
+    '}',
+    'function waitForOverlay() {',
+    '  return new Promise((resolve, reject) => {',
+    '    const deadline = Date.now() + 5000;',
+    '    const tick = () => {',
+    '      const host = document.querySelector(\'[data-auto-web-runner-overlay-host="true"]\');',
+    '      if (host?.shadowRoot) {',
+    '        resolve(host.shadowRoot);',
+    '        return;',
+    '      }',
+    '      if (Date.now() >= deadline) {',
+    '        reject(new Error("overlay host not found"));',
+    '        return;',
+    '      }',
+    '      window.setTimeout(tick, 50);',
+    '    };',
+    '    tick();',
+    '  });',
+    '}',
+    'window.addEventListener("load", () => {',
+    '  waitForOverlay().then(shadowRoot => {',
+    '    window.setTimeout(() => clickAction(shadowRoot, "start"), 250);',
+    '    window.setTimeout(() => inputValue("panel"), 700);',
+    '    window.setTimeout(() => document.querySelector("#save").click(), 900);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "pause"), 1150);',
+    '    window.setTimeout(() => inputValue("ignored"), 1350);',
+    '    window.setTimeout(() => document.querySelector("#save").click(), 1500);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "resume"), 1750);',
+    '    window.setTimeout(() => inputValue("kept"), 2000);',
+    '    window.setTimeout(() => document.querySelector("#save").click(), 2150);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "undo"), 2450);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "stop"), 2750);',
+    '  }).catch(error => {',
+    '    document.body.setAttribute("data-overlay-error", error.message);',
+    '  });',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildOverlayAssertionRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Overlay Assertion Controls</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '}',
+    'function clickAction(shadowRoot, action) {',
+    '  shadowRoot.querySelector(`[data-action="${action}"]`)?.click();',
+    '}',
+    'function waitForOverlay() {',
+    '  return new Promise((resolve, reject) => {',
+    '    const deadline = Date.now() + 5000;',
+    '    const tick = () => {',
+    '      const host = document.querySelector(\'[data-auto-web-runner-overlay-host="true"]\');',
+    '      if (host?.shadowRoot) {',
+    '        resolve(host.shadowRoot);',
+    '        return;',
+    '      }',
+    '      if (Date.now() >= deadline) {',
+    '        reject(new Error("overlay host not found"));',
+    '        return;',
+    '      }',
+    '      window.setTimeout(tick, 50);',
+    '    };',
+    '    tick();',
+    '  });',
+    '}',
+    'window.addEventListener("load", () => {',
+    '  waitForOverlay().then(shadowRoot => {',
+    '    window.setTimeout(() => clickAction(shadowRoot, "start"), 250);',
+    '    window.setTimeout(() => inputValue("Alice"), 700);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "assert-visible"), 1050);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "assert-text"), 1350);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "assert-url"), 1650);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "stop"), 2050);',
+    '  }).catch(error => {',
+    '    document.body.setAttribute("data-overlay-error", error.message);',
+    '  });',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildOverlayTargetHintRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Overlay Target Hint</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<button id="proof-pass" data-testid="overlay-proof-pass">PASS</button>',
+    '<button id="proof-fail" data-testid="overlay-proof-fail">FAIL</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '}',
+    'function clickAction(shadowRoot, action) {',
+    '  shadowRoot.querySelector(`[data-action="${action}"]`)?.click();',
+    '}',
+    'function waitForOverlay() {',
+    '  return new Promise((resolve, reject) => {',
+    '    const deadline = Date.now() + 5000;',
+    '    const tick = () => {',
+    '      const host = document.querySelector(\'[data-auto-web-runner-overlay-host="true"]\');',
+    '      if (host?.shadowRoot) {',
+    '        resolve(host.shadowRoot);',
+    '        return;',
+    '      }',
+    '      if (Date.now() >= deadline) {',
+    '        reject(new Error("overlay host not found"));',
+    '        return;',
+    '      }',
+    '      window.setTimeout(tick, 50);',
+    '    };',
+    '    tick();',
+    '  });',
+    '}',
+    'window.addEventListener("load", () => {',
+    '  waitForOverlay().then(shadowRoot => {',
+    '    window.setTimeout(() => clickAction(shadowRoot, "start"), 250);',
+    '    window.setTimeout(() => inputValue("Alice"), 700);',
+    '    window.setTimeout(() => {',
+    '      const targetText = shadowRoot.querySelector(\'[data-role="target"]\')?.textContent || "";',
+    '      const locatorText = shadowRoot.querySelector(\'[data-role="target-locator"]\')?.textContent || "";',
+    '      const highlighted = document.querySelector("#name")?.getAttribute("data-auto-web-runner-assert-target") === "true";',
+    '      const proofButton = targetText.includes("Name") && locatorText.includes("#name") && highlighted',
+    '        ? document.querySelector("#proof-pass")',
+    '        : document.querySelector("#proof-fail");',
+    '      proofButton?.click();',
+    '    }, 1700);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "stop"), 2200);',
+    '  }).catch(error => {',
+    '    document.body.setAttribute("data-overlay-error", error.message);',
+    '  });',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildOverlayCompactRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Overlay Compact Controls</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<button id="proof-pass" data-testid="overlay-compact-pass">PASS</button>',
+    '<button id="proof-fail" data-testid="overlay-compact-fail">FAIL</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '}',
+    'function clickAction(shadowRoot, action) {',
+    '  shadowRoot.querySelector(`[data-action="${action}"]`)?.click();',
+    '}',
+    'function waitForOverlay() {',
+    '  return new Promise((resolve, reject) => {',
+    '    const deadline = Date.now() + 5000;',
+    '    const tick = () => {',
+    '      const host = document.querySelector(\'[data-auto-web-runner-overlay-host="true"]\');',
+    '      if (host?.shadowRoot) {',
+    '        resolve(host.shadowRoot);',
+    '        return;',
+    '      }',
+    '      if (Date.now() >= deadline) {',
+    '        reject(new Error("overlay host not found"));',
+    '        return;',
+    '      }',
+    '      window.setTimeout(tick, 50);',
+    '    };',
+    '    tick();',
+    '  });',
+    '}',
+    'window.addEventListener("load", () => {',
+    '  waitForOverlay().then(shadowRoot => {',
+    '    window.setTimeout(() => clickAction(shadowRoot, "start"), 250);',
+    '    window.setTimeout(() => inputValue("Alice"), 700);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "toggle-collapse"), 1050);',
+    '    window.setTimeout(() => {',
+    '      const panel = shadowRoot.querySelector(".panel");',
+    '      const metaDisplay = getComputedStyle(shadowRoot.querySelector(".meta")).display;',
+    '      const compactText = shadowRoot.querySelector(\'[data-role="compact"]\')?.textContent || "";',
+    '      const collapsed = panel?.getAttribute("data-collapsed") === "true";',
+    '      const compactOk = collapsed && metaDisplay === "none" && compactText.includes("1");',
+    '      clickAction(shadowRoot, "toggle-collapse");',
+    '      window.setTimeout(() => {',
+    '        const expanded = panel?.getAttribute("data-collapsed") === "false";',
+    '        const proofButton = compactOk && expanded',
+    '          ? document.querySelector("#proof-pass")',
+    '          : document.querySelector("#proof-fail");',
+    '        proofButton?.click();',
+    '      }, 150);',
+    '    }, 1400);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "stop"), 2200);',
+    '  }).catch(error => {',
+    '    document.body.setAttribute("data-overlay-error", error.message);',
+    '  });',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildOverlayDragRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Overlay Drag Controls</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<button id="proof-pass" data-testid="overlay-drag-pass">PASS</button>',
+    '<button id="proof-fail" data-testid="overlay-drag-fail">FAIL</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '}',
+    'function clickAction(shadowRoot, action) {',
+    '  shadowRoot.querySelector(`[data-action="${action}"]`)?.click();',
+    '}',
+    'function dispatchPointer(target, type, options) {',
+    '  const eventOptions = { bubbles: true, composed: true, pointerId: 7, pointerType: "mouse", button: 0, buttons: type === "pointerup" ? 0 : 1, ...options };',
+    '  const event = typeof PointerEvent === "function"',
+    '    ? new PointerEvent(type, eventOptions)',
+    '    : new MouseEvent(type.replace("pointer", "mouse"), eventOptions);',
+    '  target.dispatchEvent(event);',
+    '}',
+    'function waitForOverlay() {',
+    '  return new Promise((resolve, reject) => {',
+    '    const deadline = Date.now() + 5000;',
+    '    const tick = () => {',
+    '      const host = document.querySelector(\'[data-auto-web-runner-overlay-host="true"]\');',
+    '      if (host?.shadowRoot) {',
+    '        resolve(host.shadowRoot);',
+    '        return;',
+    '      }',
+    '      if (Date.now() >= deadline) {',
+    '        reject(new Error("overlay host not found"));',
+    '        return;',
+    '      }',
+    '      window.setTimeout(tick, 50);',
+    '    };',
+    '    tick();',
+    '  });',
+    '}',
+    'window.addEventListener("load", () => {',
+    '  waitForOverlay().then(shadowRoot => {',
+    '    window.setTimeout(() => clickAction(shadowRoot, "start"), 250);',
+    '    window.setTimeout(() => inputValue("Alice"), 700);',
+    '    window.setTimeout(() => {',
+    '      const panel = shadowRoot.querySelector(".panel");',
+    '      const header = shadowRoot.querySelector(".header");',
+    '      const before = panel.getBoundingClientRect();',
+    '      dispatchPointer(header, "pointerdown", { clientX: before.left + 30, clientY: before.top + 14 });',
+    '      dispatchPointer(document, "pointermove", { clientX: before.left - 85, clientY: before.top + 96 });',
+    '      dispatchPointer(document, "pointerup", { clientX: before.left - 85, clientY: before.top + 96 });',
+    '      window.setTimeout(() => {',
+    '        const moved = panel.getBoundingClientRect();',
+    '        clickAction(shadowRoot, "toggle-collapse");',
+    '        window.setTimeout(() => {',
+    '          clickAction(shadowRoot, "toggle-collapse");',
+    '          window.setTimeout(() => {',
+    '            const restored = panel.getBoundingClientRect();',
+    '            const movedFarEnough = Math.abs(moved.left - before.left) > 40 && Math.abs(moved.top - before.top) > 40;',
+    '            const keptPosition = Math.abs(restored.left - moved.left) < 3 && Math.abs(restored.top - moved.top) < 3;',
+    '            const proofButton = movedFarEnough && keptPosition',
+    '              ? document.querySelector("#proof-pass")',
+    '              : document.querySelector("#proof-fail");',
+    '            proofButton?.click();',
+    '          }, 150);',
+    '        }, 150);',
+    '      }, 150);',
+    '    }, 1100);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "stop"), 2600);',
+    '  }).catch(error => {',
+    '    document.body.setAttribute("data-overlay-error", error.message);',
+    '  });',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildOverlayResetPositionRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Overlay Reset Position</title></head>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" placeholder="Name" />',
+    '<button id="proof-pass" data-testid="overlay-reset-pass">PASS</button>',
+    '<button id="proof-fail" data-testid="overlay-reset-fail">FAIL</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));',
+    '}',
+    'function clickAction(shadowRoot, action) {',
+    '  shadowRoot.querySelector(`[data-action="${action}"]`)?.click();',
+    '}',
+    'function dispatchPointer(target, type, options) {',
+    '  const eventOptions = { bubbles: true, composed: true, pointerId: 8, pointerType: "mouse", button: 0, buttons: type === "pointerup" ? 0 : 1, ...options };',
+    '  const event = typeof PointerEvent === "function"',
+    '    ? new PointerEvent(type, eventOptions)',
+    '    : new MouseEvent(type.replace("pointer", "mouse"), eventOptions);',
+    '  target.dispatchEvent(event);',
+    '}',
+    'function waitForOverlay() {',
+    '  return new Promise((resolve, reject) => {',
+    '    const deadline = Date.now() + 5000;',
+    '    const tick = () => {',
+    '      const host = document.querySelector(\'[data-auto-web-runner-overlay-host="true"]\');',
+    '      if (host?.shadowRoot) {',
+    '        resolve(host.shadowRoot);',
+    '        return;',
+    '      }',
+    '      if (Date.now() >= deadline) {',
+    '        reject(new Error("overlay host not found"));',
+    '        return;',
+    '      }',
+    '      window.setTimeout(tick, 50);',
+    '    };',
+    '    tick();',
+    '  });',
+    '}',
+    'window.addEventListener("load", () => {',
+    '  waitForOverlay().then(shadowRoot => {',
+    '    window.setTimeout(() => clickAction(shadowRoot, "start"), 250);',
+    '    window.setTimeout(() => inputValue("Alice"), 700);',
+    '    window.setTimeout(() => {',
+    '      const panel = shadowRoot.querySelector(".panel");',
+    '      const header = shadowRoot.querySelector(".header");',
+    '      const before = panel.getBoundingClientRect();',
+    '      dispatchPointer(header, "pointerdown", { clientX: before.left + 30, clientY: before.top + 14 });',
+    '      dispatchPointer(document, "pointermove", { clientX: before.left - 90, clientY: before.top + 100 });',
+    '      dispatchPointer(document, "pointerup", { clientX: before.left - 90, clientY: before.top + 100 });',
+    '      window.setTimeout(() => {',
+    '        const moved = panel.getBoundingClientRect();',
+    '        clickAction(shadowRoot, "reset-position");',
+    '        window.setTimeout(() => {',
+    '          const reset = panel.getBoundingClientRect();',
+    '          const movedFarEnough = Math.abs(moved.left - before.left) > 40 && Math.abs(moved.top - before.top) > 40;',
+    '          const resetToTop = Math.abs(reset.top - 16) < 3;',
+    '          const resetToRight = Math.abs((window.innerWidth - reset.right) - 16) < 3;',
+    '          const unpositioned = panel.getAttribute("data-positioned") !== "true";',
+    '          const proofButton = movedFarEnough && resetToTop && resetToRight && unpositioned',
+    '            ? document.querySelector("#proof-pass")',
+    '            : document.querySelector("#proof-fail");',
+    '          proofButton?.click();',
+    '        }, 150);',
+    '      }, 150);',
+    '    }, 1100);',
+    '    window.setTimeout(() => clickAction(shadowRoot, "stop"), 2500);',
+    '  }).catch(error => {',
+    '    document.body.setAttribute("data-overlay-error", error.message);',
+    '  });',
+    '});',
     '</script>',
     '</body>',
     '</html>',

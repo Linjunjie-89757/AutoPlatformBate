@@ -19,6 +19,7 @@ const VALIDATION_HIGHLIGHT_LIMIT = 8;
 const VALIDATION_HIGHLIGHT_DURATION_MS = 3000;
 const AUTH_STALE_MINUTES = 24 * 60;
 const RECORDER_BINDING_NAME = '__autoWebRunnerRecordEvent';
+const RUNNER_OVERLAY_BINDING_NAME = '__autoWebRunnerOverlayControl';
 const RECORDER_MAX_EVENTS = 300;
 const RECORDER_DUPLICATE_CLICK_WINDOW_MS = 500;
 const RECORDER_DUPLICATE_HOVER_WINDOW_MS = 500;
@@ -45,6 +46,8 @@ let lastStoppedRecorder;
 let recorderBindingContext;
 let recorderScriptContext;
 let recorderNavigationPage;
+let overlayBindingContext;
+let overlayScriptContext;
 
 const port = runtimeConfig.port;
 const allowedOrigins = parseAllowedOrigins(process.env.WEB_UI_RUNNER_ORIGINS);
@@ -350,6 +353,7 @@ async function openCollectPage(payload) {
       boundTaskId: activeSession?.boundTaskId || null,
       boundAt: activeSession?.boundAt || null,
     };
+    await ensureRunnerOverlayInstalled();
 
     return {
       success: true,
@@ -368,6 +372,7 @@ async function openCollectPage(payload) {
   const contextOptions = existsSync(storageStatePath) ? { storageState: storageStatePath } : {};
   context = await browser.newContext(contextOptions);
   page = await context.newPage();
+  await ensureRunnerOverlayInstalled();
   await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
   activeSession = {
@@ -577,6 +582,51 @@ async function ensureRecorderInstalled() {
   await Promise.all(page.frames().map(frame => frame.evaluate(installBrowserRecorderScript).catch(() => null)));
 }
 
+async function ensureRunnerOverlayInstalled() {
+  ensureContext();
+  ensurePage();
+
+  if (overlayBindingContext !== context) {
+    await context.exposeBinding(RUNNER_OVERLAY_BINDING_NAME, async (source, payload) => {
+      const action = optionalString(payload?.action).toLowerCase();
+      if (action === 'start') {
+        return startPageRecording({});
+      }
+      if (action === 'pause') {
+        return pausePageRecording();
+      }
+      if (action === 'resume') {
+        return resumePageRecording();
+      }
+      if (action === 'undo') {
+        return undoLastRecordedStep();
+      }
+      if (action === 'stop') {
+        return stopPageRecording();
+      }
+      if (action === 'status') {
+        return getPageRecordingStatus();
+      }
+      if (['assert-visible', 'assert-text', 'assert-url'].includes(action)) {
+        if (!payload?.event || typeof payload.event !== 'object') {
+          throw new Error('assertion event is required');
+        }
+        await recordBrowserEvent(source, payload.event);
+        return buildPageRecordingResult(activeRecorder || lastStoppedRecorder || null);
+      }
+      throw new Error(`unsupported overlay action: ${action || 'unknown'}`);
+    });
+    overlayBindingContext = context;
+  }
+
+  if (overlayScriptContext !== context) {
+    await context.addInitScript(installBrowserRunnerOverlayScript);
+    overlayScriptContext = context;
+  }
+
+  await page.evaluate(installBrowserRunnerOverlayScript).catch(() => null);
+}
+
 async function recordBrowserEvent(source, event) {
   const recorder = activeRecorder;
   if (recorder?.status !== 'RECORDING' || !recorder.active || !event || typeof event !== 'object') {
@@ -595,14 +645,14 @@ async function recordBrowserEvent(source, event) {
 
 async function normalizeRecordedBrowserEvent(source, event) {
   const kind = optionalString(event.kind).toUpperCase();
-  if (!['CLICK', 'FILL', 'SELECT', 'PRESS_KEY', 'HOVER', 'FILE_UPLOAD'].includes(kind)) {
+  if (!['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'FILL', 'SELECT', 'PRESS_KEY', 'HOVER', 'FILE_UPLOAD', 'ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL'].includes(kind)) {
     return null;
   }
   const target = normalizeRecordedTarget(event.target);
-  if (!target?.locator && kind !== 'PRESS_KEY') {
+  if (!target?.locator && !['PRESS_KEY', 'ASSERT_URL'].includes(kind)) {
     return null;
   }
-  if ((kind === 'FILL' || kind === 'SELECT' || kind === 'FILE_UPLOAD') && event.inputValue === undefined) {
+  if ((kind === 'FILL' || kind === 'SELECT' || kind === 'FILE_UPLOAD' || kind === 'ASSERT_TEXT' || kind === 'ASSERT_URL') && event.inputValue === undefined) {
     return null;
   }
   const framePath = await resolveFramePath(source?.frame).catch(() => []);
@@ -699,6 +749,16 @@ function appendRecordedEvent(events, event) {
     events[events.length - 1] = event;
     return;
   }
+  if (
+    last
+    && event.kind === 'DOUBLE_CLICK'
+    && last.kind === 'CLICK'
+    && sameRecordedLocator(last.target?.locator, event.target?.locator)
+    && isWithinRecordedEventWindow(last, event, RECORDER_DUPLICATE_CLICK_WINDOW_MS)
+  ) {
+    events[events.length - 1] = event;
+    return;
+  }
   events.push(event);
 }
 
@@ -744,10 +804,10 @@ function buildRecordedStep(event, sortOrder) {
   if (type === 'PRESS_KEY') {
     inputValue = event.key || event.inputValue || '';
   }
-  if (['CLICK', 'FILL', 'CLEAR', 'SELECT', 'HOVER', 'FILE_UPLOAD'].includes(type) && !locator) {
+  if (['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'FILL', 'CLEAR', 'SELECT', 'HOVER', 'FILE_UPLOAD', 'ASSERT_VISIBLE', 'ASSERT_TEXT'].includes(type) && !locator) {
     return null;
   }
-  if (['FILL', 'SELECT', 'PRESS_KEY', 'FILE_UPLOAD'].includes(type) && !optionalString(inputValue)) {
+  if (['FILL', 'SELECT', 'PRESS_KEY', 'FILE_UPLOAD', 'ASSERT_TEXT', 'ASSERT_URL'].includes(type) && !optionalString(inputValue)) {
     return null;
   }
 
@@ -790,12 +850,17 @@ function buildRecordedTargetName(target) {
 function buildRecordedStepName(type, targetName, sortOrder) {
   const suffix = targetName ? ` ${targetName}` : '';
   if (type === 'CLICK') return `点击${suffix}`.trim();
+  if (type === 'DOUBLE_CLICK') return `双击${suffix}`.trim();
+  if (type === 'RIGHT_CLICK') return `右键${suffix}`.trim();
   if (type === 'FILL') return `输入${suffix}`.trim();
   if (type === 'CLEAR') return `清空${suffix}`.trim();
   if (type === 'HOVER') return `悬停${suffix}`.trim();
   if (type === 'SELECT') return `选择${suffix}`.trim();
   if (type === 'FILE_UPLOAD') return `上传${suffix}`.trim();
   if (type === 'PRESS_KEY') return `按键${suffix}`.trim();
+  if (type === 'ASSERT_VISIBLE') return `验证${suffix}可见`.trim();
+  if (type === 'ASSERT_TEXT') return `验证${suffix}文本`.trim();
+  if (type === 'ASSERT_URL') return '验证 URL';
   return `录制步骤 ${sortOrder}`;
 }
 
@@ -1901,6 +1966,10 @@ function installBrowserRecorderScript() {
     return;
   }
   window.__autoWebRunnerRecorderInstalled = true;
+  const assertTargetMarkerAttr = 'data-auto-web-runner-assert-target';
+  const assertTargetStyleAttr = 'data-auto-web-runner-assert-target-style';
+  const assertTargetTimerKey = '__autoWebRunnerAssertTargetTimer';
+  let lastRecordableElement = null;
 
   document.addEventListener('click', event => {
     const target = findRecordableTarget(event);
@@ -1908,6 +1977,22 @@ function installBrowserRecorderScript() {
       return;
     }
     sendRecordedEvent('CLICK', event, target);
+  }, true);
+
+  document.addEventListener('dblclick', event => {
+    const target = findRecordableTarget(event);
+    if (!target || isTextEntryElement(target) || target.tagName.toLowerCase() === 'select') {
+      return;
+    }
+    sendRecordedEvent('DOUBLE_CLICK', event, target);
+  }, true);
+
+  document.addEventListener('contextmenu', event => {
+    const target = findRecordableTarget(event);
+    if (!target || isTextEntryElement(target) || target.tagName.toLowerCase() === 'select') {
+      return;
+    }
+    sendRecordedEvent('RIGHT_CLICK', event, target);
   }, true);
 
   document.addEventListener('input', event => {
@@ -1966,6 +2051,9 @@ function installBrowserRecorderScript() {
       return;
     }
     const element = target || findRecordableTarget(event);
+    if (element) {
+      lastRecordableElement = element;
+    }
     binding({
       kind,
       timestamp: new Date().toISOString(),
@@ -1976,8 +2064,82 @@ function installBrowserRecorderScript() {
     }).catch(() => {});
   }
 
+  window.__autoWebRunnerBuildAssertionEvent = (assertionType) => {
+    const kind = String(assertionType || '').toUpperCase();
+    if (kind === 'ASSERT_URL') {
+      return {
+        kind,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        inputValue: buildAssertionUrlValue(),
+      };
+    }
+    const element = resolveAssertionTarget();
+    if (!element) {
+      throw new Error('当前没有可用于断言的页面元素');
+    }
+    const target = buildRecordTarget(element);
+    if (!target?.locator) {
+      throw new Error('当前元素没有可用定位器');
+    }
+    if (kind === 'ASSERT_TEXT') {
+      const expectedValue = readAssertionText(element);
+      if (!expectedValue) {
+        throw new Error('当前元素没有可用断言文本');
+      }
+      return {
+        kind,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        target,
+        inputValue: expectedValue,
+      };
+    }
+    if (kind === 'ASSERT_VISIBLE') {
+      return {
+        kind,
+        timestamp: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title,
+        target,
+      };
+    }
+    throw new Error(`unsupported assertion type: ${kind || 'unknown'}`);
+  };
+  window.__autoWebRunnerDescribeAssertionTarget = () => {
+    const element = resolveAssertionTarget();
+    if (!element) {
+      return {
+        canAssert: false,
+        label: '',
+        locatorValue: '',
+        assertionText: '',
+      };
+    }
+    const target = buildRecordTarget(element);
+    return {
+      canAssert: Boolean(target?.locator),
+      label: buildAssertionTargetLabel(target),
+      locatorValue: target?.locator?.value || '',
+      assertionText: readAssertionText(element),
+    };
+  };
+  window.__autoWebRunnerHighlightAssertionTarget = () => {
+    const element = resolveAssertionTarget();
+    if (!element) {
+      return false;
+    }
+    highlightAssertionTarget(element);
+    return true;
+  };
+
   function findRecordableTarget(event) {
     const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    if (path.some(isRunnerOverlayElement)) {
+      return null;
+    }
     for (const item of path) {
       if (item instanceof Element && isRecordableElement(item)) {
         return item;
@@ -1999,6 +2161,9 @@ function installBrowserRecorderScript() {
   }
 
   function isRecordableElement(element) {
+    if (isRunnerOverlayElement(element)) {
+      return false;
+    }
     return Boolean(element?.matches?.([
       'a',
       'button',
@@ -2060,6 +2225,24 @@ function installBrowserRecorderScript() {
     ].join(',')));
   }
 
+  function isRunnerOverlayElement(element) {
+    return element instanceof Element
+      && (
+        element.getAttribute('data-auto-web-runner-overlay') === 'true'
+        || element.getAttribute('data-auto-web-runner-overlay-host') === 'true'
+      );
+  }
+
+  function resolveAssertionTarget() {
+    if (lastRecordableElement instanceof Element && document.contains(lastRecordableElement) && isRecordableElement(lastRecordableElement)) {
+      return lastRecordableElement;
+    }
+    if (document.activeElement instanceof Element && isRecordableElement(document.activeElement) && !isRunnerOverlayElement(document.activeElement)) {
+      return document.activeElement;
+    }
+    return null;
+  }
+
   function readElementValue(element) {
     if (isFileInputElement(element)) {
       return Array.from(element.files || []).map(file => file.name).filter(Boolean).join(', ');
@@ -2074,6 +2257,65 @@ function installBrowserRecorderScript() {
       return element.innerText || element.textContent || '';
     }
     return '';
+  }
+
+  function readAssertionText(element) {
+    if (isTextEntryElement(element) || element instanceof HTMLSelectElement || isFileInputElement(element)) {
+      return readElementValue(element).trim();
+    }
+    return normalizeText(element.innerText || element.textContent || '');
+  }
+
+  function buildAssertionUrlValue() {
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+      return `${window.location.pathname || ''}${window.location.search || ''}${window.location.hash || ''}` || window.location.href;
+    }
+    return window.location.href;
+  }
+
+  function buildAssertionTargetLabel(target) {
+    return normalizeText(
+      target?.label
+      || target?.placeholder
+      || target?.text
+      || target?.testId
+      || target?.locator?.value
+      || '',
+    );
+  }
+
+  function highlightAssertionTarget(element, durationMs = 1800) {
+    document.querySelectorAll(`[${assertTargetMarkerAttr}="true"]`).forEach((item) => {
+      const originalStyle = item.getAttribute(assertTargetStyleAttr);
+      if (originalStyle && originalStyle !== '__AUTO_EMPTY__') {
+        item.setAttribute('style', originalStyle);
+      } else {
+        item.removeAttribute('style');
+      }
+      item.removeAttribute(assertTargetMarkerAttr);
+      item.removeAttribute(assertTargetStyleAttr);
+    });
+    window.clearTimeout(window[assertTargetTimerKey]);
+    if (!(element instanceof Element) || !('style' in element)) {
+      return;
+    }
+    const originalStyle = element.getAttribute('style');
+    element.setAttribute(assertTargetMarkerAttr, 'true');
+    element.setAttribute(assertTargetStyleAttr, originalStyle || '__AUTO_EMPTY__');
+    element.style.outline = '3px solid #f59e0b';
+    element.style.outlineOffset = '2px';
+    element.style.boxShadow = '0 0 0 6px rgba(245, 158, 11, 0.18), 0 10px 26px rgba(245, 158, 11, 0.24)';
+    element.style.transition = 'outline 0.16s ease, box-shadow 0.16s ease';
+    window[assertTargetTimerKey] = window.setTimeout(() => {
+      const savedStyle = element.getAttribute(assertTargetStyleAttr);
+      if (savedStyle && savedStyle !== '__AUTO_EMPTY__') {
+        element.setAttribute('style', savedStyle);
+      } else {
+        element.removeAttribute('style');
+      }
+      element.removeAttribute(assertTargetMarkerAttr);
+      element.removeAttribute(assertTargetStyleAttr);
+    }, durationMs);
   }
 
   function buildRecordTarget(element) {
@@ -2201,6 +2443,638 @@ function installBrowserRecorderScript() {
       return window.CSS.escape(value);
     }
     return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+  }
+}
+
+function installBrowserRunnerOverlayScript() {
+  if (window.top !== window) {
+    return;
+  }
+
+  if (window.__autoWebRunnerOverlayInstalled) {
+    if (typeof window.__autoWebRunnerOverlayMount === 'function') {
+      window.__autoWebRunnerOverlayMount();
+    }
+    if (typeof window.__autoWebRunnerOverlayPollNow === 'function') {
+      window.__autoWebRunnerOverlayPollNow();
+    }
+    return;
+  }
+
+  window.__autoWebRunnerOverlayInstalled = true;
+
+  const hostAttr = 'data-auto-web-runner-overlay-host';
+  const markerAttr = 'data-auto-web-runner-overlay';
+  const bindingName = '__autoWebRunnerOverlayControl';
+  const positionStorageKey = '__auto_web_runner_overlay_position';
+  const state = {
+    busyAction: '',
+    collapsed: false,
+    eventCount: 0,
+    message: '',
+    overlayLeft: null,
+    overlayTop: null,
+    status: 'IDLE',
+    stepCount: 0,
+    targetCanAssert: false,
+    targetKey: '',
+    targetLabel: '',
+    targetLocator: '',
+  };
+  let host = null;
+  let shadowRoot = null;
+  let pollTimer = null;
+  const dragState = {
+    active: false,
+    startX: 0,
+    startY: 0,
+    startLeft: 0,
+    startTop: 0,
+  };
+
+  function mountPanel() {
+    if (!document.documentElement) {
+      return;
+    }
+    host = document.querySelector(`[${hostAttr}="true"]`);
+    if (!host) {
+      host = document.createElement('div');
+      host.setAttribute(hostAttr, 'true');
+      host.setAttribute(markerAttr, 'true');
+      document.documentElement.appendChild(host);
+      shadowRoot = host.attachShadow({ mode: 'open' });
+      shadowRoot.innerHTML = `
+        <style>
+          :host { all: initial; }
+          .panel {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 2147483647;
+            width: 240px;
+            box-sizing: border-box;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.96);
+            color: #0f172a;
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+            font-family: "Segoe UI", Arial, sans-serif;
+            backdrop-filter: blur(10px);
+          }
+          .panel * { box-sizing: border-box; }
+          .panel[data-status="RECORDING"] .dot { background: #ef4444; }
+          .panel[data-status="PAUSED"] .dot { background: #f59e0b; }
+          .panel[data-status="STOPPED"] .dot { background: #64748b; }
+          .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px 8px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+            cursor: move;
+            user-select: none;
+          }
+          .title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+          }
+          .collapse {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            line-height: 1;
+            cursor: pointer;
+          }
+          .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: #94a3b8;
+            box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.18);
+          }
+          .meta {
+            padding: 10px 12px 0;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .metric {
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 6px;
+            padding: 8px;
+            background: rgba(248, 250, 252, 0.92);
+          }
+          .metric span {
+            display: block;
+            font-size: 11px;
+            color: #475569;
+          }
+          .metric strong {
+            display: block;
+            margin-top: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #0f172a;
+          }
+          .actions {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            padding: 12px;
+          }
+          button {
+            appearance: none;
+            border: 1px solid rgba(148, 163, 184, 0.26);
+            border-radius: 6px;
+            background: #fff;
+            color: #0f172a;
+            padding: 7px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+          }
+          button[hidden] { display: none; }
+          button:disabled {
+            cursor: not-allowed;
+            color: #94a3b8;
+            background: rgba(248, 250, 252, 0.92);
+          }
+          .message {
+            min-height: 18px;
+            padding: 0 12px 12px;
+            color: #64748b;
+            font-size: 11px;
+            line-height: 1.5;
+          }
+          .target {
+            padding: 10px 12px 0;
+          }
+          .target span {
+            display: block;
+            font-size: 11px;
+            color: #475569;
+          }
+          .target strong {
+            display: block;
+            margin-top: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #0f172a;
+            word-break: break-word;
+          }
+          .target small {
+            display: block;
+            margin-top: 4px;
+            color: #64748b;
+            font-size: 11px;
+            word-break: break-all;
+          }
+          .compact {
+            display: none;
+            padding: 0 12px 10px;
+            color: #475569;
+            font-size: 11px;
+            line-height: 1.5;
+          }
+          .panel[data-collapsed="true"] {
+            width: 180px;
+          }
+          .panel[data-collapsed="true"] .meta,
+          .panel[data-collapsed="true"] .target,
+          .panel[data-collapsed="true"] .actions,
+          .panel[data-collapsed="true"] .message {
+            display: none;
+          }
+          .panel[data-collapsed="true"] .compact {
+            display: block;
+          }
+        </style>
+        <div class="panel" data-status="IDLE" data-collapsed="false" data-auto-web-runner-overlay="true">
+          <div class="header" data-auto-web-runner-overlay="true">
+            <div class="title" data-auto-web-runner-overlay="true">
+              <span class="dot" data-auto-web-runner-overlay="true"></span>
+              <span data-role="status" data-auto-web-runner-overlay="true">未开始</span>
+            </div>
+            <button type="button" class="collapse" data-action="toggle-collapse" data-auto-web-runner-overlay="true" title="收起面板">-</button>
+          </div>
+          <div class="compact" data-role="compact" data-auto-web-runner-overlay="true">步骤 0</div>
+          <div class="meta" data-auto-web-runner-overlay="true">
+            <div class="metric" data-auto-web-runner-overlay="true">
+              <span data-auto-web-runner-overlay="true">步骤</span>
+              <strong data-role="steps" data-auto-web-runner-overlay="true">0</strong>
+            </div>
+            <div class="metric" data-auto-web-runner-overlay="true">
+              <span data-auto-web-runner-overlay="true">事件</span>
+              <strong data-role="events" data-auto-web-runner-overlay="true">0</strong>
+            </div>
+          </div>
+          <div class="target" data-auto-web-runner-overlay="true">
+            <span data-auto-web-runner-overlay="true">断言目标</span>
+            <strong data-role="target" data-auto-web-runner-overlay="true">等待选择页面元素</strong>
+            <small data-role="target-locator" data-auto-web-runner-overlay="true"></small>
+          </div>
+          <div class="actions" data-auto-web-runner-overlay="true">
+            <button type="button" data-action="start" data-auto-web-runner-overlay="true">开始</button>
+            <button type="button" data-action="pause" data-auto-web-runner-overlay="true" hidden>暂停</button>
+            <button type="button" data-action="resume" data-auto-web-runner-overlay="true" hidden>继续</button>
+            <button type="button" data-action="undo" data-auto-web-runner-overlay="true">撤销</button>
+            <button type="button" data-action="stop" data-auto-web-runner-overlay="true">停止</button>
+            <button type="button" data-action="reset-position" data-auto-web-runner-overlay="true">复位</button>
+            <button type="button" data-action="assert-visible" data-auto-web-runner-overlay="true">可见断言</button>
+            <button type="button" data-action="assert-text" data-auto-web-runner-overlay="true">文本断言</button>
+            <button type="button" data-action="assert-url" data-auto-web-runner-overlay="true">URL 断言</button>
+          </div>
+          <div class="message" data-role="message" data-auto-web-runner-overlay="true"></div>
+        </div>
+      `;
+      applyOverlayPosition();
+      bindPanelEvents();
+    } else {
+      shadowRoot = host.shadowRoot;
+      applyOverlayPosition();
+    }
+  }
+
+  function bindPanelEvents() {
+    if (!shadowRoot) {
+      return;
+    }
+    shadowRoot.querySelectorAll('[data-action]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const action = button.getAttribute('data-action') || '';
+        void runAction(action);
+      });
+    });
+    const header = shadowRoot.querySelector('.header');
+    header?.addEventListener('pointerdown', startPanelDrag);
+  }
+
+  function loadOverlayPosition() {
+    const saved = window.__autoWebRunnerOverlayPosition;
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      return saved;
+    }
+    try {
+      const raw = window.localStorage?.getItem(positionStorageKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      if (Number.isFinite(parsed?.left) && Number.isFinite(parsed?.top)) {
+        window.__autoWebRunnerOverlayPosition = parsed;
+        return parsed;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  function saveOverlayPosition(position) {
+    window.__autoWebRunnerOverlayPosition = position;
+    try {
+      window.localStorage?.setItem(positionStorageKey, JSON.stringify(position));
+    } catch {
+      // Some pages, such as data: URLs, do not allow localStorage access.
+    }
+  }
+
+  function resetOverlayPosition() {
+    state.overlayLeft = null;
+    state.overlayTop = null;
+    window.__autoWebRunnerOverlayPosition = null;
+    try {
+      window.localStorage?.removeItem(positionStorageKey);
+    } catch {
+      // Some pages, such as data: URLs, do not allow localStorage access.
+    }
+    applyOverlayPosition();
+  }
+
+  function clampOverlayPosition(left, top, panel) {
+    const rect = panel.getBoundingClientRect();
+    const width = rect.width || 240;
+    const height = rect.height || 120;
+    const margin = 8;
+    const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+    const maxTop = Math.max(margin, window.innerHeight - height - margin);
+    return {
+      left: Math.min(Math.max(margin, left), maxLeft),
+      top: Math.min(Math.max(margin, top), maxTop),
+    };
+  }
+
+  function applyOverlayPosition() {
+    if (!shadowRoot) {
+      return;
+    }
+    const panel = shadowRoot.querySelector('.panel');
+    if (!panel) {
+      return;
+    }
+    if (!Number.isFinite(state.overlayLeft) || !Number.isFinite(state.overlayTop)) {
+      const saved = loadOverlayPosition();
+      if (saved) {
+        state.overlayLeft = saved.left;
+        state.overlayTop = saved.top;
+      }
+    }
+    if (!Number.isFinite(state.overlayLeft) || !Number.isFinite(state.overlayTop)) {
+      panel.style.left = '';
+      panel.style.top = '';
+      panel.style.right = '16px';
+      panel.removeAttribute('data-positioned');
+      return;
+    }
+    const next = clampOverlayPosition(state.overlayLeft, state.overlayTop, panel);
+    state.overlayLeft = next.left;
+    state.overlayTop = next.top;
+    panel.style.left = `${next.left}px`;
+    panel.style.top = `${next.top}px`;
+    panel.style.right = 'auto';
+    panel.setAttribute('data-positioned', 'true');
+  }
+
+  function startPanelDrag(event) {
+    if (event.button !== 0 || event.target?.closest?.('button')) {
+      return;
+    }
+    const panel = shadowRoot?.querySelector('.panel');
+    if (!panel) {
+      return;
+    }
+    const rect = panel.getBoundingClientRect();
+    dragState.active = true;
+    dragState.startX = event.clientX;
+    dragState.startY = event.clientY;
+    dragState.startLeft = rect.left;
+    dragState.startTop = rect.top;
+    event.preventDefault();
+    event.stopPropagation();
+    document.addEventListener('pointermove', movePanelDrag, true);
+    document.addEventListener('pointerup', stopPanelDrag, true);
+    document.addEventListener('pointercancel', stopPanelDrag, true);
+  }
+
+  function movePanelDrag(event) {
+    if (!dragState.active) {
+      return;
+    }
+    const panel = shadowRoot?.querySelector('.panel');
+    if (!panel) {
+      return;
+    }
+    const next = clampOverlayPosition(
+      dragState.startLeft + event.clientX - dragState.startX,
+      dragState.startTop + event.clientY - dragState.startY,
+      panel,
+    );
+    state.overlayLeft = next.left;
+    state.overlayTop = next.top;
+    applyOverlayPosition();
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function stopPanelDrag(event) {
+    if (!dragState.active) {
+      return;
+    }
+    dragState.active = false;
+    document.removeEventListener('pointermove', movePanelDrag, true);
+    document.removeEventListener('pointerup', stopPanelDrag, true);
+    document.removeEventListener('pointercancel', stopPanelDrag, true);
+    if (Number.isFinite(state.overlayLeft) && Number.isFinite(state.overlayTop)) {
+      saveOverlayPosition({ left: state.overlayLeft, top: state.overlayTop });
+    }
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+  }
+
+  function normalizeStatus(recording) {
+    const status = String(recording?.status || '').toUpperCase();
+    if (status === 'RECORDING' || status === 'PAUSED' || status === 'STOPPED') {
+      return status;
+    }
+    return recording?.active ? 'RECORDING' : 'IDLE';
+  }
+
+  function statusLabel(status) {
+    if (status === 'RECORDING') return '录制中';
+    if (status === 'PAUSED') return '已暂停';
+    if (status === 'STOPPED') return '已停止';
+    return '未开始';
+  }
+
+  function applyResult(result, message = '') {
+    const recording = result?.recording || {};
+    state.status = normalizeStatus(recording);
+    state.stepCount = Number(recording?.stepCount ?? result?.steps?.length ?? 0);
+    state.eventCount = Number(recording?.eventCount || 0);
+    state.message = message;
+    refreshTargetPreview({ highlight: state.status === 'RECORDING' });
+    renderPanel();
+    schedulePoll(state.status === 'RECORDING' || state.status === 'PAUSED' ? 800 : 1800);
+  }
+
+  function renderPanel() {
+    mountPanel();
+    if (!shadowRoot) {
+      return;
+    }
+    const panel = shadowRoot.querySelector('.panel');
+    const statusNode = shadowRoot.querySelector('[data-role="status"]');
+    const stepsNode = shadowRoot.querySelector('[data-role="steps"]');
+    const eventsNode = shadowRoot.querySelector('[data-role="events"]');
+    const messageNode = shadowRoot.querySelector('[data-role="message"]');
+    const compactNode = shadowRoot.querySelector('[data-role="compact"]');
+    const targetNode = shadowRoot.querySelector('[data-role="target"]');
+    const targetLocatorNode = shadowRoot.querySelector('[data-role="target-locator"]');
+    const toggleCollapseButton = shadowRoot.querySelector('[data-action="toggle-collapse"]');
+    const startButton = shadowRoot.querySelector('[data-action="start"]');
+    const pauseButton = shadowRoot.querySelector('[data-action="pause"]');
+    const resumeButton = shadowRoot.querySelector('[data-action="resume"]');
+    const undoButton = shadowRoot.querySelector('[data-action="undo"]');
+    const stopButton = shadowRoot.querySelector('[data-action="stop"]');
+    const resetPositionButton = shadowRoot.querySelector('[data-action="reset-position"]');
+    const assertVisibleButton = shadowRoot.querySelector('[data-action="assert-visible"]');
+    const assertTextButton = shadowRoot.querySelector('[data-action="assert-text"]');
+    const assertUrlButton = shadowRoot.querySelector('[data-action="assert-url"]');
+    if (
+      !panel || !statusNode || !stepsNode || !eventsNode || !messageNode || !compactNode
+      || !targetNode || !targetLocatorNode || !toggleCollapseButton
+      || !startButton || !pauseButton || !resumeButton || !undoButton || !stopButton || !resetPositionButton
+      || !assertVisibleButton || !assertTextButton || !assertUrlButton
+    ) {
+      return;
+    }
+    panel.setAttribute('data-status', state.status);
+    panel.setAttribute('data-collapsed', state.collapsed ? 'true' : 'false');
+    applyOverlayPosition();
+    statusNode.textContent = statusLabel(state.status);
+    stepsNode.textContent = String(state.stepCount);
+    eventsNode.textContent = String(state.eventCount);
+    compactNode.textContent = `步骤 ${state.stepCount} · 事件 ${state.eventCount}`;
+    targetNode.textContent = state.targetLabel || 'Pick a page element';
+    targetLocatorNode.textContent = state.targetLocator || (state.status === 'RECORDING' ? 'Click, input, or hover a recordable element first' : '');
+    messageNode.textContent = state.message || 'Control recording directly in the page';
+    toggleCollapseButton.textContent = state.collapsed ? '+' : '-';
+    toggleCollapseButton.setAttribute('title', state.collapsed ? '展开面板' : '收起面板');
+    startButton.hidden = state.status === 'RECORDING' || state.status === 'PAUSED';
+    pauseButton.hidden = state.status !== 'RECORDING';
+    resumeButton.hidden = state.status !== 'PAUSED';
+    startButton.disabled = Boolean(state.busyAction) || state.status === 'RECORDING' || state.status === 'PAUSED';
+    pauseButton.disabled = Boolean(state.busyAction) || state.status !== 'RECORDING';
+    resumeButton.disabled = Boolean(state.busyAction) || state.status !== 'PAUSED';
+    undoButton.disabled = Boolean(state.busyAction) || !['RECORDING', 'PAUSED'].includes(state.status) || state.stepCount <= 0;
+    stopButton.disabled = Boolean(state.busyAction) || !['RECORDING', 'PAUSED'].includes(state.status);
+    resetPositionButton.disabled = Boolean(state.busyAction);
+    assertVisibleButton.disabled = Boolean(state.busyAction) || state.status !== 'RECORDING' || !state.targetCanAssert;
+    assertTextButton.disabled = Boolean(state.busyAction) || state.status !== 'RECORDING' || !state.targetCanAssert;
+    assertUrlButton.disabled = Boolean(state.busyAction) || state.status !== 'RECORDING';
+  }
+
+  function refreshTargetPreview(options = {}) {
+    const preview = window.__autoWebRunnerDescribeAssertionTarget?.() || null;
+    const nextKey = preview?.canAssert ? `${preview.locatorValue || ''}::${preview.label || ''}` : '';
+    const shouldHighlight = options.highlight && preview?.canAssert && nextKey && nextKey !== state.targetKey;
+    state.targetCanAssert = Boolean(preview?.canAssert);
+    state.targetKey = nextKey;
+    state.targetLabel = preview?.label || '';
+    state.targetLocator = preview?.locatorValue || '';
+    if (shouldHighlight) {
+      window.__autoWebRunnerHighlightAssertionTarget?.();
+    }
+  }
+
+  function buildOverlayActionPayload(action) {
+    if (action === 'assert-visible') {
+      window.__autoWebRunnerHighlightAssertionTarget?.();
+      return {
+        action,
+        event: window.__autoWebRunnerBuildAssertionEvent?.('ASSERT_VISIBLE'),
+      };
+    }
+    if (action === 'assert-text') {
+      window.__autoWebRunnerHighlightAssertionTarget?.();
+      return {
+        action,
+        event: window.__autoWebRunnerBuildAssertionEvent?.('ASSERT_TEXT'),
+      };
+    }
+    if (action === 'assert-url') {
+      return {
+        action,
+        event: window.__autoWebRunnerBuildAssertionEvent?.('ASSERT_URL'),
+      };
+    }
+    return { action };
+  }
+
+  async function callOverlayBinding(action) {
+    const binding = window[bindingName];
+    if (typeof binding !== 'function') {
+      throw new Error('overlay control binding unavailable');
+    }
+    return binding(buildOverlayActionPayload(action));
+  }
+
+  async function runAction(action) {
+    if (!action) {
+      return;
+    }
+    if (action === 'toggle-collapse') {
+      state.collapsed = !state.collapsed;
+      renderPanel();
+      return;
+    }
+    if (action === 'reset-position') {
+      resetOverlayPosition();
+      state.message = '面板位置已重置';
+      renderPanel();
+      return;
+    }
+    state.busyAction = action;
+    state.message = '同步中...';
+    renderPanel();
+    try {
+      const result = await callOverlayBinding(action);
+      const actionMessages = {
+        start: '录制已开始',
+        pause: '录制已暂停',
+        resume: '录制已继续',
+        undo: result?.undone ? '已撤销上一步' : '当前没有可撤销步骤',
+        stop: '录制已停止',
+        'assert-visible': '已添加可见断言',
+        'assert-text': '已添加文本断言',
+        'assert-url': '已添加 URL 断言',
+      };
+      applyResult(result, actionMessages[action] || '已同步状态');
+    } catch (error) {
+      state.message = error instanceof Error ? error.message : String(error);
+      renderPanel();
+      schedulePoll(1500);
+    } finally {
+      state.busyAction = '';
+      renderPanel();
+    }
+  }
+
+  function schedulePoll(delayMs) {
+    window.clearTimeout(pollTimer);
+    pollTimer = window.setTimeout(() => {
+      void pollStatus();
+    }, delayMs);
+  }
+
+  async function pollStatus() {
+    try {
+      const result = await callOverlayBinding('status');
+      applyResult(result);
+    } catch (error) {
+      state.message = error instanceof Error ? error.message : String(error);
+      renderPanel();
+      schedulePoll(1800);
+    }
+  }
+
+  window.__autoWebRunnerOverlayMount = mountPanel;
+  window.__autoWebRunnerOverlayPollNow = () => {
+    void pollStatus();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mountPanel, { once: true });
+  } else {
+    mountPanel();
+  }
+  document.addEventListener('click', handleTargetActivity, true);
+  document.addEventListener('input', handleTargetActivity, true);
+  document.addEventListener('mouseover', handleTargetActivity, true);
+  document.addEventListener('focusin', handleTargetActivity, true);
+  schedulePoll(120);
+
+  function handleTargetActivity(event) {
+    if (!['RECORDING', 'PAUSED'].includes(state.status) || isOverlayInteraction(event)) {
+      return;
+    }
+    window.setTimeout(() => {
+      refreshTargetPreview({ highlight: state.status === 'RECORDING' });
+      renderPanel();
+    }, 0);
+  }
+
+  function isOverlayInteraction(event) {
+    const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+    return path.some(item => item instanceof Element && (
+      item.getAttribute('data-auto-web-runner-overlay') === 'true'
+      || item.getAttribute('data-auto-web-runner-overlay-host') === 'true'
+    ));
   }
 }
 
