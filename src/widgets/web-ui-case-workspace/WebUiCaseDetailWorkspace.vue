@@ -15,6 +15,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
+  buildRecordedCollectCandidateFingerprint,
   findMatchingWebUiElementForRecordedStep,
   formatRunStatus,
   formatLocatorType,
@@ -41,6 +42,7 @@ import {
   type WebUiStepType,
 } from '@/entities/web-ui-automation'
 import {
+  buildRecordedCaseAutoRematchMessage,
   WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY,
   WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN,
 } from '@/entities/web-ui-automation/lib/collectTask'
@@ -55,6 +57,8 @@ import {
 import {
   buildRecordingReplayDiagnostics,
   buildRecordingReplayRepairActions,
+  buildRecordingReplayRerunPrompt,
+  buildRecordingReplayStepContext,
 } from '@/entities/web-ui-automation/lib/recordingReplayDiagnostics'
 import {
   buildRecordingAssertionDraft,
@@ -72,7 +76,10 @@ import {
   type WebUiFileUploadArtifactBinding,
   type WebUiFileUploadArtifactStep,
 } from '@/entities/web-ui-automation/lib/fileUploadArtifacts'
-import { buildRecordingQualityCheck } from '@/entities/web-ui-automation/lib/recordingQuality'
+import {
+  buildRecordingCompletionSummary,
+  buildRecordingQualityCheck,
+} from '@/entities/web-ui-automation/lib/recordingQuality'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -158,6 +165,7 @@ const recordingResuming = ref(false)
 const recordingUndoing = ref(false)
 const recordingStatusRefreshing = ref(false)
 const recordingReplayRepairing = ref(false)
+const recordingReplayRepairDirty = ref(false)
 const recordingActive = ref(false)
 const recordingStatus = ref<RecordingStatus>('IDLE')
 const recordingEventCount = ref(0)
@@ -175,6 +183,7 @@ const savedFileUploadSteps = ref<WebUiFileUploadArtifactStep[]>([])
 const recordingElapsedNow = ref(Date.now())
 const lastCollectTaskId = ref<number | null>(null)
 const lastCollectTaskReturnSource = ref<CollectTaskReturnSource>(null)
+const lastRecordingCandidateCollectTaskFingerprint = ref('')
 const lastRecordingPageUrl = ref<string | null>(null)
 const localRunnerTask = ref<LocalRunnerTaskDetailResponse | null>(null)
 const localRunnerFormalRunId = ref<number | null>(null)
@@ -247,6 +256,13 @@ const recordingQualityCheck = computed(() => buildRecordingQualityCheck({
   replayPassed: recordingReplayDiagnostics.value?.tone === 'success',
   uploadBindings: uploadArtifactBindings.value,
 }))
+const recordingCompletionSummary = computed(() => buildRecordingCompletionSummary({
+  stepCount: form.value.steps.length,
+  savedStepCount: savedCaseStepCount.value,
+  quality: recordingQualityCheck.value,
+  replayPassed: recordingReplayDiagnostics.value?.tone === 'success',
+  elementCandidateCount: recordingElementCandidateCount.value,
+}))
 const focusedStepId = computed(() => {
   const raw = Array.isArray(route.query.stepId) ? route.query.stepId[0] : route.query.stepId
   const numeric = Number(raw)
@@ -261,6 +277,17 @@ const recordingElementCandidateCount = computed(() => recordingElementCandidateS
 const uploadReplayIssueStepIndexes = computed(() => form.value.steps
   .map((step, index) => (getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value) ? index : -1))
   .filter(index => index >= 0))
+const recordingReplayRerunPrompt = computed(() => buildRecordingReplayRerunPrompt({
+  repairDirty: recordingReplayRepairDirty.value,
+  diagnostics: recordingReplayDiagnostics.value,
+  uploadIssueCount: uploadReplayIssueStepIndexes.value.length,
+  canRun: canRunRecordingReplayFromQualityCheck(),
+}))
+const selectedRecordingReplayStepContext = computed(() => buildRecordingReplayStepContext({
+  selectedSortOrder: selectedStep.value?.sortOrder || (selectedStep.value ? selectedStepIndex.value + 1 : null),
+  diagnostics: recordingReplayDiagnostics.value,
+  runDetail: localRunnerRunDetail.value,
+}))
 const recordingWorkbenchVisible = computed(() => form.value.steps.length > 0
   || recordingStepCount.value > 0
   || recordingEventCount.value > 0
@@ -440,6 +467,54 @@ function toUploadArtifactBindingsFromRecordingDraft(value: unknown): Record<stri
   return restored
 }
 
+function toUploadArtifactBindingsFromSavedSteps(steps: WebUiCaseStepItem[] | null | undefined): Record<string, UploadArtifactBinding> {
+  if (!Array.isArray(steps)) {
+    return {}
+  }
+  const restored: Record<string, UploadArtifactBinding> = {}
+  for (const step of steps) {
+    if (step?.type !== 'FILE_UPLOAD') {
+      continue
+    }
+    const binding = step.uploadArtifactBinding
+    const fileId = artifactFileIdFromInputValue(step.inputValue) || binding?.fileId?.trim() || ''
+    const contentBase64 = binding?.contentBase64?.trim() || ''
+    if (!fileId || !contentBase64) {
+      continue
+    }
+    restored[fileId] = {
+      fileId,
+      fileName: binding?.fileName?.trim() || fileId,
+      contentType: binding?.contentType?.trim() || 'application/octet-stream',
+      contentBase64,
+      ...(typeof binding?.size === 'number' && Number.isFinite(binding.size) ? { size: binding.size } : {}),
+      updatedAt: Date.now(),
+    }
+  }
+  return restored
+}
+
+function toSavedUploadArtifactBinding(step: EditableStep) {
+  if (step.type !== 'FILE_UPLOAD') {
+    return null
+  }
+  const fileId = artifactFileIdFromInputValue(step.inputValue)
+  if (!fileId) {
+    return null
+  }
+  const binding = uploadArtifactBindings.value[fileId]
+  if (!binding?.contentBase64) {
+    return null
+  }
+  return {
+    fileId,
+    fileName: binding.fileName || fileId,
+    contentType: binding.contentType || 'application/octet-stream',
+    contentBase64: binding.contentBase64,
+    ...(typeof binding.size === 'number' && Number.isFinite(binding.size) ? { size: binding.size } : {}),
+  }
+}
+
 function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: boolean } = {}) {
   resetLocalRunnerState()
   currentCaseUpdatedAt.value = item.updatedAt || null
@@ -453,8 +528,11 @@ function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: bool
     : []
   recordingDraftActive.value = false
   recordingDraftMessage.value = ''
+  recordingReplayRepairDirty.value = false
   appliedRecordingRecorderId.value = null
   appliedRecordingStepCount.value = 0
+  lastRecordingCandidateCollectTaskFingerprint.value = ''
+  uploadArtifactBindings.value = toUploadArtifactBindingsFromSavedSteps(item.steps)
   suppressRecordingDraftPersist = true
   form.value = {
     name: item.name || '',
@@ -633,6 +711,7 @@ function resetLocalRunnerState() {
   localRunnerRunDetail.value = null
   recordingReplayRunId.value = null
   recordingReplayTerminalNoticeKey.value = ''
+  recordingReplayRepairDirty.value = false
 }
 
 function isLocalRunnerTaskTerminal(status?: string | null) {
@@ -724,6 +803,15 @@ function openLocalRunnerFormalReport() {
       runId: String(localRunnerFormalRunId.value),
     },
   })
+}
+
+function openRecordingReplayStepScreenshot() {
+  const url = selectedRecordingReplayStepContext.value?.screenshotUrl
+  if (!url) {
+    ElMessage.warning('当前失败步骤没有可打开的截图地址')
+    return
+  }
+  window.open(url, '_blank', 'noopener')
 }
 
 function readRecordingTargetUrl() {
@@ -908,6 +996,7 @@ function buildPayload(): SaveWebUiCasePayload {
       framePath: step.framePath || null,
       shadowPath: step.shadowPath || null,
       inputValue: step.inputValue.trim() || null,
+      uploadArtifactBinding: toSavedUploadArtifactBinding(step),
       timeoutMs: step.timeoutMs ?? null,
       continueOnFailure: step.continueOnFailure,
       screenshotPolicy: step.screenshotPolicy,
@@ -941,16 +1030,44 @@ function notifyRecordingReplayTaskTerminal(task: LocalRunnerTaskDetailResponse) 
     return
   }
   if (status === 'FAILED') {
+    focusRecordingReplayTerminalFailure()
     ElMessage.warning('录制回放失败，质量区与诊断区已更新，可直接定位失败步骤继续修复')
     return
   }
   if (status === 'DEGRADED') {
+    focusRecordingReplayTerminalFailure()
     ElMessage.warning('录制回放未完全通过，请查看质量区和诊断区中的修复建议')
     return
   }
   if (status === 'CANCELED') {
     ElMessage.warning('录制回放已取消')
   }
+}
+
+function focusRecordingReplayTerminalFailure() {
+  if (!recordingReplayDiagnostics.value?.failedStepSortOrder) {
+    return
+  }
+  focusRecordingReplayFailedStep()
+}
+
+function isRecordingReplayFailedEditableStep(step: EditableStep | null | undefined) {
+  const sortOrder = recordingReplayDiagnostics.value?.failedStepSortOrder
+  if (!step || !sortOrder) {
+    return false
+  }
+  return Number(step.sortOrder || 0) === Number(sortOrder)
+}
+
+function markRecordingReplayRepairDirty(step?: EditableStep | null) {
+  const diagnostics = recordingReplayDiagnostics.value
+  if (!diagnostics || (diagnostics.tone !== 'danger' && diagnostics.tone !== 'warning')) {
+    return
+  }
+  if (step && !isRecordingReplayFailedEditableStep(step)) {
+    return
+  }
+  recordingReplayRepairDirty.value = true
 }
 
 function countUploadReplayIssues(
@@ -1035,12 +1152,14 @@ async function handleUploadFileSelected(event: Event) {
     const afterIssue = getWebUiFileUploadReplayIssue(step, nextBindings)
     const afterIssueCount = countUploadReplayIssues(form.value.steps, nextBindings)
     if (beforeIssue && !afterIssue) {
+      markRecordingReplayRepairDirty(step)
       if (afterIssueCount === 0) {
         ElMessage.success(`已绑定文件：${file.name || fileId}，所有文件上传问题已处理完成`)
       } else {
         ElMessage.success(`已绑定文件：${file.name || fileId}，当前步骤已可本地回放，剩余 ${afterIssueCount} 个上传问题`)
       }
     } else if (beforeIssueCount > 0 && afterIssueCount === 0) {
+      markRecordingReplayRepairDirty(step)
       ElMessage.success(`已绑定文件：${file.name || fileId}，录制质量中的文件上传问题已清零`)
     } else {
       ElMessage.success(`已绑定文件：${file.name || fileId}`)
@@ -1246,6 +1365,7 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
       localRunnerTask.value = response.runnerTask
       if (options.recordingReplay) {
         recordingReplayRunId.value = response.runnerTask.runId
+        recordingReplayRepairDirty.value = false
       }
       if (isLocalRunnerTaskTerminal(response.runnerTask.status)) {
         localRunning.value = false
@@ -1405,6 +1525,7 @@ function applyRecordingReplayTimeoutSuggestion() {
   focusRecordingReplayFailedStep()
   const currentTimeout = Number(failedStep.timeoutMs || form.value.defaultTimeoutMs || 10000)
   failedStep.timeoutMs = Math.min(60000, Math.max(20000, currentTimeout + 5000))
+  markRecordingReplayRepairDirty(failedStep)
   ElMessage.success(`已将第 ${failedStep.sortOrder} 步超时调整为 ${failedStep.timeoutMs}ms，请保存后重新回放`)
 }
 
@@ -1546,7 +1667,7 @@ async function captureRecordingPage() {
   }
 }
 
-async function createRecordingCandidateCollectTask() {
+async function createRecordingCandidateCollectTask(options: { autoCreated?: boolean } = {}) {
   const candidateSteps = recordingElementCandidateSteps.value.length
     ? recordingElementCandidateSteps.value
     : recordingElementUnboundLocatorSteps.value
@@ -1555,6 +1676,10 @@ async function createRecordingCandidateCollectTask() {
   })
   if (!candidates.length) {
     ElMessage.warning('暂无可入库的未绑定定位步骤')
+    return
+  }
+  const fingerprint = buildRecordedCollectCandidateFingerprint(candidates)
+  if (options.autoCreated && fingerprint && fingerprint === lastRecordingCandidateCollectTaskFingerprint.value) {
     return
   }
 
@@ -1577,12 +1702,22 @@ async function createRecordingCandidateCollectTask() {
     })
     lastCollectTaskId.value = task.taskId
     lastCollectTaskReturnSource.value = WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN
-    ElMessage.success(`已创建 ${candidates.length} 个录制候选入库任务：#${task.taskId}，请保存用例后再查看审核`)
+    lastRecordingCandidateCollectTaskFingerprint.value = fingerprint
+    ElMessage.success(options.autoCreated
+      ? `已自动创建 ${candidates.length} 个录制候选入库任务：#${task.taskId}`
+      : `已创建 ${candidates.length} 个录制候选入库任务：#${task.taskId}，请保存用例后再查看审核`)
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
     recordingCandidateTaskCreating.value = false
   }
+}
+
+async function autoCreateRecordingCandidateCollectTask(appendSummary: { candidateCount: number; matchFailed: boolean }) {
+  if (appendSummary.matchFailed || appendSummary.candidateCount <= 0) {
+    return
+  }
+  await createRecordingCandidateCollectTask({ autoCreated: true })
 }
 
 async function rematchRecordingElementSteps() {
@@ -1597,7 +1732,7 @@ async function rematchRecordingElementStepsWithFeedback(autoRematch: boolean) {
     } else {
       ElMessage.warning('暂无需要重新匹配的未绑定步骤')
     }
-    return
+    return null
   }
 
   recordingCandidateRematching.value = true
@@ -1605,13 +1740,19 @@ async function rematchRecordingElementStepsWithFeedback(autoRematch: boolean) {
     const summary = await enrichRecordedStepsWithElementMatches(targetSteps)
     if (summary.matchFailed) {
       ElMessage.warning(autoRematch ? '元素库自动匹配失败，可手动点击重新匹配' : '元素库匹配失败，可稍后重试或手动选择元素')
-      return
+      return summary
     }
     if (summary.matchedCount > 0) {
-      ElMessage.success(autoRematch ? `已自动回填 ${summary.matchedCount} 个元素库绑定，保存用例后生效` : `已回填 ${summary.matchedCount} 个元素库绑定，保存后生效`)
-      return
+      if (!autoRematch) {
+        ElMessage.success(buildRecordedCaseAutoRematchMessage({
+          matchedCount: summary.matchedCount,
+          persisted: false,
+        }))
+      }
+      return summary
     }
     ElMessage.warning(autoRematch ? `录制候选已入库，但暂未匹配到当前步骤，仍有 ${summary.candidateCount} 个候选待入库` : `暂未匹配到元素库，仍有 ${summary.candidateCount} 个候选待入库`)
+    return summary
   } finally {
     recordingCandidateRematching.value = false
   }
@@ -1629,7 +1770,27 @@ async function maybeAutoRematchRecordedElements() {
   }
 
   try {
-    await rematchRecordingElementStepsWithFeedback(true)
+    const summary = await rematchRecordingElementStepsWithFeedback(true)
+    if (summary?.matchedCount) {
+      const saved = await saveCase({
+        successMessage: buildRecordedCaseAutoRematchMessage({
+          matchedCount: summary.matchedCount,
+          collectTaskId,
+          savedCount: Number(getRouteQueryString('saved') || 0),
+          skippedCount: Number(getRouteQueryString('skipped') || 0),
+          persisted: true,
+        }),
+      })
+      if (!saved) {
+        ElMessage.warning(buildRecordedCaseAutoRematchMessage({
+          matchedCount: summary.matchedCount,
+          collectTaskId,
+          savedCount: Number(getRouteQueryString('saved') || 0),
+          skippedCount: Number(getRouteQueryString('skipped') || 0),
+          persisted: false,
+        }))
+      }
+    }
   } finally {
     const query = { ...route.query }
     delete query[WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY]
@@ -1681,6 +1842,7 @@ async function stopRecordingSteps() {
         message: `已生成 ${appendSummary.appendedCount} 个录制步骤${matchSummary}${uploadSummary}，保存后生效`,
         duration: appendSummary.fileUploadNeedsRepairCount > 0 ? 5000 : 3000,
       })
+      await autoCreateRecordingCandidateCollectTask(appendSummary)
     } else {
       ElMessage.warning('本次录制没有生成可用步骤')
     }
@@ -2002,6 +2164,7 @@ function handleManualLocatorChange(step: EditableStep) {
   if (step.elementId || step.elementName || step.recordingElementMatchStatus) {
     clearStepElementAssociation(step)
   }
+  markRecordingReplayRepairDirty(step)
 }
 
 function openElementPicker() {
@@ -2065,6 +2228,7 @@ function applyElementToSelectedStep(item: WebUiElementItem) {
     step.recordingElementMatchStatus = 'MATCHED'
     step.recordingElementCandidateName = null
   }
+  markRecordingReplayRepairDirty(step)
   elementPickerVisible.value = false
   ElMessage.success(`已选用元素：${item.elementName}`)
 }
@@ -2247,6 +2411,25 @@ function hasRecordingQualityAction(key: string, status: string) {
     return hasReplayRecordingQualityAction(status)
   }
   return false
+}
+
+function handleRecordingCompletionAction() {
+  const stage = recordingCompletionSummary.value.stage
+  if (stage === 'UNSAVED' || stage === 'REPLAY') {
+    void saveCaseAndRunRecordingReplay()
+    return
+  }
+  if (stage === 'UPLOAD_REPAIR') {
+    focusUploadReplayIssueStep('first')
+    return
+  }
+  if (stage === 'ELEMENT_BINDING') {
+    if (recordingElementCandidateCount.value > 0) {
+      void focusFirstRecordingElementCandidateStep()
+      return
+    }
+    void createRecordingCandidateCollectTask()
+  }
 }
 
 function canRunRecordingReplayFromQualityCheck() {
@@ -2616,6 +2799,29 @@ watch(elementPickerLocatorType, () => {
               <small>正式报告会保留截图、错误信息和步骤明细</small>
             </div>
           </div>
+          <div v-if="recordingReplayRerunPrompt" class="web-ui-recording-replay-diagnostics__rerun">
+            <div>
+              <strong>{{ recordingReplayRerunPrompt.title }}</strong>
+              <small>{{ recordingReplayRerunPrompt.summary }}</small>
+            </div>
+            <AppButton
+              v-if="recordingReplayRerunPrompt.canRerun"
+              size="small"
+              type="primary"
+              :loading="saving"
+              :disabled="loading || running || localRunning || recordingInProgress"
+              @click="saveCaseAndRunRecordingReplay"
+            >
+              {{ recordingReplayRerunPrompt.actionLabel }}
+            </AppButton>
+            <AppButton
+              v-else-if="uploadReplayIssueStepIndexes.length > 0"
+              size="small"
+              @click="focusUploadReplayIssueStep('first')"
+            >
+              {{ recordingReplayRerunPrompt.actionLabel }}
+            </AppButton>
+          </div>
           <div class="web-ui-recording-replay-diagnostics__actions">
             <AppButton
               v-if="recordingReplayDiagnostics.failedStepSortOrder"
@@ -2774,6 +2980,56 @@ watch(elementPickerLocatorType, () => {
                     <el-option v-for="item in WEB_UI_STEP_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                   </el-select>
                 </el-form-item>
+              </div>
+            </section>
+
+            <section
+              v-if="selectedRecordingReplayStepContext"
+              class="web-ui-step-config web-ui-step-replay-context"
+            >
+              <div class="web-ui-step-config__title-row">
+                <h4>{{ selectedRecordingReplayStepContext.title }}</h4>
+                <el-tag v-if="selectedRecordingReplayStepContext.issueLabel" type="warning" effect="light" size="small">
+                  {{ selectedRecordingReplayStepContext.issueLabel }}
+                </el-tag>
+              </div>
+              <div class="web-ui-step-replay-context__body">
+                <div>
+                  <span>失败步骤</span>
+                  <strong>{{ selectedRecordingReplayStepContext.stepLabel }}</strong>
+                </div>
+                <div v-if="selectedRecordingReplayStepContext.locatorLabel">
+                  <span>Runner 定位器</span>
+                  <strong>{{ selectedRecordingReplayStepContext.locatorLabel }}</strong>
+                </div>
+                <div v-if="selectedRecordingReplayStepContext.durationLabel">
+                  <span>耗时</span>
+                  <strong>{{ selectedRecordingReplayStepContext.durationLabel }}</strong>
+                </div>
+                <div v-if="selectedRecordingReplayStepContext.screenshotArtifactId">
+                  <span>失败截图</span>
+                  <strong>#{{ selectedRecordingReplayStepContext.screenshotArtifactId }}</strong>
+                </div>
+              </div>
+              <p v-if="selectedRecordingReplayStepContext.errorMessage" class="web-ui-step-replay-context__error">
+                {{ selectedRecordingReplayStepContext.errorMessage }}
+              </p>
+              <div class="web-ui-step-replay-context__actions">
+                <AppButton
+                  v-if="selectedRecordingReplayStepContext.screenshotUrl"
+                  size="small"
+                  @click="openRecordingReplayStepScreenshot"
+                >
+                  查看失败截图
+                </AppButton>
+                <AppButton
+                  v-if="selectedRecordingReplayStepContext.reportAvailable && localRunnerFormalRunId"
+                  size="small"
+                  @click="openLocalRunnerFormalReport"
+                >
+                  查看完整报告
+                </AppButton>
+                <AppButton size="small" @click="focusRecordingReplayRepairArea">定位修复区</AppButton>
               </div>
             </section>
 
@@ -3047,7 +3303,7 @@ watch(elementPickerLocatorType, () => {
               <AppButton v-if="recordingDraftActive" :disabled="saving" @click="discardRecordingDraft">丢弃草稿</AppButton>
               <AppButton type="primary" :loading="recordingStopping" :disabled="!recordingInProgress" @click="stopRecordingSteps">停止并生成步骤</AppButton>
               <AppButton type="primary" :loading="recordingCapturing" :disabled="recordingOpening || recordingInProgress" @click="captureRecordingPage">采集当前页</AppButton>
-              <AppButton :loading="recordingCandidateTaskCreating" :disabled="recordingElementUnboundLocatorCount <= 0" @click="createRecordingCandidateCollectTask">候选入库</AppButton>
+              <AppButton :loading="recordingCandidateTaskCreating" :disabled="recordingElementUnboundLocatorCount <= 0" @click="() => createRecordingCandidateCollectTask()">候选入库</AppButton>
               <AppButton :loading="recordingCandidateRematching" :disabled="recordingElementUnboundLocatorCount <= 0" @click="rematchRecordingElementSteps">重新匹配</AppButton>
               <AppButton v-if="lastCollectTaskId" @click="openLastCollectTask">查看采集任务</AppButton>
             </div>
@@ -3061,6 +3317,26 @@ watch(elementPickerLocatorType, () => {
               <strong>{{ recordingQualityCheck.score }}</strong>
               <span>{{ recordingQualityCheck.title }}</span>
               <small>{{ recordingQualityCheck.summary }}</small>
+              <div
+                class="web-ui-recording-completion"
+                :class="`is-${recordingCompletionSummary.tone}`"
+              >
+                <div>
+                  <span>闭环状态</span>
+                  <strong>{{ recordingCompletionSummary.title }}</strong>
+                  <small>{{ recordingCompletionSummary.summary }}</small>
+                </div>
+                <AppButton
+                  v-if="recordingCompletionSummary.actionLabel"
+                  size="small"
+                  :type="recordingCompletionSummary.canRunReplay ? 'primary' : 'default'"
+                  :loading="saving || recordingCandidateTaskCreating"
+                  :disabled="loading || running || localRunning || recordingInProgress"
+                  @click="handleRecordingCompletionAction"
+                >
+                  {{ recordingCompletionSummary.actionLabel }}
+                </AppButton>
+              </div>
             </div>
             <div class="web-ui-recording-quality__checks">
               <div
@@ -3328,6 +3604,34 @@ watch(elementPickerLocatorType, () => {
   gap: var(--app-space-2);
   color: var(--app-text-secondary);
   font-size: var(--app-font-size-sm);
+}
+
+.web-ui-recording-replay-diagnostics__rerun {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-primary);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary-soft);
+}
+
+.web-ui-recording-replay-diagnostics__rerun div {
+  display: grid;
+  gap: var(--app-space-1);
+  min-width: 0;
+}
+
+.web-ui-recording-replay-diagnostics__rerun strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-recording-replay-diagnostics__rerun small {
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-xs);
 }
 
 .web-ui-recording-replay-diagnostics__grid {
@@ -3624,6 +3928,57 @@ watch(elementPickerLocatorType, () => {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--app-space-2) var(--app-space-4);
+}
+
+.web-ui-step-replay-context {
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-warning);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-warning-soft);
+}
+
+.web-ui-step-replay-context__body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-2);
+}
+
+.web-ui-step-replay-context__body div {
+  display: grid;
+  gap: var(--app-space-1);
+  min-width: 0;
+}
+
+.web-ui-step-replay-context__body span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.web-ui-step-replay-context__body strong {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-step-replay-context__error {
+  margin: 0;
+  padding: var(--app-space-2);
+  border-left: 3px solid var(--app-warning);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-panel);
+  color: var(--app-text-secondary);
+  font-family: var(--app-font-family-mono);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--app-line-height-sm);
+  white-space: pre-wrap;
+}
+
+.web-ui-step-replay-context__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
 }
 
 .web-ui-step-config :deep(.el-form-item) {
@@ -3939,6 +4294,47 @@ watch(elementPickerLocatorType, () => {
   color: var(--app-text-muted);
   font-size: var(--app-font-size-xs);
   line-height: var(--app-line-height-xs);
+}
+
+.web-ui-recording-completion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+  margin-top: var(--app-space-2);
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-panel);
+}
+
+.web-ui-recording-completion.is-warning {
+  border-color: var(--app-warning);
+  background: var(--app-warning-soft);
+}
+
+.web-ui-recording-completion.is-success {
+  border-color: var(--app-success);
+  background: var(--app-success-soft);
+}
+
+.web-ui-recording-completion div {
+  display: grid;
+  gap: var(--app-space-1);
+  min-width: 0;
+}
+
+.web-ui-recording-completion span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  font-weight: 600;
+}
+
+.web-ui-recording-completion strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-sm);
 }
 
 .web-ui-recording-quality__checks {

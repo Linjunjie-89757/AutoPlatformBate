@@ -85,6 +85,14 @@ export interface WebUiRecordedCaseCollectSaveNavigationInput {
   skippedCount: number
 }
 
+export interface WebUiRecordedCaseAutoRematchMessageInput {
+  matchedCount: number
+  collectTaskId?: number | null
+  savedCount?: number | null
+  skippedCount?: number | null
+  persisted: boolean
+}
+
 export const WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN = 'web-ui-case-recording'
 export const WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY = 'autoRematchRecordedElements'
 
@@ -307,6 +315,20 @@ export function buildRecordedCaseCollectSaveNavigationQuery(input: WebUiRecorded
     query.collectTaskId = String(input.collectTaskId)
   }
   return query
+}
+
+export function buildRecordedCaseAutoRematchMessage(input: WebUiRecordedCaseAutoRematchMessageInput) {
+  const matchedCount = Math.max(Number(input.matchedCount || 0), 0)
+  const savedCount = Math.max(Number(input.savedCount || 0), 0)
+  const skippedCount = Math.max(Number(input.skippedCount || 0), 0)
+  const collectTaskText = input.collectTaskId ? `，来源采集任务 #${input.collectTaskId}` : ''
+  const saveText = savedCount || skippedCount
+    ? `，候选入库新增 ${savedCount} 个${skippedCount ? `、跳过 ${skippedCount} 个` : ''}`
+    : ''
+  if (input.persisted) {
+    return `已自动回填 ${matchedCount} 个元素库绑定并保存用例${saveText}${collectTaskText}`
+  }
+  return `已自动回填 ${matchedCount} 个元素库绑定${saveText}${collectTaskText}，保存用例后生效`
 }
 
 export function buildCollectCandidateValidationSummary(

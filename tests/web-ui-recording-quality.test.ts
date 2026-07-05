@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildRecordingCompletionSummary,
   buildRecordingQualityCheck,
   hasFileUploadPathRisk,
   hasTimingRisk,
@@ -120,6 +121,77 @@ test('accepts file upload artifacts and absolute paths as replayable values', ()
   assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: '/tmp/upload-demo.txt' })), false)
   assert.equal(hasFileUploadPathRisk(step({ type: 'FILE_UPLOAD', inputValue: 'upload-demo.txt' })), true)
   assert.equal(hasFileUploadPathRisk(step({ type: 'CLICK', inputValue: 'upload-demo.txt' })), false)
+})
+
+test('summarizes recording completion stages from save quality and replay state', () => {
+  const readyQuality = buildRecordingQualityCheck({
+    replayPassed: true,
+    steps: [
+      step({ type: 'CLICK', elementId: 1, locatorType: 'TEST_ID', locatorValue: 'submit' }),
+      step({ type: 'ASSERT_VISIBLE', elementId: 1, locatorType: 'TEST_ID', locatorValue: 'done' }),
+    ],
+  })
+
+  assert.equal(buildRecordingCompletionSummary({
+    stepCount: 2,
+    savedStepCount: 1,
+    quality: readyQuality,
+    replayPassed: true,
+  }).stage, 'UNSAVED')
+
+  assert.equal(buildRecordingCompletionSummary({
+    stepCount: 2,
+    savedStepCount: 2,
+    quality: readyQuality,
+    replayPassed: false,
+  }).stage, 'REPLAY')
+
+  assert.deepEqual(buildRecordingCompletionSummary({
+    stepCount: 2,
+    savedStepCount: 2,
+    quality: readyQuality,
+    replayPassed: true,
+  }), {
+    stage: 'COMPLETE',
+    tone: 'success',
+    title: '录制闭环已完成',
+    summary: '用例已保存，上传与元素绑定已收口，最近一次本地回放已通过。',
+    actionLabel: null,
+    canRunReplay: false,
+  })
+})
+
+test('prioritizes upload and element completion blockers before replay', () => {
+  const uploadQuality = buildRecordingQualityCheck({
+    replayPassed: false,
+    steps: [
+      step({ type: 'FILE_UPLOAD', locatorType: 'CSS', locatorValue: '#file', inputValue: 'artifact:avatar' }),
+      step({ type: 'ASSERT_VISIBLE', elementId: 1, locatorType: 'TEST_ID', locatorValue: 'done' }),
+    ],
+  })
+  assert.equal(buildRecordingCompletionSummary({
+    stepCount: 2,
+    savedStepCount: 2,
+    quality: uploadQuality,
+    replayPassed: false,
+  }).stage, 'UPLOAD_REPAIR')
+
+  const elementQuality = buildRecordingQualityCheck({
+    replayPassed: false,
+    steps: [
+      step({ type: 'CLICK', elementId: null, locatorType: 'CSS', locatorValue: '#submit' }),
+      step({ type: 'ASSERT_VISIBLE', elementId: 1, locatorType: 'TEST_ID', locatorValue: 'done' }),
+    ],
+  })
+  const elementSummary = buildRecordingCompletionSummary({
+    stepCount: 2,
+    savedStepCount: 2,
+    quality: elementQuality,
+    replayPassed: false,
+    elementCandidateCount: 1,
+  })
+  assert.equal(elementSummary.stage, 'ELEMENT_BINDING')
+  assert.equal(elementSummary.actionLabel, '定位候选')
 })
 
 function step(overrides: Partial<RecordingQualityStep>): RecordingQualityStep {

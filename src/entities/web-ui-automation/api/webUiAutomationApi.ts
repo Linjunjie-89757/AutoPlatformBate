@@ -216,11 +216,27 @@ function normalizeStep(item: WebUiCaseStepItem): WebUiCaseStepItem {
     framePath: Array.isArray(item.framePath) ? item.framePath : [],
     shadowPath: Array.isArray(item.shadowPath) ? item.shadowPath : [],
     inputValue: item.inputValue || null,
+    uploadArtifactBinding: normalizeUploadArtifactBinding(item.uploadArtifactBinding),
     timeoutMs: item.timeoutMs ?? null,
     continueOnFailure: Boolean(item.continueOnFailure),
     screenshotPolicy: item.screenshotPolicy || 'NONE',
     enabled: item.enabled !== false,
     sortOrder: Number(item.sortOrder || 0),
+  }
+}
+
+function normalizeUploadArtifactBinding(value: WebUiCaseStepItem['uploadArtifactBinding']): WebUiCaseStepItem['uploadArtifactBinding'] {
+  const fileId = value?.fileId?.trim() || ''
+  const contentBase64 = value?.contentBase64?.trim() || ''
+  if (!fileId || !contentBase64) {
+    return null
+  }
+  return {
+    fileId,
+    fileName: value?.fileName?.trim() || fileId,
+    contentType: value?.contentType?.trim() || 'application/octet-stream',
+    contentBase64,
+    ...(typeof value?.size === 'number' && Number.isFinite(value.size) ? { size: value.size } : {}),
   }
 }
 

@@ -450,6 +450,7 @@ async function startPageRecording(payload = {}) {
     events: [],
     overflow: false,
   };
+  scheduleRecorderFrameRefreshes();
 
   return {
     success: true,
@@ -612,7 +613,26 @@ async function ensureRecorderInstalled() {
     recorderScriptContext = context;
   }
 
-  await Promise.all(page.frames().map(frame => frame.evaluate(installBrowserRecorderScript).catch(() => null)));
+  await installRecorderScriptInPageFrames(page);
+}
+
+async function installRecorderScriptInPageFrames(targetPage) {
+  if (!targetPage || targetPage.isClosed?.()) {
+    return;
+  }
+  await Promise.all(targetPage.frames().map(frame => frame.evaluate(installBrowserRecorderScript).catch(() => null)));
+}
+
+function scheduleRecorderFrameRefreshes() {
+  const delays = [150, 500, 1200, 2200];
+  for (const delayMs of delays) {
+    setTimeout(() => {
+      if (!activeRecorder || activeRecorder.status !== 'RECORDING' || !page || recorderScriptContext !== context) {
+        return;
+      }
+      void installRecorderScriptInPageFrames(page).catch(() => null);
+    }, delayMs);
+  }
 }
 
 async function ensureRunnerOverlayInstalled() {
@@ -683,6 +703,9 @@ function attachPageNavigationTracking(targetPage) {
   }
   trackedNavigationPages.add(targetPage);
   targetPage.on('framenavigated', frame => {
+    if (recorderScriptContext === context) {
+      void frame.evaluate(installBrowserRecorderScript).catch(() => null);
+    }
     if (targetPage === page && frame === targetPage.mainFrame()) {
       void refreshActiveSessionPageSnapshot();
     }
@@ -774,6 +797,13 @@ async function normalizeRecordedBrowserEvent(source, event) {
     target.locator.framePath = framePath;
     target.framePath = framePath;
   }
+  if (target?.locator && normalizeShadowPath(target.locator.shadowPath).length === 0) {
+    const inferredShadowPath = await inferRecordedTargetShadowPath(source?.frame, target).catch(() => []);
+    if (inferredShadowPath.length > 0) {
+      target.locator.shadowPath = inferredShadowPath;
+      target.shadowPath = inferredShadowPath;
+    }
+  }
 
   return {
     eventId: randomUUID(),
@@ -829,6 +859,8 @@ function normalizeRecordedTarget(target) {
     return null;
   }
   const locator = normalizeRecordedLocator(target.locator);
+  const framePath = normalizeFramePath(target.framePath || locator?.framePath);
+  const shadowPath = normalizeShadowPath(target.shadowPath || locator?.shadowPath);
   return {
     tagName: optionalString(target.tagName).toLowerCase() || null,
     elementType: optionalString(target.elementType).toUpperCase() || null,
@@ -837,9 +869,13 @@ function normalizeRecordedTarget(target) {
     placeholder: truncateText(target.placeholder, 160),
     role: optionalString(target.role) || null,
     testId: optionalString(target.testId) || null,
-    locator,
-    framePath: locator?.framePath || [],
-    shadowPath: locator?.shadowPath || [],
+    locator: locator ? {
+      ...locator,
+      framePath,
+      shadowPath,
+    } : null,
+    framePath,
+    shadowPath,
   };
 }
 
@@ -1080,6 +1116,142 @@ async function resolveFramePath(frame) {
   const frameElement = await frame.frameElement().catch(() => null);
   const selector = frameElement ? await frameElement.evaluate(buildFrameElementSelector).catch(() => '') : '';
   return selector ? [...parentPath, { selector }] : parentPath;
+}
+
+async function inferRecordedTargetShadowPath(frame, target) {
+  if (!frame || !target?.locator) {
+    return [];
+  }
+  const locatorType = optionalString(target.locator.locatorType).toUpperCase();
+  const locatorValue = optionalString(target.locator.locatorValue);
+  if (!locatorType || !locatorValue) {
+    return [];
+  }
+  const candidates = await frame.evaluate(({ locatorType: type, locatorValue: value, text, testId }) => {
+    const matches = [];
+
+    walkRoot(document);
+    return matches;
+
+    function walkRoot(root) {
+      for (const element of Array.from(root.querySelectorAll('*'))) {
+        if (matchesLocator(element, type, value)) {
+          matches.push({
+            shadowPath: buildElementShadowPath(element),
+            text: normalizeText(element.innerText || element.textContent || ''),
+            testId: element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa') || '',
+          });
+        }
+        if (element.shadowRoot) {
+          walkRoot(element.shadowRoot);
+        }
+      }
+    }
+
+    function matchesLocator(element, locatorType, locatorValue) {
+      if (!(element instanceof Element)) {
+        return false;
+      }
+      if (locatorType === 'CSS') {
+        try {
+          return element.matches(locatorValue);
+        } catch {
+          return false;
+        }
+      }
+      if (locatorType === 'TEST_ID') {
+        return [element.getAttribute('data-testid'), element.getAttribute('data-test'), element.getAttribute('data-qa'), element.id]
+          .filter(Boolean)
+          .includes(locatorValue);
+      }
+      return false;
+    }
+
+    function buildElementShadowPath(element) {
+      const path = [];
+      let current = element;
+      while (current instanceof Element) {
+        const root = current.getRootNode?.();
+        const host = root && typeof root === 'object' && 'host' in root ? root.host : null;
+        if (!(host instanceof Element)) {
+          break;
+        }
+        const hostRoot = host.getRootNode?.();
+        if (!hostRoot || typeof hostRoot.querySelectorAll !== 'function') {
+          break;
+        }
+        path.unshift(buildShadowHostSelector(host, hostRoot));
+        current = host;
+      }
+      return path;
+    }
+
+    function buildShadowHostSelector(element, root) {
+      const tag = element.tagName.toLowerCase();
+      if (element.id) {
+        return `${tag}#${CSS.escape(element.id)}`;
+      }
+      const testIdValue = element.getAttribute('data-testid') || element.getAttribute('data-test');
+      if (testIdValue) {
+        return `${tag}[data-testid="${cssAttributeEscape(testIdValue)}"]`;
+      }
+      const name = element.getAttribute('name');
+      if (name) {
+        return `${tag}[name="${cssAttributeEscape(name)}"]`;
+      }
+      const sameTagCount = root.querySelectorAll(tag).length;
+      return sameTagCount === 1 ? tag : buildCssPath(element);
+    }
+
+    function buildCssPath(element) {
+      const parts = [];
+      let current = element;
+      while (current && current.nodeType === Node.ELEMENT_NODE) {
+        const tag = current.tagName.toLowerCase();
+        if (current.id) {
+          parts.unshift(`${tag}#${CSS.escape(current.id)}`);
+          break;
+        }
+        const parent = current.parentElement;
+        if (!parent) {
+          parts.unshift(tag);
+          break;
+        }
+        const siblings = Array.from(parent.children).filter(item => item.tagName === current.tagName);
+        const index = siblings.indexOf(current) + 1;
+        parts.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${index})` : tag);
+        current = parent;
+      }
+      return parts.join(' > ');
+    }
+
+    function cssAttributeEscape(raw) {
+      return String(raw).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    }
+
+    function normalizeText(raw) {
+      return String(raw || '').replace(/\\s+/g, ' ').trim();
+    }
+  }, {
+    locatorType,
+    locatorValue,
+    text: optionalString(target.text),
+    testId: optionalString(target.testId),
+  }).catch(() => []);
+
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return [];
+  }
+  const normalizedText = optionalString(target.text);
+  const normalizedTestId = optionalString(target.testId);
+  const preferred = candidates.find(item =>
+    normalizeShadowPath(item?.shadowPath).length > 0
+    && (
+      (normalizedTestId && optionalString(item?.testId) === normalizedTestId)
+      || (normalizedText && optionalString(item?.text) === normalizedText)
+    ),
+  ) || candidates.find(item => normalizeShadowPath(item?.shadowPath).length > 0);
+  return normalizeShadowPath(preferred?.shadowPath);
 }
 
 function buildFrameElementSelector(element) {
@@ -2126,6 +2298,16 @@ function installBrowserRecorderScript() {
   let pendingFileInputSelection = null;
   let pendingFileInputTimer = 0;
 
+  function isElementLike(value) {
+    return Boolean(
+      value
+      && typeof value === 'object'
+      && typeof value.tagName === 'string'
+      && typeof value.matches === 'function'
+      && typeof value.closest === 'function'
+    );
+  }
+
   document.addEventListener('click', event => {
     const target = findRecordableTarget(event);
     if (!target || isTextEntryElement(target) || target.tagName.toLowerCase() === 'select') {
@@ -2220,12 +2402,13 @@ function installBrowserRecorderScript() {
     if (element) {
       lastRecordableElement = element;
     }
+    const shadowPath = element ? safeBuildShadowPathFromEvent(event) : [];
     binding({
       kind,
       timestamp: new Date().toISOString(),
       url: window.location.href,
       title: document.title,
-      target: element ? buildRecordTarget(element) : null,
+      target: element ? buildRecordTarget(element, shadowPath) : null,
       ...extra,
     }).catch(() => {});
   }
@@ -2307,11 +2490,11 @@ function installBrowserRecorderScript() {
       return null;
     }
     for (const item of path) {
-      if (item instanceof Element && isRecordableElement(item)) {
+      if (isElementLike(item) && isRecordableElement(item)) {
         return item;
       }
     }
-    const raw = event.target instanceof Element ? event.target : event.target?.parentElement;
+    const raw = isElementLike(event.target) ? event.target : event.target?.parentElement;
     return raw?.closest?.([
       'a',
       'button',
@@ -2514,7 +2697,7 @@ function installBrowserRecorderScript() {
   }
 
   function isRunnerOverlayElement(element) {
-    return element instanceof Element
+    return isElementLike(element)
       && (
         element.getAttribute('data-auto-web-runner-overlay') === 'true'
         || element.getAttribute('data-auto-web-runner-overlay-host') === 'true'
@@ -2606,8 +2789,11 @@ function installBrowserRecorderScript() {
     }, durationMs);
   }
 
-  function buildRecordTarget(element) {
-    const locator = buildRecordLocator(element);
+  function buildRecordTarget(element, preferredShadowPath = null) {
+    const shadowPath = Array.isArray(preferredShadowPath) && preferredShadowPath.length > 0
+      ? preferredShadowPath
+      : safeBuildElementShadowPath(element);
+    const locator = buildRecordLocator(element, shadowPath);
     return {
       tagName: element.tagName.toLowerCase(),
       elementType: inferElementType(element),
@@ -2616,36 +2802,93 @@ function installBrowserRecorderScript() {
       placeholder: element.getAttribute('placeholder') || '',
       role: element.getAttribute('role') || inferRole(element) || '',
       testId: element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa') || '',
+      shadowPath,
       locator,
     };
   }
 
-  function buildRecordLocator(element) {
+  function buildRecordLocator(element, shadowPath = []) {
+    const context = shadowPath.length > 0 ? { shadowPath } : {};
     const testId = element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa');
     if (testId) {
-      return { strategy: 'TEST_ID', value: testId };
+      return { strategy: 'TEST_ID', value: testId, ...context };
     }
     if (element.id) {
-      return { strategy: 'CSS', value: `#${cssEscape(element.id)}` };
+      return { strategy: 'CSS', value: `#${cssEscape(element.id)}`, ...context };
     }
     const role = element.getAttribute('role') || inferRole(element);
     const roleName = findAccessibleName(element);
     if (role && roleName) {
-      return { strategy: 'ROLE', value: `${role}[name="${escapeLocatorName(roleName)}"]` };
+      return { strategy: 'ROLE', value: `${role}[name="${escapeLocatorName(roleName)}"]`, ...context };
     }
     const placeholder = element.getAttribute('placeholder');
     if (placeholder) {
-      return { strategy: 'PLACEHOLDER', value: placeholder };
+      return { strategy: 'PLACEHOLDER', value: placeholder, ...context };
     }
     const label = findLabelText(element);
     if (label) {
-      return { strategy: 'LABEL', value: label };
+      return { strategy: 'LABEL', value: label, ...context };
     }
     const text = normalizeText(element.innerText || element.textContent || '');
     if (text && ['a', 'button'].includes(element.tagName.toLowerCase())) {
-      return { strategy: 'TEXT', value: text };
+      return { strategy: 'TEXT', value: text, ...context };
     }
-    return { strategy: 'CSS', value: buildCssPath(element) };
+    return { strategy: 'CSS', value: buildCssPath(element), ...context };
+  }
+
+  function buildElementShadowPath(element) {
+    const path = [];
+    let current = element;
+    while (isElementLike(current)) {
+      const root = current.getRootNode?.();
+      const host = root && typeof root === 'object' && 'host' in root ? root.host : null;
+      if (!isElementLike(host)) {
+        break;
+      }
+      const hostRoot = host.getRootNode?.();
+      if (!hostRoot || typeof hostRoot.querySelectorAll !== 'function') {
+        break;
+      }
+      path.unshift(buildShadowHostSelector(host, hostRoot));
+      current = host;
+    }
+    return path;
+  }
+
+  function safeBuildElementShadowPath(element) {
+    try {
+      return buildElementShadowPath(element);
+    } catch {
+      return [];
+    }
+  }
+
+  function buildShadowPathFromEvent(event) {
+    const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+    const shadowPath = [];
+    for (const item of path) {
+      const host = item && typeof item === 'object' && 'host' in item ? item.host : null;
+      if (!isElementLike(host)) {
+        continue;
+      }
+      const hostRoot = host.getRootNode?.();
+      if (!hostRoot || typeof hostRoot.querySelectorAll !== 'function') {
+        continue;
+      }
+      const selector = buildShadowHostSelector(host, hostRoot);
+      if (selector && !shadowPath.includes(selector)) {
+        shadowPath.unshift(selector);
+      }
+    }
+    return shadowPath;
+  }
+
+  function safeBuildShadowPathFromEvent(event) {
+    try {
+      return buildShadowPathFromEvent(event);
+    } catch {
+      return [];
+    }
   }
 
   function inferElementType(element) {

@@ -34,6 +34,25 @@ export interface RecordingReplayRepairActions {
   applyTimeoutSuggestion: boolean
 }
 
+export interface RecordingReplayRerunPrompt {
+  title: string
+  summary: string
+  actionLabel: string
+  canRerun: boolean
+}
+
+export interface RecordingReplayStepContext {
+  title: string
+  stepLabel: string
+  issueLabel: string | null
+  errorMessage: string | null
+  locatorLabel: string | null
+  durationLabel: string | null
+  screenshotUrl: string | null
+  screenshotArtifactId: number | null
+  reportAvailable: boolean
+}
+
 export function buildRecordingReplayDiagnostics(input: {
   replayRunId?: string | null
   task?: RecordingReplayTaskSnapshot | null
@@ -69,6 +88,24 @@ export function buildRecordingReplayDiagnostics(input: {
       tone: 'danger',
       title: '录制回放失败',
       summary: message || 'Local Runner 已返回失败，请查看正式报告中的步骤明细。',
+      issueType,
+      issueLabel: formatReplayIssueLabel(issueType),
+      suggestion: suggestRecordingReplayFix(issueType),
+      failedStepSortOrder: failedStep?.sortOrder || null,
+      failedStepLabel: failedStep ? `第 ${failedStep.sortOrder} 步：${failedStep.stepName || failedStep.stepType}` : null,
+      failedStepDetail: buildFailedStepDetail(failedStep),
+      reportAvailable,
+    }
+  }
+
+  if (status === 'DEGRADED') {
+    const failedStep = findFailedReplayStep(input.runDetail)
+    const message = failedStep?.errorMessage || task.errorMessage || task.statusMessage || input.runDetail?.summary.failureSummary || ''
+    const issueType = classifyRecordingReplayFailure(message, failedStep?.stepType)
+    return {
+      tone: 'warning',
+      title: '录制回放未完全通过',
+      summary: message || 'Local Runner 已完成回放，但存在失败或跳过步骤。',
       issueType,
       issueLabel: formatReplayIssueLabel(issueType),
       suggestion: suggestRecordingReplayFix(issueType),
@@ -118,6 +155,85 @@ export function buildRecordingReplayRepairActions(
   }
 }
 
+export function buildRecordingReplayRerunPrompt(input: {
+  repairDirty: boolean
+  diagnostics?: Pick<RecordingReplayDiagnostics, 'tone'> | null
+  uploadIssueCount?: number | null
+  canRun: boolean
+}): RecordingReplayRerunPrompt | null {
+  if (!input.repairDirty) {
+    return null
+  }
+  if (input.diagnostics?.tone === 'primary' || input.diagnostics?.tone === 'success') {
+    return null
+  }
+
+  const uploadIssueCount = Math.max(0, Number(input.uploadIssueCount || 0))
+  if (uploadIssueCount > 0) {
+    return {
+      title: '修复还未完成',
+      summary: `还有 ${uploadIssueCount} 个文件上传步骤需要重新绑定，处理完成后再保存并回放。`,
+      actionLabel: '继续修复上传',
+      canRerun: false,
+    }
+  }
+
+  if (!input.canRun) {
+    return {
+      title: '修复已记录',
+      summary: '当前用例还不能直接本地回放，请先补齐必要配置。',
+      actionLabel: '继续修复',
+      canRerun: false,
+    }
+  }
+
+  return {
+    title: '修复已应用',
+    summary: '请保存并重新回放，确认最近一次问题已经消除。',
+    actionLabel: '保存并重新回放',
+    canRerun: true,
+  }
+}
+
+export function buildRecordingReplayStepContext(input: {
+  selectedSortOrder?: number | null
+  diagnostics?: Pick<RecordingReplayDiagnostics, 'failedStepSortOrder' | 'issueLabel' | 'reportAvailable'> | null
+  runDetail?: WebUiRunDetail | null
+}): RecordingReplayStepContext | null {
+  const selectedSortOrder = Number(input.selectedSortOrder || 0)
+  const failedSortOrder = Number(input.diagnostics?.failedStepSortOrder || 0)
+  if (!selectedSortOrder || !failedSortOrder || selectedSortOrder !== failedSortOrder) {
+    return null
+  }
+
+  const step = input.runDetail?.steps.find(item => Number(item.sortOrder || 0) === failedSortOrder) || null
+  if (!step) {
+    return {
+      title: '最近一次回放失败',
+      stepLabel: `第 ${failedSortOrder} 步`,
+      issueLabel: input.diagnostics?.issueLabel || null,
+      errorMessage: null,
+      locatorLabel: null,
+      durationLabel: null,
+      screenshotUrl: null,
+      screenshotArtifactId: null,
+      reportAvailable: Boolean(input.diagnostics?.reportAvailable),
+    }
+  }
+
+  return {
+    title: '最近一次回放失败',
+    stepLabel: `第 ${step.sortOrder} 步：${step.stepName || step.stepType}`,
+    issueLabel: input.diagnostics?.issueLabel || null,
+    errorMessage: step.errorMessage || null,
+    locatorLabel: formatStepLocatorLabel(step),
+    durationLabel: step.durationMs === null || step.durationMs === undefined ? null : formatDuration(step.durationMs),
+    screenshotUrl: step.screenshotUrl || null,
+    screenshotArtifactId: step.screenshotArtifactId || null,
+    reportAvailable: Boolean(input.diagnostics?.reportAvailable),
+  }
+}
+
 export function classifyRecordingReplayFailure(message?: string | null, stepType?: WebUiStepType | string | null): ReplayIssueType {
   const value = String(message || '').toLowerCase()
   const normalizedStepType = String(stepType || '').toUpperCase()
@@ -162,6 +278,19 @@ function buildFailedStepDetail(step?: WebUiRunStepResult | null) {
   }
   const target = step.locatorValue ? `定位：${step.locatorValue}` : '未记录定位值'
   return `${step.stepType} · ${target}`
+}
+
+function formatStepLocatorLabel(step: WebUiRunStepResult) {
+  if (!step.locatorType && !step.locatorValue) {
+    return null
+  }
+  if (!step.locatorValue) {
+    return step.locatorType || null
+  }
+  if (!step.locatorType) {
+    return step.locatorValue
+  }
+  return `${step.locatorType} · ${step.locatorValue}`
 }
 
 function formatReplayIssueLabel(issueType: ReplayIssueType) {

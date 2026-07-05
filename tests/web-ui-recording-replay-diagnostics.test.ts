@@ -4,6 +4,8 @@ import assert from 'node:assert/strict'
 import {
   buildRecordingReplayDiagnostics,
   buildRecordingReplayRepairActions,
+  buildRecordingReplayRerunPrompt,
+  buildRecordingReplayStepContext,
   classifyRecordingReplayFailure,
   type RecordingReplayTaskSnapshot,
 } from '../src/entities/web-ui-automation/lib/recordingReplayDiagnostics.ts'
@@ -62,6 +64,32 @@ test('locates failed recording replay steps and classifies locator failures', ()
   assert.match(diagnostics?.suggestion || '', /定位器/)
 })
 
+test('summarizes degraded recording replay as terminal repairable result', () => {
+  const diagnostics = buildRecordingReplayDiagnostics({
+    replayRunId: 'replay-run',
+    task: taskSnapshot({ runId: 'replay-run', status: 'DEGRADED' }),
+    runDetail: runDetail({
+      status: 'DEGRADED',
+      failureSummary: 'Replay degraded',
+      steps: [
+        runStep({
+          sortOrder: 3,
+          stepName: '等待订单状态',
+          stepType: 'WAIT',
+          status: 'FAILED',
+          errorMessage: 'Timeout 30000ms exceeded waiting for response',
+        }),
+      ],
+    }),
+  })
+
+  assert.equal(diagnostics?.tone, 'warning')
+  assert.equal(diagnostics?.title, '录制回放未完全通过')
+  assert.equal(diagnostics?.failedStepSortOrder, 3)
+  assert.equal(diagnostics?.issueType, 'WAIT')
+  assert.match(diagnostics?.suggestion || '', /超时时间/)
+})
+
 test('classifies common replay failure categories', () => {
   assert.equal(classifyRecordingReplayFailure('expect text to contain paid', 'ASSERT_TEXT'), 'ASSERTION')
   assert.equal(classifyRecordingReplayFailure('Timeout 30000ms exceeded waiting for load state', 'CLICK'), 'WAIT')
@@ -90,6 +118,96 @@ test('builds repair actions from replay diagnostics issue type', () => {
   }), {
     collectLocatorCandidate: false,
     applyTimeoutSuggestion: false,
+  })
+})
+
+test('builds rerun prompt only after replay repair changes', () => {
+  assert.equal(buildRecordingReplayRerunPrompt({
+    repairDirty: false,
+    diagnostics: { tone: 'danger' },
+    uploadIssueCount: 0,
+    canRun: true,
+  }), null)
+
+  assert.deepEqual(buildRecordingReplayRerunPrompt({
+    repairDirty: true,
+    diagnostics: { tone: 'danger' },
+    uploadIssueCount: 0,
+    canRun: true,
+  }), {
+    title: '修复已应用',
+    summary: '请保存并重新回放，确认最近一次问题已经消除。',
+    actionLabel: '保存并重新回放',
+    canRerun: true,
+  })
+})
+
+test('rerun prompt asks to finish upload repairs before replaying', () => {
+  assert.deepEqual(buildRecordingReplayRerunPrompt({
+    repairDirty: true,
+    diagnostics: { tone: 'warning' },
+    uploadIssueCount: 2,
+    canRun: true,
+  }), {
+    title: '修复还未完成',
+    summary: '还有 2 个文件上传步骤需要重新绑定，处理完成后再保存并回放。',
+    actionLabel: '继续修复上传',
+    canRerun: false,
+  })
+
+  assert.equal(buildRecordingReplayRerunPrompt({
+    repairDirty: true,
+    diagnostics: { tone: 'success' },
+    uploadIssueCount: 0,
+    canRun: true,
+  }), null)
+})
+
+test('builds selected failed step replay context from run detail', () => {
+  const diagnostics = {
+    failedStepSortOrder: 2,
+    issueLabel: '定位器问题',
+    reportAvailable: true,
+  }
+  const run = runDetail({
+    status: 'FAILED',
+    steps: [
+      runStep({ sortOrder: 1, status: 'PASSED' }),
+      runStep({
+        sortOrder: 2,
+        stepName: '点击提交',
+        stepType: 'CLICK',
+        status: 'FAILED',
+        locatorType: 'CSS',
+        locatorValue: 'button.submit',
+        durationMs: 1534,
+        errorMessage: 'locator resolved to 0 elements',
+        screenshotArtifactId: 42,
+        screenshotUrl: '/artifacts/42',
+      }),
+    ],
+  })
+
+  assert.equal(buildRecordingReplayStepContext({
+    selectedSortOrder: 1,
+    diagnostics,
+    runDetail: run,
+  }), null)
+
+  assert.deepEqual(buildRecordingReplayStepContext({
+    selectedSortOrder: 2,
+    diagnostics,
+    runDetail: run,
+  }), {
+    title: '最近一次回放失败',
+    stepLabel: '第 2 步：点击提交',
+    issueLabel: '定位器问题',
+    errorMessage: 'locator resolved to 0 elements',
+    locatorLabel: 'CSS · button.submit',
+    durationLabel: '1.5s',
+    screenshotUrl: '/artifacts/42',
+    screenshotArtifactId: 42,
+    reportAvailable: true,
   })
 })
 

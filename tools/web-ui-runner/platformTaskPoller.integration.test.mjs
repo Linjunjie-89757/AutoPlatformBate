@@ -734,6 +734,73 @@ test('validates locator inside shadow root when shadowPath is provided', async (
   assert.deepEqual(stderr, []);
 });
 
+test('validates locator inside iframe shadow root when framePath and shadowPath are provided', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const frameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<body>',
+    '<custom-shell></custom-shell>',
+    '<script>',
+    'const root = document.querySelector("custom-shell").attachShadow({ mode: "open" });',
+    'root.innerHTML = `<button id="inside">Iframe Shadow</button>`;',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const pageHtml = `<iframe id="child" srcdoc="${frameHtml.replace(/"/g, '&quot;')}"></iframe>`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: `data:text/html,${encodeURIComponent(pageHtml)}`,
+      workspaceId: 'account-open',
+      environmentId: 'iframe-shadow-validate',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const validation = await postJson(runnerBaseUrl, '/collect/validate', {
+      highlight: true,
+      locators: [
+        {
+          locatorType: 'CSS',
+          locatorValue: '#inside',
+          framePath: [{ selector: 'iframe#child' }],
+          shadowPath: ['custom-shell'],
+        },
+      ],
+    });
+
+    assert.equal(validation.results[0].validationStatus, 'PASSED');
+    assert.equal(validation.results[0].matchCount, 1);
+    assert.equal(validation.results[0].visible, true);
+    assert.deepEqual(validation.results[0].framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(validation.results[0].shadowPath, ['custom-shell']);
+    assert.equal(typeof validation.results[0].screenshotBase64, 'string');
+    assert.notEqual(validation.results[0].screenshotBase64.length, 0);
+  } finally {
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 test('runs WEB_CASE_RUN step inside iframe when framePath is provided', async () => {
   const runnerPort = await findAvailablePort();
   let platformPort = await findAvailablePort();

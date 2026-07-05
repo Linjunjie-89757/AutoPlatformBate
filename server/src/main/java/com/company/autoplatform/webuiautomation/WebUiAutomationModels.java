@@ -38,11 +38,22 @@ public final class WebUiAutomationModels {
             List<Map<String, Object>> framePath,
             List<Object> shadowPath,
             String inputValue,
+            WebUiUploadArtifactBinding uploadArtifactBinding,
             Integer timeoutMs,
             Boolean continueOnFailure,
             String screenshotPolicy,
             Boolean enabled,
             Integer sortOrder
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record WebUiUploadArtifactBinding(
+            String fileId,
+            String fileName,
+            String contentType,
+            String contentBase64,
+            Long size
     ) {
     }
 
@@ -97,6 +108,7 @@ public final class WebUiAutomationModels {
             List<Map<String, Object>> framePath,
             List<Object> shadowPath,
             String inputValue,
+            WebUiUploadArtifactBinding uploadArtifactBinding,
             Integer timeoutMs,
             Boolean continueOnFailure,
             String screenshotPolicy,
@@ -174,6 +186,7 @@ public final class WebUiAutomationModels {
             List<Map<String, Object>> framePath,
             List<Object> shadowPath,
             String inputValue,
+            WebUiUploadArtifactBinding uploadArtifactBinding,
             Integer timeoutMs,
             Boolean continueOnFailure,
             String screenshotPolicy,

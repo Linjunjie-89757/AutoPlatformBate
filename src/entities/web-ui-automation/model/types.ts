@@ -65,11 +65,20 @@ export interface WebUiCaseStepItem {
   framePath?: WebUiLocatorContextPathItem[] | null
   shadowPath?: WebUiLocatorContextPathItem[] | null
   inputValue?: string | null
+  uploadArtifactBinding?: WebUiUploadArtifactBinding | null
   timeoutMs?: number | null
   continueOnFailure: boolean
   screenshotPolicy: WebUiScreenshotPolicy
   enabled: boolean
   sortOrder: number
+}
+
+export interface WebUiUploadArtifactBinding {
+  fileId: string
+  fileName: string
+  contentType?: string | null
+  contentBase64: string
+  size?: number | null
 }
 
 export interface WebUiCaseItem {

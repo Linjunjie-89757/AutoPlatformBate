@@ -91,6 +91,16 @@ export function toWebUiCollectCandidatesFromRecordedSteps(
   return candidates
 }
 
+export function buildRecordedCollectCandidateFingerprint(
+  candidates: Pick<WebUiElementCollectCandidate, 'locatorType' | 'locatorValue' | 'framePath' | 'shadowPath'>[],
+) {
+  return candidates
+    .map(candidate => buildRecordedLocatorKey(candidate.locatorType, candidate.locatorValue, candidate.framePath, candidate.shadowPath))
+    .filter(Boolean)
+    .sort()
+    .join('\n')
+}
+
 export function toWebUiCollectCandidateFromRecordedStep(
   step: Pick<WebUiCaseStepItem, 'name' | 'type' | 'elementName' | 'locatorType' | 'locatorValue' | 'framePath' | 'shadowPath'>,
   options: {

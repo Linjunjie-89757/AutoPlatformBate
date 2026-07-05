@@ -50,6 +50,7 @@ import {
 } from '@/entities/web-ui-automation'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
+import { artifactFileIdFromInputValue } from '@/entities/web-ui-automation/lib/fileUploadArtifacts'
 import { startLocalRunnerTaskPolling } from '@/entities/web-ui-automation/lib/localRunnerClient'
 
 interface EditableStep {
@@ -66,6 +67,7 @@ interface EditableStep {
   framePath: WebUiLocatorContextPathItem[]
   shadowPath: WebUiLocatorContextPathItem[]
   inputValue: string
+  uploadArtifactBinding?: WebUiCaseStepItem['uploadArtifactBinding']
   timeoutMs: number | null
   continueOnFailure: boolean
   screenshotPolicy: WebUiScreenshotPolicy
@@ -328,6 +330,7 @@ function toEditableStep(item: WebUiCaseStepItem, index: number): EditableStep {
     framePath: Array.isArray(item.framePath) ? item.framePath : [],
     shadowPath: Array.isArray(item.shadowPath) ? item.shadowPath : [],
     inputValue: item.inputValue || '',
+    uploadArtifactBinding: item.uploadArtifactBinding || null,
     timeoutMs: item.timeoutMs ?? null,
     continueOnFailure: Boolean(item.continueOnFailure),
     screenshotPolicy: item.screenshotPolicy || 'NONE',
@@ -1011,6 +1014,9 @@ function buildPayload(): SaveWebUiCasePayload {
       framePath: stepNeedsLocator(step.type) ? step.framePath : [],
       shadowPath: stepNeedsLocator(step.type) ? step.shadowPath : [],
       inputValue: stepNeedsInput(step.type) ? step.inputValue.trim() || null : null,
+      uploadArtifactBinding: step.type === 'FILE_UPLOAD' && artifactFileIdFromInputValue(step.inputValue)
+        ? step.uploadArtifactBinding || null
+        : null,
       timeoutMs: step.timeoutMs === null || step.timeoutMs === undefined ? null : clampTimeout(step.timeoutMs),
       continueOnFailure: step.continueOnFailure,
       screenshotPolicy: step.screenshotPolicy,

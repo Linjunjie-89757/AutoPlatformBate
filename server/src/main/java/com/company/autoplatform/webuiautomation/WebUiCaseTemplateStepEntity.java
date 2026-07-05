@@ -35,6 +35,9 @@ public class WebUiCaseTemplateStepEntity extends BaseEntity {
     @TableField("input_value")
     private String inputValue;
 
+    @TableField("upload_artifact_json")
+    private String uploadArtifactJson;
+
     @TableField("timeout_ms")
     private Integer timeoutMs;
 

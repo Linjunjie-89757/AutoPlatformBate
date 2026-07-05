@@ -1,16 +1,12 @@
+import type { WebUiUploadArtifactBinding } from '../model/types'
+
 export interface WebUiFileUploadArtifactStep {
   type?: string | null
   inputValue?: string | null
   enabled?: boolean | null
 }
 
-export interface WebUiFileUploadArtifactBinding {
-  fileId: string
-  fileName: string
-  contentType?: string | null
-  contentBase64: string
-  size?: number | null
-}
+export type WebUiFileUploadArtifactBinding = WebUiUploadArtifactBinding
 
 export interface WebUiRecordedFileUploadArtifact {
   fileName?: string | null

@@ -27,6 +27,7 @@ public class WebUiCaseTemplateDomainService {
     private final WorkspaceService workspaceService;
     private final ApiWorkspaceScopeSupport workspaceScopeSupport;
     private final WebUiLocatorContextSupport locatorContextSupport;
+    private final WebUiUploadArtifactBindingSupport uploadArtifactBindingSupport;
 
     public WebUiCaseTemplateDomainService(
             WebUiCaseTemplateMapper templateMapper,
@@ -35,7 +36,8 @@ public class WebUiCaseTemplateDomainService {
             WebUiCaseDomainService caseDomainService,
             WorkspaceService workspaceService,
             ApiWorkspaceScopeSupport workspaceScopeSupport,
-            WebUiLocatorContextSupport locatorContextSupport
+            WebUiLocatorContextSupport locatorContextSupport,
+            WebUiUploadArtifactBindingSupport uploadArtifactBindingSupport
     ) {
         this.templateMapper = templateMapper;
         this.templateStepMapper = templateStepMapper;
@@ -44,6 +46,7 @@ public class WebUiCaseTemplateDomainService {
         this.workspaceService = workspaceService;
         this.workspaceScopeSupport = workspaceScopeSupport;
         this.locatorContextSupport = locatorContextSupport;
+        this.uploadArtifactBindingSupport = uploadArtifactBindingSupport;
     }
 
     public PageResponse<WebUiCaseTemplateItem> listTemplates(
@@ -195,6 +198,7 @@ public class WebUiCaseTemplateDomainService {
         entity.setLocatorValue(locatorValue);
         entity.setLocatorContextJson(locatorContextSupport.write(request.framePath(), request.shadowPath()));
         entity.setInputValue(inputValue);
+        entity.setUploadArtifactJson(uploadArtifactBindingSupport.write(request.uploadArtifactBinding()));
         entity.setTimeoutMs(normalizeStepTimeout(request.timeoutMs()));
         entity.setContinueOnFailure(Boolean.TRUE.equals(request.continueOnFailure()));
         entity.setScreenshotPolicy(normalizeScreenshotPolicy(request.screenshotPolicy()));
@@ -212,6 +216,7 @@ public class WebUiCaseTemplateDomainService {
                 step.framePath(),
                 step.shadowPath(),
                 step.inputValue(),
+                step.uploadArtifactBinding(),
                 step.timeoutMs(),
                 step.continueOnFailure(),
                 step.screenshotPolicy(),
@@ -314,6 +319,7 @@ public class WebUiCaseTemplateDomainService {
                 locatorContextSupport.framePath(entity.getLocatorContextJson()),
                 locatorContextSupport.shadowPath(entity.getLocatorContextJson()),
                 entity.getInputValue(),
+                uploadArtifactBindingSupport.read(entity.getUploadArtifactJson()),
                 entity.getTimeoutMs(),
                 entity.getContinueOnFailure(),
                 entity.getScreenshotPolicy(),

@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -183,6 +184,36 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void createCasePersistsFileUploadArtifactBinding() throws Exception {
+        String unique = uniquePrefix("upload-binding");
+
+        String response = mockMvc.perform(post("/api/automation/web/cases")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(caseRequest(unique + "-case", "upload", List.of(
+                                fileUploadArtifactStep("Upload avatar", "#avatar", "avatar-file", "avatar.png", "YXZhdGFyLXBheWxvYWQ=", 1)
+                        )))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.steps[0].stepType").value("FILE_UPLOAD"))
+                .andExpect(jsonPath("$.data.steps[0].inputValue").value("artifact:avatar-file"))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.fileId").value("avatar-file"))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.fileName").value("avatar.png"))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.contentBase64").value("YXZhdGFyLXBheWxvYWQ="))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        Long caseId = objectMapper.readTree(response).at("/data/id").asLong();
+        mockMvc.perform(get("/api/automation/web/cases/{id}", caseId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.fileId").value("avatar-file"))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.contentType").value("text/plain"));
+    }
+
+    @Test
     void createListSaveFromCaseAndDeleteTemplate() throws Exception {
         String unique = uniquePrefix("template");
         Long caseId = createCase(unique + "-case", "template-source", List.of(
@@ -249,6 +280,28 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[0].id").value(savedTemplateId.intValue()))
                 .andExpect(jsonPath("$.data.items[0].templateName").value(unique + "-from-case"));
+    }
+
+    @Test
+    void saveCaseAsTemplatePreservesFileUploadArtifactBinding() throws Exception {
+        String unique = uniquePrefix("template-upload-binding");
+        Long caseId = createCase(unique + "-case", "template-source", List.of(
+                fileUploadArtifactStep("Upload contract", "input[type=file]", "contract-file", "contract.pdf", "Y29udHJhY3Q=", 1)
+        ));
+
+        mockMvc.perform(post("/api/automation/web/cases/{id}/save-as-template", caseId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "templateName", unique + "-template"
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.steps[0].stepType").value("FILE_UPLOAD"))
+                .andExpect(jsonPath("$.data.steps[0].inputValue").value("artifact:contract-file"))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.fileId").value("contract-file"))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.fileName").value("contract.pdf"))
+                .andExpect(jsonPath("$.data.steps[0].uploadArtifactBinding.contentBase64").value("Y29udHJhY3Q="));
     }
 
     @Test
@@ -386,10 +439,10 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
         candidate.put("validationMessage", "静态生成，尚未经过 Runner 真机验证");
         request.put("candidates", List.of(candidate));
 
-        mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response = createLocalRunnerCollectTask(request);
+        Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+
+        awaitLocalRunnerCollectTaskReady(taskId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.taskId").isNumber())
@@ -444,10 +497,10 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("搜索按钮", "CSS", "#search", 88)
         ));
 
-        mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response = createLocalRunnerCollectTask(request);
+        Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+
+        awaitLocalRunnerCollectTaskReady(taskId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"))
@@ -455,7 +508,7 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.aiModelName").value("web-ui-ai-model"))
                 .andExpect(jsonPath("$.data.message").value("AI 已完成候选元素命名、分组和说明增强"))
                 .andExpect(jsonPath("$.data.filterLogs[?(@.stage=='AI_METADATA')].message").value(hasItem("AI 已完成候选元素命名、分组和说明增强")))
-                .andExpect(jsonPath("$.data.candidates[0].groupName").value("筛选区"))
+                .andExpect(jsonPath("$.data.candidates[0].groupName").value("筛选表单区"))
                 .andExpect(jsonPath("$.data.candidates[0].elementName").value("订单搜索按钮"))
                 .andExpect(jsonPath("$.data.candidates[0].locatorType").value("CSS"))
                 .andExpect(jsonPath("$.data.candidates[0].locatorValue").value("#search"))
@@ -516,10 +569,10 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("搜索按钮", "CSS", "#search", 88)
         ));
 
-        String response = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response = createLocalRunnerCollectTask(request);
+        Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+
+        awaitLocalRunnerCollectTaskReady(taskId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"))
@@ -529,11 +582,7 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.candidates[?(@.locatorValue=='#export')].candidateSource").value(hasItem("AI_SUPPLEMENT")))
                 .andExpect(jsonPath("$.data.candidates[?(@.locatorValue=='#export')].validationStatus").value(hasItem("AI_UNVERIFIED")))
                 .andExpect(jsonPath("$.data.candidates[?(@.locatorValue=='#export')].recommendedToSave").value(hasItem(false)))
-                .andExpect(jsonPath("$.data.candidates[?(@.locatorValue=='#export')].saveBlockedReason").value(hasItem("AI 补充候选需通过本地 Runner 验证后才能保存")))
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+                .andExpect(jsonPath("$.data.candidates[?(@.locatorValue=='#export')].saveBlockedReason").value(hasItem("AI 补充候选需通过本地 Runner 验证后才能保存")));
 
         Map<String, Object> validationPayload = new LinkedHashMap<>();
         validationPayload.put("results", List.of(
@@ -589,10 +638,10 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("搜索按钮", "CSS", "#search", 88)
         ));
 
-        mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response = createLocalRunnerCollectTask(request);
+        Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+
+        awaitLocalRunnerCollectTaskReady(taskId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"))
@@ -620,21 +669,14 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("搜索按钮", "CSS", "#search", 92)
         ));
 
-        String firstResponse = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"))
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String firstResponse = createLocalRunnerCollectTask(request);
         Long firstTaskId = objectMapper.readTree(firstResponse).path("data").path("taskId").asLong();
+        awaitLocalRunnerCollectTaskReady(firstTaskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
 
-        mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        createLocalRunnerCollectTask(request);
+        awaitLocalRunnerCollectTaskReady(firstTaskId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.taskId").value(firstTaskId))
                 .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"))
@@ -662,10 +704,10 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("空定位器", "CSS", "", 80)
         ));
 
-        mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
+        String response = createLocalRunnerCollectTask(request);
+        Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+
+        awaitLocalRunnerCollectTaskReady(taskId)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"))
@@ -703,15 +745,15 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("空定位器", "CSS", "", 80)
         ));
 
-        String response = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String response = createLocalRunnerCollectTask(request);
         Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
+
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
 
         mockMvc.perform(get("/api/automation/web/elements/collect-tasks/{taskId}", taskId)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
@@ -730,7 +772,7 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.filterLogs[0].count").value(1))
                 .andExpect(jsonPath("$.data.filterLogs[1].reason").value("DUPLICATE_LOCATOR"))
                 .andExpect(jsonPath("$.data.filterLogs[2].reason").value("LOW_STABILITY"))
-                .andExpect(jsonPath("$.data.filterLogs[3].reason").value("FINAL_CANDIDATE"));
+                .andExpect(jsonPath("$.data.filterLogs[?(@.reason=='FINAL_CANDIDATE')].count").value(hasItem(1)));
     }
 
     @Test
@@ -754,15 +796,15 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("空定位候选", "CSS", "", 80)
         ));
 
-        String response = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String response = createLocalRunnerCollectTask(request);
         Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
+
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
 
         mockMvc.perform(get("/api/automation/web/elements/collect-tasks/{taskId}/filter-details", taskId)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
@@ -796,15 +838,11 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("缺失按钮", "CSS", "#missing", 88)
         ));
 
-        String response = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String response = createLocalRunnerCollectTask(request);
         Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
 
         Map<String, Object> validationPayload = new LinkedHashMap<>();
         validationPayload.put("results", List.of(
@@ -858,15 +896,11 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("搜索按钮", "CSS", "#search", 92)
         ));
 
-        String response = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String response = createLocalRunnerCollectTask(request);
         Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
 
         Map<String, Object> degradePayload = new LinkedHashMap<>();
         degradePayload.put("reason", "Runner 真机验证失败：本地服务离线");
@@ -902,15 +936,11 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("搜索按钮", "CSS", "#search", 92)
         ));
 
-        String response = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String response = createLocalRunnerCollectTask(request);
         Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
 
         mockMvc.perform(post("/api/automation/web/elements/collect-tasks/{taskId}/cancel", taskId)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
@@ -942,15 +972,11 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 localRunnerCandidate("搜索按钮", "CSS", "#search", 92)
         ));
 
-        String response = mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
-                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
+        String response = createLocalRunnerCollectTask(request);
         Long taskId = objectMapper.readTree(response).path("data").path("taskId").asLong();
+        awaitLocalRunnerCollectTaskReady(taskId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WAITING_LOCAL_VALIDATION"));
 
         mockMvc.perform(post("/api/automation/web/elements/collect-tasks/{taskId}/validation-timeout", taskId)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
@@ -1150,6 +1176,37 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
         return objectMapper.readTree(response).at("/data/id").asLong();
     }
 
+    private String createLocalRunnerCollectTask(Map<String, Object> request) throws Exception {
+        return mockMvc.perform(post("/api/automation/web/elements/collect-tasks/local-runner")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    private ResultActions awaitLocalRunnerCollectTaskReady(Long taskId) throws Exception {
+        String lastStatus = null;
+        for (int attempt = 0; attempt < 60; attempt++) {
+            String response = mockMvc.perform(get("/api/automation/web/elements/collect-tasks/{taskId}", taskId)
+                            .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            lastStatus = objectMapper.readTree(response).at("/data/status").asText();
+            if (!List.of("UPLOADED", "RULE_CLEANING", "AI_ANALYZING").contains(lastStatus)) {
+                return mockMvc.perform(get("/api/automation/web/elements/collect-tasks/{taskId}", taskId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE));
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("采集任务未在预期时间内完成异步处理，taskId=" + taskId + ", status=" + lastStatus);
+    }
+
     private Long createEnvironment(String name, String baseUrl) throws Exception {
         String response = mockMvc.perform(post("/api/automation/web/environments")
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
@@ -1311,6 +1368,32 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 "enabled", true,
                 "sortOrder", sortOrder
         );
+    }
+
+    private Map<String, Object> fileUploadArtifactStep(
+            String name,
+            String locatorValue,
+            String fileId,
+            String fileName,
+            String contentBase64,
+            int sortOrder
+    ) {
+        Map<String, Object> step = new LinkedHashMap<>();
+        step.put("stepName", name);
+        step.put("stepType", "file_upload");
+        step.put("locatorType", "CSS");
+        step.put("locatorValue", locatorValue);
+        step.put("inputValue", "artifact:" + fileId);
+        step.put("uploadArtifactBinding", Map.of(
+                "fileId", fileId,
+                "fileName", fileName,
+                "contentType", "text/plain",
+                "contentBase64", contentBase64,
+                "size", 12
+        ));
+        step.put("enabled", true);
+        step.put("sortOrder", sortOrder);
+        return step;
     }
 
     private Map<String, Object> localRunnerCandidate(String elementName, String locatorType, String locatorValue, int confidence) {

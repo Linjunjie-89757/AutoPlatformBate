@@ -60,6 +60,66 @@ test('collects candidates from iframe and open shadow root with context paths', 
   assert.deepEqual(stderr, []);
 });
 
+test('collects candidates from iframe shadow root with frame and shadow context paths', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const frameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<body>',
+    '<custom-shell></custom-shell>',
+    '<script>',
+    'const root = document.querySelector("custom-shell").attachShadow({ mode: "open" });',
+    'root.innerHTML = `<button id="inside-shadow-frame" data-testid="iframe-shadow-save">Iframe Shadow Save</button>`;',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const pageHtml = [
+    '<button id="outer">Outer</button>',
+    `<iframe id="child" srcdoc="${frameHtml.replace(/"/g, '&quot;')}"></iframe>`,
+  ].join('');
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: `data:text/html,${encodeURIComponent(pageHtml)}`,
+      workspaceId: 'account-open',
+      environmentId: 'collect-iframe-shadow-context',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const captured = await postJson(runnerBaseUrl, '/collect/capture', { waitMs: 100 });
+    assert.equal(captured.success, true);
+
+    const iframeShadowCandidate = captured.candidates.find(item => item.locator?.value === 'iframe-shadow-save');
+    assert.ok(iframeShadowCandidate, 'expected iframe shadow candidate');
+    assert.deepEqual(iframeShadowCandidate.framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(iframeShadowCandidate.shadowPath, ['custom-shell']);
+    assert.deepEqual(iframeShadowCandidate.locator.framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(iframeShadowCandidate.locator.shadowPath, ['custom-shell']);
+  } finally {
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 async function waitForRunnerHealth(baseUrl) {
   await waitFor(async () => {
     const health = await getJson(baseUrl, '/health').catch(() => null);

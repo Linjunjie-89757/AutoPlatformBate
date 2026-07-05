@@ -4,6 +4,14 @@ import type { WebUiLocatorType, WebUiStepType } from '../model/types'
 
 export type RecordingQualityCheckStatus = 'PASS' | 'WARN'
 export type RecordingQualityStatus = 'READY' | 'NEEDS_WORK'
+export type RecordingCompletionStage =
+  | 'EMPTY'
+  | 'UNSAVED'
+  | 'UPLOAD_REPAIR'
+  | 'ELEMENT_BINDING'
+  | 'QUALITY_FIX'
+  | 'REPLAY'
+  | 'COMPLETE'
 
 export interface RecordingQualityStep {
   name?: string | null
@@ -37,6 +45,15 @@ export interface RecordingQualityResult {
   fragileLocatorCount: number
   timingRiskCount: number
   fileUploadPathRiskCount: number
+}
+
+export interface RecordingCompletionSummary {
+  stage: RecordingCompletionStage
+  tone: 'info' | 'warning' | 'success'
+  title: string
+  summary: string
+  actionLabel: string | null
+  canRunReplay: boolean
 }
 
 export function buildRecordingQualityCheck(input: {
@@ -76,6 +93,94 @@ export function buildRecordingQualityCheck(input: {
     fragileLocatorCount,
     timingRiskCount,
     fileUploadPathRiskCount,
+  }
+}
+
+export function buildRecordingCompletionSummary(input: {
+  stepCount: number
+  savedStepCount: number
+  quality: Pick<RecordingQualityResult, 'ready' | 'assertionCount' | 'fragileLocatorCount' | 'timingRiskCount' | 'unboundLocatorCount' | 'fileUploadPathRiskCount'>
+  replayPassed: boolean
+  elementCandidateCount?: number | null
+}): RecordingCompletionSummary {
+  const stepCount = Math.max(0, Number(input.stepCount || 0))
+  const savedStepCount = Math.max(0, Number(input.savedStepCount || 0))
+  const elementCandidateCount = Math.max(0, Number(input.elementCandidateCount || 0))
+
+  if (stepCount <= 0) {
+    return {
+      stage: 'EMPTY',
+      tone: 'info',
+      title: '还没有录制步骤',
+      summary: '先录制或新增步骤，再进行保存、本地回放和质量收口。',
+      actionLabel: null,
+      canRunReplay: false,
+    }
+  }
+
+  if (savedStepCount !== stepCount) {
+    return {
+      stage: 'UNSAVED',
+      tone: 'warning',
+      title: '录制步骤待保存',
+      summary: `当前 ${stepCount} 步，已保存 ${savedStepCount} 步；请先保存后再本地回放。`,
+      actionLabel: '保存并本地回放',
+      canRunReplay: true,
+    }
+  }
+
+  if (input.quality.fileUploadPathRiskCount > 0) {
+    return {
+      stage: 'UPLOAD_REPAIR',
+      tone: 'warning',
+      title: '文件上传待修复',
+      summary: `还有 ${input.quality.fileUploadPathRiskCount} 个文件上传步骤缺少可回放绑定。`,
+      actionLabel: '定位上传问题',
+      canRunReplay: false,
+    }
+  }
+
+  if (input.quality.unboundLocatorCount > 0) {
+    const candidateText = elementCandidateCount > 0 ? `，其中 ${elementCandidateCount} 个已标记为候选` : ''
+    return {
+      stage: 'ELEMENT_BINDING',
+      tone: 'warning',
+      title: '元素绑定待收口',
+      summary: `还有 ${input.quality.unboundLocatorCount} 个定位步骤未绑定元素库${candidateText}。`,
+      actionLabel: elementCandidateCount > 0 ? '定位候选' : '候选入库',
+      canRunReplay: false,
+    }
+  }
+
+  if (!input.quality.ready && (input.quality.assertionCount <= 0 || input.quality.fragileLocatorCount > 0 || input.quality.timingRiskCount > 0)) {
+    return {
+      stage: 'QUALITY_FIX',
+      tone: 'warning',
+      title: '质量项待处理',
+      summary: '断言、定位器稳定性或等待配置仍有风险，建议处理后再沉淀。',
+      actionLabel: null,
+      canRunReplay: false,
+    }
+  }
+
+  if (!input.replayPassed) {
+    return {
+      stage: 'REPLAY',
+      tone: 'warning',
+      title: '等待本地回放通过',
+      summary: '步骤已保存且关键修复项已处理，请执行一次本地回放验证。',
+      actionLabel: '保存并本地回放',
+      canRunReplay: true,
+    }
+  }
+
+  return {
+    stage: 'COMPLETE',
+    tone: 'success',
+    title: '录制闭环已完成',
+    summary: '用例已保存，上传与元素绑定已收口，最近一次本地回放已通过。',
+    actionLabel: null,
+    canRunReplay: false,
   }
 }
 

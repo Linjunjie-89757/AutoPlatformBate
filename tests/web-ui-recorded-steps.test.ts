@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  buildRecordedCollectCandidateFingerprint,
   buildRecordedLocatorKey,
   findMatchingWebUiElementForRecordedStep,
   toWebUiCollectCandidatesFromRecordedSteps,
@@ -9,6 +10,7 @@ import {
 } from '../src/entities/web-ui-automation/lib/recordedSteps.ts'
 import {
   WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY,
+  buildRecordedCaseAutoRematchMessage,
   buildRecordedCaseCollectSaveNavigationQuery,
 } from '../src/entities/web-ui-automation/lib/collectTask.ts'
 
@@ -187,6 +189,20 @@ test('skips duplicate or invalid recorded collect candidates', () => {
   assert.equal(candidates[0].elementName, 'Submit')
 })
 
+test('builds stable recorded collect candidate fingerprints', () => {
+  const first = toWebUiCollectCandidatesFromRecordedSteps([
+    recordedCaseStep({ locatorValue: '#b' }),
+    recordedCaseStep({ locatorValue: '#a', framePath: [{ selector: 'iframe#checkout' }] }),
+  ])
+  const second = toWebUiCollectCandidatesFromRecordedSteps([
+    recordedCaseStep({ locatorValue: ' #a ', framePath: [{ selector: 'iframe#checkout' }] }),
+    recordedCaseStep({ locatorValue: '#b' }),
+  ])
+
+  assert.equal(buildRecordedCollectCandidateFingerprint(first), buildRecordedCollectCandidateFingerprint(second))
+  assert.equal(buildRecordedCollectCandidateFingerprint([]), '')
+})
+
 test('builds recorded case collect save query with auto rematch marker', () => {
   assert.deepEqual(buildRecordedCaseCollectSaveNavigationQuery({
     workspaceCode: 'account-open',
@@ -201,6 +217,21 @@ test('builds recorded case collect save query with auto rematch marker', () => {
     saved: '2',
     skipped: '1',
   })
+})
+
+test('builds recorded case auto rematch messages for persisted bindings', () => {
+  assert.equal(buildRecordedCaseAutoRematchMessage({
+    matchedCount: 2,
+    collectTaskId: 42,
+    savedCount: 2,
+    skippedCount: 1,
+    persisted: true,
+  }), '已自动回填 2 个元素库绑定并保存用例，候选入库新增 2 个、跳过 1 个，来源采集任务 #42')
+
+  assert.equal(buildRecordedCaseAutoRematchMessage({
+    matchedCount: 1,
+    persisted: false,
+  }), '已自动回填 1 个元素库绑定，保存用例后生效')
 })
 
 function recordedStep(overrides: Partial<LocalRunnerRecordedStep>): LocalRunnerRecordedStep {
@@ -223,6 +254,19 @@ function recordedStep(overrides: Partial<LocalRunnerRecordedStep>): LocalRunnerR
     sortOrder: 1,
     ...overrides,
   } as LocalRunnerRecordedStep
+}
+
+function recordedCaseStep(overrides: Partial<ReturnType<typeof toWebUiCaseStepFromRecordedStep>> = {}) {
+  return {
+    name: 'Recorded step',
+    type: 'CLICK',
+    elementName: null,
+    locatorType: 'CSS',
+    locatorValue: '#target',
+    framePath: null,
+    shadowPath: null,
+    ...overrides,
+  } as NonNullable<ReturnType<typeof toWebUiCaseStepFromRecordedStep>>
 }
 
 function element(overrides: Partial<WebUiElementItem>): WebUiElementItem {

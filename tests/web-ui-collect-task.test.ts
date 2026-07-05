@@ -327,8 +327,8 @@ test('builds front-end stage model for completed static collect task', () => {
   assert.deepEqual(stages.map(stage => [stage.key, stage.status]), [
     ['UPLOAD_SNAPSHOT', 'done'],
     ['RULE_CLEAN', 'done'],
-    ['AI_ANALYZE', 'pending'],
-    ['LOCAL_VALIDATE', 'pending'],
+    ['AI_ANALYZE', 'done'],
+    ['LOCAL_VALIDATE', 'done'],
     ['FINALIZE', 'done'],
   ])
 })
@@ -618,7 +618,7 @@ test('builds unique locator list for collect candidate revalidation', () => {
 
 test('classifies collect candidate review level and message', () => {
   assert.equal(getCollectCandidateReviewLevel({ validationStatus: 'PASSED', confidence: 88 }), 'success')
-  assert.equal(getCollectCandidateReviewMessage({ validationStatus: 'PASSED', matchCount: 1, confidence: 88 }), '真机验证通过，定位器匹配 1 个元素')
+  assert.equal(getCollectCandidateReviewMessage({ validationStatus: 'PASSED', matchCount: 1, confidence: 88 }), '本地页面验证通过，定位器匹配 1 个元素')
 
   assert.equal(getCollectCandidateReviewLevel({ validationStatus: 'FAILED', confidence: 88 }), 'danger')
   assert.equal(getCollectCandidateReviewMessage({ validationStatus: 'FAILED', validationMessage: '未找到元素', confidence: 88 }), '未找到元素')
@@ -627,7 +627,7 @@ test('classifies collect candidate review level and message', () => {
   assert.equal(getCollectCandidateReviewMessage({ validationStatus: 'MULTIPLE', matchCount: 3, confidence: 88 }), '定位器匹配 3 个元素，建议改成唯一定位器')
 
   assert.equal(getCollectCandidateReviewLevel({ validationStatus: 'UNVERIFIED', confidence: 88 }), 'warning')
-  assert.equal(getCollectCandidateReviewMessage({ validationStatus: 'UNVERIFIED', confidence: 88 }), '尚未经过本地 Runner 真机验证')
+  assert.equal(getCollectCandidateReviewMessage({ validationStatus: 'UNVERIFIED', confidence: 88 }), '尚未经过本地页面验证')
 
   assert.equal(getCollectCandidateReviewLevel({ validationStatus: 'PASSED', confidence: 55 }), 'warning')
   assert.equal(getCollectCandidateReviewMessage({ validationStatus: 'PASSED', confidence: 55 }), '稳定性评分偏低，建议确认定位器是否足够稳定')

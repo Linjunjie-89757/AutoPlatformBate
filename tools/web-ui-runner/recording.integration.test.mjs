@@ -475,6 +475,1118 @@ test('replays recorded file upload through WEB_CASE_RUN artifact refs', async ()
   assert.deepEqual(stderr, []);
 });
 
+test('replays recorded iframe interaction through WEB_CASE_RUN with framePath', async () => {
+  const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildRecordedIframeReplayPageHtml({ autoInteract: true }))}`;
+  const playbackPageUrl = `data:text/html,${encodeURIComponent(buildRecordedIframeReplayPageHtml({ autoInteract: false }))}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+  let recordedSteps = [];
+
+  const fakePlatform = createHttpServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_recording_iframe_replay_test',
+          runnerToken: 'runner_token',
+          runnerName: 'Recording Iframe Replay Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_recording_iframe_replay_001',
+            taskType: 'WEB_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_recording_iframe_replay_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 5,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {},
+            environmentSnapshot: {},
+            variableSnapshot: {},
+            scriptSnapshot: {},
+            artifactRefs: [],
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              caseSnapshot: {
+                caseId: 1010,
+                caseName: 'Recorded iframe replay case',
+                baseUrl: '',
+                headless: true,
+                defaultTimeoutMs: 5000,
+                steps: [
+                  {
+                    stepId: 'open-recorded-iframe-page',
+                    stepName: 'Open recorded iframe playback page',
+                    stepType: 'OPEN',
+                    inputValue: playbackPageUrl,
+                    enabled: true,
+                    sortOrder: 1,
+                  },
+                  ...recordedSteps.map((step, index) => ({
+                    ...step,
+                    stepId: `recorded-iframe-${index + 1}`,
+                    stepName: step.name || `Recorded iframe step ${index + 1}`,
+                    stepType: step.stepType || step.type,
+                    enabled: true,
+                    sortOrder: index + 2,
+                  })),
+                  {
+                    stepId: 'assert-recorded-iframe-result',
+                    stepName: 'Assert recorded iframe replay result',
+                    stepType: 'ASSERT_TEXT',
+                    locatorType: 'CSS',
+                    locatorValue: '#state',
+                    inputValue: 'clicked',
+                    framePath: [{ selector: 'iframe#child' }],
+                    enabled: true,
+                    sortOrder: recordedSteps.length + 2,
+                  },
+                ],
+              },
+              runOptions: {
+                debugMode: true,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_replay_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_replay_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_replay_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_replay_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(fakePlatform, platformPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.success, true);
+    assert.equal(started.recording.active, true);
+
+    await new Promise(resolve => setTimeout(resolve, 4300));
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.steps.length, 1);
+    assert.deepEqual(stopped.steps.map(item => item.type), ['CLICK']);
+    assert.equal(stopped.steps[0].locatorType, 'CSS');
+    assert.equal(stopped.steps[0].locatorValue, '#inside');
+    assert.deepEqual(stopped.steps[0].framePath, [{ selector: 'iframe#child' }]);
+    recordedSteps = stopped.steps;
+
+    await postJson(runnerBaseUrl, '/session/release', {});
+    const startedReplay = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'recording-iframe-replay-test',
+      intervalMs: 1000,
+      capabilities: ['WEB_CASE_RUN'],
+    });
+    assert.equal(startedReplay.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.register.length, 1);
+    assert.equal(reports.pull[0].capabilities.includes('WEB_CASE_RUN'), true);
+    assert.equal(reports.steps.length, 3);
+    assert.deepEqual(reports.steps.map(item => item.status), ['SUCCESS', 'SUCCESS', 'SUCCESS']);
+    assert.deepEqual(reports.steps[1].extra.framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(reports.steps[2].extra.framePath, [{ selector: 'iframe#child' }]);
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.results[0].summary.total, 3);
+    assert.equal(reports.results[0].summary.passed, 3);
+    assert.equal(reports.results[0].summary.failed, 0);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await closeServer(fakePlatform);
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('records native iframe click interaction with framePath', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildNativeIframeRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.success, true);
+    assert.equal(started.recording.active, true);
+
+    let status;
+    await waitFor(async () => {
+      status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 1;
+    }, 5000);
+
+    assert.equal(status.steps[0].type, 'CLICK');
+    assert.equal(status.steps[0].locatorType, 'CSS');
+    assert.equal(status.steps[0].locatorValue, '#inside');
+    assert.deepEqual(status.steps[0].framePath, [{ selector: 'iframe#child' }]);
+    assert.equal(status.page.url, 'about:srcdoc');
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.steps.length, 1);
+    assert.equal(stopped.steps[0].type, 'CLICK');
+    assert.equal(stopped.steps[0].locatorType, 'CSS');
+    assert.equal(stopped.steps[0].locatorValue, '#inside');
+    assert.deepEqual(stopped.steps[0].framePath, [{ selector: 'iframe#child' }]);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('records native iframe form interactions with framePath', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildNativeIframeFormRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.success, true);
+    assert.equal(started.recording.active, true);
+
+    let status;
+    await waitFor(async () => {
+      status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 3;
+    }, 5000);
+
+    assert.equal(status.page.url, 'about:srcdoc');
+    assert.deepEqual(status.steps.map(item => item.type), ['FILL', 'SELECT', 'CLICK']);
+
+    const [fillStep, selectStep, clickStep] = status.steps;
+    assert.equal(fillStep.locatorType, 'CSS');
+    assert.equal(fillStep.locatorValue, '#name');
+    assert.equal(fillStep.inputValue, 'Alice');
+    assert.deepEqual(fillStep.framePath, [{ selector: 'iframe#child' }]);
+    assert.equal(selectStep.locatorType, 'CSS');
+    assert.equal(selectStep.locatorValue, '#role');
+    assert.equal(selectStep.inputValue, 'admin');
+    assert.deepEqual(selectStep.framePath, [{ selector: 'iframe#child' }]);
+    assert.equal(clickStep.locatorType, 'TEST_ID');
+    assert.equal(clickStep.locatorValue, 'save-order');
+    assert.deepEqual(clickStep.framePath, [{ selector: 'iframe#child' }]);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.steps.length, 3);
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILL', 'SELECT', 'CLICK']);
+    assert.deepEqual(stopped.steps.map(item => item.framePath), [
+      [{ selector: 'iframe#child' }],
+      [{ selector: 'iframe#child' }],
+      [{ selector: 'iframe#child' }],
+    ]);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('records native iframe shadow click interaction with framePath and shadowPath', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildNativeIframeShadowRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.success, true);
+    assert.equal(started.recording.active, true);
+
+    let status;
+    await waitFor(async () => {
+      status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 1;
+    }, 5000);
+
+    assert.equal(status.page.url, 'about:srcdoc');
+    assert.equal(status.steps[0].type, 'CLICK');
+    assert.equal(status.steps[0].locatorType, 'CSS');
+    assert.equal(status.steps[0].locatorValue, '#inside-shadow');
+    assert.deepEqual(status.steps[0].framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(status.steps[0].shadowPath, ['custom-shell']);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.steps.length, 1);
+    assert.equal(stopped.steps[0].type, 'CLICK');
+    assert.equal(stopped.steps[0].locatorType, 'CSS');
+    assert.equal(stopped.steps[0].locatorValue, '#inside-shadow');
+    assert.deepEqual(stopped.steps[0].framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(stopped.steps[0].shadowPath, ['custom-shell']);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('records native nested iframe click interaction with recursive framePath', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildNativeNestedIframeRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.success, true);
+    assert.equal(started.recording.active, true);
+
+    let status;
+    await waitFor(async () => {
+      status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 1;
+    }, 5000);
+
+    assert.equal(status.page.url, 'about:srcdoc');
+    assert.equal(status.steps[0].type, 'CLICK');
+    assert.equal(status.steps[0].locatorType, 'CSS');
+    assert.equal(status.steps[0].locatorValue, '#inside');
+    assert.deepEqual(status.steps[0].framePath, [{ selector: 'iframe#outer' }, { selector: 'iframe#inner' }]);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.steps.length, 1);
+    assert.equal(stopped.steps[0].type, 'CLICK');
+    assert.equal(stopped.steps[0].locatorType, 'CSS');
+    assert.equal(stopped.steps[0].locatorValue, '#inside');
+    assert.deepEqual(stopped.steps[0].framePath, [{ selector: 'iframe#outer' }, { selector: 'iframe#inner' }]);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('replays nested iframe interaction through WEB_CASE_RUN with recursive framePath', async () => {
+  const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const playbackPageUrl = `data:text/html,${encodeURIComponent(buildRecordedNestedIframeReplayPageHtml({ autoInteract: false }))}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+  let recordedSteps = [];
+
+  const fakePlatform = createHttpServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_recording_nested_iframe_replay_test',
+          runnerToken: 'runner_token',
+          runnerName: 'Recording Nested Iframe Replay Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_recording_nested_iframe_replay_001',
+            taskType: 'WEB_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_recording_nested_iframe_replay_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 5,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {},
+            environmentSnapshot: {},
+            variableSnapshot: {},
+            scriptSnapshot: {},
+            artifactRefs: [],
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              caseSnapshot: {
+                caseId: 1011,
+                caseName: 'Recorded nested iframe replay case',
+                baseUrl: '',
+                headless: true,
+                defaultTimeoutMs: 5000,
+                steps: [
+                  {
+                    stepId: 'open-recorded-nested-iframe-page',
+                    stepName: 'Open recorded nested iframe playback page',
+                    stepType: 'OPEN',
+                    inputValue: playbackPageUrl,
+                    enabled: true,
+                    sortOrder: 1,
+                  },
+                  ...recordedSteps.map((step, index) => ({
+                    ...step,
+                    stepId: `recorded-nested-iframe-${index + 1}`,
+                    stepName: step.name || `Recorded nested iframe step ${index + 1}`,
+                    stepType: step.stepType || step.type,
+                    enabled: true,
+                    sortOrder: index + 2,
+                  })),
+                  {
+                    stepId: 'assert-recorded-nested-iframe-result',
+                    stepName: 'Assert recorded nested iframe replay result',
+                    stepType: 'ASSERT_TEXT',
+                    locatorType: 'CSS',
+                    locatorValue: '#state',
+                    inputValue: 'clicked',
+                    framePath: [{ selector: 'iframe#outer' }, { selector: 'iframe#inner' }],
+                    enabled: true,
+                    sortOrder: recordedSteps.length + 2,
+                  },
+                ],
+              },
+              runOptions: {
+                debugMode: true,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_nested_iframe_replay_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_nested_iframe_replay_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_nested_iframe_replay_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_nested_iframe_replay_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(fakePlatform, platformPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    recordedSteps = [{
+      type: 'CLICK',
+      stepType: 'CLICK',
+      locatorType: 'CSS',
+      locatorValue: '#inside',
+      framePath: [{ selector: 'iframe#outer' }, { selector: 'iframe#inner' }],
+    }];
+
+    const startedReplay = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'recording-nested-iframe-replay-test',
+      intervalMs: 1000,
+      capabilities: ['WEB_CASE_RUN'],
+    });
+    assert.equal(startedReplay.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.register.length, 1);
+    assert.equal(reports.pull[0].capabilities.includes('WEB_CASE_RUN'), true);
+    assert.equal(reports.steps.length, 3);
+    assert.deepEqual(reports.steps.map(item => item.status), ['SUCCESS', 'SUCCESS', 'SUCCESS']);
+    assert.deepEqual(reports.steps[1].extra.framePath, [{ selector: 'iframe#outer' }, { selector: 'iframe#inner' }]);
+    assert.deepEqual(reports.steps[2].extra.framePath, [{ selector: 'iframe#outer' }, { selector: 'iframe#inner' }]);
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.results[0].summary.total, 3);
+    assert.equal(reports.results[0].summary.passed, 3);
+    assert.equal(reports.results[0].summary.failed, 0);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await closeServer(fakePlatform);
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('replays iframe shadow interaction through WEB_CASE_RUN with framePath and shadowPath', async () => {
+  const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const playbackPageUrl = `data:text/html,${encodeURIComponent(buildRecordedIframeShadowReplayPageHtml())}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+  let recordedSteps = [];
+
+  const fakePlatform = createHttpServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_recording_iframe_shadow_replay_test',
+          runnerToken: 'runner_token',
+          runnerName: 'Recording Iframe Shadow Replay Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_recording_iframe_shadow_replay_001',
+            taskType: 'WEB_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_recording_iframe_shadow_replay_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 5,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {},
+            environmentSnapshot: {},
+            variableSnapshot: {},
+            scriptSnapshot: {},
+            artifactRefs: [],
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              caseSnapshot: {
+                caseId: 1012,
+                caseName: 'Recorded iframe shadow replay case',
+                baseUrl: '',
+                headless: true,
+                defaultTimeoutMs: 5000,
+                steps: [
+                  {
+                    stepId: 'open-recorded-iframe-shadow-page',
+                    stepName: 'Open recorded iframe shadow playback page',
+                    stepType: 'OPEN',
+                    inputValue: playbackPageUrl,
+                    enabled: true,
+                    sortOrder: 1,
+                  },
+                  ...recordedSteps.map((step, index) => ({
+                    ...step,
+                    stepId: `recorded-iframe-shadow-${index + 1}`,
+                    stepName: step.name || `Recorded iframe shadow step ${index + 1}`,
+                    stepType: step.stepType || step.type,
+                    enabled: true,
+                    sortOrder: index + 2,
+                  })),
+                  {
+                    stepId: 'assert-recorded-iframe-shadow-result',
+                    stepName: 'Assert recorded iframe shadow replay result',
+                    stepType: 'ASSERT_TEXT',
+                    locatorType: 'CSS',
+                    locatorValue: '#state',
+                    inputValue: 'clicked',
+                    framePath: [{ selector: 'iframe#child' }],
+                    shadowPath: ['custom-shell'],
+                    enabled: true,
+                    sortOrder: recordedSteps.length + 2,
+                  },
+                ],
+              },
+              runOptions: {
+                debugMode: true,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_shadow_replay_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_shadow_replay_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_shadow_replay_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_iframe_shadow_replay_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(fakePlatform, platformPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    recordedSteps = [{
+      type: 'CLICK',
+      stepType: 'CLICK',
+      locatorType: 'CSS',
+      locatorValue: '#inside-shadow',
+      framePath: [{ selector: 'iframe#child' }],
+      shadowPath: ['custom-shell'],
+    }];
+
+    const startedReplay = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'recording-iframe-shadow-replay-test',
+      intervalMs: 1000,
+      capabilities: ['WEB_CASE_RUN'],
+    });
+    assert.equal(startedReplay.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.register.length, 1);
+    assert.equal(reports.pull[0].capabilities.includes('WEB_CASE_RUN'), true);
+    assert.equal(reports.steps.length, 3);
+    assert.deepEqual(reports.steps.map(item => item.status), ['SUCCESS', 'SUCCESS', 'SUCCESS']);
+    assert.deepEqual(reports.steps[1].extra.framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(reports.steps[1].extra.shadowPath, ['custom-shell']);
+    assert.deepEqual(reports.steps[2].extra.framePath, [{ selector: 'iframe#child' }]);
+    assert.deepEqual(reports.steps[2].extra.shadowPath, ['custom-shell']);
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.results[0].summary.total, 3);
+    assert.equal(reports.results[0].summary.passed, 3);
+    assert.equal(reports.results[0].summary.failed, 0);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await closeServer(fakePlatform);
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('replays recorded shadow interaction through WEB_CASE_RUN with shadowPath', async () => {
+  const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildRecordedShadowReplayPageHtml({ autoInteract: true }))}`;
+  const playbackPageUrl = `data:text/html,${encodeURIComponent(buildRecordedShadowReplayPageHtml({ autoInteract: false }))}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+  let recordedSteps = [];
+
+  const fakePlatform = createHttpServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_recording_shadow_replay_test',
+          runnerToken: 'runner_token',
+          runnerName: 'Recording Shadow Replay Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_recording_shadow_replay_001',
+            taskType: 'WEB_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_recording_shadow_replay_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 5,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {},
+            environmentSnapshot: {},
+            variableSnapshot: {},
+            scriptSnapshot: {},
+            artifactRefs: [],
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              caseSnapshot: {
+                caseId: 1011,
+                caseName: 'Recorded shadow replay case',
+                baseUrl: '',
+                headless: true,
+                defaultTimeoutMs: 5000,
+                steps: [
+                  {
+                    stepId: 'open-recorded-shadow-page',
+                    stepName: 'Open recorded shadow playback page',
+                    stepType: 'OPEN',
+                    inputValue: playbackPageUrl,
+                    enabled: true,
+                    sortOrder: 1,
+                  },
+                  ...recordedSteps.map((step, index) => ({
+                    ...step,
+                    stepId: `recorded-shadow-${index + 1}`,
+                    stepName: step.name || `Recorded shadow step ${index + 1}`,
+                    stepType: step.stepType || step.type,
+                    enabled: true,
+                    sortOrder: index + 2,
+                  })),
+                  {
+                    stepId: 'assert-recorded-shadow-result',
+                    stepName: 'Assert recorded shadow replay result',
+                    stepType: 'ASSERT_TEXT',
+                    locatorType: 'CSS',
+                    locatorValue: '#state',
+                    inputValue: 'clicked',
+                    shadowPath: ['custom-shell'],
+                    enabled: true,
+                    sortOrder: recordedSteps.length + 2,
+                  },
+                ],
+              },
+              runOptions: {
+                debugMode: true,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_shadow_replay_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_shadow_replay_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_shadow_replay_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_shadow_replay_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(fakePlatform, platformPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.success, true);
+    assert.equal(started.recording.active, true);
+
+    await new Promise(resolve => setTimeout(resolve, 2800));
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.steps.length, 1);
+    assert.deepEqual(stopped.steps.map(item => item.type), ['CLICK']);
+    assert.equal(stopped.steps[0].locatorType, 'CSS');
+    assert.equal(stopped.steps[0].locatorValue, '#inside-shadow');
+    assert.deepEqual(stopped.steps[0].shadowPath, ['custom-shell']);
+    recordedSteps = stopped.steps;
+
+    await postJson(runnerBaseUrl, '/session/release', {});
+    const startedReplay = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'recording-shadow-replay-test',
+      intervalMs: 1000,
+      capabilities: ['WEB_CASE_RUN'],
+    });
+    assert.equal(startedReplay.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.register.length, 1);
+    assert.equal(reports.pull[0].capabilities.includes('WEB_CASE_RUN'), true);
+    assert.equal(reports.steps.length, 3);
+    assert.deepEqual(reports.steps.map(item => item.status), ['SUCCESS', 'SUCCESS', 'SUCCESS']);
+    assert.deepEqual(reports.steps[1].extra.shadowPath, ['custom-shell']);
+    assert.deepEqual(reports.steps[2].extra.shadowPath, ['custom-shell']);
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.results[0].summary.total, 3);
+    assert.equal(reports.results[0].summary.passed, 3);
+    assert.equal(reports.results[0].summary.failed, 0);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await closeServer(fakePlatform);
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 test('pauses resumes and undoes recorded page steps', async () => {
   const runnerPort = await findAvailablePort();
   const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
@@ -1379,6 +2491,378 @@ function buildRecordedUploadReplayPageHtml({ autoInteract }) {
       '  input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));',
       '}, 1000);',
     ].join('') : '',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildRecordedIframeReplayPageHtml({ autoInteract }) {
+  const frameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<body>',
+    '<button id="inside" onclick="document.querySelector(\'#state\').textContent = \'clicked\'">Inside</button>',
+    '<div id="state">ready</div>',
+    '</body>',
+    '</html>',
+  ].join('');
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Recording Iframe Replay</title></head>',
+    '<body>',
+    '<iframe id="child"></iframe>',
+    '<script>',
+    `const frameSrcdoc = ${JSON.stringify(frameHtml)};`,
+    'const frame = document.querySelector("#child");',
+    autoInteract ? [
+      'window.addEventListener("load", () => {',
+      '  window.setTimeout(() => {',
+        '    frame.srcdoc = frameSrcdoc;',
+      '  }, 500);',
+      '  window.setTimeout(() => {',
+      '    const binding = window.__autoWebRunnerRecordEvent;',
+      '    if (typeof binding === "function") {',
+      '      binding({',
+      '        kind: "CLICK",',
+      '        timestamp: new Date().toISOString(),',
+      '        url: window.location.href,',
+      '        title: document.title,',
+      '        target: {',
+      '          tagName: "button",',
+      '          elementType: "BUTTON",',
+      '          text: "Inside",',
+      '          label: "",',
+      '          placeholder: "",',
+      '          role: "button",',
+      '          testId: "",',
+      '          locator: {',
+      '            strategy: "CSS",',
+      '            value: "#inside",',
+      '            framePath: [{ selector: "iframe#child" }]',
+      '          }',
+      '        }',
+      '      }).catch(() => {});',
+      '    }',
+      '    const button = frame.contentWindow?.document?.querySelector("#inside");',
+      '    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));',
+      '  }, 2200);',
+      '});',
+    ].join('') : 'frame.srcdoc = frameSrcdoc;',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildNativeIframeRecordingPageHtml() {
+  const frameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<body>',
+    '<button id="inside" onclick="document.querySelector(\'#state\').textContent = \'clicked\'">Inside</button>',
+    '<div id="state">ready</div>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const escapedFrameHtml = frameHtml.replace(/"/g, '&quot;');
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Native Iframe Recording</title></head>',
+    '<body>',
+    `<iframe id="child" srcdoc="${escapedFrameHtml}"></iframe>`,
+    '<script>',
+    'window.addEventListener("load", () => {',
+    '  window.setTimeout(() => {',
+    '    const button = document.querySelector("#child")?.contentWindow?.document?.querySelector("#inside");',
+    '    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));',
+    '  }, 2000);',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildNativeIframeFormRecordingPageHtml() {
+  const frameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<body>',
+    '<label for="name">Name</label>',
+    '<input id="name" />',
+    '<label for="role">Role</label>',
+    '<select id="role"><option value="">Choose</option><option value="admin">Admin</option></select>',
+    '<button id="save" data-testid="save-order" onclick="document.querySelector(\'#result\').textContent = `${document.querySelector(\'#name\').value}:${document.querySelector(\'#role\').value}`">Save</button>',
+    '<div id="result">ready</div>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const escapedFrameHtml = frameHtml.replace(/"/g, '&quot;');
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Native Iframe Form Recording</title></head>',
+    '<body>',
+    `<iframe id="child" srcdoc="${escapedFrameHtml}"></iframe>`,
+    '<script>',
+    'window.addEventListener("load", () => {',
+    '  window.setTimeout(() => {',
+    '    const frameDocument = document.querySelector("#child")?.contentWindow?.document;',
+    '    const input = frameDocument?.querySelector("#name");',
+    '    if (input) {',
+    '      input.value = "Alice";',
+    '      input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));',
+    '    }',
+    '  }, 1200);',
+    '  window.setTimeout(() => {',
+    '    const frameDocument = document.querySelector("#child")?.contentWindow?.document;',
+    '    const select = frameDocument?.querySelector("#role");',
+    '    if (select) {',
+    '      select.value = "admin";',
+    '      select.dispatchEvent(new Event("change", { bubbles: true, composed: true }));',
+    '    }',
+    '  }, 1600);',
+    '  window.setTimeout(() => {',
+    '    const button = document.querySelector("#child")?.contentWindow?.document?.querySelector("#save");',
+    '    button?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));',
+    '  }, 2000);',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildNativeIframeShadowRecordingPageHtml() {
+  const frameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:12px;}button{display:block;}</style></head>',
+    '<body>',
+    '<custom-shell></custom-shell>',
+    '<script>',
+    'const root = document.querySelector("custom-shell").attachShadow({ mode: "open" });',
+    'root.innerHTML = `<button id="inside-shadow">Shadow</button><div id="state">ready</div>`;',
+    'root.querySelector("#inside-shadow").addEventListener("click", () => {',
+    '  root.querySelector("#state").textContent = "clicked";',
+    '});',
+    'window.addEventListener("load", () => {',
+    '  window.setTimeout(() => {',
+    '    root.querySelector("#inside-shadow")?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));',
+    '  }, 2000);',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const escapedFrameHtml = frameHtml.replace(/"/g, '&quot;');
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:8px;}iframe{width:760px;height:320px;border:0;display:block;}</style><title>Native Iframe Shadow Recording</title></head>',
+    '<body>',
+    `<iframe id="child" srcdoc="${escapedFrameHtml}"></iframe>`,
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildNativeNestedIframeRecordingPageHtml() {
+  const innerFrameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:12px;}button{display:block;}</style></head>',
+    '<body>',
+    '<button id="inside" onclick="document.querySelector(\'#state\').textContent = \'clicked\'">Inside</button>',
+    '<div id="state">ready</div>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const outerFrameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:8px;}iframe{width:640px;height:240px;border:0;display:block;}</style></head>',
+    '<body>',
+    '<iframe id="inner"></iframe>',
+    '</body>',
+    '</html>',
+  ].join('');
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:8px;}iframe{width:760px;height:360px;border:0;display:block;}</style><title>Native Nested Iframe Recording</title></head>',
+    '<body>',
+    '<iframe id="outer"></iframe>',
+    '<script>',
+    `const innerFrameHtml = ${JSON.stringify(innerFrameHtml)};`,
+    `const outerFrameHtml = ${JSON.stringify(outerFrameHtml)};`,
+    'const outer = document.querySelector("#outer");',
+    'outer.addEventListener("load", () => {',
+    '  const inner = outer.contentWindow?.document?.querySelector("#inner");',
+    '  if (inner && !inner.srcdoc) {',
+    '    inner.srcdoc = innerFrameHtml;',
+    '  }',
+    '});',
+    'outer.srcdoc = outerFrameHtml;',
+    'window.addEventListener("load", () => {',
+    '  let attempts = 0;',
+    '  const timer = window.setInterval(() => {',
+    '    attempts += 1;',
+    '    const innerWindow = document.querySelector("#outer")?.contentWindow?.document?.querySelector("#inner")?.contentWindow;',
+    '    const button = innerWindow?.document?.querySelector("#inside");',
+    '    const recorderReady = innerWindow && innerWindow.__autoWebRunnerRecorderInstalled === true && typeof innerWindow.__autoWebRunnerRecordEvent === "function";',
+    '    if (button && recorderReady) {',
+    '      window.clearInterval(timer);',
+    '      button.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));',
+    '      return;',
+    '    }',
+    '    if (attempts >= 30) {',
+    '      window.clearInterval(timer);',
+    '    }',
+    '  }, 200);',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildRecordedNestedIframeReplayPageHtml({ autoInteract }) {
+  const innerFrameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:12px;}button{display:block;}</style></head>',
+    '<body>',
+    '<button id="inside" onclick="document.querySelector(\'#state\').textContent = \'clicked\'">Inside</button>',
+    '<div id="state">ready</div>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const outerFrameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:8px;}iframe{width:640px;height:240px;border:0;display:block;}</style></head>',
+    '<body>',
+    '<iframe id="inner"></iframe>',
+    '</body>',
+    '</html>',
+  ].join('');
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:8px;}iframe{width:760px;height:360px;border:0;display:block;}</style><title>Recording Nested Iframe Replay</title></head>',
+    '<body>',
+    '<iframe id="outer"></iframe>',
+    '<script>',
+    `const innerFrameHtml = ${JSON.stringify(innerFrameHtml)};`,
+    `const outerFrameHtml = ${JSON.stringify(outerFrameHtml)};`,
+    'const outer = document.querySelector("#outer");',
+    'outer.addEventListener("load", () => {',
+    '  const inner = outer.contentWindow?.document?.querySelector("#inner");',
+    '  if (inner && !inner.srcdoc) {',
+    '    inner.srcdoc = innerFrameHtml;',
+    '  }',
+    '});',
+    'outer.srcdoc = outerFrameHtml;',
+    autoInteract ? [
+      'window.addEventListener("load", () => {',
+      '  let attempts = 0;',
+      '  const timer = window.setInterval(() => {',
+      '    attempts += 1;',
+      '    const button = document.querySelector("#outer")?.contentWindow?.document?.querySelector("#inner")?.contentWindow?.document?.querySelector("#inside");',
+      '    if (button) {',
+      '      window.clearInterval(timer);',
+      '      const binding = window.__autoWebRunnerRecordEvent;',
+      '      if (typeof binding === "function") {',
+      '        binding({',
+      '          kind: "CLICK",',
+      '          timestamp: new Date().toISOString(),',
+      '          url: window.location.href,',
+      '          title: document.title,',
+      '          target: {',
+      '            tagName: "button",',
+      '            elementType: "BUTTON",',
+      '            text: "Inside",',
+      '            label: "",',
+      '            placeholder: "",',
+      '            role: "button",',
+      '            testId: "",',
+      '            locator: {',
+      '              strategy: "CSS",',
+      '              value: "#inside",',
+      '              framePath: [{ selector: "iframe#outer" }, { selector: "iframe#inner" }]',
+      '            }',
+      '          }',
+      '        }).catch(() => {});',
+      '      }',
+      '      return;',
+      '    }',
+      '    if (attempts >= 20) {',
+      '      window.clearInterval(timer);',
+      '    }',
+      '  }, 200);',
+      '});',
+    ].join('') : '',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildRecordedIframeShadowReplayPageHtml() {
+  const frameHtml = [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:12px;}button{display:block;}</style></head>',
+    '<body>',
+    '<custom-shell></custom-shell>',
+    '<script>',
+    'const root = document.querySelector("custom-shell").attachShadow({ mode: "open" });',
+    'root.innerHTML = `<button id="inside-shadow">Shadow</button><div id="state">ready</div>`;',
+    'root.querySelector("#inside-shadow").addEventListener("click", () => {',
+    '  root.querySelector("#state").textContent = "clicked";',
+    '});',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+  const escapedFrameHtml = frameHtml.replace(/"/g, '&quot;');
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><style>html,body{margin:0;padding:8px;}iframe{width:760px;height:320px;border:0;display:block;}</style><title>Recording Iframe Shadow Replay</title></head>',
+    '<body>',
+    `<iframe id="child" srcdoc="${escapedFrameHtml}"></iframe>`,
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildRecordedShadowReplayPageHtml({ autoInteract }) {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Recording Shadow Replay</title></head>',
+    '<body>',
+    '<button id="outside">Outer</button>',
+    '<custom-shell></custom-shell>',
+    '<script>',
+    'const root = document.querySelector("custom-shell").attachShadow({ mode: "open" });',
+    'root.innerHTML = `<button id="inside-shadow">Shadow</button><div id="state">ready</div>`;',
+    'root.querySelector("#inside-shadow").addEventListener("click", () => {',
+    '  root.querySelector("#state").textContent = "clicked";',
+    '});',
+    autoInteract ? 'window.setTimeout(() => root.querySelector("#inside-shadow")?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true })), 2000);' : '',
     '</script>',
     '</body>',
     '</html>',
