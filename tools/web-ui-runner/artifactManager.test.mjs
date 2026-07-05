@@ -61,7 +61,7 @@ test('artifact manager materializes inline base64 artifacts to a local file', as
   const filePath = resolveArtifactUploadPath(task, 'artifact:upload-file');
 
   try {
-    assert.match(filePath, /upload-file|upload\.txt/);
+    assert.match(filePath, /upload-file[\\/]+upload\.txt$/);
     assert.equal(await readFile(filePath, 'utf8'), 'inline-upload-content');
     assert.equal(resolveArtifactUploadPath(task, 'artifact:upload-file'), filePath);
   } finally {

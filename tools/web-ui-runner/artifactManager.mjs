@@ -61,8 +61,9 @@ function materializeInlineArtifact(task, artifact, fileId) {
   const safeFileId = sanitizePathSegment(fileId);
   const safeFileName = sanitizeFileName(optionalString(artifact.fileName || artifact.name) || safeFileId);
   const artifactDir = join(tmpdir(), 'auto-web-ui-runner-artifacts', runId);
-  mkdirSync(artifactDir, { recursive: true });
-  const localPath = join(artifactDir, `${safeFileId}-${safeFileName}`);
+  const artifactFileDir = join(artifactDir, safeFileId);
+  mkdirSync(artifactFileDir, { recursive: true });
+  const localPath = join(artifactFileDir, safeFileName);
   writeFileSync(localPath, Buffer.from(contentBase64, 'base64'));
   artifact.localPath = localPath;
   return localPath;

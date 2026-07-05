@@ -234,6 +234,247 @@ test('records page input, select and click events as runnable web ui steps', asy
   assert.deepEqual(stderr, []);
 });
 
+test('replays recorded file upload through WEB_CASE_RUN artifact refs', async () => {
+  const runnerPort = await findAvailablePort();
+  let platformPort = await findAvailablePort();
+  while (platformPort === runnerPort) {
+    platformPort = await findAvailablePort();
+  }
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const platformBaseUrl = `http://127.0.0.1:${platformPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildRecordedUploadReplayPageHtml({ autoInteract: true }))}`;
+  const playbackPageUrl = `data:text/html,${encodeURIComponent(buildRecordedUploadReplayPageHtml({ autoInteract: false }))}`;
+  const reports = {
+    register: [],
+    pull: [],
+    status: [],
+    logs: [],
+    steps: [],
+    results: [],
+  };
+  let taskPulled = false;
+  let recordedSteps = [];
+  let artifactRefs = [];
+
+  const fakePlatform = createHttpServer(async (request, response) => {
+    const url = new URL(request.url || '/', platformBaseUrl);
+    const body = await readJson(request);
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/register') {
+      reports.register.push(body);
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          runnerId: 'runner_recording_upload_replay_test',
+          runnerToken: 'runner_token',
+          runnerName: 'Recording Upload Replay Test Runner',
+          protocolVersion: '1.0',
+          accepted: true,
+          message: 'registered',
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/pull') {
+      reports.pull.push(body);
+      if (taskPulled) {
+        return sendJson(response, 200, {
+          success: true,
+          data: {
+            hasTask: false,
+            serverTime: new Date().toISOString(),
+            pollIntervalMs: 1000,
+            task: null,
+          },
+        });
+      }
+      taskPulled = true;
+      return sendJson(response, 200, {
+        success: true,
+        data: {
+          hasTask: true,
+          serverTime: new Date().toISOString(),
+          pollIntervalMs: 1000,
+          task: {
+            runId: 'run_recording_upload_replay_001',
+            taskType: 'WEB_CASE_RUN',
+            executionLocation: 'LOCAL_RUNNER',
+            executionToken: 'execution_token',
+            runnerId: 'runner_recording_upload_replay_test',
+            workspaceCode: 'account-open',
+            userId: '1',
+            protocolVersion: '1.0',
+            priority: 'MANUAL',
+            resourceCost: 5,
+            createdAt: new Date().toISOString(),
+            deadlineAt: null,
+            timeoutPolicy: {},
+            environmentSnapshot: {},
+            variableSnapshot: {},
+            scriptSnapshot: {},
+            artifactRefs,
+            maskingRules: [],
+            screenshotPolicy: {},
+            payload: {
+              caseSnapshot: {
+                caseId: 1003,
+                caseName: 'Recorded upload replay case',
+                baseUrl: '',
+                headless: true,
+                defaultTimeoutMs: 5000,
+                steps: [
+                  {
+                    stepId: 'open-recorded-upload-page',
+                    stepName: 'Open recorded upload playback page',
+                    stepType: 'OPEN',
+                    inputValue: playbackPageUrl,
+                    enabled: true,
+                    sortOrder: 1,
+                  },
+                  ...recordedSteps.map((step, index) => ({
+                    ...step,
+                    stepId: `recorded-upload-${index + 1}`,
+                    stepName: step.name || `Recorded upload step ${index + 1}`,
+                    stepType: step.stepType || step.type,
+                    enabled: true,
+                    sortOrder: index + 2,
+                  })),
+                  {
+                    stepId: 'assert-recorded-upload-result',
+                    stepName: 'Assert recorded upload replay result',
+                    stepType: 'ASSERT_TEXT',
+                    locatorType: 'CSS',
+                    locatorValue: '#result',
+                    inputValue: 'Uploaded upload-demo.txt',
+                    enabled: true,
+                    sortOrder: recordedSteps.length + 2,
+                  },
+                ],
+              },
+              runOptions: {
+                debugMode: true,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_upload_replay_001/status') {
+      reports.status.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_upload_replay_001/logs') {
+      reports.logs.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_upload_replay_001/steps') {
+      reports.steps.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: 'RUNNING' } });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/public/local-runner/tasks/run_recording_upload_replay_001/result') {
+      reports.results.push(body);
+      return sendJson(response, 200, { success: true, data: { accepted: true, status: body.status } });
+    }
+
+    return sendJson(response, 404, {
+      success: false,
+      message: `Unexpected platform route: ${request.method} ${url.pathname}`,
+    });
+  });
+
+  await listen(fakePlatform, platformPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.success, true);
+    assert.equal(started.recording.active, true);
+
+    await new Promise(resolve => setTimeout(resolve, 1600));
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.success, true);
+    assert.equal(stopped.steps.length, 1);
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILE_UPLOAD']);
+    assert.equal(stopped.steps[0].locatorType, 'CSS');
+    assert.equal(stopped.steps[0].locatorValue, '#attachment');
+    assert.equal(stopped.steps[0].inputValue, 'upload-demo.txt');
+    assert.deepEqual(stopped.steps[0].uploadArtifact, {
+      fileName: 'upload-demo.txt',
+      contentType: 'text/plain',
+      contentBase64: 'ZGVtbw==',
+      size: 4,
+      captureStatus: 'READY',
+    });
+
+    const uploadArtifact = stopped.steps[0].uploadArtifact;
+    artifactRefs = [{
+      fileId: 'recorded-upload-artifact-1',
+      artifactId: 'recorded-upload-artifact-1',
+      fileName: uploadArtifact.fileName,
+      contentType: uploadArtifact.contentType,
+      contentBase64: uploadArtifact.contentBase64,
+      size: uploadArtifact.size,
+    }];
+    recordedSteps = stopped.steps.map((step) => ({
+      ...step,
+      inputValue: `artifact:${artifactRefs[0].fileId}`,
+    }));
+
+    await postJson(runnerBaseUrl, '/session/release', {});
+    const startedReplay = await postJson(runnerBaseUrl, '/tasks/poll/start', {
+      apiBaseUrl: platformBaseUrl,
+      installId: 'recording-upload-replay-test',
+      intervalMs: 1000,
+      capabilities: ['WEB_CASE_RUN'],
+    });
+    assert.equal(startedReplay.success, true);
+
+    await waitFor(() => reports.results.length > 0);
+
+    assert.equal(reports.register.length, 1);
+    assert.equal(reports.pull[0].capabilities.includes('WEB_CASE_RUN'), true);
+    assert.equal(reports.steps.length, 3);
+    assert.deepEqual(reports.steps.map(item => item.status), ['SUCCESS', 'SUCCESS', 'SUCCESS']);
+    assert.equal(reports.results[0].status, 'SUCCESS');
+    assert.equal(reports.results[0].summary.total, 3);
+    assert.equal(reports.results[0].summary.passed, 3);
+    assert.equal(reports.results[0].summary.failed, 0);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/tasks/poll/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await closeServer(fakePlatform);
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
 test('pauses resumes and undoes recorded page steps', async () => {
   const runnerPort = await findAvailablePort();
   const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
@@ -1105,6 +1346,37 @@ function buildRecordingPageHtml({ autoInteract }) {
       '  select.value = "admin";',
       '  select.dispatchEvent(new Event("change", { bubbles: true }));',
       '  document.querySelector("#save").click();',
+      '}, 1000);',
+    ].join('') : '',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildRecordedUploadReplayPageHtml({ autoInteract }) {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Recording Upload Replay</title></head>',
+    '<body>',
+    '<label for="attachment">Attachment</label>',
+    '<input id="attachment" type="file" />',
+    '<div id="result">Waiting</div>',
+    '<script>',
+    'const input = document.querySelector("#attachment");',
+    'const result = document.querySelector("#result");',
+    'function syncResult() {',
+    '  const file = input.files && input.files[0];',
+    '  result.textContent = file ? `Uploaded ${file.name}` : "No file";',
+    '}',
+    'input.addEventListener("change", syncResult);',
+    autoInteract ? [
+      'window.setTimeout(() => {',
+      '  const transfer = new DataTransfer();',
+      '  transfer.items.add(new File(["demo"], "upload-demo.txt", { type: "text/plain" }));',
+      '  input.files = transfer.files;',
+      '  input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));',
       '}, 1000);',
     ].join('') : '',
     '</script>',
