@@ -79,6 +79,8 @@ import {
 import {
   buildRecordingCompletionSummary,
   buildRecordingQualityCheck,
+  hasTimingRisk,
+  isFragileLocatorStep,
 } from '@/entities/web-ui-automation/lib/recordingQuality'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
@@ -103,6 +105,19 @@ type RecordingStatus = 'IDLE' | 'RECORDING' | 'PAUSED' | 'STOPPED'
 type RecordingElementMatchStatus = 'MATCHED' | 'CANDIDATE'
 type CollectTaskReturnSource = typeof WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN | null
 type UploadArtifactBinding = WebUiFileUploadArtifactBinding & { updatedAt: number }
+type StepGroupKey = 'NAVIGATION' | 'INTERACTION' | 'UPLOAD' | 'ASSERTION' | 'WAITING' | 'EVIDENCE'
+type RecordingRepairAction =
+  | 'UPLOAD_FIRST'
+  | 'UPLOAD_NEXT'
+  | 'ELEMENT_FOCUS'
+  | 'ELEMENT_CREATE'
+  | 'ELEMENT_REMATCH'
+  | 'ASSERT_ADD'
+  | 'LOCATOR_FOCUS'
+  | 'TIMING_FOCUS'
+  | 'REPLAY_FOCUS'
+  | 'REPLAY_RUN'
+  | 'REPLAY_REPORT'
 
 interface EditableStep {
   id?: number | null
@@ -191,6 +206,9 @@ const localRunnerRunDetail = ref<WebUiRunDetail | null>(null)
 const recordingReplayRunId = ref<string | null>(null)
 const errorMessage = ref('')
 const selectedStepIndex = ref(0)
+const selectedStepIndexes = ref<number[]>([])
+const collapsedStepGroupKeys = ref<string[]>([])
+const draggingStepIndex = ref<number | null>(null)
 const form = ref<CaseForm>(createEmptyForm())
 const uploadArtifactBindings = ref<Record<string, UploadArtifactBinding>>({})
 const uploadFileInputRef = ref<HTMLInputElement | null>(null)
@@ -233,6 +251,11 @@ function getRouteQueryNumber(name: string) {
 }
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
+const selectedStepIndexSet = computed(() => new Set(selectedStepIndexes.value))
+const selectedStepCount = computed(() => selectedStepIndexes.value.length)
+const hasSelectedSteps = computed(() => selectedStepCount.value > 0)
+const allStepsSelected = computed(() => form.value.steps.length > 0 && selectedStepCount.value === form.value.steps.length)
+const someStepsSelected = computed(() => selectedStepCount.value > 0 && !allStepsSelected.value)
 const selectedStepUploadFileId = computed(() => {
   const step = selectedStep.value
   return step?.type === 'FILE_UPLOAD' ? artifactFileIdFromInputValue(step.inputValue) : null
@@ -277,6 +300,12 @@ const recordingElementCandidateCount = computed(() => recordingElementCandidateS
 const uploadReplayIssueStepIndexes = computed(() => form.value.steps
   .map((step, index) => (getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value) ? index : -1))
   .filter(index => index >= 0))
+const fragileLocatorStepIndexes = computed(() => form.value.steps
+  .map((step, index) => (step.enabled !== false && isFragileLocatorStep(step) ? index : -1))
+  .filter(index => index >= 0))
+const timingRiskStepIndexes = computed(() => form.value.steps
+  .map((step, index) => (step.enabled !== false && hasTimingRisk(step) ? index : -1))
+  .filter(index => index >= 0))
 const recordingReplayRerunPrompt = computed(() => buildRecordingReplayRerunPrompt({
   repairDirty: recordingReplayRepairDirty.value,
   diagnostics: recordingReplayDiagnostics.value,
@@ -298,6 +327,104 @@ const recordingWorkbenchReplaySummary = computed(() => {
     return '保存并本地回放后显示结果'
   }
   return diagnostics.failedStepLabel || diagnostics.summary || '等待回放结果'
+})
+const recordingRepairQueueItems = computed(() => {
+  const items: Array<{
+    key: string
+    tone: 'warning' | 'danger' | 'info'
+    title: string
+    summary: string
+    count: number
+    primaryLabel: string
+    primaryAction: RecordingRepairAction
+    secondaryLabel?: string
+    secondaryAction?: RecordingRepairAction
+  }> = []
+  if (uploadReplayIssueStepIndexes.value.length > 0) {
+    items.push({
+      key: 'uploads',
+      tone: 'warning',
+      title: '上传文件待重绑',
+      summary: '文件上传步骤需要 artifact 或本机可回放路径，否则本地回放会找不到文件。',
+      count: uploadReplayIssueStepIndexes.value.length,
+      primaryLabel: '定位首个',
+      primaryAction: 'UPLOAD_FIRST',
+      secondaryLabel: uploadReplayIssueStepIndexes.value.length > 1 ? '下一个' : undefined,
+      secondaryAction: uploadReplayIssueStepIndexes.value.length > 1 ? 'UPLOAD_NEXT' : undefined,
+    })
+  }
+  if (recordingElementUnboundLocatorCount.value > 0) {
+    items.push({
+      key: 'elements',
+      tone: 'warning',
+      title: '元素库绑定待收口',
+      summary: recordingElementCandidateCount.value > 0
+        ? `${recordingElementCandidateCount.value} 个步骤已标记候选，确认入库后可自动回填。`
+        : '未绑定元素库的定位步骤建议先候选入库或重新匹配。',
+      count: recordingElementUnboundLocatorCount.value,
+      primaryLabel: recordingElementCandidateCount.value > 0 ? '定位候选' : '候选入库',
+      primaryAction: recordingElementCandidateCount.value > 0 ? 'ELEMENT_FOCUS' : 'ELEMENT_CREATE',
+      secondaryLabel: '重新匹配',
+      secondaryAction: 'ELEMENT_REMATCH',
+    })
+  }
+  if (recordingQualityCheck.value.assertionCount <= 0 && form.value.steps.length > 0) {
+    items.push({
+      key: 'assertions',
+      tone: 'info',
+      title: '缺少结果断言',
+      summary: '至少补一个可见、文本或 URL 断言，避免只验证操作流程。',
+      count: 1,
+      primaryLabel: '添加可见断言',
+      primaryAction: 'ASSERT_ADD',
+    })
+  }
+  if (fragileLocatorStepIndexes.value.length > 0) {
+    items.push({
+      key: 'locators',
+      tone: 'warning',
+      title: '脆弱定位器待替换',
+      summary: 'XPath、nth-child 或过长 CSS 容易因页面结构变化导致回放失败。',
+      count: fragileLocatorStepIndexes.value.length,
+      primaryLabel: '定位首个',
+      primaryAction: 'LOCATOR_FOCUS',
+    })
+  }
+  if (timingRiskStepIndexes.value.length > 0) {
+    items.push({
+      key: 'timing',
+      tone: 'warning',
+      title: '等待与超时待复核',
+      summary: '短等待容易偶发失败，过长超时会拖慢回归。',
+      count: timingRiskStepIndexes.value.length,
+      primaryLabel: '定位首个',
+      primaryAction: 'TIMING_FOCUS',
+    })
+  }
+  if (recordingReplayDiagnostics.value?.tone === 'danger' || recordingReplayDiagnostics.value?.tone === 'warning') {
+    items.push({
+      key: 'replay',
+      tone: recordingReplayDiagnostics.value.tone === 'danger' ? 'danger' : 'warning',
+      title: '回放失败待修复',
+      summary: recordingReplayDiagnostics.value.failedStepLabel || recordingReplayDiagnostics.value.summary || '最近一次本地回放未通过。',
+      count: recordingReplayDiagnostics.value.failedStepSortOrder ? 1 : 0,
+      primaryLabel: recordingReplayDiagnostics.value.failedStepSortOrder ? '定位失败步骤' : '重新回放',
+      primaryAction: recordingReplayDiagnostics.value.failedStepSortOrder ? 'REPLAY_FOCUS' : 'REPLAY_RUN',
+      secondaryLabel: recordingReplayDiagnostics.value.reportAvailable && localRunnerFormalRunId.value ? '查看报告' : undefined,
+      secondaryAction: recordingReplayDiagnostics.value.reportAvailable && localRunnerFormalRunId.value ? 'REPLAY_REPORT' : undefined,
+    })
+  } else if (!recordingReplayDiagnostics.value && canRunRecordingReplayFromQualityCheck() && form.value.steps.length > 0) {
+    items.push({
+      key: 'replay',
+      tone: 'info',
+      title: '等待本地回放验证',
+      summary: '保存后跑一次本地回放，确认录制步骤可以稳定执行。',
+      count: 1,
+      primaryLabel: '保存并回放',
+      primaryAction: 'REPLAY_RUN',
+    })
+  }
+  return items
 })
 const uploadRepairFocusActive = ref(false)
 const recordingReplayRepairFocusSection = ref<'locator' | 'action' | 'advanced' | null>(null)
@@ -340,6 +467,51 @@ const recordingElapsedText = computed(() => {
   const seconds = totalSeconds % 60
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 })
+const stepGroups = computed(() => {
+  const groups: Array<{
+    key: string
+    label: string
+    startIndex: number
+    endIndex: number
+    steps: Array<{ step: EditableStep; index: number }>
+  }> = []
+  for (const [index, step] of form.value.steps.entries()) {
+    const group = getStepGroupMeta(step.type)
+    const previous = groups[groups.length - 1]
+    if (previous && previous.label === group.label) {
+      previous.endIndex = index
+      previous.steps.push({ step, index })
+      continue
+    }
+    groups.push({
+      key: `${group.key}-${index}`,
+      label: group.label,
+      startIndex: index,
+      endIndex: index,
+      steps: [{ step, index }],
+    })
+  }
+  return groups
+})
+
+function getStepGroupMeta(stepType: WebUiStepType): { key: StepGroupKey; label: string } {
+  if (stepType === 'OPEN') {
+    return { key: 'NAVIGATION', label: '页面导航' }
+  }
+  if (stepType === 'FILE_UPLOAD') {
+    return { key: 'UPLOAD', label: '文件上传' }
+  }
+  if (stepType.startsWith('ASSERT_')) {
+    return { key: 'ASSERTION', label: '断言校验' }
+  }
+  if (stepType === 'WAIT_FOR') {
+    return { key: 'WAITING', label: '等待同步' }
+  }
+  if (stepType === 'SCREENSHOT') {
+    return { key: 'EVIDENCE', label: '证据截图' }
+  }
+  return { key: 'INTERACTION', label: '页面操作' }
+}
 
 function createEmptyForm(): CaseForm {
   return {
@@ -531,6 +703,9 @@ function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: bool
   recordingReplayRepairDirty.value = false
   appliedRecordingRecorderId.value = null
   appliedRecordingStepCount.value = 0
+  selectedStepIndexes.value = []
+  collapsedStepGroupKeys.value = []
+  draggingStepIndex.value = null
   lastRecordingCandidateCollectTaskFingerprint.value = ''
   uploadArtifactBindings.value = toUploadArtifactBindingsFromSavedSteps(item.steps)
   suppressRecordingDraftPersist = true
@@ -658,6 +833,8 @@ function restoreRecordingDraft(item: WebUiCaseDetail) {
   selectInitialStep()
   suppressRecordingDraftPersist = false
   recordingDraftActive.value = true
+  selectedStepIndexes.value = []
+  collapsedStepGroupKeys.value = []
   appliedRecordingRecorderId.value = recordingDraft.recorderId || null
   appliedRecordingStepCount.value = Math.max(
     0,
@@ -2093,6 +2270,7 @@ function addStep() {
   const insertIndex = form.value.steps.length ? Math.min(selectedStepIndex.value + 1, form.value.steps.length) : 0
   form.value.steps.splice(insertIndex, 0, createStep(insertIndex + 1))
   selectedStepIndex.value = insertIndex
+  clearStepSelection()
   reorderSteps()
 }
 
@@ -2111,6 +2289,7 @@ function copyStepAt(index: number) {
     name: step.name ? `${step.name}副本` : '',
   })
   selectedStepIndex.value = index + 1
+  clearStepSelection()
   reorderSteps()
 }
 
@@ -2131,8 +2310,10 @@ async function removeStepAt(index: number) {
   } catch {
     return
   }
+  const selectedRefs = getSelectedStepRefs()
   form.value.steps.splice(index, 1)
   selectedStepIndex.value = Math.max(0, Math.min(index, form.value.steps.length - 1))
+  restoreStepSelectionByRefs(selectedRefs)
   reorderSteps()
 }
 
@@ -2141,10 +2322,145 @@ function moveStep(index: number, direction: -1 | 1) {
   if (targetIndex < 0 || targetIndex >= form.value.steps.length) {
     return
   }
+  const selectedRefs = getSelectedStepRefs()
   const [step] = form.value.steps.splice(index, 1)
   form.value.steps.splice(targetIndex, 0, step)
   selectedStepIndex.value = targetIndex
+  restoreStepSelectionByRefs(selectedRefs)
   reorderSteps()
+}
+
+function isStepSelected(index: number) {
+  return selectedStepIndexSet.value.has(index)
+}
+
+function setStepSelected(index: number, checked: unknown) {
+  const next = new Set(selectedStepIndexes.value)
+  if (Boolean(checked)) {
+    next.add(index)
+  } else {
+    next.delete(index)
+  }
+  selectedStepIndexes.value = Array.from(next).filter(isValidStepIndex).sort((left, right) => left - right)
+}
+
+function toggleAllStepSelection(checked: unknown) {
+  selectedStepIndexes.value = Boolean(checked) ? form.value.steps.map((_, index) => index) : []
+}
+
+function invertStepSelection() {
+  const selected = selectedStepIndexSet.value
+  selectedStepIndexes.value = form.value.steps
+    .map((_, index) => index)
+    .filter(index => !selected.has(index))
+}
+
+function clearStepSelection() {
+  selectedStepIndexes.value = []
+}
+
+function normalizeStepSelection() {
+  selectedStepIndexes.value = selectedStepIndexes.value.filter(isValidStepIndex).sort((left, right) => left - right)
+}
+
+function isValidStepIndex(index: number) {
+  return Number.isInteger(index) && index >= 0 && index < form.value.steps.length
+}
+
+function getSelectedStepRefs() {
+  return selectedStepIndexes.value
+    .map(index => form.value.steps[index])
+    .filter((step): step is EditableStep => Boolean(step))
+}
+
+function restoreStepSelectionByRefs(steps: EditableStep[]) {
+  selectedStepIndexes.value = steps
+    .map(step => form.value.steps.indexOf(step))
+    .filter(index => index >= 0)
+    .sort((left, right) => left - right)
+}
+
+function setSelectedStepsEnabled(enabled: boolean) {
+  const indexes = selectedStepIndexes.value.filter(isValidStepIndex)
+  if (!indexes.length) {
+    return
+  }
+  indexes.forEach(index => {
+    form.value.steps[index].enabled = enabled
+  })
+  ElMessage.success(`已${enabled ? '启用' : '停用'} ${indexes.length} 个步骤，保存后生效`)
+}
+
+async function removeSelectedSteps() {
+  const indexes = selectedStepIndexes.value.filter(isValidStepIndex)
+  if (!indexes.length) {
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`删除选中的 ${indexes.length} 个步骤后需要保存才会生效，确认删除？`, '批量删除步骤', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  const deleted = new Set(indexes)
+  const selectedStepRef = selectedStep.value
+  form.value.steps = form.value.steps.filter((_, index) => !deleted.has(index))
+  selectedStepIndex.value = selectedStepRef
+    ? Math.max(0, form.value.steps.indexOf(selectedStepRef))
+    : Math.max(0, Math.min(selectedStepIndex.value, form.value.steps.length - 1))
+  if (selectedStepIndex.value < 0) {
+    selectedStepIndex.value = Math.max(0, Math.min(indexes[0] || 0, form.value.steps.length - 1))
+  }
+  clearStepSelection()
+  reorderSteps()
+  ElMessage.success(`已删除 ${indexes.length} 个步骤，保存后生效`)
+}
+
+function isStepGroupCollapsed(groupKey: string) {
+  return collapsedStepGroupKeys.value.includes(groupKey)
+}
+
+function toggleStepGroup(groupKey: string) {
+  const next = new Set(collapsedStepGroupKeys.value)
+  if (next.has(groupKey)) {
+    next.delete(groupKey)
+  } else {
+    next.add(groupKey)
+  }
+  collapsedStepGroupKeys.value = Array.from(next)
+}
+
+function startStepDrag(index: number, event: DragEvent) {
+  draggingStepIndex.value = index
+  event.dataTransfer?.setData('text/plain', String(index))
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+}
+
+function dropStep(targetIndex: number) {
+  const sourceIndex = draggingStepIndex.value
+  if (sourceIndex === null || sourceIndex === targetIndex || !isValidStepIndex(sourceIndex) || !isValidStepIndex(targetIndex)) {
+    finishStepDrag()
+    return
+  }
+  const selectedRefs = getSelectedStepRefs()
+  const selectedStepRef = selectedStep.value
+  const [step] = form.value.steps.splice(sourceIndex, 1)
+  form.value.steps.splice(targetIndex, 0, step)
+  if (selectedStepRef) {
+    selectedStepIndex.value = Math.max(0, form.value.steps.indexOf(selectedStepRef))
+  }
+  restoreStepSelectionByRefs(selectedRefs)
+  reorderSteps()
+  finishStepDrag()
+}
+
+function finishStepDrag() {
+  draggingStepIndex.value = null
 }
 
 function clearStepElementAssociation(step: EditableStep) {
@@ -2440,6 +2756,52 @@ function canFocusNextUploadReplayIssueStep() {
   return uploadReplayIssueStepIndexes.value.length > 1
 }
 
+function handleRecordingRepairAction(action: RecordingRepairAction) {
+  if (action === 'UPLOAD_FIRST') {
+    focusUploadReplayIssueStep('first')
+    return
+  }
+  if (action === 'UPLOAD_NEXT') {
+    focusUploadReplayIssueStep('next')
+    return
+  }
+  if (action === 'ELEMENT_FOCUS') {
+    void focusFirstRecordingElementCandidateStep()
+    return
+  }
+  if (action === 'ELEMENT_CREATE') {
+    void createRecordingCandidateCollectTask()
+    return
+  }
+  if (action === 'ELEMENT_REMATCH') {
+    void rematchRecordingElementSteps()
+    return
+  }
+  if (action === 'ASSERT_ADD') {
+    void addDefaultRecordingAssertionStep()
+    return
+  }
+  if (action === 'LOCATOR_FOCUS') {
+    void focusFirstFragileLocatorStep()
+    return
+  }
+  if (action === 'TIMING_FOCUS') {
+    void focusFirstTimingRiskStep()
+    return
+  }
+  if (action === 'REPLAY_FOCUS') {
+    focusRecordingReplayFailedStep()
+    return
+  }
+  if (action === 'REPLAY_RUN') {
+    void saveCaseAndRunRecordingReplay()
+    return
+  }
+  if (action === 'REPLAY_REPORT') {
+    openLocalRunnerFormalReport()
+  }
+}
+
 function isReplayRecordingQualityAction(key: string) {
   return key === 'REPLAY' && canRunRecordingReplayFromQualityCheck()
 }
@@ -2494,6 +2856,19 @@ async function focusLocatorEditorAfterStepSelection() {
   }
 }
 
+async function focusAdvancedEditorAfterStepSelection() {
+  await nextTick()
+  const target = stepAdvancedSectionRef.value
+  if (!target) {
+    return
+  }
+  target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  const focusable = target.querySelector('input, textarea, button, [role="radio"], [tabindex]')
+  if (focusable instanceof HTMLElement) {
+    focusable.focus()
+  }
+}
+
 async function focusFirstUnboundLocatorStep() {
   const index = form.value.steps.findIndex(isUnboundLocatorStep)
   if (index < 0) {
@@ -2512,6 +2887,38 @@ async function focusFirstRecordingElementCandidateStep() {
   }
   selectedStepIndex.value = index
   await focusLocatorEditorAfterStepSelection()
+}
+
+async function focusFirstFragileLocatorStep() {
+  const index = fragileLocatorStepIndexes.value[0] ?? -1
+  if (index < 0) {
+    ElMessage.success('当前没有明显脆弱的定位器')
+    return
+  }
+  selectedStepIndex.value = index
+  await focusLocatorEditorAfterStepSelection()
+}
+
+async function focusFirstTimingRiskStep() {
+  const index = timingRiskStepIndexes.value[0] ?? -1
+  if (index < 0) {
+    ElMessage.success('当前没有明显等待或超时风险')
+    return
+  }
+  selectedStepIndex.value = index
+  await focusAdvancedEditorAfterStepSelection()
+}
+
+async function addDefaultRecordingAssertionStep() {
+  const current = selectedStep.value
+  if (!current || !requiresLocator(current.type) || !current.locatorType || !current.locatorValue.trim()) {
+    const index = form.value.steps.findIndex(step => step.enabled !== false && requiresLocator(step.type) && step.locatorType && step.locatorValue.trim())
+    if (index >= 0) {
+      selectedStepIndex.value = index
+      await nextTick()
+    }
+  }
+  await addRecordingAssertionStep('ASSERT_VISIBLE')
 }
 
 function focusUploadReplayIssueStep(mode: 'first' | 'next' = 'first') {
@@ -2703,6 +3110,14 @@ watch(
     schedulePersistRecordingDraft()
   },
   { deep: true },
+)
+
+watch(
+  () => form.value.steps.length,
+  () => {
+    selectedStepIndex.value = form.value.steps.length ? Math.min(selectedStepIndex.value, form.value.steps.length - 1) : 0
+    normalizeStepSelection()
+  },
 )
 
 watch(elementPickerKeyword, () => {
@@ -2899,57 +3314,103 @@ watch(elementPickerLocatorType, () => {
         <div class="web-ui-case-detail__panel-header">
           <div>
             <h3>步骤列表</h3>
-            <p>共 {{ form.steps.length }} 步</p>
+            <p>共 {{ form.steps.length }} 步<span v-if="selectedStepCount"> · 已选 {{ selectedStepCount }}</span></p>
           </div>
           <AppButton type="primary" :icon="Plus" @click="addStep">新增</AppButton>
         </div>
-        <div v-if="form.steps.length" class="web-ui-step-list">
-          <div
-            v-for="(step, index) in form.steps"
-            :key="`${step.id || 'new'}-${index}`"
-            role="button"
-            tabindex="0"
-            class="web-ui-step-list__item"
-            :class="{ 'is-active': selectedStepIndex === index, 'is-disabled': !step.enabled }"
-            :aria-current="selectedStepIndex === index ? 'step' : undefined"
-            @click="selectedStepIndex = index"
-            @keydown.enter.prevent="selectedStepIndex = index"
-            @keydown.space.prevent="selectedStepIndex = index"
+        <div v-if="form.steps.length" class="web-ui-step-list-toolbar" aria-label="步骤批量整理">
+          <el-checkbox
+            :model-value="allStepsSelected"
+            :indeterminate="someStepsSelected"
+            @change="toggleAllStepSelection"
           >
-            <span class="web-ui-step-list__order">{{ index + 1 }}</span>
-            <span class="web-ui-step-list__content">
-              <span
-                class="web-ui-step-list__type"
-                :class="`is-${getStepCardTypeTone(step.type)}`"
+            全选
+          </el-checkbox>
+          <AppButton size="small" :disabled="!form.steps.length" @click="invertStepSelection">反选</AppButton>
+          <AppButton size="small" :disabled="!hasSelectedSteps" @click="() => setSelectedStepsEnabled(true)">启用</AppButton>
+          <AppButton size="small" :disabled="!hasSelectedSteps" @click="() => setSelectedStepsEnabled(false)">停用</AppButton>
+          <AppButton size="small" :disabled="!hasSelectedSteps" :icon="Delete" @click="removeSelectedSteps">删除</AppButton>
+        </div>
+        <div v-if="form.steps.length" class="web-ui-step-list">
+          <section
+            v-for="group in stepGroups"
+            :key="group.key"
+            class="web-ui-step-list__group"
+          >
+            <button
+              type="button"
+              class="web-ui-step-list__group-header"
+              :aria-expanded="!isStepGroupCollapsed(group.key)"
+              @click="toggleStepGroup(group.key)"
+            >
+              <el-icon>
+                <ArrowDown v-if="!isStepGroupCollapsed(group.key)" />
+                <ArrowUp v-else />
+              </el-icon>
+              <strong>{{ group.label }}</strong>
+              <small>第 {{ group.startIndex + 1 }}-{{ group.endIndex + 1 }} 步 · {{ group.steps.length }} 步</small>
+            </button>
+            <div v-show="!isStepGroupCollapsed(group.key)" class="web-ui-step-list__group-body">
+              <div
+                v-for="{ step, index } in group.steps"
+                :key="`${step.id || 'new'}-${index}`"
+                role="button"
+                tabindex="0"
+                class="web-ui-step-list__item"
+                :class="{ 'is-active': selectedStepIndex === index, 'is-disabled': !step.enabled, 'is-selected': isStepSelected(index), 'is-dragging': draggingStepIndex === index }"
+                :aria-current="selectedStepIndex === index ? 'step' : undefined"
+                draggable="true"
+                @click="selectedStepIndex = index"
+                @keydown.enter.prevent="selectedStepIndex = index"
+                @keydown.space.prevent="selectedStepIndex = index"
+                @dragstart="startStepDrag(index, $event)"
+                @dragover.prevent
+                @drop.prevent="dropStep(index)"
+                @dragend="finishStepDrag"
               >
-                {{ getStepCardTypeLabel(step.type) }}
-              </span>
-              <small>{{ getStepSummary(step) }}</small>
-              <el-tag v-if="getStepFileUploadReplayLabel(step)" type="warning" effect="light" size="small">
-                {{ getStepFileUploadReplayLabel(step) }}
-              </el-tag>
-              <el-tag v-if="getStepRecordedUploadArtifactLabel(step)" :type="getStepRecordedUploadArtifactTagType(step)" effect="light" size="small">
-                {{ getStepRecordedUploadArtifactLabel(step) }}
-              </el-tag>
-              <el-tag v-if="step.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(step)" effect="light" size="small">
-                {{ getRecordingElementMatchLabel(step) }}
-              </el-tag>
-            </span>
-            <span class="web-ui-step-list__actions" aria-label="步骤操作">
-              <button type="button" title="上移" aria-label="上移" :disabled="index === 0" @click.stop="moveStep(index, -1)">
-                <el-icon><ArrowUp /></el-icon>
-              </button>
-              <button type="button" title="下移" aria-label="下移" :disabled="index === form.steps.length - 1" @click.stop="moveStep(index, 1)">
-                <el-icon><ArrowDown /></el-icon>
-              </button>
-              <button type="button" title="复制" aria-label="复制" @click.stop="copyStepAt(index)">
-                <el-icon><CopyDocument /></el-icon>
-              </button>
-              <button type="button" title="删除" aria-label="删除" @click.stop="removeStepAt(index)">
-                <el-icon><Delete /></el-icon>
-              </button>
-            </span>
-          </div>
+                <el-checkbox
+                  class="web-ui-step-list__select"
+                  :model-value="isStepSelected(index)"
+                  :aria-label="`选择第 ${index + 1} 步`"
+                  @click.stop
+                  @change="setStepSelected(index, $event)"
+                />
+                <span class="web-ui-step-list__order">{{ index + 1 }}</span>
+                <span class="web-ui-step-list__content">
+                  <span
+                    class="web-ui-step-list__type"
+                    :class="`is-${getStepCardTypeTone(step.type)}`"
+                  >
+                    {{ getStepCardTypeLabel(step.type) }}
+                  </span>
+                  <small>{{ getStepSummary(step) }}</small>
+                  <el-tag v-if="getStepFileUploadReplayLabel(step)" type="warning" effect="light" size="small">
+                    {{ getStepFileUploadReplayLabel(step) }}
+                  </el-tag>
+                  <el-tag v-if="getStepRecordedUploadArtifactLabel(step)" :type="getStepRecordedUploadArtifactTagType(step)" effect="light" size="small">
+                    {{ getStepRecordedUploadArtifactLabel(step) }}
+                  </el-tag>
+                  <el-tag v-if="step.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(step)" effect="light" size="small">
+                    {{ getRecordingElementMatchLabel(step) }}
+                  </el-tag>
+                </span>
+                <span class="web-ui-step-list__actions" aria-label="步骤操作">
+                  <button type="button" title="上移" aria-label="上移" :disabled="index === 0" @click.stop="moveStep(index, -1)">
+                    <el-icon><ArrowUp /></el-icon>
+                  </button>
+                  <button type="button" title="下移" aria-label="下移" :disabled="index === form.steps.length - 1" @click.stop="moveStep(index, 1)">
+                    <el-icon><ArrowDown /></el-icon>
+                  </button>
+                  <button type="button" title="复制" aria-label="复制" @click.stop="copyStepAt(index)">
+                    <el-icon><CopyDocument /></el-icon>
+                  </button>
+                  <button type="button" title="删除" aria-label="删除" @click.stop="removeStepAt(index)">
+                    <el-icon><Delete /></el-icon>
+                  </button>
+                </span>
+              </div>
+            </div>
+          </section>
         </div>
         <AppEmptyState v-else title="还没有步骤" description="新增第一步后即可配置打开页面、点击、输入和断言。" />
       </aside>
@@ -3338,6 +3799,41 @@ watch(elementPickerLocatorType, () => {
                 </AppButton>
               </div>
             </div>
+            <div v-if="recordingRepairQueueItems.length" class="web-ui-recording-repair-queue" aria-label="录制修复队列">
+              <div class="web-ui-recording-repair-queue__header">
+                <div>
+                  <span>修复队列</span>
+                  <strong>{{ recordingRepairQueueItems.length }} 项待处理</strong>
+                </div>
+                <small>按保存前闭环优先级排序</small>
+              </div>
+              <div class="web-ui-recording-repair-queue__list">
+                <div
+                  v-for="item in recordingRepairQueueItems"
+                  :key="item.key"
+                  class="web-ui-recording-repair-queue__item"
+                  :class="`is-${item.tone}`"
+                >
+                  <div class="web-ui-recording-repair-queue__main">
+                    <span>{{ item.title }}</span>
+                    <small>{{ item.summary }}</small>
+                  </div>
+                  <strong v-if="item.count > 0">{{ item.count }}</strong>
+                  <div class="web-ui-recording-repair-queue__actions">
+                    <AppButton size="small" type="primary" @click="handleRecordingRepairAction(item.primaryAction)">
+                      {{ item.primaryLabel }}
+                    </AppButton>
+                    <AppButton
+                      v-if="item.secondaryLabel && item.secondaryAction"
+                      size="small"
+                      @click="handleRecordingRepairAction(item.secondaryAction)"
+                    >
+                      {{ item.secondaryLabel }}
+                    </AppButton>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="web-ui-recording-quality__checks">
               <div
                 v-for="item in recordingQualityCheck.checks"
@@ -3713,10 +4209,71 @@ watch(elementPickerLocatorType, () => {
   overflow: auto;
 }
 
+.web-ui-step-list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-muted);
+}
+
+.web-ui-step-list-toolbar :deep(.el-checkbox) {
+  height: 28px;
+  margin-right: var(--app-space-1);
+}
+
+.web-ui-step-list__group {
+  display: grid;
+  gap: var(--app-space-2);
+}
+
+.web-ui-step-list__group-header {
+  display: grid;
+  grid-template-columns: 18px auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--app-space-2);
+  width: 100%;
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-muted);
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.web-ui-step-list__group-header:hover,
+.web-ui-step-list__group-header:focus-visible {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+  outline: none;
+}
+
+.web-ui-step-list__group-header strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-step-list__group-header small {
+  overflow: hidden;
+  font-size: var(--app-font-size-xs);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-step-list__group-body {
+  display: grid;
+  gap: var(--app-space-2);
+}
+
 .web-ui-step-list__item {
   display: grid;
   position: relative;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 22px 24px minmax(0, 1fr);
   gap: var(--app-space-2);
   align-items: flex-start;
   width: 100%;
@@ -3741,8 +4298,29 @@ watch(elementPickerLocatorType, () => {
   background: var(--app-primary-soft);
 }
 
+.web-ui-step-list__item.is-selected {
+  border-color: color-mix(in srgb, var(--app-primary) 72%, var(--app-border));
+  box-shadow: inset 3px 0 0 var(--app-primary);
+}
+
+.web-ui-step-list__item.is-dragging {
+  opacity: 0.52;
+}
+
 .web-ui-step-list__item.is-disabled {
   opacity: 0.68;
+}
+
+.web-ui-step-list__select {
+  display: inline-flex;
+  width: 22px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+}
+
+.web-ui-step-list__select :deep(.el-checkbox__label) {
+  display: none;
 }
 
 .web-ui-step-list__order {
@@ -4337,6 +4915,108 @@ watch(elementPickerLocatorType, () => {
   line-height: var(--app-line-height-sm);
 }
 
+.web-ui-recording-repair-queue {
+  display: grid;
+  gap: var(--app-space-2);
+  min-width: 0;
+}
+
+.web-ui-recording-repair-queue__header,
+.web-ui-recording-repair-queue__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--app-space-3);
+}
+
+.web-ui-recording-repair-queue__header {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.web-ui-recording-repair-queue__header div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  min-width: 0;
+}
+
+.web-ui-recording-repair-queue__header span {
+  color: var(--app-text-secondary);
+  font-weight: 600;
+}
+
+.web-ui-recording-repair-queue__header strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.web-ui-recording-repair-queue__list {
+  display: grid;
+  gap: var(--app-space-2);
+}
+
+.web-ui-recording-repair-queue__item {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-panel);
+}
+
+.web-ui-recording-repair-queue__item.is-warning {
+  border-color: color-mix(in srgb, var(--app-warning) 36%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-warning) 8%, var(--app-bg-panel));
+}
+
+.web-ui-recording-repair-queue__item.is-danger {
+  border-color: color-mix(in srgb, var(--app-danger) 36%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-danger) 8%, var(--app-bg-panel));
+}
+
+.web-ui-recording-repair-queue__item.is-info {
+  border-color: color-mix(in srgb, var(--app-primary) 24%, var(--app-border-soft));
+  background: color-mix(in srgb, var(--app-primary) 6%, var(--app-bg-panel));
+}
+
+.web-ui-recording-repair-queue__main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.web-ui-recording-repair-queue__main span {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+}
+
+.web-ui-recording-repair-queue__main small {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--app-line-height-xs);
+}
+
+.web-ui-recording-repair-queue__item > strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--app-bg-muted);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-xs);
+}
+
+.web-ui-recording-repair-queue__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--app-space-2);
+}
+
 .web-ui-recording-quality__checks {
   display: grid;
   gap: var(--app-space-2);
@@ -4493,8 +5173,13 @@ watch(elementPickerLocatorType, () => {
   }
 
   .web-ui-element-picker__toolbar,
-  .web-ui-element-picker__item {
+  .web-ui-element-picker__item,
+  .web-ui-recording-repair-queue__item {
     grid-template-columns: 1fr;
+  }
+
+  .web-ui-recording-repair-queue__actions {
+    justify-content: flex-start;
   }
 }
 </style>
