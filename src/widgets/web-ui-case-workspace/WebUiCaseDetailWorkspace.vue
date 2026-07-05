@@ -62,10 +62,13 @@ import {
 } from '@/entities/web-ui-automation/lib/recordingAssertions'
 import {
   artifactFileIdFromInputValue,
+  bindRecordedWebUiFileUploadArtifact,
   buildWebUiFileUploadArtifactRefs,
   findFirstWebUiFileUploadReplayIssue,
   getWebUiFileUploadReplayIssue,
   hasUnsavedWebUiFileUploadArtifactChanges,
+  type RecordedWebUiFileUploadArtifactBindResult,
+  type RecordedWebUiFileUploadArtifactBindStatus,
   type WebUiFileUploadArtifactBinding,
   type WebUiFileUploadArtifactStep,
 } from '@/entities/web-ui-automation/lib/fileUploadArtifacts'
@@ -112,6 +115,8 @@ interface EditableStep {
   sortOrder: number
   recordingElementMatchStatus?: RecordingElementMatchStatus | null
   recordingElementCandidateName?: string | null
+  recordedUploadArtifactStatus?: RecordedWebUiFileUploadArtifactBindStatus | null
+  recordedUploadArtifactMessage?: string | null
 }
 
 interface CaseForm {
@@ -228,6 +233,8 @@ const selectedStepUploadBinding = computed(() => {
   return fileId ? uploadArtifactBindings.value[fileId] || null : null
 })
 const selectedStepUploadReplayIssue = computed(() => getWebUiFileUploadReplayIssue(selectedStep.value, uploadArtifactBindings.value))
+const selectedStepRecordedUploadArtifactStatus = computed(() => selectedStep.value?.type === 'FILE_UPLOAD' ? selectedStep.value.recordedUploadArtifactStatus || null : null)
+const selectedStepRecordedUploadArtifactMessage = computed(() => selectedStep.value?.type === 'FILE_UPLOAD' ? selectedStep.value.recordedUploadArtifactMessage || '' : '')
 const localRunnerRunSummary = computed(() => localRunnerRunDetail.value?.summary ?? null)
 const recordingReplayDiagnostics = computed(() => buildRecordingReplayDiagnostics({
   replayRunId: recordingReplayRunId.value,
@@ -254,6 +261,17 @@ const recordingElementCandidateCount = computed(() => recordingElementCandidateS
 const uploadReplayIssueStepIndexes = computed(() => form.value.steps
   .map((step, index) => (getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value) ? index : -1))
   .filter(index => index >= 0))
+const recordingWorkbenchVisible = computed(() => form.value.steps.length > 0
+  || recordingStepCount.value > 0
+  || recordingEventCount.value > 0
+  || Boolean(recordingReplayDiagnostics.value))
+const recordingWorkbenchReplaySummary = computed(() => {
+  const diagnostics = recordingReplayDiagnostics.value
+  if (!diagnostics) {
+    return '保存并本地回放后显示结果'
+  }
+  return diagnostics.failedStepLabel || diagnostics.summary || '等待回放结果'
+})
 const uploadRepairFocusActive = ref(false)
 const recordingReplayRepairFocusSection = ref<'locator' | 'action' | 'advanced' | null>(null)
 const recordingReplayTerminalNoticeKey = ref('')
@@ -355,6 +373,12 @@ function toEditableStep(item: WebUiCaseStepItem, index: number): EditableStep {
   if (raw.recordingElementCandidateName) {
     step.recordingElementCandidateName = raw.recordingElementCandidateName
   }
+  if (isRecordedUploadArtifactStatus(raw.recordedUploadArtifactStatus)) {
+    step.recordedUploadArtifactStatus = raw.recordedUploadArtifactStatus
+  }
+  if (typeof raw.recordedUploadArtifactMessage === 'string') {
+    step.recordedUploadArtifactMessage = raw.recordedUploadArtifactMessage
+  }
   return step
 }
 
@@ -383,6 +407,37 @@ function toCaseFormFromRecordingDraft(value: unknown, fallback: CaseForm): CaseF
     status: raw.status || fallback.status,
     steps: Array.isArray(raw.steps) ? raw.steps.map((step, index) => toEditableStep(step as WebUiCaseStepItem, index)) : fallback.steps,
   }
+}
+
+function cloneUploadArtifactBindingsForRecordingDraft(bindings: Record<string, UploadArtifactBinding>) {
+  return Object.fromEntries(Object.entries(bindings).map(([fileId, binding]) => [
+    fileId,
+    { ...binding },
+  ]))
+}
+
+function toUploadArtifactBindingsFromRecordingDraft(value: unknown): Record<string, UploadArtifactBinding> {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const restored: Record<string, UploadArtifactBinding> = {}
+  for (const [fileId, rawBinding] of Object.entries(value as Record<string, Partial<UploadArtifactBinding> | null | undefined>)) {
+    const normalizedFileId = fileId.trim()
+    const bindingFileId = rawBinding?.fileId?.trim() || normalizedFileId
+    const contentBase64 = rawBinding?.contentBase64?.trim() || ''
+    if (!normalizedFileId || !bindingFileId || !contentBase64) {
+      continue
+    }
+    restored[normalizedFileId] = {
+      fileId: bindingFileId,
+      fileName: rawBinding?.fileName?.trim() || bindingFileId,
+      contentType: rawBinding?.contentType?.trim() || 'application/octet-stream',
+      contentBase64,
+      ...(typeof rawBinding?.size === 'number' && Number.isFinite(rawBinding.size) ? { size: rawBinding.size } : {}),
+      updatedAt: typeof rawBinding?.updatedAt === 'number' && Number.isFinite(rawBinding.updatedAt) ? rawBinding.updatedAt : Date.now(),
+    }
+  }
+  return restored
 }
 
 function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: boolean } = {}) {
@@ -429,7 +484,7 @@ function readRecordingDraft() {
     return null
   }
   try {
-    return parseWebUiRecordingDraft<CaseForm>(window.localStorage.getItem(key))
+    return parseWebUiRecordingDraft<CaseForm, Record<string, UploadArtifactBinding>>(window.localStorage.getItem(key))
   } catch {
     return null
   }
@@ -451,6 +506,7 @@ function persistRecordingDraftNow() {
       recorderId: appliedRecordingRecorderId.value,
       recordedStepCount: appliedRecordingStepCount.value,
       form: cloneCaseFormForRecordingDraft(form.value),
+      uploadArtifactBindings: cloneUploadArtifactBindingsForRecordingDraft(uploadArtifactBindings.value),
       previousDraft,
     })
     window.localStorage.setItem(key, JSON.stringify(draft))
@@ -517,9 +573,10 @@ function restoreRecordingDraft(item: WebUiCaseDetail) {
     return
   }
 
-  const recordingDraft = draft as WebUiRecordingDraftPayload<CaseForm>
+  const recordingDraft = draft as WebUiRecordingDraftPayload<CaseForm, Record<string, UploadArtifactBinding>>
   suppressRecordingDraftPersist = true
   form.value = toCaseFormFromRecordingDraft(recordingDraft.form, form.value)
+  uploadArtifactBindings.value = toUploadArtifactBindingsFromRecordingDraft(recordingDraft.uploadArtifactBindings)
   selectInitialStep()
   suppressRecordingDraftPersist = false
   recordingDraftActive.value = true
@@ -670,7 +727,12 @@ function openLocalRunnerFormalReport() {
 }
 
 function readRecordingTargetUrl() {
-  return form.value.baseUrl.trim()
+  const baseUrl = form.value.baseUrl.trim()
+  if (baseUrl) {
+    return baseUrl
+  }
+  const openStep = form.value.steps.find(step => step.enabled !== false && step.type === 'OPEN' && step.inputValue.trim())
+  return openStep?.inputValue.trim() || ''
 }
 
 function normalizeRecordingStatus(result: LocalRunnerRecordingResult): RecordingStatus {
@@ -898,6 +960,40 @@ function countUploadReplayIssues(
   return steps.filter(step => Boolean(getWebUiFileUploadReplayIssue(step, bindings))).length
 }
 
+function isRecordedUploadArtifactStatus(value: unknown): value is RecordedWebUiFileUploadArtifactBindStatus {
+  return value === 'BOUND'
+    || value === 'TOO_LARGE'
+    || value === 'UNSUPPORTED_MULTIPLE'
+    || value === 'EMPTY_CONTENT'
+    || value === 'INVALID_ARTIFACT'
+}
+
+function applyRecordedUploadArtifactResult(step: EditableStep, result: RecordedWebUiFileUploadArtifactBindResult) {
+  step.recordedUploadArtifactStatus = result.status
+  step.recordedUploadArtifactMessage = getRecordedUploadArtifactMessage(result)
+}
+
+function getRecordedUploadArtifactMessage(result: RecordedWebUiFileUploadArtifactBindResult) {
+  if (result.status === 'BOUND') {
+    const fileName = result.binding?.fileName || '录制文件'
+    const sizeText = typeof result.binding?.size === 'number' ? `（${formatFileSize(result.binding.size)}）` : ''
+    return `${fileName}${sizeText} 已由录制自动绑定，可直接本地回放`
+  }
+  if (result.status === 'TOO_LARGE') {
+    const sizeText = typeof result.size === 'number' ? formatFileSize(result.size) : '未知大小'
+    const limitText = typeof result.limitBytes === 'number' ? formatFileSize(result.limitBytes) : '自动绑定上限'
+    return `录制文件大小 ${sizeText}，超过 ${limitText}，请手动重新选择文件`
+  }
+  if (result.status === 'UNSUPPORTED_MULTIPLE') {
+    const countText = typeof result.fileCount === 'number' ? `${result.fileCount} 个文件` : '多个文件'
+    return `录制到了${countText}，当前本地回放暂不自动绑定多文件，请手动选择目标文件`
+  }
+  if (result.status === 'EMPTY_CONTENT') {
+    return '录制时没有拿到可回放的文件内容，请手动重新选择文件'
+  }
+  return '录制文件信息不完整，请手动重新选择文件'
+}
+
 function triggerSelectedStepFileUpload() {
   if (!selectedStep.value || selectedStep.value.type !== 'FILE_UPLOAD') {
     return
@@ -922,6 +1018,8 @@ async function handleUploadFileSelected(event: Event) {
     const fileId = buildFileUploadArtifactId(step)
     const contentBase64 = await readFileAsBase64(file)
     step.inputValue = `artifact:${fileId}`
+    step.recordedUploadArtifactStatus = null
+    step.recordedUploadArtifactMessage = null
     const nextBindings = {
       ...uploadArtifactBindings.value,
       [fileId]: {
@@ -969,6 +1067,8 @@ function clearSelectedStepUploadArtifact() {
     uploadArtifactBindings.value = nextBindings
   }
   step.inputValue = ''
+  step.recordedUploadArtifactStatus = null
+  step.recordedUploadArtifactMessage = null
   if (!beforeIssue) {
     ElMessage.warning('已清除当前上传绑定，该步骤需要重新选择文件后才能本地回放')
   }
@@ -1647,8 +1747,23 @@ async function undoRecordingStep() {
 }
 
 async function appendRecordedSteps(steps: LocalRunnerRecordedStep[], options: { activateDraft?: boolean } = {}) {
+  const nextUploadArtifactBindings = { ...uploadArtifactBindings.value }
+  let uploadArtifactBindingChanged = false
   const mappedSteps = steps
-    .map((step, index) => toEditableRecordedStep(step, form.value.steps.length + index + 1))
+    .map((step, index) => {
+      const sortOrder = form.value.steps.length + index + 1
+      const mappedStep = toEditableRecordedStep(step, sortOrder)
+      if (mappedStep?.type === 'FILE_UPLOAD') {
+        const fileId = buildFileUploadArtifactId(mappedStep, sortOrder - 1)
+        const autoBindResult = bindRecordedWebUiFileUploadArtifact(mappedStep, fileId, step.uploadArtifact)
+        applyRecordedUploadArtifactResult(mappedStep, autoBindResult)
+        if (autoBindResult.status === 'BOUND' && autoBindResult.binding) {
+          nextUploadArtifactBindings[autoBindResult.binding.fileId] = autoBindResult.binding
+          uploadArtifactBindingChanged = true
+        }
+      }
+      return mappedStep
+    })
     .filter((step): step is EditableStep => Boolean(step))
   if (!mappedSteps.length) {
     return {
@@ -1660,6 +1775,9 @@ async function appendRecordedSteps(steps: LocalRunnerRecordedStep[], options: { 
     }
   }
   const matchSummary = await enrichRecordedStepsWithElementMatches(mappedSteps)
+  if (uploadArtifactBindingChanged) {
+    uploadArtifactBindings.value = nextUploadArtifactBindings
+  }
   const fileUploadNeedsRepairCount = mappedSteps.filter(step => Boolean(getWebUiFileUploadReplayIssue(step, uploadArtifactBindings.value))).length
   const insertIndex = form.value.steps.length
   form.value.steps.push(...mappedSteps)
@@ -1992,6 +2110,10 @@ function handleStepTypeChange(step: EditableStep) {
   if (!requiresInput(step.type)) {
     step.inputValue = ''
   }
+  if (step.type !== 'FILE_UPLOAD') {
+    step.recordedUploadArtifactStatus = null
+    step.recordedUploadArtifactMessage = null
+  }
 }
 
 function getStepActionConfigTitle(type: WebUiStepType) {
@@ -2091,6 +2213,32 @@ function getStepFileUploadReplayLabel(step: EditableStep) {
   return ''
 }
 
+function getStepRecordedUploadArtifactLabel(step: EditableStep) {
+  if (step.type !== 'FILE_UPLOAD') {
+    return ''
+  }
+  if (step.recordedUploadArtifactStatus === 'BOUND') {
+    return '录制已自动绑定'
+  }
+  if (step.recordedUploadArtifactStatus === 'TOO_LARGE') {
+    return '录制文件过大'
+  }
+  if (step.recordedUploadArtifactStatus === 'UNSUPPORTED_MULTIPLE') {
+    return '多文件待手动绑定'
+  }
+  if (step.recordedUploadArtifactStatus === 'EMPTY_CONTENT') {
+    return '录制文件内容缺失'
+  }
+  if (step.recordedUploadArtifactStatus === 'INVALID_ARTIFACT') {
+    return '录制文件待重绑'
+  }
+  return ''
+}
+
+function getStepRecordedUploadArtifactTagType(step: EditableStep) {
+  return step.recordedUploadArtifactStatus === 'BOUND' ? 'success' : 'warning'
+}
+
 function hasRecordingQualityAction(key: string, status: string) {
   if (key === 'UPLOADS') {
     return status === 'WARN'
@@ -2150,6 +2298,39 @@ function getRecordingQualityCheckSuggestion(
   return recordingReplayDiagnostics.value?.suggestion || item.suggestion
 }
 
+async function focusLocatorEditorAfterStepSelection() {
+  await nextTick()
+  const target = stepLocatorSectionRef.value
+  if (!target) {
+    return
+  }
+  target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  const focusable = target.querySelector('input, textarea, button, [role="radio"], [tabindex]')
+  if (focusable instanceof HTMLElement) {
+    focusable.focus()
+  }
+}
+
+async function focusFirstUnboundLocatorStep() {
+  const index = form.value.steps.findIndex(isUnboundLocatorStep)
+  if (index < 0) {
+    ElMessage.success('当前没有未绑定的录制定位器')
+    return
+  }
+  selectedStepIndex.value = index
+  await focusLocatorEditorAfterStepSelection()
+}
+
+async function focusFirstRecordingElementCandidateStep() {
+  const index = form.value.steps.findIndex(isRecordingElementCandidateStep)
+  if (index < 0) {
+    ElMessage.success('当前没有待入库的新元素候选')
+    return
+  }
+  selectedStepIndex.value = index
+  await focusLocatorEditorAfterStepSelection()
+}
+
 function focusUploadReplayIssueStep(mode: 'first' | 'next' = 'first') {
   const indexes = uploadReplayIssueStepIndexes.value
   if (!indexes.length) {
@@ -2194,6 +2375,18 @@ async function focusSelectedUploadRepairAction() {
 }
 
 function getSelectedStepUploadTitle() {
+  if (selectedStepRecordedUploadArtifactStatus.value === 'TOO_LARGE') {
+    return '录制文件未自动绑定'
+  }
+  if (selectedStepRecordedUploadArtifactStatus.value === 'UNSUPPORTED_MULTIPLE') {
+    return '录制到多文件上传'
+  }
+  if (selectedStepRecordedUploadArtifactStatus.value === 'EMPTY_CONTENT') {
+    return '录制文件内容缺失'
+  }
+  if (selectedStepRecordedUploadArtifactStatus.value === 'INVALID_ARTIFACT') {
+    return '录制文件待重新绑定'
+  }
   if (selectedStepUploadBinding.value?.fileName) {
     return selectedStepUploadBinding.value.fileName
   }
@@ -2207,6 +2400,21 @@ function getSelectedStepUploadTitle() {
 }
 
 function getSelectedStepUploadNote() {
+  if (selectedStepRecordedUploadArtifactStatus.value === 'BOUND') {
+    return selectedStepRecordedUploadArtifactMessage.value || '该文件已由录制自动绑定，可直接本地回放；保存用例不会写入文件内容'
+  }
+  if (selectedStepRecordedUploadArtifactStatus.value === 'TOO_LARGE') {
+    return selectedStepRecordedUploadArtifactMessage.value || '录制文件超过自动绑定大小上限，请重新选择本地文件后再运行'
+  }
+  if (selectedStepRecordedUploadArtifactStatus.value === 'UNSUPPORTED_MULTIPLE') {
+    return selectedStepRecordedUploadArtifactMessage.value || '当前步骤录制到了多文件上传，暂不自动绑定，请手动重新选择目标文件'
+  }
+  if (selectedStepRecordedUploadArtifactStatus.value === 'EMPTY_CONTENT') {
+    return selectedStepRecordedUploadArtifactMessage.value || '录制时没有拿到可回放的文件内容，请重新选择本地文件后再运行'
+  }
+  if (selectedStepRecordedUploadArtifactStatus.value === 'INVALID_ARTIFACT') {
+    return selectedStepRecordedUploadArtifactMessage.value || '录制文件信息不完整，请重新选择本地文件后再运行'
+  }
   if (selectedStepUploadReplayIssue.value === 'MISSING_BINDING') {
     return '当前 artifact 还没有绑定本地文件，本地运行前需要重新选择'
   }
@@ -2514,6 +2722,9 @@ watch(elementPickerLocatorType, () => {
               <el-tag v-if="getStepFileUploadReplayLabel(step)" type="warning" effect="light" size="small">
                 {{ getStepFileUploadReplayLabel(step) }}
               </el-tag>
+              <el-tag v-if="getStepRecordedUploadArtifactLabel(step)" :type="getStepRecordedUploadArtifactTagType(step)" effect="light" size="small">
+                {{ getStepRecordedUploadArtifactLabel(step) }}
+              </el-tag>
               <el-tag v-if="step.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(step)" effect="light" size="small">
                 {{ getRecordingElementMatchLabel(step) }}
               </el-tag>
@@ -2638,6 +2849,15 @@ watch(elementPickerLocatorType, () => {
                   <span v-if="selectedStepUploadBinding">
                     {{ formatFileSize(selectedStepUploadBinding.size) }} · {{ selectedStepUploadBinding.contentType || 'application/octet-stream' }}
                   </span>
+                  <span v-else-if="selectedStepRecordedUploadArtifactStatus === 'TOO_LARGE'">
+                    超过自动绑定上限，需重新选择文件
+                  </span>
+                  <span v-else-if="selectedStepRecordedUploadArtifactStatus === 'UNSUPPORTED_MULTIPLE'">
+                    多文件上传暂不自动绑定
+                  </span>
+                  <span v-else-if="selectedStepRecordedUploadArtifactStatus === 'EMPTY_CONTENT'">
+                    录制文件内容不可用
+                  </span>
                   <span v-else-if="selectedStepUploadFileId">artifact:{{ selectedStepUploadFileId }}</span>
                   <span v-else>支持本机绝对路径，或选择文件生成 artifact 引用</span>
                 </div>
@@ -2647,7 +2867,7 @@ watch(elementPickerLocatorType, () => {
                 </div>
                 <small
                   class="web-ui-upload-artifact__note"
-                  :class="{ 'is-warning': selectedStepUploadReplayIssue }"
+                  :class="{ 'is-warning': selectedStepUploadReplayIssue || (selectedStepRecordedUploadArtifactStatus && selectedStepRecordedUploadArtifactStatus !== 'BOUND') }"
                 >
                   {{ getSelectedStepUploadNote() }}
                 </small>
@@ -2737,6 +2957,85 @@ watch(elementPickerLocatorType, () => {
               <small v-if="recordingEventCount > 0">事件 {{ recordingEventCount }}</small>
               <small v-if="recordingElementCandidateCount > 0">新候选 {{ recordingElementCandidateCount }}</small>
               <small v-if="recordingElementUnboundLocatorCount > 0">未绑定 {{ recordingElementUnboundLocatorCount }}</small>
+            </div>
+            <div v-if="recordingWorkbenchVisible" class="web-ui-recording-workbench" aria-label="录制草稿概览">
+              <div class="web-ui-recording-workbench__item">
+                <span>步骤草稿</span>
+                <strong>{{ form.steps.length }}</strong>
+                <small>{{ recordingDraftActive ? '草稿未保存' : '当前用例步骤' }}</small>
+              </div>
+              <div class="web-ui-recording-workbench__item">
+                <span>Runner 缓存</span>
+                <strong>{{ recordingStepCount }}</strong>
+                <small>{{ recordingEventCount > 0 ? `事件 ${recordingEventCount}` : '等待同步' }}</small>
+              </div>
+              <div
+                class="web-ui-recording-workbench__item"
+                :class="{ 'is-warning': recordingElementUnboundLocatorCount > 0 }"
+              >
+                <span>待匹配定位</span>
+                <strong>{{ recordingElementUnboundLocatorCount }}</strong>
+                <small>{{ recordingElementCandidateCount > 0 ? `新候选 ${recordingElementCandidateCount}` : '已绑定元素库' }}</small>
+                <div v-if="recordingElementUnboundLocatorCount > 0" class="web-ui-recording-workbench__actions">
+                  <AppButton size="small" @click="focusFirstUnboundLocatorStep">定位首个</AppButton>
+                  <AppButton
+                    v-if="recordingElementCandidateCount > 0"
+                    size="small"
+                    @click="focusFirstRecordingElementCandidateStep"
+                  >
+                    定位候选
+                  </AppButton>
+                </div>
+              </div>
+              <div
+                class="web-ui-recording-workbench__item"
+                :class="{ 'is-warning': uploadReplayIssueStepIndexes.length > 0 }"
+              >
+                <span>上传修复</span>
+                <strong>{{ uploadReplayIssueStepIndexes.length }}</strong>
+                <small>{{ uploadReplayIssueStepIndexes.length > 0 ? '本地回放前需重绑文件' : '文件上传可回放' }}</small>
+                <div v-if="uploadReplayIssueStepIndexes.length > 0" class="web-ui-recording-workbench__actions">
+                  <AppButton size="small" @click="focusUploadReplayIssueStep('first')">定位问题</AppButton>
+                  <AppButton
+                    v-if="canFocusNextUploadReplayIssueStep()"
+                    size="small"
+                    @click="focusUploadReplayIssueStep('next')"
+                  >
+                    下一处
+                  </AppButton>
+                </div>
+              </div>
+              <div
+                v-if="recordingReplayDiagnostics"
+                class="web-ui-recording-workbench__item"
+                :class="{
+                  'is-warning': recordingReplayDiagnostics.tone === 'danger',
+                  'is-success': recordingReplayDiagnostics.tone === 'success',
+                }"
+              >
+                <span>回放诊断</span>
+                <strong>{{ recordingReplayDiagnostics.title }}</strong>
+                <small>{{ recordingWorkbenchReplaySummary }}</small>
+                <div
+                  v-if="recordingReplayDiagnostics.failedStepSortOrder || (recordingReplayDiagnostics.reportAvailable && localRunnerFormalRunId)"
+                  class="web-ui-recording-workbench__actions"
+                >
+                  <AppButton
+                    v-if="recordingReplayDiagnostics.failedStepSortOrder"
+                    size="small"
+                    @click="focusRecordingReplayFailedStep"
+                  >
+                    定位失败
+                  </AppButton>
+                  <AppButton
+                    v-if="recordingReplayDiagnostics.reportAvailable && localRunnerFormalRunId"
+                    size="small"
+                    @click="openLocalRunnerFormalReport"
+                  >
+                    查看报告
+                  </AppButton>
+                </div>
+              </div>
             </div>
             <div class="web-ui-recording-placeholder__actions">
               <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="recordingCapturing || recordingInProgress" @click="openRecordingPage">打开目标页</AppButton>
@@ -3472,6 +3771,8 @@ watch(elementPickerLocatorType, () => {
   display: grid;
   justify-items: start;
   gap: var(--app-space-2);
+  width: 100%;
+  min-width: 0;
   color: var(--app-text-secondary);
   font-size: var(--app-font-size-sm);
 }
@@ -3493,14 +3794,19 @@ watch(elementPickerLocatorType, () => {
 }
 
 .web-ui-recording-placeholder p {
+  max-width: 100%;
   margin: 0;
+  overflow: hidden;
   line-height: var(--app-line-height-md);
+  text-overflow: ellipsis;
 }
 
 .web-ui-recording-placeholder__status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--app-space-1);
+  min-width: 0;
   color: var(--app-text-primary);
 }
 
@@ -3527,10 +3833,74 @@ watch(elementPickerLocatorType, () => {
   color: var(--app-text-secondary);
 }
 
+.web-ui-recording-workbench {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: var(--app-space-2);
+  width: 100%;
+  max-width: 100%;
+  justify-self: stretch;
+}
+
+.web-ui-recording-workbench__item {
+  display: grid;
+  gap: var(--app-space-1);
+  align-content: start;
+  min-width: 0;
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-muted);
+}
+
+.web-ui-recording-workbench__item.is-warning {
+  border-color: var(--app-warning);
+  background: var(--app-warning-soft);
+}
+
+.web-ui-recording-workbench__item.is-success {
+  border-color: var(--app-success);
+  background: var(--app-success-soft);
+}
+
+.web-ui-recording-workbench__item span {
+  overflow: hidden;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--app-line-height-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-recording-workbench__item strong {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-lg);
+  line-height: var(--app-line-height-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-recording-workbench__item small {
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  line-height: var(--app-line-height-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-recording-workbench__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-1);
+}
+
 .web-ui-recording-placeholder__actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--app-space-2);
+  max-width: 100%;
 }
 
 .web-ui-recording-quality {

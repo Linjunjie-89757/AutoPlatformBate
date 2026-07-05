@@ -405,6 +405,133 @@ test('records hover checkbox radio and file upload interactions', async () => {
     assert.equal(stopped.steps[2].locatorValue, '#priority-high');
     assert.equal(stopped.steps[3].locatorValue, '#attachment');
     assert.equal(stopped.steps[3].inputValue, 'upload-demo.txt');
+    assert.deepEqual(stopped.steps[3].uploadArtifact, {
+      fileName: 'upload-demo.txt',
+      contentType: 'text/plain',
+      contentBase64: 'ZGVtbw==',
+      size: 4,
+      captureStatus: 'READY',
+    });
+    assert.deepEqual(stopped.events[3].uploadArtifact, stopped.steps[3].uploadArtifact);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('upgrades file input click to file upload after native picker focus returns', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildNativeFilePickerFallbackRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    await waitFor(async () => {
+      const status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 1 && status.steps[0]?.type === 'FILE_UPLOAD';
+    }, 5000);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILE_UPLOAD']);
+    assert.equal(stopped.steps[0].locatorType, 'CSS');
+    assert.equal(stopped.steps[0].locatorValue, '#attachment');
+    assert.equal(stopped.steps[0].inputValue, 'native-upload.txt');
+    assert.deepEqual(stopped.steps[0].uploadArtifact, {
+      fileName: 'native-upload.txt',
+      contentType: 'text/plain',
+      contentBase64: 'bmF0aXZl',
+      size: 6,
+      captureStatus: 'READY',
+    });
+    assert.equal(stopped.events.length, 1);
+    assert.equal(stopped.events[0].kind, 'FILE_UPLOAD');
+    assert.deepEqual(stopped.events[0].uploadArtifact, stopped.steps[0].uploadArtifact);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('records file upload after focus returns even when no DOM click is observed', async () => {
+  const runnerPort = await findAvailablePort();
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const recordingPageUrl = `data:text/html,${encodeURIComponent(buildFilePickerFocusOnlyRecordingPageHtml())}`;
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: recordingPageUrl,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    await waitFor(async () => {
+      const status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 1 && status.steps[0]?.type === 'FILE_UPLOAD';
+    }, 5000);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILE_UPLOAD']);
+    assert.equal(stopped.steps[0].locatorValue, '#attachment');
+    assert.equal(stopped.steps[0].inputValue, 'focus-only-upload.txt');
+    assert.deepEqual(stopped.steps[0].uploadArtifact, {
+      fileName: 'focus-only-upload.txt',
+      contentType: 'text/plain',
+      contentBase64: 'Zm9jdXM=',
+      size: 5,
+      captureStatus: 'READY',
+    });
+    assert.equal(stopped.events.length, 1);
+    assert.equal(stopped.events[0].kind, 'FILE_UPLOAD');
+    assert.deepEqual(stopped.events[0].uploadArtifact, stopped.steps[0].uploadArtifact);
   } finally {
     await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
     await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
@@ -465,6 +592,153 @@ test('records keyboard double click and right click interactions', async () => {
     await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
     await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
     await stopRunnerProcess(runner);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('continues recording after page refresh', async () => {
+  const runnerPort = await findAvailablePort();
+  let appPort = await findAvailablePort();
+  while (appPort === runnerPort) {
+    appPort = await findAvailablePort();
+  }
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const appBaseUrl = `http://127.0.0.1:${appPort}`;
+
+  const app = createHttpServer((request, response) => {
+    const url = new URL(request.url || '/', appBaseUrl);
+    if (url.pathname === '/refresh') {
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end(buildRefreshRecordingPageHtml());
+      return;
+    }
+    response.writeHead(404);
+    response.end('not found');
+  });
+
+  await listen(app, appPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: `${appBaseUrl}/refresh`,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    let status;
+    await waitFor(async () => {
+      status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 2;
+    }, 8000);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILL', 'CLICK']);
+    assert.equal(stopped.steps[0].locatorValue, '#refresh-name');
+    assert.equal(stopped.steps[0].inputValue, 'Reloaded');
+    assert.equal(stopped.steps[1].locatorType, 'TEST_ID');
+    assert.equal(stopped.steps[1].locatorValue, 'refresh-save');
+    assert.equal(status.page.url, `${appBaseUrl}/refresh`);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+    await closeServer(app);
+  }
+
+  assert.deepEqual(stderr, []);
+});
+
+test('follows the active recording page when a new tab records events', async () => {
+  const runnerPort = await findAvailablePort();
+  let appPort = await findAvailablePort();
+  while (appPort === runnerPort) {
+    appPort = await findAvailablePort();
+  }
+  const runnerBaseUrl = `http://127.0.0.1:${runnerPort}`;
+  const appBaseUrl = `http://127.0.0.1:${appPort}`;
+
+  const app = createHttpServer((request, response) => {
+    const url = new URL(request.url || '/', appBaseUrl);
+    if (url.pathname === '/opener') {
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end(buildNewTabOpenerRecordingPageHtml());
+      return;
+    }
+    if (url.pathname === '/child') {
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end(buildNewTabChildRecordingPageHtml());
+      return;
+    }
+    response.writeHead(404);
+    response.end('not found');
+  });
+
+  await listen(app, appPort);
+
+  const runner = spawn(process.execPath, ['tools/web-ui-runner/server.mjs'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      WEB_UI_RUNNER_PORT: String(runnerPort),
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stderr = [];
+  runner.stderr.on('data', chunk => stderr.push(String(chunk)));
+
+  try {
+    await waitForRunnerHealth(runnerBaseUrl);
+    const opened = await postJson(runnerBaseUrl, '/collect/open', {
+      url: `${appBaseUrl}/opener`,
+      workspaceId: 'account-open',
+      environmentId: 'recording',
+      headless: true,
+    });
+    assert.equal(opened.success, true);
+    const started = await postJson(runnerBaseUrl, '/record/start', {});
+    assert.equal(started.recording.status, 'RECORDING');
+
+    let status;
+    await waitFor(async () => {
+      status = await getJson(runnerBaseUrl, '/record/status');
+      return status?.steps?.length === 4;
+    }, 8000);
+
+    const stopped = await postJson(runnerBaseUrl, '/record/stop', {});
+    assert.equal(stopped.recording.status, 'STOPPED');
+    assert.deepEqual(stopped.steps.map(item => item.type), ['FILL', 'CLICK', 'FILL', 'CLICK']);
+    assert.equal(stopped.steps[0].locatorValue, '#opener-name');
+    assert.equal(stopped.steps[1].locatorType, 'TEST_ID');
+    assert.equal(stopped.steps[1].locatorValue, 'open-child');
+    assert.equal(stopped.steps[2].locatorValue, '#child-name');
+    assert.equal(stopped.steps[3].locatorType, 'TEST_ID');
+    assert.equal(stopped.steps[3].locatorValue, 'child-save');
+    assert.equal(status.page.url, `${appBaseUrl}/child`);
+  } finally {
+    await postJson(runnerBaseUrl, '/record/stop', {}).catch(() => {});
+    await postJson(runnerBaseUrl, '/session/release', {}).catch(() => {});
+    await stopRunnerProcess(runner);
+    await closeServer(app);
   }
 
   assert.deepEqual(stderr, []);
@@ -872,6 +1146,53 @@ function buildComplexRecordingPageHtml() {
   ].join('');
 }
 
+function buildNativeFilePickerFallbackRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Native Picker Fallback</title></head>',
+    '<body>',
+    '<label for="attachment">Attachment</label>',
+    '<input id="attachment" type="file" />',
+    '<script>',
+    'const input = document.querySelector("#attachment");',
+    'input.addEventListener("click", () => {',
+    '  window.setTimeout(() => {',
+    '    const transfer = new DataTransfer();',
+    '    transfer.items.add(new File(["native"], "native-upload.txt", { type: "text/plain" }));',
+    '    input.files = transfer.files;',
+    '    window.dispatchEvent(new FocusEvent("focus"));',
+    '  }, 120);',
+    '}, { once: true });',
+    'window.setTimeout(() => input.click(), 1000);',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildFilePickerFocusOnlyRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>File Picker Focus Only</title></head>',
+    '<body>',
+    '<label for="attachment">Attachment</label>',
+    '<input id="attachment" type="file" />',
+    '<script>',
+    'window.setTimeout(() => {',
+    '  const input = document.querySelector("#attachment");',
+    '  const transfer = new DataTransfer();',
+    '  transfer.items.add(new File(["focus"], "focus-only-upload.txt", { type: "text/plain" }));',
+    '  input.files = transfer.files;',
+    '  window.dispatchEvent(new FocusEvent("focus"));',
+    '}, 1000);',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
 function buildAdvancedInteractionRecordingPageHtml() {
   return [
     '<!doctype html>',
@@ -904,6 +1225,82 @@ function buildAdvancedInteractionRecordingPageHtml() {
     '  mouse(button, "dblclick");',
     '}, 1650);',
     'window.setTimeout(() => mouse(document.querySelector("#right"), "contextmenu"), 1950);',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildRefreshRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>Refresh Recording</title></head>',
+    '<body>',
+    '<label for="refresh-name">Refresh Name</label>',
+    '<input id="refresh-name" placeholder="Refresh Name" />',
+    '<button id="refresh-save" data-testid="refresh-save">Save refresh</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#refresh-name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: value }));',
+    '}',
+    'window.setTimeout(() => {',
+    '  if (sessionStorage.getItem("auto-web-refresh-done") !== "true") {',
+    '    sessionStorage.setItem("auto-web-refresh-done", "true");',
+    '    window.location.reload();',
+    '    return;',
+    '  }',
+    '  inputValue("Reloaded");',
+    '  window.setTimeout(() => document.querySelector("#refresh-save").click(), 200);',
+    '}, 900);',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildNewTabOpenerRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>New Tab Opener</title></head>',
+    '<body>',
+    '<label for="opener-name">Opener Name</label>',
+    '<input id="opener-name" placeholder="Opener Name" />',
+    '<a id="child-link" href="/child" target="_blank" data-testid="open-child">Open child</a>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#opener-name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: value }));',
+    '}',
+    'window.setTimeout(() => inputValue("Opener"), 900);',
+    'window.setTimeout(() => document.querySelector("#child-link").click(), 1300);',
+    '</script>',
+    '</body>',
+    '</html>',
+  ].join('');
+}
+
+function buildNewTabChildRecordingPageHtml() {
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head><title>New Tab Child</title></head>',
+    '<body>',
+    '<label for="child-name">Child Name</label>',
+    '<input id="child-name" placeholder="Child Name" />',
+    '<button id="child-save" data-testid="child-save">Save child</button>',
+    '<script>',
+    'function inputValue(value) {',
+    '  const input = document.querySelector("#child-name");',
+    '  input.value = value;',
+    '  input.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: value }));',
+    '}',
+    'window.setTimeout(() => inputValue("Child"), 800);',
+    'window.setTimeout(() => document.querySelector("#child-save").click(), 1100);',
     '</script>',
     '</body>',
     '</html>',

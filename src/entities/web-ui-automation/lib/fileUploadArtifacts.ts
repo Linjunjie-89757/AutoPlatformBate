@@ -12,6 +12,16 @@ export interface WebUiFileUploadArtifactBinding {
   size?: number | null
 }
 
+export interface WebUiRecordedFileUploadArtifact {
+  fileName?: string | null
+  contentType?: string | null
+  contentBase64?: string | null
+  size?: number | null
+  captureStatus?: WebUiRecordedFileUploadArtifactCaptureStatus | null
+  limitBytes?: number | null
+  fileCount?: number | null
+}
+
 export interface WebUiFileUploadArtifactRef {
   fileId: string
   artifactId: string
@@ -26,7 +36,20 @@ export interface WebUiFileUploadArtifactRefBuildResult {
   missingFileIds: string[]
 }
 
+export type WebUiFileUploadArtifactBindingWithTimestamp = WebUiFileUploadArtifactBinding & { updatedAt: number }
 export type WebUiFileUploadReplayIssue = 'MISSING_BINDING' | 'NON_REPLAYABLE_VALUE'
+export type WebUiRecordedFileUploadArtifactCaptureStatus = 'READY' | 'TOO_LARGE' | 'UNSUPPORTED_MULTIPLE' | 'EMPTY_CONTENT' | 'READ_FAILED'
+export type RecordedWebUiFileUploadArtifactBindStatus = 'BOUND' | 'TOO_LARGE' | 'UNSUPPORTED_MULTIPLE' | 'EMPTY_CONTENT' | 'INVALID_ARTIFACT'
+
+export interface RecordedWebUiFileUploadArtifactBindResult {
+  status: RecordedWebUiFileUploadArtifactBindStatus
+  binding?: WebUiFileUploadArtifactBindingWithTimestamp
+  size?: number | null
+  limitBytes?: number | null
+  fileCount?: number | null
+}
+
+export const RECORDED_WEB_UI_UPLOAD_ARTIFACT_MAX_SIZE_BYTES = 2 * 1024 * 1024
 
 export interface WebUiFileUploadReplayIssueMatch {
   index: number
@@ -132,6 +155,83 @@ export function buildWebUiFileUploadArtifactRefs(
   return { artifactRefs, missingFileIds }
 }
 
+export function bindRecordedWebUiFileUploadArtifact<T extends WebUiFileUploadArtifactStep>(
+  step: T,
+  fileId: string,
+  artifact: WebUiRecordedFileUploadArtifact | null | undefined,
+  updatedAt = Date.now(),
+): RecordedWebUiFileUploadArtifactBindResult {
+  if (!isEnabledFileUploadStep(step)) {
+    return { status: 'INVALID_ARTIFACT' }
+  }
+  const normalizedFileId = fileId.trim()
+  if (!normalizedFileId) {
+    return { status: 'INVALID_ARTIFACT' }
+  }
+  if (!artifact || typeof artifact !== 'object') {
+    return { status: 'INVALID_ARTIFACT' }
+  }
+
+  const size = normalizePositiveNumber(artifact.size)
+  const limitBytes = normalizePositiveNumber(artifact.limitBytes) || RECORDED_WEB_UI_UPLOAD_ARTIFACT_MAX_SIZE_BYTES
+  const fileCount = normalizePositiveNumber(artifact.fileCount)
+  const captureStatus = artifact.captureStatus || null
+
+  if (captureStatus === 'UNSUPPORTED_MULTIPLE') {
+    return {
+      status: 'UNSUPPORTED_MULTIPLE',
+      fileCount,
+    }
+  }
+
+  if (captureStatus === 'TOO_LARGE' || (typeof size === 'number' && size > limitBytes)) {
+    return {
+      status: 'TOO_LARGE',
+      size,
+      limitBytes,
+    }
+  }
+
+  if (captureStatus === 'EMPTY_CONTENT' || captureStatus === 'READ_FAILED') {
+    return {
+      status: 'EMPTY_CONTENT',
+      size,
+    }
+  }
+
+  const fileName = artifact.fileName?.trim() || normalizedFileId
+  const contentBase64 = artifact.contentBase64?.trim() || ''
+  if (!contentBase64) {
+    return {
+      status: 'EMPTY_CONTENT',
+      size,
+    }
+  }
+
+  step.inputValue = `artifact:${normalizedFileId}`
+  return {
+    status: 'BOUND',
+    binding: {
+      fileId: normalizedFileId,
+      fileName,
+      contentType: artifact.contentType?.trim() || 'application/octet-stream',
+      contentBase64,
+      ...(typeof size === 'number' ? { size } : {}),
+      updatedAt,
+    },
+  }
+}
+
+export function applyRecordedWebUiFileUploadArtifact<T extends WebUiFileUploadArtifactStep>(
+  step: T,
+  fileId: string,
+  artifact: WebUiRecordedFileUploadArtifact | null | undefined,
+  updatedAt = Date.now(),
+): WebUiFileUploadArtifactBindingWithTimestamp | null {
+  const result = bindRecordedWebUiFileUploadArtifact(step, fileId, artifact, updatedAt)
+  return result.status === 'BOUND' ? result.binding || null : null
+}
+
 export function hasUnsavedWebUiFileUploadArtifactChanges(
   currentSteps: WebUiFileUploadArtifactStep[],
   savedSteps: WebUiFileUploadArtifactStep[],
@@ -160,4 +260,8 @@ export function hasUnsavedWebUiFileUploadArtifactChanges(
 
 function isEnabledFileUploadStep(step?: WebUiFileUploadArtifactStep | null) {
   return step?.enabled !== false && String(step?.type || '').toUpperCase() === 'FILE_UPLOAD'
+}
+
+function normalizePositiveNumber(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }

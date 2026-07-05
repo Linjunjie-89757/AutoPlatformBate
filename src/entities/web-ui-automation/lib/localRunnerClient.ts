@@ -227,6 +227,17 @@ export interface LocalRunnerRecordedEvent {
   pageTitle: string | null
   inputValue?: string | null
   key?: string | null
+  uploadArtifact?: LocalRunnerRecordedUploadArtifact | null
+}
+
+export interface LocalRunnerRecordedUploadArtifact {
+  fileName: string
+  contentType?: string | null
+  contentBase64?: string | null
+  size?: number | null
+  captureStatus?: 'READY' | 'TOO_LARGE' | 'UNSUPPORTED_MULTIPLE' | 'EMPTY_CONTENT' | 'READ_FAILED' | null
+  limitBytes?: number | null
+  fileCount?: number | null
 }
 
 export interface LocalRunnerRecordedStep {
@@ -249,6 +260,7 @@ export interface LocalRunnerRecordedStep {
   source?: string | null
   pageUrl?: string | null
   recordedAt?: string | null
+  uploadArtifact?: LocalRunnerRecordedUploadArtifact | null
 }
 
 export interface LocalRunnerRecordingResult {

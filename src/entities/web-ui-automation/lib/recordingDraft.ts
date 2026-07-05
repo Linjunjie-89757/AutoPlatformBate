@@ -1,7 +1,7 @@
 export const WEB_UI_RECORDING_DRAFT_VERSION = 1
 export const WEB_UI_RECORDING_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-export interface WebUiRecordingDraftPayload<TForm = unknown> {
+export interface WebUiRecordingDraftPayload<TForm = unknown, TUploadArtifactBindings = unknown> {
   version: typeof WEB_UI_RECORDING_DRAFT_VERSION
   workspaceCode: string
   caseId: number
@@ -13,6 +13,7 @@ export interface WebUiRecordingDraftPayload<TForm = unknown> {
   createdAt: string
   updatedAt: string
   form: TForm
+  uploadArtifactBindings?: TUploadArtifactBindings | null
 }
 export interface WebUiRecordingDraftTarget {
   workspaceCode: string
@@ -29,7 +30,7 @@ export function buildWebUiRecordingDraftStorageKey(workspaceCode: string, caseId
   ].join(':')
 }
 
-export function createWebUiRecordingDraft<TForm>(input: {
+export function createWebUiRecordingDraft<TForm, TUploadArtifactBindings = unknown>(input: {
   workspaceCode: string
   caseId: number
   caseUpdatedAt?: string | null
@@ -38,9 +39,10 @@ export function createWebUiRecordingDraft<TForm>(input: {
   recorderId?: string | null
   recordedStepCount?: number
   form: TForm
-  previousDraft?: WebUiRecordingDraftPayload<TForm> | null
+  uploadArtifactBindings?: TUploadArtifactBindings | null
+  previousDraft?: WebUiRecordingDraftPayload<TForm, TUploadArtifactBindings> | null
   now?: string
-}): WebUiRecordingDraftPayload<TForm> {
+}): WebUiRecordingDraftPayload<TForm, TUploadArtifactBindings> {
   const now = input.now || new Date().toISOString()
   return {
     version: WEB_UI_RECORDING_DRAFT_VERSION,
@@ -54,19 +56,20 @@ export function createWebUiRecordingDraft<TForm>(input: {
     createdAt: input.previousDraft?.createdAt || now,
     updatedAt: now,
     form: input.form,
+    uploadArtifactBindings: input.uploadArtifactBindings || null,
   }
 }
 
-export function parseWebUiRecordingDraft<TForm = unknown>(
+export function parseWebUiRecordingDraft<TForm = unknown, TUploadArtifactBindings = unknown>(
   raw: string | null | undefined,
   options: { nowMs?: number; ttlMs?: number } = {},
-): WebUiRecordingDraftPayload<TForm> | null {
+): WebUiRecordingDraftPayload<TForm, TUploadArtifactBindings> | null {
   if (!raw) {
     return null
   }
 
   try {
-    const parsed = JSON.parse(raw) as Partial<WebUiRecordingDraftPayload<TForm>>
+    const parsed = JSON.parse(raw) as Partial<WebUiRecordingDraftPayload<TForm, TUploadArtifactBindings>>
     if (
       parsed.version !== WEB_UI_RECORDING_DRAFT_VERSION
       || !parsed.workspaceCode
@@ -100,6 +103,7 @@ export function parseWebUiRecordingDraft<TForm = unknown>(
       createdAt: parsed.createdAt || parsed.updatedAt,
       updatedAt: parsed.updatedAt,
       form: parsed.form as TForm,
+      uploadArtifactBindings: parsed.uploadArtifactBindings as TUploadArtifactBindings | null | undefined || null,
     }
   } catch {
     return null

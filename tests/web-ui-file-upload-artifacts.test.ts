@@ -2,13 +2,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  applyRecordedWebUiFileUploadArtifact,
   artifactFileIdFromInputValue,
+  bindRecordedWebUiFileUploadArtifact,
   buildWebUiFileUploadArtifactRefs,
   findFirstWebUiFileUploadReplayIssue,
   getWebUiFileUploadReplayIssue,
   hasUnsavedWebUiFileUploadArtifactChanges,
   isFileUploadArtifactValue,
   isReplayableWebUiFileUploadValue,
+  RECORDED_WEB_UI_UPLOAD_ARTIFACT_MAX_SIZE_BYTES,
   type WebUiFileUploadArtifactBinding,
   type WebUiFileUploadArtifactStep,
 } from '../src/entities/web-ui-automation/lib/fileUploadArtifacts.ts'
@@ -100,6 +103,71 @@ test('detects replay issues for recorded upload names and missing artifact bindi
   assert.equal(getWebUiFileUploadReplayIssue(step({ inputValue: 'D:/fixtures/avatar.png' })), null)
   assert.equal(isReplayableWebUiFileUploadValue('upload-demo.txt'), false)
   assert.equal(isReplayableWebUiFileUploadValue('artifact:avatar'), true)
+})
+
+test('applies recorded upload artifact to a replayable file upload step', () => {
+  const uploadStep = step({ inputValue: 'recorded-upload.txt' })
+  const binding = applyRecordedWebUiFileUploadArtifact(uploadStep, 'recorded-file', {
+    fileName: 'recorded-upload.txt',
+    contentType: 'text/plain',
+    contentBase64: 'cmVjb3JkZWQ=',
+    size: 8,
+  }, 1234)
+
+  assert.equal(uploadStep.inputValue, 'artifact:recorded-file')
+  assert.deepEqual(binding, {
+    fileId: 'recorded-file',
+    fileName: 'recorded-upload.txt',
+    contentType: 'text/plain',
+    contentBase64: 'cmVjb3JkZWQ=',
+    size: 8,
+    updatedAt: 1234,
+  })
+  assert.equal(getWebUiFileUploadReplayIssue(uploadStep, {
+    'recorded-file': binding || undefined,
+  }), null)
+})
+
+test('keeps recorded upload unchanged when artifact content is missing', () => {
+  const uploadStep = step({ inputValue: 'recorded-upload.txt' })
+  const binding = applyRecordedWebUiFileUploadArtifact(uploadStep, 'recorded-file', {
+    fileName: 'recorded-upload.txt',
+    contentBase64: '',
+  }, 1234)
+
+  assert.equal(binding, null)
+  assert.equal(uploadStep.inputValue, 'recorded-upload.txt')
+})
+
+test('reports recorded upload artifact boundary states without mutating the step', () => {
+  const tooLargeStep = step({ inputValue: 'large-upload.bin' })
+  const tooLarge = bindRecordedWebUiFileUploadArtifact(tooLargeStep, 'large-file', {
+    fileName: 'large-upload.bin',
+    contentBase64: 'ignored',
+    size: RECORDED_WEB_UI_UPLOAD_ARTIFACT_MAX_SIZE_BYTES + 1,
+  }, 1234)
+  assert.equal(tooLarge.status, 'TOO_LARGE')
+  assert.equal(tooLarge.limitBytes, RECORDED_WEB_UI_UPLOAD_ARTIFACT_MAX_SIZE_BYTES)
+  assert.equal(tooLargeStep.inputValue, 'large-upload.bin')
+
+  const emptyStep = step({ inputValue: 'empty-upload.txt' })
+  const empty = bindRecordedWebUiFileUploadArtifact(emptyStep, 'empty-file', {
+    fileName: 'empty-upload.txt',
+    contentBase64: '',
+    size: 0,
+  }, 1234)
+  assert.equal(empty.status, 'EMPTY_CONTENT')
+  assert.equal(emptyStep.inputValue, 'empty-upload.txt')
+
+  const multiStep = step({ inputValue: 'multi-upload.txt' })
+  const multi = bindRecordedWebUiFileUploadArtifact(multiStep, 'multi-file', {
+    fileName: 'multi-upload.txt',
+    captureStatus: 'UNSUPPORTED_MULTIPLE',
+    fileCount: 2,
+  }, 1234)
+  assert.equal(multi.status, 'UNSUPPORTED_MULTIPLE')
+  assert.equal(multi.fileCount, 2)
+  assert.equal(multiStep.inputValue, 'multi-upload.txt')
 })
 
 test('finds the first upload step that still needs replay repair', () => {

@@ -27,6 +27,16 @@ test('creates and parses valid recording drafts', () => {
     recorderId: 'rec-1',
     recordedStepCount: 2,
     form: { steps: [{ type: 'CLICK' }] },
+    uploadArtifactBindings: {
+      'upload-1': {
+        fileId: 'upload-1',
+        fileName: 'recorded-upload.txt',
+        contentType: 'text/plain',
+        contentBase64: 'cmVjb3JkZWQ=',
+        size: 8,
+        updatedAt: 1234,
+      },
+    },
     now: '2026-07-02T12:10:00.000Z',
   })
 
@@ -35,6 +45,43 @@ test('creates and parses valid recording drafts', () => {
   })
 
   assert.deepEqual(parsed, draft)
+})
+
+test('keeps recorded upload artifact bindings in local recording drafts', () => {
+  const draft = createWebUiRecordingDraft({
+    workspaceCode: 'account-open',
+    caseId: 42,
+    savedStepCount: 1,
+    draftStepCount: 2,
+    form: {
+      steps: [{
+        type: 'FILE_UPLOAD',
+        inputValue: 'artifact:recorded-file',
+        recordedUploadArtifactStatus: 'BOUND',
+      }],
+    },
+    uploadArtifactBindings: {
+      'recorded-file': {
+        fileId: 'recorded-file',
+        fileName: 'recorded-upload.txt',
+        contentType: 'text/plain',
+        contentBase64: 'cmVjb3JkZWQ=',
+        size: 8,
+        updatedAt: 1234,
+      },
+    },
+    now: '2026-07-02T12:10:00.000Z',
+  })
+
+  const parsed = parseWebUiRecordingDraft<
+    { steps: Array<{ type: string; inputValue: string; recordedUploadArtifactStatus: string }> },
+    Record<string, { fileId: string; fileName: string; contentBase64: string; updatedAt: number }>
+  >(JSON.stringify(draft), {
+    nowMs: Date.parse('2026-07-02T12:11:00.000Z'),
+  })
+
+  assert.equal(parsed?.form.steps[0]?.inputValue, 'artifact:recorded-file')
+  assert.equal(parsed?.uploadArtifactBindings?.['recorded-file']?.contentBase64, 'cmVjb3JkZWQ=')
 })
 
 test('rejects expired or incompatible recording drafts', () => {

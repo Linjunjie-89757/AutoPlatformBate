@@ -23,6 +23,7 @@ const RUNNER_OVERLAY_BINDING_NAME = '__autoWebRunnerOverlayControl';
 const RECORDER_MAX_EVENTS = 300;
 const RECORDER_DUPLICATE_CLICK_WINDOW_MS = 500;
 const RECORDER_DUPLICATE_HOVER_WINDOW_MS = 500;
+const RECORDED_UPLOAD_ARTIFACT_MAX_SIZE_BYTES = 2 * 1024 * 1024;
 const runtimeConfig = resolveRunnerRuntimeConfig({
   env: process.env,
   argv: process.argv.slice(2),
@@ -48,6 +49,9 @@ let recorderScriptContext;
 let recorderNavigationPage;
 let overlayBindingContext;
 let overlayScriptContext;
+let pageTrackingContext;
+let trackedNavigationPages = new WeakSet();
+let activePagePromotedAtMs = 0;
 
 const port = runtimeConfig.port;
 const allowedOrigins = parseAllowedOrigins(process.env.WEB_UI_RUNNER_ORIGINS);
@@ -366,6 +370,9 @@ async function openCollectPage(payload) {
     await context.close();
     context = undefined;
     page = undefined;
+    pageTrackingContext = undefined;
+    trackedNavigationPages = new WeakSet();
+    activePagePromotedAtMs = 0;
   }
 
   const storageStatePath = getStorageStatePath(workspaceId, environmentId);
@@ -543,22 +550,57 @@ function finalizeActiveRecorder() {
 
 async function buildPageRecordingResult(recorder) {
   const events = recorder?.events?.slice() || [];
+  const latestPageEvent = findLatestRecordedPageEvent(events);
+  if (latestPageEvent?.pageUrl) {
+    promoteActivePageByUrl(latestPageEvent.pageUrl, latestPageEvent.timestamp);
+  }
+  const pageInfo = hasUsablePage() ? await getPageInfo(page) : null;
   return {
     success: true,
     session: buildSessionView(),
-    page: hasUsablePage() ? await getPageInfo(page) : null,
+    page: buildRecordingPageInfo(pageInfo, latestPageEvent),
     recording: buildRecorderView(recorder),
     events,
     steps: buildRecordedSteps(events),
   };
 }
 
+function findLatestRecordedPageEvent(events) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    if (optionalString(events[index]?.pageUrl)) {
+      return events[index];
+    }
+  }
+  return null;
+}
+
+function buildRecordingPageInfo(pageInfo, latestPageEvent) {
+  const latestUrl = optionalString(latestPageEvent?.pageUrl);
+  if (!latestUrl || pageInfo?.url === latestUrl) {
+    return pageInfo;
+  }
+  const latestTitle = optionalString(latestPageEvent?.pageTitle) || pageInfo?.title || '';
+  return {
+    url: latestUrl,
+    title: latestTitle,
+    isProbablyLoginPage: isProbablyLoginPage({
+      url: latestUrl,
+      title: latestTitle,
+      visibleText: '',
+      hasPasswordInput: false,
+    }),
+  };
+}
+
 async function ensureRecorderInstalled() {
   ensureContext();
   ensurePage();
+  ensureContextPageTracking();
+  attachPageNavigationTracking(page);
 
   if (recorderBindingContext !== context) {
     await context.exposeBinding(RECORDER_BINDING_NAME, async (source, event) => {
+      promoteActivePage(source?.page, event?.timestamp);
       await recordBrowserEvent(source, event);
       return { accepted: Boolean(activeRecorder?.active) };
     });
@@ -570,24 +612,18 @@ async function ensureRecorderInstalled() {
     recorderScriptContext = context;
   }
 
-  if (recorderNavigationPage !== page) {
-    page.on('framenavigated', frame => {
-      if (frame === page?.mainFrame()) {
-        void refreshActiveSessionPageSnapshot();
-      }
-    });
-    recorderNavigationPage = page;
-  }
-
   await Promise.all(page.frames().map(frame => frame.evaluate(installBrowserRecorderScript).catch(() => null)));
 }
 
 async function ensureRunnerOverlayInstalled() {
   ensureContext();
   ensurePage();
+  ensureContextPageTracking();
+  attachPageNavigationTracking(page);
 
   if (overlayBindingContext !== context) {
     await context.exposeBinding(RUNNER_OVERLAY_BINDING_NAME, async (source, payload) => {
+      promoteActivePage(source?.page, payload?.event?.timestamp);
       const action = optionalString(payload?.action).toLowerCase();
       if (action === 'start') {
         return startPageRecording({});
@@ -627,11 +663,89 @@ async function ensureRunnerOverlayInstalled() {
   await page.evaluate(installBrowserRunnerOverlayScript).catch(() => null);
 }
 
+function ensureContextPageTracking() {
+  if (!context || pageTrackingContext === context) {
+    return;
+  }
+  trackedNavigationPages = new WeakSet();
+  context.on('page', newPage => {
+    attachPageNavigationTracking(newPage);
+    if (activeRecorder || activeSession) {
+      promoteActivePage(newPage, Date.now());
+    }
+  });
+  pageTrackingContext = context;
+}
+
+function attachPageNavigationTracking(targetPage) {
+  if (!targetPage || targetPage.isClosed?.() || trackedNavigationPages.has(targetPage)) {
+    return;
+  }
+  trackedNavigationPages.add(targetPage);
+  targetPage.on('framenavigated', frame => {
+    if (targetPage === page && frame === targetPage.mainFrame()) {
+      void refreshActiveSessionPageSnapshot();
+    }
+  });
+  targetPage.on('close', () => {
+    if (targetPage !== page) {
+      return;
+    }
+    const replacement = context?.pages?.().find(item => item && !item.isClosed?.());
+    if (replacement && replacement !== targetPage) {
+      promoteActivePage(replacement);
+      return;
+    }
+    clearClosedSession();
+  });
+}
+
+function promoteActivePage(candidatePage, promotedAt = Date.now()) {
+  if (!candidatePage || candidatePage.isClosed?.()) {
+    return false;
+  }
+  if (context && typeof candidatePage.context === 'function' && candidatePage.context() !== context) {
+    return false;
+  }
+  const promotedAtMs = normalizePromotionTime(promotedAt);
+  if (page && page !== candidatePage && promotedAtMs < activePagePromotedAtMs) {
+    return false;
+  }
+  activePagePromotedAtMs = Math.max(activePagePromotedAtMs, promotedAtMs);
+  if (page !== candidatePage) {
+    page = candidatePage;
+  }
+  attachPageNavigationTracking(candidatePage);
+  if (activeSession) {
+    activeSession.currentUrl = candidatePage.url?.() || activeSession.currentUrl || '';
+    void refreshActiveSessionPageSnapshot();
+  }
+  return true;
+}
+
+function promoteActivePageByUrl(url, promotedAt = Date.now()) {
+  const targetUrl = optionalString(url);
+  if (!targetUrl || !context?.pages) {
+    return false;
+  }
+  const matchingPage = context.pages().find(item => item && !item.isClosed?.() && item.url?.() === targetUrl);
+  return matchingPage ? promoteActivePage(matchingPage, promotedAt) : false;
+}
+
+function normalizePromotionTime(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  const parsed = Date.parse(optionalString(value));
+  return Number.isFinite(parsed) ? parsed : Date.now();
+}
+
 async function recordBrowserEvent(source, event) {
   const recorder = activeRecorder;
   if (recorder?.status !== 'RECORDING' || !recorder.active || !event || typeof event !== 'object') {
     return;
   }
+  promoteActivePageByUrl(event.url, event.timestamp);
   const normalized = await normalizeRecordedBrowserEvent(source, event);
   if (!normalized) {
     return;
@@ -669,8 +783,45 @@ async function normalizeRecordedBrowserEvent(source, event) {
     pageTitle: optionalString(event.title) || activeSession?.pageTitle || null,
     inputValue: event.inputValue === undefined || event.inputValue === null ? null : String(event.inputValue),
     key: optionalString(event.key) || null,
+    uploadArtifact: kind === 'FILE_UPLOAD' ? normalizeRecordedUploadArtifact(event.uploadArtifact) : null,
     target,
   };
+}
+
+function normalizeRecordedUploadArtifact(artifact) {
+  if (!artifact || typeof artifact !== 'object') {
+    return null;
+  }
+  const fileName = optionalString(artifact.fileName);
+  if (!fileName) {
+    return null;
+  }
+  const contentBase64 = optionalString(artifact.contentBase64);
+  const size = Number(artifact.size);
+  const fileCount = Number(artifact.fileCount);
+  const limitBytes = Number(artifact.limitBytes);
+  const captureStatus = normalizeRecordedUploadArtifactCaptureStatus(artifact.captureStatus, Boolean(contentBase64));
+  const normalized = {
+    fileName,
+    contentType: optionalString(artifact.contentType) || 'application/octet-stream',
+    ...(contentBase64 ? { contentBase64 } : {}),
+    size: Number.isFinite(size) && size >= 0 ? size : null,
+    captureStatus,
+    ...(Number.isFinite(limitBytes) && limitBytes > 0 ? { limitBytes } : {}),
+    ...(Number.isFinite(fileCount) && fileCount > 0 ? { fileCount } : {}),
+  };
+  if (!normalized.contentBase64 && captureStatus === 'READY') {
+    normalized.captureStatus = 'EMPTY_CONTENT';
+  }
+  return normalized;
+}
+
+function normalizeRecordedUploadArtifactCaptureStatus(value, hasContentBase64) {
+  const normalized = optionalString(value);
+  if (normalized === 'TOO_LARGE' || normalized === 'UNSUPPORTED_MULTIPLE' || normalized === 'EMPTY_CONTENT' || normalized === 'READ_FAILED') {
+    return normalized;
+  }
+  return hasContentBase64 ? 'READY' : 'EMPTY_CONTENT';
 }
 
 function normalizeRecordedTarget(target) {
@@ -832,6 +983,7 @@ function buildRecordedStep(event, sortOrder) {
     source: 'LOCAL_RUNNER_RECORDING',
     pageUrl: event.pageUrl || null,
     recordedAt: event.timestamp || null,
+    uploadArtifact: event.uploadArtifact || null,
   };
 }
 
@@ -1970,11 +2122,17 @@ function installBrowserRecorderScript() {
   const assertTargetStyleAttr = 'data-auto-web-runner-assert-target-style';
   const assertTargetTimerKey = '__autoWebRunnerAssertTargetTimer';
   let lastRecordableElement = null;
+  const observedFileInputValues = new WeakMap();
+  let pendingFileInputSelection = null;
+  let pendingFileInputTimer = 0;
 
   document.addEventListener('click', event => {
     const target = findRecordableTarget(event);
     if (!target || isTextEntryElement(target) || target.tagName.toLowerCase() === 'select') {
       return;
+    }
+    if (isFileInputElement(target)) {
+      rememberPendingFileInputSelection(target);
     }
     sendRecordedEvent('CLICK', event, target);
   }, true);
@@ -2011,9 +2169,9 @@ function installBrowserRecorderScript() {
       return;
     }
     if (isFileInputElement(target)) {
-      sendRecordedEvent('FILE_UPLOAD', event, target, {
-        inputValue: readElementValue(target),
-      });
+      rememberObservedFileInputValue(target);
+      clearPendingFileInputSelection();
+      void sendRecordedFileUploadEvent(event, target);
       return;
     }
     if (target.tagName.toLowerCase() === 'select') {
@@ -2043,6 +2201,14 @@ function installBrowserRecorderScript() {
       return;
     }
     sendRecordedEvent('HOVER', event, target);
+  }, true);
+  window.addEventListener('focus', () => {
+    schedulePendingFileInputSelectionFlush();
+  }, true);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      schedulePendingFileInputSelectionFlush();
+    }
   }, true);
 
   function sendRecordedEvent(kind, event, target, extra = {}) {
@@ -2205,6 +2371,128 @@ function installBrowserRecorderScript() {
 
   function isFileInputElement(element) {
     return element instanceof HTMLInputElement && String(element.getAttribute('type') || '').toLowerCase() === 'file';
+  }
+
+  function rememberPendingFileInputSelection(element) {
+    rememberObservedFileInputValue(element);
+    pendingFileInputSelection = {
+      element,
+      value: readElementValue(element),
+    };
+    window.clearTimeout(pendingFileInputTimer);
+  }
+
+  function rememberObservedFileInputValue(element) {
+    if (!isFileInputElement(element)) {
+      return;
+    }
+    observedFileInputValues.set(element, readElementValue(element));
+  }
+
+  function clearPendingFileInputSelection() {
+    pendingFileInputSelection = null;
+    window.clearTimeout(pendingFileInputTimer);
+    pendingFileInputTimer = 0;
+  }
+
+  function schedulePendingFileInputSelectionFlush() {
+    window.clearTimeout(pendingFileInputTimer);
+    pendingFileInputTimer = window.setTimeout(() => {
+      flushPendingFileInputSelection();
+    }, 80);
+  }
+
+  function flushPendingFileInputSelection() {
+    pendingFileInputTimer = 0;
+    const pending = pendingFileInputSelection;
+    const candidates = pending?.element
+      ? [pending.element]
+      : Array.from(document.querySelectorAll('input[type="file"]'));
+    for (const element of candidates) {
+      if (!isFileInputElement(element) || !document.contains(element)) {
+        continue;
+      }
+      const previousValue = pending?.element === element
+        ? pending.value
+        : (observedFileInputValues.get(element) || '');
+      const nextValue = readElementValue(element);
+      observedFileInputValues.set(element, nextValue);
+      if (!nextValue || nextValue === previousValue) {
+        continue;
+      }
+      clearPendingFileInputSelection();
+      void sendRecordedFileUploadEvent({ target: element }, element, nextValue);
+      return;
+    }
+    clearPendingFileInputSelection();
+  }
+
+  async function sendRecordedFileUploadEvent(event, target, inputValue = readElementValue(target)) {
+    const uploadArtifact = await readFileUploadArtifact(target);
+    sendRecordedEvent('FILE_UPLOAD', event, target, {
+      inputValue,
+      ...(uploadArtifact ? { uploadArtifact } : {}),
+    });
+  }
+
+  function readFileUploadArtifact(element) {
+    return new Promise((resolve) => {
+      if (!isFileInputElement(element)) {
+        resolve(null);
+        return;
+      }
+      const files = Array.from(element.files || []);
+      const file = files[0];
+      if (!file) {
+        resolve(null);
+        return;
+      }
+      const maxSizeBytes = 2 * 1024 * 1024;
+      const baseArtifact = {
+        fileName: file.name || readElementValue(element),
+        contentType: file.type || 'application/octet-stream',
+        size: typeof file.size === 'number' ? file.size : null,
+      };
+      if (files.length > 1) {
+        resolve({
+          ...baseArtifact,
+          captureStatus: 'UNSUPPORTED_MULTIPLE',
+          fileCount: files.length,
+        });
+        return;
+      }
+      if (typeof file.size === 'number' && file.size > maxSizeBytes) {
+        resolve({
+          ...baseArtifact,
+          captureStatus: 'TOO_LARGE',
+          limitBytes: maxSizeBytes,
+        });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const commaIndex = result.indexOf(',');
+        const contentBase64 = commaIndex >= 0 ? result.slice(commaIndex + 1) : result;
+        if (!contentBase64) {
+          resolve({
+            ...baseArtifact,
+            captureStatus: 'EMPTY_CONTENT',
+          });
+          return;
+        }
+        resolve({
+          ...baseArtifact,
+          contentBase64,
+          captureStatus: 'READY',
+        });
+      };
+      reader.onerror = () => resolve({
+        ...baseArtifact,
+        captureStatus: 'READ_FAILED',
+      });
+      reader.readAsDataURL(file);
+    });
   }
 
   function isHoverRecordableElement(element) {
@@ -3564,8 +3852,13 @@ async function refreshActiveSessionPageSnapshot() {
   if (!activeSession || !hasUsablePage()) {
     return;
   }
-  activeSession.currentUrl = getActivePageUrl() || activeSession.currentUrl || '';
-  activeSession.pageTitle = await page.title().catch(() => activeSession.pageTitle || '');
+  const session = activeSession;
+  const targetPage = page;
+  session.currentUrl = targetPage.url?.() || session.currentUrl || '';
+  const title = await targetPage.title().catch(() => session.pageTitle || '');
+  if (activeSession === session && page === targetPage) {
+    session.pageTitle = title;
+  }
 }
 
 function optionalString(value) {
