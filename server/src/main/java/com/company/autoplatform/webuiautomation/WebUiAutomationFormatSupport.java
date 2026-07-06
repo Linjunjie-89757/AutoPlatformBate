@@ -21,13 +21,14 @@ final class WebUiAutomationFormatSupport {
     private static final Set<String> LOCATOR_TYPES = Set.of("CSS", "TEXT", "ROLE", "PLACEHOLDER", "LABEL", "TEST_ID", "XPATH");
     private static final Set<String> STEP_TYPES = Set.of(
             "OPEN", "CLICK", "FILL", "CLEAR", "WAIT_FOR", "ASSERT_VISIBLE", "ASSERT_TEXT", "SCREENSHOT",
-            "HOVER", "DOUBLE_CLICK", "RIGHT_CLICK", "PRESS_KEY", "SELECT", "FILE_UPLOAD",
+            "DRAG_TO", "DRAG_COORDINATES",
+            "HOVER", "DOUBLE_CLICK", "RIGHT_CLICK", "PRESS_KEY", "SELECT", "FILE_UPLOAD", "FILE_PICKER",
             "ASSERT_URL", "ASSERT_TITLE", "ASSERT_ATTRIBUTE", "ASSERT_COUNT");
     private static final Set<String> LOCATOR_REQUIRED_STEP_TYPES = Set.of(
             "CLICK", "FILL", "CLEAR", "WAIT_FOR", "ASSERT_VISIBLE", "ASSERT_TEXT",
-            "HOVER", "DOUBLE_CLICK", "RIGHT_CLICK", "SELECT", "FILE_UPLOAD", "ASSERT_ATTRIBUTE", "ASSERT_COUNT");
+            "DRAG_TO", "DRAG_COORDINATES", "HOVER", "DOUBLE_CLICK", "RIGHT_CLICK", "SELECT", "FILE_UPLOAD", "FILE_PICKER", "ASSERT_ATTRIBUTE", "ASSERT_COUNT");
     private static final Set<String> INPUT_REQUIRED_STEP_TYPES = Set.of(
-            "OPEN", "FILL", "ASSERT_TEXT", "PRESS_KEY", "SELECT", "FILE_UPLOAD",
+            "OPEN", "FILL", "DRAG_TO", "DRAG_COORDINATES", "ASSERT_TEXT", "PRESS_KEY", "SELECT", "FILE_UPLOAD", "FILE_PICKER",
             "ASSERT_URL", "ASSERT_TITLE", "ASSERT_ATTRIBUTE", "ASSERT_COUNT");
     private static final Set<String> SCREENSHOT_POLICIES = Set.of("NONE", "ON_FAILURE", "ALWAYS");
 

@@ -2600,7 +2600,10 @@ function getStepActionConfigTitle(type: WebUiStepType) {
   if (type === 'OPEN') return '页面地址'
   if (type === 'FILL') return '输入配置'
   if (type === 'SELECT') return '下拉选择'
+  if (type === 'DRAG_TO') return '拖拽配置'
+  if (type === 'DRAG_COORDINATES') return '坐标拖拽'
   if (type === 'FILE_UPLOAD') return '上传配置'
+  if (type === 'FILE_PICKER') return '文件选择器'
   if (type === 'PRESS_KEY') return '按键配置'
   if (type === 'ASSERT_TEXT') return '文本断言'
   if (type === 'ASSERT_URL') return 'URL 断言'
@@ -2614,6 +2617,8 @@ function getStepInputLabel(type: WebUiStepType) {
   if (type === 'OPEN') return '页面地址'
   if (type === 'FILL') return '输入文本'
   if (type === 'SELECT') return '选项值或标签'
+  if (type === 'DRAG_TO') return '目标定位器'
+  if (type === 'DRAG_COORDINATES') return '起止坐标'
   if (type === 'ASSERT_TEXT') return '期望文本'
   if (type === 'ASSERT_URL') return 'URL 关键字'
   if (type === 'ASSERT_TITLE') return '标题关键字'
@@ -2621,6 +2626,7 @@ function getStepInputLabel(type: WebUiStepType) {
   if (type === 'ASSERT_COUNT') return '数量表达式'
   if (type === 'PRESS_KEY') return '按键'
   if (type === 'FILE_UPLOAD') return '文件路径'
+  if (type === 'FILE_PICKER') return '文件路径'
   return '输入/目标'
 }
 
@@ -2628,7 +2634,10 @@ function getStepInputPlaceholder(type: WebUiStepType) {
   if (type === 'OPEN') return '输入相对路径或完整 URL'
   if (type === 'FILL') return '输入要填充的文本内容'
   if (type === 'SELECT') return '输入 option 的值或可见文本'
+  if (type === 'DRAG_TO') return '例如 CSS=#drop-zone、TEST_ID=target 或 #drop-zone'
+  if (type === 'DRAG_COORDINATES') return '例如 20,20 -> 180,120，或 {"from":{"x":20,"y":20},"to":{"x":180,"y":120}}'
   if (type === 'FILE_UPLOAD') return '输入本机文件路径'
+  if (type === 'FILE_PICKER') return '输入本机文件路径或 artifact:文件ID'
   if (type === 'PRESS_KEY') return '例如 Enter、Escape、Control+A'
   if (type === 'ASSERT_TEXT') return '输入元素应包含的文本'
   if (type === 'ASSERT_URL') return '输入当前 URL 应包含的关键字'
@@ -2664,16 +2673,19 @@ function getStepCardTypeLabel(type: WebUiStepType) {
   if (['WAIT_FOR'].includes(type)) return '等待'
   if (type === 'CLEAR') return '清空'
   if (type === 'HOVER') return '悬停'
+  if (type === 'DRAG_TO') return '拖拽'
+  if (type === 'DRAG_COORDINATES') return '坐标拖拽'
   if (type === 'PRESS_KEY') return '按键'
   if (type === 'SELECT') return '选择'
   if (type === 'FILE_UPLOAD') return '上传'
+  if (type === 'FILE_PICKER') return '选择文件'
   if (type === 'SCREENSHOT') return '截图'
   return '步骤'
 }
 
 function getStepCardTypeTone(type: WebUiStepType) {
-  if (['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'HOVER', 'CLEAR'].includes(type)) return 'success'
-  if (['FILL', 'SELECT', 'FILE_UPLOAD', 'PRESS_KEY'].includes(type)) return 'primary'
+  if (['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK', 'HOVER', 'DRAG_TO', 'DRAG_COORDINATES', 'CLEAR'].includes(type)) return 'success'
+  if (['FILL', 'SELECT', 'FILE_UPLOAD', 'FILE_PICKER', 'PRESS_KEY'].includes(type)) return 'primary'
   if (['ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL', 'ASSERT_TITLE', 'ASSERT_ATTRIBUTE', 'ASSERT_COUNT'].includes(type)) return 'warning'
   return 'default'
 }
@@ -3049,10 +3061,13 @@ function getStepSummary(step: EditableStep) {
   if (step.type === 'DOUBLE_CLICK') return `双击 ${target || '元素'}`
   if (step.type === 'RIGHT_CLICK') return `右键 ${target || '元素'}`
   if (step.type === 'HOVER') return `悬停 ${target || '元素'}`
+  if (step.type === 'DRAG_TO') return `拖拽 ${target || '元素'} 到 ${input || '目标'}`
+  if (step.type === 'DRAG_COORDINATES') return `坐标拖拽 ${target || '区域'}：${input || '起点到终点'}`
   if (step.type === 'CLEAR') return `清空 ${target || '输入框'}`
   if (step.type === 'FILL') return `输入 ${input || '文本'}`
   if (step.type === 'SELECT') return `选择 ${input || '选项'}`
   if (step.type === 'FILE_UPLOAD') return `上传 ${input || '文件'}`
+  if (step.type === 'FILE_PICKER') return `选择 ${input || '文件'}`
   if (step.type === 'PRESS_KEY') return `按下 ${input || '按键'}`
   if (step.type === 'WAIT_FOR') return `等待 ${target || '元素'} 出现`
   if (step.type === 'ASSERT_VISIBLE') return `断言 ${target || '元素'} 可见`

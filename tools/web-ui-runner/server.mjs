@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir, hostname } from 'node:os';
@@ -24,6 +24,7 @@ const RECORDER_MAX_EVENTS = 300;
 const RECORDER_DUPLICATE_CLICK_WINDOW_MS = 500;
 const RECORDER_DUPLICATE_HOVER_WINDOW_MS = 500;
 const RECORDED_UPLOAD_ARTIFACT_MAX_SIZE_BYTES = 2 * 1024 * 1024;
+const DOWNLOAD_ARCHIVE_MAX_SIZE_BYTES = 1024 * 1024;
 const runtimeConfig = resolveRunnerRuntimeConfig({
   env: process.env,
   argv: process.argv.slice(2),
@@ -1381,7 +1382,7 @@ async function executeCurrentPageCase(payload) {
     const startedAt = Date.now();
     let result;
     try {
-      await executeCurrentPageCaseStep({
+      const stepExtra = await executeCurrentPageCaseStep({
         task,
         caseSnapshot,
         step,
@@ -1391,6 +1392,7 @@ async function executeCurrentPageCase(payload) {
         durationMs: Date.now() - startedAt,
         extra: {
           pageUrl: getActivePageUrl(),
+          ...(stepExtra && typeof stepExtra === 'object' ? stepExtra : {}),
         },
       });
     } catch (error) {
@@ -1447,23 +1449,45 @@ async function executeCurrentPageCaseStep(input) {
     }
     case 'CLICK': {
       const locator = await prepareLocatorAction(step, timeoutMs);
-      await locator.click({ timeout: timeoutMs });
-      return;
+      return executeActionWithPageBoundary(() => locator.click({ timeout: timeoutMs }), { timeoutMs });
     }
     case 'DOUBLE_CLICK': {
       const locator = await prepareLocatorAction(step, timeoutMs);
-      await locator.dblclick({ timeout: timeoutMs });
-      return;
+      return executeActionWithPageBoundary(() => locator.dblclick({ timeout: timeoutMs }), { timeoutMs });
     }
     case 'RIGHT_CLICK': {
       const locator = await prepareLocatorAction(step, timeoutMs);
-      await locator.click({ button: 'right', timeout: timeoutMs });
-      return;
+      return executeActionWithPageBoundary(() => locator.click({ button: 'right', timeout: timeoutMs }), { timeoutMs });
     }
     case 'HOVER': {
       const locator = await prepareLocatorAction(step, timeoutMs);
       await locator.hover({ timeout: timeoutMs });
       return;
+    }
+    case 'DRAG_TO': {
+      const source = await prepareLocatorAction(step, timeoutMs);
+      const target = await prepareDragTargetLocator(step, timeoutMs);
+      const actionExtra = await executeActionWithPageBoundary(() => source.dragTo(target.locator, { timeout: timeoutMs }), { timeoutMs });
+      return {
+        ...actionExtra,
+        dragTarget: {
+          locatorType: target.locatorType,
+          locatorValue: target.locatorValue,
+        },
+      };
+    }
+    case 'DRAG_COORDINATES': {
+      const drag = await prepareCoordinateDrag(step, timeoutMs);
+      const actionExtra = await executeActionWithPageBoundary(async () => {
+        await page.mouse.move(drag.absoluteFrom.x, drag.absoluteFrom.y);
+        await page.mouse.down();
+        await page.mouse.move(drag.absoluteTo.x, drag.absoluteTo.y, { steps: drag.steps });
+        await page.mouse.up();
+      }, { timeoutMs });
+      return {
+        ...actionExtra,
+        dragCoordinates: drag.extra,
+      };
     }
     case 'FILL': {
       const locator = await prepareLocatorAction(step, timeoutMs);
@@ -1502,6 +1526,22 @@ async function executeCurrentPageCaseStep(input) {
       const filePath = resolveUploadFilePath(input.task, step);
       await locator.setInputFiles(filePath, { timeout: timeoutMs });
       return;
+    }
+    case 'FILE_PICKER': {
+      const locator = await prepareLocatorAction(step, timeoutMs);
+      const filePath = resolveUploadFilePath(input.task, step);
+      const actionExtra = await executeActionWithPageBoundary(async () => {
+        const chooserPromise = page.waitForEvent('filechooser', { timeout: timeoutMs });
+        await locator.click({ timeout: timeoutMs });
+        const chooser = await chooserPromise;
+        await chooser.setFiles(filePath);
+      }, { timeoutMs });
+      return {
+        ...actionExtra,
+        filePicker: {
+          filePath,
+        },
+      };
     }
     case 'WAIT_FOR': {
       if (optionalString(step.locatorValue)) {
@@ -1626,6 +1666,133 @@ async function executeCurrentPageCaseStep(input) {
 async function ensureCasePage() {
   ensurePage();
   await ensureSessionFresh();
+}
+
+async function executeActionWithPageBoundary(action, options = {}) {
+  await ensureCasePage();
+  const actionPage = page;
+  const knownPages = new Set(context?.pages?.().filter(item => item && !item.isClosed?.()) || []);
+  const dialogMessages = [];
+  let capturedDownload = null;
+  const onDialog = async dialog => {
+    dialogMessages.push({
+      type: dialog.type?.() || 'dialog',
+      message: dialog.message?.() || '',
+      defaultValue: dialog.defaultValue?.() || '',
+    });
+    await dialog.accept(optionalString(options.dialogText)).catch(async () => {
+      await dialog.dismiss().catch(() => null);
+    });
+  };
+  const onDownload = download => {
+    capturedDownload = download;
+  };
+  actionPage.on?.('dialog', onDialog);
+  actionPage.on?.('download', onDownload);
+  try {
+    const result = await action();
+    const newPage = await promoteNewPageAfterAction(knownPages, options.timeoutMs);
+    const download = await summarizeCapturedDownload(capturedDownload);
+    return {
+      result,
+      ...(dialogMessages.length ? { dialogs: dialogMessages } : {}),
+      ...(download ? { download } : {}),
+      ...(newPage ? { newPageUrl: newPage.url?.() || null } : {}),
+    };
+  } finally {
+    actionPage.off?.('dialog', onDialog);
+    actionPage.off?.('download', onDownload);
+  }
+}
+
+async function promoteNewPageAfterAction(knownPages, timeoutMs = 1000) {
+  if (!context?.pages) {
+    return null;
+  }
+  const deadline = Date.now() + Math.min(Math.max(Number(timeoutMs || 0), 500), 1000);
+  while (Date.now() <= deadline) {
+    const candidate = context.pages()
+      .filter(item => item && !item.isClosed?.() && !knownPages.has(item))
+      .at(-1);
+    if (candidate) {
+      attachPageNavigationTracking(candidate);
+      await candidate.waitForLoadState('domcontentloaded', { timeout: Math.max(100, deadline - Date.now()) }).catch(() => null);
+      promoteActivePage(candidate);
+      return candidate;
+    }
+    await sleep(50);
+  }
+  return null;
+}
+
+async function summarizeCapturedDownload(download) {
+  if (!download) {
+    return null;
+  }
+  const suggestedFilename = optionalString(download.suggestedFilename?.());
+  const localPath = await download.path?.().catch(() => null);
+  const failure = await download.failure?.().catch(() => null);
+  const stats = localPath ? await stat(localPath).catch(() => null) : null;
+  const contentType = inferContentTypeFromFileName(suggestedFilename);
+  const archive = await buildDownloadArchive({
+    localPath,
+    suggestedFilename,
+    contentType,
+    size: stats?.size ?? null,
+    failure,
+  });
+  return {
+    suggestedFilename: suggestedFilename || null,
+    url: optionalString(download.url?.()) || null,
+    contentType,
+    size: stats?.size ?? null,
+    failure: optionalString(failure) || null,
+    completed: !failure,
+    ...(archive ? { archive } : {}),
+  };
+}
+
+async function buildDownloadArchive(input) {
+  if (input.failure || !input.localPath || typeof input.size !== 'number') {
+    return null;
+  }
+  if (input.size > DOWNLOAD_ARCHIVE_MAX_SIZE_BYTES) {
+    return {
+      archived: false,
+      reason: 'FILE_TOO_LARGE',
+      maxSize: DOWNLOAD_ARCHIVE_MAX_SIZE_BYTES,
+    };
+  }
+  const content = await readFile(input.localPath).catch(() => null);
+  if (!content) {
+    return {
+      archived: false,
+      reason: 'READ_FAILED',
+      maxSize: DOWNLOAD_ARCHIVE_MAX_SIZE_BYTES,
+    };
+  }
+  return {
+    archived: true,
+    source: 'LOCAL_RUNNER_DOWNLOAD',
+    fileName: optionalString(input.suggestedFilename) || null,
+    contentType: input.contentType || null,
+    encoding: 'base64',
+    contentBase64: content.toString('base64'),
+    size: input.size,
+  };
+}
+
+function inferContentTypeFromFileName(fileName) {
+  const normalized = optionalString(fileName).toLowerCase();
+  if (normalized.endsWith('.txt')) return 'text/plain';
+  if (normalized.endsWith('.json')) return 'application/json';
+  if (normalized.endsWith('.csv')) return 'text/csv';
+  if (normalized.endsWith('.pdf')) return 'application/pdf';
+  if (normalized.endsWith('.png')) return 'image/png';
+  if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg')) return 'image/jpeg';
+  if (normalized.endsWith('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  if (normalized.endsWith('.zip')) return 'application/zip';
+  return null;
 }
 
 function resolveCaseOpenUrl(step, caseSnapshot) {
@@ -1799,6 +1966,145 @@ async function prepareLocatorAction(step, timeoutMs) {
   });
   await locator.scrollIntoViewIfNeeded({ timeout: Math.min(timeoutMs, 5000) }).catch(() => {});
   return locator;
+}
+
+async function prepareDragTargetLocator(step, timeoutMs) {
+  ensurePage();
+  const target = parseDragTargetLocator(step.inputValue || step.targetLocator || step.value);
+  const locatorTarget = resolveLocatorTarget(page, step.targetFramePath || step.framePath, step.targetShadowPath || step.shadowPath);
+  const locator = resolveLocator(locatorTarget, target.locatorType, target.locatorValue).first();
+  await locator.waitFor({ state: 'visible', timeout: timeoutMs }).catch(error => {
+    throw new Error(`拖拽目标准备失败：元素在 ${timeoutMs} ms 内未显示（${target.locatorType}: ${target.locatorValue}），原始错误：${error instanceof Error ? error.message : String(error)}`);
+  });
+  await locator.scrollIntoViewIfNeeded({ timeout: Math.min(timeoutMs, 5000) }).catch(() => {});
+  return {
+    locator,
+    locatorType: target.locatorType,
+    locatorValue: target.locatorValue,
+  };
+}
+
+function parseDragTargetLocator(value) {
+  const raw = optionalString(value);
+  if (!raw) {
+    throw new Error('DRAG_TO step requires inputValue as target locator');
+  }
+  const separatorIndex = raw.indexOf('=');
+  if (separatorIndex <= 0) {
+    return { locatorType: 'CSS', locatorValue: raw };
+  }
+  const locatorType = raw.slice(0, separatorIndex).trim().toUpperCase();
+  const locatorValue = raw.slice(separatorIndex + 1).trim();
+  if (!locatorValue) {
+    throw new Error('DRAG_TO target locator value is required');
+  }
+  if (!['CSS', 'TEST_ID', 'TEXT', 'ROLE', 'PLACEHOLDER', 'LABEL', 'XPATH'].includes(locatorType)) {
+    return { locatorType: 'CSS', locatorValue: raw };
+  }
+  return { locatorType, locatorValue };
+}
+
+async function prepareCoordinateDrag(step, timeoutMs) {
+  ensurePage();
+  const locator = await prepareLocatorAction(step, timeoutMs);
+  const box = await locator.boundingBox({ timeout: Math.min(timeoutMs, 5000) }).catch(() => null);
+  if (!box) {
+    throw new Error(`坐标拖拽失败：无法获取元素位置（${formatLocatorForMessage(step)}）`);
+  }
+  const coordinates = parseDragCoordinates(step.inputValue || step.coordinates || step.value);
+  const absoluteFrom = resolveCoordinatePoint(box, coordinates.from, coordinates.relativeTo);
+  const absoluteTo = resolveCoordinatePoint(box, coordinates.to, coordinates.relativeTo);
+  return {
+    absoluteFrom,
+    absoluteTo,
+    steps: coordinates.steps,
+    extra: {
+      relativeTo: coordinates.relativeTo,
+      from: coordinates.from,
+      to: coordinates.to,
+      absoluteFrom,
+      absoluteTo,
+      steps: coordinates.steps,
+    },
+  };
+}
+
+function parseDragCoordinates(value) {
+  const raw = optionalString(value);
+  if (!raw) {
+    throw new Error('DRAG_COORDINATES step requires inputValue');
+  }
+  const parsed = parseDragCoordinatesJson(raw) || parseDragCoordinatesExpression(raw);
+  if (!parsed) {
+    throw new Error('DRAG_COORDINATES inputValue must be JSON or "x1,y1 -> x2,y2"');
+  }
+  return {
+    relativeTo: parsed.relativeTo === 'viewport' ? 'viewport' : 'element',
+    from: normalizeCoordinatePoint(parsed.from, 'from'),
+    to: normalizeCoordinatePoint(parsed.to, 'to'),
+    steps: normalizeDragSteps(parsed.steps),
+  };
+}
+
+function parseDragCoordinatesJson(raw) {
+  if (!raw.startsWith('{')) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    return {
+      relativeTo: optionalString(parsed.relativeTo),
+      from: parsed.from,
+      to: parsed.to,
+      steps: parsed.steps,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseDragCoordinatesExpression(raw) {
+  const match = raw.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*(?:->|=>|to)\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/i);
+  if (!match) {
+    return null;
+  }
+  return {
+    relativeTo: 'element',
+    from: { x: Number(match[1]), y: Number(match[2]) },
+    to: { x: Number(match[3]), y: Number(match[4]) },
+  };
+}
+
+function normalizeCoordinatePoint(value, label) {
+  const point = Array.isArray(value)
+    ? { x: value[0], y: value[1] }
+    : value && typeof value === 'object'
+      ? { x: value.x, y: value.y }
+      : null;
+  const x = Number(point?.x);
+  const y = Number(point?.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    throw new Error(`DRAG_COORDINATES ${label} coordinate must include numeric x and y`);
+  }
+  return { x, y };
+}
+
+function normalizeDragSteps(value) {
+  const steps = Number(value);
+  return Number.isFinite(steps) && steps > 0 ? Math.min(Math.floor(steps), 100) : 12;
+}
+
+function resolveCoordinatePoint(box, point, relativeTo) {
+  if (relativeTo === 'viewport') {
+    return { x: point.x, y: point.y };
+  }
+  return {
+    x: box.x + point.x,
+    y: box.y + point.y,
+  };
 }
 
 function formatLocatorForMessage(step) {
@@ -4106,6 +4412,10 @@ async function refreshActiveSessionPageSnapshot() {
 
 function optionalString(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function normalizeTaskId(value) {

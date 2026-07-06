@@ -4,15 +4,19 @@ import com.company.autoplatform.common.BadRequestException;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.FileChooser;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.options.BoundingBox;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class WebUiPlaywrightBrowserRunner implements WebUiBrowserRunner {
@@ -52,11 +56,14 @@ public class WebUiPlaywrightBrowserRunner implements WebUiBrowserRunner {
                 case "FILL" -> locator(page, step).fill(requiredInput(step));
                 case "CLEAR" -> locator(page, step).clear();
                 case "HOVER" -> locator(page, step).hover();
+                case "DRAG_TO" -> locator(page, step).dragTo(dragTarget(page, step));
+                case "DRAG_COORDINATES" -> dragCoordinates(page, step);
                 case "DOUBLE_CLICK" -> locator(page, step).dblclick();
                 case "RIGHT_CLICK" -> locator(page, step).click(new Locator.ClickOptions().setButton(com.microsoft.playwright.options.MouseButton.RIGHT));
                 case "PRESS_KEY" -> page.keyboard().press(requiredInput(step));
                 case "SELECT" -> locator(page, step).selectOption(requiredInput(step));
                 case "FILE_UPLOAD" -> locator(page, step).setInputFiles(java.nio.file.Path.of(requiredInput(step)));
+                case "FILE_PICKER" -> chooseFile(page, step);
                 case "WAIT_FOR" -> locator(page, step).waitFor();
                 case "ASSERT_VISIBLE" -> assertVisible(page, step);
                 case "ASSERT_TEXT" -> assertText(page, step);
@@ -198,6 +205,64 @@ public class WebUiPlaywrightBrowserRunner implements WebUiBrowserRunner {
 
     private Locator locator(Page page, WebUiCaseStepEntity step) {
         return locatorSupport.resolve(page, step.getLocatorType(), step.getLocatorValue());
+    }
+
+    private Locator dragTarget(Page page, WebUiCaseStepEntity step) {
+        TargetLocator target = parseTargetLocator(requiredInput(step));
+        return locatorSupport.resolve(page, target.locatorType(), target.locatorValue());
+    }
+
+    private void dragCoordinates(Page page, WebUiCaseStepEntity step) {
+        BoundingBox box = locator(page, step).boundingBox();
+        if (box == null) {
+            throw new BadRequestException("Element bounding box is unavailable");
+        }
+        CoordinateDrag drag = parseCoordinateDrag(requiredInput(step));
+        page.mouse().move(box.x + drag.fromX(), box.y + drag.fromY());
+        page.mouse().down();
+        page.mouse().move(box.x + drag.toX(), box.y + drag.toY());
+        page.mouse().up();
+    }
+
+    private void chooseFile(Page page, WebUiCaseStepEntity step) {
+        FileChooser fileChooser = page.waitForFileChooser(() -> locator(page, step).click());
+        fileChooser.setFiles(java.nio.file.Path.of(requiredInput(step)));
+    }
+
+    private TargetLocator parseTargetLocator(String value) {
+        int separatorIndex = value.indexOf('=');
+        if (separatorIndex <= 0) {
+            return new TargetLocator("CSS", value);
+        }
+        String locatorType = value.substring(0, separatorIndex).trim().toUpperCase(Locale.ROOT);
+        String locatorValue = value.substring(separatorIndex + 1).trim();
+        if (locatorValue.isBlank()) {
+            throw new BadRequestException("Drag target locator value cannot be blank");
+        }
+        if (!List.of("CSS", "TEST_ID", "TEXT", "ROLE", "PLACEHOLDER", "LABEL", "XPATH").contains(locatorType)) {
+            return new TargetLocator("CSS", value);
+        }
+        return new TargetLocator(locatorType, locatorValue);
+    }
+
+    private record TargetLocator(String locatorType, String locatorValue) {
+    }
+
+    private CoordinateDrag parseCoordinateDrag(String value) {
+        Matcher matcher = Pattern
+                .compile("-?\\d+(?:\\.\\d+)?")
+                .matcher(value);
+        List<Double> numbers = new ArrayList<>();
+        while (matcher.find() && numbers.size() < 4) {
+            numbers.add(Double.parseDouble(matcher.group()));
+        }
+        if (numbers.size() < 4) {
+            throw new BadRequestException("Coordinate drag input must include fromX, fromY, toX and toY");
+        }
+        return new CoordinateDrag(numbers.get(0), numbers.get(1), numbers.get(2), numbers.get(3));
+    }
+
+    private record CoordinateDrag(double fromX, double fromY, double toX, double toY) {
     }
 
     private BrowserType browserType(Playwright playwright, String browserType) {
