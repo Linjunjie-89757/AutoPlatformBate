@@ -86,6 +86,7 @@ public class WebUiExecutionDomainService {
     private final WebUiArtifactStorageService artifactStorageService;
     private final WebUiExecutionContextSupport executionContextSupport;
     private final WebUiLocatorContextSupport locatorContextSupport;
+    private final WebUiUploadArtifactBindingSupport uploadArtifactBindingSupport;
     private final NotificationDomainService notificationDomainService;
     private final String mockPublicBaseUrl;
 
@@ -108,6 +109,7 @@ public class WebUiExecutionDomainService {
             WebUiArtifactStorageService artifactStorageService,
             WebUiExecutionContextSupport executionContextSupport,
             WebUiLocatorContextSupport locatorContextSupport,
+            WebUiUploadArtifactBindingSupport uploadArtifactBindingSupport,
             NotificationDomainService notificationDomainService,
             @Value("${autoplatform.mock.public-base-url:http://localhost:${server.port:8080}/api/mock}") String mockPublicBaseUrl
     ) {
@@ -129,6 +131,7 @@ public class WebUiExecutionDomainService {
         this.artifactStorageService = artifactStorageService;
         this.executionContextSupport = executionContextSupport;
         this.locatorContextSupport = locatorContextSupport;
+        this.uploadArtifactBindingSupport = uploadArtifactBindingSupport;
         this.notificationDomainService = notificationDomainService;
         this.mockPublicBaseUrl = trimTrailingSlash(mockPublicBaseUrl);
     }
@@ -635,22 +638,25 @@ public class WebUiExecutionDomainService {
             List<WebUiCaseStepEntity> runtimeSteps,
             List<Map<String, Object>> requestArtifactRefs
     ) {
-        if (requestArtifactRefs == null || requestArtifactRefs.isEmpty()) {
-            return List.of();
-        }
         Map<String, Map<String, Object>> refsById = new LinkedHashMap<>();
-        for (Map<String, Object> artifactRef : requestArtifactRefs) {
+        for (WebUiCaseStepEntity step : runtimeSteps) {
+            Map<String, Object> artifactRef = buildArtifactRefFromUploadBinding(step);
             String fileId = artifactRefFileId(artifactRef);
             if (fileId != null) {
-                refsById.putIfAbsent(fileId, new LinkedHashMap<>(artifactRef));
+                refsById.put(fileId, artifactRef);
             }
         }
-        if (refsById.isEmpty()) {
-            return List.of();
+        if (requestArtifactRefs != null) {
+            for (Map<String, Object> artifactRef : requestArtifactRefs) {
+                String fileId = artifactRefFileId(artifactRef);
+                if (fileId != null) {
+                    refsById.put(fileId, new LinkedHashMap<>(artifactRef));
+                }
+            }
         }
         Map<String, Map<String, Object>> referencedRefs = new LinkedHashMap<>();
         for (WebUiCaseStepEntity step : runtimeSteps) {
-            if (step == null || !"FILE_UPLOAD".equalsIgnoreCase(step.getStepType())) {
+            if (step == null || !isFileUploadStep(step)) {
                 continue;
             }
             String fileId = artifactReferenceFileId(step.getInputValue());
@@ -660,9 +666,35 @@ public class WebUiExecutionDomainService {
             Map<String, Object> artifactRef = refsById.get(fileId);
             if (artifactRef != null) {
                 referencedRefs.putIfAbsent(fileId, artifactRef);
+            } else {
+                throw new BadRequestException("File upload artifact is missing: " + fileId);
             }
         }
         return List.copyOf(referencedRefs.values());
+    }
+
+    private Map<String, Object> buildArtifactRefFromUploadBinding(WebUiCaseStepEntity step) {
+        if (step == null || !isFileUploadStep(step)) {
+            return null;
+        }
+        WebUiUploadArtifactBinding binding = uploadArtifactBindingSupport.read(step.getUploadArtifactJson());
+        if (binding == null) {
+            return null;
+        }
+        LinkedHashMap<String, Object> artifactRef = new LinkedHashMap<>();
+        artifactRef.put("fileId", binding.fileId());
+        artifactRef.put("artifactId", binding.fileId());
+        artifactRef.put("fileName", binding.fileName());
+        artifactRef.put("contentType", binding.contentType());
+        artifactRef.put("contentBase64", binding.contentBase64());
+        artifactRef.put("size", binding.size());
+        return artifactRef;
+    }
+
+    private boolean isFileUploadStep(WebUiCaseStepEntity step) {
+        return step != null
+                && ("FILE_UPLOAD".equalsIgnoreCase(step.getStepType())
+                || "FILE_PICKER".equalsIgnoreCase(step.getStepType()));
     }
 
     private String artifactRefFileId(Map<String, Object> artifactRef) {
@@ -1635,9 +1667,12 @@ public class WebUiExecutionDomainService {
         step.setCaseId(source.getCaseId());
         step.setStepName(source.getStepName());
         step.setStepType(source.getStepType());
+        step.setElementId(source.getElementId());
         step.setLocatorType(source.getLocatorType());
         step.setLocatorValue(executionContextSupport.replaceVariables(source.getLocatorValue(), variables));
+        step.setLocatorContextJson(source.getLocatorContextJson());
         step.setInputValue(executionContextSupport.replaceVariables(source.getInputValue(), variables));
+        step.setUploadArtifactJson(source.getUploadArtifactJson());
         step.setTimeoutMs(source.getTimeoutMs());
         step.setContinueOnFailure(source.getContinueOnFailure());
         step.setScreenshotPolicy(source.getScreenshotPolicy());

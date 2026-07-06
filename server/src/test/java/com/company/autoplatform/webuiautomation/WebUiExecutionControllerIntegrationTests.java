@@ -267,6 +267,60 @@ class WebUiExecutionControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void localRunnerCaseRunBuildsArtifactRefsFromSavedUploadBindings() throws Exception {
+        Long caseId = createCase(uniquePrefix("local-runner-saved-upload"), List.of(
+                openStep("Open page", "https://example.com/upload", 1),
+                fileUploadStepWithBinding(
+                        "Upload saved avatar",
+                        "CSS",
+                        "input[type=file]",
+                        "artifact:saved-avatar",
+                        Map.of(
+                                "fileId", "saved-avatar",
+                                "fileName", "saved-avatar.txt",
+                                "contentType", "text/plain",
+                                "contentBase64", "c2F2ZWQtYXZhdGFy",
+                                "size", 12
+                        ),
+                        2
+                )
+        ));
+        registerRunner("runner-web-saved-upload", "[\"WEB_CASE_RUN\"]");
+
+        mockMvc.perform(post("/api/automation/web/cases/{id}/local-runner-run", caseId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("runnerId", "runner-web-saved-upload"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.runnerTask.taskType").value("WEB_CASE_RUN"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs.length()").value(1))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs[0].fileId").value("saved-avatar"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs[0].artifactId").value("saved-avatar"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs[0].fileName").value("saved-avatar.txt"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs[0].contentType").value("text/plain"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.artifactRefs[0].contentBase64").value("c2F2ZWQtYXZhdGFy"))
+                .andExpect(jsonPath("$.data.runnerTask.envelope.payload.caseSnapshot.steps[1].inputValue").value("artifact:saved-avatar"));
+    }
+
+    @Test
+    void localRunnerCaseRunRejectsMissingSavedUploadArtifactBinding() throws Exception {
+        Long caseId = createCase(uniquePrefix("local-runner-missing-upload"), List.of(
+                openStep("Open page", "https://example.com/upload", 1),
+                fileUploadStep("Upload missing avatar", "CSS", "input[type=file]", "artifact:missing-avatar", 2)
+        ));
+        registerRunner("runner-web-missing-upload", "[\"WEB_CASE_RUN\"]");
+
+        mockMvc.perform(post("/api/automation/web/cases/{id}/local-runner-run", caseId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("runnerId", "runner-web-missing-upload"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("File upload artifact is missing: missing-avatar"));
+    }
+
+    @Test
     void artifactDownloadRequiresArtifactToBelongToRun() throws Exception {
         mockMvc.perform(get("/api/automation/web/runs/{runId}/artifacts/{artifactId}/download", 999999, 888888)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
@@ -1026,6 +1080,19 @@ class WebUiExecutionControllerIntegrationTests extends IntegrationTestSupport {
                 "enabled", true,
                 "sortOrder", sortOrder
         );
+    }
+
+    private Map<String, Object> fileUploadStepWithBinding(
+            String name,
+            String locatorType,
+            String locatorValue,
+            String inputValue,
+            Map<String, Object> uploadArtifactBinding,
+            int sortOrder
+    ) {
+        Map<String, Object> step = new LinkedHashMap<>(fileUploadStep(name, locatorType, locatorValue, inputValue, sortOrder));
+        step.put("uploadArtifactBinding", uploadArtifactBinding);
+        return step;
     }
 
     private Map<String, Object> screenshotStep(String name, int sortOrder) {
