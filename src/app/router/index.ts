@@ -16,6 +16,7 @@ import DefectsPage from '@/pages/defects/DefectsPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage.vue'
 import SystemSettingsPage from '@/pages/system-settings/SystemSettingsPage.vue'
+import WorkspaceSelectPage from '@/pages/workspace-select/WorkspaceSelectPage.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -36,6 +37,15 @@ const routes: RouteRecordRaw[] = [
       title: 'Web UI 公开报告',
       bare: true,
       public: true,
+    },
+  },
+  {
+    path: '/workspaces/select',
+    name: 'workspace-select',
+    component: WorkspaceSelectPage,
+    meta: {
+      title: '选择工作区',
+      bare: true,
     },
   },
   {
@@ -350,7 +360,12 @@ router.beforeEach(async (to) => {
   }
 
   if (to.name === 'login' && sessionState.isAuthenticated.value) {
-    return { path: '/config-center', replace: true }
+    const redirect = Array.isArray(to.query.redirect) ? to.query.redirect[0] : to.query.redirect
+    return {
+      path: '/workspaces/select',
+      query: typeof redirect === 'string' && redirect.startsWith('/') ? { redirect } : undefined,
+      replace: true,
+    }
   }
 
   if (!isPublicRoute && !sessionState.isAuthenticated.value) {

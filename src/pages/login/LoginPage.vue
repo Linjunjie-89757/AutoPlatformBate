@@ -65,7 +65,16 @@ const stats = [
 
 function resolveRedirect() {
   const redirect = route.query.redirect
-  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/config-center'
+  if (
+    typeof redirect === 'string'
+    && redirect.startsWith('/')
+    && !redirect.startsWith('/login')
+    && !redirect.startsWith('/workspaces/select')
+  ) {
+    return redirect
+  }
+
+  return '/config-center'
 }
 
 async function handleSubmit() {
@@ -85,7 +94,12 @@ async function handleSubmit() {
       username: form.username.trim(),
       password: form.password,
     })
-    await router.replace(resolveRedirect())
+    await router.replace({
+      path: '/workspaces/select',
+      query: {
+        redirect: resolveRedirect(),
+      },
+    })
   } catch {
     // useLogin exposes a stable, normalized error message for the page.
   }
