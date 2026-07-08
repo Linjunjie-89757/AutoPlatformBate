@@ -251,9 +251,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 220px;
-  padding: 12px;
-  border: 1px solid #e5e6eb;
-  border-radius: 4px;
+  padding: 10px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-md);
   background: #fff;
   overflow: hidden;
 }
@@ -284,19 +284,19 @@ onBeforeUnmount(() => {
   justify-content: center;
   height: 24px;
   padding: 0 8px;
-  border: 1px solid #e5e6eb;
-  border-radius: 4px;
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-sm);
   background: #fff;
-  color: #1d2129;
+  color: var(--app-text-secondary);
   font-size: 12px;
   line-height: 22px;
   cursor: pointer;
 }
 
 .api-code-editor__format:hover {
-  border-color: #c9cdd4;
-  background: #f7f8fa;
-  color: #165dff;
+  border-color: var(--app-border-strong);
+  background: var(--app-bg-soft);
+  color: var(--app-primary);
 }
 
 .api-code-editor__body {

@@ -124,18 +124,18 @@ onMounted(() => {
   min-height: 0;
   flex: 1;
   align-items: stretch;
-  gap: var(--app-space-5);
+  gap: var(--app-space-4);
 }
 
 .config-center-page__content {
   min-width: 0;
   flex: 1;
   min-height: 0;
-  padding: var(--app-space-6);
-  border: 1px solid var(--app-border);
+  padding: var(--app-space-5);
+  border: 1px solid var(--app-border-soft);
   border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
-  box-shadow: var(--app-shadow-card);
+  background: var(--app-bg-elevated);
+  box-shadow: var(--app-shadow-panel);
 }
 
 .config-workspace-select {
@@ -148,7 +148,7 @@ onMounted(() => {
   flex: 0 0 auto;
   color: var(--app-text-secondary);
   font-size: var(--app-font-size-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .config-workspace-select__control {

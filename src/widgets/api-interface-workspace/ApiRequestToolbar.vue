@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { InfoFilled } from '@element-plus/icons-vue'
 import {
+  Info as LucideInfo,
   Play as LucidePlay,
   Save as LucideSave,
 } from '@lucide/vue'
@@ -95,7 +95,7 @@ defineExpose({
           :disabled="!props.environmentSelected"
           @click="emit('openEnvironment')"
         >
-          <el-icon><InfoFilled /></el-icon>
+          <LucideInfo class="api-run-environment-detail-icon" />
         </button>
       </el-tooltip>
       <el-select
@@ -155,34 +155,47 @@ defineExpose({
 <style scoped>
 .api-request-line {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 204px 96px auto;
+  grid-template-columns: minmax(360px, 1fr) 168px 80px 92px;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--app-border);
+  gap: 8px;
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--app-border-soft);
   background: #fff;
 }
 
 .api-url-compose {
   display: grid;
   min-width: 0;
-  grid-template-columns: 104px minmax(0, 1fr) 68px;
+  grid-template-columns: 90px minmax(0, 1fr) 68px;
   align-items: center;
   overflow: hidden;
-  border: 1px solid var(--app-border-strong);
-  border-radius: var(--app-radius-md);
-  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-bg-panel);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.api-url-compose:focus-within {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.1);
 }
 
 .api-run-environment-combo {
   display: grid;
   min-width: 0;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr);
   align-items: center;
   overflow: hidden;
-  border: 1px solid var(--app-border-strong);
-  border-radius: var(--app-radius-md);
-  background: #fff;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-bg-panel);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.api-run-environment-combo:focus-within {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.1);
 }
 
 .api-run-environment-select {
@@ -191,35 +204,35 @@ defineExpose({
 }
 
 .api-run-environment-select :deep(.el-select__wrapper) {
-  height: 38px;
-  min-height: 38px;
-  padding-left: 10px;
+  height: 36px;
+  min-height: 36px;
+  padding-left: 8px;
   border-radius: 0;
-  background: #fff;
+  background: var(--app-bg-panel);
   box-shadow: none;
 }
 
 .api-run-environment-select :deep(.el-select__selected-item),
 .api-run-environment-select :deep(.el-select__placeholder) {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .api-run-environment-detail-button {
   display: inline-flex;
-  width: 32px;
-  height: 38px;
+  width: 31px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   border: 0;
   border-right: 1px solid var(--app-border);
   border-radius: 0;
-  background: #f9fafb;
+  background: var(--app-bg-muted);
   color: var(--app-text-muted);
   cursor: pointer;
 }
 
 .api-run-environment-detail-button:hover:not(:disabled) {
-  background: #eff6ff;
+  background: var(--app-primary-soft);
   color: var(--app-primary);
 }
 
@@ -228,18 +241,24 @@ defineExpose({
   opacity: 0.48;
 }
 
+.api-run-environment-detail-icon {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
 .api-method-select :deep(.el-select__wrapper),
 .api-url-compose :deep(.el-input__wrapper),
 .api-curl-button {
-  height: 38px;
-  min-height: 38px;
+  height: 36px;
+  min-height: 36px;
   border-radius: 0;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 20px;
 }
 
 .api-method-select :deep(.el-select__wrapper) {
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 10px;
   border-color: var(--app-border);
   border-style: solid;
@@ -247,7 +266,7 @@ defineExpose({
   border-radius: var(--app-radius-md);
   border-bottom-right-radius: 0;
   border-top-right-radius: 0;
-  background: #f9fafb;
+  background: var(--app-bg-muted);
   box-shadow: none;
   color: var(--app-text-primary);
 }
@@ -258,43 +277,43 @@ defineExpose({
   border-color: var(--app-border);
   border-style: solid;
   border-width: 0 1px 0 0;
-  background: #f9fafb;
+  background: var(--app-bg-muted);
   box-shadow: none;
   color: var(--app-text-primary);
 }
 
 .api-method-select {
-  width: 104px;
-  min-width: 104px;
+  width: 90px;
+  min-width: 90px;
   line-height: 21px;
 }
 
 .api-method-select :deep(.el-select__selected-item) {
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 20px;
 }
 
 .api-method-select.method-get :deep(.el-select__selected-item),
-.api-method-select.method-get :deep(.el-select__placeholder) { color: #15803d; }
+.api-method-select.method-get :deep(.el-select__placeholder) { color: #00B42A; }
 .api-method-select.method-post :deep(.el-select__selected-item),
-.api-method-select.method-post :deep(.el-select__placeholder) { color: #ea580c; }
+.api-method-select.method-post :deep(.el-select__placeholder) { color: #FF7D00; }
 .api-method-select.method-put :deep(.el-select__selected-item),
-.api-method-select.method-put :deep(.el-select__placeholder) { color: #2563eb; }
+.api-method-select.method-put :deep(.el-select__placeholder) { color: #165DFF; }
 .api-method-select.method-patch :deep(.el-select__selected-item),
-.api-method-select.method-patch :deep(.el-select__placeholder) { color: #7c3aed; }
+.api-method-select.method-patch :deep(.el-select__placeholder) { color: #7816FF; }
 .api-method-select.method-delete :deep(.el-select__selected-item),
-.api-method-select.method-delete :deep(.el-select__placeholder) { color: #dc2626; }
+.api-method-select.method-delete :deep(.el-select__placeholder) { color: #F53F3F; }
 .api-method-select.method-options :deep(.el-select__selected-item),
-.api-method-select.method-options :deep(.el-select__placeholder) { color: #7c3aed; }
+.api-method-select.method-options :deep(.el-select__placeholder) { color: #7816FF; }
 .api-method-select.method-trace :deep(.el-select__selected-item),
 .api-method-select.method-trace :deep(.el-select__placeholder) { color: #6b7280; }
 .api-method-select.method-head :deep(.el-select__selected-item),
 .api-method-select.method-head :deep(.el-select__placeholder) { color: #15803d; }
 
 .api-method-option {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 20px;
 }
@@ -306,20 +325,20 @@ defineExpose({
 }
 
 :global(.api-method-popper .method-get) {
-  color: #15803d;
+  color: #00B42A;
 }
 
 :global(.api-method-popper .method-post) {
-  color: #ea580c;
+  color: #FF7D00;
 }
 
 :global(.api-method-popper .method-put) {
-  color: #2563eb;
+  color: #165DFF;
 }
 
 :global(.api-method-popper .method-patch),
 :global(.api-method-popper .method-options) {
-  color: #7c3aed;
+  color: #7816FF;
 }
 
 :global(.api-method-popper .method-trace) {
@@ -327,11 +346,11 @@ defineExpose({
 }
 
 :global(.api-method-popper .method-head) {
-  color: #15803d;
+  color: #00B42A;
 }
 
 :global(.api-method-popper .method-delete) {
-  color: #dc2626;
+  color: #F53F3F;
 }
 
 :global(.api-method-popper.el-select-dropdown) {
@@ -340,43 +359,56 @@ defineExpose({
 
 .api-url-compose :deep(.el-input__wrapper) {
   padding-inline: 14px;
+  background: var(--app-bg-panel);
   box-shadow: none;
 }
 
 .api-url-compose :deep(.el-input__inner) {
-  color: #111827;
+  color: var(--app-text-primary);
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .api-url-compose :deep(.el-input__inner::placeholder) {
-  color: #9ca3af;
+  color: var(--app-text-muted);
 }
 
 .api-curl-button {
   border-width: 0 0 0 1px;
   border-color: var(--app-border);
-  color: var(--app-primary);
+  background: var(--app-bg-panel);
+  color: var(--app-text-secondary);
   font-size: 12px;
+  font-weight: 500;
 }
 
 .api-curl-button:hover {
-  background: var(--app-primary-soft);
+  background: var(--app-bg-soft);
+  color: var(--app-primary);
 }
 
 .api-send-button {
   display: inline-flex;
-  width: 96px;
-  min-width: 96px;
-  height: 40px;
+  width: 80px;
+  min-width: 80px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 18px;
+  padding: 0 16px;
   border: 0;
-  border-radius: var(--app-radius-md);
+  border-radius: 8px;
   background: var(--app-primary);
   color: #fff;
   cursor: pointer;
+  box-shadow: none;
+  font-size: 13px;
   font-weight: 500;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+.api-send-button:hover:not(:disabled) {
+  background: var(--app-primary-hover);
 }
 
 .api-send-button:disabled {
@@ -386,52 +418,79 @@ defineExpose({
 
 .api-send-button__icon,
 .api-button-icon {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
 }
 
 .api-save-label {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
 .api-save-dropdown {
-  width: 113px;
+  width: 92px;
+  min-width: 92px;
+}
+
+.api-save-dropdown :deep(.el-button-group) {
+  display: flex;
+  width: 100%;
+  height: 36px;
+  align-items: stretch;
 }
 
 .api-save-dropdown :deep(.el-button),
 .api-save-dropdown :deep(.el-button-group > .el-button) {
-  height: 38px;
-  border-color: var(--app-border-strong);
-  background: #fff;
+  height: 36px;
+  border-color: var(--app-border);
+  background: var(--app-bg-panel);
   color: #374151;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 20px;
 }
 
 .api-save-dropdown :deep(.el-button-group > .el-button:first-child) {
+  flex: 1 1 auto;
+  min-width: 0;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
-  padding: 0 14px;
+  padding: 0 8px;
 }
 
 .api-save-dropdown :deep(.el-button-group > .el-button:last-child) {
+  flex: 0 0 30px;
+  width: 30px;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  padding: 0 9px;
+  padding: 0;
 }
 
 .api-save-dropdown :deep(.el-button:hover:not(.is-disabled)) {
-  border-color: var(--app-text-subtle);
-  background: var(--app-bg-page);
-  color: var(--app-text-primary);
+  border-color: var(--app-primary);
+  background: #fff;
+  color: var(--app-primary);
 }
 
 :global(.api-save-dropdown-menu .el-dropdown-menu__item) {
   gap: 6px;
   min-height: 32px;
   font-size: 13px;
+}
+
+@media (max-width: 1280px) {
+  .api-request-line {
+    grid-template-columns: minmax(300px, 1fr) 152px 76px 88px;
+  }
+
+  .api-url-compose {
+    grid-template-columns: 88px minmax(0, 1fr) 62px;
+  }
+
+  .api-method-select {
+    width: 88px;
+    min-width: 88px;
+  }
 }
 </style>

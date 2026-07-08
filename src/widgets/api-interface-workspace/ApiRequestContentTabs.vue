@@ -29,42 +29,44 @@ const emit = defineEmits<{
 <style scoped>
 .api-content-tabs {
   display: flex;
-  height: 46px;
-  min-height: 46px;
+  height: 40px;
+  min-height: 40px;
   align-items: center;
-  gap: 0;
+  gap: 2px;
   overflow: hidden;
   padding: 0 16px;
   border-bottom: 1px solid var(--app-border);
-  background: #fff;
+  background: #ffffff;
 }
 
 .api-content-tab {
   position: relative;
   display: inline-flex;
   box-sizing: border-box;
-  height: 45px;
+  height: 40px;
   align-items: center;
   gap: 6px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--app-text-muted);
+  color: var(--app-text-secondary);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 20px;
   padding: 0 12px;
   white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .api-content-tab.is-active {
-  border-bottom-color: var(--app-primary);
-  color: var(--app-primary);
+  border-bottom-color: var(--app-warning);
+  color: var(--app-warning);
   font-weight: 500;
 }
 
 .api-content-tab:not(.is-active):hover {
+  background: var(--app-bg-muted);
   color: var(--app-text-secondary);
 }
 
@@ -81,7 +83,7 @@ const emit = defineEmits<{
   border-radius: 999px;
   background: var(--app-bg-muted);
   color: var(--app-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   padding: 0 5px;
 }

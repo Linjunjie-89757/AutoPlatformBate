@@ -19,6 +19,10 @@ export interface DirectoryNode {
   method?: string
   definition?: ApiDefinitionItem
   loading?: boolean
+  placeholderAction?: 'lazy' | 'loading' | 'load-more' | 'show-more'
+  parentKey?: string | null
+  loadedCount?: number
+  totalCount?: number
   children: DirectoryNode[]
 }
 
@@ -33,6 +37,12 @@ export interface BuildApiDirectoryTreeOptions {
   definitions: ApiDefinitionItem[]
   loadedModuleKeys: Set<string>
   loadingModuleKeys: Set<string>
+  moduleRequestStateByKey?: Map<string, {
+    loadedCount: number
+    total: number
+    hasMore: boolean
+  }>
+  moduleVisibleRequestCountByKey?: Map<string, number>
 }
 
 export function definitionModuleLoadKey(workspaceCode: string, moduleId: number | null, fullPath: string | null) {
@@ -110,16 +120,39 @@ function stripChildMap(
   nodes: MutableDirectoryNode[],
   loadedModuleKeys: Set<string>,
   loadingModuleKeys: Set<string>,
+  moduleRequestStateByKey: BuildApiDirectoryTreeOptions['moduleRequestStateByKey'],
+  moduleVisibleRequestCountByKey: BuildApiDirectoryTreeOptions['moduleVisibleRequestCountByKey'],
 ): DirectoryNode[] {
   sortDirectoryNodes(nodes)
   return nodes.map((node) => {
-    const children = stripChildMap(node.children as MutableDirectoryNode[], loadedModuleKeys, loadingModuleKeys)
-    const hasRequestChild = children.some(child => child.type === 'request')
+    const children = stripChildMap(
+      node.children as MutableDirectoryNode[],
+      loadedModuleKeys,
+      loadingModuleKeys,
+      moduleRequestStateByKey,
+      moduleVisibleRequestCountByKey,
+    )
     const moduleLoadKey = node.type === 'module'
       ? definitionModuleLoadKey(node.workspaceCode, node.moduleId, node.fullPath ?? null)
       : ''
     const isLoadingModule = node.type === 'module' && loadingModuleKeys.has(moduleLoadKey)
     const isLoadedModule = node.type === 'module' && loadedModuleKeys.has(moduleLoadKey)
+    const moduleRequestState = node.type === 'module' ? moduleRequestStateByKey?.get(moduleLoadKey) : null
+    const moduleVisibleRequestCount = node.type === 'module'
+      ? moduleVisibleRequestCountByKey?.get(moduleLoadKey)
+      : undefined
+    const requestChildren = children.filter(child => child.type === 'request')
+    const nonRequestChildren = children.filter(child => child.type !== 'request')
+    const actualLoadedRequestCount = requestChildren.length
+    const visibleRequestChildren = node.type === 'module'
+      && typeof moduleVisibleRequestCount === 'number'
+      && moduleVisibleRequestCount >= 0
+      && requestChildren.length > moduleVisibleRequestCount
+      ? requestChildren.slice(0, moduleVisibleRequestCount)
+      : requestChildren
+    const hasHiddenLoadedRequests = visibleRequestChildren.length < requestChildren.length
+    const renderedChildren = [...nonRequestChildren, ...visibleRequestChildren]
+    const hasRequestChild = actualLoadedRequestCount > 0
     const shouldLoadDefinitions = canLoadDefinitionsForDirectoryNode({ ...node, children })
     const shouldAddLazyPlaceholder = shouldLoadDefinitions
       && !hasRequestChild
@@ -136,15 +169,57 @@ function stripChildMap(
         definitionId: null,
         fullPath: node.fullPath,
         loading: isLoadingModule,
+        placeholderAction: isLoadingModule ? 'loading' : 'lazy',
+        parentKey: node.key,
         children: [],
       }
       if (isLoadingModule) {
-        children.unshift(placeholderNode)
+        if (hasRequestChild) {
+          renderedChildren.push(placeholderNode)
+        } else {
+          renderedChildren.unshift(placeholderNode)
+        }
       } else {
-        children.push(placeholderNode)
+        renderedChildren.push(placeholderNode)
       }
     }
-    const loadedRequestCount = children
+    if (node.type === 'module' && hasHiddenLoadedRequests) {
+      renderedChildren.push({
+        key: `${node.key}:show-more-placeholder`,
+        type: 'placeholder',
+        label: `\u663e\u793a\u66f4\u591a (${visibleRequestChildren.length}/${actualLoadedRequestCount})`,
+        count: 0,
+        directCount: 0,
+        moduleId: node.moduleId,
+        workspaceCode: node.workspaceCode,
+        definitionId: null,
+        fullPath: node.fullPath,
+        placeholderAction: 'show-more',
+        parentKey: node.key,
+        loadedCount: visibleRequestChildren.length,
+        totalCount: actualLoadedRequestCount,
+        children: [],
+      })
+    }
+    if (node.type === 'module' && moduleRequestState?.hasMore && !isLoadingModule) {
+      renderedChildren.push({
+        key: `${node.key}:load-more-placeholder`,
+        type: 'placeholder',
+        label: `\u52a0\u8f7d\u66f4\u591a (${moduleRequestState.loadedCount}/${Math.max(moduleRequestState.total, moduleRequestState.loadedCount)})`,
+        count: 0,
+        directCount: 0,
+        moduleId: node.moduleId,
+        workspaceCode: node.workspaceCode,
+        definitionId: null,
+        fullPath: node.fullPath,
+        placeholderAction: 'load-more',
+        parentKey: node.key,
+        loadedCount: moduleRequestState.loadedCount,
+        totalCount: Math.max(moduleRequestState.total, moduleRequestState.loadedCount),
+        children: [],
+      })
+    }
+    const loadedRequestCount = actualLoadedRequestCount + nonRequestChildren
       .filter(child => child.type !== 'placeholder')
       .reduce((sum, child) => sum + (child.type === 'request' ? 1 : child.count), 0)
     const displayCount = node.type === 'request'
@@ -164,7 +239,7 @@ function stripChildMap(
       fullPath: node.fullPath,
       method: node.method,
       definition: node.definition,
-      children,
+      children: renderedChildren,
     }
   })
 }
@@ -283,10 +358,12 @@ export function buildApiDirectoryTree(options: BuildApiDirectoryTreeOptions): Di
 
   const workspaceTrees = workspaceNodes.map((workspaceNode) => {
     const children = stripChildMap(
-      workspaceNode.children as MutableDirectoryNode[],
-      options.loadedModuleKeys,
-      options.loadingModuleKeys,
-    )
+        workspaceNode.children as MutableDirectoryNode[],
+        options.loadedModuleKeys,
+        options.loadingModuleKeys,
+        options.moduleRequestStateByKey,
+        options.moduleVisibleRequestCountByKey,
+      )
     const unassignedRequests = unassignedRequestMap.get(workspaceNode.workspaceCode) ?? []
     if (unassignedRequests.length) {
       children.push({
@@ -299,7 +376,13 @@ export function buildApiDirectoryTree(options: BuildApiDirectoryTreeOptions): Di
         workspaceCode: workspaceNode.workspaceCode,
         definitionId: null,
         fullPath: null,
-        children: stripChildMap(unassignedRequests, options.loadedModuleKeys, options.loadingModuleKeys),
+        children: stripChildMap(
+          unassignedRequests,
+          options.loadedModuleKeys,
+          options.loadingModuleKeys,
+          options.moduleRequestStateByKey,
+          options.moduleVisibleRequestCountByKey,
+        ),
       })
     }
     const workspaceCount = children.reduce((sum, child) => sum + child.count, 0)
@@ -364,4 +447,59 @@ export function findDirectoryNodeByKey(nodes: DirectoryNode[], key: string): Dir
     if (child) return child
   }
   return null
+}
+
+function matchesDirectoryNode(node: DirectoryNode, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLowerCase()
+  if (!normalizedKeyword) return true
+  const fields = [
+    node.label,
+    node.fullPath || '',
+    node.method || '',
+    node.definition?.path || '',
+  ]
+  return fields.some(field => String(field || '').toLowerCase().includes(normalizedKeyword))
+}
+
+export function filterApiDirectoryTree(nodes: DirectoryNode[], keyword: string): DirectoryNode[] {
+  const normalizedKeyword = keyword.trim().toLowerCase()
+  if (!normalizedKeyword) {
+    return nodes
+  }
+
+  return nodes.flatMap((node) => {
+    if (node.type === 'placeholder') {
+      return []
+    }
+
+    const matchedChildren = filterApiDirectoryTree(node.children || [], normalizedKeyword)
+    const selfMatched = matchesDirectoryNode(node, normalizedKeyword)
+    const nextChildren = matchedChildren.length
+      ? matchedChildren
+      : selfMatched && node.type !== 'request'
+        ? node.children
+        : []
+
+    if (!selfMatched && !matchedChildren.length) {
+      return []
+    }
+
+    return [{
+      ...node,
+      children: nextChildren,
+    }]
+  })
+}
+
+export function countDirectoryTreeRequestNodes(nodes: DirectoryNode[]) {
+  let total = 0
+  const walk = (node: DirectoryNode) => {
+    if (node.type === 'request') {
+      total += 1
+      return
+    }
+    node.children.forEach(walk)
+  }
+  nodes.forEach(walk)
+  return total
 }

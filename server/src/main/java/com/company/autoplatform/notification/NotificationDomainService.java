@@ -9,6 +9,7 @@ import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.company.autoplatform.workspace.WorkspaceService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -17,6 +18,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +40,7 @@ public class NotificationDomainService {
     private static final String CHANNEL_WEBHOOK = "WEBHOOK";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
+    private static final DateTimeFormatter NOTIFICATION_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final TypeReference<List<Long>> LONG_LIST_TYPE = new TypeReference<>() {
     };
     private static final TypeReference<Map<String, String>> STRING_MAP_TYPE = new TypeReference<>() {
@@ -48,19 +51,25 @@ public class NotificationDomainService {
     private final NotificationRecordMapper recordMapper;
     private final WorkspaceService workspaceService;
     private final ObjectMapper objectMapper;
+    private final String publicFrontendBaseUrl;
+    private final String publicBackendBaseUrl;
 
     public NotificationDomainService(
             NotificationChannelMapper channelMapper,
             NotificationRuleMapper ruleMapper,
             NotificationRecordMapper recordMapper,
             WorkspaceService workspaceService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            @Value("${app.public-frontend-base-url:${APP_PUBLIC_FRONTEND_BASE_URL:}}") String publicFrontendBaseUrl,
+            @Value("${app.public-backend-base-url:${autoplatform.public-base-url:http://localhost:${server.port:8080}}}") String publicBackendBaseUrl
     ) {
         this.channelMapper = channelMapper;
         this.ruleMapper = ruleMapper;
         this.recordMapper = recordMapper;
         this.workspaceService = workspaceService;
         this.objectMapper = objectMapper;
+        this.publicFrontendBaseUrl = normalizePublicBaseUrl(publicFrontendBaseUrl);
+        this.publicBackendBaseUrl = normalizePublicBaseUrl(publicBackendBaseUrl);
     }
 
     public List<NotificationEventOption> listEventTypes() {
@@ -306,6 +315,44 @@ public class NotificationDomainService {
         }
     }
 
+    public boolean hasActiveRule(Long workspaceId, String eventType, String result) {
+        if (workspaceId == null || blankToNull(eventType) == null) {
+            return false;
+        }
+        List<NotificationRuleEntity> rules = ruleMapper.selectList(new LambdaQueryWrapper<NotificationRuleEntity>()
+                .eq(NotificationRuleEntity::getWorkspaceId, workspaceId)
+                .eq(NotificationRuleEntity::getEventType, normalizeEventType(eventType))
+                .eq(NotificationRuleEntity::getStatus, 1));
+        for (NotificationRuleEntity rule : rules) {
+            NotificationEvent event = new NotificationEvent(
+                    workspaceId,
+                    eventType,
+                    "",
+                    "",
+                    null,
+                    "",
+                    result,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    Map.of()
+            );
+            if (!matchesCondition(rule, event) || isRateLimited(rule)) {
+                continue;
+            }
+            for (Long channelId : readChannelIds(rule.getChannelIdsJson())) {
+                NotificationChannelEntity channel = channelMapper.selectById(channelId);
+                if (channel != null && workspaceId.equals(channel.getWorkspaceId()) && Integer.valueOf(1).equals(channel.getStatus())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private void publishRule(NotificationRuleEntity rule, NotificationEvent event) {
         if (!matchesCondition(rule, event) || isRateLimited(rule)) {
             return;
@@ -394,12 +441,45 @@ public class NotificationDomainService {
             appendLine(builder, "耗时", formatDuration(event.durationMs()));
         }
         appendLine(builder, "失败原因", event.failureSummary());
-        appendLine(builder, "触发时间", LocalDateTime.now().toString().replace('T', ' '));
-        String link = blankToNull(event.linkUrl());
+        appendLine(builder, "触发时间", LocalDateTime.now().format(NOTIFICATION_TIME_FORMATTER));
+        String link = resolveLinkUrl(event.linkUrl());
         if (link != null) {
             builder.append('\n').append("[查看详情](").append(link).append(")");
         }
         return builder.toString();
+    }
+
+    private String resolveLinkUrl(String linkUrl) {
+        String link = blankToNull(linkUrl);
+        if (link == null || isAbsoluteUrl(link)) {
+            return link;
+        }
+        String baseUrl = link.startsWith("/api/") ? publicBackendBaseUrl : publicFrontendBaseUrl;
+        if (baseUrl == null) {
+            baseUrl = publicBackendBaseUrl;
+        }
+        if (baseUrl == null) {
+            return link;
+        }
+        return link.startsWith("/")
+                ? baseUrl + link
+                : baseUrl + "/" + link;
+    }
+
+    private boolean isAbsoluteUrl(String link) {
+        String lower = link.toLowerCase(Locale.ROOT);
+        return lower.startsWith("http://") || lower.startsWith("https://");
+    }
+
+    private String normalizePublicBaseUrl(String value) {
+        String baseUrl = blankToNull(value);
+        if (baseUrl == null) {
+            return null;
+        }
+        while (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        return baseUrl;
     }
 
     private void appendLine(StringBuilder builder, String label, String value) {
@@ -659,7 +739,7 @@ public class NotificationDomainService {
         values.put("failedCount", String.valueOf(defaultNumber(event.failedCount())));
         values.put("duration", event.durationMs() == null ? "" : formatDuration(event.durationMs()));
         values.put("failureSummary", nullToEmpty(event.failureSummary()));
-        values.put("linkUrl", nullToEmpty(event.linkUrl()));
+        values.put("linkUrl", nullToEmpty(resolveLinkUrl(event.linkUrl())));
         values.put("message", message);
         String result = template;
         for (Map.Entry<String, String> entry : values.entrySet()) {

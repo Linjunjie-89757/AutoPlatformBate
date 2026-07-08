@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import {
+  ChevronRight as LucideChevronRight,
   MoreHorizontal as LucideMoreHorizontal,
   Folder as LucideFolder,
   FolderOpen as LucideFolderOpen,
-  Plus as LucidePlus,
 } from '@lucide/vue'
 
 import type { DirectoryNode } from './lib/apiDirectoryTree'
@@ -22,9 +22,11 @@ const emit = defineEmits<{
   nodeExpand: [node: DirectoryNode]
   nodeCollapse: [node: DirectoryNode]
   createModule: [parentId: number | null]
+  createRequest: [node: DirectoryNode]
   renameModule: [node: DirectoryNode]
   deleteModule: [node: DirectoryNode]
   renameRequest: [node: DirectoryNode]
+  copyRequest: [node: DirectoryNode]
   deleteRequest: [node: DirectoryNode]
 }>()
 
@@ -36,6 +38,16 @@ const treeRef = ref<{
     _getAllNodes?: () => Array<{ key?: string | number; expanded?: boolean; data?: DirectoryNode }>
   }
 } | null>(null)
+
+const moreMenuTitle = '\u66f4\u591a\u64cd\u4f5c'
+const addChildDirectoryLabel = '\u6dfb\u52a0\u5b50\u76ee\u5f55'
+const addRootDirectoryLabel = '\u6dfb\u52a0\u9876\u7ea7\u76ee\u5f55'
+const addRequestLabel = '\u6dfb\u52a0\u8bf7\u6c42'
+const renameDirectoryLabel = '\u91cd\u547d\u540d\u76ee\u5f55'
+const deleteDirectoryLabel = '\u5220\u9664\u76ee\u5f55'
+const renameRequestLabel = '\u91cd\u547d\u540d\u8bf7\u6c42'
+const copyRequestLabel = '\u590d\u5236\u8bf7\u6c42'
+const deleteRequestLabel = '\u5220\u9664\u8bf7\u6c42'
 
 function requestMethodClass(method?: string) {
   return `method-${String(method || 'GET').toLowerCase()}`
@@ -60,6 +72,7 @@ defineExpose({
     :default-expanded-keys="props.expandedKeys"
     :current-node-key="props.selectedKey"
     :expand-on-click-node="false"
+    :icon="LucideChevronRight"
     highlight-current
     class="api-directory-tree"
     @node-click="(node: DirectoryNode) => emit('nodeClick', node)"
@@ -67,14 +80,14 @@ defineExpose({
     @node-collapse="(node: DirectoryNode) => emit('nodeCollapse', node)"
   >
     <template #default="{ data }">
-      <div :class="['api-directory-node', { 'is-request': data.type === 'request', 'is-placeholder': data.type === 'placeholder' }]">
+      <div :class="['api-directory-node', { 'is-request': data.type === 'request', 'is-placeholder': data.type === 'placeholder', 'is-load-more': data.placeholderAction === 'load-more' || data.placeholderAction === 'show-more' }]">
         <div class="api-directory-node__main">
           <template v-if="data.type === 'request'">
             <span :class="['api-method', requestMethodClass(data.method)]">{{ data.method }}</span>
             <span class="api-directory-node__name" :title="data.label">{{ data.label }}</span>
           </template>
           <template v-else-if="data.type === 'placeholder'">
-            <span :class="['api-directory-node__placeholder-dot', { 'is-loading': data.loading }]"></span>
+            <span :class="['api-directory-node__placeholder-dot', { 'is-loading': data.loading, 'is-load-more': data.placeholderAction === 'load-more' || data.placeholderAction === 'show-more' }]"></span>
             <span class="api-directory-node__placeholder-text" :title="data.label">{{ data.label }}</span>
           </template>
           <template v-else>
@@ -88,28 +101,25 @@ defineExpose({
         </div>
 
         <div class="api-directory-node__actions" @click.stop>
-          <button
-            v-if="data.type === 'workspace' || data.type === 'module'"
-            type="button"
-            class="api-directory-node__action"
-            title="新建模块"
-            @click.stop="emit('createModule', data.type === 'module' ? data.moduleId : null)"
-          >
-            <LucidePlus class="api-directory-node__lucide-action" />
-          </button>
-          <el-dropdown v-if="data.type === 'module' || data.type === 'request'" trigger="click" @click.stop>
-            <button type="button" class="api-directory-node__action is-more" title="更多操作" @click.stop>
+          <el-dropdown v-if="data.type === 'workspace' || data.type === 'module' || data.type === 'request'" trigger="click" @click.stop>
+            <button type="button" class="api-directory-node__action is-more" :title="moreMenuTitle" @click.stop>
               <LucideMoreHorizontal class="api-directory-node__lucide-action" />
             </button>
             <template #dropdown>
               <el-dropdown-menu>
+                <template v-if="data.type === 'workspace'">
+                  <el-dropdown-item @click="emit('createModule', null)">{{ addRootDirectoryLabel }}</el-dropdown-item>
+                </template>
                 <template v-if="data.type === 'module'">
-                  <el-dropdown-item @click="emit('renameModule', data)">重命名模块</el-dropdown-item>
-                  <el-dropdown-item @click="emit('deleteModule', data)">删除模块</el-dropdown-item>
+                  <el-dropdown-item @click="emit('createModule', data.moduleId)">{{ addChildDirectoryLabel }}</el-dropdown-item>
+                  <el-dropdown-item @click="emit('createRequest', data)">{{ addRequestLabel }}</el-dropdown-item>
+                  <el-dropdown-item @click="emit('renameModule', data)">{{ renameDirectoryLabel }}</el-dropdown-item>
+                  <el-dropdown-item @click="emit('deleteModule', data)">{{ deleteDirectoryLabel }}</el-dropdown-item>
                 </template>
                 <template v-else-if="data.type === 'request'">
-                  <el-dropdown-item @click="emit('renameRequest', data)">重命名请求</el-dropdown-item>
-                  <el-dropdown-item divided @click="emit('deleteRequest', data)">删除请求</el-dropdown-item>
+                  <el-dropdown-item @click="emit('renameRequest', data)">{{ renameRequestLabel }}</el-dropdown-item>
+                  <el-dropdown-item @click="emit('copyRequest', data)">{{ copyRequestLabel }}</el-dropdown-item>
+                  <el-dropdown-item divided @click="emit('deleteRequest', data)">{{ deleteRequestLabel }}</el-dropdown-item>
                 </template>
               </el-dropdown-menu>
             </template>
@@ -125,15 +135,31 @@ defineExpose({
   background: transparent;
 }
 
+.api-directory-tree :deep(.el-tree-node) {
+  margin-bottom: 0;
+}
+
+.api-directory-tree :deep(.el-tree-node__expand-icon) {
+  padding: 0;
+  color: var(--app-text-subtle);
+  font-size: 12px;
+  transition: color 0.16s ease, transform 0.16s ease;
+}
+
 .api-directory-tree :deep(.el-tree-node__content) {
   min-height: 32px;
   height: auto;
-  border-radius: var(--app-radius-md);
-  transition: background-color 0.15s ease;
+  border-radius: var(--app-radius-sm);
+  padding-right: 2px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .api-directory-tree :deep(.el-tree-node__content:hover) {
-  background: var(--app-bg-muted);
+  background: #fafbff;
+}
+
+.api-directory-tree :deep(.el-tree-node__content:hover .el-tree-node__expand-icon) {
+  color: var(--app-text-main);
 }
 
 .api-directory-tree :deep(.el-tree-node__expand-icon.is-leaf) {
@@ -141,20 +167,25 @@ defineExpose({
 }
 
 .api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
-  background: var(--app-primary-soft);
+  background: #e8f3ff;
+  box-shadow: inset 0 0 0 1px rgba(22, 93, 255, 0.12);
+}
+
+.api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content .el-tree-node__expand-icon) {
+  color: var(--app-primary);
 }
 
 .api-directory-node {
   position: relative;
   display: flex;
-  min-height: 30px;
+  min-height: 32px;
   min-width: 0;
   width: 100%;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
-  font-size: 14px;
-  line-height: 21px;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .api-directory-tree :deep(.el-tree-node__content:has(.api-directory-node.is-placeholder)) {
@@ -169,12 +200,16 @@ defineExpose({
   overflow: visible;
 }
 
+.api-directory-node.is-load-more {
+  cursor: pointer;
+}
+
 .api-directory-node__main {
   display: flex;
   min-width: 0;
   width: 100%;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 
 .api-directory-node__actions {
@@ -182,13 +217,13 @@ defineExpose({
   right: 0;
   display: flex;
   width: 0;
-  height: 30px;
+  height: 28px;
   align-items: center;
   gap: 2px;
   overflow: hidden;
-  padding-left: 4px;
+  padding-left: 10px;
   border-radius: var(--app-radius-md);
-  background: var(--app-bg-muted);
+  background: linear-gradient(90deg, rgba(250, 251, 255, 0) 0%, rgba(250, 251, 255, 0.94) 22%, rgba(250, 251, 255, 1) 100%);
   opacity: 0;
   pointer-events: none;
   transition: width 0.15s ease, opacity 0.15s ease;
@@ -196,8 +231,8 @@ defineExpose({
 
 .api-directory-node__action {
   display: inline-flex;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -225,11 +260,11 @@ defineExpose({
 .api-directory-node:hover .api-directory-node__count,
 .api-directory-node:focus-within .api-directory-node__count,
 .api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content) .api-directory-node__count {
-  visibility: hidden;
+  opacity: 0;
 }
 
 .api-directory-node__action:hover {
-  background: #fff;
+  background: var(--app-bg-muted);
   color: var(--app-primary);
 }
 
@@ -249,36 +284,64 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #374151;
-  font-size: 14px;
-  line-height: 21px;
+  color: var(--app-text-main);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.api-directory-node.is-request {
+  min-height: 30px;
+  font-size: 12px;
+}
+
+.api-directory-node.is-request .api-directory-node__main {
+  gap: 8px;
+}
+
+.api-directory-node.is-request .api-directory-node__name {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-directory-node:not(.is-request):not(.is-placeholder) .api-directory-node__name {
+  color: var(--app-text-primary);
+  font-weight: 500;
 }
 
 .api-directory-node__folder {
   display: inline-flex;
-  width: 17px;
-  height: 17px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
 }
 
 .api-directory-node__icon {
-  width: 16px;
-  height: 16px;
-  color: #60a5fa;
+  width: 13px;
+  height: 13px;
+  color: #ff7d00;
 }
 
 .api-directory-node__folder.is-open .api-directory-node__icon {
-  color: #3b82f6;
+  color: #ff7d00;
 }
 
 .api-directory-node__count {
+  display: inline-flex;
+  min-width: 24px;
+  height: 16px;
   flex: 0 0 auto;
-  margin-left: 2px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0;
+  margin-left: auto;
   color: var(--app-text-subtle);
-  font-size: var(--app-font-size-xs);
+  font-size: 11px;
   line-height: 16px;
+  transition: opacity 0.15s ease;
 }
 
 .api-directory-node__placeholder-dot {
@@ -286,13 +349,19 @@ defineExpose({
   height: 5px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #cbd5e1;
+  background: #c9cdd4;
+}
+
+.api-directory-node__placeholder-dot.is-load-more {
+  width: 7px;
+  height: 7px;
+  background: var(--app-primary);
 }
 
 .api-directory-node__placeholder-dot.is-loading {
   width: 10px;
   height: 10px;
-  border: 1px solid rgba(37, 99, 235, 0.22);
+  border: 1px solid rgba(22, 93, 255, 0.22);
   border-top-color: var(--app-primary);
   background: transparent;
   animation: api-directory-loading-spin 0.8s linear infinite;
@@ -309,21 +378,54 @@ defineExpose({
   font-size: 12px;
 }
 
-.api-method {
-  display: inline-flex;
-  height: 18px;
-  align-items: center;
-  flex: 0 0 auto;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
+.api-directory-node.is-load-more .api-directory-node__placeholder-text {
+  color: var(--app-primary);
+  font-weight: 500;
 }
 
-.method-get { color: #15803d; }
-.method-post { color: #ea580c; }
-.method-put { color: #2563eb; }
-.method-patch { color: #7c3aed; }
-.method-delete { color: #dc2626; }
+.api-method {
+  display: inline-flex;
+  min-width: 44px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.method-get {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.method-post {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.method-put {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.method-patch {
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.method-delete {
+  background: #ffe8e8;
+  color: #f53f3f;
+}
+
 .method-head,
-.method-options { color: #64748b; }
+.method-options {
+  background: #f2f3f5;
+  color: #4e5969;
+}
 </style>

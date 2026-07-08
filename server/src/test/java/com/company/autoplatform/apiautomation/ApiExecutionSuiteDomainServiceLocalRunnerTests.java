@@ -37,6 +37,7 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
         ApiWorkspaceScopeSupport workspaceScopeSupport = mock(ApiWorkspaceScopeSupport.class);
         LocalRunnerService localRunnerService = mock(LocalRunnerService.class);
         NotificationDomainService notificationDomainService = mock(NotificationDomainService.class);
+        ApiReportShareDomainService reportShareDomainService = mock(ApiReportShareDomainService.class);
 
         ApiExecutionSuiteEntity suite = new ApiExecutionSuiteEntity();
         suite.setId(8001L);
@@ -163,7 +164,8 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
                 workspaceService,
                 workspaceScopeSupport,
                 localRunnerService,
-                notificationDomainService
+                notificationDomainService,
+                reportShareDomainService
         );
 
         var response = service.runSuite(8001L, "risk-ops", new ApiRunRequest(
@@ -225,6 +227,7 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
         ApiWorkspaceScopeSupport workspaceScopeSupport = mock(ApiWorkspaceScopeSupport.class);
         LocalRunnerService localRunnerService = mock(LocalRunnerService.class);
         NotificationDomainService notificationDomainService = mock(NotificationDomainService.class);
+        ApiReportShareDomainService reportShareDomainService = mock(ApiReportShareDomainService.class);
 
         ApiExecutionSuiteEntity suite = new ApiExecutionSuiteEntity();
         suite.setId(8002L);
@@ -379,7 +382,8 @@ class ApiExecutionSuiteDomainServiceLocalRunnerTests {
                 workspaceService,
                 workspaceScopeSupport,
                 localRunnerService,
-                notificationDomainService
+                notificationDomainService,
+                reportShareDomainService
         );
 
         service.runSuite(8002L, "risk-ops", new ApiRunRequest(

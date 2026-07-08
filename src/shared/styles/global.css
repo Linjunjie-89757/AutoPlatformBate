@@ -8,7 +8,10 @@ html {
   color: var(--app-text-primary);
   font-family: var(--app-font-family);
   font-size: var(--app-font-size-md);
+  font-variant-numeric: tabular-nums;
   line-height: var(--app-line-height-md);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -29,6 +32,13 @@ a {
   color: inherit;
 }
 
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--app-font-family-mono);
+}
+
 #app {
   min-height: 100dvh;
 }
@@ -44,7 +54,7 @@ a {
 }
 
 .app-soft-scrollbar:hover {
-  scrollbar-color: var(--el-scrollbar-bg-color, rgba(144, 147, 153, 0.3)) transparent;
+  scrollbar-color: var(--el-scrollbar-bg-color, rgba(100, 116, 139, 0.32)) transparent;
 }
 
 .app-soft-scrollbar::-webkit-scrollbar {
@@ -62,9 +72,9 @@ a {
 }
 
 .app-soft-scrollbar:hover::-webkit-scrollbar-thumb {
-  background-color: var(--el-scrollbar-bg-color, rgba(144, 147, 153, 0.3));
+  background-color: var(--el-scrollbar-bg-color, rgba(100, 116, 139, 0.32));
 }
 
 .app-soft-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: var(--el-scrollbar-hover-bg-color, rgba(144, 147, 153, 0.5));
+  background-color: var(--el-scrollbar-hover-bg-color, rgba(71, 85, 105, 0.5));
 }

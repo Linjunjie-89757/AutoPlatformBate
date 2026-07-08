@@ -90,11 +90,11 @@ function visibleParamTypeOptions() {
 
 <style scoped>
 .api-param-table {
-  min-height: 296px;
+  min-height: 300px;
   overflow: auto;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: #fff;
+  border-radius: 8px;
+  background: var(--app-bg-panel);
 }
 
 .api-param-header,
@@ -102,38 +102,42 @@ function visibleParamTypeOptions() {
   display: grid;
   width: 100%;
   min-width: 100%;
-  grid-template-columns: 24px 32px 240px 150px 240px 200px 80px minmax(220px, 1fr) 90px;
+  grid-template-columns: 22px 30px 240px 148px 240px 188px 72px minmax(220px, 1fr) 76px;
   align-items: center;
   gap: 0;
-  padding: 5px 10px 5px 0;
+  padding: 2px 8px 2px 0;
 }
 
 .api-param-table.is-header .api-param-header,
 .api-param-table.is-header .api-param-row {
   min-width: 100%;
-  grid-template-columns: 24px 32px repeat(3, minmax(0, 1fr)) 80px;
+  grid-template-columns: 22px 30px repeat(3, minmax(0, 1fr)) 72px;
 }
 
 .api-param-header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
   box-sizing: border-box;
-  height: 40px;
-  min-height: 40px;
-  padding: 0 10px 0 0;
-  background: #f9fafb;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 8px 0 0;
+  border-bottom: 1px solid var(--app-border);
+  background: #fafafa;
   color: var(--app-text-muted);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 16px;
 }
 
 .api-param-row {
-  min-height: 44px;
+  min-height: 38px;
   border-bottom: 1px solid var(--app-border-soft);
   transition: background-color 0.15s ease;
 }
 
 .api-param-row:hover {
-  background: #fbfdff;
+  background: #fafbff;
 }
 
 .api-drag-cell,
@@ -146,8 +150,8 @@ function visibleParamTypeOptions() {
 
 .api-drag-handle {
   display: grid;
-  width: 14px;
-  height: 19px;
+  width: 12px;
+  height: 18px;
   align-content: center;
   justify-content: center;
   grid-template-columns: repeat(2, 3px);
@@ -156,14 +160,14 @@ function visibleParamTypeOptions() {
 }
 
 .api-drag-dot {
-  width: 3px;
-  height: 3px;
+  width: 2.5px;
+  height: 2.5px;
   border-radius: 999px;
-  background: #c0c4cc;
+  background: var(--app-text-subtle);
 }
 
 .api-param-row:hover .api-drag-dot {
-  background: #9ca3af;
+  background: var(--app-text-muted);
 }
 
 .api-header-title {
@@ -201,21 +205,21 @@ function visibleParamTypeOptions() {
 }
 
 .api-required-button {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #98a2b3;
+  color: var(--app-text-subtle);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
 }
 
 .api-required-button.active {
-  background: #fff1f3;
-  color: #f04438;
+  background: var(--app-danger-soft);
+  color: var(--app-danger);
 }
 
 .api-link-button {
@@ -243,30 +247,31 @@ function visibleParamTypeOptions() {
 }
 
 .api-param-row :deep(.el-input) {
-  height: 30px;
+  height: 28px;
 }
 
 .api-param-row :deep(.el-input__wrapper) {
-  height: 30px;
+  height: 28px;
 }
 
 .api-param-row :deep(.el-input__wrapper:hover),
 .api-param-row :deep(.el-select__wrapper:hover) {
   background: #fff;
-  box-shadow: inset 0 0 0 1px #d0d5dd;
+  box-shadow: inset 0 0 0 1px var(--app-border);
 }
 
 .api-param-row :deep(.el-input.is-focus .el-input__wrapper),
 .api-param-row :deep(.el-select.is-focus .el-select__wrapper),
 .api-param-row :deep(.el-select__wrapper.is-focused) {
   background: #fff;
-  box-shadow: inset 0 0 0 1px #3b82f6;
+  box-shadow: inset 0 0 0 1px var(--app-primary);
 }
 
 .api-param-row :deep(.el-input__inner),
 .api-param-row :deep(.el-select__placeholder),
 .api-param-row :deep(.el-select__selected-item) {
   font-size: 12px;
+  color: var(--app-text-primary);
 }
 
 .api-length-range {
@@ -282,20 +287,28 @@ function visibleParamTypeOptions() {
 .api-row-remove,
 .api-add-row {
   min-height: 28px;
-  padding: 0 4px;
+  padding: 0 10px;
   border: 0;
   border-radius: var(--app-radius-sm);
   background: transparent;
   color: var(--app-primary);
   cursor: pointer;
   font-size: var(--app-font-size-xs);
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
+}
+
+.api-add-row {
+  width: 100%;
+  border-top: 1px solid var(--app-border-soft);
+  border-radius: 0;
+  color: var(--app-text-secondary);
+  font-weight: 500;
 }
 
 .api-row-remove:hover,
 .api-add-row:hover {
-  background: #eff6ff;
+  background: var(--app-primary-soft);
   color: var(--app-primary-hover);
 }
 </style>

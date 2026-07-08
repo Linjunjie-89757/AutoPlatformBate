@@ -5,7 +5,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
   configApi,
-  configStatusOptions,
   notificationChannelTypeOptions,
   notificationSendStatusOptions,
   notificationTriggerConditionOptions,
@@ -64,6 +63,8 @@ const recordChannelFilter = ref<number | ''>('')
 const recordStatusFilter = ref('')
 const recordDateRange = ref<[Date, Date] | null>(null)
 
+const concreteWorkspaceSelected = computed(() => props.workspaceCode !== 'ALL')
+
 const channelDialogVisible = ref(false)
 const channelDialogMode = ref<DialogMode>('create')
 const editingChannel = ref<NotificationChannelItem | null>(null)
@@ -74,7 +75,6 @@ const ruleDialogMode = ref<DialogMode>('create')
 const editingRule = ref<NotificationRuleItem | null>(null)
 const ruleForm = ref<CreateNotificationRulePayload>(defaultRuleForm())
 
-const concreteWorkspaceSelected = computed(() => props.workspaceCode !== 'ALL')
 const enabledChannels = computed(() => channels.value.filter(item => item.status === 1))
 const channelStats = computed(() => ({
   total: channels.value.length,
@@ -124,7 +124,12 @@ function defaultRuleForm(): CreateNotificationRulePayload {
 }
 
 async function loadEventTypes() {
-  eventTypes.value = await configApi.getNotificationEventTypes()
+  try {
+    eventTypes.value = await configApi.getNotificationEventTypes()
+  } catch (error) {
+    eventTypes.value = []
+    errorMessage.value = errorMessage.value || getRequestErrorMessage(error)
+  }
 }
 
 async function loadChannels() {
@@ -186,20 +191,6 @@ async function loadRecords() {
 
 async function refreshAll() {
   await Promise.all([loadChannels(), loadRules(), loadRecords()])
-}
-
-function resetChannelFilters() {
-  channelKeyword.value = ''
-  channelTypeFilter.value = ''
-  channelStatusFilter.value = ''
-  void loadChannels()
-}
-
-function resetRuleFilters() {
-  ruleKeyword.value = ''
-  ruleEventFilter.value = ''
-  ruleStatusFilter.value = ''
-  void loadRules()
 }
 
 function resetRecordFilters() {
@@ -515,31 +506,8 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
 
     <el-tabs v-model="activeTab" class="notification-tabs">
       <el-tab-pane label="通知渠道" name="channels">
-        <div class="config-filter-toolbar">
-          <el-input
-            v-model="channelKeyword"
-            class="config-filter-control config-filter-control--search"
-            clearable
-            placeholder="搜索渠道名称 / 备注"
-            :prefix-icon="Search"
-          />
-          <el-select v-model="channelTypeFilter" class="config-filter-control" clearable placeholder="渠道类型">
-            <el-option
-              v-for="item in notificationChannelTypeOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-          <el-select v-model="channelStatusFilter" class="config-filter-control" clearable placeholder="状态">
-            <el-option
-              v-for="item in configStatusOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="String(item.value)"
-            />
-          </el-select>
-          <AppButton :icon="RefreshRight" @click="resetChannelFilters">重置</AppButton>
+        <div class="notification-tab-toolbar">
+          <span>公共渠道列表</span>
           <AppButton type="primary" :icon="Plus" @click="openCreateChannelDialog">新建渠道</AppButton>
         </div>
 
@@ -549,7 +517,7 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
           title="暂无通知渠道"
           description="创建企业微信机器人或通用 Webhook 后，可在通知规则中引用。"
         />
-        <el-table v-else v-loading="channelsLoading" :data="channels" border stripe>
+        <el-table v-else v-loading="channelsLoading" :data="channels" border>
           <el-table-column prop="channelName" label="渠道名称" min-width="180" />
           <el-table-column prop="channelTypeName" label="渠道类型" width="150" />
           <el-table-column prop="workspaceName" label="工作空间" width="140" />
@@ -576,31 +544,8 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
       </el-tab-pane>
 
       <el-tab-pane label="通知规则" name="rules">
-        <div class="config-filter-toolbar">
-          <el-input
-            v-model="ruleKeyword"
-            class="config-filter-control config-filter-control--search"
-            clearable
-            placeholder="搜索规则名称"
-            :prefix-icon="Search"
-          />
-          <el-select v-model="ruleEventFilter" class="config-filter-control" clearable placeholder="触发场景">
-            <el-option
-              v-for="item in eventTypes"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-          <el-select v-model="ruleStatusFilter" class="config-filter-control" clearable placeholder="状态">
-            <el-option
-              v-for="item in configStatusOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="String(item.value)"
-            />
-          </el-select>
-          <AppButton :icon="RefreshRight" @click="resetRuleFilters">重置</AppButton>
+        <div class="notification-tab-toolbar">
+          <span>触发规则列表</span>
           <AppButton type="primary" :icon="Plus" @click="openCreateRuleDialog">新建规则</AppButton>
         </div>
 
@@ -610,7 +555,7 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
           title="暂无通知规则"
           description="规则负责把接口套件和 Web UI 的执行结果发送到指定渠道。"
         />
-        <el-table v-else v-loading="rulesLoading" :data="rules" border stripe>
+        <el-table v-else v-loading="rulesLoading" :data="rules" border>
           <el-table-column prop="ruleName" label="规则名称" min-width="190" />
           <el-table-column prop="eventName" label="触发场景" min-width="180" />
           <el-table-column label="关联渠道" min-width="220">
@@ -677,8 +622,10 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
               :value="item.value"
             />
           </el-select>
-          <AppButton type="primary" :icon="Search" @click="loadRecords">查询</AppButton>
-          <AppButton :icon="RefreshRight" @click="resetRecordFilters">重置</AppButton>
+          <div class="notification-record-toolbar__actions">
+            <AppButton type="primary" :icon="Search" @click="loadRecords">查询</AppButton>
+            <AppButton :icon="RefreshRight" @click="resetRecordFilters">重置</AppButton>
+          </div>
         </div>
 
         <AppLoadingState v-if="recordsLoading && !records.length" text="正在加载通知记录..." />
@@ -688,7 +635,7 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
           description="接口套件或 Web UI 执行触发通知后，会在这里留下发送结果。"
         />
         <template v-else>
-          <el-table v-loading="recordsLoading" :data="records" border stripe>
+          <el-table v-loading="recordsLoading" :data="records" border>
             <el-table-column prop="createdAt" label="触发时间" width="170">
               <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
             </el-table-column>
@@ -853,19 +800,19 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
 .notification-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--app-space-3);
+  gap: var(--app-space-2);
   margin-bottom: var(--app-space-4);
 }
 
 .notification-summary__item {
   display: flex;
-  min-height: 72px;
+  min-height: 64px;
   flex-direction: column;
   justify-content: center;
-  padding: var(--app-space-4);
-  border: 1px solid var(--app-border);
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid var(--app-border-soft);
   border-radius: var(--app-radius-md);
-  background: var(--app-bg-subtle);
+  background: var(--app-bg-soft);
 }
 
 .notification-summary__item span {
@@ -876,7 +823,8 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
 .notification-summary__item strong {
   margin-top: 4px;
   color: var(--app-text-primary);
-  font-size: 22px;
+  font-size: 21px;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -888,16 +836,69 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
   min-width: 0;
 }
 
+.notification-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--app-space-4);
+}
+
+.notification-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: var(--app-border-soft);
+}
+
+.notification-tabs :deep(.el-tabs__item) {
+  height: 38px;
+  color: var(--app-text-muted);
+  font-weight: 500;
+}
+
+.notification-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--app-primary-active);
+}
+
+.notification-tabs :deep(.el-tabs__active-bar) {
+  height: 2px;
+  border-radius: 2px;
+  background: var(--app-primary);
+}
+
+.notification-tab-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  margin-bottom: var(--app-space-3);
+  padding: var(--app-space-2) 0;
+}
+
+.notification-tab-toolbar span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-sm);
+}
+
 .notification-tag {
   margin-right: 4px;
 }
 
 .notification-record-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.35fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(130px, 0.7fr) auto;
   align-items: center;
+  gap: var(--app-space-2);
 }
 
 .notification-date-range {
-  width: 340px;
+  width: 100%;
+}
+
+.notification-record-toolbar .config-filter-control {
+  width: 100%;
+}
+
+.notification-record-toolbar__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--app-space-2);
+  white-space: nowrap;
 }
 
 .notification-pagination {
@@ -922,14 +923,27 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .notification-date-range {
-    width: 100%;
+  .notification-record-toolbar {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 640px) {
   .notification-summary {
     grid-template-columns: 1fr;
+  }
+
+  .notification-record-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-tab-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .notification-record-toolbar__actions {
+    justify-content: flex-start;
   }
 }
 </style>

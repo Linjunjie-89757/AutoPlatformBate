@@ -38,7 +38,7 @@ defineProps<{
 .app-section__title {
   margin: 0;
   font-size: var(--app-font-size-lg);
-  font-weight: 700;
+  font-weight: 600;
   line-height: var(--app-line-height-lg);
 }
 

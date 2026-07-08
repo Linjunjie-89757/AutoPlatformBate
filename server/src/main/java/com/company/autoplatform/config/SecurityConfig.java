@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/public/local-runner/**").permitAll()
                         .requestMatchers("/api/public/automation/web/element-collect-tasks/**").permitAll()
                         .requestMatchers("/api/public/automation/web/report-shares/**").permitAll()
+                        .requestMatchers("/api/public/automation/api/report-shares/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()

@@ -16,13 +16,13 @@ defineProps<{
 <style scoped>
 .config-stat-card {
   display: flex;
-  min-height: 84px;
+  min-height: 72px;
   flex-direction: column;
   justify-content: space-between;
-  padding: var(--app-space-4);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-soft);
 }
 
 .config-stat-card span {
@@ -32,32 +32,33 @@ defineProps<{
 
 .config-stat-card strong {
   color: var(--app-text-primary);
-  font-size: 24px;
-  line-height: 30px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
 }
 
 .config-stat-card--primary {
-  border-color: #bfdbfe;
-  background: var(--app-primary-soft);
+  border-color: var(--app-primary-subtle);
+  background: color-mix(in srgb, var(--app-primary-soft) 68%, #fff);
 }
 
 .config-stat-card--success {
-  border-color: #bbf7d0;
-  background: var(--app-success-soft);
+  border-color: #b7ead5;
+  background: color-mix(in srgb, var(--app-success-soft) 72%, #fff);
 }
 
 .config-stat-card--warning {
-  border-color: #fed7aa;
-  background: var(--app-warning-soft);
+  border-color: #f2d8a7;
+  background: color-mix(in srgb, var(--app-warning-soft) 72%, #fff);
 }
 
 .config-stat-card--danger {
-  border-color: #fecaca;
-  background: var(--app-danger-soft);
+  border-color: #f5c2bc;
+  background: color-mix(in srgb, var(--app-danger-soft) 72%, #fff);
 }
 
 .config-stat-card--purple {
-  border-color: #e9d5ff;
-  background: var(--app-purple-soft);
+  border-color: #d8ddff;
+  background: color-mix(in srgb, var(--app-purple-soft) 72%, #fff);
 }
 </style>

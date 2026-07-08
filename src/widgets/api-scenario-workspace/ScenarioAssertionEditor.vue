@@ -59,150 +59,40 @@
             </el-select>
           </label>
 
-          <template v-if="activeAssertion.assertionType === 'RESPONSE_CODE'">
-            <label class="scenario-advanced-field">
-              <span>条件</span>
-              <el-select v-model="activeAssertion.condition" @change="emitChange">
-                <el-option v-for="option in assertionConditionOptions" :key="option.value" :label="option.label" :value="option.value" />
-              </el-select>
-            </label>
-            <label class="scenario-advanced-field">
-              <span>期望值</span>
-              <el-input v-model="activeAssertion.expectedValue" placeholder="200" @input="emitChange" />
-            </label>
-          </template>
-
-          <template v-else-if="activeAssertion.assertionType === 'RESPONSE_HEADER'">
-            <div class="scenario-advanced-table scenario-assertion-header-table">
-              <div class="scenario-advanced-table-head">
-                <span></span>
-                <span>响应头名称</span>
-                <span>条件</span>
-                <span>期望值</span>
-                <span></span>
-                <span></span>
-              </div>
-              <div v-for="(item, index) in headerItems(activeAssertion)" :key="`${activeAssertion.id}-header-${index}`" class="scenario-advanced-table-row">
-                <el-checkbox v-model="item.enabled" @change="emitChange" />
-                <el-input v-model="item.header" placeholder="Content-Type" @input="emitChange" />
-                <el-select v-model="item.condition" @change="emitChange">
-                  <el-option v-for="option in assertionConditionOptions" :key="option.value" :label="option.label" :value="option.value" />
-                </el-select>
-                <el-input v-model="item.expectedValue" placeholder="application/json" @input="emitChange" />
-                <button type="button" class="scenario-row-action" @click="duplicateAssertionItem(headerItems(activeAssertion), index)">复制</button>
-                <button type="button" class="scenario-row-remove" @click="removeAssertionItem(headerItems(activeAssertion), index)">删除</button>
-              </div>
-              <button type="button" class="scenario-advanced-add-row" @click="addHeaderItem(activeAssertion)">+ 添加响应头断言</button>
-            </div>
-          </template>
-
-          <template v-else-if="activeAssertion.assertionType === 'RESPONSE_BODY'">
-            <div class="scenario-expression-switch">
-              <button
-                v-for="option in bodyExpressionOptions"
-                :key="option.value"
-                type="button"
-                :class="{ active: activeAssertion.assertionBodyType === option.value }"
-                @click="setBodyExpressionType(activeAssertion, option.value)"
-              >
-                {{ option.label }}
-              </button>
-              <el-select
-                v-if="activeAssertion.assertionBodyType === 'X_PATH'"
-                v-model="bodyGroup(activeAssertion).responseFormat"
-                class="scenario-assertion-format-select"
-                @change="emitChange"
-              >
-                <el-option label="XML" value="XML" />
-                <el-option label="HTML" value="HTML" />
-              </el-select>
-            </div>
-            <div class="scenario-advanced-table scenario-assertion-body-table">
-              <div class="scenario-advanced-table-head">
-                <span></span>
-                <span>表达式</span>
-                <span>条件</span>
-                <span>期望值</span>
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <div v-for="(item, index) in bodyItems(activeAssertion)" :key="`${activeAssertion.id}-body-${index}`" class="scenario-advanced-table-row">
-                <el-checkbox v-model="item.enabled" @change="emitChange" />
-                <el-input v-model="item.expression" placeholder="$.data.id" @input="emitChange">
-                  <template #suffix>
-                    <button
-                      type="button"
-                      :class="['scenario-fast-extract', { 'is-disabled': !hasResponseBody }]"
-                      :disabled="!hasResponseBody"
-                      :title="fastExtractionTitle"
-                      aria-label="快速提取"
-                      @click.stop="openFastExtraction(index)"
-                    >
-                      <el-icon><MagicStick /></el-icon>
-                    </button>
-                  </template>
-                </el-input>
-                <el-select v-model="item.condition" @change="emitChange">
-                  <el-option v-for="option in assertionConditionOptions" :key="option.value" :label="option.label" :value="option.value" />
-                </el-select>
-                <el-input v-model="item.expectedValue" placeholder="期望值" @input="emitChange" />
-                <button type="button" class="scenario-row-action" @click="testBodyExpression(activeAssertion, item)">测试</button>
-                <button type="button" class="scenario-row-action" @click="duplicateAssertionItem(bodyItems(activeAssertion), index)">复制</button>
-                <button type="button" class="scenario-row-remove" @click="removeAssertionItem(bodyItems(activeAssertion), index)">删除</button>
-              </div>
-              <button type="button" class="scenario-advanced-add-row" @click="addBodyItem(activeAssertion)">+ 添加响应体断言</button>
-            </div>
-          </template>
-
-          <template v-else-if="activeAssertion.assertionType === 'RESPONSE_TIME'">
-            <label class="scenario-advanced-field">
-              <span>最大耗时(ms)</span>
-              <el-input-number v-model="activeAssertion.expectedValue" :min="0" :step="100" @change="emitChange" />
-            </label>
-          </template>
-
-          <template v-else-if="activeAssertion.assertionType === 'VARIABLE'">
-            <div class="scenario-advanced-hint">可校验后置 SQL 或提取处理器写入的变量。</div>
-            <div class="scenario-advanced-table scenario-assertion-variable-table">
-              <div class="scenario-advanced-table-head">
-                <span></span>
-                <span>变量名</span>
-                <span>条件</span>
-                <span>期望值</span>
-                <span></span>
-                <span></span>
-              </div>
-              <div v-for="(item, index) in variableItems(activeAssertion)" :key="`${activeAssertion.id}-variable-${index}`" class="scenario-advanced-table-row">
-                <el-checkbox v-model="item.enabled" @change="emitChange" />
-                <el-input v-model="item.variableName" placeholder="变量名" @input="emitChange" />
-                <el-select v-model="item.condition" @change="emitChange">
-                  <el-option v-for="option in assertionConditionOptions" :key="option.value" :label="option.label" :value="option.value" />
-                </el-select>
-                <el-input v-model="item.expectedValue" placeholder="期望值" @input="emitChange" />
-                <button type="button" class="scenario-row-action" @click="duplicateAssertionItem(variableItems(activeAssertion), index)">复制</button>
-                <button type="button" class="scenario-row-remove" @click="removeAssertionItem(variableItems(activeAssertion), index)">删除</button>
-              </div>
-              <button type="button" class="scenario-advanced-add-row" @click="addVariableItem(activeAssertion)">+ 添加变量断言</button>
-            </div>
-          </template>
-
-          <template v-else>
-            <div class="scenario-code-toolbar">
-              <el-tag size="small">JavaScript</el-tag>
-              <button type="button" @click="activeAssertion.script = ''; emitChange()">清空</button>
-              <button type="button" @click="activeAssertion.script = (activeAssertion.script || '').trim(); emitChange()">格式化</button>
-            </div>
-            <ApiCodeEditor
-              v-model="activeAssertion.script"
-              language="javascript"
-              height="360px"
-              :show-format-button="false"
-              placeholder="// JavaScript"
-              @change="emitChange"
-            />
-            <div class="scenario-advanced-hint">脚本中可以读取响应、变量和断言上下文，执行结果按旧项目断言脚本承载。</div>
-          </template>
+          <ScenarioResponseCodeAssertionPanel
+            v-if="activeAssertion.assertionType === 'RESPONSE_CODE'"
+            :assertion="activeAssertion"
+            @change="emitChange"
+          />
+          <ScenarioHeaderAssertionPanel
+            v-else-if="activeAssertion.assertionType === 'RESPONSE_HEADER'"
+            :assertion="activeAssertion"
+            @change="emitChange"
+          />
+          <ScenarioBodyAssertionPanel
+            v-else-if="activeAssertion.assertionType === 'RESPONSE_BODY'"
+            :assertion="activeAssertion"
+            :has-response-body="hasResponseBody"
+            :fast-extraction-title="fastExtractionTitle"
+            :latest-response-body="latestResponseBody"
+            @change="emitChange"
+            @fast-extract="openFastExtraction"
+          />
+          <ScenarioResponseTimeAssertionPanel
+            v-else-if="activeAssertion.assertionType === 'RESPONSE_TIME'"
+            :assertion="activeAssertion"
+            @change="emitChange"
+          />
+          <ScenarioVariableAssertionPanel
+            v-else-if="activeAssertion.assertionType === 'VARIABLE'"
+            :assertion="activeAssertion"
+            @change="emitChange"
+          />
+          <ScenarioScriptAssertionPanel
+            v-else
+            :assertion="activeAssertion"
+            @change="emitChange"
+          />
         </div>
       </template>
     </section>
@@ -219,48 +109,27 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { MagicStick } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import ApiCodeEditor from '../api-interface-workspace/ApiCodeEditor.vue'
 import ApiFastExtractionDrawer from '../api-interface-workspace/ApiFastExtractionDrawer.vue'
-import type { FastExtractionConfig, FastExtractionMode, FastExtractionResponseFormat } from '../api-interface-workspace/fastExtraction'
-
-type AssertionType = 'RESPONSE_CODE' | 'RESPONSE_HEADER' | 'RESPONSE_BODY' | 'RESPONSE_TIME' | 'VARIABLE' | 'SCRIPT'
-type AssertionExpressionType = 'JSON_PATH' | 'X_PATH' | 'REGEX'
-
-interface AssertionItem {
-  enabled?: boolean
-  header?: string
-  expression?: string
-  variableName?: string
-  condition?: string
-  expectedValue?: string | number | null
-}
-
-interface AssertionGroup {
-  assertions?: AssertionItem[]
-  responseFormat?: string
-}
-
-interface ScenarioAssertion {
-  id?: string
-  name?: string
-  enabled?: boolean
-  assertionType?: AssertionType | string
-  type?: string
-  condition?: string
-  operator?: string
-  expectedValue?: string | number | null
-  assertionBodyType?: AssertionExpressionType | string
-  jsonPathAssertion?: AssertionGroup
-  xpathAssertion?: AssertionGroup
-  regexAssertion?: AssertionGroup
-  assertions?: AssertionItem[]
-  variableAssertionItems?: AssertionItem[]
-  scriptLanguage?: string
-  script?: string
-  [key: string]: unknown
-}
+import type { FastExtractionConfig, FastExtractionMode } from '../api-interface-workspace/fastExtraction'
+import ScenarioBodyAssertionPanel from './ScenarioBodyAssertionPanel.vue'
+import ScenarioHeaderAssertionPanel from './ScenarioHeaderAssertionPanel.vue'
+import ScenarioResponseCodeAssertionPanel from './ScenarioResponseCodeAssertionPanel.vue'
+import ScenarioResponseTimeAssertionPanel from './ScenarioResponseTimeAssertionPanel.vue'
+import ScenarioScriptAssertionPanel from './ScenarioScriptAssertionPanel.vue'
+import ScenarioVariableAssertionPanel from './ScenarioVariableAssertionPanel.vue'
+import type {
+  AssertionExpressionType,
+  AssertionType,
+  ScenarioAssertion,
+} from './lib/scenarioAssertionEditorTypes'
+import {
+  assertionBodyGroup,
+  assertionBodyItems,
+  cloneAssertionValue,
+  ensureAssertionGroupShape,
+  normalizeAssertionBodyType,
+  normalizeAssertionFastExtractionResponseFormat,
+} from './lib/scenarioAssertionEditorTypes'
 
 const props = defineProps<{
   modelValue: unknown[]
@@ -289,27 +158,6 @@ const availableAssertionTypeOptions = computed(() => {
   return assertionTypeOptions.filter(option => props.allowedTypes?.includes(option.value))
 })
 
-const assertionConditionOptions = [
-  { label: '等于', value: 'EQUALS' },
-  { label: '不等于', value: 'NOT_EQUALS' },
-  { label: '包含', value: 'CONTAINS' },
-  { label: '不包含', value: 'NOT_CONTAINS' },
-  { label: '为空', value: 'EMPTY' },
-  { label: '不为空', value: 'NOT_EMPTY' },
-  { label: '正则匹配', value: 'REGEX' },
-  { label: '大于', value: 'GT' },
-  { label: '大于等于', value: 'GT_OR_EQUALS' },
-  { label: '小于', value: 'LT' },
-  { label: '小于等于', value: 'LT_OR_EQUALS' },
-  { label: '不校验', value: 'UNCHECKED' },
-]
-
-const bodyExpressionOptions: Array<{ label: string; value: AssertionExpressionType }> = [
-  { label: 'JSONPath', value: 'JSON_PATH' },
-  { label: 'XPath', value: 'X_PATH' },
-  { label: 'Regex', value: 'REGEX' },
-]
-
 const assertions = computed<ScenarioAssertion[]>({
   get: () => props.modelValue as ScenarioAssertion[],
   set: value => emit('update:modelValue', value as unknown[]),
@@ -329,12 +177,12 @@ const activeFastExtractionConfig = computed<FastExtractionConfig>(() => {
   const assertion = assertions.value.find(item => item.id === target.assertionId)
   if (!assertion) return { extractType: 'JSON_PATH', expression: '$', responseFormat: 'JSON' }
   const item = bodyItems(assertion)[target.index]
-  const type = normalizeBodyType(assertion.assertionBodyType)
+  const type = normalizeAssertionBodyType(assertion.assertionBodyType)
   const group = bodyGroup(assertion)
   return {
     extractType: type,
     expression: item?.expression || '',
-    responseFormat: normalizeFastExtractionResponseFormat(group.responseFormat || (type === 'X_PATH' ? 'XML' : 'JSON')),
+    responseFormat: normalizeAssertionFastExtractionResponseFormat(group.responseFormat || (type === 'X_PATH' ? 'XML' : 'JSON')),
   }
 })
 const activeFastExtractionMode = computed<FastExtractionMode>(() => activeFastExtractionConfig.value.extractType || 'JSON_PATH')
@@ -370,7 +218,7 @@ function createId(type: string) {
 }
 
 function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
+  return cloneAssertionValue(value)
 }
 
 function normalizeAssertionType(assertion: ScenarioAssertion): AssertionType {
@@ -413,7 +261,7 @@ function ensureAssertionShape(assertion: ScenarioAssertion) {
   } else if (type === 'RESPONSE_HEADER') {
     assertion.assertions = assertion.assertions?.length ? assertion.assertions : [{ enabled: true, header: '', condition: 'EQUALS', expectedValue: '' }]
   } else if (type === 'RESPONSE_BODY') {
-    assertion.assertionBodyType = normalizeBodyType(assertion.assertionBodyType)
+    assertion.assertionBodyType = normalizeAssertionBodyType(assertion.assertionBodyType)
     ensureAssertionGroupShape(assertion, 'jsonPathAssertion', 'JSON_PATH')
     ensureAssertionGroupShape(assertion, 'xpathAssertion', 'X_PATH')
     ensureAssertionGroupShape(assertion, 'regexAssertion', 'REGEX')
@@ -427,45 +275,6 @@ function ensureAssertionShape(assertion: ScenarioAssertion) {
   } else if (type === 'SCRIPT') {
     assertion.scriptLanguage = assertion.scriptLanguage || 'JAVASCRIPT'
     assertion.script = assertion.script ?? ''
-  }
-}
-
-function normalizeBodyType(type?: string): AssertionExpressionType {
-  const value = String(type || 'JSON_PATH').toUpperCase()
-  if (value === 'XPATH') return 'X_PATH'
-  return bodyExpressionOptions.some(item => item.value === value) ? value as AssertionExpressionType : 'JSON_PATH'
-}
-
-function normalizeFastExtractionResponseFormat(format?: string): FastExtractionResponseFormat {
-  const value = String(format || '').toUpperCase()
-  if (value === 'XML' || value === 'HTML') return value
-  return 'JSON'
-}
-
-function ensureGroup(group: AssertionGroup | undefined, type: AssertionExpressionType): AssertionGroup {
-  return {
-    responseFormat: group?.responseFormat || 'XML',
-    assertions: group?.assertions?.length
-      ? group.assertions
-      : [{ expression: type === 'JSON_PATH' ? '$.data' : type === 'X_PATH' ? '/root' : '.+', condition: 'EQUALS', expectedValue: '' }],
-  }
-}
-
-function ensureAssertionGroupShape(
-  assertion: ScenarioAssertion,
-  key: 'jsonPathAssertion' | 'xpathAssertion' | 'regexAssertion',
-  type: AssertionExpressionType,
-) {
-  const group = assertion[key]
-  if (!group) {
-    assertion[key] = ensureGroup(undefined, type)
-    return
-  }
-  if (!group.responseFormat) {
-    group.responseFormat = 'XML'
-  }
-  if (!group.assertions?.length) {
-    group.assertions = ensureGroup(undefined, type).assertions
   }
 }
 
@@ -521,75 +330,13 @@ function handleTypeChange(assertion: ScenarioAssertion) {
   emitChange()
 }
 
-function headerItems(assertion: ScenarioAssertion) {
-  ensureAssertionShape(assertion)
-  return assertion.assertions || (assertion.assertions = [])
-}
-
 function bodyGroup(assertion: ScenarioAssertion) {
   ensureAssertionShape(assertion)
-  const type = normalizeBodyType(assertion.assertionBodyType)
-  if (type === 'X_PATH') return assertion.xpathAssertion || (assertion.xpathAssertion = ensureGroup(undefined, 'X_PATH'))
-  if (type === 'REGEX') return assertion.regexAssertion || (assertion.regexAssertion = ensureGroup(undefined, 'REGEX'))
-  return assertion.jsonPathAssertion || (assertion.jsonPathAssertion = ensureGroup(undefined, 'JSON_PATH'))
+  return assertionBodyGroup(assertion)
 }
 
 function bodyItems(assertion: ScenarioAssertion) {
-  const group = bodyGroup(assertion)
-  return group.assertions || (group.assertions = [])
-}
-
-function variableItems(assertion: ScenarioAssertion) {
-  ensureAssertionShape(assertion)
-  return assertion.variableAssertionItems || (assertion.variableAssertionItems = [])
-}
-
-function setBodyExpressionType(assertion: ScenarioAssertion, type: AssertionExpressionType) {
-  assertion.assertionBodyType = type
-  ensureAssertionShape(assertion)
-  emitChange()
-}
-
-function addHeaderItem(assertion: ScenarioAssertion) {
-  headerItems(assertion).push({ enabled: true, header: '', condition: 'EQUALS', expectedValue: '' })
-  emitChange()
-}
-
-function addBodyItem(assertion: ScenarioAssertion) {
-  bodyItems(assertion).push({ expression: '', condition: 'EQUALS', expectedValue: '' })
-  emitChange()
-}
-
-function addVariableItem(assertion: ScenarioAssertion) {
-  variableItems(assertion).push({ enabled: true, variableName: '', condition: 'EQUALS', expectedValue: '' })
-  emitChange()
-}
-
-function duplicateAssertionItem(items: AssertionItem[], index: number) {
-  const source = items[index]
-  if (!source) return
-  items.splice(index + 1, 0, clone(source))
-  emitChange()
-}
-
-function removeAssertionItem(items: AssertionItem[], index: number) {
-  items.splice(index, 1)
-  if (!items.length) {
-    items.push({ enabled: true, condition: 'EQUALS', expectedValue: '' })
-  }
-  emitChange()
-}
-
-function testBodyExpression(_assertion: ScenarioAssertion, item: AssertionItem) {
-  if (!props.latestResponseBody?.trim()) {
-    ElMessage.warning('请先发送请求获取响应内容')
-    return
-  }
-  if (!item.expression?.trim()) {
-    ElMessage.warning('请先填写表达式')
-    return
-  }
-  ElMessage.info('场景步骤内表达式测试会在调试响应后回填验证结果')
+  return assertionBodyItems(assertion)
 }
 
 function openFastExtraction(index: number) {

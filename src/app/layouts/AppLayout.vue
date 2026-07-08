@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import {
-  ArrowDown,
   Bell,
-  Cpu,
-  Files,
-  Grid,
+  Bug,
+  ChevronDown,
+  ChevronLeft,
+  ClipboardList,
+  Code2,
+  LayoutDashboard,
+  Layers,
+  LogOut,
   Monitor,
-  Setting,
-  SwitchButton,
-  Tools,
-  User,
-  Warning,
-} from '@element-plus/icons-vue'
-import { ChevronDown, ChevronLeft, Layers } from '@lucide/vue'
+  Settings,
+  SlidersHorizontal,
+  TabletSmartphone,
+} from '@lucide/vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useSession } from '@/entities/session'
@@ -65,12 +66,15 @@ const navigationTargetQuery = computed(() => ({
   workspace: selectedWorkspaceCode.value,
 }))
 
-const sidebarWidth = computed(() => (isMenuCollapsed.value ? '60px' : 'var(--app-sidebar-width)'))
+const sidebarWidth = computed(() => (isMenuCollapsed.value ? '56px' : 'var(--app-sidebar-width)'))
+const isApiWorkbenchRoute = computed(() => route.path.startsWith('/automation/api'))
 
 interface NavigationItem {
   path: string
   label: string
-  icon: typeof Grid
+  icon: Component
+  color: string
+  lightBg: string
   children?: Array<{
     path: string
     label: string
@@ -80,12 +84,14 @@ interface NavigationItem {
 type NavigationGroupExpandedState = Record<string, boolean>
 
 const navigationItems: NavigationItem[] = [
-  { path: '/', label: '工作台', icon: Grid },
-  { path: '/config-center', label: '配置中心', icon: Setting },
+  { path: '/', label: '工作台', icon: LayoutDashboard, color: '#165DFF', lightBg: '#E8F3FF' },
+  { path: '/config-center', label: '配置中心', icon: SlidersHorizontal, color: '#4E5AC8', lightBg: '#EEF0FA' },
   {
     path: '/cases',
     label: '用例中心',
-    icon: Files,
+    icon: ClipboardList,
+    color: '#00B42A',
+    lightBg: '#E8FFEA',
     children: [
       { path: '/cases/manage', label: '用例管理' },
       { path: '/cases/ai-generate', label: 'AI 用例生成' },
@@ -93,11 +99,13 @@ const navigationItems: NavigationItem[] = [
       { path: '/cases/ai-config', label: 'AI 配置' },
     ],
   },
-  { path: '/bugs', label: '缺陷管理', icon: Warning },
+  { path: '/bugs', label: '缺陷管理', icon: Bug, color: '#F53F3F', lightBg: '#FFE8E8' },
   {
     path: '/automation/api',
     label: '接口自动化',
-    icon: Cpu,
+    icon: Code2,
+    color: '#FF7D00',
+    lightBg: '#FFF3E8',
     children: [
       { path: '/automation/api/interfaces', label: '接口管理' },
       { path: '/automation/api/scenarios', label: '接口场景' },
@@ -110,6 +118,8 @@ const navigationItems: NavigationItem[] = [
     path: '/automation/web',
     label: 'Web UI 自动化',
     icon: Monitor,
+    color: '#0FC6C2',
+    lightBg: '#E8FFFB',
     children: [
       { path: '/automation/web/cases', label: '用例管理' },
       { path: '/automation/web/elements', label: '元素库' },
@@ -120,8 +130,8 @@ const navigationItems: NavigationItem[] = [
       { path: '/automation/web/variables', label: '变量集设置' },
     ],
   },
-  { path: '/automation/app', label: 'APP 自动化', icon: Tools },
-  { path: '/settings', label: '系统设置', icon: User },
+  { path: '/automation/app', label: 'APP 自动化', icon: TabletSmartphone, color: '#7816FF', lightBg: '#F5E8FF' },
+  { path: '/settings', label: '系统设置', icon: Settings, color: '#4E5969', lightBg: '#F2F3F5' },
 ]
 
 function readNavigationGroupExpandedState(): NavigationGroupExpandedState {
@@ -279,11 +289,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-layout">
+  <div
+    class="app-layout"
+    :class="{ 'is-api-workbench': isApiWorkbenchRoute }"
+    :style="{ '--app-current-sidebar-width': sidebarWidth }"
+  >
     <aside
       class="app-layout__sidebar"
       :class="{ 'is-collapsed': isMenuCollapsed }"
-      :style="{ '--app-current-sidebar-width': sidebarWidth }"
     >
       <button
         type="button"
@@ -294,9 +307,7 @@ onMounted(() => {
       >
         <span class="app-layout__brand-mark">A</span>
         <span class="app-layout__brand-copy">自动化测试平台</span>
-        <el-icon class="app-layout__brand-collapse-icon" :class="{ 'is-collapsed': isMenuCollapsed }">
-          <ChevronLeft />
-        </el-icon>
+        <ChevronLeft class="app-layout__brand-collapse-icon" :class="{ 'is-collapsed': isMenuCollapsed }" />
       </button>
 
       <nav class="app-layout__nav" aria-label="主导航">
@@ -308,6 +319,7 @@ onMounted(() => {
             'is-active': isNavigationItemActive(item),
             'is-expanded': isNavigationGroupExpanded(item),
           }"
+          :style="{ '--nav-color': item.color, '--nav-bg': item.lightBg }"
         >
           <button
             v-if="hasNavigationChildren(item)"
@@ -320,9 +332,9 @@ onMounted(() => {
             :aria-expanded="isNavigationGroupExpanded(item)"
             @click="toggleNavigationGroup(item)"
           >
-            <el-icon class="app-layout__nav-icon">
-              <component :is="item.icon" />
-            </el-icon>
+            <span class="app-layout__nav-icon-shell">
+              <component :is="item.icon" class="app-layout__nav-icon" />
+            </span>
             <span class="app-layout__nav-label">{{ item.label }}</span>
           </button>
           <RouterLink
@@ -331,9 +343,9 @@ onMounted(() => {
             :class="{ 'is-active': isNavigationItemActive(item) }"
             :to="{ path: item.path, query: navigationTargetQuery }"
           >
-            <el-icon class="app-layout__nav-icon">
-              <component :is="item.icon" />
-            </el-icon>
+            <span class="app-layout__nav-icon-shell">
+              <component :is="item.icon" class="app-layout__nav-icon" />
+            </span>
             <span class="app-layout__nav-label">{{ item.label }}</span>
           </RouterLink>
 
@@ -384,9 +396,7 @@ onMounted(() => {
 
         <div class="app-layout__header-actions">
           <button class="app-layout__header-icon-button" type="button" title="通知">
-            <el-icon class="app-layout__header-bell-icon">
-              <Bell />
-            </el-icon>
+            <Bell class="app-layout__header-bell-icon" />
             <span class="app-layout__header-icon-dot" />
           </button>
           <span class="app-layout__header-divider app-layout__header-divider--right" />
@@ -400,18 +410,14 @@ onMounted(() => {
             >
               <span class="app-layout__user-avatar">{{ userDisplayName.slice(0, 1).toUpperCase() }}</span>
               <span class="app-layout__user-name">{{ userDisplayName }}</span>
-              <el-icon class="app-layout__user-arrow">
-                <ArrowDown />
-              </el-icon>
+              <ChevronDown class="app-layout__user-arrow" />
             </button>
 
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item disabled>{{ userRoleText }}</el-dropdown-item>
                 <el-dropdown-item divided command="logout" :disabled="logoutLoading">
-                  <el-icon>
-                    <SwitchButton />
-                  </el-icon>
+                  <LogOut class="app-layout__dropdown-icon" />
                   {{ logoutLoading ? '正在退出' : '退出登录' }}
                 </el-dropdown-item>
               </el-dropdown-menu>
@@ -439,9 +445,9 @@ onMounted(() => {
   position: fixed;
   inset: 0 auto 0 0;
   width: var(--app-current-sidebar-width, var(--app-sidebar-width));
-  border-right: 0;
-  background: #0f172a;
-  color: #f8fafc;
+  border-right: 1px solid var(--app-border);
+  background: #ffffff;
+  color: var(--app-text-secondary);
   overflow: hidden;
   transition: width 0.2s ease-in-out;
 }
@@ -451,27 +457,27 @@ onMounted(() => {
   align-items: center;
   gap: var(--app-space-3);
   width: 100%;
-  height: 64px;
-  padding: 0 var(--app-space-5);
+  height: 48px;
+  padding: 0 10px;
   border: 0;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid var(--app-border);
   background: transparent;
-  color: #f8fafc;
+  color: var(--app-text-secondary);
   cursor: pointer;
-  font-size: var(--app-font-size-lg);
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   text-align: left;
   transition: background-color 150ms ease;
 }
 
 .app-layout__brand:hover {
-  background: #1e293b;
+  background: var(--app-bg-muted);
 }
 
 .app-layout__brand.is-collapsed {
   justify-content: center;
   gap: 0;
-  padding: 0 14px;
+  padding: 0 8px;
 }
 
 .app-layout__brand-mark {
@@ -480,10 +486,11 @@ onMounted(() => {
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: var(--app-radius-md);
+  border-radius: 8px;
   background: var(--app-primary);
   color: var(--app-text-inverse);
-  font-size: var(--app-font-size-md);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .app-layout__brand-copy {
@@ -505,10 +512,12 @@ onMounted(() => {
 
 .app-layout__brand-collapse-icon {
   flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
   margin-left: auto;
-  color: #94a3b8;
-  font-size: 16px;
+  color: var(--app-text-subtle);
   opacity: 0;
+  stroke-width: 2;
   transition: opacity 150ms ease, transform 0.2s ease;
 }
 
@@ -523,25 +532,27 @@ onMounted(() => {
 .app-layout__nav {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-2);
-  padding: var(--app-space-4) var(--app-space-3);
+  gap: 4px;
+  padding: 8px;
 }
 
 .app-layout__nav-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  --nav-color: var(--app-primary);
+  --nav-bg: var(--app-primary-soft);
 }
 
 .app-layout__nav-item {
   display: flex;
   align-items: center;
-  gap: var(--app-space-3);
+  gap: 10px;
   min-height: 40px;
-  padding: 0 var(--app-space-3);
-  border-radius: var(--app-radius-md);
-  color: #94a3b8;
-  font-size: var(--app-font-size-md);
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--app-text-secondary);
+  font-size: 13px;
   font-weight: 500;
   text-decoration: none;
   transition: background-color 160ms ease, color 160ms ease;
@@ -551,6 +562,9 @@ onMounted(() => {
   justify-content: center;
   gap: 0;
   padding: 0;
+  width: 40px;
+  min-height: 40px;
+  border-radius: 12px;
 }
 
 .app-layout__nav-button {
@@ -563,22 +577,60 @@ onMounted(() => {
 }
 
 .app-layout__nav-item.has-children {
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .app-layout__nav-item:hover {
-  background: #1e293b;
-  color: #f1f5f9;
+  background: var(--app-bg-muted);
+  color: var(--nav-color);
 }
 
 .app-layout__nav-item.is-active {
-  background: #3b82f6;
-  color: #fff;
+  background: var(--nav-bg);
+  color: var(--nav-color);
+  font-weight: 600;
+}
+
+.app-layout__sidebar.is-collapsed .app-layout__nav-item.is-active {
+  background: var(--nav-color);
+  color: #ffffff;
+}
+
+.app-layout__nav-icon-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 10px;
+  background: var(--nav-bg);
+  color: var(--nav-color);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .app-layout__nav-icon {
-  width: 18px;
-  font-size: 18px;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  color: currentColor;
+  stroke-width: 1.8;
+}
+
+.app-layout__nav-item:hover .app-layout__nav-icon-shell {
+  transform: translateY(-1px);
+}
+
+.app-layout__sidebar.is-collapsed .app-layout__nav-icon-shell {
+  width: 40px;
+  height: 40px;
+  flex-basis: 40px;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.app-layout__sidebar.is-collapsed .app-layout__nav-item.is-active .app-layout__nav-icon-shell {
+  color: #ffffff;
 }
 
 .app-layout__nav-label {
@@ -599,7 +651,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding-left: 34px;
+  padding-left: 28px;
 }
 
 .app-layout__sidebar.is-collapsed .app-layout__nav-children {
@@ -609,24 +661,25 @@ onMounted(() => {
 .app-layout__nav-child {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: var(--app-radius-md);
-  color: #94a3b8;
-  font-size: var(--app-font-size-sm);
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--app-text-muted);
+  font-size: 12px;
   line-height: var(--app-line-height-sm);
   text-decoration: none;
   transition: background-color 160ms ease, color 160ms ease;
 }
 
 .app-layout__nav-child:hover {
-  background: #1e293b;
-  color: #f1f5f9;
+  background: var(--nav-bg);
+  color: var(--nav-color);
 }
 
 .app-layout__nav-child.is-active {
-  background: #2563eb;
-  color: #fff;
+  background: var(--nav-bg);
+  color: var(--nav-color);
+  font-weight: 600;
 }
 
 .app-layout__body {
@@ -644,11 +697,11 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-4);
-  height: 64px;
-  padding: 0 var(--app-space-6);
+  height: 48px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--app-border);
-  background: rgb(255 255 255 / 0.92);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
+  backdrop-filter: none;
 }
 
 .app-layout__header-copy {
@@ -700,7 +753,7 @@ onMounted(() => {
 .app-layout__header-bell-icon {
   width: 16px;
   height: 16px;
-  font-size: 16px;
+  stroke-width: 2;
 }
 
 .app-layout__header-icon-dot {
@@ -771,9 +824,9 @@ onMounted(() => {
 
 .app-layout__header-title {
   overflow: hidden;
-  font-size: var(--app-font-size-lg);
-  font-weight: 700;
-  line-height: var(--app-line-height-lg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -810,8 +863,8 @@ onMounted(() => {
   height: 24px;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6 0%, #9333ea 100%);
-  color: #fff;
+  background: var(--app-primary);
+  color: var(--app-text-inverse);
   font-size: 11px;
   font-weight: 700;
 }
@@ -828,13 +881,27 @@ onMounted(() => {
 
 .app-layout__user-arrow {
   flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
   color: var(--app-text-muted);
-  font-size: 14px;
+  stroke-width: 2;
+}
+
+.app-layout__dropdown-icon {
+  width: 15px;
+  height: 15px;
+  margin-right: 6px;
+  stroke-width: 2;
 }
 
 .app-layout__main {
-  min-height: calc(100dvh - 64px);
-  padding: var(--app-space-6);
+  min-height: calc(100dvh - 48px);
+  padding: 12px;
+  background: var(--app-bg-page);
+}
+
+.app-layout.is-api-workbench .app-layout__main {
+  padding: 0;
 }
 
 @media (max-width: 900px) {

@@ -48,20 +48,21 @@ const icons = {
   display: flex;
   align-self: stretch;
   flex-direction: column;
-  gap: var(--app-space-2);
-  width: 220px;
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border);
+  gap: 2px;
+  width: 226px;
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border-soft);
   border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
+  background: var(--app-bg-soft);
 }
 
 .config-sidebar__item {
+  position: relative;
   display: flex;
   width: 100%;
   align-items: flex-start;
-  gap: var(--app-space-3);
-  padding: var(--app-space-3);
+  gap: var(--app-space-2);
+  padding: 10px var(--app-space-3);
   border: 0;
   border-radius: var(--app-radius-md);
   background: transparent;
@@ -72,24 +73,42 @@ const icons = {
 }
 
 .config-sidebar__item:hover {
-  background: var(--app-bg-muted);
+  background: var(--app-bg-panel);
   color: var(--app-text-primary);
 }
 
 .config-sidebar__item.is-active {
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
+  background: var(--app-bg-panel);
+  color: var(--app-primary-active);
+  box-shadow: inset 0 0 0 1px var(--app-border-soft);
+}
+
+.config-sidebar__item.is-active::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 6px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--app-primary);
+  content: "";
 }
 
 .config-sidebar__icon {
   flex: 0 0 auto;
-  margin-top: 1px;
-  font-size: 17px;
+  margin-top: 2px;
+  color: var(--app-text-muted);
+  font-size: 16px;
+}
+
+.config-sidebar__item.is-active .config-sidebar__icon {
+  color: var(--app-primary);
 }
 
 .config-sidebar strong {
   display: block;
   font-size: var(--app-font-size-md);
+  font-weight: 500;
   line-height: var(--app-line-height-md);
 }
 

@@ -242,28 +242,28 @@ function formParamTypeOptions() {
 
 .api-body-modes {
   display: flex;
-  gap: 4px;
-  margin-bottom: 14px;
+  gap: 2px;
+  margin-bottom: 12px;
 }
 
 .api-body-chip {
-  height: 24px;
+  height: 28px;
   padding: 0 12px;
-  border: 1px solid var(--app-border-strong);
-  border-radius: var(--app-radius-sm);
-  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
   color: var(--app-text-muted);
   cursor: pointer;
-  font-family: Arial, sans-serif;
+  font-family: var(--app-font-family);
   font-size: 12px;
   font-weight: 500;
-  line-height: 16px;
+  line-height: 18px;
 }
 
 .api-body-chip.is-active {
-  border-color: #3b82f6;
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
+  border-color: rgba(255, 125, 0, 0.18);
+  background: var(--app-warning-soft);
+  color: var(--app-warning);
 }
 
 .api-body-editor {
@@ -271,8 +271,8 @@ function formParamTypeOptions() {
   flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: #fff;
+  border-radius: 8px;
+  background: var(--app-bg-panel);
 }
 
 .api-body-editor.is-code {
@@ -282,12 +282,12 @@ function formParamTypeOptions() {
 }
 
 .api-body-editor:not(.is-code) {
-  min-height: 300px;
+  min-height: 312px;
 }
 
 .api-body-editor.is-empty {
-  border: 0;
-  border-radius: var(--app-radius-sm);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
 }
 
 .api-body-editor.is-empty,
@@ -295,24 +295,24 @@ function formParamTypeOptions() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--app-bg-page);
-  color: var(--app-text-subtle);
-  font-size: var(--app-font-size-sm);
+  background: #fff;
+  color: var(--app-text-muted);
+  font-size: 13px;
 }
 
 .api-empty-body {
   width: 100%;
-  min-height: 300px;
+  min-height: 312px;
   border: 0;
-  border-radius: var(--app-radius-sm);
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 12px;
 }
 
 .api-param-table {
   min-height: 296px;
   overflow: auto;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
+  border-radius: 8px;
   background: #fff;
 }
 
@@ -324,7 +324,7 @@ function formParamTypeOptions() {
   grid-template-columns: 24px 32px 240px 150px 240px 200px 80px minmax(220px, 1fr) 90px;
   align-items: center;
   gap: 0;
-  padding: 5px 10px 5px 0;
+  padding: 2px 10px 2px 0;
 }
 
 .api-param-table.is-body-form .api-param-header,
@@ -335,24 +335,24 @@ function formParamTypeOptions() {
 
 .api-param-header {
   box-sizing: border-box;
-  height: 40px;
-  min-height: 40px;
+  height: 36px;
+  min-height: 36px;
   padding: 0 10px 0 0;
-  background: #f9fafb;
+  background: #fafafa;
   color: var(--app-text-muted);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 16px;
 }
 
 .api-param-row {
-  min-height: 44px;
+  min-height: 38px;
   border-bottom: 1px solid var(--app-border-soft);
   transition: background-color 0.15s ease;
 }
 
 .api-param-row:hover {
-  background: #fbfdff;
+  background: #fafbff;
 }
 
 .api-body-code-wrap {
@@ -367,15 +367,15 @@ function formParamTypeOptions() {
   align-items: center;
   padding: 1px;
   border: 1px solid var(--app-border);
-  border-radius: 5px;
-  background: #f9fafb;
+  border-radius: 6px;
+  background: var(--app-bg-muted);
 }
 
 .api-body-view-switch__item {
   height: 20px;
   padding: 0 7px;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--app-text-muted);
   cursor: pointer;
@@ -385,13 +385,13 @@ function formParamTypeOptions() {
 }
 
 .api-body-view-switch__item:hover {
-  color: var(--app-primary);
+  color: var(--app-warning);
 }
 
 .api-body-view-switch__item.active {
   background: #fff;
-  color: var(--app-primary);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 8%);
+  color: var(--app-warning);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .api-body-editor-action {
@@ -404,7 +404,7 @@ function formParamTypeOptions() {
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: var(--app-primary);
+  color: var(--app-warning);
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
@@ -416,8 +416,8 @@ function formParamTypeOptions() {
 }
 
 .api-body-editor-action:hover:not(:disabled) {
-  background: var(--app-primary-soft);
-  color: var(--app-primary-hover);
+  background: var(--app-warning-soft);
+  color: var(--app-warning);
 }
 
 .api-body-editor-action:disabled {
@@ -449,14 +449,14 @@ function formParamTypeOptions() {
 }
 
 .api-drag-dot {
-  width: 3px;
-  height: 3px;
+  width: 2.5px;
+  height: 2.5px;
   border-radius: 999px;
-  background: #c0c4cc;
+  background: var(--app-text-subtle);
 }
 
 .api-param-row:hover .api-drag-dot {
-  background: #9ca3af;
+  background: var(--app-text-muted);
 }
 
 .api-header-title {
@@ -494,21 +494,21 @@ function formParamTypeOptions() {
 }
 
 .api-required-button {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #98a2b3;
+  color: var(--app-text-subtle);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
 }
 
 .api-required-button.active {
-  background: #fff1f3;
-  color: #f04438;
+  background: var(--app-danger-soft);
+  color: var(--app-danger);
 }
 
 .api-link-button {
@@ -516,7 +516,7 @@ function formParamTypeOptions() {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--app-primary);
+  color: var(--app-warning);
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
@@ -532,30 +532,31 @@ function formParamTypeOptions() {
 }
 
 .api-param-row :deep(.el-input) {
-  height: 30px;
+  height: 28px;
 }
 
 .api-param-row :deep(.el-input__wrapper) {
-  height: 30px;
+  height: 28px;
 }
 
 .api-param-row :deep(.el-input__wrapper:hover),
 .api-param-row :deep(.el-select__wrapper:hover) {
   background: #fff;
-  box-shadow: inset 0 0 0 1px #d0d5dd;
+  box-shadow: inset 0 0 0 1px var(--app-border);
 }
 
 .api-param-row :deep(.el-input.is-focus .el-input__wrapper),
 .api-param-row :deep(.el-select.is-focus .el-select__wrapper),
 .api-param-row :deep(.el-select__wrapper.is-focused) {
   background: #fff;
-  box-shadow: inset 0 0 0 1px #3b82f6;
+  box-shadow: inset 0 0 0 1px var(--app-primary);
 }
 
 .api-param-row :deep(.el-input__inner),
 .api-param-row :deep(.el-select__placeholder),
 .api-param-row :deep(.el-select__selected-item) {
   font-size: 12px;
+  color: var(--app-text-primary);
 }
 
 .api-length-range {
@@ -583,12 +584,12 @@ function formParamTypeOptions() {
 
 .api-row-remove,
 .api-add-row {
-  min-height: 17px;
-  padding: 0;
+  min-height: 28px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 0;
+  border-radius: 6px;
   background: transparent;
-  color: var(--app-primary);
+  color: var(--app-warning);
   cursor: pointer;
   font-size: var(--app-font-size-xs);
   font-weight: 500;
@@ -603,12 +604,16 @@ function formParamTypeOptions() {
 }
 
 .api-add-row {
-  height: 37px;
-  padding: 9px 10px 11px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border-top: 1px solid var(--app-border-soft);
+  border-radius: 0;
+  color: var(--app-text-secondary);
 }
 
 .api-row-remove {
-  color: #ef4444;
+  color: var(--app-danger);
 }
 
 .api-row-remove:hover {
@@ -627,7 +632,7 @@ function formParamTypeOptions() {
 .api-file-picker > span {
   min-width: 0;
   overflow: hidden;
-  color: var(--app-text-primary);
+  color: var(--app-text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -646,17 +651,17 @@ function formParamTypeOptions() {
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-sm);
+  border-radius: 6px;
   background: var(--app-bg-panel);
-  color: var(--app-text-primary);
+  color: var(--app-text-secondary);
   cursor: pointer;
   font-size: var(--app-font-size-xs);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .api-file-picker__button:hover {
-  border-color: var(--app-primary);
-  color: var(--app-primary);
+  border-color: var(--app-warning);
+  color: var(--app-warning);
 }
 
 .api-file-picker__button input {
@@ -668,17 +673,17 @@ function formParamTypeOptions() {
   min-height: 300px;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
+  border-radius: 8px;
   background: #fff;
 }
 
 .api-binary-row {
   display: grid;
   min-height: 0;
-  grid-template-columns: 128px minmax(0, 1fr);
+  grid-template-columns: 112px minmax(0, 1fr);
   align-items: center;
-  gap: 18px;
-  padding: 12px 18px;
+  gap: 12px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--app-border-soft);
 }
 
@@ -704,16 +709,16 @@ function formParamTypeOptions() {
 .api-binary-pick,
 .api-binary-clear {
   display: inline-flex;
-  height: 32px;
+  height: 30px;
   align-items: center;
   justify-content: center;
-  padding: 0 15px;
-  border: 1px solid var(--app-border-strong);
-  border-radius: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
   background: #fff;
-  color: var(--app-text-primary);
+  color: var(--app-text-secondary);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 20px;
 }
@@ -723,8 +728,8 @@ function formParamTypeOptions() {
 }
 
 .api-binary-pick:hover {
-  border-color: var(--app-primary);
-  color: var(--app-primary);
+  border-color: var(--app-warning);
+  color: var(--app-warning);
 }
 
 .api-binary-clear:disabled {

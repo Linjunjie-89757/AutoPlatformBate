@@ -1,35 +1,77 @@
 :root {
-  --app-font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --app-font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --app-font-family-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
-  --app-primary: #2563eb;
-  --app-primary-hover: #1d4ed8;
-  --app-primary-active: #1e40af;
-  --app-primary-soft: #eff6ff;
+  --app-primary: #165dff;
+  --app-primary-hover: #0e4fe8;
+  --app-primary-active: #0a42c8;
+  --app-primary-soft: #e8f3ff;
+  --app-primary-subtle: #d8e9ff;
+  --app-primary-muted: #a9c8ff;
 
-  --app-success: #16a34a;
-  --app-success-soft: #f0fdf4;
-  --app-warning: #ea580c;
-  --app-warning-soft: #fff7ed;
-  --app-danger: #ef4444;
-  --app-danger-soft: #fef2f2;
-  --app-purple: #9333ea;
-  --app-purple-soft: #faf5ff;
+  --app-success: #00b42a;
+  --app-success-soft: #e8ffea;
+  --app-warning: #ff7d00;
+  --app-warning-soft: #fff3e8;
+  --app-danger: #f53f3f;
+  --app-danger-soft: #ffe8e8;
+  --app-running: #7816ff;
+  --app-running-soft: #f5e8ff;
+  --app-purple: var(--app-running);
+  --app-purple-soft: var(--app-running-soft);
 
-  --app-bg-page: #f9fafb;
+  --app-cyan: #0fc6c2;
+  --app-cyan-soft: #e8fffb;
+  --app-indigo: #4e5ac8;
+  --app-indigo-soft: #eef0fa;
+
+  --app-bg-page: #f4f6fa;
   --app-bg-panel: #ffffff;
-  --app-bg-muted: #f3f4f6;
-  --app-bg-subtle: #fbfcff;
+  --app-bg-card: #ffffff;
+  --app-bg-soft: #fafbff;
+  --app-bg-muted: #f2f3f5;
+  --app-bg-subtle: #fafafa;
+  --app-bg-elevated: #ffffff;
+  --app-bg-code: #0f172a;
+  --app-bg-code-soft: #111c2f;
 
-  --app-border: #e5e7eb;
-  --app-border-soft: #f3f4f6;
-  --app-border-strong: #d1d5db;
+  --app-border: #e5e6eb;
+  --app-border-soft: #f2f3f5;
+  --app-border-strong: #c9cdd4;
+  --app-focus-ring: rgba(22, 93, 255, 0.18);
 
-  --app-text-primary: #111827;
-  --app-text-secondary: #4b5563;
-  --app-text-main: #374151;
-  --app-text-muted: #6b7280;
-  --app-text-subtle: #9ca3af;
+  --app-text-primary: #1d2129;
+  --app-text-secondary: #4e5969;
+  --app-text-main: #4e5969;
+  --app-text-muted: #86909c;
+  --app-text-subtle: #c9cdd4;
   --app-text-inverse: #ffffff;
+  --app-text-code: #dbeafe;
+
+  --app-sidebar-bg: #ffffff;
+  --app-sidebar-bg-hover: #f2f3f5;
+  --app-sidebar-bg-active: #e8f3ff;
+  --app-sidebar-border: #e5e6eb;
+  --app-sidebar-text: #4e5969;
+  --app-sidebar-text-muted: #86909c;
+
+  --app-toolbar-bg: #fafafa;
+  --app-table-header-bg: #fafafa;
+  --app-table-row-hover-bg: #fafbff;
+  --app-table-border: var(--app-border-soft);
+
+  --app-status-passed: var(--app-success);
+  --app-status-passed-soft: var(--app-success-soft);
+  --app-status-failed: var(--app-danger);
+  --app-status-failed-soft: var(--app-danger-soft);
+  --app-status-running: var(--app-running);
+  --app-status-running-soft: var(--app-running-soft);
+  --app-status-skipped: #4e5969;
+  --app-status-skipped-soft: #f2f3f5;
+  --app-status-blocked: var(--app-warning);
+  --app-status-blocked-soft: var(--app-warning-soft);
+  --app-status-unverified: #4e5969;
+  --app-status-unverified-soft: #f2f3f5;
 
   --app-radius-sm: 6px;
   --app-radius-md: 8px;
@@ -57,14 +99,15 @@
   --app-line-height-lg: 24px;
 
   --app-control-height-sm: 32px;
-  --app-control-height-md: 38px;
+  --app-control-height-md: 36px;
   --app-table-row-height: 54px;
   --app-dialog-header-height: 64px;
   --app-sidebar-width: 232px;
 
-  --app-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
-  --app-shadow-card-hover: 0 4px 6px rgba(15, 23, 42, 0.04), 0 10px 22px rgba(15, 23, 42, 0.08);
-  --app-shadow-overlay: 0 20px 60px rgba(15, 23, 42, 0.18);
+  --app-shadow-card: 0 1px 4px rgba(0, 0, 0, 0.04);
+  --app-shadow-card-hover: 0 4px 16px rgba(22, 93, 255, 0.08);
+  --app-shadow-floating: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --app-shadow-overlay: 0 24px 70px rgba(15, 23, 42, 0.22);
 
   --app-color-bg: var(--app-bg-page);
   --app-color-surface: var(--app-bg-panel);
@@ -99,6 +142,8 @@
   --ath-purple-soft: var(--app-purple-soft);
   --ath-bg-page: var(--app-bg-page);
   --ath-bg-panel: var(--app-bg-panel);
+  --ath-bg-card: var(--app-bg-card);
+  --ath-bg-soft: var(--app-bg-soft);
   --ath-bg-muted: var(--app-bg-muted);
   --ath-bg-subtle: var(--app-bg-subtle);
   --ath-border: var(--app-border);

@@ -146,8 +146,8 @@ const emit = defineEmits<{
   min-height: 360px;
   flex: 0 0 auto;
   flex-direction: column;
-  border-top: 1px solid var(--app-border);
-  background: #fff;
+  border-top: 1px solid #dfe6f0;
+  background: #f7f9fc;
   overflow: visible;
 }
 
@@ -170,27 +170,27 @@ const emit = defineEmits<{
   width: 42px;
   height: 2px;
   border-radius: 999px;
-  background: var(--app-border-strong);
+  background: #c9d3e2;
   content: "";
   transform: translateX(-50%);
 }
 
 .api-response-header {
   display: flex;
-  height: 41px;
-  min-height: 41px;
+  height: 38px;
+  min-height: 38px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--app-border);
+  padding: 8px 14px;
+  border-bottom: 1px solid #e4eaf2;
   background: #fff;
 }
 
 .api-response-header strong {
   color: var(--app-text-primary);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 20px;
 }
 
@@ -212,14 +212,14 @@ const emit = defineEmits<{
 
 .api-response-result-pill {
   display: inline-flex;
-  height: 22px;
+  height: 20px;
   align-items: center;
   justify-content: center;
-  padding: 0 8px;
+  padding: 0 7px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  line-height: 22px;
+  line-height: 20px;
 }
 
 .api-response-result-pill.is-success {
@@ -233,10 +233,14 @@ const emit = defineEmits<{
 }
 
 .api-response-pill {
-  padding: 0;
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  padding: 0 7px;
+  border: 1px solid #e4eaf2;
   border-radius: 999px;
-  background: transparent;
-  color: var(--app-text-subtle);
+  background: var(--app-bg-soft);
+  color: var(--app-text-muted);
 }
 
 .api-response-pill.is-success {
@@ -257,7 +261,7 @@ const emit = defineEmits<{
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: #f7f9fc;
 }
 
 .api-response-empty {
@@ -267,8 +271,8 @@ const emit = defineEmits<{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 12px 0 4px;
+  gap: 14px;
+  padding: 24px 0 10px;
   color: var(--app-text-muted);
 }
 
@@ -276,10 +280,10 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 8px 10px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-page);
+  padding: 10px 12px;
+  border: 1px solid #e1e7f0;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .api-response-empty__window span {
@@ -292,7 +296,7 @@ const emit = defineEmits<{
 
 .api-response-empty p {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
   text-align: center;
 }
@@ -304,13 +308,13 @@ const emit = defineEmits<{
 
 .api-response-tabs {
   display: flex;
-  height: 41px;
-  min-height: 41px;
+  height: 36px;
+  min-height: 36px;
   align-items: center;
-  gap: 0;
+  gap: 2px;
   overflow: hidden;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--app-border);
+  padding: 0 12px;
+  border-bottom: 1px solid #e4eaf2;
   background: #fff;
 }
 
@@ -318,7 +322,7 @@ const emit = defineEmits<{
   position: relative;
   display: inline-flex;
   box-sizing: border-box;
-  height: 41px;
+  height: 36px;
   align-items: center;
   gap: 6px;
   border: 0;
@@ -326,11 +330,12 @@ const emit = defineEmits<{
   background: transparent;
   color: var(--app-text-muted);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 400;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 20px;
-  padding: 0 12px;
+  padding: 0 10px;
   white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .api-response-tabs button.is-active {
@@ -340,6 +345,7 @@ const emit = defineEmits<{
 }
 
 .api-response-tabs button:not(.is-active):hover {
+  background: #f3f6fb;
   color: var(--app-text-secondary);
 }
 
@@ -353,7 +359,7 @@ const emit = defineEmits<{
   flex: 0 0 auto;
   flex-direction: column;
   overflow: visible;
-  margin: 12px;
+  margin: 10px 12px 12px;
 }
 
 .api-response-code :deep(.api-code-editor) {

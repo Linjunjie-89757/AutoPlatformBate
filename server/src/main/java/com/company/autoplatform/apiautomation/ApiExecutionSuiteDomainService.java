@@ -50,6 +50,7 @@ public class ApiExecutionSuiteDomainService {
     private final ApiWorkspaceScopeSupport workspaceScopeSupport;
     private final LocalRunnerService localRunnerService;
     private final NotificationDomainService notificationDomainService;
+    private final ApiReportShareDomainService reportShareDomainService;
 
     public ApiExecutionSuiteDomainService(
             ApiExecutionSuiteModuleMapper suiteModuleMapper,
@@ -63,7 +64,8 @@ public class ApiExecutionSuiteDomainService {
             WorkspaceService workspaceService,
             ApiWorkspaceScopeSupport workspaceScopeSupport,
             LocalRunnerService localRunnerService,
-            NotificationDomainService notificationDomainService
+            NotificationDomainService notificationDomainService,
+            ApiReportShareDomainService reportShareDomainService
     ) {
         this.suiteModuleMapper = suiteModuleMapper;
         this.suiteMapper = suiteMapper;
@@ -77,6 +79,7 @@ public class ApiExecutionSuiteDomainService {
         this.workspaceScopeSupport = workspaceScopeSupport;
         this.localRunnerService = localRunnerService;
         this.notificationDomainService = notificationDomainService;
+        this.reportShareDomainService = reportShareDomainService;
     }
 
     public List<ApiExecutionSuiteModuleItem> listSuiteModules(String workspaceCode) {
@@ -924,24 +927,29 @@ public class ApiExecutionSuiteDomainService {
         if (!Boolean.TRUE.equals(suite.getNotifyEnabled())) {
             return;
         }
+        String eventType = aggregate.success()
+                ? NotificationDomainService.EVENT_API_SUITE_FINISHED
+                : NotificationDomainService.EVENT_API_SUITE_FAILED;
+        String result = aggregate.success() ? "SUCCESS" : "FAILED";
+        String reportLink = notificationDomainService.hasActiveRule(suite.getWorkspaceId(), eventType, result)
+                ? reportShareDomainService.createSuiteHistoryShareLink(history)
+                : null;
         notificationDomainService.publishEvent(new NotificationModels.NotificationEvent(
                 suite.getWorkspaceId(),
-                aggregate.success()
-                        ? NotificationDomainService.EVENT_API_SUITE_FINISHED
-                        : NotificationDomainService.EVENT_API_SUITE_FAILED,
+                eventType,
                 aggregate.success()
                         ? "接口自动化套件执行完成"
                         : "接口自动化套件执行失败",
                 "API_EXECUTION_SUITE",
                 suite.getId(),
                 suite.getSuiteName(),
-                aggregate.success() ? "SUCCESS" : "FAILED",
+                result,
                 history.getTotalCount(),
                 history.getSuccessCount(),
                 history.getFailedCount(),
                 history.getDurationMs(),
                 aggregate.failureSummary(),
-                "/automation/api?tab=suites&suiteId=" + suite.getId(),
+                reportLink == null ? "/automation/api?tab=suites&suiteId=" + suite.getId() : reportLink,
                 Map.of("historyId", history.getId())
         ));
     }

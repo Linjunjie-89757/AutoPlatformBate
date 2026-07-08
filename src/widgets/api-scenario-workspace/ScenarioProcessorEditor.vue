@@ -64,175 +64,30 @@
             <el-input v-model="activeProcessor.description" placeholder="可填写处理器说明" @input="emitChange" />
           </label>
 
-          <template v-if="activeProcessor.processorType === 'SCRIPT'">
-            <div class="scenario-code-toolbar">
-              <el-tag size="small">JavaScript</el-tag>
-              <button type="button" @click="activeProcessor.script = ''; emitChange()">清空</button>
-              <button type="button" @click="activeProcessor.script = (activeProcessor.script || '').trim(); emitChange()">格式化</button>
-            </div>
-            <ApiCodeEditor
-              v-model="activeProcessor.script"
-              language="javascript"
-              height="360px"
-              :show-format-button="false"
-              placeholder="// JavaScript"
-              @change="emitChange"
-            />
-            <div class="scenario-advanced-hint">按旧项目脚本处理器承载，脚本区域自然撑开高级区。</div>
-          </template>
-
-          <template v-else-if="activeProcessor.processorType === 'SQL'">
-            <div class="scenario-processor-sql-grid">
-              <label class="scenario-advanced-field">
-                <span>数据库连接</span>
-                <el-select v-model="activeProcessor.dataSourceId" filterable clearable placeholder="请选择数据库连接" @change="syncDataSourceName(activeProcessor)">
-                  <el-option v-for="item in enabledDbConnections" :key="item.id" :label="item.connectionName || item.name || `连接 ${item.id}`" :value="item.id" />
-                </el-select>
-              </label>
-              <label class="scenario-advanced-field">
-                <span>查询超时(ms)</span>
-                <el-input-number v-model="activeProcessor.queryTimeout" :min="1000" :step="1000" @change="emitChange" />
-              </label>
-              <label class="scenario-advanced-field">
-                <span>按列存储变量</span>
-                <el-input v-model="activeProcessor.variableNames" placeholder="id,name,status" @input="emitChange" />
-              </label>
-              <label class="scenario-advanced-field">
-                <span>完整结果变量</span>
-                <el-input v-model="activeProcessor.resultVariable" placeholder="sqlRows" @input="emitChange" />
-              </label>
-            </div>
-            <ApiCodeEditor
-              v-model="activeProcessor.sql"
-              language="sql"
-              height="260px"
-              :show-format-button="false"
-              placeholder="请输入 SQL 语句"
-              @change="syncSqlScript(activeProcessor)"
-            />
-            <div class="scenario-advanced-table scenario-sql-extract-table">
-              <div class="scenario-advanced-table-head">
-                <span>变量名</span>
-                <span>列名</span>
-                <span></span>
-              </div>
-              <div v-for="(item, index) in sqlExtractParams(activeProcessor)" :key="`${activeProcessor.id}-sql-${index}`" class="scenario-advanced-table-row">
-                <el-input v-model="item.key" placeholder="变量名" @input="emitChange" />
-                <el-input v-model="item.value" placeholder="列名" @input="emitChange" />
-                <button type="button" class="scenario-row-remove" @click="removeSqlExtractParam(activeProcessor, index)">删除</button>
-              </div>
-              <button type="button" class="scenario-advanced-add-row" @click="addSqlExtractParam(activeProcessor)">+ 添加提取参数</button>
-            </div>
-          </template>
-
-          <template v-else-if="activeProcessor.processorType === 'TIME_WAITING'">
-            <label class="scenario-advanced-field">
-              <span>等待时长(ms)</span>
-              <el-input-number v-model="activeProcessor.delayMs" :min="1" :max="60000" :step="100" @change="emitChange" />
-            </label>
-          </template>
-
-          <template v-else>
-            <div class="scenario-advanced-table scenario-extractor-table">
-              <div class="scenario-advanced-table-head">
-                <span>变量名</span>
-                <span>描述</span>
-                <span>变量类型</span>
-                <span>提取方式</span>
-                <span>提取范围</span>
-                <span>表达式</span>
-                <span></span>
-              </div>
-              <div v-for="(item, index) in extractors(activeProcessor)" :key="`${activeProcessor.id}-extract-${index}`" class="scenario-advanced-table-row">
-                <el-input v-model="item.variableName" placeholder="变量名" @input="emitChange" />
-                <el-input v-model="item.description" placeholder="描述" @input="emitChange" />
-                <el-select v-model="item.variableType" @change="emitChange">
-                  <el-option label="临时变量" value="TEMPORARY" />
-                  <el-option label="环境变量" value="ENVIRONMENT" />
-                </el-select>
-                <el-select v-model="item.extractType" @change="handleExtractorTypeChange(item)">
-                  <el-option label="JSONPath" value="JSON_PATH" />
-                  <el-option label="XPath" value="X_PATH" />
-                  <el-option label="Regex" value="REGEX" />
-                </el-select>
-                <el-select v-model="item.extractScope" @change="emitChange">
-                  <el-option v-for="option in extractScopeOptions(item.extractType)" :key="option.value" :label="option.label" :value="option.value" />
-                </el-select>
-                <el-input v-model="item.expression" placeholder="表达式" @input="emitChange">
-                  <template #suffix>
-                    <button
-                      type="button"
-                      :class="['scenario-fast-extract', { 'is-disabled': !hasResponseBody }]"
-                      :disabled="!hasResponseBody"
-                      :title="fastExtractionTitle"
-                      aria-label="快速提取"
-                      @click.stop="openFastExtraction(activeProcessor, index)"
-                    >
-                      <el-icon><MagicStick /></el-icon>
-                    </button>
-                  </template>
-                </el-input>
-                <span class="scenario-extractor-actions">
-                  <el-popover
-                    placement="bottom-end"
-                    :width="340"
-                    trigger="click"
-                    :visible="moreSettingsVisibleKey === `${processorKey(activeProcessor)}-${index}`"
-                    @update:visible="(value: boolean) => setMoreSettingsVisible(processorKey(activeProcessor), index, value)"
-                  >
-                    <template #reference>
-                      <el-button text class="scenario-extractor-more-trigger" :icon="MoreFilled" />
-                    </template>
-
-                    <div class="scenario-extractor-more-settings">
-                      <button
-                        type="button"
-                        class="scenario-extractor-more-copy"
-                        @click="copyExtractor(activeProcessor, index)"
-                      >
-                        复制当前提取项
-                      </button>
-
-                      <div class="scenario-extractor-more-divider"></div>
-                      <div class="scenario-extractor-more-title">高级设置</div>
-
-                      <div class="scenario-extractor-more-group">
-                        <div class="scenario-extractor-more-label">结果匹配规则</div>
-                        <el-radio-group v-model="item.resultMatchingRule" size="small" @change="emitChange">
-                          <el-radio value="RANDOM">随机</el-radio>
-                          <el-radio value="SPECIFIC">指定</el-radio>
-                          <el-radio value="ALL">全部</el-radio>
-                        </el-radio-group>
-                      </div>
-
-                      <div v-if="showSpecificResultIndex(item)" class="scenario-extractor-more-group">
-                        <div class="scenario-extractor-more-label">指定序号</div>
-                        <el-input-number v-model="item.resultMatchingRuleNum" :min="1" :step="1" size="small" @change="emitChange" />
-                      </div>
-
-                      <div v-if="showRegexSettings(item)" class="scenario-extractor-more-group">
-                        <div class="scenario-extractor-more-label">正则匹配规则</div>
-                        <el-radio-group v-model="item.expressionMatchingRule" size="small" @change="emitChange">
-                          <el-radio value="EXPRESSION">整段匹配</el-radio>
-                          <el-radio value="GROUP">分组 1</el-radio>
-                        </el-radio-group>
-                      </div>
-
-                      <div v-if="showXPathSettings(item)" class="scenario-extractor-more-group">
-                        <div class="scenario-extractor-more-label">内容格式</div>
-                        <el-radio-group v-model="item.responseFormat" size="small" @change="emitChange">
-                          <el-radio value="XML">XML</el-radio>
-                          <el-radio value="HTML">HTML</el-radio>
-                        </el-radio-group>
-                      </div>
-                    </div>
-                  </el-popover>
-                  <button type="button" class="scenario-row-remove" @click="removeExtractor(activeProcessor, index)">删除</button>
-                </span>
-              </div>
-              <button type="button" class="scenario-advanced-add-row" @click="addExtractor(activeProcessor)">+ 添加提取项</button>
-            </div>
-          </template>
+          <ScenarioProcessorScriptPanel
+            v-if="activeProcessor.processorType === 'SCRIPT'"
+            :processor="activeProcessor"
+            @change="emitChange"
+          />
+          <ScenarioProcessorSqlPanel
+            v-else-if="activeProcessor.processorType === 'SQL'"
+            :processor="activeProcessor"
+            :db-connections="enabledDbConnections"
+            @change="emitChange"
+          />
+          <ScenarioProcessorWaitPanel
+            v-else-if="activeProcessor.processorType === 'TIME_WAITING'"
+            :processor="activeProcessor"
+            @change="emitChange"
+          />
+          <ScenarioProcessorExtractPanel
+            v-else
+            :processor="activeProcessor"
+            :has-response-body="hasResponseBody"
+            :fast-extraction-title="fastExtractionTitle"
+            @change="emitChange"
+            @fast-extract="openFastExtraction"
+          />
         </div>
       </template>
     </section>
@@ -249,60 +104,24 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { MagicStick, MoreFilled } from '@element-plus/icons-vue'
-import ApiCodeEditor from '../api-interface-workspace/ApiCodeEditor.vue'
 import ApiFastExtractionDrawer from '../api-interface-workspace/ApiFastExtractionDrawer.vue'
-import type { FastExtractionConfig, FastExtractionMode, FastExtractionResponseFormat } from '../api-interface-workspace/fastExtraction'
-
-type ProcessorType = 'SCRIPT' | 'SQL' | 'TIME_WAITING' | 'EXTRACT'
-
-interface DbConnectionLike {
-  id: number
-  name?: string | null
-  connectionName?: string | null
-  status?: number | null
-}
-
-interface SqlExtractParam {
-  key?: string
-  value?: string
-  enabled?: boolean
-}
-
-interface ExtractorItem {
-  variableName?: string
-  description?: string
-  variableType?: string
-  extractType?: string
-  extractScope?: string
-  expression?: string
-  expressionMatchingRule?: string
-  resultMatchingRule?: string
-  resultMatchingRuleNum?: number
-  responseFormat?: string
-  enabled?: boolean
-}
-
-interface ScenarioProcessor {
-  id?: string
-  name?: string
-  description?: string
-  enabled?: boolean
-  processorType?: ProcessorType | string
-  type?: string
-  scriptLanguage?: string
-  script?: string
-  sql?: string
-  dataSourceId?: number | null
-  dataSourceName?: string | null
-  queryTimeout?: number | null
-  variableNames?: string | null
-  resultVariable?: string | null
-  extractParams?: SqlExtractParam[]
-  extractors?: ExtractorItem[]
-  delayMs?: number | null
-  [key: string]: unknown
-}
+import type { FastExtractionConfig, FastExtractionMode } from '../api-interface-workspace/fastExtraction'
+import ScenarioProcessorExtractPanel from './ScenarioProcessorExtractPanel.vue'
+import ScenarioProcessorScriptPanel from './ScenarioProcessorScriptPanel.vue'
+import ScenarioProcessorSqlPanel from './ScenarioProcessorSqlPanel.vue'
+import ScenarioProcessorWaitPanel from './ScenarioProcessorWaitPanel.vue'
+import type {
+  DbConnectionLike,
+  ProcessorType,
+  ScenarioProcessor,
+} from './lib/scenarioProcessorEditorTypes'
+import {
+  applyProcessorExtractorTypeDefaults,
+  createEmptyProcessorExtractor,
+  ensureProcessorExtractors,
+  normalizeProcessorFastExtractionMode,
+  normalizeProcessorFastExtractionResponseFormat,
+} from './lib/scenarioProcessorEditorTypes'
 
 const props = defineProps<{
   modelValue: unknown[]
@@ -330,19 +149,18 @@ const hasResponseBody = computed(() => Boolean(props.latestResponseBody?.trim())
 const fastExtractionTitle = computed(() => hasResponseBody.value ? '快速提取' : '请先发送获取响应内容')
 const fastExtractionVisible = ref(false)
 const activeExtractorTarget = ref<{ processorId: string; index: number } | null>(null)
-const moreSettingsVisibleKey = ref<string | null>(null)
 const latestResponseBody = computed(() => props.latestResponseBody || '')
 
 const activeFastExtractionConfig = computed<FastExtractionConfig>(() => {
   const target = activeExtractorTarget.value
   if (!target) return emptyFastExtractionConfig()
   const processor = processors.value.find(item => item.id === target.processorId)
-  const item = processor ? extractors(processor)[target.index] : null
+  const item = processor ? ensureProcessorExtractors(processor)[target.index] : null
   return item ? {
     expression: item.expression || '',
-    extractType: normalizeFastExtractionMode(item.extractType),
+    extractType: normalizeProcessorFastExtractionMode(item.extractType),
     expressionMatchingRule: item.expressionMatchingRule === 'GROUP' ? 'GROUP' : 'EXPRESSION',
-    responseFormat: normalizeFastExtractionResponseFormat(item.responseFormat),
+    responseFormat: normalizeProcessorFastExtractionResponseFormat(item.responseFormat),
   } : emptyFastExtractionConfig()
 })
 const activeFastExtractionMode = computed<FastExtractionMode>(() => activeFastExtractionConfig.value.extractType || 'JSON_PATH')
@@ -416,10 +234,6 @@ function displayProcessorName(processor: ScenarioProcessor) {
   return processorTypeLabel(processor.processorType)
 }
 
-function processorKey(processor: ScenarioProcessor | null) {
-  return processor?.id || 'processor'
-}
-
 function defaultProcessor(type: ProcessorType): ScenarioProcessor {
   const processor: ScenarioProcessor = {
     id: createId(type),
@@ -453,23 +267,7 @@ function ensureProcessorShape(processor: ScenarioProcessor) {
   } else if (type === 'TIME_WAITING') {
     processor.delayMs = processor.delayMs ?? 1000
   } else {
-    processor.extractors = processor.extractors?.length ? processor.extractors : [emptyExtractor()]
-  }
-}
-
-function emptyExtractor(): ExtractorItem {
-  return {
-    variableName: '',
-    description: '',
-    variableType: 'TEMPORARY',
-    extractType: 'JSON_PATH',
-    extractScope: 'BODY',
-    expression: '',
-    expressionMatchingRule: 'EXPRESSION',
-    resultMatchingRule: 'RANDOM',
-    resultMatchingRuleNum: 1,
-    responseFormat: 'JSON',
-    enabled: true,
+    processor.extractors = processor.extractors?.length ? processor.extractors : [createEmptyProcessorExtractor()]
   }
 }
 
@@ -534,104 +332,6 @@ function handleTypeChange(processor: ScenarioProcessor) {
   emitChange()
 }
 
-function syncDataSourceName(processor: ScenarioProcessor) {
-  const selected = enabledDbConnections.value.find(item => item.id === processor.dataSourceId)
-  processor.dataSourceName = selected?.connectionName || selected?.name || ''
-  emitChange()
-}
-
-function syncSqlScript(processor: ScenarioProcessor) {
-  processor.script = processor.sql || ''
-  emitChange()
-}
-
-function sqlExtractParams(processor: ScenarioProcessor) {
-  ensureProcessorShape(processor)
-  return processor.extractParams || (processor.extractParams = [])
-}
-
-function addSqlExtractParam(processor: ScenarioProcessor) {
-  sqlExtractParams(processor).push({ key: '', value: '', enabled: true })
-  emitChange()
-}
-
-function removeSqlExtractParam(processor: ScenarioProcessor, index: number) {
-  sqlExtractParams(processor).splice(index, 1)
-  emitChange()
-}
-
-function extractors(processor: ScenarioProcessor) {
-  ensureProcessorShape(processor)
-  return processor.extractors || (processor.extractors = [emptyExtractor()])
-}
-
-function normalizedExtractorType(item: ExtractorItem): string {
-  const value = String(item.extractType || 'JSON_PATH').toUpperCase()
-  if (value === 'XPATH') return 'X_PATH'
-  if (value === 'X_PATH' || value === 'REGEX') return value
-  return 'JSON_PATH'
-}
-
-function extractScopeOptions(type?: string) {
-  if (String(type || '').toUpperCase() === 'REGEX') {
-    return [
-      { label: '响应体', value: 'BODY' },
-      { label: '响应头', value: 'RESPONSE_HEADERS' },
-      { label: '请求头', value: 'REQUEST_HEADERS' },
-      { label: '状态码', value: 'RESPONSE_CODE' },
-      { label: '响应消息', value: 'RESPONSE_MESSAGE' },
-      { label: 'URL', value: 'URL' },
-    ]
-  }
-  return [{ label: '响应体', value: 'BODY' }]
-}
-
-function handleExtractorTypeChange(item: ExtractorItem) {
-  const type = normalizedExtractorType(item)
-  item.extractType = type
-  item.extractScope = extractScopeOptions(type)[0].value
-  if (type !== 'REGEX') {
-    item.expressionMatchingRule = 'EXPRESSION'
-  }
-  if (type === 'JSON_PATH') {
-    item.responseFormat = 'JSON'
-  } else if (type === 'X_PATH') {
-    item.responseFormat = item.responseFormat === 'HTML' ? 'HTML' : 'XML'
-  } else if (!item.responseFormat) {
-    item.responseFormat = 'JSON'
-  }
-  emitChange()
-}
-
-function showSpecificResultIndex(item: ExtractorItem) {
-  return (item.resultMatchingRule || 'RANDOM') === 'SPECIFIC'
-}
-
-function showRegexSettings(item: ExtractorItem) {
-  return normalizedExtractorType(item) === 'REGEX'
-}
-
-function showXPathSettings(item: ExtractorItem) {
-  return normalizedExtractorType(item) === 'X_PATH'
-}
-
-function setMoreSettingsVisible(processorId: string, index: number, visible: boolean) {
-  moreSettingsVisibleKey.value = visible ? `${processorId}-${index}` : null
-}
-
-function normalizeFastExtractionMode(type?: string): FastExtractionMode {
-  const value = String(type || 'JSON_PATH').toUpperCase()
-  if (value === 'XPATH') return 'X_PATH'
-  if (value === 'X_PATH' || value === 'REGEX') return value
-  return 'JSON_PATH'
-}
-
-function normalizeFastExtractionResponseFormat(format?: string): FastExtractionResponseFormat {
-  const value = String(format || '').toUpperCase()
-  if (value === 'XML' || value === 'HTML') return value
-  return 'JSON'
-}
-
 function openFastExtraction(processor: ScenarioProcessor, index: number) {
   if (!hasResponseBody.value || !processor.id) return
   activeExtractorTarget.value = {
@@ -646,34 +346,14 @@ function handleFastExtractionApply(config: FastExtractionConfig) {
   if (!target) return
   const processor = processors.value.find(item => item.id === target.processorId)
   if (!processor) return
-  const item = extractors(processor)[target.index]
+  const item = ensureProcessorExtractors(processor)[target.index]
   if (!item) return
   item.expression = config.expression || item.expression
   item.extractType = config.extractType || item.extractType
   item.expressionMatchingRule = config.expressionMatchingRule || item.expressionMatchingRule
   item.responseFormat = config.responseFormat || item.responseFormat
-  handleExtractorTypeChange(item)
+  applyProcessorExtractorTypeDefaults(item)
   fastExtractionVisible.value = false
-  emitChange()
-}
-
-function addExtractor(processor: ScenarioProcessor) {
-  extractors(processor).push(emptyExtractor())
-  emitChange()
-}
-
-function copyExtractor(processor: ScenarioProcessor, index: number) {
-  const source = extractors(processor)[index]
-  if (!source) return
-  extractors(processor).splice(index + 1, 0, clone(source))
-  emitChange()
-}
-
-function removeExtractor(processor: ScenarioProcessor, index: number) {
-  extractors(processor).splice(index, 1)
-  if (!extractors(processor).length) {
-    extractors(processor).push(emptyExtractor())
-  }
   emitChange()
 }
 </script>

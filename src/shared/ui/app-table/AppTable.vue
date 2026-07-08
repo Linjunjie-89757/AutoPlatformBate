@@ -29,6 +29,7 @@ withDefaults(
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-lg);
   background: var(--app-bg-panel);
+  box-shadow: var(--app-shadow-card);
 }
 
 .app-table__pagination {
@@ -37,5 +38,6 @@ withDefaults(
   min-height: 56px;
   padding: var(--app-space-3) var(--app-space-4);
   border-top: 1px solid var(--app-border-soft);
+  background: var(--app-bg-subtle);
 }
 </style>

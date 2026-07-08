@@ -45,14 +45,15 @@ defineProps<{
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--app-space-4);
-  padding: var(--app-space-5) var(--app-space-6);
+  padding: var(--app-space-4) var(--app-space-5);
   border-bottom: 1px solid var(--app-border-soft);
+  background: var(--app-bg-subtle);
 }
 
 .app-card__title {
   margin: 0;
   font-size: var(--app-font-size-lg);
-  font-weight: 700;
+  font-weight: 600;
   line-height: var(--app-line-height-lg);
 }
 
@@ -70,6 +71,6 @@ defineProps<{
 }
 
 .app-card__body {
-  padding: var(--app-space-6);
+  padding: var(--app-space-5);
 }
 </style>
