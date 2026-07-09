@@ -1,0 +1,143 @@
+import dbActionDelete from './config-center/db/action-delete.svg'
+import dbActionEdit from './config-center/db/action-edit.svg'
+import dbActionTest from './config-center/db/action-test.svg'
+import dbCylinderBlue from './config-center/db/db-cylinder-blue.svg'
+import dbCylinderOrange from './config-center/db/db-cylinder-orange.svg'
+import dbCylinderPurple from './config-center/db/db-cylinder-purple.svg'
+import dbCylinderYellow from './config-center/db/db-cylinder-yellow.svg'
+import notificationActionDelete from './config-center/notification/action-delete.svg'
+import notificationActionCopy from './config-center/notification/action-copy.svg'
+import notificationActionEdit from './config-center/notification/action-edit.svg'
+import notificationActionEye from './config-center/notification/action-eye.svg'
+import notificationActionPower from './config-center/notification/action-power.svg'
+import notificationActionRetry from './config-center/notification/action-retry.svg'
+import notificationActionSend from './config-center/notification/action-send.svg'
+import notificationChannelEmail from './config-center/notification/channel-email.svg'
+import notificationChannelWebhook from './config-center/notification/channel-webhook.svg'
+import notificationChannelWecom from './config-center/notification/channel-wecom.svg'
+import notificationDrawerClose from './config-center/notification/drawer-close.svg'
+import notificationDrawerHint from './config-center/notification/drawer-hint.svg'
+import notificationDrawerSave from './config-center/notification/drawer-save.svg'
+import notificationModalDeleteWarning from './config-center/notification/modal-delete-warning.svg'
+import notificationPlus from './config-center/notification/plus.svg'
+import notificationTabChannel from './config-center/notification/tab-channel.svg'
+import notificationTabHistory from './config-center/notification/tab-history.svg'
+import notificationTabRule from './config-center/notification/tab-rule.svg'
+import runnerActionDetail from './config-center/runner/runner-17.svg'
+import runnerActionEdit from './config-center/runner/runner-18.svg'
+import runnerActionLog from './config-center/runner/runner-16.svg'
+import runnerActionPlus from './config-center/runner/runner-19.svg'
+import runnerActionReport from './config-center/runner/runner-15.svg'
+import runnerActionTrash from './config-center/runner/runner-20.svg'
+import runnerCapabilityApi from './config-center/runner/runner-26.svg'
+import runnerCapabilityRecording from './config-center/runner/runner-28.svg'
+import runnerCapabilityScreenshot from './config-center/runner/runner-29.svg'
+import runnerCapabilityUpload from './config-center/runner/runner-30.svg'
+import runnerCapabilityWebui from './config-center/runner/runner-27.svg'
+import runnerCheckboxChecked from './config-center/runner/runner-25.svg'
+import runnerDrawerClose from './config-center/runner/runner-24.svg'
+import runnerDrawerSave from './config-center/runner/runner-31.svg'
+import runnerNavApi from './config-center/runner/runner-05.svg'
+import runnerNavApp from './config-center/runner/runner-07.svg'
+import runnerNavBug from './config-center/runner/runner-04.svg'
+import runnerNavCase from './config-center/runner/runner-03.svg'
+import runnerNavConfig from './config-center/runner/runner-02.svg'
+import runnerNavDashboard from './config-center/runner/runner-01.svg'
+import runnerNavSetting from './config-center/runner/runner-10.svg'
+import runnerNavWeb from './config-center/runner/runner-06.svg'
+import runnerOverviewAi from './config-center/runner/runner-08.svg'
+import runnerOverviewParam from './config-center/runner/runner-09.svg'
+
+export const figmaConfigDbIcons = {
+  cylinder: {
+    blue: dbCylinderBlue,
+    purple: dbCylinderPurple,
+    orange: dbCylinderOrange,
+    yellow: dbCylinderYellow,
+  },
+  action: {
+    test: dbActionTest,
+    edit: dbActionEdit,
+    delete: dbActionDelete,
+  },
+} as const
+
+export type FigmaConfigDbCylinderIcon = keyof typeof figmaConfigDbIcons.cylinder
+
+export const figmaConfigNotificationIcons = {
+  tab: {
+    channel: notificationTabChannel,
+    rule: notificationTabRule,
+    history: notificationTabHistory,
+  },
+  channel: {
+    wecom: notificationChannelWecom,
+    email: notificationChannelEmail,
+    webhook: notificationChannelWebhook,
+  },
+  action: {
+    send: notificationActionSend,
+    edit: notificationActionEdit,
+    copy: notificationActionCopy,
+    eye: notificationActionEye,
+    power: notificationActionPower,
+    retry: notificationActionRetry,
+    delete: notificationActionDelete,
+  },
+  drawer: {
+    close: notificationDrawerClose,
+    hint: notificationDrawerHint,
+    save: notificationDrawerSave,
+  },
+  modal: {
+    deleteWarning: notificationModalDeleteWarning,
+  },
+  plus: notificationPlus,
+} as const
+
+export type FigmaConfigNotificationChannelIcon = keyof typeof figmaConfigNotificationIcons.channel
+
+export const figmaConfigRunnerIcons = {
+  action: {
+    detail: runnerActionDetail,
+    edit: runnerActionEdit,
+    log: runnerActionLog,
+    plus: runnerActionPlus,
+    report: runnerActionReport,
+    trash: runnerActionTrash,
+  },
+  capability: {
+    api: runnerCapabilityApi,
+    webui: runnerCapabilityWebui,
+    recording: runnerCapabilityRecording,
+    screenshot: runnerCapabilityScreenshot,
+    upload: runnerCapabilityUpload,
+  },
+  checkbox: {
+    checked: runnerCheckboxChecked,
+  },
+  drawer: {
+    close: runnerDrawerClose,
+    save: runnerDrawerSave,
+  },
+} as const
+
+export const figmaGlobalNavIcons = {
+  dashboard: runnerNavDashboard,
+  config: runnerNavConfig,
+  case: runnerNavCase,
+  bug: runnerNavBug,
+  api: runnerNavApi,
+  web: runnerNavWeb,
+  app: runnerNavApp,
+  setting: runnerNavSetting,
+} as const
+
+export const figmaConfigOverviewIcons = {
+  database: dbCylinderBlue,
+  environment: runnerNavSetting,
+  runner: runnerNavConfig,
+  ai: runnerOverviewAi,
+  notification: notificationTabChannel,
+  parameter: runnerOverviewParam,
+} as const

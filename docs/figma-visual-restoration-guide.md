@@ -5,11 +5,14 @@
 ## 设计来源
 
 - Figma 页面：后台管理系统界面设计 2
+- Figma MCP：设计文件节点上下文、metadata 和截图的优先来源
 - 本地参考代码：`设计/后台管理系统界面设计`
 - 当前项目技术栈：Vue3 + Element Plus + Pinia + Vue Router
 - Figma 生成代码技术栈：React + Tailwind + Radix/shadcn，局部包含 MUI
 
 Figma 生成代码不能直接搬进当前项目。它只作为视觉规范、布局密度、组件状态和交互参考使用。
+
+本文档是本项目 Figma 视觉还原的唯一权威准则。后续涉及 Figma 页面还原、Figma Make 代码迁移、全局视觉基线、页面视觉对齐的任务，默认先阅读本文档。
 
 ## 核心结论
 
@@ -35,6 +38,12 @@ Figma 数值还原纪律：
 
 - Figma MCP 或设计检查器已经明确给出的颜色、透明度、圆角、间距、字号、行高、阴影数值，不得手写近似或为了“简洁”擅自四舍五入。
 - 例如 Figma 给出 `rgba(..., 0.733)` 时，代码中必须保留 `0.733`，不能简化为 `0.73`。
+- Figma / Tailwind 导出的尺寸通常按 `border-box` 理解，固定高度或宽度已经包含 padding 和 border。迁移到普通 CSS 时，凡是同时设置固定尺寸、padding、border 的容器，必须显式检查 `box-sizing: border-box`，不能让浏览器按 content-box 把边框额外叠加导致尺寸多出 1-2px。
+- 不能只看源码中是否写了 Figma 数值，还必须检查最终浏览器 computed style。尤其在同一文件内存在旧样式和新样式叠加时，旧选择器可能因为优先级更高覆盖新规则，例如 `.xxx span` 会压过 `.xxx__value`，导致源码写了 `18px`，运行时实际仍是 `13px`。
+- 对关键视觉元素，例如统计数字、标题、按钮文字、表格行高和卡片高度，完成后要用 DevTools 或 Playwright 读取 computed style / bounding box 做一次抽样验证，确认最终生效值与 Figma 对齐。
+- 表单和操作区不能只验证大容器尺寸；输入框 `prefix` / `suffix`、密码显示眼睛、清空按钮、下拉箭头、关闭按钮、保存按钮内图标、表格操作列图标都必须逐项核对。Figma 使用图标按钮时，前端不得用“显示 / 隐藏”等文字按钮近似替代，除非设计稿明确如此。
+- 表格字段内容本身也属于视觉还原范围。Figma 已明确给出的列名、字段文案、标签形态、按钮数量、按钮顺序和失败 / 成功状态展示，必须先按 Figma 对齐；当前接口或业务逻辑暂不支撑时，使用视觉兜底并记录到 `设计/遗留问题.md`，不能擅自改成旧项目字段或用“暂未接入”替代设计稿中的展示。
+- 同一页面存在多个 Tab 表格时，不能套用一套旧项目通用列宽。必须按对应 Tab 的 Figma Make 代码或 Design metadata 单独核对表头文字位置、单元格 padding、行高和操作列按钮尺寸；例如通知渠道、通知规则、发送历史三张表需要分别定义列宽和文字样式。
 - 只有当项目 token 已有明确等价语义，或 Element Plus 原生结构导致无法完全一致时，才允许偏离；偏离原因必须写在目标包总结或文档中。
 - 视觉还原检查时，应优先对照 Figma 原始数值，而不是只凭肉眼判断“差不多”。
 
@@ -65,16 +74,28 @@ Figma 迁移遗留问题处理：
 | 弱文字 | `#86909C` | 映射到 `--app-text-muted` |
 | 边框 | `#E5E6EB` | 映射到 `--app-border` |
 | 弱背景 | `#F7F8FA` / `#FAFAFA` | 映射到表头、工具条、输入底色 |
-| 字体 | Inter + 接近思源黑体的中文 fallback | 映射到 `--app-font-family`，本地使用 Noto Sans SC 子集复刻中文质感 |
+| 字体 | Inter + 系统中文 UI 字体 fallback | 映射到 `--app-font-family`，不强求 Figma 字体族 1:1 |
 
 字体基线说明：
 
-- Figma 设计中声明的主要字体是 Inter，但 Inter 不包含中文字符，中文实际由 Figma 渲染环境自动 fallback。
-- 前端工程以 Inter 承载英文和数字，以本地子集化的 Noto Sans SC 承载当前系统内置中文文案，视觉上贴近 Figma 的中文 fallback 质感。
-- Noto Sans SC 只引入 `400 / 500 / 600 / 700` 四个常用字重，并使用 `font-display: swap`，避免文字加载阻塞。
-- 当前字体文件是根据 `src` 内中文文案生成的轻量子集。后端返回的生僻中文若不在子集中，会继续走 `Source Han Sans SC`、`PingFang SC`、`Microsoft YaHei UI` 等兜底字体，保证可用性。
-- 不直接引入 Noto Sans SC 全量简体中文字体。全量四字重约数 MB 级，会显著增加首次加载成本，不符合当前视觉基线包的轻量目标。
-- Figma Make 常见 `font-semibold` / `font-medium` 在 PingFang SC 或浏览器 fallback 下观感较轻；迁移到 Noto Sans SC 后，中文同等字重会显得更黑。若截图对比出现“中文标题偏粗”，允许在页面局部做一档字重补偿，例如 `600 -> 500`、`500 -> 400`，但数字指标、品牌名、明确需要强调的状态值不自动降权。
+- Figma 设计中声明的主要字体通常是 Inter，但 Inter 不包含中文字符，中文实际由 Figma 渲染环境自动 fallback。
+- 当前项目采用产品级系统原生字体栈：英文和数字优先 Inter，中文优先系统 UI 字体，例如 macOS 的 PingFang SC、Windows 的 Microsoft YaHei / Microsoft YaHei UI、国产 Linux 的 WenQuanYi Micro Hei，Noto Sans SC 只作为兜底。
+- 当前项目等宽字体优先使用 JetBrains Mono，并向后兜底到系统等宽字体，例如 Menlo、Consolas、DejaVu Sans Mono、WenQuanYi Zen Hei Mono。
+- 后续视觉迁移不再追求 Figma 字体族完全一致，因为 Figma、macOS、Windows、Linux 的字体 fallback 和抗锯齿渲染天然存在差异。
+- 必须对齐 Figma 的字体设计参数：`font-size`、`font-weight`、`line-height`、`color`、文字容器尺寸和文字周边间距。
+- 禁止为了“看起来差不多”擅自把 Figma 的 `600` 改成 `500`，也禁止用字体族差异解释掉实际的字号、字重、行高偏差。若因 Element Plus 原生结构或可读性原因必须偏离，必须在目标包总结或遗留问题中说明。
+
+当前字体栈：
+
+```css
+--app-font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+  "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei",
+  "Hiragino Sans GB", "WenQuanYi Micro Hei", "Noto Sans SC", sans-serif;
+
+--app-font-family-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular",
+  Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono",
+  "WenQuanYi Zen Hei Mono", monospace;
+```
 
 ## 组件映射
 
@@ -183,6 +204,7 @@ Figma 迁移遗留问题处理：
 
 - 页面背景、容器边框、卡片圆角是否统一。
 - 按钮高度、图标尺寸、文字颜色是否一致。
+- 输入框前后缀图标、密码眼睛、清空按钮、下拉箭头、表格操作列图标是否与 Figma 类型、尺寸、位置一致。
 - 表格表头、行高、分隔线、hover 状态是否轻量。
 - 侧栏展开/收起后主内容是否正确贴齐。
 - 弹窗/抽屉遮罩、圆角、标题区、底部操作区是否统一。
@@ -204,11 +226,24 @@ Figma 迁移遗留问题处理：
 
 ## 附录 A：Figma 视觉值提取步骤
 
-当前优先从本地 Figma 生成代码和截图中提取视觉值。如果后续可以使用 Figma MCP 或 Figma 桌面检查器，再以设计文件中的实际节点属性为准。
+当前优先使用 Figma MCP 从 design URL 提取节点上下文、metadata 和截图。本地 Figma Make 代码只作为 MCP 不完整或需要补充实现细节时的参考。
+
+### 从 Figma MCP 提取
+
+有 Figma design URL 时，默认按以下顺序处理：
+
+1. 从 URL 提取 `fileKey` 和 `node-id`，例如 `node-id=1-191` 转成 `1:191`。
+2. 优先调用 `get_design_context` 获取节点结构、代码参考和设计上下文。
+3. 必须调用 `get_screenshot` 获取视觉截图，截图作为最终肉眼对齐的源头。
+4. 如 `get_design_context` 返回过大或不完整，调用 `get_metadata` 定位子节点，再按需读取具体节点。
+5. 如 `get_design_context` 失败，例如提示“当前没有选中图层”，使用 `get_metadata + get_screenshot + 本地 Figma Make 代码` 兜底。
+6. 实现完成后，用 Playwright 按接近 Figma 的视口尺寸截图，对比布局、字体参数、颜色、间距和组件状态。
+
+如果 MCP 获取失败，目标包总结里必须说明实际使用了哪些依据，不能默认宣称已完整读取 Figma 结构化上下文。
 
 ### 从本地代码提取
 
-优先读取这些文件：
+MCP 信息不足时，再读取这些文件：
 
 - `设计/后台管理系统界面设计/src/styles/theme.css`：全局颜色、字体、圆角、背景。
 - `设计/后台管理系统界面设计/src/app/App.tsx`：主布局、侧栏、顶部栏、接口工作台示例。
@@ -223,9 +258,9 @@ Figma 迁移遗留问题处理：
 2. 再取组件规格：按钮高度、输入框高度、表格行高、Tab 高度、弹窗宽度。
 3. 最后取页面密度：页面 padding、筛选栏间距、卡片内边距、操作栏高度。
 
-### 从 Figma 设计文件提取
+### 从 Figma 设计文件检查器提取
 
-如果能打开 Figma 设计文件，优先检查这些属性：
+如果能打开 Figma 设计文件或 MCP metadata，优先检查这些属性：
 
 - Fill：背景色、卡片色、状态色。
 - Stroke：边框颜色和粗细。
@@ -380,7 +415,58 @@ Figma 迁移遗留问题处理：
 
 ## 附录 D：图标迁移规范
 
-Figma 代码使用 `lucide-react`，当前项目使用 `@lucide/vue`。两者图标命名大多一致，迁移时只替换导入方式和模板使用方式。
+图标迁移优先级：
+
+1. Figma MCP 返回了明确的 SVG asset：必须下载到本地项目维护，并通过 `src/shared/assets/figma-icons` 模块统一导出使用。
+2. Figma 只表达了 lucide 图标组件，例如 `lucide-react`，且没有人工二次修改：转换为当前项目的 `@lucide/vue`。
+3. Figma 没有明确 SVG asset，也没有明确图标库组件：才允许选择语义最接近的 lucide 图标，并在目标包总结中说明。
+
+强制本地维护 SVG 的情况：
+
+- Figma MCP 输出 `const imgIcon = "https://www.figma.com/api/mcp/asset/..."` 并通过 `<img src={imgIcon}>` 使用。
+- 品牌 Logo、产品识别图形、模块专属识别图形。
+- 多 path 组合、渐变、剪切蒙版、特殊底色块、非单色线性图标等组合图形。
+- 即使 MCP 输出 `lucide-react`，但设计师对图标做过二次修改，例如改线宽、改路径、缩放、调整视觉重心、搭配专属底色块。
+- 样板页或核心验收区域中，使用图标库后肉眼和 Figma 有明显差异。
+
+可以使用图标库的情况：
+
+- Figma 明确使用 `lucide-react`，且图标没有被二次修改。
+- 图标只是普通辅助语义，例如加号、搜索、关闭、刷新、箭头、筛选。
+- 图标不属于品牌识别、核心验收区域或页面独有视觉资产。
+- 使用 `@lucide/vue` 后，尺寸、线宽、留白和 Figma 基本一致。
+- 如果 Figma 代码中控件内部使用图标组件，例如密码框 `Eye / EyeOff`、输入框搜索图标、按钮内 `Save` / `Send`，迁移后必须保持同类图标按钮形态，不得替换成文字按钮或 Element Plus 默认图标，除非设计稿没有明确图标形态。
+
+禁止在业务代码中直接引用 `https://www.figma.com/api/mcp/asset/...` 这类远程临时资源。Figma asset URL 只用于开发期提取，生产代码必须引用本地资产。
+
+本地维护目录：
+
+```text
+src/shared/assets/figma-icons/
+  README.md
+  index.ts
+  config-center/
+    db/
+      db-cylinder-blue.svg
+      action-edit.svg
+```
+
+新增 Figma SVG 时需要记录来源页面、Figma node-id、使用位置和命名含义。页面专用图标先按页面/模块归档，多个页面复用后再上提到通用目录。
+
+SVG 预处理规则：
+
+- 不一刀切清除 Figma SVG 内部颜色。Figma 1:1 专用图标、品牌 Logo、渐变图标、多色图标可以保留设计稿导出的固定 `stroke` / `fill`。
+- 通用可复用的单色线性图标，才优先改成 `currentColor`，方便 hover、active、disabled 和主题色控制。
+- 保留 Figma 明确给出的 `viewBox`、路径、线宽、圆角、clipPath 等结构，不为了“简洁”重画或改路径。
+- SVG 不直接散落在页面目录里；必须进入 `src/shared/assets/figma-icons`，并从 `index.ts` 导出。
+
+封装规则：
+
+- 单页面少量图标，可以通过 `figmaIcons` 映射 + `<img>` 使用。
+- 多页面复用、需要 hover / active / disabled 状态、或需要统一尺寸控制时，再封装为共享图标组件。
+- 不为了一个页面的一两个静态图标提前过度封装。
+
+当 Figma 代码使用 `lucide-react` 且没有额外 SVG asset 时，当前项目使用 `@lucide/vue`。两者图标命名大多一致，迁移时只替换导入方式和模板使用方式。
 
 React 示例：
 
@@ -451,13 +537,13 @@ import { Bell, Plus } from '@lucide/vue'
 - 危险操作：`var(--app-danger)`
 - 模块强调：使用导航或模块自己的强调色 token
 
-图标迁移时不要新增无关图标库。Figma 里找不到完全同名图标时，优先选择 lucide 中语义最接近的图标，并保持尺寸和线性风格一致。
+图标迁移时不要新增无关图标库。Figma 里找不到完全同名图标且没有 SVG asset 时，优先选择 lucide 中语义最接近的图标，并保持尺寸和线性风格一致。
 
 图标禁用规则：
 
 - 默认不写非标准尺寸，例如 `22px`。确有设计依据时允许使用，但需要在目标包说明中解释。
-- 禁止直接写死 `fill="#xxx"` 或 `stroke="#xxx"`；优先使用 `currentColor` 和 CSS token 控制颜色。
-- 不混用多套风格，当前全站统一使用 lucide 线性图标。
+- 手写或自建 SVG 禁止直接写死 `fill="#xxx"` 或 `stroke="#xxx"`；优先使用 `currentColor` 和 CSS token 控制颜色。Figma 原始 SVG asset 可以保留设计稿导出的固定色值。
+- 不混用多套风格；Figma SVG asset 和 lucide 图标并存时，优先保证单个页面内同一功能区图标风格统一。
 - 不为了某个页面引入新的图标库。
 
 ## 附录 E：特殊场景验收清单

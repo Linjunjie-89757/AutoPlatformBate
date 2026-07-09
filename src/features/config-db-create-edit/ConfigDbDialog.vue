@@ -3,7 +3,6 @@ import { reactive, ref, watch } from 'vue'
 import { Hide, View } from '@element-plus/icons-vue'
 
 import { configDbTypeOptions, configStatusOptions, type DbConnectionItem } from '@/entities/config'
-import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 
 import {
@@ -93,6 +92,7 @@ watch(
     :model-value="modelValue"
     :title="mode === 'create' ? '新增数据库连接' : '编辑数据库连接'"
     width="672px"
+    modal-class="config-db-dialog-modal"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="config-db-dialog">
@@ -207,8 +207,12 @@ watch(
     </div>
 
     <template #footer>
-      <AppButton :disabled="saving" @click="emit('update:modelValue', false)">取消</AppButton>
-      <AppButton type="primary" :loading="saving" @click="submit">保存</AppButton>
+      <div class="config-db-dialog__footer">
+        <button type="button" class="config-db-dialog__secondary-button" :disabled="saving" @click="emit('update:modelValue', false)">取消</button>
+        <button type="button" class="config-db-dialog__primary-button" :disabled="saving" @click="submit">
+          {{ saving ? '保存中...' : '保存' }}
+        </button>
+      </div>
     </template>
   </AppDialog>
 </template>
@@ -217,12 +221,12 @@ watch(
 .config-db-dialog {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-4);
+  gap: 14px;
 }
 
 .config-db-dialog__grid {
   display: grid;
-  gap: var(--app-space-4);
+  gap: 12px;
 }
 
 .config-db-dialog__grid.is-two {
@@ -232,19 +236,20 @@ watch(
 .config-db-dialog__field {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-2);
+  gap: 5.25px;
 }
 
 .config-db-dialog__field > span {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
 }
 
 .config-db-dialog__segment {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--app-space-2);
+  gap: 8px;
 }
 
 .config-db-dialog__segment.is-two {
@@ -252,40 +257,137 @@ watch(
 }
 
 .config-db-dialog__segment button {
-  min-height: var(--app-control-height-md);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-panel);
-  color: var(--app-text-secondary);
+  min-height: 32px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #4e5969;
   cursor: pointer;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
 .config-db-dialog__segment button:hover {
-  background: var(--app-bg-page);
+  background: #fafafa;
 }
 
 .config-db-dialog__segment button.is-active {
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
+  border-color: #165dff;
+  background: #e8f3ff;
+  color: #165dff;
 }
 
 .config-db-dialog__password-toggle {
   display: inline-flex;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  color: var(--app-text-muted);
+  color: #86909c;
   cursor: pointer;
+}
+
+.config-db-dialog__password-toggle:hover {
+  background: #f2f3f5;
+  color: #1d2129;
 }
 
 .config-db-dialog__error {
   margin: 0;
-  color: var(--app-danger);
-  font-size: var(--app-font-size-sm);
+  color: #f53f3f;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-db-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.config-db-dialog__secondary-button,
+.config-db-dialog__primary-button {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.config-db-dialog__secondary-button {
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+}
+
+.config-db-dialog__primary-button {
+  border: 1px solid #165dff;
+  background: #165dff;
+  color: #fff;
+}
+
+.config-db-dialog__secondary-button:disabled,
+.config-db-dialog__primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+:global(.config-db-dialog-modal .el-dialog) {
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
+}
+
+:global(.config-db-dialog-modal .el-dialog__header) {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #e5e6eb;
+  margin: 0;
+}
+
+:global(.config-db-dialog-modal .el-dialog__title) {
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+:global(.config-db-dialog-modal .el-dialog__body) {
+  padding: 16px 20px;
+}
+
+:global(.config-db-dialog-modal .el-dialog__footer) {
+  padding: 13px 20px;
+  border-top: 1px solid #e5e6eb;
+}
+
+:global(.config-db-dialog-modal .el-input__wrapper),
+:global(.config-db-dialog-modal .el-textarea__inner) {
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+:global(.config-db-dialog-modal .el-input__wrapper) {
+  min-height: 32px;
+}
+
+:global(.config-db-dialog-modal .el-input__inner),
+:global(.config-db-dialog-modal .el-textarea__inner) {
+  color: #1d2129;
+  font-size: 13px;
+}
+
+:global(.config-db-dialog-modal .el-input-number) {
+  width: 100%;
 }
 
 @media (max-width: 720px) {
