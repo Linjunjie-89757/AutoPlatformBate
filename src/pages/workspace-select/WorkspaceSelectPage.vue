@@ -17,7 +17,7 @@ type WorkspaceSelectItem = WorkspaceItem & {
   roleName?: string | null
 }
 
-const DEFAULT_REDIRECT_PATH = '/config-center'
+const DEFAULT_REDIRECT_PATH = '/'
 const FIGMA_WORKSPACE_FALLBACKS = [
   {
     description: '电商平台 · 订单/风控全链路自动化',

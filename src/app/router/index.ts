@@ -11,6 +11,7 @@ import CaseAiRecordsPage from '@/pages/cases/CaseAiRecordsPage.vue'
 import CaseCenterPage from '@/pages/cases/CaseCenterPage.vue'
 import CasesPage from '@/pages/cases/CasesPage.vue'
 import ConfigCenterPage from '@/pages/config-center/ConfigCenterPage.vue'
+import DashboardPage from '@/pages/dashboard/DashboardPage.vue'
 import DefectDetailPage from '@/pages/defects/DefectDetailPage.vue'
 import DefectsPage from '@/pages/defects/DefectsPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
@@ -55,10 +56,10 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'dashboard',
-        component: PlaceholderPage,
+        component: DashboardPage,
         meta: {
           title: '工作台',
-          description: '保持旧项目克制的占位页风格，后续按模块迁移实际内容。',
+          description: '按 Figma 工作台总览视觉展示执行动态、关注事项、系统健康和 AI 洞察。',
         },
       },
       {
