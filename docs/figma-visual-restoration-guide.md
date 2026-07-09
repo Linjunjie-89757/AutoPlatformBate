@@ -74,6 +74,7 @@ Figma 迁移遗留问题处理：
 - Noto Sans SC 只引入 `400 / 500 / 600 / 700` 四个常用字重，并使用 `font-display: swap`，避免文字加载阻塞。
 - 当前字体文件是根据 `src` 内中文文案生成的轻量子集。后端返回的生僻中文若不在子集中，会继续走 `Source Han Sans SC`、`PingFang SC`、`Microsoft YaHei UI` 等兜底字体，保证可用性。
 - 不直接引入 Noto Sans SC 全量简体中文字体。全量四字重约数 MB 级，会显著增加首次加载成本，不符合当前视觉基线包的轻量目标。
+- Figma Make 常见 `font-semibold` / `font-medium` 在 PingFang SC 或浏览器 fallback 下观感较轻；迁移到 Noto Sans SC 后，中文同等字重会显得更黑。若截图对比出现“中文标题偏粗”，允许在页面局部做一档字重补偿，例如 `600 -> 500`、`500 -> 400`，但数字指标、品牌名、明确需要强调的状态值不自动降权。
 
 ## 组件映射
 

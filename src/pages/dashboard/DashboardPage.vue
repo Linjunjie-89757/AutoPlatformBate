@@ -479,7 +479,7 @@ function navigateTo(path: string) {
 
 .dashboard-page__greeting strong {
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 25.5px;
 }
 
@@ -617,7 +617,7 @@ function navigateTo(path: string) {
 .dashboard-panel__title {
   color: #1d2129;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 21px;
 }
 
@@ -736,7 +736,7 @@ function navigateTo(path: string) {
   min-width: 0;
   color: #1d2129;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -822,7 +822,7 @@ function navigateTo(path: string) {
 
 .dashboard-panel__footer strong {
   color: #165dff;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .dashboard-panel__footer-divider {
@@ -897,7 +897,7 @@ function navigateTo(path: string) {
   overflow: hidden;
   color: #1d2129;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1084,7 +1084,7 @@ function navigateTo(path: string) {
   overflow: hidden;
   color: #1d2129;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1152,7 +1152,7 @@ function navigateTo(path: string) {
   overflow: hidden;
   color: #1d2129;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1220,7 +1220,7 @@ function navigateTo(path: string) {
 .dashboard-ai-card strong {
   color: #7816ff;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 17px;
 }
 
