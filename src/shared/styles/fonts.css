@@ -31,6 +31,39 @@
   src: url("../../assets/fonts/inter/Inter-latin-700.woff2") format("woff2");
 }
 
+/* Subset generated from current UI Chinese copy to keep the Figma typography baseline lightweight. */
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("../../assets/fonts/noto-sans-sc/NotoSansSC-subset-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("../../assets/fonts/noto-sans-sc/NotoSansSC-subset-500.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("../../assets/fonts/noto-sans-sc/NotoSansSC-subset-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("../../assets/fonts/noto-sans-sc/NotoSansSC-subset-700.woff2") format("woff2");
+}
+
 @font-face {
   font-family: "JetBrains Mono";
   font-style: normal;

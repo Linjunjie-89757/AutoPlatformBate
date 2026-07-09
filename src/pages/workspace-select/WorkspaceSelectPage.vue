@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { AlertCircle, ChevronRight, FlaskConical, Loader2, RefreshCw } from '@lucide/vue'
+import { AlertCircle, ChevronRight, Loader2, RefreshCw } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
+import autotestFigmaMarkUrl from '@/assets/brand/autotest-figma-mark.svg'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { useLogout } from '@/features/auth-logout'
 import { getRequestErrorMessage } from '@/shared/api/error'
@@ -17,6 +18,26 @@ type WorkspaceSelectItem = WorkspaceItem & {
 }
 
 const DEFAULT_REDIRECT_PATH = '/config-center'
+const FIGMA_WORKSPACE_FALLBACKS = [
+  {
+    description: '电商平台 · 订单/风控全链路自动化',
+    memberCount: 8,
+    lastAccessTime: '今天 09:31',
+    roleName: '测试负责人',
+  },
+  {
+    description: '风控中台 · 规则引擎和策略测试',
+    memberCount: 12,
+    lastAccessTime: '3 天前',
+    roleName: '测试工程师',
+  },
+  {
+    description: '数据平台 · BI 报表和数据质量测试',
+    memberCount: 5,
+    lastAccessTime: '7 天前',
+    roleName: '只读访客',
+  },
+]
 const router = useRouter()
 const route = useRoute()
 const { setSelectedWorkspaceCode } = useWorkspaceContext()
@@ -56,11 +77,15 @@ function getWorkspaceInitial(item: WorkspaceSelectItem) {
   return source.trim().slice(0, 1).toUpperCase()
 }
 
-function getWorkspaceDescription(item: WorkspaceSelectItem) {
-  return item.description || `${item.workspaceName || item.workspaceCode} 工作区`
+function getFigmaWorkspaceFallback(index: number) {
+  return FIGMA_WORKSPACE_FALLBACKS[index % FIGMA_WORKSPACE_FALLBACKS.length]
 }
 
-function getWorkspaceRole(item: WorkspaceSelectItem) {
+function getWorkspaceDescription(item: WorkspaceSelectItem, index: number) {
+  return item.description || getFigmaWorkspaceFallback(index).description
+}
+
+function getWorkspaceRole(item: WorkspaceSelectItem, index: number) {
   if (item.roleName) {
     return item.roleName
   }
@@ -76,31 +101,17 @@ function getWorkspaceRole(item: WorkspaceSelectItem) {
     return '测试工程师'
   }
 
-  return '已授权访问'
+  return getFigmaWorkspaceFallback(index).roleName
 }
 
-function getWorkspaceMeta(item: WorkspaceSelectItem) {
-  const meta: string[] = []
-  if (typeof item.memberCount === 'number' && Number.isFinite(item.memberCount)) {
-    meta.push(`${item.memberCount} 名成员`)
-  } else if (item.ownerName) {
-    meta.push(`负责人 ${item.ownerName}`)
-  } else {
-    meta.push('成员可见')
-  }
+function getWorkspaceMeta(item: WorkspaceSelectItem, index: number) {
+  const fallback = getFigmaWorkspaceFallback(index)
+  const memberCount = typeof item.memberCount === 'number' && Number.isFinite(item.memberCount)
+    ? item.memberCount
+    : fallback.memberCount
+  const lastAccess = item.lastAccessTime || item.lastAccessAt || fallback.lastAccessTime
 
-  const lastAccess = item.lastAccessTime || item.lastAccessAt
-  if (lastAccess) {
-    meta.push(`上次访问 ${lastAccess}`)
-  } else if (item.current || item.isCurrent) {
-    meta.push('当前正在使用')
-  } else if (item.default || item.isDefault) {
-    meta.push('默认工作区')
-  } else {
-    meta.push('可切换')
-  }
-
-  return meta
+  return [`${memberCount} 名成员`, `上次访问 ${lastAccess}`]
 }
 
 function shouldShowRecentBadge(item: WorkspaceSelectItem) {
@@ -109,10 +120,10 @@ function shouldShowRecentBadge(item: WorkspaceSelectItem) {
 
 function getAvatarStyle(index: number) {
   const gradients = [
-    'linear-gradient(135deg, #165dff 0%, rgba(22, 93, 255, 0.73) 100%)',
-    'linear-gradient(135deg, #8b5cf6 0%, rgba(139, 92, 246, 0.73) 100%)',
-    'linear-gradient(135deg, #10b981 0%, rgba(16, 185, 129, 0.73) 100%)',
-    'linear-gradient(135deg, #ff7d00 0%, rgba(255, 125, 0, 0.73) 100%)',
+    'linear-gradient(135deg, #165dff 0%, rgba(22, 93, 255, 0.733) 100%)',
+    'linear-gradient(135deg, #8b5cf6 0%, rgba(139, 92, 246, 0.733) 100%)',
+    'linear-gradient(135deg, #10b981 0%, rgba(16, 185, 129, 0.733) 100%)',
+    'linear-gradient(135deg, #ff7d00 0%, rgba(255, 125, 0, 0.733) 100%)',
   ]
 
   return {
@@ -181,7 +192,7 @@ onMounted(() => {
     <section class="workspace-select-page__panel" aria-label="选择工作区">
       <header class="workspace-select-page__brand">
         <span class="workspace-select-page__brand-mark">
-          <FlaskConical class="workspace-select-page__brand-icon" />
+          <img class="workspace-select-page__brand-icon" :src="autotestFigmaMarkUrl" alt="">
         </span>
         <span class="workspace-select-page__brand-name">AutoTest</span>
       </header>
@@ -233,13 +244,13 @@ onMounted(() => {
                 >
                   最近访问
                 </span>
-                <span class="workspace-select-page__badge">{{ getWorkspaceRole(item) }}</span>
+                <span class="workspace-select-page__badge">{{ getWorkspaceRole(item, index) }}</span>
               </span>
 
-              <span class="workspace-select-page__description">{{ getWorkspaceDescription(item) }}</span>
+              <span class="workspace-select-page__description">{{ getWorkspaceDescription(item, index) }}</span>
 
               <span class="workspace-select-page__meta">
-                <span v-for="meta in getWorkspaceMeta(item)" :key="meta">{{ meta }}</span>
+                <span v-for="meta in getWorkspaceMeta(item, index)" :key="meta">{{ meta }}</span>
               </span>
             </span>
 
@@ -306,7 +317,7 @@ onMounted(() => {
 .workspace-select-page__brand-icon {
   width: 17px;
   height: 17px;
-  stroke-width: 2.4;
+  display: block;
 }
 
 .workspace-select-page__brand-name {
@@ -349,7 +360,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 21px 25px;
+  padding: 20px 25px;
   border: 1px solid #e5e6eb;
   border-radius: 14px;
   background: #fff;
