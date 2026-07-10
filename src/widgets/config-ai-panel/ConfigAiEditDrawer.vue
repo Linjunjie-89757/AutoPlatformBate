@@ -102,7 +102,8 @@ function submit() {
               class="config-ai-edit__provider-avatar"
               :style="{ color: visual.color, backgroundColor: '#ffffff' }"
             >
-              {{ visual.initial }}
+              <img v-if="visual.logoSrc" :src="visual.logoSrc" alt="">
+              <span v-else>{{ visual.initial }}</span>
             </span>
             <div>
               <strong :style="{ color: visual.color }">{{ visual.label }}</strong>
@@ -332,6 +333,20 @@ function submit() {
   border-radius: 11px;
   font-size: 12px;
   font-weight: 700;
+}
+
+.config-ai-edit__provider-avatar img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.config-ai-edit__provider-avatar > span {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
 }
 
 .config-ai-edit__provider strong {

@@ -41,7 +41,7 @@ const errorMessage = ref('')
 const searchKeyword = ref('')
 const statusFilter = ref('all')
 const providerFilter = ref('all')
-const usageBindOpen = ref(true)
+const usageBindOpen = ref(false)
 const pickerVisible = ref(false)
 const editVisible = ref(false)
 const editMode = ref<'create' | 'edit'>('create')
@@ -348,7 +348,7 @@ onMounted(() => {
         </button>
         <button class="config-ai-btn config-ai-btn--primary" type="button" @click="openCreatePicker">
           <img :src="figmaConfigAiIcons.plus" alt="">
-          + 新增连接
+          新增连接
         </button>
       </div>
     </header>
@@ -411,7 +411,8 @@ onMounted(() => {
                       backgroundColor: getProviderVisual(provider).bg,
                     }"
                   >
-                    {{ getProviderVisual(provider).initial }}
+                    <img v-if="getProviderVisual(provider).logoSrc" :src="getProviderVisual(provider).logoSrc" alt="">
+                    <span v-else>{{ getProviderVisual(provider).initial }}</span>
                   </span>
                   <div>
                     <strong>{{ provider.connectionName }}</strong>
@@ -855,6 +856,20 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.config-ai-conn__avatar img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.config-ai-conn__avatar > span {
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
 .config-ai-conn strong,
 .config-ai-model-cell strong {
   display: block;
@@ -864,7 +879,7 @@ onMounted(() => {
   line-height: 19.5px;
 }
 
-.config-ai-conn span,
+.config-ai-conn > div > span,
 .config-ai-model-cell span {
   display: block;
   color: #86909c;

@@ -138,6 +138,7 @@ const stats = computed<RunnerStatCard[]>(() => {
   const offlineCount = runners.value.filter(item => item.offline).length
   const activeTaskCount = runners.value.reduce((total, item) => total + activeTasksOf(item).length, 0)
   const busyCount = runners.value.filter(item => !item.offline && activeTasksOf(item).length > 0).length
+  const todayRunCount = runners.value.reduce((total, item) => total + getRunnerTodayRuns(item), 0)
 
   return [
     { label: '节点总数', value: runners.value.length, color: '#4E5969', bg: '#F2F3F5' },
@@ -145,6 +146,7 @@ const stats = computed<RunnerStatCard[]>(() => {
     { label: '忙碌', value: busyCount, color: '#FF7D00', bg: '#FFF3E8' },
     { label: '离线', value: offlineCount, color: offlineCount > 0 ? '#F53F3F' : '#C9CDD4', bg: offlineCount > 0 ? '#FFE8E8' : '#F2F3F5' },
     { label: '当前任务数', value: activeTaskCount, color: runnerAccentColor, bg: '#E0F2FE' },
+    { label: '今日执行', value: todayRunCount, color: '#4E5969', bg: '#F2F3F5' },
   ]
 })
 
@@ -1599,34 +1601,35 @@ onBeforeUnmount(() => {
 
 .config-runner-panel__stats {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10.5px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .config-runner-stat-card {
   display: flex;
   min-width: 0;
-  height: 65px;
+  height: 58px;
   align-items: center;
-  gap: 10px;
-  padding: 14px;
+  gap: 8.75px;
+  padding: 13.25px;
   border: 1px solid #e5e6eb;
-  border-radius: 12px;
+  border-radius: 11px;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
 }
 
 .config-runner-stat-card__value {
   display: inline-flex;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 31.5px;
+  height: 31.5px;
+  flex: 0 0 31.5px;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 7px;
   font-size: 16px;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 24px;
 }
 
 .config-runner-stat-card > span:last-child {
@@ -1647,8 +1650,8 @@ onBeforeUnmount(() => {
 .config-runner-search {
   position: relative;
   display: flex;
-  width: 240px;
-  height: 32px;
+  width: 217px;
+  height: 28px;
   align-items: center;
   color: #86909c;
 }
@@ -1661,9 +1664,9 @@ onBeforeUnmount(() => {
 
 .config-runner-search input,
 .config-runner-filter {
-  height: 32px;
+  height: 28px;
   border: 1px solid #e5e6eb;
-  border-radius: 8px;
+  border-radius: 7px;
   outline: none;
   background: #fff;
   color: #1d2129;
@@ -1700,13 +1703,13 @@ onBeforeUnmount(() => {
 .config-runner-secondary-button,
 .config-runner-primary-button {
   display: inline-flex;
-  height: 32px;
+  height: 28px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
@@ -1735,6 +1738,8 @@ onBeforeUnmount(() => {
 }
 
 .config-runner-primary-button {
+  height: 32px;
+  padding: 0 14px;
   border: 1px solid #0284c7;
   background: #0284c7;
   color: #fff;
@@ -1882,7 +1887,7 @@ onBeforeUnmount(() => {
   min-height: 120px;
   overflow: hidden;
   border: 1px solid #e5e6eb;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
@@ -1890,47 +1895,47 @@ onBeforeUnmount(() => {
 .config-runner-table-card table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .config-runner-table-card__name-col {
-  width: auto;
+  width: 14.31%;
 }
 
 .config-runner-table-card__address-col {
-  width: auto;
+  width: 8.28%;
 }
 
 .config-runner-table-card__status-col {
-  width: auto;
+  width: 7.31%;
 }
 
 .config-runner-table-card__task-col {
-  width: auto;
+  width: 12.16%;
 }
 
 .config-runner-table-card__capability-col {
-  width: auto;
+  width: 18.1%;
 }
 
 .config-runner-table-card__browser-col {
-  width: auto;
+  width: 7.5%;
 }
 
 .config-runner-table-card__version-col {
-  width: auto;
+  width: 5.77%;
 }
 
 .config-runner-table-card__heartbeat-col {
-  width: auto;
+  width: 6.07%;
 }
 
 .config-runner-table-card__resource-col {
-  width: auto;
+  width: 8.66%;
 }
 
 .config-runner-table-card__action-col {
-  width: auto;
+  width: 11.09%;
 }
 
 .config-runner-table-card thead {
@@ -1939,8 +1944,8 @@ onBeforeUnmount(() => {
 }
 
 .config-runner-table-card th {
-  height: 36px;
-  padding: 0 12px;
+  height: 34.5px;
+  padding: 0 10.5px;
   color: #86909c;
   font-size: 11px;
   font-weight: 600;
@@ -1952,7 +1957,7 @@ onBeforeUnmount(() => {
 
 .config-runner-table-card td {
   height: 56px;
-  padding: 8px 12px;
+  padding: 8px 10.5px;
   border-bottom: 1px solid #e5e6eb;
   color: #1d2129;
   font-size: 13px;
@@ -1991,12 +1996,12 @@ onBeforeUnmount(() => {
 
 .config-runner-node-icon {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
+  width: 24.5px;
+  height: 24.5px;
+  flex: 0 0 24.5px;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 7px;
 }
 
 .config-runner-node-cell strong {
@@ -2088,11 +2093,11 @@ onBeforeUnmount(() => {
 .config-runner-browser-list span {
   display: inline-flex;
   min-width: 0;
-  height: 20px;
+  height: 18.5px;
   align-items: center;
   justify-content: center;
-  padding: 0 6px;
-  border-radius: 4px;
+  padding: 0 5.25px;
+  border-radius: 3.5px;
   font-size: 10px;
   font-weight: 500;
   line-height: 14px;
@@ -2111,19 +2116,19 @@ onBeforeUnmount(() => {
 
 .config-runner-resource-mini {
   display: grid;
-  width: 86px;
-  gap: 4px;
+  width: 70px;
+  gap: 3.5px;
 }
 
 .config-runner-resource-mini span {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5.25px;
 }
 
 .config-runner-resource-mini i {
   display: block;
-  height: 4px;
+  height: 3.5px;
   flex: 1;
   overflow: hidden;
   border-radius: 999px;
@@ -2132,7 +2137,7 @@ onBeforeUnmount(() => {
 
 .config-runner-resource-mini b {
   display: block;
-  height: 4px;
+  height: 3.5px;
   border-radius: inherit;
 }
 
@@ -2148,17 +2153,17 @@ onBeforeUnmount(() => {
 .config-runner-row-actions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 1.75px;
 }
 
 .config-runner-row-actions button {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: 24.5px;
+  height: 24.5px;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: #c9cdd4;
   cursor: pointer;

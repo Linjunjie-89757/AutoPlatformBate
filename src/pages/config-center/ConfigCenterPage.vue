@@ -318,7 +318,7 @@ watch(
   margin: 0;
   color: var(--app-text-primary);
   font-size: 18px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 27px;
 }
 
@@ -344,9 +344,9 @@ watch(
   gap: 14px;
   padding: 18.5px;
   border: 1px solid var(--app-border);
-  border-radius: 12px;
+  border-radius: 11px;
   background: #ffffff;
-  box-shadow: var(--app-shadow-card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .config-overview-card__icon {
@@ -356,7 +356,7 @@ watch(
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 8px;
+  border-radius: 7px;
 }
 
 .config-overview-card__icon img {
@@ -390,7 +390,7 @@ watch(
   min-height: 274px;
   padding: 18.5px;
   border: 1px solid var(--app-border);
-  border-radius: 12px;
+  border-radius: 11px;
   background: #ffffff;
 }
 
@@ -398,8 +398,8 @@ watch(
   margin: 0 0 4px;
   color: var(--app-text-primary);
   font-size: 15px;
-  font-weight: 500;
-  line-height: 23px;
+  font-weight: 600;
+  line-height: 22.5px;
 }
 
 .config-overview-trend__chart {

@@ -39,7 +39,8 @@ defineEmits<{
                 backgroundColor: getProviderVisual(providerType).bg,
               }"
             >
-              {{ getProviderVisual(providerType).initial }}
+              <img v-if="getProviderVisual(providerType).logoSrc" :src="getProviderVisual(providerType).logoSrc" alt="">
+              <span v-else>{{ getProviderVisual(providerType).initial }}</span>
             </span>
             <span class="config-ai-provider-option__name">{{ getProviderVisual(providerType).label }}</span>
             <img class="config-ai-provider-option__arrow" :src="figmaConfigAiIcons.chevronRight" alt="">
@@ -143,6 +144,20 @@ defineEmits<{
   align-items: center;
   justify-content: center;
   border-radius: 11px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.config-ai-provider-option__avatar img {
+  display: block;
+  width: 21px;
+  height: 21px;
+  object-fit: contain;
+}
+
+.config-ai-provider-option__avatar > span {
+  color: inherit;
   font-size: 12px;
   font-weight: 700;
   line-height: 18px;

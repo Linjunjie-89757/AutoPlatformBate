@@ -65,8 +65,12 @@ import runnerNavConfig from './config-center/runner/runner-02.svg'
 import runnerNavDashboard from './config-center/runner/runner-01.svg'
 import runnerNavSetting from './config-center/runner/runner-10.svg'
 import runnerNavWeb from './config-center/runner/runner-06.svg'
-import runnerOverviewAi from './config-center/runner/runner-08.svg'
-import runnerOverviewParam from './config-center/runner/runner-09.svg'
+import overviewAi from './config-center/overview/overview-ai.svg'
+import overviewDatabase from './config-center/overview/overview-database.svg'
+import overviewEnvironment from './config-center/overview/overview-environment.svg'
+import overviewNotification from './config-center/overview/overview-notification.svg'
+import overviewParameter from './config-center/overview/overview-parameter.svg'
+import overviewRunner from './config-center/overview/overview-runner.svg'
 
 export const figmaConfigDbIcons = {
   cylinder: {
@@ -187,10 +191,10 @@ export const figmaGlobalNavIcons = {
 } as const
 
 export const figmaConfigOverviewIcons = {
-  database: dbCylinderBlue,
-  environment: runnerNavSetting,
-  runner: runnerNavConfig,
-  ai: runnerOverviewAi,
-  notification: notificationTabChannel,
-  parameter: runnerOverviewParam,
+  database: overviewDatabase,
+  environment: overviewEnvironment,
+  runner: overviewRunner,
+  ai: overviewAi,
+  notification: overviewNotification,
+  parameter: overviewParameter,
 } as const

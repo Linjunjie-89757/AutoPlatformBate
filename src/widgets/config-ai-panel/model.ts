@@ -6,6 +6,18 @@ import type {
   SaveAiProviderConnectionPayload,
   UpdateAiProviderStatusPayload,
 } from '@/entities/ai-provider'
+import anthropicLogo from '@/entities/ai-provider/assets/anthropic.svg'
+import azureLogo from '@/entities/ai-provider/assets/azure.svg'
+import customLogo from '@/entities/ai-provider/assets/custom.svg'
+import deepseekLogo from '@/entities/ai-provider/assets/deepseek.svg'
+import googleLogo from '@/entities/ai-provider/assets/google.svg'
+import kimiLogo from '@/entities/ai-provider/assets/kimi.svg'
+import minimaxLogo from '@/entities/ai-provider/assets/minimax.svg'
+import ollamaLogo from '@/entities/ai-provider/assets/ollama.svg'
+import openaiLogo from '@/entities/ai-provider/assets/openai.svg'
+import qwenLogo from '@/entities/ai-provider/assets/qwen.svg'
+import xiaomiLogo from '@/entities/ai-provider/assets/xiaomi.svg'
+import zhipuLogo from '@/entities/ai-provider/assets/zhipu.svg'
 
 export type AiCapability = 'text' | 'vision' | 'long-ctx' | 'json'
 export type AiUsage = 'case-gen' | 'case-review' | 'fail-analysis' | 'element-id' | 'assert-suggest'
@@ -16,6 +28,7 @@ export interface ProviderVisualConfig {
   color: string
   bg: string
   initial: string
+  logoSrc: string
   baseUrl: string
   models: string[]
   description: string
@@ -43,6 +56,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#10A37F',
     bg: '#E8FFF9',
     initial: 'O',
+    logoSrc: openaiLogo,
     baseUrl: 'https://api.openai.com/v1',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
     description: 'GPT-4o、GPT-4 Turbo 等模型',
@@ -52,6 +66,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#CF5600',
     bg: '#FFF3E8',
     initial: 'A',
+    logoSrc: anthropicLogo,
     baseUrl: 'https://api.anthropic.com',
     models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],
     description: 'Claude 3.5 Sonnet、Claude 3 Opus',
@@ -61,6 +76,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#4285F4',
     bg: '#E8F3FF',
     initial: 'G',
+    logoSrc: googleLogo,
     baseUrl: 'https://generativelanguage.googleapis.com/v1',
     models: ['gemini-1.5-pro', 'gemini-1.5-flash'],
     description: 'Gemini 1.5 Pro、Gemini Flash',
@@ -70,6 +86,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#1E40AF',
     bg: '#EFF6FF',
     initial: 'D',
+    logoSrc: deepseekLogo,
     baseUrl: 'https://api.deepseek.com/v1',
     models: ['deepseek-chat', 'deepseek-reasoner'],
     description: 'DeepSeek-V3、DeepSeek-R1',
@@ -79,6 +96,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#FF6A00',
     bg: '#FFF5EB',
     initial: '千',
+    logoSrc: qwenLogo,
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     models: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
     description: 'Qwen-Max、Qwen-Plus、Qwen-Turbo',
@@ -88,6 +106,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#0078D4',
     bg: '#E8F4FF',
     initial: 'Az',
+    logoSrc: azureLogo,
     baseUrl: 'https://{resource}.openai.azure.com',
     models: ['gpt-4o', 'gpt-4-turbo'],
     description: '微软 Azure 托管的 OpenAI 模型',
@@ -97,6 +116,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#E91E8C',
     bg: '#FFE8F5',
     initial: 'M',
+    logoSrc: minimaxLogo,
     baseUrl: 'https://api.minimax.chat/v1',
     models: ['abab6.5s-chat', 'abab6.5-chat'],
     description: 'MiniMax-Text、abab 系列',
@@ -106,6 +126,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#5C6BC0',
     bg: '#ECEFF8',
     initial: '智',
+    logoSrc: zhipuLogo,
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     models: ['glm-4', 'glm-4-flash'],
     description: 'GLM-4、GLM-4-Flash 系列',
@@ -115,6 +136,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#1C1C1C',
     bg: '#F5F5F5',
     initial: 'K',
+    logoSrc: kimiLogo,
     baseUrl: 'https://api.moonshot.cn/v1',
     models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
     description: 'Moonshot AI，擅长长文本理解',
@@ -124,6 +146,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#555555',
     bg: '#F2F3F5',
     initial: 'Ol',
+    logoSrc: ollamaLogo,
     baseUrl: 'http://localhost:11434/v1',
     models: ['llama3', 'mistral', 'qwen2'],
     description: '本地部署的开源大模型',
@@ -133,6 +156,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#6B7280',
     bg: '#F2F3F5',
     initial: '*',
+    logoSrc: customLogo,
     baseUrl: '',
     models: ['custom-model'],
     description: '支持 OpenAI API 规范的其它供应商',
@@ -142,6 +166,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     color: '#FF6900',
     bg: '#FFF3E8',
     initial: 'Mi',
+    logoSrc: xiaomiLogo,
     baseUrl: 'https://api.mimo.xiaomi.com/v1',
     models: ['mimo-7b', 'mimo-7b-rl'],
     description: 'MiMo 推理模型',
