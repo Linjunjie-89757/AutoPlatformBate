@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { ConfigCenterTab } from '@/entities/config'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import ConfigComingSoonPanel from '@/widgets/config-coming-soon-panel/ConfigComingSoonPanel.vue'
+import { ConfigAiPanel } from '@/widgets/config-ai-panel'
 import ConfigDbPanel from '@/widgets/config-db-panel/ConfigDbPanel.vue'
 import ConfigEnvPanel from '@/widgets/config-env-panel/ConfigEnvPanel.vue'
 import ConfigNotificationPanel from '@/widgets/config-notification-panel/ConfigNotificationPanel.vue'
@@ -239,12 +239,7 @@ watch(
         <ConfigParamPanel v-else-if="activeTab === 'param'" :workspace-code="workspaceCode" />
         <ConfigNotificationPanel v-else-if="activeTab === 'notification'" :workspace-code="workspaceCode" />
         <ConfigRunnerPanel v-else-if="activeTab === 'runner'" />
-        <ConfigComingSoonPanel
-          v-else-if="activeTab === 'ai'"
-          title="AI 连接配置"
-          description="后续统一维护平台 AI 服务连接、模型 Key、调用限额和可用状态。"
-          :items="['AI 服务连接', '模型 Key 配置', '可用性检测与调用限额']"
-        />
+        <ConfigAiPanel v-else-if="activeTab === 'ai'" :workspace-code="workspaceCode" />
       </section>
     </main>
   </div>

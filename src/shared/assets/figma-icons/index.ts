@@ -5,6 +5,26 @@ import dbCylinderBlue from './config-center/db/db-cylinder-blue.svg'
 import dbCylinderOrange from './config-center/db/db-cylinder-orange.svg'
 import dbCylinderPurple from './config-center/db/db-cylinder-purple.svg'
 import dbCylinderYellow from './config-center/db/db-cylinder-yellow.svg'
+import aiActionDelete from './config-center/ai/action-delete.svg'
+import aiActionEdit from './config-center/ai/action-edit.svg'
+import aiActionModel from './config-center/ai/action-model.svg'
+import aiActionPower from './config-center/ai/action-power.svg'
+import aiActionTest from './config-center/ai/action-test.svg'
+import aiCheckboxChecked from './config-center/ai/checkbox-checked.svg'
+import aiChevronRight from './config-center/ai/chevron-right.svg'
+import aiDrawerClose from './config-center/ai/drawer-close.svg'
+import aiDrawerSave from './config-center/ai/drawer-save.svg'
+import aiDrawerTest from './config-center/ai/drawer-test.svg'
+import aiEye from './config-center/ai/eye.svg'
+import aiKeyConfigured from './config-center/ai/key-configured.svg'
+import aiKeyMissing from './config-center/ai/key-missing.svg'
+import aiModelSupportCheck from './config-center/ai/model-support-check.svg'
+import aiPlus from './config-center/ai/plus.svg'
+import aiRefresh from './config-center/ai/refresh.svg'
+import aiSearch from './config-center/ai/search.svg'
+import aiTestSuccess from './config-center/ai/test-success.svg'
+import aiUsage from './config-center/ai/usage.svg'
+import aiWarning from './config-center/ai/warning.svg'
 import notificationActionDelete from './config-center/notification/action-delete.svg'
 import notificationActionCopy from './config-center/notification/action-copy.svg'
 import notificationActionEdit from './config-center/notification/action-edit.svg'
@@ -63,6 +83,39 @@ export const figmaConfigDbIcons = {
 } as const
 
 export type FigmaConfigDbCylinderIcon = keyof typeof figmaConfigDbIcons.cylinder
+
+export const figmaConfigAiIcons = {
+  action: {
+    test: aiActionTest,
+    model: aiActionModel,
+    edit: aiActionEdit,
+    power: aiActionPower,
+    delete: aiActionDelete,
+  },
+  drawer: {
+    close: aiDrawerClose,
+    test: aiDrawerTest,
+    save: aiDrawerSave,
+    eye: aiEye,
+  },
+  checkbox: {
+    checked: aiCheckboxChecked,
+  },
+  key: {
+    configured: aiKeyConfigured,
+    missing: aiKeyMissing,
+  },
+  model: {
+    supportCheck: aiModelSupportCheck,
+  },
+  refresh: aiRefresh,
+  plus: aiPlus,
+  search: aiSearch,
+  warning: aiWarning,
+  usage: aiUsage,
+  chevronRight: aiChevronRight,
+  testSuccess: aiTestSuccess,
+}
 
 export const figmaConfigNotificationIcons = {
   tab: {
