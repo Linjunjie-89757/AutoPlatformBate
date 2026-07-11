@@ -6,7 +6,7 @@ export type RawBodyType = Extract<BodyType, 'RAW_JSON' | 'RAW_XML' | 'RAW_TEXT'>
 export type ApiBodyLanguage = 'json' | 'xml' | 'text'
 export type BodyJsonViewMode = 'json' | 'schema'
 export type DefinitionSchemaViewMode = 'schema' | 'json'
-export type ResponseTab = 'body' | 'header' | 'console' | 'actualRequest' | 'assertions'
+export type ResponseTab = 'body' | 'header' | 'cookies' | 'assertions' | 'console' | 'actualRequest'
 export type ApiAiGeneratedCaseStatus = 'generating' | 'pending' | 'accepted' | 'discarded' | 'failed'
 export type ApiAiCaseResultFilter = 'all' | 'pending' | 'accepted' | 'discarded'
 

@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowDown,
+  Close,
   EditPen,
   Fold,
   MoreFilled,
@@ -401,6 +402,9 @@ const selectedScenarioModuleTreeKey = computed(() => {
 
 const activeScenarioEditorTab = computed(() => (
   scenarioEditorTabs.value.find(item => item.key === activeScenarioEditorKey.value) || scenarioEditorTabs.value[0]
+))
+const showScenarioEditorTabStrip = computed(() => (
+  activeScenarioEditorKey.value !== 'scenario-list' || scenarioEditorTabs.value.some(item => item.key !== 'scenario-list')
 ))
 
 const activeScenarioDetail = computed(() => activeScenarioEditorTab.value?.detail || buildEmptyScenarioDetail())
@@ -3055,7 +3059,7 @@ watch(activeScenarioDetailTab, (tab) => {
     </aside>
 
     <main class="scenario-main-pane">
-      <div class="ms-like-tab-strip scenario-editor-tab-strip">
+      <div v-if="showScenarioEditorTabStrip" class="ms-like-tab-strip scenario-editor-tab-strip">
         <div class="ms-like-tab-strip-main">
           <button
             v-if="scenarioTabOverflow.overflow"
@@ -3149,6 +3153,7 @@ watch(activeScenarioDetailTab, (tab) => {
           :scenario-list-page-size="scenarioListPageSize"
           :change-scenario-list-page="changeScenarioListPage"
           :change-scenario-list-page-size="changeScenarioListPageSize"
+          :open-new-scenario-tab="openNewScenarioTab"
           @update:scenario-filter-keyword="value => { scenarioFilters.keyword = value }"
           @update:scenario-view-mode="value => { scenarioViewMode = value }"
           @open-table-settings="scenarioTableSettingsVisible = true"
@@ -3505,4 +3510,4 @@ watch(activeScenarioDetailTab, (tab) => {
   </div>
 </template>
 
-<style scoped src="./styles/api-scenario-workspace.css"></style>
+<style src="./styles/api-scenario-workspace.css"></style>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { MagicStick, MoreFilled, Setting } from '@element-plus/icons-vue'
+import { MoreFilled, Setting } from '@element-plus/icons-vue'
 
 import type { ApiDefinitionCaseItem } from '@/entities/api-automation'
+import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 
 defineProps<{
   definitionId: number | null
@@ -50,8 +51,8 @@ const emit = defineEmits<{
           :title="definitionId ? 'AI 生成接口用例' : '请先保存接口，再使用 AI 生成用例'"
           @click="emit('aiGenerate')"
         >
-          <el-icon><MagicStick /></el-icon>
-          <span>AI生成用例</span>
+          <img class="case-ai-generate-button__icon" :src="figmaApiInterfaceIcons.aiGenerate" alt="" />
+          <span>AI 生成</span>
         </button>
       </div>
 
@@ -155,37 +156,40 @@ const emit = defineEmits<{
 
 .case-ai-generate-button {
   display: inline-flex;
+  box-sizing: border-box;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: #fff;
-  color: #374151;
+  gap: 5.25px;
+  height: 31.5px;
+  padding: 0 11.5px;
+  border: 1px solid rgba(120, 22, 255, 0.19);
+  border-radius: 7px;
+  background: #f5e8ff;
+  color: #7816ff;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 30px;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .case-ai-generate-button:hover:not(:disabled) {
-  border-color: #2563eb;
-  color: #2563eb;
+  border-color: rgba(120, 22, 255, 0.3);
+  background: #f5e8ff;
+  color: #7816ff;
 }
 
 .case-ai-generate-button:disabled {
-  border-color: #e5e7eb;
-  background: #f9fafb;
-  color: #9ca3af;
+  border-color: rgba(120, 22, 255, 0.12);
+  background: rgba(245, 232, 255, 0.55);
+  color: rgba(120, 22, 255, 0.45);
   cursor: not-allowed;
 }
 
-.case-ai-generate-button .el-icon {
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
+.case-ai-generate-button__icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
 }
 
 .case-list-panel .empty-hint {
@@ -274,5 +278,68 @@ const emit = defineEmits<{
 .case-list-pagination-summary {
   color: #6b7280;
   font-size: 12px;
+}
+
+/* Figma interface workspace visual pass */
+.case-list-request-body {
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.case-list-panel .editor-actions.left {
+  min-height: 31.5px;
+  margin-bottom: 14px;
+}
+
+.case-list-panel .editor-actions.left :deep(.el-button),
+.case-ai-generate-button {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 11.5px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.case-ai-generate-button {
+  border-color: rgba(120, 22, 255, 0.19);
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.case-list-table-wrap {
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.case-list-table :deep(.el-table__header th) {
+  height: 31px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.case-list-table :deep(.el-table__row td) {
+  height: 34.5px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.case-list-action-button,
+.case-list-more-button {
+  height: 28px;
+  color: #165dff;
+  font-size: 12px;
+}
+
+.case-list-pagination {
+  min-height: 40px;
+  padding: 0 10.5px;
+  border-top-color: #e5e6eb;
 }
 </style>

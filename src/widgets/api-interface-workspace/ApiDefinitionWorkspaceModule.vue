@@ -439,10 +439,10 @@ const {
 })
 
 const contentTabs = computed<ApiRequestContentTabItem[]>(() => [
-  { label: '请求头', value: 'headers' },
-  { label: '请求体', value: 'body' },
   { label: 'Params', value: 'params', count: enabledRows(activeEditor.value?.detail.requestConfig.queryParams).length },
   { label: 'Auth', value: 'auth' },
+  { label: 'Headers', value: 'headers' },
+  { label: 'Body', value: 'body' },
   { label: '前置处理', value: 'pre' },
   { label: '后置处理', value: 'post' },
   { label: '断言', value: 'tests', count: activeEditor.value?.detail.assertions.length || undefined },

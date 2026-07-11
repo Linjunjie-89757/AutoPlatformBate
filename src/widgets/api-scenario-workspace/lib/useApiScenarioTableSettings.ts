@@ -33,23 +33,23 @@ interface UseApiScenarioTableSettingsOptions {
   draggingColumnKey: Ref<ScenarioTableColumnKey | null>
 }
 
-const SCENARIO_TABLE_SETTINGS_KEY = 'api-scenario-list-table-settings-v1'
+const SCENARIO_TABLE_SETTINGS_KEY = 'api-scenario-list-table-settings-v2'
 
 const scenarioTableColumnDefinitions = computed<ScenarioTableColumnDefinition[]>(() => [
   { key: 'id', label: 'ID', width: 120, required: true, defaultVisible: true },
-  { key: 'name', label: '场景名称', minWidth: 220, required: true, defaultVisible: true },
-  { key: 'priority', label: '场景等级', width: 110, defaultVisible: true },
-  { key: 'status', label: '状态', width: 110, defaultVisible: true },
-  { key: 'lastRunResult', label: '执行结果', width: 120, defaultVisible: true },
-  { key: 'tags', label: '标签', minWidth: 160, defaultVisible: true },
-  { key: 'environment', label: '场景环境', width: 140, defaultVisible: true },
+  { key: 'name', label: '场景名称', minWidth: 300, required: true, defaultVisible: true },
+  { key: 'priority', label: '优先级', width: 98, defaultVisible: true },
+  { key: 'status', label: '状态', width: 116, defaultVisible: true },
+  { key: 'lastRunResult', label: '执行结果', width: 116, defaultVisible: true },
+  { key: 'tags', label: '标签', minWidth: 160, defaultVisible: false },
+  { key: 'environment', label: '场景环境', width: 140, defaultVisible: false },
   { key: 'stepCount', label: '步骤数', width: 100, defaultVisible: false },
   { key: 'passRate', label: '通过率', width: 100, defaultVisible: false },
-  { key: 'moduleName', label: '所属模块', width: 140, defaultVisible: false },
+  { key: 'moduleName', label: '所属模块', width: 204, defaultVisible: true },
   { key: 'createdAt', label: '创建时间', width: 168, defaultVisible: false },
   { key: 'updatedAt', label: '更新时间', width: 168, defaultVisible: false },
-  { key: 'createdBy', label: '创建人', width: 120, defaultVisible: true },
-  { key: 'updatedBy', label: '更新人', width: 120, defaultVisible: true },
+  { key: 'createdBy', label: '创建人', width: 120, defaultVisible: false },
+  { key: 'updatedBy', label: '更新人', width: 120, defaultVisible: false },
 ])
 
 export function useApiScenarioTableSettings(options: UseApiScenarioTableSettingsOptions) {

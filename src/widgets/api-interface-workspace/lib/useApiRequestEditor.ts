@@ -52,10 +52,10 @@ interface UseApiRequestEditorOptions {
 export function useApiRequestEditor(options: UseApiRequestEditorOptions) {
   const tabs = ref<EditorTab[]>([])
   const activeEditorKey = ref('')
-  const responsePanelHeight = ref(360)
-  const responsePanelMinHeight = 300
+  const responsePanelHeight = ref(280)
+  const responsePanelMinHeight = 220
   const responsePanelMaxHeight = 520
-  const responsePanelHeightStorageKey = 'api-interface-response-panel-height'
+  const responsePanelHeightStorageKey = 'api-interface-response-panel-height-v2'
   let responseResizeStartY = 0
   let responseResizeStartHeight = 0
 

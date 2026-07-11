@@ -25,6 +25,33 @@ import aiSearch from './config-center/ai/search.svg'
 import aiTestSuccess from './config-center/ai/test-success.svg'
 import aiUsage from './config-center/ai/usage.svg'
 import aiWarning from './config-center/ai/warning.svg'
+import caseActionDelete from './cases/case-action-delete.svg'
+import caseActionEdit from './cases/case-action-edit.svg'
+import caseActionRun from './cases/case-action-run.svg'
+import caseActionView from './cases/case-action-view.svg'
+import caseAdd from './cases/case-add.svg'
+import caseAddDirectory from './cases/case-add-directory.svg'
+import caseFilterSearch from './cases/case-filter-search.svg'
+import caseImport from './cases/case-import.svg'
+import caseTreeExpand from './cases/case-tree-expand.svg'
+import caseTreeFolder from './cases/case-tree-folder.svg'
+import caseTreeSearch from './cases/case-tree-search.svg'
+import defectActionDelete from './defects/defect-action-delete.svg'
+import defectActionEdit from './defects/defect-action-edit.svg'
+import defectActionTransition from './defects/defect-action-transition.svg'
+import defectActionView from './defects/defect-action-view.svg'
+import defectAdd from './defects/defect-add.svg'
+import defectDrawerEdit from './defects/defect-drawer-edit.svg'
+import defectSearch from './defects/defect-search.svg'
+import defectUpload from './defects/defect-upload.svg'
+import defectCommentSubmit from './defects/defect-comment-submit.svg'
+import defectStatsChartModule from './defects/stats-chart-module.png'
+import defectStatsChartSeverity from './defects/stats-chart-severity.png'
+import defectStatsChartStatus from './defects/stats-chart-status.png'
+import defectStatsIconHigh from './defects/stats-icon-high.svg'
+import defectStatsIconTodo from './defects/stats-icon-todo.svg'
+import defectStatsIconTotal from './defects/stats-icon-total.svg'
+import defectStatsIconVerify from './defects/stats-icon-verify.svg'
 import notificationActionDelete from './config-center/notification/action-delete.svg'
 import notificationActionCopy from './config-center/notification/action-copy.svg'
 import notificationActionEdit from './config-center/notification/action-edit.svg'
@@ -71,6 +98,15 @@ import overviewEnvironment from './config-center/overview/overview-environment.s
 import overviewNotification from './config-center/overview/overview-notification.svg'
 import overviewParameter from './config-center/overview/overview-parameter.svg'
 import overviewRunner from './config-center/overview/overview-runner.svg'
+import apiInterfaceAddParam from './api-interface/add-param.svg'
+import apiInterfaceCheckboxChecked from './api-interface/checkbox-checked.svg'
+import apiInterfaceImport from './api-interface/import.svg'
+import apiInterfaceNewRequest from './api-interface/new-request.svg'
+import apiInterfaceResponseEmpty from './api-interface/response-empty.svg'
+import apiInterfaceAiGenerate from './api-interface/ai-generate.svg'
+import apiInterfaceSave from './api-interface/save.svg'
+import apiInterfaceSearch from './api-interface/search.svg'
+import apiInterfaceSend from './api-interface/send.svg'
 
 export const figmaConfigDbIcons = {
   cylinder: {
@@ -197,4 +233,60 @@ export const figmaConfigOverviewIcons = {
   ai: overviewAi,
   notification: overviewNotification,
   parameter: overviewParameter,
+} as const
+
+export const figmaApiInterfaceIcons = {
+  newRequest: apiInterfaceNewRequest,
+  import: apiInterfaceImport,
+  search: apiInterfaceSearch,
+  checkboxChecked: apiInterfaceCheckboxChecked,
+  addParam: apiInterfaceAddParam,
+  delete: notificationActionDelete,
+  responseEmpty: apiInterfaceResponseEmpty,
+  send: apiInterfaceSend,
+  save: apiInterfaceSave,
+  aiGenerate: apiInterfaceAiGenerate,
+} as const
+
+export const figmaCaseIcons = {
+  addDirectory: caseAddDirectory,
+  treeSearch: caseTreeSearch,
+  treeExpand: caseTreeExpand,
+  treeFolder: caseTreeFolder,
+  filterSearch: caseFilterSearch,
+  import: caseImport,
+  add: caseAdd,
+  action: {
+    view: caseActionView,
+    edit: caseActionEdit,
+    run: caseActionRun,
+    delete: caseActionDelete,
+  },
+} as const
+
+export const figmaDefectIcons = {
+  add: defectAdd,
+  search: defectSearch,
+  upload: defectUpload,
+  commentSubmit: defectCommentSubmit,
+  drawerEdit: defectDrawerEdit,
+  stats: {
+    icon: {
+      total: defectStatsIconTotal,
+      todo: defectStatsIconTodo,
+      high: defectStatsIconHigh,
+      verify: defectStatsIconVerify,
+    },
+    chart: {
+      status: defectStatsChartStatus,
+      severity: defectStatsChartSeverity,
+      module: defectStatsChartModule,
+    },
+  },
+  action: {
+    view: defectActionView,
+    edit: defectActionEdit,
+    transition: defectActionTransition,
+    delete: defectActionDelete,
+  },
 } as const

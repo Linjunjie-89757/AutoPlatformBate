@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ApiAssertionResult } from '@/entities/api-automation'
+import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 import ApiCodeEditor from './ApiCodeEditor.vue'
 import type { ResponseTab } from './apiInterfaceTypes'
 
@@ -47,21 +48,20 @@ const emit = defineEmits<{
           <span>耗时 {{ duration ?? '-' }}<template v-if="duration !== null"> ms</template></span>
           <span>大小 {{ size }}</span>
         </div>
+        <div class="api-response-tabs">
+          <button :class="{ 'is-active': activeTab === 'body' }" @click="emit('update:activeTab', 'body')">响应体</button>
+          <button :class="{ 'is-active': activeTab === 'header' }" @click="emit('update:activeTab', 'header')">Headers</button>
+          <button :class="{ 'is-active': activeTab === 'cookies' }" @click="emit('update:activeTab', 'cookies')">Cookies</button>
+          <button :class="{ 'is-active': activeTab === 'assertions' }" @click="emit('update:activeTab', 'assertions')">断言结果</button>
+        </div>
       </div>
     </div>
     <div class="api-response-content">
       <div v-if="showEmpty" class="api-response-empty">
-        <div class="api-response-empty__window"><span></span><span></span><span></span></div>
-        <p>点击 <b>发送</b> 获取响应内容</p>
+        <img class="api-response-empty__icon" :src="figmaApiInterfaceIcons.responseEmpty" alt="" />
+        <p>点击「发送」获取响应内容</p>
       </div>
       <template v-else>
-        <div class="api-response-tabs">
-          <button :class="{ 'is-active': activeTab === 'body' }" @click="emit('update:activeTab', 'body')">Body</button>
-          <button :class="{ 'is-active': activeTab === 'header' }" @click="emit('update:activeTab', 'header')">Header</button>
-          <button :class="{ 'is-active': activeTab === 'console' }" @click="emit('update:activeTab', 'console')">控制台</button>
-          <button :class="{ 'is-active': activeTab === 'actualRequest' }" @click="emit('update:activeTab', 'actualRequest')">实际请求</button>
-          <button :class="{ 'is-active': activeTab === 'assertions' }" @click="emit('update:activeTab', 'assertions')">断言</button>
-        </div>
         <div v-if="activeTab === 'body'" class="api-response-code">
           <ApiCodeEditor
             :model-value="body"
@@ -83,6 +83,9 @@ const emit = defineEmits<{
             :max-fit-content-height="1000"
             height="100%"
           />
+        </div>
+        <div v-else-if="activeTab === 'cookies'" class="api-response-empty is-inline">
+          <p>当前响应暂无 Cookies</p>
         </div>
         <div v-else-if="activeTab === 'console'" class="api-response-code is-text">
           <ApiCodeEditor
@@ -143,12 +146,14 @@ const emit = defineEmits<{
 .api-response-shell {
   position: relative;
   display: flex;
-  min-height: 360px;
-  flex: 0 0 auto;
+  box-sizing: border-box;
+  min-height: 280px;
+  flex: 1 1 280px;
   flex-direction: column;
-  border-top: 1px solid #dfe6f0;
-  background: #f7f9fc;
-  overflow: visible;
+  height: auto;
+  border-top: 2px solid #e5e6eb;
+  background: #ffffff;
+  overflow: hidden;
 }
 
 .api-response-resizer {
@@ -164,41 +169,34 @@ const emit = defineEmits<{
 }
 
 .api-response-resizer::after {
-  position: absolute;
-  top: 2px;
-  left: 50%;
-  width: 42px;
-  height: 2px;
-  border-radius: 999px;
-  background: #c9d3e2;
-  content: "";
-  transform: translateX(-50%);
+  content: none;
 }
 
 .api-response-header {
   display: flex;
-  height: 38px;
-  min-height: 38px;
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 14px;
-  border-bottom: 1px solid #e4eaf2;
-  background: #fff;
+  padding: 0 14px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
 }
 
 .api-response-header strong {
   color: var(--app-text-primary);
   font-size: 13px;
   font-weight: 600;
-  line-height: 20px;
+  line-height: 19.5px;
 }
 
 .api-response-header__right {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
 }
 
 .api-response-metrics {
@@ -257,11 +255,11 @@ const emit = defineEmits<{
 
 .api-response-content {
   display: flex;
-  min-height: 300px;
+  min-height: 238px;
   flex: 1;
   flex-direction: column;
   overflow: hidden;
-  background: #f7f9fc;
+  background: #ffffff;
 }
 
 .api-response-empty {
@@ -271,33 +269,26 @@ const emit = defineEmits<{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  padding: 24px 0 10px;
-  color: var(--app-text-muted);
+  gap: 7px;
+  padding: 14px;
+  color: #c9cdd4;
 }
 
-.api-response-empty__window {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 10px 12px;
-  border: 1px solid #e1e7f0;
-  border-radius: 8px;
-  background: #fff;
+.api-response-empty.is-inline {
+  min-height: 0;
 }
 
-.api-response-empty__window span {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--app-text-subtle);
-  opacity: 0.6;
+.api-response-empty__icon {
+  display: block;
+  width: 28px;
+  height: 28px;
 }
 
 .api-response-empty p {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
   text-align: center;
 }
 
@@ -308,21 +299,21 @@ const emit = defineEmits<{
 
 .api-response-tabs {
   display: flex;
-  height: 36px;
-  min-height: 36px;
+  height: 28px;
+  min-height: 28px;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   overflow: hidden;
-  padding: 0 12px;
-  border-bottom: 1px solid #e4eaf2;
-  background: #fff;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
 }
 
 .api-response-tabs button {
   position: relative;
   display: inline-flex;
   box-sizing: border-box;
-  height: 36px;
+  height: 28px;
   align-items: center;
   gap: 6px;
   border: 0;
@@ -330,10 +321,10 @@ const emit = defineEmits<{
   background: transparent;
   color: var(--app-text-muted);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  line-height: 20px;
-  padding: 0 10px;
+  line-height: 18px;
+  padding: 0 10.5px 2px;
   white-space: nowrap;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
@@ -345,7 +336,7 @@ const emit = defineEmits<{
 }
 
 .api-response-tabs button:not(.is-active):hover {
-  background: #f3f6fb;
+  background: transparent;
   color: var(--app-text-secondary);
 }
 

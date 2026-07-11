@@ -783,4 +783,131 @@ function emitActiveResponseTime(value: number | undefined) {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Figma interface workspace visual pass */
+.api-assertion-panel {
+  gap: 14px;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.api-assertion-editor {
+  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 360px;
+}
+
+.api-assertion-list,
+.api-assertion-detail,
+.api-assertion-item-list {
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.api-assertion-toolbar {
+  height: 40px;
+  padding: 0 10.5px;
+  border-bottom-color: #e5e6eb;
+  background: #fafafa;
+}
+
+.api-legacy-primary,
+.api-assertion-batch-link {
+  height: 28px;
+  padding: 0 11.5px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-assertion-batch-link {
+  border-color: #e5e6eb;
+  color: #ff7d00;
+}
+
+.api-assertion-toolbar + .api-assertion-list-item {
+  margin-top: 7px;
+}
+
+.api-assertion-list-item {
+  min-height: 34.5px;
+  width: calc(100% - 14px);
+  margin: 0 7px 0;
+  padding: 5px 7px;
+  border-radius: 7px;
+}
+
+.api-assertion-list-item.is-active {
+  border-color: rgba(255, 125, 0, 0.22);
+  background: #fff7e8;
+}
+
+.api-assertion-list-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.api-assertion-list-meta,
+.api-assertion-hint,
+.api-assertion-form-grid label,
+.api-assertion-form-row {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-assertion-detail {
+  gap: 14px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.api-assertion-detail-header {
+  min-height: 40px;
+  padding-bottom: 10px;
+  border-bottom-color: #e5e6eb;
+}
+
+.api-assertion-detail-actions button,
+.api-assertion-subtitle button,
+.api-assertion-item-row button,
+.api-assertion-add-row,
+.api-row-remove {
+  color: #ff7d00;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.api-row-remove,
+.api-assertion-item-row .api-row-remove {
+  color: #f53f3f;
+}
+
+.api-assertion-detail-fields :deep(.el-input__wrapper),
+.api-assertion-form-grid :deep(.el-input__wrapper),
+.api-assertion-form-grid :deep(.el-select__wrapper),
+.api-assertion-form-row :deep(.el-input__wrapper),
+.api-assertion-item-row :deep(.el-input__wrapper),
+.api-assertion-item-row :deep(.el-select__wrapper) {
+  min-height: 31.5px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #e5e6eb;
+}
+
+.api-assertion-item-row {
+  min-height: 34.5px;
+  padding: 6px 10.5px;
+  border-bottom-color: #e5e6eb;
+}
+
+.api-assertion-subtitle {
+  min-height: 31px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+}
 </style>

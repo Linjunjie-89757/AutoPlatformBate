@@ -13,6 +13,7 @@ export type CaseTableColumnKey =
   | 'executedAt'
   | 'workspaceName'
   | 'directoryName'
+  | 'defectCount'
   | 'createdByName'
   | 'createdAt'
   | 'updatedByName'

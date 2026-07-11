@@ -323,4 +323,126 @@ function setMoreSettingsVisible(index: number, visible: boolean) {
 .api-fast-extraction-suffix-button.is-disabled,.api-fast-extraction-suffix-button:disabled{background:transparent;color:#c9cdd4;cursor:not-allowed}
 .api-row-remove{border:0;background:transparent;cursor:pointer;font-size:12px;font-weight:500;padding:0}
 .api-row-remove:hover{background:var(--app-danger-soft);color:var(--app-danger)}
+
+/* Figma interface workspace visual pass */
+.api-processor-panel {
+  gap: 14px;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.api-processor-editor {
+  grid-template-columns: minmax(220px, 250px) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 360px;
+}
+
+.api-processor-sidebar,
+.api-processor-detail,
+.api-processor-extract-grid,
+.api-sql-extract-table {
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.api-processor-toolbar {
+  height: 40px;
+  padding: 0 10.5px;
+  border-bottom-color: #e5e6eb;
+  background: #fafafa;
+}
+
+.api-legacy-primary {
+  height: 28px;
+  padding: 0 11.5px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-processor-sidebar-list {
+  gap: 0;
+  padding: 7px;
+}
+
+.api-processor-list-item {
+  min-height: 34.5px;
+  margin: 0;
+  padding: 5px 7px;
+  border-radius: 7px;
+}
+
+.api-processor-list-item.is-active {
+  border-color: rgba(255, 125, 0, 0.22);
+  background: #fff7e8;
+}
+
+.api-processor-list-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.api-processor-list-meta,
+.api-processor-form-label,
+.api-processor-hint,
+.api-processor-form-grid span {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-processor-detail {
+  gap: 14px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.api-processor-detail-header {
+  min-height: 40px;
+  padding-bottom: 10px;
+  border-bottom-color: #e5e6eb;
+}
+
+.api-processor-detail-actions button,
+.api-processor-editor-actions button,
+.api-processor-extract-toolbar button,
+.api-processor-extract-row button,
+.api-sql-extract-table__row .api-row-remove,
+.api-sql-extract-table__add,
+.api-row-remove {
+  color: #ff7d00;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.api-processor-detail-fields :deep(.el-input__wrapper),
+.api-processor-form-grid :deep(.el-input__wrapper),
+.api-processor-form-grid :deep(.el-select__wrapper),
+.api-processor-extract-row :deep(.el-input__wrapper),
+.api-processor-extract-row :deep(.el-select__wrapper),
+.api-sql-extract-table__row :deep(.el-input__wrapper) {
+  min-height: 31.5px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #e5e6eb;
+}
+
+.api-processor-extract-header,
+.api-sql-extract-table__header {
+  min-height: 31px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-processor-extract-row,
+.api-sql-extract-table__row {
+  min-height: 34.5px;
+  border-color: #e5e6eb;
+}
 </style>

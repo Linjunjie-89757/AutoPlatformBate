@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
-import { RefreshRight, Search } from '@element-plus/icons-vue'
 
 import {
   caseExecutionStatusOptions,
@@ -8,8 +7,7 @@ import {
   caseReviewStatusOptions,
   type CaseClientFilter,
 } from '@/entities/case'
-import AppButton from '@/shared/ui/app-button/AppButton.vue'
-
+import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 const props = defineProps<{
   modelValue: CaseClientFilter
   executorOptions?: string[]
@@ -20,7 +18,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: CaseClientFilter]
-  reset: []
 }>()
 
 const form = reactive<CaseClientFilter>({
@@ -49,9 +46,6 @@ watch(
   { deep: true },
 )
 
-function resetFilters() {
-  emit('reset')
-}
 </script>
 
 <template>
@@ -60,9 +54,12 @@ function resetFilters() {
       v-model="form.keyword"
       class="case-filter-panel__search"
       clearable
-      placeholder="搜索编号或名称"
-      :prefix-icon="Search"
-    />
+      placeholder="搜索用例标题或 ID"
+    >
+      <template #prefix>
+        <img class="case-filter-panel__prefix-icon" :src="figmaCaseIcons.filterSearch" alt="" />
+      </template>
+    </el-input>
     <el-select v-model="form.priority" class="case-filter-panel__control" clearable placeholder="优先级">
       <el-option v-for="item in casePriorityOptions" :key="item.value" :label="item.label" :value="item.value" />
     </el-select>
@@ -85,29 +82,16 @@ function resetFilters() {
     <el-select v-model="form.executorName" class="case-filter-panel__control" clearable filterable placeholder="执行人">
       <el-option v-for="item in executorOptions" :key="`executor-${item}`" :label="item" :value="item" />
     </el-select>
-    <el-select v-model="form.createdByName" class="case-filter-panel__control" clearable filterable placeholder="创建人">
-      <el-option v-for="item in creatorOptions" :key="`creator-${item}`" :label="item" :value="item" />
-    </el-select>
-    <el-select
-      v-if="showWorkspaceFilter"
-      v-model="form.workspaceCode"
-      class="case-filter-panel__control"
-      clearable
-      filterable
-      placeholder="所属空间"
-    >
-      <el-option v-for="item in workspaceOptions" :key="item.value" :label="item.label" :value="item.value" />
-    </el-select>
-    <AppButton :icon="RefreshRight" @click="resetFilters">重置</AppButton>
   </div>
 </template>
 
 <style scoped>
 .case-filter-panel {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: var(--app-space-2);
+  gap: 7px;
   min-width: 0;
 }
 
@@ -116,7 +100,43 @@ function resetFilters() {
 }
 
 .case-filter-panel__control {
-  width: 112px;
+  width: 104px;
+}
+
+.case-filter-panel__control:nth-of-type(2),
+.case-filter-panel__control:nth-of-type(5) {
+  width: 100px;
+}
+
+.case-filter-panel__control:nth-of-type(3),
+.case-filter-panel__control:nth-of-type(4) {
+  width: 110px;
+}
+
+.case-filter-panel :deep(.el-input__wrapper),
+.case-filter-panel :deep(.el-select__wrapper) {
+  min-height: 28px;
+  height: 28px;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--app-border) inset;
+}
+
+.case-filter-panel :deep(.el-input__inner),
+.case-filter-panel :deep(.el-select__selected-item),
+.case-filter-panel :deep(.el-select__placeholder) {
+  font-size: 13px;
+}
+
+.case-filter-panel__prefix-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+@media (max-width: 1280px) {
+  .case-filter-panel {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 720px) {

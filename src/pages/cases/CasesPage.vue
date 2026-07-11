@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Plus, RefreshRight } from '@element-plus/icons-vue'
+import { RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
@@ -21,6 +21,7 @@ import {
 } from '@/entities/case'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
@@ -353,20 +354,12 @@ async function handleWorkspaceChange(value: string) {
   void loadDirectories()
 }
 
-function resetFilters() {
-  filter.value = {
-    keyword: '',
-    priority: '',
-    reviewStatus: '',
-    executionStatus: '',
-    executorName: '',
-    createdByName: '',
-    workspaceCode: '',
-  }
-}
-
 function openCreateCase() {
   caseListRef.value?.openCreateDialog()
+}
+
+function handleImportCases() {
+  ElMessage.info('用例导入接口暂未接入')
 }
 
 function openCreateModule(payload: { nodeId: string; workspaceCode: string; directoryId: number | null; label: string; type: 'root' | 'workspace' | 'module' }) {
@@ -553,6 +546,7 @@ watch(
   <AppPage
     title="用例中心"
     description=""
+    fill
   >
     <template #actions>
       <div class="cases-workspace-select">
@@ -622,11 +616,17 @@ watch(
                 :creator-options="creatorOptions"
                 :workspace-options="businessWorkspaceOptions"
                 :show-workspace-filter="workspaceCode === 'ALL'"
-                @reset="resetFilters"
               />
-              <AppButton :icon="Plus" type="primary" class="cases-page__create-button" @click="openCreateCase">
-                新建用例
-              </AppButton>
+              <div class="cases-page__toolbar-actions">
+                <button type="button" class="cases-page__import-button" @click="handleImportCases">
+                  <img :src="figmaCaseIcons.import" alt="" />
+                  导入
+                </button>
+                <button type="button" class="cases-page__create-button" @click="openCreateCase">
+                  <img :src="figmaCaseIcons.add" alt="" />
+                  新增用例
+                </button>
+              </div>
             </header>
 
             <CaseListPanel
@@ -714,42 +714,88 @@ watch(
 <style scoped>
 .cases-page {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  min-height: calc(100dvh - 86px);
+  align-items: stretch;
+  gap: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .cases-page__content {
+  display: flex;
   min-width: 0;
+  min-height: 0;
   flex: 1;
+  overflow: auto;
+  padding: 17.5px;
+  background: var(--app-bg-page);
 }
 
 .cases-page__stack {
   display: flex;
+  min-width: 0;
+  width: 100%;
   flex-direction: column;
   gap: 0;
 }
 
 .cases-page__workbench {
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
-  box-shadow: var(--app-shadow-card);
+  min-width: 0;
 }
 
 .cases-page__toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--app-space-4);
-  min-height: 84px;
-  padding: var(--app-space-5) var(--app-space-6) var(--app-space-4);
-  border-bottom: 1px solid var(--app-border-soft);
+  gap: 14px;
+  min-height: 32px;
+  margin-bottom: 14px;
+}
+
+.cases-page__toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.cases-page__import-button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 5.25px;
+  padding: 0 11.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
 }
 
 .cases-page__create-button {
-  flex: 0 0 auto;
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 5.25px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: #165dff;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.cases-page__import-button img,
+.cases-page__create-button img {
+  display: block;
+  width: 13px;
+  height: 13px;
 }
 
 .cases-page__inline-error {

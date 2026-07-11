@@ -40,9 +40,30 @@ const configCenterCrumbTitle = computed(() => {
   return typeof tab === 'string' && labels[tab] ? labels[tab] : '配置总览'
 })
 
+const caseCenterCrumbTitle = computed(() => {
+  const routeName = String(route.name || '')
+  const labels: Record<string, string> = {
+    'cases-manage': '用例管理',
+    'case-execution': '用例执行',
+    'cases-ai-generate': 'AI 用例生成',
+    'cases-ai-records': 'AI 生成记录',
+    'cases-ai-record-detail': '生成记录详情',
+    'cases-ai-config': 'AI 配置',
+  }
+  return labels[routeName] || '用例管理'
+})
+
 const headerCrumbs = computed(() => {
   if (route.name === 'config-center') {
     return ['配置中心', configCenterCrumbTitle.value]
+  }
+
+  if (route.path.startsWith('/cases')) {
+    return ['用例中心', caseCenterCrumbTitle.value]
+  }
+
+  if (route.path.startsWith('/automation/api')) {
+    return ['接口自动化']
   }
 
   return [headerTitle.value]
@@ -61,6 +82,15 @@ const navigationTargetQuery = computed(() => ({
 
 const sidebarWidth = computed(() => '56px')
 const isApiWorkbenchRoute = computed(() => route.path.startsWith('/automation/api'))
+const activeSecondaryNavigation = computed(() => {
+  if (!route.path.startsWith('/automation/api')) return []
+  const activeItem = navigationItems.find(item => item.children?.length && isNavigationItemActive(item))
+  if (!activeItem?.children) return []
+  if (activeItem.path === '/automation/api') {
+    return activeItem.children.filter(item => item.path !== '/automation/api/settings')
+  }
+  return []
+})
 
 interface NavigationItem {
   path: string
@@ -200,7 +230,7 @@ onMounted(() => {
 <template>
   <div
     class="app-layout"
-    :class="{ 'is-api-workbench': isApiWorkbenchRoute }"
+    :class="{ 'is-api-workbench': isApiWorkbenchRoute, 'has-secondary-nav': activeSecondaryNavigation.length }"
     :style="{ '--app-current-sidebar-width': sidebarWidth }"
   >
     <aside
@@ -313,6 +343,20 @@ onMounted(() => {
           </el-dropdown>
         </div>
       </header>
+
+      <nav v-if="activeSecondaryNavigation.length" class="app-layout__secondary-nav" aria-label="模块导航">
+        <RouterLink
+          v-for="item in activeSecondaryNavigation"
+          :key="item.path"
+          class="app-layout__secondary-link"
+          :class="{ 'is-active': matchesNavigationPath(item.path) }"
+          :to="{ path: item.path, query: navigationTargetQuery }"
+        >
+          {{ item.label }}
+        </RouterLink>
+        <span class="app-layout__secondary-spacer" />
+        <button type="button" class="app-layout__secondary-placeholder" aria-hidden="true" tabindex="-1"></button>
+      </nav>
 
       <main class="app-layout__main">
         <RouterView />
@@ -652,6 +696,57 @@ onMounted(() => {
   min-height: calc(100dvh - 42px);
   padding: 0;
   background: var(--app-bg-page);
+}
+
+.app-layout.has-secondary-nav .app-layout__main {
+  min-height: calc(100dvh - 86px);
+}
+
+.app-layout__secondary-nav {
+  display: flex;
+  height: 44px;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 17.5px;
+  border-bottom: 1px solid var(--app-border);
+  background: #ffffff;
+}
+
+.app-layout__secondary-link {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 43px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 17.5px 2px;
+  border-bottom: 2px solid transparent;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-layout__secondary-link.is-active {
+  border-bottom-color: #ff7d00;
+  color: var(--app-text-primary);
+}
+
+.app-layout__secondary-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-layout__secondary-placeholder {
+  width: 81.5px;
+  height: 24.5px;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: #ffffff;
+  pointer-events: none;
 }
 
 @media (max-width: 900px) {

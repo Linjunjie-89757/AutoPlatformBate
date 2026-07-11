@@ -1,5 +1,9 @@
 <template>
-  <div class="api-code-editor" :class="{ 'is-fit-content': fitContent }" :style="editorShellStyle">
+  <div
+    class="api-code-editor"
+    :class="{ 'is-fit-content': fitContent, 'is-plain': plain, 'is-fill': fill }"
+    :style="editorShellStyle"
+  >
     <div v-if="showToolbar" class="api-code-editor__toolbar">
       <div class="api-code-editor__toolbar-left">
         <slot name="toolbar"></slot>
@@ -33,7 +37,11 @@ const props = withDefaults(defineProps<{
   readOnly?: boolean
   showFormatButton?: boolean
   placeholder?: string
+  lineNumbers?: 'on' | 'off'
+  folding?: boolean
   fitContent?: boolean
+  fill?: boolean
+  plain?: boolean
   minFitContentHeight?: number
   maxFitContentHeight?: number
 }>(), {
@@ -42,7 +50,11 @@ const props = withDefaults(defineProps<{
   readOnly: false,
   showFormatButton: true,
   placeholder: '',
+  lineNumbers: 'on',
+  folding: true,
   fitContent: false,
+  fill: false,
+  plain: false,
   minFitContentHeight: 120,
   maxFitContentHeight: 1000,
 })
@@ -59,7 +71,17 @@ let editor: monaco.editor.IStandaloneCodeEditor | null = null
 let suppressModelSync = false
 
 const showToolbar = computed(() => !props.readOnly && (props.showFormatButton || Boolean(slots.toolbar)))
-const editorShellStyle = computed(() => (props.fitContent ? { height: 'auto' } : { height: props.height }))
+const editorShellStyle = computed(() => {
+  if (props.fitContent) {
+    return { height: 'auto' }
+  }
+
+  if (props.fill) {
+    return {}
+  }
+
+  return { height: props.height }
+})
 const editorBodyStyle = computed(() => (props.fitContent ? { height: bodyHeight.value } : {}))
 
 function mapLanguage(language: ApiCodeLanguage) {
@@ -129,6 +151,10 @@ async function formatDocument() {
   await editor.getAction('editor.action.formatDocument')?.run()
 }
 
+defineExpose({
+  formatDocument,
+})
+
 function syncEditorHeight() {
   if (!props.fitContent || !editor) {
     return
@@ -152,8 +178,11 @@ function createEditor() {
     automaticLayout: true,
     minimap: { enabled: false },
     contextmenu: !props.readOnly,
+    lineNumbers: props.lineNumbers,
     lineNumbersMinChars: 3,
     lineDecorationsWidth: 0,
+    glyphMargin: false,
+    folding: props.folding,
     tabSize: 2,
     scrollBeyondLastLine: false,
     wordWrap: 'on',
@@ -225,6 +254,17 @@ watch(
 )
 
 watch(
+  () => [props.lineNumbers, props.folding] as const,
+  ([lineNumbers, folding]) => {
+    editor?.updateOptions({
+      lineNumbers,
+      folding,
+    })
+    syncEditorHeight()
+  },
+)
+
+watch(
   () => props.height,
   (height) => {
     if (!props.fitContent) {
@@ -260,6 +300,19 @@ onBeforeUnmount(() => {
 
 .api-code-editor.is-fit-content {
   min-height: 0;
+}
+
+.api-code-editor.is-fill {
+  height: 100%;
+  flex: 1 1 auto;
+}
+
+.api-code-editor.is-plain {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .api-code-editor__toolbar {

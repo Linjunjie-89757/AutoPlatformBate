@@ -2,22 +2,24 @@
 import { computed } from 'vue'
 
 import type { DefectStatistics } from '@/entities/defect'
+import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 
 type DefectSummaryCard = {
   label: string
   value: number
-  description: string
   status: string
-  tone: 'primary' | 'assigned' | 'processing' | 'verify'
+  tone: 'total' | 'todo' | 'high' | 'verify'
 }
 
 const props = defineProps<{
   statistics: DefectStatistics | null
   activeStatus?: string
+  showCreateButton?: boolean
 }>()
 
 const emit = defineEmits<{
   select: [status: string]
+  create: []
 }>()
 
 const stats = computed<DefectSummaryCard[]>(() => {
@@ -30,12 +32,17 @@ const stats = computed<DefectSummaryCard[]>(() => {
     closed: 0,
     rejected: 0,
   }
+  const extraSource = source as DefectStatistics & {
+    highPriority?: number
+    highPriorityCount?: number
+  }
+  const highPriorityCount = extraSource.highPriority ?? extraSource.highPriorityCount ?? 0
 
   return [
-    { label: '缺陷总数', value: source.total, description: '全部缺陷', status: '', tone: 'primary' },
-    { label: '待处理', value: source.assigned, description: '已指派待处理', status: 'ASSIGNED', tone: 'assigned' },
-    { label: '处理中', value: source.inProgress, description: '正在处理中', status: 'IN_PROGRESS', tone: 'processing' },
-    { label: '待验证', value: source.pendingVerify, description: '等待验证结果', status: 'PENDING_VERIFY', tone: 'verify' },
+    { label: '缺陷总数', value: source.total, status: '', tone: 'total' },
+    { label: '待处理', value: source.todo + source.assigned, status: 'TODO', tone: 'todo' },
+    { label: '高优先级', value: highPriorityCount, status: '', tone: 'high' },
+    { label: '待验证', value: source.pendingVerify, status: 'PENDING_VERIFY', tone: 'verify' },
   ]
 })
 
@@ -54,150 +61,135 @@ function handleSelect(status: string) {
 
 <template>
   <div class="defect-summary-panel">
-    <article
-      v-for="stat in stats"
-      :key="stat.label"
-      class="defect-summary-panel__card"
-      :class="[
-        `defect-summary-panel__card--${stat.tone}`,
-        { 'defect-summary-panel__card--active': isActive(stat.status) },
-      ]"
-      role="button"
-      tabindex="0"
-      @click="handleSelect(stat.status)"
-      @keydown.enter.prevent="handleSelect(stat.status)"
-      @keydown.space.prevent="handleSelect(stat.status)"
-    >
-      <div class="defect-summary-panel__card-head">
+    <div class="defect-summary-panel__stats">
+      <button
+        v-for="stat in stats"
+        :key="stat.label"
+        type="button"
+        class="defect-summary-panel__card"
+        :class="[
+          `defect-summary-panel__card--${stat.tone}`,
+          { 'defect-summary-panel__card--active': isActive(stat.status) },
+        ]"
+        @click="handleSelect(stat.status)"
+      >
+        <strong>{{ stat.value }}</strong>
         <span>{{ stat.label }}</span>
-        <i class="defect-summary-panel__dot" aria-hidden="true" />
-      </div>
-      <strong>{{ stat.value }}</strong>
-      <p>{{ stat.description }}</p>
-    </article>
+      </button>
+    </div>
+    <button
+      v-if="showCreateButton"
+      type="button"
+      class="defect-summary-panel__create"
+      @click="emit('create')"
+    >
+      <img class="defect-summary-panel__create-icon" :src="figmaDefectIcons.add" alt="" />
+      <span>新增缺陷</span>
+    </button>
   </div>
 </template>
 
 <style scoped>
 .defect-summary-panel {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 48px;
+  padding: 0 21px 1px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
+}
+
+.defect-summary-panel__stats {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
 }
 
 .defect-summary-panel__card {
-  display: grid;
-  gap: 10px;
-  min-height: 144px;
-  padding: 20px 24px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 17.5px 0 0;
+  border: 0;
+  border-right: 1px solid #e5e6eb;
+  border-radius: 0;
+  margin-right: 17.5px;
+  background: transparent;
   cursor: pointer;
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
+  font-family: var(--app-font-family);
+  transition: opacity 160ms ease;
 }
 
 .defect-summary-panel__card:hover {
-  border-color: var(--app-border-strong);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  transform: translateY(-1px);
+  opacity: 0.82;
 }
 
-.defect-summary-panel__card--active {
-  border-color: #60a5fa;
-  background: linear-gradient(180deg, #fdfefe 0%, #f3f8ff 100%);
-  box-shadow:
-    0 12px 28px rgba(59, 130, 246, 0.14),
-    0 0 0 1px rgba(96, 165, 250, 0.16);
-}
-
-.defect-summary-panel__card--active .defect-summary-panel__card-head span,
-.defect-summary-panel__card--active .defect-summary-panel__card strong {
-  color: #1d4ed8;
-}
-
-.defect-summary-panel__card--active .defect-summary-panel__dot {
-  transform: scale(1.08);
-  box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.18);
-}
-
-.defect-summary-panel__card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--app-space-3);
-  margin-bottom: 6px;
-}
-
-.defect-summary-panel__card-head span {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
-  line-height: var(--app-line-height-sm);
+.defect-summary-panel__card:last-child {
+  border-right: 0;
+  margin-right: 0;
+  padding-right: 0;
 }
 
 .defect-summary-panel__card strong {
-  color: var(--app-text-primary);
-  font-size: 28px;
-  line-height: 32px;
+  color: #1d2129;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 36px;
 }
 
-.defect-summary-panel__card p {
-  margin: 0;
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
+.defect-summary-panel__card span {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
   line-height: 18px;
 }
 
-.defect-summary-panel__dot {
-  width: 10px;
-  height: 10px;
+.defect-summary-panel__card--todo strong {
+  color: #ff7d00;
+}
+
+.defect-summary-panel__card--high strong {
+  color: #f53f3f;
+}
+
+.defect-summary-panel__card--verify strong {
+  color: #c89b00;
+}
+
+.defect-summary-panel__card--active span {
+  color: #4e5969;
+}
+
+.defect-summary-panel__create {
+  display: inline-flex;
+  height: 32px;
   flex: 0 0 auto;
-  border-radius: 999px;
-  background: #3b82f6;
-  box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.12);
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  align-items: center;
+  gap: 5.25px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: #f53f3f;
+  color: #ffffff;
+  cursor: pointer;
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
 }
 
-.defect-summary-panel__card--primary {
-  border-color: #dbeafe;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-}
-
-.defect-summary-panel__card--assigned .defect-summary-panel__dot {
-  background: #a855f7;
-  box-shadow: 0 0 0 6px rgba(168, 85, 247, 0.12);
-}
-
-.defect-summary-panel__card--processing .defect-summary-panel__dot {
-  background: #22c55e;
-  box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.12);
-}
-
-.defect-summary-panel__card--verify .defect-summary-panel__dot {
-  background: #f97316;
-  box-shadow: 0 0 0 6px rgba(249, 115, 22, 0.12);
-}
-
-.defect-summary-panel__card--success .defect-summary-panel__dot {
-  background: #16a34a;
-  box-shadow: 0 0 0 6px rgba(22, 163, 74, 0.12);
-}
-
-
-@media (max-width: 1180px) {
-  .defect-summary-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.defect-summary-panel__create-icon {
+  width: 13px;
+  height: 13px;
+  display: block;
 }
 
 @media (max-width: 720px) {
   .defect-summary-panel {
-    grid-template-columns: 1fr;
+    overflow-x: auto;
   }
 }
 </style>

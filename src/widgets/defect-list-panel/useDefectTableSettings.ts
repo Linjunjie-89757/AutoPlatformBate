@@ -1,6 +1,7 @@
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 
 export type DefectTableColumnKey =
+  | 'select'
   | 'bugNo'
   | 'title'
   | 'status'

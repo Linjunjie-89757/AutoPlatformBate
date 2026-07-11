@@ -182,6 +182,10 @@ onMounted(() => {
 
 <style scoped>
 .api-interface-workspace {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
   height: 100%;
 }

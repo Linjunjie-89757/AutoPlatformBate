@@ -13,7 +13,6 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  generateFromJson: []
   updateRequired: [field: ApiSchemaFieldInput, value: unknown]
   updateFieldValue: [field: ApiSchemaFieldInput, key: 'description' | 'example' | 'defaultValue', value: string]
 }>()
@@ -21,9 +20,6 @@ const emit = defineEmits<{
 
 <template>
   <div class="api-schema-panel is-body-schema">
-    <div class="api-schema-actions">
-      <button type="button" class="api-schema-action" @click="emit('generateFromJson')">从 JSON 生成 Schema</button>
-    </div>
     <div v-if="!fields.length" class="api-empty-body">当前请求体暂无 Schema 定义</div>
     <div v-else class="api-schema-table">
       <div class="api-schema-header">
@@ -38,7 +34,14 @@ const emit = defineEmits<{
       <div v-for="field in fields" :key="`body-schema-${field.fieldPath || field.name}`" class="api-schema-row">
         <span class="api-schema-field" :style="{ paddingLeft: `${schemaFieldDepth(field) * 16}px` }">{{ schemaFieldName(field) }}</span>
         <span :class="['api-schema-type', schemaFieldTypeClass(field)]">{{ schemaFieldType(field) }}</span>
-        <span><el-switch :model-value="Boolean(field.required)" size="small" @change="emit('updateRequired', field, $event)" /></span>
+        <span class="api-schema-required-cell">
+          <input
+            class="api-schema-checkbox"
+            type="checkbox"
+            :checked="Boolean(field.required)"
+            @change="emit('updateRequired', field, ($event.target as HTMLInputElement).checked)"
+          />
+        </span>
         <span><el-input :model-value="field.description || ''" size="small" placeholder="描述" @input="emit('updateFieldValue', field, 'description', String($event))" /></span>
         <span><el-input :model-value="schemaEditableValue(field.example)" size="small" placeholder="示例值" @input="emit('updateFieldValue', field, 'example', String($event))" /></span>
         <span><el-input :model-value="schemaEditableValue(field.defaultValue)" size="small" placeholder="默认值" @input="emit('updateFieldValue', field, 'defaultValue', String($event))" /></span>
@@ -52,73 +55,59 @@ const emit = defineEmits<{
 .api-empty-body {
   display: flex;
   width: 100%;
-  min-height: 300px;
+  height: 100%;
+  min-height: 220px;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: var(--app-radius-sm);
-  background: var(--app-bg-page);
+  border-radius: 0;
+  background: #fff;
   color: var(--app-text-subtle);
   font-size: 13px;
 }
 
 .api-schema-panel {
-  min-height: 300px;
-}
-
-.api-schema-actions {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.api-schema-action {
-  min-height: 26px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--app-primary);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.api-schema-action:hover {
-  background: var(--app-primary-soft);
-  color: var(--app-primary-hover);
+  min-height: 0;
+  flex-direction: column;
 }
 
 .api-schema-table {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
-  border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border: 0;
+  border-radius: 0;
   background: #fff;
 }
 
 .api-schema-header,
 .api-schema-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.35fr) 130px 72px minmax(180px, 1.2fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr);
+  grid-template-columns: minmax(220px, 1.35fr) 108px 58px minmax(180px, 1.15fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr);
   align-items: center;
-  column-gap: 12px;
+  column-gap: 8px;
   min-width: 1180px;
-  padding: 0 12px;
+  padding: 0 10.5px;
 }
 
 .api-schema-header {
-  height: 38px;
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  height: 31px;
+  min-height: 31px;
   border-bottom: 1px solid var(--app-border);
-  background: #f9fafb;
+  background: #fafafa;
   color: var(--app-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  line-height: 16.5px;
 }
 
 .api-schema-row {
-  min-height: 42px;
+  height: 34.5px;
+  min-height: 34.5px;
   border-bottom: 1px solid var(--app-border-soft);
   color: var(--app-text-primary);
   font-size: 13px;
@@ -131,9 +120,9 @@ const emit = defineEmits<{
 .api-schema-field {
   min-width: 0;
   overflow: hidden;
-  color: #111827;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-weight: 600;
+  color: #165dff;
+  font-family: var(--app-font-family-mono);
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -151,12 +140,13 @@ const emit = defineEmits<{
   width: fit-content;
   max-width: 100%;
   align-items: center;
-  padding: 2px 7px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: #f1f5f9;
   color: #475569;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
 }
 
 .api-schema-type.is-string {
@@ -182,12 +172,53 @@ const emit = defineEmits<{
 
 .api-schema-row :deep(.el-input__wrapper) {
   min-height: 28px;
-  border-radius: 4px;
-  box-shadow: 0 0 0 1px var(--app-border-soft) inset;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.api-schema-row :deep(.el-input.is-focus .el-input__wrapper) {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--app-primary);
 }
 
 .api-schema-row :deep(.el-input__inner) {
   height: 28px;
-  font-size: 12px;
+  color: var(--app-text-primary);
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.api-schema-required-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.api-schema-checkbox {
+  display: block;
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #c9cdd4;
+  border-radius: 2px;
+  appearance: none;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.api-schema-checkbox:checked {
+  border-color: #165dff;
+  background-color: #165dff;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 10 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 5.2L4.05 7.25L8.15 2.8' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.api-schema-checkbox:focus-visible {
+  outline: 2px solid rgba(22, 93, 255, 0.18);
+  outline-offset: 2px;
 }
 </style>

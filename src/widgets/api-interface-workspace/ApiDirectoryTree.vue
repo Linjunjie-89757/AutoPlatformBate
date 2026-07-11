@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import {
   ChevronRight as LucideChevronRight,
-  MoreHorizontal as LucideMoreHorizontal,
   Folder as LucideFolder,
   FolderOpen as LucideFolderOpen,
 } from '@lucide/vue'
@@ -103,7 +102,7 @@ defineExpose({
         <div class="api-directory-node__actions" @click.stop>
           <el-dropdown v-if="data.type === 'workspace' || data.type === 'module' || data.type === 'request'" trigger="click" @click.stop>
             <button type="button" class="api-directory-node__action is-more" :title="moreMenuTitle" @click.stop>
-              <LucideMoreHorizontal class="api-directory-node__lucide-action" />
+              <span class="api-directory-node__ellipsis" aria-hidden="true">...</span>
             </button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -147,10 +146,10 @@ defineExpose({
 }
 
 .api-directory-tree :deep(.el-tree-node__content) {
-  min-height: 32px;
-  height: auto;
-  border-radius: var(--app-radius-sm);
-  padding-right: 2px;
+  min-height: 30px;
+  height: 30px;
+  border-radius: 0;
+  padding-right: 10.5px;
   transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
@@ -178,12 +177,12 @@ defineExpose({
 .api-directory-node {
   position: relative;
   display: flex;
-  min-height: 32px;
+  min-height: 30px;
   min-width: 0;
   width: 100%;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 5.25px;
   font-size: 13px;
   line-height: 20px;
 }
@@ -209,7 +208,8 @@ defineExpose({
   min-width: 0;
   width: 100%;
   align-items: center;
-  gap: 6px;
+  gap: 5.25px;
+  padding-right: 18px;
 }
 
 .api-directory-node__actions {
@@ -221,9 +221,9 @@ defineExpose({
   align-items: center;
   gap: 2px;
   overflow: hidden;
-  padding-left: 10px;
-  border-radius: var(--app-radius-md);
-  background: linear-gradient(90deg, rgba(250, 251, 255, 0) 0%, rgba(250, 251, 255, 0.94) 22%, rgba(250, 251, 255, 1) 100%);
+  padding-left: 4px;
+  border-radius: 0;
+  background: transparent;
   opacity: 0;
   pointer-events: none;
   transition: width 0.15s ease, opacity 0.15s ease;
@@ -231,12 +231,12 @@ defineExpose({
 
 .api-directory-node__action {
   display: inline-flex;
-  width: 22px;
+  width: 18px;
   height: 22px;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: var(--app-radius-sm);
+  border-radius: 0;
   background: transparent;
   color: var(--app-text-subtle);
   cursor: pointer;
@@ -264,18 +264,25 @@ defineExpose({
 }
 
 .api-directory-node__action:hover {
-  background: var(--app-bg-muted);
-  color: var(--app-primary);
+  background: transparent;
+  color: var(--app-text-secondary);
 }
 
 .api-directory-node__action.is-more {
-  border-radius: 4px;
+  border-radius: 0;
 }
 
-.api-directory-node__lucide-action {
-  width: 15px;
-  height: 15px;
-  stroke-width: 2;
+.api-directory-node__ellipsis {
+  display: inline-flex;
+  width: 18px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 18px;
 }
 
 .api-directory-node__name {
@@ -291,12 +298,17 @@ defineExpose({
 }
 
 .api-directory-node.is-request {
-  min-height: 30px;
+  min-height: 28.5px;
   font-size: 12px;
 }
 
+.api-directory-tree :deep(.el-tree-node__content:has(.api-directory-node.is-request)) {
+  min-height: 28.5px;
+  height: 28.5px;
+}
+
 .api-directory-node.is-request .api-directory-node__main {
-  gap: 8px;
+  gap: 7px;
 }
 
 .api-directory-node.is-request .api-directory-node__name {
@@ -312,8 +324,8 @@ defineExpose({
 
 .api-directory-node__folder {
   display: inline-flex;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -386,7 +398,7 @@ defineExpose({
 .api-method {
   display: inline-flex;
   min-width: 44px;
-  height: 20px;
+  height: 17px;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
@@ -395,7 +407,7 @@ defineExpose({
   background: #f2f3f5;
   font-size: 10px;
   font-weight: 700;
-  line-height: 20px;
+  line-height: 15px;
 }
 
 .method-get {

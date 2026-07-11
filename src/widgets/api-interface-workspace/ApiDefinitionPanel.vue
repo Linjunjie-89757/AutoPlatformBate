@@ -582,4 +582,95 @@ const emit = defineEmits<{
     text-align: left;
   }
 }
+
+/* Figma interface workspace visual pass */
+.api-definition-doc {
+  gap: 14px;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.api-definition-summary,
+.api-definition-group,
+.api-definition-empty.is-panel {
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.api-definition-summary {
+  padding: 14px;
+}
+
+.api-definition-title-row strong {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.api-definition-summary p,
+.api-definition-path,
+.api-definition-group__head span,
+.api-doc-muted,
+.api-doc-required {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-definition-group__head {
+  min-height: 40px;
+  padding: 0 10.5px;
+  border-bottom-color: #e5e6eb;
+  background: #fafafa;
+}
+
+.api-definition-group__head strong,
+.api-definition-section__title {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.api-doc-schema-head {
+  height: 31px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-doc-schema-row {
+  min-height: 34.5px;
+  border-bottom-color: #e5e6eb;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.api-doc-field-name,
+.api-doc-field-cell small,
+.api-definition-example-panel pre {
+  font-family: var(--app-font-family-mono);
+}
+
+.api-definition-view-switch button,
+.api-definition-status-tabs button {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.api-definition-view-switch button:hover,
+.api-definition-view-switch button.is-active,
+.api-definition-status-tabs button.is-active {
+  color: #ff7d00;
+}
+
+.api-definition-status-tabs button.is-active {
+  background: #fff7e8;
+}
 </style>

@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 
-import { defectStatusOptions, type DefectSummaryItem, type TransitionDefectPayload } from '@/entities/defect'
+import { DefectStatusBadge, defectStatusOptions, type DefectSummaryItem, type TransitionDefectPayload } from '@/entities/defect'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
-import AppUserSelect from '@/shared/ui/app-user-select/AppUserSelect.vue'
 
 import {
   buildTransitionPayload,
@@ -36,10 +35,13 @@ const formError = reactive({
   message: '',
 })
 const targetStatusOptions = computed(() =>
-  defectStatusOptions.filter((item) => item.value !== props.defectItem?.status),
+  defectStatusOptions
+    .filter((item) => ['PENDING_VERIFY', 'CLOSED'].includes(item.value))
+    .filter((item) => item.value !== props.defectItem?.status),
 )
 function resetForm() {
   Object.assign(form, createDefaultTransitionForm(props.defectItem))
+  form.toStatus = targetStatusOptions.value[0]?.value || form.toStatus
   formError.message = ''
 }
 
@@ -76,29 +78,23 @@ watch(
 <template>
   <AppDialog
     :model-value="modelValue"
-    title="&#22788;&#29702;&#32570;&#38519;"
-    width="560px"
+    title="状态流转"
+    width="480px"
+    modal-class="defect-transition-dialog-overlay"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="defect-transition-dialog">
       <div class="defect-transition-dialog__summary">
-        <span>{{ defectItem?.bugNo || '-' }}</span>
-        <strong>{{ defectItem?.title || '-' }}</strong>
+        <span>{{ defectItem?.bugNo || '-' }} · {{ defectItem?.title || '-' }}</span>
       </div>
 
       <div class="defect-transition-dialog__field">
-        <span>&#22788;&#29702;&#20154;</span>
-        <AppUserSelect
-          v-model="form.assigneeId"
-          :workspace-code="workspaceCode"
-          :disabled="saving"
-          clearable
-          placeholder="&#21487;&#36873;&#65292;&#21464;&#26356;&#22788;&#29702;&#20154;"
-        />
+        <span>当前状态</span>
+        <DefectStatusBadge v-if="defectItem" :status="defectItem.status" />
       </div>
 
       <div class="defect-transition-dialog__field">
-        <span>&#30446;&#26631;&#29366;&#24577; *</span>
+        <span>流转至</span>
         <div class="defect-transition-dialog__segment">
           <button
             v-for="item in targetStatusOptions"
@@ -110,20 +106,17 @@ watch(
             {{ item.label }}
           </button>
         </div>
-        <p class="defect-transition-dialog__hint">
-          &#33509;&#24403;&#21069;&#32570;&#38519;&#19981;&#25903;&#25345;&#25152;&#36873;&#30446;&#26631;&#29366;&#24577;&#65292;&#20445;&#23384;&#26102;&#20250;&#26174;&#31034;&#26381;&#21153;&#31471;&#36820;&#22238;&#30340;&#22833;&#36133;&#21407;&#22240;&#12290;
-        </p>
       </div>
 
       <div class="defect-transition-dialog__field">
-        <span>&#27969;&#36716;&#22791;&#27880;</span>
+        <span>处理说明 <small>(可选)</small></span>
         <el-input
           v-model="form.actionComment"
           type="textarea"
           :rows="4"
           maxlength="300"
           show-word-limit
-          placeholder="&#21487;&#36873;"
+          placeholder="填写本次流转的处理说明..."
         />
       </div>
 
@@ -133,7 +126,7 @@ watch(
     <template #footer>
       <div class="defect-transition-dialog__footer">
         <AppButton :disabled="saving" @click="emit('update:modelValue', false)">&#21462;&#28040;</AppButton>
-        <AppButton type="primary" :loading="saving" @click="submit">&#20445;&#23384;&#27969;&#36716;</AppButton>
+        <AppButton type="primary" :loading="saving" @click="submit">确认流转</AppButton>
       </div>
     </template>
   </AppDialog>
@@ -143,59 +136,89 @@ watch(
 .defect-transition-dialog {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-3);
+  gap: 17.5px;
+}
+
+:global(.defect-transition-dialog-overlay .el-dialog) {
+  overflow: hidden;
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+}
+
+:global(.defect-transition-dialog-overlay .el-dialog)::before {
+  display: block;
+  width: 100%;
+  height: 3.5px;
+  background: #f53f3f;
+  content: '';
+}
+
+:global(.defect-transition-dialog-overlay .el-dialog__header) {
+  margin: 0;
+  padding: 17.5px 21px 18.5px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+:global(.defect-transition-dialog-overlay .el-dialog__title) {
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22.5px;
+}
+
+:global(.defect-transition-dialog-overlay .el-dialog__body) {
+  padding: 17.5px 21px;
+}
+
+:global(.defect-transition-dialog-overlay .el-dialog__footer) {
+  padding: 15px 21px 14px;
+  border-top: 1px solid #e5e6eb;
+  background: #fafafa;
 }
 
 .defect-transition-dialog__summary {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: var(--app-space-1);
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-page);
-}
-
-.defect-transition-dialog__summary span,
-.defect-transition-dialog__summary strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin-top: -17.5px;
+  padding-top: 1.75px;
 }
 
 .defect-transition-dialog__summary span {
-  color: var(--app-text-subtle);
-  font-family: Consolas, Monaco, monospace;
-  font-size: var(--app-font-size-xs);
-}
-
-.defect-transition-dialog__summary strong {
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-base);
-  line-height: var(--app-line-height-md);
-  white-space: normal;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .defect-transition-dialog__field {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--app-space-2);
+  gap: 7px;
 }
 
 .defect-transition-dialog__field > span {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
 }
 
-.defect-transition-dialog :deep(.el-select__wrapper) {
-  min-height: 40px;
+.defect-transition-dialog__field small {
+  color: #c9cdd4;
+  font-weight: 400;
+}
+
+.defect-transition-dialog :deep(.el-textarea__inner) {
+  min-height: 78px;
+  padding: 9.75px 11.5px;
+  border-radius: 11px;
+  font-size: 13px;
+  line-height: 19.5px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
 }
 
 .defect-transition-dialog :deep(.el-select__selection) {
@@ -203,32 +226,28 @@ watch(
 }
 
 .defect-transition-dialog__segment {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--app-space-2);
+  display: flex;
+  gap: 7px;
 }
 
 .defect-transition-dialog__segment button {
-  min-height: var(--app-control-height-md);
-  padding: 0 var(--app-space-2);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-panel);
-  color: var(--app-text-secondary);
+  height: 28px;
+  padding: 2px 16px;
+  border: 2px solid rgba(200, 155, 0, 0.21);
+  border-radius: 11px;
+  background: #ffffff;
+  color: #c89b00;
   cursor: pointer;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
   white-space: nowrap;
   transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 
-.defect-transition-dialog__segment button:hover {
-  background: var(--app-bg-page);
-}
-
 .defect-transition-dialog__segment button.is-active {
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
+  border-color: rgba(0, 180, 42, 0.21);
+  color: #00b42a;
 }
 
 .defect-transition-dialog__error {
@@ -247,7 +266,7 @@ watch(
 .defect-transition-dialog__footer {
   display: flex;
   justify-content: flex-end;
-  gap: var(--app-space-2);
+  gap: 7px;
 }
 
 .defect-transition-dialog__footer :deep(.el-button + .el-button) {
@@ -256,7 +275,7 @@ watch(
 
 @media (max-width: 640px) {
   .defect-transition-dialog__segment {
-    grid-template-columns: 1fr;
+    flex-wrap: wrap;
   }
 }
 </style>

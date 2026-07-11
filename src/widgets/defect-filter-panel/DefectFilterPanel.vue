@@ -1,6 +1,5 @@
 ﻿<script setup lang="ts">
 import { nextTick, reactive, watch } from 'vue'
-import { Plus, RefreshRight, Search } from '@element-plus/icons-vue'
 
 import {
   defectPriorityOptions,
@@ -8,7 +7,7 @@ import {
   defectStatusOptions,
   type DefectClientFilter,
 } from '@/entities/defect'
-import AppButton from '@/shared/ui/app-button/AppButton.vue'
+import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 
 const props = defineProps<{
   modelValue: DefectClientFilter
@@ -76,9 +75,6 @@ watch(
   { deep: true },
 )
 
-function resetFilters() {
-  emit('reset')
-}
 </script>
 
 <template>
@@ -94,20 +90,23 @@ function resetFilters() {
         class="defect-filter-panel__search"
         clearable
         placeholder="&#25628;&#32034;&#32570;&#38519;&#32534;&#21495; / &#26631;&#39064; / &#25551;&#36848;"
-        :prefix-icon="Search"
-      />
-      <el-select v-model="form.status" class="defect-filter-panel__control" clearable placeholder="&#29366;&#24577;">
+      >
+        <template #prefix>
+          <img class="defect-filter-panel__search-icon" :src="figmaDefectIcons.search" alt="" />
+        </template>
+      </el-input>
+      <el-select v-model="form.status" class="defect-filter-panel__control is-100" clearable placeholder="&#29366;&#24577;">
         <el-option v-for="item in defectStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-select v-model="form.priority" class="defect-filter-panel__control" clearable placeholder="&#20248;&#20808;&#32423;">
-        <el-option v-for="item in defectPriorityOptions" :key="item.value" :label="item.label" :value="item.value" />
-      </el-select>
-      <el-select v-model="form.severity" class="defect-filter-panel__control" clearable placeholder="&#20005;&#37325;&#32423;&#21035;">
+      <el-select v-model="form.severity" class="defect-filter-panel__control is-110" clearable placeholder="&#20005;&#37325;&#32423;&#21035;">
         <el-option v-for="item in defectSeverityOptions" :key="item.value" :label="item.label" :value="item.value" />
+      </el-select>
+      <el-select v-model="form.priority" class="defect-filter-panel__control is-100" clearable placeholder="&#20248;&#20808;&#32423;">
+        <el-option v-for="item in defectPriorityOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
       <el-select
         v-model="form.assigneeId"
-        class="defect-filter-panel__control"
+        class="defect-filter-panel__control is-110"
         clearable
         placeholder="&#22788;&#29702;&#20154;"
       >
@@ -121,7 +120,7 @@ function resetFilters() {
       <el-select
         v-if="showWorkspaceFilter"
         v-model="form.workspaceCode"
-        class="defect-filter-panel__control"
+        class="defect-filter-panel__control is-100"
         clearable
         placeholder="&#25152;&#23646;&#31354;&#38388;"
       >
@@ -132,12 +131,15 @@ function resetFilters() {
           :value="item.value"
         />
       </el-select>
-      <AppButton :icon="RefreshRight" @click="resetFilters">&#37325;&#32622;</AppButton>
+      <el-select
+        v-else
+        class="defect-filter-panel__control is-100"
+        disabled
+        placeholder="&#25152;&#23646;&#27169;&#22359;"
+      />
     </div>
 
-    <div class="defect-filter-panel__right">
-      <AppButton v-if="showCreateButton" type="primary" :icon="Plus" @click="$emit('create')">&#26032;&#22686;&#32570;&#38519;</AppButton>
-    </div>
+    <div v-if="false" class="defect-filter-panel__right" />
   </section>
 </template>
 
@@ -146,12 +148,14 @@ function resetFilters() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--app-space-4);
-  padding: var(--app-space-4) var(--app-space-5);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  gap: 7px;
+  min-height: 46.5px;
+  padding: 8.75px 21px 9.75px;
+  border: 0;
+  border-bottom: 1px solid #e5e6eb;
+  border-radius: 0;
+  background: #fafafa;
+  box-shadow: none;
 }
 
 .defect-filter-panel--embedded {
@@ -166,13 +170,13 @@ function resetFilters() {
 .defect-filter-panel__right {
   display: flex;
   align-items: center;
-  gap: var(--app-space-2);
+  gap: 7px;
 }
 
 .defect-filter-panel__left {
   min-width: 0;
   flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .defect-filter-panel__right {
@@ -181,27 +185,46 @@ function resetFilters() {
 }
 
 .defect-filter-panel__search {
-  width: min(248px, 100%);
+  width: 220px;
 }
 
 .defect-filter-panel__control {
-  width: 136px;
+  width: 100px;
+}
+
+.defect-filter-panel__control.is-100 {
+  width: 100px;
+}
+
+.defect-filter-panel__control.is-110 {
+  width: 110px;
 }
 
 .defect-filter-panel :deep(.el-input__wrapper),
 .defect-filter-panel :deep(.el-select__wrapper) {
-  min-height: 36px;
-  border-radius: var(--app-radius-md);
-  box-shadow: 0 0 0 1px var(--app-border-strong) inset;
+  min-height: 28px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
 }
 
 .defect-filter-panel :deep(.el-input__wrapper:hover),
 .defect-filter-panel :deep(.el-select__wrapper:hover) {
-  box-shadow: 0 0 0 1px var(--app-border-strong) inset;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
 }
 
-.defect-filter-panel :deep(.el-input__prefix) {
-  color: var(--app-text-subtle);
+.defect-filter-panel :deep(.el-input__inner),
+.defect-filter-panel :deep(.el-select__placeholder),
+.defect-filter-panel :deep(.el-select__selected-item) {
+  color: rgba(29, 33, 41, 0.5);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.defect-filter-panel__search-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
 }
 
 @media (max-width: 960px) {

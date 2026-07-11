@@ -242,6 +242,7 @@ function confirmCreateModule() {
     v-model="createModuleVisible"
     title="新建模块"
     width="420px"
+    class="api-definition-save-dialog api-definition-save-dialog--module"
     append-to-body
     :close-on-click-modal="!props.moduleCreating"
     :close-on-press-escape="!props.moduleCreating"
@@ -283,6 +284,66 @@ function confirmCreateModule() {
 </template>
 
 <style scoped>
+:global(.el-dialog.api-definition-save-dialog) {
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-dialog__header) {
+  height: 48px;
+  margin: 0;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--app-border-soft);
+  display: flex;
+  align-items: center;
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-dialog__title) {
+  color: var(--app-text-primary);
+  font-family: var(--app-font-family);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-dialog__headerbtn) {
+  top: 8px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-dialog__body) {
+  padding: 16px 18px 14px;
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-dialog__footer) {
+  padding: 12px 18px;
+  border-top: 1px solid var(--app-border-soft);
+  background: #fafbfc;
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-input__wrapper),
+:global(.el-dialog.api-definition-save-dialog .el-select__wrapper) {
+  min-height: 32px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-input__wrapper:hover),
+:global(.el-dialog.api-definition-save-dialog .el-select__wrapper:hover) {
+  box-shadow: inset 0 0 0 1px #c9cdd4;
+}
+
+:global(.el-dialog.api-definition-save-dialog .el-input.is-focus .el-input__wrapper),
+:global(.el-dialog.api-definition-save-dialog .el-select__wrapper.is-focused) {
+  box-shadow: inset 0 0 0 1px var(--app-primary);
+}
+
 .api-definition-save-dialog__form {
   display: flex;
   flex-direction: column;

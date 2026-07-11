@@ -201,4 +201,87 @@ function syncExtractType(row: ApiExtractorPanelRow) {
   color: var(--app-text-subtle);
   font-size: 13px;
 }
+
+/* Figma interface workspace visual pass */
+.api-extractor-panel {
+  gap: 14px;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.api-advanced-toolbar {
+  min-height: 40px;
+  padding: 0 10.5px;
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #fafafa;
+}
+
+.api-advanced-toolbar strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.api-advanced-toolbar span {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-advanced-actions button,
+.api-row-remove {
+  min-height: 28px;
+  border-radius: 7px;
+  color: #ff7d00;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.api-sidebar-primary {
+  border-color: #165dff;
+  background: #165dff;
+  color: #ffffff;
+}
+
+.api-extractor-table {
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.api-extractor-header,
+.api-extractor-row {
+  padding: 0 10.5px;
+}
+
+.api-extractor-header {
+  min-height: 31px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-extractor-row {
+  min-height: 34.5px;
+  border-top-color: #e5e6eb;
+}
+
+.api-extractor-row :deep(.el-input__wrapper),
+.api-extractor-row :deep(.el-select__wrapper) {
+  min-height: 31.5px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #e5e6eb;
+}
+
+.api-extractor-row :deep(.el-input__inner),
+.api-extractor-row :deep(.el-select__selected-item),
+.api-extractor-row :deep(.el-select__placeholder) {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
 </style>

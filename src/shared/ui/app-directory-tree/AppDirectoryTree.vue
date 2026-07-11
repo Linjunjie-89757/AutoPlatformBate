@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import { Fold, Folder, FolderOpened, MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 
+import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+
 export interface AppDirectoryTreeNode {
   id: string
   label: string
@@ -28,6 +30,7 @@ const props = withDefaults(defineProps<{
   showTitleCount?: boolean
   showCollapseAll?: boolean
   titleCount?: number
+  variant?: 'default' | 'figma-compact'
 }>(), {
   selectedNodeId: '',
   expandedNodeIds: () => [],
@@ -38,6 +41,7 @@ const props = withDefaults(defineProps<{
   showMore: true,
   showTitleCount: true,
   showCollapseAll: false,
+  variant: 'default',
 })
 
 const emit = defineEmits<{
@@ -74,15 +78,23 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 </script>
 
 <template>
-  <aside class="app-directory-tree">
+  <aside class="app-directory-tree" :class="`app-directory-tree--${variant}`">
+    <div v-if="$slots.toolbar" class="app-directory-tree__toolbar">
+      <slot name="toolbar" />
+    </div>
+
     <div class="app-directory-tree__search">
       <el-input
         :model-value="search"
         :placeholder="searchPlaceholder"
         clearable
-        :prefix-icon="Search"
+        :prefix-icon="variant === 'figma-compact' ? undefined : Search"
         @update:model-value="emit('update:search', String($event))"
-      />
+      >
+        <template v-if="variant === 'figma-compact'" #prefix>
+          <img class="app-directory-tree__search-icon" :src="figmaCaseIcons.treeSearch" alt="" />
+        </template>
+      </el-input>
     </div>
 
     <div class="app-directory-tree__title">
@@ -119,12 +131,19 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
         <div class="app-directory-tree__node">
           <div class="app-directory-tree__node-main">
             <el-icon
+              v-if="variant !== 'figma-compact'"
               class="app-directory-tree__node-icon"
               :class="{ 'app-directory-tree__node-icon--expanded': isNodeExpanded(data) }"
             >
               <FolderOpened v-if="isNodeExpanded(data)" />
               <Folder v-else />
             </el-icon>
+            <img
+              v-else
+              class="app-directory-tree__node-figma-icon"
+              :src="figmaCaseIcons.treeFolder"
+              alt=""
+            />
             <span class="app-directory-tree__node-label">{{ data.label }}</span>
             <span v-if="typeof data.count === 'number'" class="app-directory-tree__node-count">{{ data.count }}</span>
           </div>
@@ -178,6 +197,10 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
   box-shadow: var(--app-shadow-card);
   display: flex;
   flex-direction: column;
+}
+
+.app-directory-tree__toolbar {
+  flex: 0 0 auto;
 }
 
 .app-directory-tree__search {
@@ -353,6 +376,114 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 .app-directory-tree__icon-button:hover {
   background: var(--app-border);
   color: var(--app-text-primary);
+}
+
+.app-directory-tree--figma-compact {
+  width: 240px;
+  flex: 0 0 240px;
+  height: calc(100dvh - 86px);
+  border: 0;
+  border-right: 1px solid var(--app-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__toolbar {
+  display: flex;
+  min-height: 45.5px;
+  align-items: center;
+  padding: 8.75px 10.5px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__search {
+  padding: 0 10.5px 7px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__search :deep(.el-input__wrapper) {
+  min-height: 28px;
+  height: 28px;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--app-border) inset;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__search :deep(.el-input__inner) {
+  font-size: 13px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__search-icon {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__title {
+  min-height: 32px;
+  padding: 0 10.5px;
+  border-bottom: 1px solid #e5e6eb;
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__title strong {
+  font-weight: 500;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__tree {
+  padding: 3.5px 7px 16px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__tree :deep(.el-tree-node) {
+  margin-top: 1px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__tree :deep(.el-tree-node__content) {
+  min-height: 28.5px;
+  height: 28.5px;
+  padding-right: 7px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__tree :deep(.el-tree-node__content:hover) {
+  background: var(--app-bg-subtle);
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  background: rgba(0, 180, 42, 0.07);
+  color: #00b42a;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__node-main {
+  gap: 5.25px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__node-icon {
+  width: 13px;
+  height: 13px;
+  color: var(--app-warning);
+  font-size: 13px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__node-icon--expanded {
+  color: var(--app-warning);
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__node-figma-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__node-count {
+  margin-left: auto;
+  color: var(--app-text-subtle);
+  font-size: 11px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__icon-button {
+  width: 20px;
+  height: 20px;
 }
 
 @media (max-width: 900px) {

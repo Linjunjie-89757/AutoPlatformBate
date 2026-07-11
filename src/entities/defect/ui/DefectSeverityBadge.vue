@@ -23,42 +23,33 @@ const meta = computed(() => getDefectSeverityMeta(props.severity))
   align-items: center;
   justify-content: center;
   min-height: 20px;
-  padding: 2px 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 16px;
+  padding: 1.75px 7px;
+  border: 0;
+  border-radius: 3.5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16.5px;
   white-space: nowrap;
+  color: #ffffff;
 }
 
 .defect-badge--critical {
-  border-color: #fecaca;
-  background: #fee2e2;
-  color: #b91c1c;
+  background: #f53f3f;
 }
 
 .defect-badge--high {
-  border-color: #fed7aa;
-  background: #ffedd5;
-  color: #c2410c;
+  background: #ff7d00;
 }
 
 .defect-badge--medium {
-  border-color: #fde68a;
-  background: #fef3c7;
-  color: #92400e;
+  background: #ff9a00;
 }
 
 .defect-badge--low {
-  border-color: #bfdbfe;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #86909c;
 }
 
 .defect-badge--neutral {
-  border-color: #e5e7eb;
-  background: #f3f4f6;
-  color: #374151;
+  background: #86909c;
 }
 </style>

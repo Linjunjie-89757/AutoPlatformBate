@@ -159,3 +159,242 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
+<style scoped>
+.api-editor-tabs {
+  display: flex;
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  align-items: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--app-border-soft);
+  background: #ffffff;
+}
+
+.api-editor-tabs__nav {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 0 1 auto;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.api-editor-tabs__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.api-editor-tab {
+  position: relative;
+  display: inline-flex;
+  box-sizing: border-box;
+  max-width: 220px;
+  height: 39px;
+  min-height: 39px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10.5px;
+  border: 0;
+  border-right: 1px solid var(--app-border-soft);
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--app-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.api-editor-tab:hover,
+.api-editor-tab.is-active {
+  background: #ffffff;
+  color: var(--app-text-primary);
+}
+
+.api-editor-tab.is-active {
+  border-bottom-color: #ff7d00;
+}
+
+.api-method {
+  display: inline-flex;
+  min-width: 44px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.method-get {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.method-post {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.method-put,
+.method-patch {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.method-delete {
+  background: #ffece8;
+  color: #f53f3f;
+}
+
+.method-other {
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.api-editor-tab__label {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 140px;
+  height: 18px;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-editor-tab__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--app-primary);
+}
+
+.api-editor-tab__close {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  color: var(--app-text-muted);
+}
+
+.api-editor-tab__close:hover {
+  background: var(--app-bg-muted);
+  color: var(--app-text-primary);
+}
+
+.api-editor-tab-scroll,
+.api-editor-tab-add,
+.api-editor-tab-more {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 32px;
+  height: 39px;
+  min-width: 32px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--app-border-soft);
+  border-radius: 0;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+}
+
+.api-editor-tab-scroll {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  flex-basis: 28px;
+}
+
+.api-editor-tab-add {
+  margin-left: 0;
+}
+
+.api-editor-tab-more {
+  margin-right: 0;
+  color: #86909c;
+}
+
+.api-editor-tabs :deep(.el-dropdown) {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.api-editor-tab-scroll:hover:not(:disabled),
+.api-editor-tab-add:hover,
+.api-editor-tab-more:hover {
+  border-color: var(--app-border-soft);
+  background: #fafafa;
+  color: #1d2129;
+}
+
+.api-editor-tab-scroll:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.api-workspace-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  stroke-width: 2;
+}
+
+.api-editor-tab-add .api-workspace-icon,
+.api-editor-tab-more .api-workspace-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.api-workspace-icon.is-close {
+  width: 13px;
+  height: 13px;
+}
+
+.ai-generation-tab-spinner {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 999px;
+}
+
+.ai-generation-tab-spinner.spinning {
+  animation: ai-generation-spin 0.8s linear infinite;
+}
+
+.ai-generation-tab-finished-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+@keyframes ai-generation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>
+

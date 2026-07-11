@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { Checked, MoreFilled, Plus, RefreshRight, View } from '@element-plus/icons-vue'
+import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
   type CaseDetail,
-  CaseExecutionStatusBadge,
-  CasePriorityBadge,
-  CaseReviewStatusBadge,
   caseApi,
   formatCaseDateTime,
   getCaseDirectoryText,
@@ -35,14 +32,13 @@ import { CaseCreateEditDrawer } from '@/features/case-create-edit'
 import type { CaseDialogMode } from '@/features/case-create-edit/model'
 import { deleteCase } from '@/features/case-delete'
 import { CaseReviewDialog, reviewCase } from '@/features/case-review'
-import { getCaseStatusActionText, toggleCaseStatus } from '@/features/case-toggle-status'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
-import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 import AppTagInput from '@/shared/ui/app-tag-input/AppTagInput.vue'
 import AppUserSelect from '@/shared/ui/app-user-select/AppUserSelect.vue'
 import { CaseDetailDrawer } from '@/widgets/case-detail-drawer'
@@ -118,58 +114,51 @@ const deletingCaseId = ref<number | null>(null)
 const togglingCaseId = ref<number | null>(null)
 let filterReloadTimer: number | undefined
 let loadRequestSeq = 0
-const pageSizeOptions = [10, 20, 30, 40, 50]
 
 const tableColumnDefinitions = computed<CaseTableColumnDefinition[]>(() => [
-  { key: 'caseNo', label: '用例编号', width: 168, required: true, defaultVisible: true },
-  { key: 'title', label: '用例名称', minWidth: 320, required: true, defaultVisible: true },
-  { key: 'priority', label: '优先级', width: 88, defaultVisible: true },
-  { key: 'sourceType', label: '用例来源', width: 120, defaultVisible: false },
-  { key: 'reviewStatus', label: '评审状态', width: 112, defaultVisible: true },
+  { key: 'caseNo', label: '用例 ID', width: 121.797, required: true, defaultVisible: true },
+  { key: 'title', label: '用例标题', width: 341.031, required: true, defaultVisible: true },
+  { key: 'directoryName', label: '所属目录', width: 158.328, defaultVisible: true },
+  { key: 'priority', label: '优先级', width: 73.078, defaultVisible: true },
+  { key: 'reviewStatus', label: '状态', width: 97.438, defaultVisible: true },
+  { key: 'executionStatus', label: '执行状态', width: 97.438, defaultVisible: true },
+  { key: 'sourceType', label: '来源', width: 73.078, defaultVisible: true },
+  { key: 'defectCount', label: '关联缺陷', width: 73.078, defaultVisible: true },
   { key: 'reviewedByName', label: '评审人', width: 110, defaultVisible: false },
   { key: 'reviewedAt', label: '评审时间', width: 156, defaultVisible: false },
-  { key: 'executionStatus', label: '执行状态', width: 112, defaultVisible: true },
-  { key: 'executorName', label: '执行人', width: 104, defaultVisible: true },
+  { key: 'executorName', label: '执行人', width: 104, defaultVisible: false },
   { key: 'executedAt', label: '执行时间', width: 156, defaultVisible: false },
   { key: 'workspaceName', label: '所属空间', width: 128, defaultVisible: false },
-  { key: 'directoryName', label: '所属模块', width: 152, defaultVisible: true },
   { key: 'createdByName', label: '创建人', width: 130, defaultVisible: false },
   { key: 'createdAt', label: '创建时间', width: 176, defaultVisible: false },
   { key: 'updatedByName', label: '更新人', width: 130, defaultVisible: false },
   { key: 'updatedAt', label: '更新时间', width: 176, defaultVisible: false },
 ])
 const tableSettings = useCaseTableSettings({
-  storageKey: 'case-list-table-settings-v1',
+  storageKey: 'case-list-table-settings-figma-v2',
   columns: tableColumnDefinitions,
 })
 const visibleColumns = computed(() => tableSettings.visibleColumns.value)
+function resolveCaseTableColumnWidth(column: CaseTableColumnDefinition) {
+  const width = typeof column.width === 'number' ? column.width : 0
+  const minWidth = typeof column.minWidth === 'number' ? column.minWidth : 0
+  return Math.max(width, minWidth) || 120
+}
+
+function formatCaseTableGridTrack(width: number) {
+  return `minmax(${width}px, ${width}fr)`
+}
+
 const dataGridMinWidth = computed(() => {
   const columnWidth = visibleColumns.value.reduce((total, column) => {
-    if (typeof column.width === 'number') {
-      return total + column.width
-    }
-    if (typeof column.minWidth === 'number') {
-      return total + column.minWidth
-    }
-    return total + 120
-  }, 56)
+    return total + resolveCaseTableColumnWidth(column)
+  }, 42.625)
 
   return `${columnWidth}px`
 })
 const dataGridTemplateColumns = computed(() => [
-  '56px',
-  ...visibleColumns.value.map((column) => {
-    if (typeof column.width === 'number') {
-      return `${column.width}px`
-    }
-    if (column.key === 'title' && typeof column.minWidth === 'number') {
-      return `minmax(${column.minWidth}px, 1fr)`
-    }
-    if (typeof column.minWidth === 'number') {
-      return `${column.minWidth}px`
-    }
-    return '120px'
-  }),
+  formatCaseTableGridTrack(42.625),
+  ...visibleColumns.value.map(column => formatCaseTableGridTrack(resolveCaseTableColumnWidth(column))),
 ].join(' '))
 
 const defaultDialogWorkspaceCode = computed(() => {
@@ -261,6 +250,8 @@ function formatColumnValue(row: CaseSummaryItem, key: CaseTableColumnKey) {
       return row.workspaceName || row.workspaceCode || '-'
     case 'directoryName':
       return getCaseDirectoryText(row)
+    case 'defectCount':
+      return '—'
     case 'createdByName':
       return row.createdByName || '-'
     case 'createdAt':
@@ -272,6 +263,29 @@ function formatColumnValue(row: CaseSummaryItem, key: CaseTableColumnKey) {
     default:
       return '-'
   }
+}
+
+function isAiGeneratedCase(item: CaseSummaryItem) {
+  return item.sourceType === 'AI_GENERATED' || item.sourceType === 'AI'
+}
+
+function getReviewStatusVisual(status: string) {
+  if (status === 'PASSED') return { label: '已确认', tone: 'success' }
+  if (status === 'REJECTED') return { label: '不通过', tone: 'danger' }
+  return { label: '待确认', tone: 'warning' }
+}
+
+function getExecutionStatusVisual(status: string) {
+  if (status === 'PASSED') return { label: '通过', tone: 'success' }
+  if (status === 'FAILED') return { label: '失败', tone: 'danger' }
+  if (status === 'BLOCKED') return { label: '阻塞', tone: 'warning' }
+  return { label: '未执行', tone: 'default' }
+}
+
+function getCaseSourceVisual(sourceType: string) {
+  if (sourceType === 'AI_GENERATED' || sourceType === 'AI') return { label: 'AI生成', tone: 'ai' }
+  if (sourceType === 'IMPORTED') return { label: '导入', tone: 'imported' }
+  return { label: '人工', tone: 'manual' }
 }
 
 function applyPage(page: PageResponse<CaseSummaryItem>) {
@@ -429,21 +443,6 @@ async function openAdjacentEditCase(direction: 'prev' | 'next') {
   await switchEditCase(nextCase)
 }
 
-async function openCopyDialog(item: CaseSummaryItem) {
-  dialogMode.value = 'copy'
-  editingCase.value = item
-  editingCaseDetail.value = null
-  dialogVisible.value = true
-  detailLoading.value = true
-  try {
-    editingCaseDetail.value = await caseApi.getCaseDetail(item.id, props.workspaceCode)
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    detailLoading.value = false
-  }
-}
-
 async function saveCase(payload: Parameters<typeof caseApi.createCase>[1]) {
   if (saving.value) {
     return
@@ -468,18 +467,6 @@ async function saveCase(payload: Parameters<typeof caseApi.createCase>[1]) {
   } finally {
     saving.value = false
   }
-}
-
-function openDefectDialog(item: CaseSummaryItem) {
-  defectCase.value = item
-  defectForm.title = `${item.title || item.caseNo || '用例'} - 缺陷`
-  defectForm.description = ''
-  defectForm.priority = 'P1'
-  defectForm.severity = 'HIGH'
-  defectForm.assigneeId = ''
-  defectForm.tags = []
-  defectFormError.value = ''
-  defectDialogVisible.value = true
 }
 
 function buildDefectFromCasePayload(): SaveDefectPayload {
@@ -671,11 +658,6 @@ function openExecutionPage(item: CaseSummaryItem) {
   })
 }
 
-function openReviewDialog(item: CaseSummaryItem) {
-  reviewingCase.value = item
-  reviewDialogVisible.value = true
-}
-
 async function saveReviewCase(payload: ReviewCasePayload) {
   if (!reviewingCase.value || reviewingCaseId.value !== null) {
     return
@@ -694,31 +676,8 @@ async function saveReviewCase(payload: ReviewCasePayload) {
   }
 }
 
-async function handleToggleCaseStatus(item: CaseSummaryItem) {
-  if (togglingCaseId.value !== null || runningCaseId.value !== null || deletingCaseId.value !== null || reviewingCaseId.value !== null) {
-    return
-  }
-
-  togglingCaseId.value = item.id
-  try {
-    await toggleCaseStatus(item, props.workspaceCode)
-    ElMessage.success(`用例已${getCaseStatusActionText(item.status)}`)
-    await loadCases()
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    togglingCaseId.value = null
-  }
-}
-
 function handlePageChange(value: number) {
   pageNo.value = value
-  void loadCases()
-}
-
-function handlePageSizeChange(value: number) {
-  pageSize.value = value
-  pageNo.value = 1
   void loadCases()
 }
 
@@ -829,19 +788,57 @@ defineExpose({
                 :key="`${item.id}-${column.key}`"
                 :class="['case-list-panel__cell', `case-list-panel__cell--${column.key}`]"
               >
-                <span v-if="column.key === 'caseNo'" class="case-list-panel__code">
+                <button
+                  v-if="column.key === 'caseNo'"
+                  type="button"
+                  class="case-list-panel__code"
+                  :title="`查看 ${item.caseNo}`"
+                  @click="openDetailDrawer(item)"
+                >
                   {{ formatColumnValue(item, column.key) }}
-                </span>
+                </button>
                 <el-tooltip
                   v-else-if="column.key === 'title'"
                   :content="formatColumnValue(item, column.key)"
                   placement="top"
                 >
-                  <span class="case-list-panel__title">{{ formatColumnValue(item, column.key) }}</span>
+                  <span class="case-list-panel__title-wrap">
+                    <span class="case-list-panel__title">{{ formatColumnValue(item, column.key) }}</span>
+                    <span v-if="isAiGeneratedCase(item)" class="case-list-panel__ai-mark">AI</span>
+                  </span>
                 </el-tooltip>
-                <CasePriorityBadge v-else-if="column.key === 'priority'" :priority="item.priority" />
-                <CaseReviewStatusBadge v-else-if="column.key === 'reviewStatus'" :status="item.reviewStatus" />
-                <CaseExecutionStatusBadge v-else-if="column.key === 'executionStatus'" :status="item.executionStatus" />
+                <span
+                  v-else-if="column.key === 'priority'"
+                  class="case-list-panel__priority"
+                  :class="`is-${String(item.priority || 'p2').toLowerCase()}`"
+                >
+                  {{ item.priority || 'P2' }}
+                </span>
+                <span
+                  v-else-if="column.key === 'reviewStatus'"
+                  class="case-list-panel__status"
+                  :class="`is-${getReviewStatusVisual(item.reviewStatus).tone}`"
+                >
+                  {{ getReviewStatusVisual(item.reviewStatus).label }}
+                </span>
+                <span
+                  v-else-if="column.key === 'executionStatus'"
+                  class="case-list-panel__execution"
+                  :class="`is-${getExecutionStatusVisual(item.executionStatus).tone}`"
+                >
+                  <span class="case-list-panel__execution-dot" />
+                  {{ getExecutionStatusVisual(item.executionStatus).label }}
+                </span>
+                <span
+                  v-else-if="column.key === 'sourceType'"
+                  class="case-list-panel__source"
+                  :class="`is-${getCaseSourceVisual(item.sourceType).tone}`"
+                >
+                  {{ getCaseSourceVisual(item.sourceType).label }}
+                </span>
+                <span v-else-if="column.key === 'defectCount'" class="case-list-panel__defect-count">
+                  {{ formatColumnValue(item, column.key) }}
+                </span>
                 <span v-else class="case-list-panel__cell-text">{{ formatColumnValue(item, column.key) }}</span>
               </div>
             </div>
@@ -851,7 +848,6 @@ defineExpose({
         <div class="case-list-panel__table-actions-fixed">
           <div class="case-list-panel__actions-header">
             <span>操作</span>
-            <AppTableSettingsTrigger @click="tableSettings.settingsVisible.value = true" />
           </div>
 
           <div
@@ -860,58 +856,44 @@ defineExpose({
             class="case-list-panel__actions-row"
           >
             <div class="case-list-panel__row-actions">
-              <el-button text size="small" type="primary" @click="openEditDialog(item)">编辑</el-button>
-              <el-button
-                text
-                size="small"
-                type="primary"
+              <button
+                type="button"
+                class="case-list-panel__icon-action"
+                title="查看详情"
+                aria-label="查看详情"
+                @click="openDetailDrawer(item)"
+              >
+                <img :src="figmaCaseIcons.action.view" alt="" />
+              </button>
+              <button
+                type="button"
+                class="case-list-panel__icon-action"
+                title="编辑用例"
+                aria-label="编辑用例"
+                @click="openEditDialog(item)"
+              >
+                <img :src="figmaCaseIcons.action.edit" alt="" />
+              </button>
+              <button
+                type="button"
+                class="case-list-panel__icon-action is-primary"
+                title="执行用例"
+                aria-label="执行用例"
                 :disabled="runningCaseId === item.id"
                 @click="openExecutionPage(item)"
               >
-                执行
-              </el-button>
-              <el-dropdown trigger="click">
-                <el-button text size="small" type="primary" class="case-list-panel__more-button">
-                  <el-icon><MoreFilled /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item
-                      :icon="View"
-                      @click="openDetailDrawer(item)"
-                    >
-                      详情
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      :icon="Checked"
-                      :disabled="reviewingCaseId === item.id"
-                      @click="openReviewDialog(item)"
-                    >
-                      {{ reviewingCaseId === item.id ? '评审中' : '评审' }}
-                    </el-dropdown-item>
-                    <el-dropdown-item @click="openDefectDialog(item)">提缺陷</el-dropdown-item>
-                    <el-dropdown-item
-                      :disabled="detailLoading && editingCase?.id === item.id"
-                      @click="openCopyDialog(item)"
-                    >
-                      {{ detailLoading && editingCase?.id === item.id && dialogMode === 'copy' ? '复制中' : '复制' }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      :disabled="togglingCaseId === item.id || runningCaseId === item.id || deletingCaseId === item.id || reviewingCaseId === item.id"
-                      @click="handleToggleCaseStatus(item)"
-                    >
-                      {{ togglingCaseId === item.id ? '处理中' : getCaseStatusActionText(item.status) }}
-                    </el-dropdown-item>
-                    <el-dropdown-item
-                      class="case-list-panel__danger-action"
-                      :disabled="deletingCaseId === item.id || runningCaseId === item.id || togglingCaseId === item.id || reviewingCaseId === item.id"
-                      @click="handleDeleteCase(item)"
-                    >
-                      {{ deletingCaseId === item.id ? '删除中' : '删除' }}
-                    </el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
+                <img :src="figmaCaseIcons.action.run" alt="" />
+              </button>
+              <button
+                type="button"
+                class="case-list-panel__icon-action"
+                title="删除用例"
+                aria-label="删除用例"
+                :disabled="deletingCaseId === item.id || runningCaseId === item.id || togglingCaseId === item.id || reviewingCaseId === item.id"
+                @click="handleDeleteCase(item)"
+              >
+                <img :src="figmaCaseIcons.action.delete" alt="" />
+              </button>
             </div>
           </div>
         </div>
@@ -938,16 +920,14 @@ defineExpose({
           </div>
         </div>
         <div class="case-list-panel__pagination">
-          <span>共 {{ total }} 条，{{ totalPages }} 页</span>
+          <span>共 {{ total }} 条</span>
           <el-pagination
             background
-            layout="sizes, prev, pager, next"
+            layout="pager"
             :current-page="pageNo"
             :page-size="pageSize"
-            :page-sizes="pageSizeOptions"
             :total="total"
             @current-change="handlePageChange"
-            @size-change="handlePageSizeChange"
           />
         </div>
       </footer>
@@ -1113,6 +1093,8 @@ defineExpose({
       v-model="detailDrawerVisible"
       :case-id="detailCaseId"
       :workspace-code="workspaceCode"
+      @edit="openEditDialog"
+      @run="openExecutionPage"
     />
 
     <AppTableColumnSettingsDrawer
@@ -1130,12 +1112,12 @@ defineExpose({
 
 <style scoped>
 .case-list-panel {
-  --case-table-header-height: 48px;
-  --case-table-row-height: 54px;
-  --case-table-actions-width: 164px;
+  --case-table-header-height: 51px;
+  --case-table-row-height: 46px;
+  --case-table-actions-width: 140.109px;
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-3);
+  gap: 12px;
   min-width: 0;
 }
 
@@ -1166,10 +1148,10 @@ defineExpose({
 
 .case-list-panel__table-card {
   overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  background: var(--app-bg-panel);
-  box-shadow: none;
+  border: 1px solid #e5e6eb;
+  border-radius: 11px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 .case-list-panel__inline-error {
@@ -1212,7 +1194,7 @@ defineExpose({
   grid-template-columns: minmax(0, 1fr) var(--case-table-actions-width);
   min-width: 0;
   overflow: hidden;
-  border-top: 1px solid var(--app-border-soft);
+  border-top: 0;
 }
 
 .case-list-panel__table-data {
@@ -1226,7 +1208,7 @@ defineExpose({
 }
 
 .case-list-panel__table-scroll::-webkit-scrollbar {
-  height: 10px;
+  height: 7px;
 }
 
 .case-list-panel__table-scroll::-webkit-scrollbar-track {
@@ -1235,7 +1217,7 @@ defineExpose({
 
 .case-list-panel__table-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.5);
+  background: rgba(134, 144, 156, 0.38);
 }
 
 .case-list-panel__grid {
@@ -1244,29 +1226,33 @@ defineExpose({
 
 .case-list-panel__grid--header {
   min-height: var(--case-table-header-height);
-  border-bottom: 1px solid var(--app-border);
-  background: #f8fafc;
-  color: var(--app-text-muted);
-  font-size: 12px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.275px;
+  line-height: 16.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .case-list-panel__grid--row {
   min-height: var(--case-table-row-height);
-  border-bottom: 1px solid var(--app-border-soft);
-  background: var(--app-bg-panel);
+  border-bottom: 1px solid #f0f1f2;
+  background: #ffffff;
   transition: background-color 160ms ease;
 }
 
 .case-list-panel__grid--row:hover {
-  background: #f8fafc;
+  background: #f7faff;
 }
 
 .case-list-panel__cell {
   display: flex;
   min-width: 0;
   align-items: center;
-  padding: 0 var(--app-space-5);
+  padding: 0 14px;
 }
 
 .case-list-panel__cell--selection {
@@ -1280,45 +1266,197 @@ defineExpose({
   display: block;
   width: 100%;
   overflow: hidden;
-  font-size: var(--app-font-size-sm);
-  line-height: 20px;
+  font-size: 12px;
+  line-height: 19px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .case-list-panel__code {
-  color: var(--app-primary);
-  font-weight: 400;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #165dff;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.case-list-panel__code:hover {
+  color: #0e42d2;
+  text-decoration: underline;
 }
 
 .case-list-panel__title {
-  color: var(--app-text-primary);
+  color: #1d2129;
+  font-size: 13px;
   font-weight: 500;
 }
 
+.case-list-panel__title-wrap {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  align-items: center;
+  gap: 5px;
+}
+
+.case-list-panel__ai-mark {
+  flex: 0 0 auto;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #f5e8ff;
+  color: #7816ff;
+  font-size: 9px;
+  line-height: 14px;
+  font-weight: 600;
+}
+
 .case-list-panel__cell-text {
-  color: var(--app-text-main);
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.case-list-panel__priority,
+.case-list-panel__status,
+.case-list-panel__source {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 17.5px;
+  padding: 0 5px;
+  border-radius: 3.5px;
+  font-size: 11px;
+  line-height: 16.5px;
+  font-weight: 500;
+}
+
+.case-list-panel__priority.is-p0 {
+  background: #f53f3f;
+  color: #ffffff;
+}
+
+.case-list-panel__priority {
+  font-weight: 700;
+}
+
+.case-list-panel__priority.is-p1 {
+  background: #ff7d00;
+  color: #ffffff;
+}
+
+.case-list-panel__priority.is-p2 {
+  background: #ffb400;
+  color: #ffffff;
+}
+
+.case-list-panel__priority.is-p3 {
+  background: #86909c;
+  color: #ffffff;
+}
+
+.case-list-panel__status.is-success {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.case-list-panel__status.is-warning {
+  background: #fff7e8;
+  color: #ff7d00;
+}
+
+.case-list-panel__status.is-danger {
+  background: #ffece8;
+  color: #f53f3f;
+}
+
+.case-list-panel__execution {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #4e5969;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.case-list-panel__execution-dot {
+  width: 5.25px;
+  height: 5.25px;
+  flex: 0 0 5.25px;
+  border-radius: 50%;
+  background: #c9cdd4;
+}
+
+.case-list-panel__execution.is-success {
+  color: #00b42a;
+}
+
+.case-list-panel__execution.is-success .case-list-panel__execution-dot {
+  background: #00b42a;
+}
+
+.case-list-panel__execution.is-danger {
+  color: #f53f3f;
+}
+
+.case-list-panel__execution.is-danger .case-list-panel__execution-dot {
+  background: #f53f3f;
+}
+
+.case-list-panel__execution.is-warning {
+  color: #ff7d00;
+}
+
+.case-list-panel__execution.is-warning .case-list-panel__execution-dot {
+  background: #ff7d00;
+}
+
+.case-list-panel__source.is-manual {
+  background: #f2f3f5;
+  color: #86909c;
+}
+
+.case-list-panel__source.is-ai {
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.case-list-panel__source.is-imported {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.case-list-panel__defect-count {
+  color: #86909c;
+  font-size: 12px;
 }
 
 .case-list-panel__table-actions-fixed {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  border-left: 1px solid var(--app-border);
-  background: var(--app-bg-panel);
+  border-left: 1px solid #e5e6eb;
+  background: #ffffff;
 }
 
 .case-list-panel__actions-header {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--app-space-1);
   min-height: var(--case-table-header-height);
-  border-bottom: 1px solid var(--app-border);
-  background: #f8fafc;
-  color: var(--app-text-muted);
-  font-size: 12px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.275px;
+  line-height: 16.5px;
+  text-transform: uppercase;
 }
 
 .case-list-panel__actions-row {
@@ -1326,18 +1464,47 @@ defineExpose({
   align-items: center;
   justify-content: center;
   min-height: var(--case-table-row-height);
-  border-bottom: 1px solid var(--app-border-soft);
+  border-bottom: 1px solid #f0f1f2;
   transition: background-color 160ms ease;
 }
 
 .case-list-panel__actions-row:hover {
-  background: #f8fafc;
+  background: #f7faff;
 }
 
-.case-list-panel__more-button {
-  width: 28px;
-  padding-right: 0;
-  padding-left: 0;
+.case-list-panel__icon-action {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.case-list-panel__icon-action img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.case-list-panel__icon-action:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #165dff;
+}
+
+.case-list-panel__icon-action.is-primary {
+  color: #165dff;
+}
+
+.case-list-panel__icon-action:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
 }
 
 .case-list-panel__footer {
@@ -1345,14 +1512,14 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-4);
-  min-height: 52px;
-  padding: var(--app-space-2) var(--app-space-4);
-  border-top: 1px solid var(--app-border-soft);
+  min-height: 43px;
+  padding: 8.75px 14px;
+  border-top: 0;
 }
 
 .case-list-panel__footer span {
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-sm);
+  color: #86909c;
+  font-size: 12px;
 }
 
 .case-list-panel__footer-left {
@@ -1364,14 +1531,21 @@ defineExpose({
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--app-space-3);
+  gap: 7px;
+}
+
+.case-list-panel__pagination :deep(.el-pagination) {
+  --el-pagination-button-width: 24.5px;
+  --el-pagination-button-height: 24.5px;
+  --el-pagination-border-radius: 5px;
+  font-size: 12px;
 }
 
 .case-list-panel__row-actions {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 2px;
   white-space: nowrap;
 }
 

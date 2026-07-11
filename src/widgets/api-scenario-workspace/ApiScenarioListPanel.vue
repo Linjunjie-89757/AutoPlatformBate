@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Search, Setting } from '@element-plus/icons-vue'
 
+import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
 const props = defineProps([
@@ -27,6 +28,7 @@ const props = defineProps([
   'scenarioListPageSize',
   'changeScenarioListPage',
   'changeScenarioListPageSize',
+  'openNewScenarioTab',
 ])
 
 const emit = defineEmits([
@@ -52,9 +54,13 @@ function scenarioEnvironmentName(defaultEnvironmentId: string | number | null | 
 
 <template>
           <div class="ms-scenario-list-shell">
+            <div class="ms-scenario-page-head">
+              <h2>接口场景</h2>
+              <p>多接口串联编排，支持数据驱动和场景级断言</p>
+            </div>
             <div class="ms-scenario-list-toolbar">
               <div class="ms-scenario-search">
-                <el-input :model-value="scenarioFilterKeyword" placeholder="通过 ID/名称/标签搜索" clearable @update:model-value="updateScenarioFilterKeyword">
+                <el-input :model-value="scenarioFilterKeyword" placeholder="搜索场景名称" clearable @update:model-value="updateScenarioFilterKeyword">
                   <template #suffix>
                     <el-icon><Search /></el-icon>
                   </template>
@@ -63,6 +69,10 @@ function scenarioEnvironmentName(defaultEnvironmentId: string | number | null | 
               <el-select :model-value="scenarioViewMode" class="ms-scenario-view-select" @update:model-value="updateScenarioViewMode">
                 <el-option label="全部数据" value="ALL" />
               </el-select>
+              <button type="button" class="ms-scenario-primary-button" @click="openNewScenarioTab">
+                <span>+</span>
+                新建场景
+              </button>
               <el-button class="ms-scenario-tool-button">筛选</el-button>
             </div>
             <div class="ms-scenario-grid-shell">
@@ -141,17 +151,15 @@ function scenarioEnvironmentName(defaultEnvironmentId: string | number | null | 
                     @mouseleave="setHoveredScenarioRow(null)"
                   >
                     <div class="ms-scenario-grid-action-buttons">
-                      <button type="button" class="ms-scenario-action" @click="selectScenario(row.id)">编辑</button>
-                      <button type="button" class="ms-scenario-action" @click="runScenarioFromList(row.id)">执行</button>
-                      <el-dropdown trigger="click">
-                        <button type="button" class="ms-scenario-action">...</button>
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item @click="copyScenario(row)">复制</el-dropdown-item>
-                            <el-dropdown-item @click="removeScenarioFromList(row)">删除</el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
+                      <button type="button" class="ms-scenario-icon-action" title="编辑" aria-label="编辑" @click="selectScenario(row.id)">
+                        <img :src="figmaCaseIcons.action.edit" alt="" />
+                      </button>
+                      <button type="button" class="ms-scenario-icon-action" title="执行" aria-label="执行" @click="runScenarioFromList(row.id)">
+                        <img :src="figmaCaseIcons.action.run" alt="" />
+                      </button>
+                      <button type="button" class="ms-scenario-icon-action" title="删除" aria-label="删除" @click="removeScenarioFromList(row)">
+                        <img :src="figmaCaseIcons.action.delete" alt="" />
+                      </button>
                     </div>
                   </div>
                 </template>

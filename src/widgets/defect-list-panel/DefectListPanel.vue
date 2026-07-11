@@ -19,11 +19,10 @@ import {
 import { assignDefect } from '@/features/defect-assign'
 import { DefectTransitionDialog, transitionDefect } from '@/features/defect-transition'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
-import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 import { DefectDetailDrawer } from '@/widgets/defect-detail-drawer'
 import {
   useDefectTableSettings,
@@ -95,18 +94,19 @@ const activeDetailIndex = computed(() => {
   return index >= 0 ? index : null
 })
 const tableColumnDefinitions = computed<DefectTableColumnDefinition[]>(() => [
-  { key: 'bugNo', label: '缺陷编号', width: 170, required: true, defaultVisible: true },
-  { key: 'title', label: '缺陷标题', minWidth: 260, required: true, defaultVisible: true, showOverflowTooltip: true },
-  { key: 'status', label: '状态', width: 112, required: true, defaultVisible: true },
-  { key: 'priority', label: '优先级', width: 88, defaultVisible: true },
-  { key: 'severity', label: '严重级别', width: 112, defaultVisible: true },
-  { key: 'assigneeName', label: '处理人', width: 120, defaultVisible: true, showOverflowTooltip: true },
-  { key: 'workspaceName', label: '所属空间', width: 132, defaultVisible: false, showOverflowTooltip: true },
+  { key: 'select', label: '', width: 43.5, required: true, defaultVisible: true },
+  { key: 'bugNo', label: '缺陷 ID', width: 130.578, required: true, defaultVisible: true },
+  { key: 'title', label: '缺陷标题', minWidth: 362.766, required: true, defaultVisible: true, showOverflowTooltip: true },
+  { key: 'severity', label: '严重程度', width: 116.078, required: true, defaultVisible: true },
+  { key: 'priority', label: '优先级', width: 101.562, defaultVisible: true },
+  { key: 'status', label: '状态', width: 116.078, required: true, defaultVisible: true },
+  { key: 'assigneeName', label: '负责人', width: 101.562, defaultVisible: true, showOverflowTooltip: true },
+  { key: 'workspaceName', label: '所属模块', width: 130.578, required: true, defaultVisible: true, showOverflowTooltip: true },
+  { key: 'updatedAt', label: '更新时间', width: 210.156, required: true, defaultVisible: true },
   { key: 'tags', label: '标签', width: 190, defaultVisible: false, showOverflowTooltip: true },
   { key: 'reporterName', label: '创建人', width: 120, defaultVisible: false, showOverflowTooltip: true },
   { key: 'createdAt', label: '创建时间', width: 168, defaultVisible: false },
   { key: 'updatedByName', label: '更新人', width: 120, defaultVisible: false, showOverflowTooltip: true },
-  { key: 'updatedAt', label: '更新时间', width: 168, defaultVisible: false },
   { key: 'relatedCaseCount', label: '关联用例数', width: 112, defaultVisible: false },
 ])
 const tableSettings = useDefectTableSettings({
@@ -145,6 +145,8 @@ function formatColumnValue(row: DefectSummaryItem, key: DefectTableColumnKey) {
   switch (key) {
     case 'bugNo':
       return row.bugNo || '-'
+    case 'select':
+      return ''
     case 'title':
       return row.title || '-'
     case 'status':
@@ -336,6 +338,36 @@ async function deleteActiveDetailDefect() {
   }
 }
 
+async function deleteRowDefect(item: DefectSummaryItem) {
+  if (!item || deletingDefectId.value !== null) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(`确认删除缺陷“${item.bugNo || item.title}”吗？删除后不可恢复。`, '删除缺陷', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger',
+    })
+
+    deletingDefectId.value = item.id
+    await defectApi.deleteDefect(props.workspaceCode, item.id)
+    ElMessage.success('缺陷已删除')
+    if (detailDefectId.value === item.id) {
+      detailDrawerVisible.value = false
+    }
+    await loadDefects()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    deletingDefectId.value = null
+  }
+}
+
 async function submitTransitionDefect(payload: TransitionDefectPayload) {
   if (!transitioningDefect.value || transitioningDefectId.value !== null || assigningDefectId.value !== null) {
     return
@@ -482,8 +514,14 @@ defineExpose({
                   :key="`${row.id}-${column.key}`"
                   :class="['defect-list-panel__cell', `defect-list-panel__cell--${column.key}`]"
                 >
+                  <span
+                    v-if="column.key === 'select'"
+                    class="defect-list-panel__checkbox"
+                    aria-hidden="true"
+                  />
+
                   <button
-                    v-if="column.key === 'bugNo'"
+                    v-else-if="column.key === 'bugNo'"
                     type="button"
                     class="defect-list-panel__code-trigger"
                     @click="openDetailDrawer(row)"
@@ -495,6 +533,9 @@ defineExpose({
                     <el-tooltip :content="row.title" placement="top">
                       <span class="defect-list-panel__title">{{ row.title || '-' }}</span>
                     </el-tooltip>
+                    <div v-if="Array.isArray(row.tags) && row.tags.length" class="defect-list-panel__tags">
+                      <span v-for="tag in row.tags.slice(0, 2)" :key="tag">{{ tag }}</span>
+                    </div>
                   </div>
 
                   <DefectStatusBadge v-else-if="column.key === 'status'" :status="row.status" />
@@ -523,7 +564,6 @@ defineExpose({
         <div class="defect-list-panel__table-actions">
           <div class="defect-list-panel__actions-header">
             <span>操作</span>
-            <AppTableSettingsTrigger @click="tableSettings.settingsVisible.value = true" />
           </div>
 
           <template v-if="pagedDefects.length">
@@ -538,21 +578,41 @@ defineExpose({
               @mouseleave="setHoveredRow(null)"
             >
               <div class="defect-list-panel__actions">
-                <AppButton size="small" @click="openDetailDrawer(row)">查看</AppButton>
-                <AppButton
-                  size="small"
+                <button
+                  type="button"
+                  class="defect-list-panel__icon-button"
+                  title="查看"
+                  @click="openDetailDrawer(row)"
+                >
+                  <img :src="figmaDefectIcons.action.view" alt="" />
+                </button>
+                <button
+                  type="button"
+                  class="defect-list-panel__icon-button"
+                  title="编辑"
                   :disabled="saving"
                   @click="openEditDialog(row)"
                 >
-                  编辑
-                </AppButton>
-                <AppButton
-                  size="small"
-                  :loading="transitioningDefectId === row.id || assigningDefectId === row.id"
+                  <img :src="figmaDefectIcons.action.edit" alt="" />
+                </button>
+                <button
+                  type="button"
+                  class="defect-list-panel__icon-button"
+                  title="流转"
+                  :disabled="transitioningDefectId === row.id || assigningDefectId === row.id"
                   @click="openTransitionDialog(row)"
                 >
-                  {{ transitioningDefectId === row.id || assigningDefectId === row.id ? '处理中' : '流转' }}
-                </AppButton>
+                  <img :src="figmaDefectIcons.action.transition" alt="" />
+                </button>
+                <button
+                  type="button"
+                  class="defect-list-panel__icon-button"
+                  title="删除"
+                  :disabled="deletingDefectId === row.id"
+                  @click="deleteRowDefect(row)"
+                >
+                  <img :src="figmaDefectIcons.action.delete" alt="" />
+                </button>
               </div>
             </div>
           </template>
@@ -601,24 +661,14 @@ defineExpose({
       :saving="transitioningDefectId !== null"
       @submit="submitTransitionDefect"
     />
-    <AppTableColumnSettingsDrawer
-      v-model="tableSettings.settingsVisible.value"
-      :columns="tableSettings.drawerColumns.value"
-      :dragging-key="tableSettings.draggingColumnKey.value"
-      @toggle-column="tableSettings.toggleColumnVisibility"
-      @drag-start="tableSettings.handleDragStart"
-      @drag-end="tableSettings.handleDragEnd"
-      @drop-column="tableSettings.moveColumnToTarget"
-      @reset="tableSettings.reset"
-    />
   </section>
 </template>
 
 <style scoped>
 .defect-list-panel {
-  --defect-table-header-height: 48px;
-  --defect-table-row-height: 54px;
-  --defect-table-actions-width: 150px;
+  --defect-table-header-height: 34.5px;
+  --defect-table-row-height: 53.25px;
+  --defect-table-actions-width: 140.109px;
   min-width: 0;
 }
 
@@ -665,10 +715,15 @@ defineExpose({
 .defect-list-panel__table-shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--defect-table-actions-width);
-  width: 100%;
+  width: calc(100% - 42px);
   min-height: 0;
+  margin: 14px 21px 0;
   overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-bottom: 0;
+  border-radius: 11px 11px 0 0;
   background: var(--app-bg-panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 .defect-list-panel__table-data {
@@ -689,22 +744,25 @@ defineExpose({
 
 .defect-list-panel__grid--header {
   min-height: var(--defect-table-header-height);
-  border-bottom: 1px solid var(--app-border);
-  color: var(--app-text-muted);
-  font-size: 12px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #86909c;
+  font-size: 11px;
   font-weight: 600;
-  background: #f8fafc;
+  line-height: 16.5px;
+  letter-spacing: 0.275px;
+  text-transform: uppercase;
+  background: #fafafa;
 }
 
 .defect-list-panel__grid--row {
   min-height: var(--defect-table-row-height);
-  border-bottom: 1px solid var(--app-border-soft);
-  background: var(--app-bg-panel);
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
   transition: background-color 160ms ease;
 }
 
 .defect-list-panel__grid--row:hover {
-  background: #f8fafc;
+  background: #fafafa;
 }
 
 .defect-list-panel__grid--row.is-active {
@@ -720,7 +778,7 @@ defineExpose({
   display: flex;
   min-width: 0;
   align-items: center;
-  padding: 0 var(--app-space-5);
+  padding: 0 14px;
 }
 
 .defect-list-panel__grid--header .defect-list-panel__cell {
@@ -731,9 +789,10 @@ defineExpose({
   display: block;
   width: 100%;
   overflow: hidden;
-  color: var(--app-text-main);
-  font-size: var(--app-font-size-sm);
-  line-height: 20px;
+  color: #86909c;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -742,18 +801,21 @@ defineExpose({
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--app-primary);
+  color: #f53f3f;
   cursor: pointer;
-  font-size: var(--app-font-size-sm);
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
   font-weight: 500;
-  line-height: 20px;
+  line-height: 18px;
 }
 
 .defect-list-panel__title-cell {
   display: flex;
   width: 100%;
   min-width: 0;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
 }
 
 .defect-list-panel__code {
@@ -771,14 +833,44 @@ defineExpose({
 .defect-list-panel__title {
   display: block;
   width: 100%;
-  max-width: 320px;
+  max-width: 200px;
   overflow: hidden;
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 400;
-  line-height: 20px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.defect-list-panel__tags {
+  display: flex;
+  height: 18.75px;
+  align-items: flex-start;
+  gap: 3.5px;
+  padding-top: 1.75px;
+}
+
+.defect-list-panel__tags span {
+  display: inline-flex;
+  height: 17px;
+  align-items: center;
+  padding: 1px 5.25px;
+  border-radius: 3.5px;
+  background: #f2f3f5;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 15px;
+}
+
+.defect-list-panel__checkbox {
+  display: block;
+  width: 12.25px;
+  height: 12.25px;
+  border: 1px solid #767676;
+  border-radius: 2px;
+  background: #ffffff;
 }
 
 .defect-list-panel__table-actions {
@@ -786,7 +878,7 @@ defineExpose({
   flex-direction: column;
   width: var(--defect-table-actions-width);
   min-width: var(--defect-table-actions-width);
-  border-left: 1px solid var(--app-border);
+  border-left: 0;
   background: var(--app-bg-panel);
   position: relative;
   z-index: 1;
@@ -799,11 +891,14 @@ defineExpose({
   gap: 4px;
   min-height: var(--defect-table-header-height);
   padding: 0 8px;
-  border-bottom: 1px solid var(--app-border);
-  color: var(--app-text-muted);
-  font-size: 12px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #86909c;
+  font-size: 11px;
   font-weight: 600;
-  background: #f8fafc;
+  line-height: 16.5px;
+  letter-spacing: 0.275px;
+  text-transform: uppercase;
+  background: #fafafa;
   white-space: nowrap;
 }
 
@@ -813,8 +908,8 @@ defineExpose({
   align-items: center;
   justify-content: center;
   padding: 0 6px;
-  border-bottom: 1px solid var(--app-border-soft);
-  background: var(--app-bg-panel);
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
   transition: background-color 160ms ease;
 }
 
@@ -827,34 +922,37 @@ defineExpose({
   flex-wrap: nowrap;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 0;
   white-space: nowrap;
 }
 
-.defect-list-panel__actions > * {
-  flex: 0 0 auto;
-}
-
-.defect-list-panel__actions :deep(.el-button) {
-  min-height: 28px;
-  padding-right: 0;
-  padding-left: 0;
-  border-color: transparent;
+.defect-list-panel__icon-button {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
   background: transparent;
-  color: var(--app-primary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 500;
-  box-shadow: none;
+  cursor: pointer;
 }
 
-.defect-list-panel__actions :deep(.el-button + .el-button) {
-  margin-left: 0;
+.defect-list-panel__icon-button img {
+  display: block;
+  width: 13px;
+  height: 13px;
 }
 
-.defect-list-panel__actions :deep(.el-button:hover),
-.defect-list-panel__actions :deep(.el-button:focus-visible) {
-  background: transparent;
-  color: var(--app-primary-hover);
+.defect-list-panel__icon-button:hover {
+  background: #f2f3f5;
+}
+
+.defect-list-panel__icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .defect-list-panel__actions-empty {
@@ -896,21 +994,7 @@ defineExpose({
 
 .defect-list-panel :deep(.defect-status-pill),
 .defect-list-panel :deep(.defect-badge) {
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 16px;
-}
-
-.defect-list-panel :deep(.defect-status-pill) {
-  min-height: 22px;
-  padding: 2px 10px;
-  border-radius: 9999px;
-}
-
-.defect-list-panel :deep(.defect-badge) {
-  min-height: 20px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  flex: 0 0 auto;
 }
 
 .defect-list-panel__empty {
@@ -923,10 +1007,16 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: var(--app-space-4);
-  min-height: 58px;
-  padding: 12px var(--app-space-5);
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-sm);
+  min-height: 43px;
+  margin: 0 21px 14px;
+  padding: 8.75px 14px 9.75px;
+  border: 1px solid #e5e6eb;
+  border-top: 0;
+  border-radius: 0 0 11px 11px;
+  background: #ffffff;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .defect-list-panel__pagination > span {

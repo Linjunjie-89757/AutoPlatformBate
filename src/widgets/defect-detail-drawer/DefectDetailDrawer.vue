@@ -1,6 +1,5 @@
 ﻿<script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeftBold, ArrowRightBold, Close, Delete, DocumentCopy, Edit, Link, MoreFilled, Promotion } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import {
@@ -12,12 +11,14 @@ import {
   defectApi,
   formatDefectDateTime,
   formatDefectTags,
+  getDefectStatusMeta,
   type DefectAttachment,
   type DefectComment,
   type DefectDetail,
 } from '@/entities/defect'
 import DefectCaseAssociateDialog from '@/features/defect-case-associate/DefectCaseAssociateDialog.vue'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -83,17 +84,11 @@ let detailRequestSeq = 0
 let commentsRequestSeq = 0
 let attachmentImageRequestSeq = 0
 
-const detailTabs = [
-  { key: 'basic', label: '基础信息' },
-  { key: 'detail', label: '详情' },
-  { key: 'case', label: '用例' },
-  { key: 'comment', label: '评论' },
-  { key: 'history', label: '历史' },
-] as const
-
-const hasRecordNavigation = computed(() => props.totalCount > 1 && props.currentIndex !== null)
-const canNavigatePrev = computed(() => hasRecordNavigation.value && (props.currentIndex ?? 0) > 0)
-const canNavigateNext = computed(() => hasRecordNavigation.value && (props.currentIndex ?? 0) < props.totalCount - 1)
+const detailTabs = computed(() => [
+  { key: 'detail' as const, label: '缺陷详情' },
+  { key: 'history' as const, label: `流转记录（${activityCount.value}）` },
+  { key: 'comment' as const, label: `评论（${comments.value.length}）` },
+])
 
 const activityCount = computed(() => {
   if (!Array.isArray(detail.value?.activities)) {
@@ -103,7 +98,6 @@ const activityCount = computed(() => {
   return detail.value.activities.length
 })
 
-const attachmentCount = computed(() => getAttachments(detail.value).length)
 const imageAttachments = computed(() => getAttachments(detail.value).filter(isImageAttachment))
 const previewImageUrls = computed(() => imageAttachments.value
   .map(attachment => attachmentImageUrls.value[attachment.id])
@@ -225,51 +219,6 @@ async function unlinkCase(caseItem: DefectCaseRow) {
   }
 }
 
-function navigatePrev() {
-  if (canNavigatePrev.value) {
-    emit('navigate-prev')
-  }
-}
-
-function navigateNext() {
-  if (canNavigateNext.value) {
-    emit('navigate-next')
-  }
-}
-
-async function copyShareLink() {
-  if (!detail.value || typeof window === 'undefined') {
-    return
-  }
-
-  const url = new URL(window.location.href)
-  url.pathname = `/bugs/${detail.value.id}`
-  url.search = ''
-  if (detail.value.workspaceCode) {
-    url.searchParams.set('workspace', detail.value.workspaceCode)
-  }
-
-  try {
-    await navigator.clipboard.writeText(url.toString())
-    ElMessage.success('链接已复制')
-  } catch {
-    ElMessage.error('链接复制失败')
-  }
-}
-
-async function copyDefectNo() {
-  if (!detail.value) {
-    return
-  }
-
-  try {
-    await navigator.clipboard.writeText(detail.value.bugNo)
-    ElMessage.success('缺陷编号已复制')
-  } catch {
-    ElMessage.error('复制失败')
-  }
-}
-
 function displayText(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === '') {
     return '-'
@@ -352,6 +301,55 @@ function getCaseRows(value: DefectDetail | null): DefectCaseRow[] {
   return []
 }
 
+function readSourceContextText(value: DefectDetail | null, keys: string[]) {
+  const context = readRecord(value?.sourceContext)
+  if (!context) {
+    return ''
+  }
+
+  for (const key of keys) {
+    const field = context[key]
+    if (typeof field === 'string' && field.trim()) {
+      return field.trim()
+    }
+    if (typeof field === 'number') {
+      return String(field)
+    }
+  }
+
+  return ''
+}
+
+function getRelatedCaseLabel(value: DefectDetail | null) {
+  const rows = getCaseRows(value)
+  const firstCase = rows[0]
+  if (!firstCase) {
+    return '-'
+  }
+
+  return firstCase.caseNo || firstCase.title || `#${firstCase.id}`
+}
+
+function getReproduceSteps(value: DefectDetail | null) {
+  const raw = readSourceContextText(value, ['reproduceSteps', 'steps', 'stepText', 'reproductionSteps'])
+  if (!raw) {
+    return []
+  }
+
+  return raw
+    .split(/\n+/)
+    .map(item => item.replace(/^\s*\d+[.)、]\s*/, '').trim())
+    .filter(Boolean)
+}
+
+function getExpectedResult(value: DefectDetail | null) {
+  return readSourceContextText(value, ['expectedResult', 'expected', 'expectation'])
+}
+
+function getActualResult(value: DefectDetail | null) {
+  return readSourceContextText(value, ['actualResult', 'actual', 'actualBehavior'])
+}
+
 function isImageAttachment(attachment: DefectAttachment) {
   if (attachment.contentType?.startsWith('image/')) {
     return true
@@ -427,32 +425,62 @@ function getActivityKey(activity: DefectActivityRecord, index: number) {
   return readActivityString(activity, ['id', 'activityId', 'createdAt', 'occurredAt']) || `activity-${index}`
 }
 
-function getActivityTitle(activity: DefectActivityRecord) {
-  const title = readActivityString(activity, ['title', 'type', 'action']) || '缺陷记录'
-  const actor = getActivityActor(activity)
-  if (!actor || title.includes(actor)) {
-    return title
-  }
-
-  return `${actor} ${title}`
-}
-
-function getActivityDetail(activity: DefectActivityRecord) {
-  const detailText = readActivityString(activity, ['detail', 'content', 'comment', 'description', 'message'])
-  const attachmentName = readActivityString(activity, ['attachmentName', 'fileName'])
-  const fromStatus = readActivityString(activity, ['fromStatus', 'from'])
-  const toStatus = readActivityString(activity, ['toStatus', 'to'])
-  const statusText = fromStatus && toStatus ? `${fromStatus} -> ${toStatus}` : ''
-
-  return [detailText, attachmentName, statusText].filter(Boolean).join(' / ') || '-'
-}
-
 function getActivityTime(activity: DefectActivityRecord) {
   return formatDefectDateTime(readActivityString(activity, ['occurredAt', 'createdAt', 'updatedAt']))
 }
 
 function getActivityActor(activity: DefectActivityRecord) {
   return readActivityString(activity, ['operatorName', 'actorName', 'createdByName', 'userName']) || '系统记录'
+}
+
+function getActivityFromStatus(activity: DefectActivityRecord) {
+  return readActivityString(activity, ['fromStatus', 'fromStatusCode', 'from'])
+}
+
+function getActivityToStatus(activity: DefectActivityRecord) {
+  return readActivityString(activity, ['toStatus', 'toStatusCode', 'to', 'status'])
+}
+
+function getActivityStatusLabel(status: string) {
+  return status ? getDefectStatusMeta(status).label : ''
+}
+
+function getActivityStatusTone(status: string) {
+  return status ? getDefectStatusMeta(status).tone : 'neutral'
+}
+
+function getActivityTone(activity: DefectActivityRecord, index: number) {
+  const toStatus = getActivityToStatus(activity)
+  if (toStatus) {
+    return getActivityStatusTone(toStatus)
+  }
+  return index === 0 ? 'new' : 'neutral'
+}
+
+function getActivityMarker(activity: DefectActivityRecord, index: number) {
+  if (index === 0 && !getActivityFromStatus(activity)) {
+    return '🐞'
+  }
+  return '→'
+}
+
+function getActivityActionText(activity: DefectActivityRecord, index: number) {
+  if (getActivityFromStatus(activity) && getActivityToStatus(activity)) {
+    return '将状态从'
+  }
+
+  const action = readActivityString(activity, ['title', 'type', 'action'])
+  if (action && !/create|created|new|新增|创建/i.test(action)) {
+    return action
+  }
+
+  return index === 0 ? '创建了缺陷' : '更新了缺陷'
+}
+
+function getActivityDescription(activity: DefectActivityRecord) {
+  const detailText = readActivityString(activity, ['detail', 'content', 'comment', 'description', 'message'])
+  const attachmentName = readActivityString(activity, ['attachmentName', 'fileName'])
+  return [detailText, attachmentName].filter(Boolean).join(' / ') || '-'
 }
 
 function getAvatarText(value: string | null | undefined) {
@@ -673,62 +701,52 @@ onBeforeUnmount(() => {
   <AppDrawer
     :model-value="modelValue"
     :with-header="false"
-    size="850px"
+    size="720px"
     drawer-class="defect-detail-drawer-host"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="defect-detail-drawer">
+      <div class="defect-detail-drawer__accent" aria-hidden="true" />
       <header class="defect-detail-drawer__topbar">
         <div class="defect-detail-drawer__title-wrap">
-          <div class="defect-detail-drawer__object-line">
-            <DefectPriorityBadge v-if="detail" :priority="detail.priority" />
+          <div class="defect-detail-drawer__badge-line">
             <span class="defect-detail-drawer__code">{{ displayText(detail?.bugNo) }}</span>
-            <strong class="defect-detail-drawer__title">{{ displayText(detail?.title || '缺陷详情') }}</strong>
+            <DefectSeverityBadge v-if="detail" :severity="detail.severity" />
             <DefectStatusBadge v-if="detail" :status="detail.status" />
+            <DefectPriorityBadge v-if="detail" :priority="detail.priority" />
+            <span
+              v-for="tag in (detail?.tags ?? []).slice(0, 2)"
+              :key="tag"
+              class="defect-detail-drawer__tag"
+            >
+              {{ tag }}
+            </span>
           </div>
+          <strong class="defect-detail-drawer__title">{{ displayText(detail?.title || '缺陷详情') }}</strong>
+          <p class="defect-detail-drawer__subtitle">
+            <span>{{ displayText(detail?.workspaceName || detail?.workspaceCode) }}</span>
+            <span>创建人：{{ displayText(detail?.reporterName) }}</span>
+            <span>{{ formatDefectDateTime(detail?.createdAt) }}</span>
+            <span>负责人：<strong>{{ displayText(detail?.assigneeName) }}</strong></span>
+          </p>
         </div>
 
         <div class="defect-detail-drawer__actions">
-          <div v-if="hasRecordNavigation" class="defect-detail-drawer__record-nav">
-            <AppButton
-              class="defect-detail-drawer__nav-button"
-              size="small"
-              :icon="ArrowLeftBold"
-              :disabled="!canNavigatePrev"
-              @click="navigatePrev"
-            />
-            <AppButton
-              class="defect-detail-drawer__nav-button"
-              size="small"
-              :icon="ArrowRightBold"
-              :disabled="!canNavigateNext"
-              @click="navigateNext"
-            />
-          </div>
-
-          <AppButton v-if="detail" size="small" :icon="Promotion" @click="emitIfDetail('transition')">流转</AppButton>
-          <AppButton v-if="detail" size="small" :icon="Link" @click="copyShareLink">分享</AppButton>
-
-          <el-dropdown v-if="detail" trigger="click" popper-class="defect-detail-drawer__more-menu">
-            <AppButton class="defect-detail-drawer__more-button" size="small" :icon="MoreFilled" aria-label="更多操作" />
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item :icon="Edit" @click="emitIfDetail('edit')">编辑</el-dropdown-item>
-                <el-dropdown-item :icon="DocumentCopy" @click="copyDefectNo">复制</el-dropdown-item>
-                <el-dropdown-item class="is-danger" :icon="Delete" @click="emitIfDetail('delete')">删除</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-
-          <AppButton
-            class="defect-detail-drawer__close-button"
-            size="small"
-            :icon="Close"
-            aria-label="关闭"
-            @click="closeDrawer"
-          />
+          <button v-if="detail" type="button" class="defect-detail-drawer__edit-button" @click="emitIfDetail('edit')">
+            <img :src="figmaDefectIcons.drawerEdit" alt="" />
+            <span>编辑</span>
+          </button>
+          <button type="button" class="defect-detail-drawer__close-button" aria-label="关闭" @click="closeDrawer">
+            ×
+          </button>
         </div>
       </header>
+
+      <div v-if="detail" class="defect-detail-drawer__flowbar">
+        <span>流转至：</span>
+        <button type="button" class="is-verify" @click="emitIfDetail('transition')">提交验证</button>
+        <button type="button" class="is-close" @click="emitIfDetail('transition')">直接关闭</button>
+      </div>
 
       <nav v-if="detail" class="defect-detail-drawer__tabs" aria-label="缺陷详情分区">
         <button
@@ -816,32 +834,70 @@ onBeforeUnmount(() => {
           </section>
 
           <section v-show="activeTab === 'detail'" class="defect-detail-drawer__pane">
-            <div class="defect-detail-drawer__section">
-              <div class="defect-detail-drawer__section-header">
-                <h4>缺陷标题</h4>
-                <span>当前缺陷的标题信息</span>
+            <dl class="defect-detail-drawer__figma-meta">
+              <div>
+                <dt>所属模块</dt>
+                <dd>{{ displayText(detail.workspaceName || detail.workspaceCode) }}</dd>
               </div>
-              <div class="defect-detail-drawer__content-card defect-detail-drawer__content-card--soft">
-                <p class="defect-detail-drawer__text is-compact">{{ displayText(detail.title) }}</p>
+              <div>
+                <dt>负责人</dt>
+                <dd>{{ displayText(detail.assigneeName) }}</dd>
               </div>
-            </div>
+              <div>
+                <dt>创建人</dt>
+                <dd>{{ displayText(detail.reporterName) }}</dd>
+              </div>
+              <div>
+                <dt>创建时间</dt>
+                <dd>{{ formatDefectDateTime(detail.createdAt) }}</dd>
+              </div>
+              <div>
+                <dt>最后更新</dt>
+                <dd>{{ formatDefectDateTime(detail.updatedAt) }}</dd>
+              </div>
+              <div>
+                <dt>关联用例</dt>
+                <dd>{{ getRelatedCaseLabel(detail) }}</dd>
+              </div>
+            </dl>
 
-            <div class="defect-detail-drawer__section">
-              <div class="defect-detail-drawer__section-header">
-                <h4>缺陷描述</h4>
-                <span>复现现象、影响范围和补充信息</span>
+            <section class="defect-detail-drawer__figma-section">
+              <h4>问题描述</h4>
+              <div class="defect-detail-drawer__description-box">
+                {{ displayRichText(detail.description) }}
               </div>
-              <div class="defect-detail-drawer__content-card defect-detail-drawer__content-card--soft">
-                <p class="defect-detail-drawer__text">{{ displayRichText(detail.description) }}</p>
-              </div>
-            </div>
+            </section>
 
-            <div class="defect-detail-drawer__section">
-              <div class="defect-detail-drawer__section-header">
-                <h4>附件</h4>
-                <span>{{ attachmentCount }} 个附件</span>
+            <section class="defect-detail-drawer__figma-section">
+              <h4>复现步骤</h4>
+              <div v-if="getReproduceSteps(detail).length" class="defect-detail-drawer__step-list">
+                <div v-for="(step, index) in getReproduceSteps(detail)" :key="`${index}-${step}`">
+                  <span>{{ index + 1 }}</span>
+                  <p>{{ step }}</p>
+                </div>
               </div>
-              <div class="defect-detail-drawer__attachment-toolbar">
+              <div v-else class="defect-detail-drawer__step-list is-empty">
+                <div>
+                  <span>1</span>
+                  <p>-</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="defect-detail-drawer__result-grid">
+              <div>
+                <h4>预期结果</h4>
+                <p class="is-expected">{{ displayText(getExpectedResult(detail)) }}</p>
+              </div>
+              <div>
+                <h4>实际结果</h4>
+                <p class="is-actual">{{ displayText(getActualResult(detail)) }}</p>
+              </div>
+            </section>
+
+            <section class="defect-detail-drawer__figma-section">
+              <div class="defect-detail-drawer__attachment-heading">
+                <h4>附件 / 截图</h4>
                 <input
                   ref="attachmentInputRef"
                   class="defect-detail-drawer__file-input"
@@ -849,22 +905,23 @@ onBeforeUnmount(() => {
                   multiple
                   @change="uploadAttachments"
                 />
-                <AppButton size="small" type="primary" :loading="attachmentUploading" @click="openAttachmentPicker">
-                  上传附件
-                </AppButton>
+                <button type="button" @click="openAttachmentPicker">上传附件</button>
               </div>
-              <DefectAttachmentPanel
-                :items="attachmentPanelItems"
-                :preview-urls="previewImageUrls"
-                :downloading-id="attachmentDownloadingId"
-                :removing-id="attachmentRemovingId"
-                @download="handleAttachmentPanelDownload"
-                @remove="handleAttachmentPanelRemove"
-              />
+              <div v-if="attachmentPanelItems.length" class="defect-detail-drawer__attachment-panel">
+                <DefectAttachmentPanel
+                  :items="attachmentPanelItems"
+                  :preview-urls="previewImageUrls"
+                  :downloading-id="attachmentDownloadingId"
+                  :removing-id="attachmentRemovingId"
+                  @download="handleAttachmentPanelDownload"
+                  @remove="handleAttachmentPanelRemove"
+                />
+              </div>
+              <div v-else class="defect-detail-drawer__attachment-empty">暂无附件</div>
               <p v-if="attachmentErrorMessage" class="defect-detail-drawer__form-error">
                 {{ attachmentErrorMessage }}
               </p>
-            </div>
+            </section>
           </section>
 
           <section v-show="activeTab === 'case'" class="defect-detail-drawer__pane">
@@ -925,12 +982,8 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <section v-show="activeTab === 'comment'" class="defect-detail-drawer__pane">
-            <div class="defect-detail-drawer__section">
-              <div class="defect-detail-drawer__section-header">
-                <h4>评论</h4>
-                <span>{{ comments.length }} 条评论</span>
-              </div>
+          <section v-show="activeTab === 'comment'" class="defect-detail-drawer__comment-pane">
+            <div class="defect-detail-drawer__comment-scroll">
               <AppLoadingState v-if="commentsLoading && !comments.length" text="正在加载评论..." />
 
               <div v-else-if="commentsErrorMessage && !comments.length" class="defect-detail-drawer__inline-error">
@@ -943,12 +996,14 @@ onBeforeUnmount(() => {
                   <div class="defect-detail-drawer__comment-avatar">
                     {{ getAvatarText(comment.commenterName) }}
                   </div>
-                  <div class="defect-detail-drawer__comment-bubble">
+                  <div class="defect-detail-drawer__comment-main">
                     <div class="defect-detail-drawer__comment-top">
                       <strong>{{ displayText(comment.commenterName) }}</strong>
                       <span>{{ formatDefectDateTime(comment.createdAt) }}</span>
                     </div>
-                    <p>{{ displayText(comment.content) }}</p>
+                    <div class="defect-detail-drawer__comment-bubble">
+                      <p>{{ displayText(comment.content) }}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -959,67 +1014,77 @@ onBeforeUnmount(() => {
                 description="还没有人在这条缺陷下留言，可以补充处理说明、现象说明或验证结果。"
               />
             </div>
-            <div class="defect-detail-drawer__section">
-              <div class="defect-detail-drawer__section-header">
-                <h4>发表评论</h4>
-                <span>当前仅支持纯文本评论</span>
-              </div>
-              <div class="defect-detail-drawer__comment-editor">
-                <el-input
-                  v-model="commentDraft"
-                  type="textarea"
-                  :rows="4"
-                  maxlength="500"
-                  show-word-limit
-                  placeholder="输入评论内容"
-                  :disabled="commentSubmitting"
-                />
-                <p v-if="commentSubmitError" class="defect-detail-drawer__form-error">
-                  {{ commentSubmitError }}
-                </p>
-                <div class="defect-detail-drawer__comment-actions">
-                  <AppButton
-                    type="primary"
-                    :loading="commentSubmitting"
-                    :disabled="!commentDraft.trim() || commentSubmitting"
-                    @click="submitComment"
-                  >
-                    提交评论
-                  </AppButton>
-                </div>
+
+            <div class="defect-detail-drawer__comment-composer">
+              <el-input
+                v-model="commentDraft"
+                type="textarea"
+                :rows="3"
+                maxlength="500"
+                placeholder="添加评论，可以 @提及成员..."
+                :disabled="commentSubmitting"
+              />
+              <p v-if="commentSubmitError" class="defect-detail-drawer__form-error">
+                {{ commentSubmitError }}
+              </p>
+              <div class="defect-detail-drawer__comment-actions">
+                <button
+                  type="button"
+                  class="defect-detail-drawer__comment-submit"
+                  :disabled="!commentDraft.trim() || commentSubmitting"
+                  @click="submitComment"
+                >
+                  <img :src="figmaDefectIcons.commentSubmit" alt="" />
+                  <span>{{ commentSubmitting ? '提交中' : '提交评论' }}</span>
+                </button>
               </div>
             </div>
           </section>
 
-          <section v-show="activeTab === 'history'" class="defect-detail-drawer__pane">
-            <div class="defect-detail-drawer__section">
-              <div class="defect-detail-drawer__section-header">
-                <h4>历史</h4>
-                <span>{{ activityCount }} 条记录</span>
-              </div>
-              <div v-if="getActivities(detail).length" class="defect-detail-drawer__timeline">
-                <div
-                  v-for="(activity, index) in getActivities(detail)"
-                  :key="getActivityKey(activity, index)"
-                  class="defect-detail-drawer__timeline-item"
-                >
-                  <span class="defect-detail-drawer__timeline-dot" />
-                  <span class="defect-detail-drawer__timeline-main">
-                    <strong>{{ getActivityTitle(activity) }}</strong>
-                    <small>
-                      <span>{{ getActivityActor(activity) }}</span>
-                      <span>{{ getActivityDetail(activity) }}</span>
-                    </small>
+          <section v-show="activeTab === 'history'" class="defect-detail-drawer__history-pane">
+            <div v-if="getActivities(detail).length" class="defect-detail-drawer__timeline">
+              <div
+                v-for="(activity, index) in getActivities(detail)"
+                :key="getActivityKey(activity, index)"
+                class="defect-detail-drawer__timeline-item"
+              >
+                <div class="defect-detail-drawer__timeline-rail">
+                  <span
+                    class="defect-detail-drawer__timeline-marker"
+                    :class="`is-${getActivityTone(activity, index)}`"
+                  >
+                    {{ getActivityMarker(activity, index) }}
                   </span>
+                  <i v-if="index < getActivities(detail).length - 1" />
+                </div>
+                <div class="defect-detail-drawer__timeline-main">
+                  <div class="defect-detail-drawer__timeline-title">
+                    <strong>{{ getActivityActor(activity) }}</strong>
+                    <span>{{ getActivityActionText(activity, index) }}</span>
+                    <em
+                      v-if="getActivityFromStatus(activity)"
+                      :class="`is-${getActivityStatusTone(getActivityFromStatus(activity))}`"
+                    >
+                      {{ getActivityStatusLabel(getActivityFromStatus(activity)) }}
+                    </em>
+                    <span v-if="getActivityFromStatus(activity) && getActivityToStatus(activity)">改为</span>
+                    <em
+                      v-if="getActivityToStatus(activity)"
+                      :class="`is-${getActivityStatusTone(getActivityToStatus(activity))}`"
+                    >
+                      {{ getActivityStatusLabel(getActivityToStatus(activity)) }}
+                    </em>
+                  </div>
+                  <p>{{ getActivityDescription(activity) }}</p>
                   <time>{{ getActivityTime(activity) }}</time>
                 </div>
               </div>
-              <AppEmptyState
-                v-else
-                title="暂无历史"
-                description="当前缺陷还没有更多流转或操作记录。"
-              />
             </div>
+            <AppEmptyState
+              v-else
+              title="暂无历史"
+              description="当前缺陷还没有更多流转或操作记录。"
+            />
           </section>
         </template>
       </div>
@@ -1055,20 +1120,26 @@ onBeforeUnmount(() => {
 }
 
 :global(.defect-detail-drawer-host .el-drawer) {
-  box-shadow: -24px 0 48px rgba(15, 23, 42, 0.18);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
+.defect-detail-drawer__accent {
+  width: 100%;
+  height: 3.5px;
+  flex: 0 0 auto;
+  background: #ff7d00;
 }
 
 .defect-detail-drawer__topbar {
   display: flex;
   min-width: 0;
   flex: 0 0 auto;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--app-space-4);
-  min-height: 72px;
-  padding: var(--app-space-5) var(--app-space-6) var(--app-space-3);
-  border-bottom: 1px solid var(--app-border);
-  background: var(--app-bg-panel);
+  gap: 10.5px;
+  padding: 14px 21px 15px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
 }
 
 .defect-detail-drawer__title-wrap {
@@ -1076,45 +1147,71 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-.defect-detail-drawer__object-line {
+.defect-detail-drawer__badge-line {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: var(--app-space-2);
+  gap: 7px;
   white-space: nowrap;
 }
 
 .defect-detail-drawer__code {
   flex: 0 0 auto;
-  color: var(--app-primary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
-  line-height: var(--app-line-height-sm);
+  padding: 1.75px 5.25px;
+  border-radius: 3.5px;
+  background: #f2f3f5;
+  color: #4e5969;
+  font-family: var(--app-font-family-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.defect-detail-drawer__tag {
+  display: inline-flex;
+  padding: 1.75px 5.25px;
+  border-radius: 3.5px;
+  background: #f2f3f5;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 15px;
 }
 
 .defect-detail-drawer__title {
+  display: block;
   min-width: 0;
   overflow: hidden;
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-lg);
+  margin-top: 7px;
+  color: #1d2129;
+  font-size: 16px;
   font-weight: 600;
-  line-height: var(--app-line-height-lg);
+  line-height: 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .defect-detail-drawer__subtitle {
-  margin: var(--app-space-1) 0 0;
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-  line-height: var(--app-line-height-xs);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10.5px;
+  margin: 5.25px 0 0;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.defect-detail-drawer__subtitle strong {
+  color: #1d2129;
+  font-weight: 500;
 }
 
 .defect-detail-drawer__actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--app-space-1);
+  gap: 7px;
   min-width: 0;
 }
 
@@ -1127,31 +1224,43 @@ onBeforeUnmount(() => {
   border-right: 1px solid var(--app-border);
 }
 
-.defect-detail-drawer__actions :deep(.el-button) {
-  min-height: 30px;
-  padding: 0 10px;
-  border-color: transparent;
-  border-radius: var(--app-radius-sm);
-  background: transparent;
-  color: var(--app-text-main);
+.defect-detail-drawer__edit-button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 5.25px;
+  padding: 1px 11.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
   font-size: 13px;
-  font-weight: 400;
-  box-shadow: none;
+  font-weight: 500;
+  line-height: 19.5px;
 }
 
-.defect-detail-drawer__actions :deep(.el-button:hover),
-.defect-detail-drawer__actions :deep(.el-button:focus-visible) {
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
-  outline: none;
+.defect-detail-drawer__edit-button img {
+  display: block;
+  width: 13px;
+  height: 13px;
 }
 
-:deep(.defect-detail-drawer__nav-button.el-button),
-:deep(.defect-detail-drawer__more-button.el-button),
-:deep(.defect-detail-drawer__close-button.el-button) {
-  width: 30px;
-  min-width: 30px;
+.defect-detail-drawer__close-button {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  align-items: center;
+  justify-content: center;
   padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #c9cdd4;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 27px;
 }
 
 :global(.defect-detail-drawer__more-menu .el-dropdown-menu__item.is-danger) {
@@ -1167,24 +1276,25 @@ onBeforeUnmount(() => {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--app-space-5);
-  min-height: 44px;
-  padding: 0 var(--app-space-6);
-  border-bottom: 1px solid var(--app-border);
-  background: var(--app-bg-panel);
+  gap: 0;
+  min-height: 35px;
+  padding: 0 21px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
 }
 
 .defect-detail-drawer__tab {
   position: relative;
-  height: 44px;
-  padding: 0;
+  height: 35px;
+  padding: 0 14px 2px;
   border: 0;
+  border-bottom: 2px solid transparent;
   background: transparent;
-  color: var(--app-text-muted);
+  color: #86909c;
   cursor: pointer;
-  font-size: var(--app-font-size-sm);
+  font-size: 13px;
   font-weight: 500;
-  line-height: 44px;
+  line-height: 19.5px;
   white-space: nowrap;
   transition: color 160ms ease;
 }
@@ -1196,32 +1306,237 @@ onBeforeUnmount(() => {
 }
 
 .defect-detail-drawer__tab.is-active {
-  color: var(--app-primary);
-  font-weight: 600;
+  border-bottom-color: #f53f3f;
+  color: #f53f3f;
+  font-weight: 500;
 }
 
 .defect-detail-drawer__tab.is-active::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 2px;
-  border-radius: 999px 999px 0 0;
-  background: var(--app-primary);
-  content: '';
+  content: none;
 }
 
 .defect-detail-drawer__content {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: var(--app-space-5) var(--app-space-6);
-  background: var(--app-bg-panel);
+  padding: 17.5px 21px;
+  background: #ffffff;
 }
 
 .defect-detail-drawer__pane {
   display: grid;
-  gap: var(--app-space-5);
+  gap: 17.5px;
+}
+
+.defect-detail-drawer__flowbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 10.5px 21px 11.5px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
+}
+
+.defect-detail-drawer__flowbar span {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.defect-detail-drawer__flowbar button {
+  height: 24.5px;
+  padding: 1px 11.5px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.defect-detail-drawer__flowbar .is-verify {
+  border: 1px solid rgba(200, 155, 0, 0.25);
+  background: rgba(200, 155, 0, 0.05);
+  color: #c89b00;
+}
+
+.defect-detail-drawer__flowbar .is-close {
+  border: 1px solid rgba(0, 180, 42, 0.25);
+  background: rgba(0, 180, 42, 0.05);
+  color: #00b42a;
+}
+
+.defect-detail-drawer__figma-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10.5px 21px;
+  margin: 0;
+  padding-bottom: 17.5px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.defect-detail-drawer__figma-meta div {
+  min-width: 0;
+}
+
+.defect-detail-drawer__figma-meta dt {
+  margin: 0 0 1.75px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.defect-detail-drawer__figma-meta dd {
+  margin: 0;
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defect-detail-drawer__figma-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.defect-detail-drawer__figma-section h4,
+.defect-detail-drawer__result-grid h4 {
+  margin: 0;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.defect-detail-drawer__description-box {
+  min-height: 64px;
+  padding: 10.5px 14px;
+  border-radius: 11px;
+  background: #f7f8fa;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 21.125px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.defect-detail-drawer__step-list {
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 11px;
+}
+
+.defect-detail-drawer__step-list div {
+  display: flex;
+  min-height: 38.25px;
+  align-items: flex-start;
+  gap: 10.5px;
+  padding: 8.75px 14px 9.75px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.defect-detail-drawer__step-list div:last-child {
+  border-bottom: 0;
+}
+
+.defect-detail-drawer__step-list span {
+  display: inline-flex;
+  width: 17.5px;
+  height: 17.5px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(245, 63, 63, 0.08);
+  color: #f53f3f;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16.5px;
+}
+
+.defect-detail-drawer__step-list p {
+  margin: 0;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.defect-detail-drawer__result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.defect-detail-drawer__result-grid > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.defect-detail-drawer__result-grid p {
+  min-height: 65.25px;
+  margin: 0;
+  padding: 11.5px 15px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 21.125px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.defect-detail-drawer__result-grid .is-expected {
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.defect-detail-drawer__result-grid .is-actual {
+  border-color: #ffa39e;
+  background: #fff0f0;
+}
+
+.defect-detail-drawer__attachment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.defect-detail-drawer__attachment-heading button {
+  height: 24.5px;
+  padding: 0 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.defect-detail-drawer__attachment-empty {
+  display: flex;
+  min-height: 75px;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #e5e6eb;
+  border-radius: 11px;
+  color: #c9cdd4;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
 }
 
 .defect-detail-drawer__content-card {
@@ -1416,6 +1731,144 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
+.defect-detail-drawer__comment-pane {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 0;
+  margin: -17.5px -21px;
+}
+
+.defect-detail-drawer__comment-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 17.5px 21px;
+}
+
+.defect-detail-drawer__comment-list {
+  gap: 0;
+}
+
+.defect-detail-drawer__comment-item {
+  display: flex;
+  gap: 10.5px;
+}
+
+.defect-detail-drawer__comment-item + .defect-detail-drawer__comment-item {
+  padding-top: 17.5px;
+}
+
+.defect-detail-drawer__comment-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3.5px;
+}
+
+.defect-detail-drawer__comment-item strong {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.defect-detail-drawer__comment-avatar {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  background: #165dff;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.defect-detail-drawer__comment-top {
+  justify-content: flex-start;
+  gap: 7px;
+}
+
+.defect-detail-drawer__comment-top span {
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.defect-detail-drawer__comment-bubble {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.defect-detail-drawer__comment-bubble p {
+  padding: 10.5px 14px;
+  border-radius: 11px;
+  background: #f7f8fa;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 21.125px;
+}
+
+.defect-detail-drawer__comment-composer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  padding: 15px 21px 14px;
+  border-top: 1px solid #e5e6eb;
+  background: #ffffff;
+}
+
+.defect-detail-drawer__comment-composer :deep(.el-textarea__inner) {
+  min-height: 78px;
+  padding: 9.75px 11.5px;
+  border-radius: 11px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+.defect-detail-drawer__comment-composer :deep(.el-textarea__inner::placeholder) {
+  color: rgba(29, 33, 41, 0.5);
+}
+
+.defect-detail-drawer__comment-actions {
+  padding-top: 7px;
+}
+
+.defect-detail-drawer__comment-submit {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 5.25px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: #165dff;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.defect-detail-drawer__comment-submit img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.defect-detail-drawer__comment-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .defect-detail-drawer__form-error {
   margin: 0;
   color: var(--app-danger);
@@ -1597,6 +2050,196 @@ onBeforeUnmount(() => {
 }
 
 .defect-detail-drawer__timeline-item time {
+  white-space: nowrap;
+}
+
+.defect-detail-drawer__history-pane {
+  min-height: 0;
+}
+
+.defect-detail-drawer__timeline {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+}
+
+.defect-detail-drawer__timeline-item {
+  display: flex;
+  min-width: 0;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.defect-detail-drawer__timeline-item::before {
+  content: none !important;
+}
+
+.defect-detail-drawer__timeline-rail {
+  display: flex;
+  width: 36px;
+  min-height: 79px;
+  flex: 0 0 36px;
+  flex-direction: column;
+  align-items: center;
+}
+
+.defect-detail-drawer__timeline-marker {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #86909c;
+  border-radius: 999px;
+  background: #f2f3f5;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.defect-detail-drawer__timeline-marker.is-new {
+  border-color: #165dff;
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.defect-detail-drawer__timeline-marker.is-assigned {
+  border-color: #7816ff;
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.defect-detail-drawer__timeline-marker.is-processing {
+  border-color: #ff7d00;
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.defect-detail-drawer__timeline-marker.is-verify {
+  border-color: #c89b00;
+  background: #fff7e8;
+  color: #c89b00;
+}
+
+.defect-detail-drawer__timeline-marker.is-closed {
+  border-color: #00b42a;
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.defect-detail-drawer__timeline-marker.is-hold {
+  border-color: #f53f3f;
+  background: #ffe8e8;
+  color: #f53f3f;
+}
+
+.defect-detail-drawer__timeline-rail i {
+  display: block;
+  width: 1.75px;
+  min-height: 44px;
+  flex: 1 1 auto;
+  margin: 3.5px 0;
+  background: #e5e6eb;
+}
+
+.defect-detail-drawer__timeline-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 17.5px;
+}
+
+.defect-detail-drawer__timeline-title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.defect-detail-drawer__timeline-title strong {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.defect-detail-drawer__timeline-title span {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.defect-detail-drawer__timeline-title em {
+  display: inline-flex;
+  align-items: center;
+  padding: 1.75px 7px;
+  border-radius: 3.5px;
+  background: #f2f3f5;
+  color: #86909c;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.defect-detail-drawer__timeline-title em.is-new {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.defect-detail-drawer__timeline-title em.is-assigned {
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.defect-detail-drawer__timeline-title em.is-processing {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.defect-detail-drawer__timeline-title em.is-verify {
+  background: #fff7e8;
+  color: #c89b00;
+}
+
+.defect-detail-drawer__timeline-title em.is-closed {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.defect-detail-drawer__timeline-title em.is-hold {
+  background: #ffe8e8;
+  color: #f53f3f;
+}
+
+.defect-detail-drawer__timeline-main p {
+  margin: 0;
+  padding-top: 3.5px;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+.defect-detail-drawer__timeline-main time {
+  padding-top: 3.5px;
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
   white-space: nowrap;
 }
 

@@ -72,6 +72,7 @@ watch(selectedWorkspaceCode, (value) => {
 
 <template>
   <AppPage
+    class="api-automation-app-page"
     title="接口自动化"
     description="管理接口、场景、执行套件、报告和设置。"
     fill
@@ -89,6 +90,10 @@ watch(selectedWorkspaceCode, (value) => {
 </template>
 
 <style scoped>
+.api-automation-app-page {
+  min-height: calc(100dvh - 86px);
+}
+
 .api-automation-page {
   display: flex;
   min-width: 0;

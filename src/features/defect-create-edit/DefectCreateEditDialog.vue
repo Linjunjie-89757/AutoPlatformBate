@@ -53,6 +53,12 @@ const form = reactive<DefectForm>(createDefaultDefectForm(props.defaultWorkspace
 const formError = reactive({
   message: '',
 })
+const visualForm = reactive({
+  sourceType: '手工录入',
+  reproduceSteps: '',
+  expectedResult: '',
+  actualResult: '',
+})
 const workspaceOptions = ref<WorkspaceItem[]>([])
 const workspaceOptionsLoading = ref(false)
 const workspaceOptionsError = ref('')
@@ -66,7 +72,6 @@ let loadingCaseOptionsWorkspaceCode = ''
 
 const activeWorkspaceCode = computed(() => form.workspaceCode || props.defaultWorkspaceCode || 'ALL')
 const dialogTitle = computed(() => (props.mode === 'create' ? '新增缺陷' : '编辑缺陷'))
-const introTitle = computed(() => (props.mode === 'create' ? '填写缺陷基础信息' : '调整缺陷基础信息'))
 
 
 function getCaseLabel(item: CaseSummaryItem) {
@@ -171,6 +176,12 @@ function resetForm() {
         : createDefaultDefectForm(props.defaultWorkspaceCode)
 
   Object.assign(form, nextForm)
+  Object.assign(visualForm, {
+    sourceType: '手工录入',
+    reproduceSteps: '',
+    expectedResult: '',
+    actualResult: '',
+  })
   formError.message = ''
 }
 
@@ -228,156 +239,158 @@ watch(
   <AppDialog
     :model-value="modelValue"
     :title="dialogTitle"
-    width="1120px"
+    width="640px"
     modal-class="defect-dialog-overlay"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="defect-dialog">
-      <div class="defect-dialog__intro">
-        <strong>{{ introTitle }}</strong>
-        <span>保持当前后端字段契约，先把弹窗布局、字段节奏和按钮区收拢到旧项目方向。</span>
-      </div>
-
       <div v-if="loadingDetail" class="defect-dialog__hint">正在加载缺陷详情...</div>
       <div v-else-if="detailErrorMessage" class="defect-dialog__error-panel">
         <span>{{ detailErrorMessage }}</span>
         <AppButton size="small" @click="emit('retryDetail')">重试</AppButton>
       </div>
 
-      <div class="defect-dialog__surface">
-        <div class="defect-dialog__columns">
-          <section class="defect-dialog__main">
-            <div class="defect-dialog__section-header defect-dialog__section-header--stack">
-              <h4>主要信息</h4>
-              <span>填写缺陷标题和现象描述</span>
-            </div>
+      <div class="defect-dialog__field is-full">
+        <span class="is-required">缺陷标题</span>
+        <el-input v-model="form.title" :disabled="loadingDetail" placeholder="请输入缺陷标题" />
+      </div>
 
-            <div class="defect-dialog__field">
-              <span class="is-required">缺陷标题</span>
-              <el-input v-model="form.title" :disabled="loadingDetail" placeholder="请输入缺陷标题" />
-            </div>
+      <div class="defect-dialog__grid">
+        <div class="defect-dialog__field">
+          <span class="is-required">严重程度</span>
+          <el-select v-model="form.severity" class="defect-dialog__select" :disabled="loadingDetail">
+            <el-option
+              v-for="item in defectSeverityOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </div>
 
-            <div class="defect-dialog__field">
-              <span class="is-required">缺陷描述</span>
-              <el-input
-                v-model="form.description"
-                type="textarea"
-                :rows="14"
-                resize="none"
-                :disabled="loadingDetail"
-                placeholder="请输入复现现象、影响范围或必要上下文"
-              />
-            </div>
-          </section>
+        <div class="defect-dialog__field">
+          <span class="is-required">优先级</span>
+          <el-select v-model="form.priority" class="defect-dialog__select" :disabled="loadingDetail">
+            <el-option
+              v-for="item in defectPriorityOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </div>
 
-          <aside class="defect-dialog__side">
-            <div class="defect-dialog__section-header defect-dialog__section-header--stack">
-              <h4>流转字段</h4>
-              <span>保持当前后端契约，只调整视觉和信息层次</span>
-            </div>
+        <div class="defect-dialog__field">
+          <span class="is-required">所属模块</span>
+          <el-select
+            v-model="form.workspaceCode"
+            class="defect-dialog__select"
+            :disabled="mode === 'edit' || loadingDetail || workspaceOptionsLoading"
+            :loading="workspaceOptionsLoading"
+            filterable
+            placeholder="请选择所属模块"
+          >
+            <el-option
+              v-for="workspace in getConcreteWorkspaces()"
+              :key="workspace.workspaceCode"
+              :label="getWorkspaceLabel(workspace)"
+              :value="workspace.workspaceCode"
+            />
+          </el-select>
+          <small v-if="workspaceOptionsError" class="defect-dialog__field-error">{{ workspaceOptionsError }}</small>
+        </div>
 
-            <div class="defect-dialog__field">
-              <span class="is-required">工作空间</span>
-              <el-select
-                v-model="form.workspaceCode"
-                class="defect-dialog__select"
-                :disabled="mode === 'edit' || loadingDetail || workspaceOptionsLoading"
-                :loading="workspaceOptionsLoading"
-                filterable
-                placeholder="请选择工作空间"
-              >
-                <el-option
-                  v-for="workspace in getConcreteWorkspaces()"
-                  :key="workspace.workspaceCode"
-                  :label="getWorkspaceLabel(workspace)"
-                  :value="workspace.workspaceCode"
-                >
-                  <div class="defect-dialog__option">
-                    <span>{{ getWorkspaceLabel(workspace) }}</span>
-                    <small>{{ workspace.workspaceCode }}</small>
-                  </div>
-                </el-option>
-              </el-select>
-              <small v-if="workspaceOptionsError" class="defect-dialog__field-error">{{ workspaceOptionsError }}</small>
-            </div>
+        <div class="defect-dialog__field">
+          <span>指派给</span>
+          <AppUserSelect
+            v-model="form.assigneeId"
+            :workspace-code="activeWorkspaceCode"
+            :disabled="loadingDetail"
+            placeholder="请选择指派人"
+          />
+        </div>
 
-            <div class="defect-dialog__field">
-              <span class="is-required">处理人</span>
-              <AppUserSelect
-                v-model="form.assigneeId"
-                :workspace-code="activeWorkspaceCode"
-                :disabled="loadingDetail"
-                placeholder="&#35831;&#36873;&#25321;&#22788;&#29702;&#20154;"
-              />
-            </div>
+        <div class="defect-dialog__field">
+          <span>来源类型</span>
+          <el-select v-model="visualForm.sourceType" class="defect-dialog__select" :disabled="loadingDetail">
+            <el-option label="手工录入" value="手工录入" />
+            <el-option label="用例执行" value="用例执行" />
+            <el-option label="报告导入" value="报告导入" />
+          </el-select>
+        </div>
 
-            <div class="defect-dialog__field">
-              <span class="is-required">优先级</span>
-              <div class="defect-dialog__segment is-four">
-                <button
-                  v-for="item in defectPriorityOptions"
-                  :key="item.value"
-                  type="button"
-                  :class="{ 'is-active': form.priority === item.value }"
-                  :disabled="loadingDetail"
-                  @click="form.priority = item.value"
-                >
-                  {{ item.label }}
-                </button>
-              </div>
-            </div>
+        <div class="defect-dialog__field">
+          <span>关联用例</span>
+          <el-select
+            v-model="form.relatedCaseId"
+            class="defect-dialog__select"
+            :disabled="loadingDetail || caseOptionsLoading"
+            :loading="caseOptionsLoading"
+            clearable
+            filterable
+            placeholder="可选"
+          >
+            <el-option
+              v-for="item in caseOptions"
+              :key="item.id"
+              :label="getCaseLabel(item)"
+              :value="String(item.id)"
+            />
+          </el-select>
+          <small v-if="caseOptionsError" class="defect-dialog__field-error">{{ caseOptionsError }}</small>
+        </div>
+      </div>
 
-            <div class="defect-dialog__field">
-              <span class="is-required">严重级别</span>
-              <el-select
-                v-model="form.severity"
-                class="defect-dialog__select"
-                :disabled="loadingDetail"
-              >
-                <el-option
-                  v-for="item in defectSeverityOptions"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value"
-                />
-              </el-select>
-            </div>
+      <div class="defect-dialog__field is-full">
+        <span>问题描述</span>
+        <el-input
+          v-model="form.description"
+          type="textarea"
+          resize="none"
+          :disabled="loadingDetail"
+          placeholder="详细描述问题现象、影响范围、触发条件..."
+        />
+      </div>
 
-            <div class="defect-dialog__field">
-              <span>关联用例</span>
-              <el-select
-                v-model="form.relatedCaseId"
-                class="defect-dialog__select"
-                :disabled="loadingDetail || caseOptionsLoading"
-                :loading="caseOptionsLoading"
-                clearable
-                filterable
-                placeholder="可选"
-              >
-                <el-option
-                  v-for="item in caseOptions"
-                  :key="item.id"
-                  :label="getCaseLabel(item)"
-                  :value="String(item.id)"
-                >
-                  <div class="defect-dialog__option">
-                    <span>{{ item.title || '-' }}</span>
-                    <small>{{ item.caseNo || `#${item.id}` }}</small>
-                  </div>
-                </el-option>
-              </el-select>
-              <small v-if="caseOptionsError" class="defect-dialog__field-error">{{ caseOptionsError }}</small>
-            </div>
+      <div class="defect-dialog__field is-full">
+        <span>复现步骤</span>
+        <el-input
+          v-model="visualForm.reproduceSteps"
+          type="textarea"
+          resize="none"
+          :disabled="loadingDetail"
+          placeholder="1. 打开页面&#10;2. 执行操作&#10;3. 观察结果"
+        />
+      </div>
 
-            <div class="defect-dialog__field">
-              <span>标签</span>
-              <el-input
-                v-model="form.tagsText"
-                :disabled="loadingDetail"
-                placeholder="多个标签用逗号或换行分隔"
-              />
-            </div>
-          </aside>
+      <div class="defect-dialog__grid">
+        <div class="defect-dialog__field">
+          <span>预期结果</span>
+          <el-input
+            v-model="visualForm.expectedResult"
+            type="textarea"
+            resize="none"
+            :disabled="loadingDetail"
+            placeholder="描述期望的正确结果"
+          />
+        </div>
+        <div class="defect-dialog__field">
+          <span>实际结果</span>
+          <el-input
+            v-model="visualForm.actualResult"
+            type="textarea"
+            resize="none"
+            :disabled="loadingDetail"
+            placeholder="描述实际发生的错误结果"
+          />
+        </div>
+      </div>
+
+      <div class="defect-dialog__upload">
+        <span>附件 / 截图</span>
+        <div>
+          <strong>点击或拖拽文件到此处上传</strong>
+          <small>支持 PNG、JPG、GIF、MP4，最大 20MB</small>
         </div>
       </div>
 
@@ -393,7 +406,7 @@ watch(
           :disabled="loadingDetail || Boolean(detailErrorMessage)"
           @click="submit"
         >
-          保存
+          {{ mode === 'create' ? '提交缺陷' : '保存修改' }}
         </AppButton>
       </div>
     </template>
@@ -404,45 +417,54 @@ watch(
 .defect-dialog {
   display: flex;
   min-height: 0;
-  height: 100%;
   flex-direction: column;
-  gap: var(--app-space-4);
+  gap: 14px;
 }
 
 :global(.defect-dialog-overlay .el-dialog) {
   display: flex;
-  height: min(760px, calc(100vh - 72px));
-  max-height: calc(100vh - 72px);
+  height: min(775.797px, calc(100vh - 86px));
+  max-height: calc(100vh - 86px);
   flex-direction: column;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: var(--app-shadow-overlay);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2);
+}
+
+:global(.defect-dialog-overlay .el-dialog)::before {
+  display: block;
+  width: 100%;
+  height: 3.5px;
+  flex: 0 0 auto;
+  background: #f53f3f;
+  content: '';
 }
 
 :global(.defect-dialog-overlay .el-dialog__header) {
-  min-height: 64px;
+  min-height: 53.5px;
   margin: 0;
-  padding: 18px 24px 14px;
-  border-bottom: 1px solid var(--app-border-soft);
+  padding: 14px 21px 15px;
+  border-bottom: 1px solid #e5e6eb;
 }
 
 :global(.defect-dialog-overlay .el-dialog__title) {
-  color: var(--app-text-primary);
-  font-size: 17px;
+  color: #1d2129;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 24px;
+  line-height: 22.5px;
 }
 
 :global(.defect-dialog-overlay .el-dialog__body) {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 20px 24px 16px;
-  overflow: hidden;
+  padding: 17.5px 21px;
+  overflow: auto;
 }
 
 :global(.defect-dialog-overlay .el-dialog__footer) {
-  padding: 14px 24px 18px;
-  border-top: 1px solid var(--app-border-soft);
+  padding: 14px 21px 15px;
+  border-top: 1px solid #e5e6eb;
+  background: #fafafa;
 }
 
 .defect-dialog__intro {
@@ -536,14 +558,26 @@ watch(
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
+}
+
+.defect-dialog__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 292px));
+  gap: 14px;
+}
+
+.defect-dialog__field.is-full {
+  width: 100%;
 }
 
 .defect-dialog__field > span {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
-  line-height: 20px;
+  height: 23.25px;
+  padding-bottom: 5.25px;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
 }
 
 .defect-dialog__field > span.is-required::before {
@@ -555,14 +589,33 @@ watch(
 .defect-dialog__field :deep(.el-input__wrapper),
 .defect-dialog__field :deep(.el-textarea__inner),
 .defect-dialog__field :deep(.el-select__wrapper) {
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px var(--app-border-strong) inset;
+  min-height: 31.5px;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+.defect-dialog__field :deep(.el-input__inner),
+.defect-dialog__field :deep(.el-select__selected-item),
+.defect-dialog__field :deep(.el-select__placeholder),
+.defect-dialog__field :deep(.el-textarea__inner) {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
 }
 
 .defect-dialog__field :deep(.el-textarea__inner) {
-  min-height: 248px;
-  padding: 12px 14px;
-  line-height: 1.75;
+  min-height: 78px;
+  padding: 9.75px 11.5px;
+  line-height: 19.5px;
+}
+
+.defect-dialog__field.is-full:nth-of-type(4) :deep(.el-textarea__inner) {
+  min-height: 97.5px;
+}
+
+.defect-dialog__grid .defect-dialog__field :deep(.el-textarea__inner) {
+  min-height: 58.5px;
 }
 
 .defect-dialog__select {
@@ -685,7 +738,7 @@ watch(
 .defect-dialog__footer {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 7px;
 }
 
 .defect-dialog__footer :deep(.el-button + .el-button) {
@@ -693,8 +746,58 @@ watch(
 }
 
 .defect-dialog__footer :deep(.app-button) {
-  min-width: 88px;
-  height: 36px;
+  min-width: auto;
+  height: 28px;
+  padding: 0 11.5px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.defect-dialog__footer :deep(.app-button--primary) {
+  height: 32px;
+  padding: 0 14px;
+  background: #f53f3f;
+  border-color: #f53f3f;
+}
+
+.defect-dialog__upload {
+  display: flex;
+  flex-direction: column;
+  gap: 5.25px;
+}
+
+.defect-dialog__upload > span {
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.defect-dialog__upload > div {
+  display: flex;
+  min-height: 111.75px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.75px;
+  border: 2px dashed #e5e6eb;
+  border-radius: 11px;
+  color: #86909c;
+}
+
+.defect-dialog__upload strong {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.defect-dialog__upload small {
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
 }
 
 @media (max-width: 1200px) {

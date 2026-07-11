@@ -32,9 +32,9 @@ const emit = defineEmits<{
   height: 40px;
   min-height: 40px;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   overflow: hidden;
-  padding: 0 16px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--app-border);
   background: #ffffff;
 }
@@ -43,7 +43,7 @@ const emit = defineEmits<{
   position: relative;
   display: inline-flex;
   box-sizing: border-box;
-  height: 40px;
+  height: 39px;
   align-items: center;
   gap: 6px;
   border: 0;
@@ -54,7 +54,7 @@ const emit = defineEmits<{
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
-  padding: 0 12px;
+  padding: 0 10.5px;
   white-space: nowrap;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
@@ -75,7 +75,7 @@ const emit = defineEmits<{
 }
 
 .api-tab-badge {
-  display: inline-flex;
+  display: none;
   min-width: 18px;
   height: 18px;
   align-items: center;

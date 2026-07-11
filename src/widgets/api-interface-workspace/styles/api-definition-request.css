@@ -1,30 +1,38 @@
 .api-request-body {
+  box-sizing: border-box;
   min-height: 0;
   flex: 0 0 auto;
   overflow: visible;
-  padding: 10px 12px 12px;
+  padding: 14px;
   border-bottom: 0;
   background: #ffffff;
 }
 
 .api-request-body.is-params,
-.api-request-body.is-headers {
-  min-height: 320px;
-  flex-basis: 320px;
+.api-request-body.is-headers,
+.api-request-body.is-body,
+.api-request-body.is-cookies,
+.api-request-body.is-auth {
+  height: auto;
+  min-height: 360px;
+  flex: 1 1 360px;
+  overflow: hidden;
 }
 
 .api-request-body.is-pre,
 .api-request-body.is-post,
 .api-request-body.is-tests {
+  height: auto;
   min-height: 360px;
-  flex: 0 0 auto;
-  overflow: visible;
+  flex: 1 1 360px;
+  overflow: hidden auto;
 }
 
 .api-request-body.is-settings {
-  min-height: 320px;
-  flex: 0 0 auto;
-  overflow: visible;
+  height: auto;
+  min-height: 360px;
+  flex: 1 1 360px;
+  overflow: hidden auto;
 }
 
 .api-request-body.is-cases {

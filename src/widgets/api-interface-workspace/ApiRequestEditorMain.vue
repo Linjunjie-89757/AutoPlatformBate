@@ -213,7 +213,7 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
   <div :class="['api-request-body', `is-${activeEditor.activeTab}`]">
     <template v-if="activeEditor.activeTab === 'params'">
       <ApiKeyValueTable
-        title="Query 参数"
+        title="参数名"
         variant="query"
         batch-target="query"
         :rows="activeEditor.detail.requestConfig.queryParams"
@@ -241,24 +241,18 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
     </template>
 
     <template v-else-if="activeEditor.activeTab === 'cookies'">
-      <div class="api-param-table is-cookie">
-        <div class="api-param-toolbar">
-          <span>Cookie</span>
-          <button type="button" @click="openBatchAdd('cookie')">批量添加</button>
-        </div>
-        <div class="api-param-header">
-          <span></span><span>Cookie 名称</span><span>Cookie 值</span><span>必填</span><span>描述</span><span></span>
-        </div>
-        <div v-for="(row, index) in activeEditor.detail.requestConfig.cookies" :key="`cookie-${index}`" class="api-param-row">
-          <el-checkbox v-model="row.enabled" @change="markDirty" />
-          <el-input v-model="row.key" placeholder="Cookie 名称" @input="markDirty" />
-          <el-input v-model="row.value" placeholder="Cookie 值 / {{variable}}" @input="markDirty" />
-          <el-checkbox v-model="row.required" @change="markDirty" />
-          <el-input v-model="row.description" placeholder="描述" @input="markDirty" />
-          <button type="button" class="api-row-remove" @click="removeRow(activeEditor.detail.requestConfig.cookies, index)">删除</button>
-        </div>
-        <button type="button" class="api-add-row" @click="addRow(activeEditor.detail.requestConfig.cookies)">+ 添加一行</button>
-      </div>
+      <ApiKeyValueTable
+        title="Cookie 名"
+        variant="query"
+        batch-target="cookie"
+        :rows="activeEditor.detail.requestConfig.cookies"
+        :param-type-options="paramTypeOptions"
+        @dirty="markDirty"
+        @add-row="addRow(activeEditor.detail.requestConfig.cookies)"
+        @remove-row="removeRow(activeEditor.detail.requestConfig.cookies, $event)"
+        @set-rows-enabled="setRowsEnabled(activeEditor.detail.requestConfig.cookies, $event)"
+        @open-batch-add="openBatchAdd"
+      />
     </template>
 
     <template v-else-if="activeEditor.activeTab === 'body'">
@@ -297,12 +291,19 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
 
     <template v-else-if="activeEditor.activeTab === 'auth'">
       <div class="api-auth-panel">
+        <div class="api-config-panel-head">
+          <strong>请求认证</strong>
+          <span>配置当前请求发送时附带的认证信息。</span>
+        </div>
         <span class="api-form-label">认证方式</span>
         <el-radio-group v-model="activeEditor.detail.requestConfig.authConfig.authType" @change="markDirty">
           <el-radio-button value="NONE">No Auth</el-radio-button>
           <el-radio-button value="BASIC">Basic Auth</el-radio-button>
           <el-radio-button value="DIGEST">Digest Auth</el-radio-button>
         </el-radio-group>
+        <div v-if="activeEditor.detail.requestConfig.authConfig.authType === 'NONE'" class="api-auth-empty">
+          当前请求不附带认证信息。
+        </div>
         <div v-if="activeEditor.detail.requestConfig.authConfig.authType === 'BASIC'" class="api-auth-grid">
           <label>Username</label>
           <el-input v-model="activeEditor.detail.requestConfig.authConfig.basicAuth!.userName" class="api-auth-form-control" placeholder="username" @input="markDirty" />
@@ -320,6 +321,10 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
 
     <template v-else-if="activeEditor.activeTab === 'settings'">
       <div class="api-settings-panel">
+        <div class="api-config-panel-head">
+          <strong>请求设置</strong>
+          <span>维护接口元信息、超时和调试上下文。</span>
+        </div>
         <label>接口名称</label>
         <el-input v-model="activeEditor.detail.name" placeholder="接口名称" @input="markDirty" />
         <label>模块 / 目录</label>
@@ -501,3 +506,400 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
   </template>
 </div>
 </template>
+
+<style scoped>
+.api-editor-scroll {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.api-request-body {
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 0 0 auto;
+  overflow: visible;
+  padding: 14px;
+  border-bottom: 0;
+  background: #ffffff;
+}
+
+.api-request-body.is-params,
+.api-request-body.is-headers,
+.api-request-body.is-body,
+.api-request-body.is-cookies,
+.api-request-body.is-auth {
+  display: flex;
+  height: auto;
+  min-height: 360px;
+  flex: 1 1 360px;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.api-request-body.is-pre,
+.api-request-body.is-post,
+.api-request-body.is-tests,
+.api-request-body.is-settings {
+  height: auto;
+  min-height: 360px;
+  flex: 1 1 360px;
+  overflow: hidden auto;
+}
+
+.api-request-body.is-cases,
+.api-request-body.is-definition {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden auto;
+  padding: 12px;
+}
+
+.api-param-table.is-cookie {
+  height: 100%;
+  min-height: 169px;
+  flex: 1 1 auto;
+  overflow: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.api-param-toolbar {
+  display: flex;
+  box-sizing: border-box;
+  height: 31px;
+  min-height: 31px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 10.5px;
+  border-bottom: 1px solid var(--app-border);
+  background: #fafafa;
+  color: var(--app-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-param-toolbar button,
+.api-link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #ff7d00;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.api-param-table.is-cookie .api-param-header,
+.api-param-table.is-cookie .api-param-row {
+  display: grid;
+  width: 100%;
+  min-width: 760px;
+  grid-template-columns: 32px minmax(160px, 1fr) minmax(220px, 1.2fr) 64px minmax(220px, 1fr) 76px;
+  align-items: center;
+  gap: 0;
+  padding: 0 8px 0 0;
+}
+
+.api-param-table.is-cookie .api-param-header {
+  position: sticky;
+  z-index: 1;
+  top: 31px;
+  box-sizing: border-box;
+  height: 31px;
+  min-height: 31px;
+  border-bottom: 1px solid var(--app-border);
+  background: #fafafa;
+  color: var(--app-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-param-table.is-cookie .api-param-row {
+  min-height: 34.5px;
+  border-bottom: 1px solid var(--app-border-soft);
+  transition: background-color 0.15s ease;
+}
+
+.api-param-table.is-cookie .api-param-row:hover {
+  background: #fafbff;
+}
+
+.api-param-table.is-cookie :deep(.el-checkbox) {
+  height: 12.25px;
+}
+
+.api-param-table.is-cookie :deep(.el-checkbox__input),
+.api-param-table.is-cookie :deep(.el-checkbox__inner) {
+  width: 12.25px;
+  height: 12.25px;
+}
+
+.api-param-table.is-cookie :deep(.el-checkbox__inner::after) {
+  left: 3.75px;
+  top: 1.5px;
+  width: 3px;
+  height: 6px;
+}
+
+.api-param-table.is-cookie .api-param-row:last-of-type {
+  border-bottom: 0;
+}
+
+.api-param-table.is-cookie :deep(.el-input__wrapper) {
+  height: 28px;
+  min-height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.api-param-table.is-cookie :deep(.el-input__wrapper:hover) {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+.api-param-table.is-cookie :deep(.el-input.is-focus .el-input__wrapper) {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--app-primary);
+}
+
+.api-param-table.is-cookie :deep(.el-input__inner) {
+  color: var(--app-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.api-row-remove,
+.api-add-row {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #ff7d00;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.api-row-remove {
+  width: 28px;
+  height: 28px;
+  justify-self: center;
+  padding: 0;
+  color: var(--app-danger);
+}
+
+.api-row-remove__icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.api-row-remove:hover {
+  background: #fff1f0;
+  color: var(--app-danger);
+}
+
+.api-add-row {
+  width: 100%;
+  height: 32px;
+  justify-content: flex-start;
+  gap: 5.25px;
+  border-top: 1px solid var(--app-border-soft);
+  border-radius: 0;
+  color: var(--app-text-secondary);
+}
+
+.api-add-row__icon {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.api-add-row:hover {
+  background: #fafafa;
+  color: #ff7d00;
+}
+
+.api-auth-panel,
+.api-settings-panel {
+  display: grid;
+  gap: 12px 14px;
+  max-width: none;
+  height: 100%;
+  align-content: start;
+  overflow: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 14px;
+  color: var(--app-text-primary);
+  font-size: 13px;
+}
+
+.api-config-panel-head {
+  display: flex;
+  min-height: 42px;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--app-border-soft);
+}
+
+.api-config-panel-head strong {
+  color: var(--app-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.api-config-panel-head span,
+.api-auth-empty {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.api-form-label,
+.api-auth-grid label,
+.api-settings-panel > label {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-auth-panel :deep(.el-radio-button__inner) {
+  height: 28px;
+  padding: 0 12px;
+  border-color: var(--app-border);
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 26px;
+}
+
+.api-auth-panel :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  border-color: rgba(255, 125, 0, 0.28);
+  background: #fff7e8;
+  box-shadow: -1px 0 0 0 rgba(255, 125, 0, 0.28);
+  color: #ff7d00;
+}
+
+.api-auth-panel,
+.api-auth-grid,
+.api-settings-panel {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 14px;
+}
+
+.api-auth-grid {
+  grid-column: 1 / -1;
+  max-width: 640px;
+  padding-top: 2px;
+}
+
+.api-auth-empty {
+  grid-column: 1 / -1;
+  min-height: 140px;
+  border: 1px dashed var(--app-border);
+  border-radius: 7px;
+  background: #fafbfc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.api-auth-form-control,
+.api-settings-panel > .el-input,
+.api-settings-panel > .el-textarea,
+.api-settings-panel > .api-settings-control-cell {
+  min-width: 0;
+}
+
+.api-auth-form-control :deep(.el-input__wrapper),
+.api-settings-panel :deep(.el-input__wrapper),
+.api-settings-panel :deep(.el-input-number .el-input__wrapper),
+.api-settings-panel :deep(.el-textarea__inner) {
+  min-height: 32px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+.api-auth-form-control :deep(.el-input__inner),
+.api-settings-panel :deep(.el-input__inner),
+.api-settings-panel :deep(.el-textarea__inner) {
+  color: var(--app-text-primary);
+  font-size: 13px;
+}
+
+.api-auth-form-control :deep(.el-input__wrapper:hover),
+.api-settings-panel :deep(.el-input__wrapper:hover),
+.api-settings-panel :deep(.el-textarea__inner:hover) {
+  box-shadow: inset 0 0 0 1px #c9cdd4;
+}
+
+.api-auth-form-control :deep(.el-input.is-focus .el-input__wrapper),
+.api-settings-panel :deep(.el-input.is-focus .el-input__wrapper),
+.api-settings-panel :deep(.el-textarea__inner:focus) {
+  box-shadow: inset 0 0 0 1px var(--app-primary);
+}
+
+.api-settings-panel > label:nth-of-type(5),
+.api-settings-panel > .el-textarea,
+.api-settings-footer {
+  grid-column: 1 / -1;
+}
+
+.api-settings-panel > label:nth-of-type(5) {
+  margin-top: 2px;
+}
+
+.api-settings-panel :deep(.el-textarea__inner) {
+  min-height: 96px;
+  padding: 8px 11.5px;
+  line-height: 20px;
+}
+
+.api-settings-control-cell :deep(.el-input-number) {
+  width: 180px;
+}
+
+.api-settings-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-settings-footer span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #f7f8fa;
+}
+</style>

@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import {
-  Info as LucideInfo,
-  Play as LucidePlay,
-  Save as LucideSave,
-} from '@lucide/vue'
 
 import type { ApiAutomationEnvironmentItem } from '@/entities/api-automation'
+import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 
 const pathInputRef = ref<{ focus: () => void } | null>(null)
 
@@ -85,19 +81,13 @@ defineExpose({
       <button type="button" class="api-curl-button" @click="emit('importCurl')">Curl</button>
     </div>
     <div class="api-run-environment-combo">
-      <el-tooltip
-        :content="props.environmentSelected ? '查看运行环境详情' : '选择运行环境后查看详情'"
-        placement="top"
-      >
-        <button
-          type="button"
-          class="api-run-environment-detail-button"
-          :disabled="!props.environmentSelected"
-          @click="emit('openEnvironment')"
-        >
-          <LucideInfo class="api-run-environment-detail-icon" />
-        </button>
-      </el-tooltip>
+      <button
+        type="button"
+        class="api-run-environment-detail-button"
+        :disabled="!props.environmentSelected"
+        title="查看运行环境详情"
+        @click="emit('openEnvironment')"
+      ></button>
       <el-select
         :model-value="props.environmentId"
         class="api-run-environment-select"
@@ -122,7 +112,7 @@ defineExpose({
       :disabled="props.sending || !props.path.trim()"
       @click="emit('send')"
     >
-      <LucidePlay class="api-send-button__icon" />
+      <img class="api-send-button__icon" :src="figmaApiInterfaceIcons.send" alt="" />
       发送
     </button>
     <el-dropdown
@@ -134,7 +124,7 @@ defineExpose({
       @click="emit('save')"
     >
       <span class="api-save-label">
-        <LucideSave class="api-button-icon" />
+        <img class="api-button-icon" :src="figmaApiInterfaceIcons.save" alt="" />
         保存
       </span>
       <template #dropdown>
@@ -155,41 +145,37 @@ defineExpose({
 <style scoped>
 .api-request-line {
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) 168px 80px 92px;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr) 110px 72.25px auto;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   height: 56px;
-  padding: 0 16px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--app-border-soft);
   background: #fff;
 }
 
 .api-url-compose {
   display: grid;
+  box-sizing: border-box;
+  height: 31.5px;
   min-width: 0;
-  grid-template-columns: 90px minmax(0, 1fr) 68px;
+  grid-template-columns: 90px minmax(0, 1fr) 47px;
   align-items: center;
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-bg-panel);
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
-}
-
-.api-url-compose:focus-within {
-  border-color: var(--app-primary);
-  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.1);
+  gap: 7px;
+  overflow: visible;
+  background: transparent;
 }
 
 .api-run-environment-combo {
-  display: grid;
+  display: block;
+  box-sizing: border-box;
+  height: 28px;
   min-width: 0;
-  grid-template-columns: 32px minmax(0, 1fr);
-  align-items: center;
   overflow: hidden;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
-  background: var(--app-bg-panel);
+  border-radius: 7px;
+  background: #ffffff;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
@@ -204,11 +190,12 @@ defineExpose({
 }
 
 .api-run-environment-select :deep(.el-select__wrapper) {
-  height: 36px;
-  min-height: 36px;
-  padding-left: 8px;
-  border-radius: 0;
-  background: var(--app-bg-panel);
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 9px 0 10px;
+  border-radius: 7px;
+  background: #ffffff;
   box-shadow: none;
 }
 
@@ -218,17 +205,7 @@ defineExpose({
 }
 
 .api-run-environment-detail-button {
-  display: inline-flex;
-  width: 31px;
-  height: 36px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-right: 1px solid var(--app-border);
-  border-radius: 0;
-  background: var(--app-bg-muted);
-  color: var(--app-text-muted);
-  cursor: pointer;
+  display: none;
 }
 
 .api-run-environment-detail-button:hover:not(:disabled) {
@@ -248,51 +225,110 @@ defineExpose({
 }
 
 .api-method-select :deep(.el-select__wrapper),
-.api-url-compose :deep(.el-input__wrapper),
-.api-curl-button {
-  height: 36px;
-  min-height: 36px;
-  border-radius: 0;
+.api-url-compose :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 31.5px;
+  min-height: 31.5px;
+  border-radius: 7px;
   font-size: 13px;
   line-height: 20px;
 }
 
 .api-method-select :deep(.el-select__wrapper) {
-  min-height: 36px;
+  min-height: 31.5px;
   padding: 0 10px;
-  border-color: var(--app-border);
+  border-color: var(--api-method-border, #e8ffea);
   border-style: solid;
-  border-width: 0 1px 0 0;
-  border-radius: var(--app-radius-md);
-  border-bottom-right-radius: 0;
-  border-top-right-radius: 0;
-  background: var(--app-bg-muted);
+  border-width: 1px;
+  border-radius: 7px;
+  background: var(--api-method-bg, #e8ffea);
+  background-color: var(--api-method-bg, #e8ffea);
   box-shadow: none;
-  color: var(--app-text-primary);
 }
 
 .api-method-select :deep(.el-select__wrapper:hover),
 .api-method-select :deep(.el-select__wrapper.is-focused),
 .api-method-select.is-focus :deep(.el-select__wrapper) {
-  border-color: var(--app-border);
+  border-color: var(--api-method-border-hover, var(--api-method-border, var(--app-border)));
   border-style: solid;
-  border-width: 0 1px 0 0;
-  background: var(--app-bg-muted);
+  border-width: 1px;
+  background: var(--api-method-bg, #e8ffea);
+  background-color: var(--api-method-bg, #e8ffea);
   box-shadow: none;
-  color: var(--app-text-primary);
 }
 
 .api-method-select {
   width: 90px;
   min-width: 90px;
+  height: 31.5px;
   line-height: 21px;
 }
 
 .api-method-select :deep(.el-select__selected-item) {
   justify-content: center;
+  color: var(--api-method-color, #00b42a);
   font-size: 13px;
   font-weight: 600;
   line-height: 20px;
+}
+
+.api-method-select :deep(.el-select__selection) {
+  justify-content: center;
+}
+
+.api-method-select :deep(.el-select__placeholder),
+.api-method-select :deep(.el-select__caret) {
+  color: var(--api-method-color, #00b42a);
+}
+
+.api-method-select.method-get {
+  --api-method-bg: #e8ffea;
+  --api-method-border: #e8ffea;
+  --api-method-border-hover: rgba(0, 180, 42, 0.26);
+  --api-method-color: #00b42a;
+}
+
+.api-method-select.method-post {
+  --api-method-bg: #fff3e8;
+  --api-method-border: #fff3e8;
+  --api-method-border-hover: rgba(255, 125, 0, 0.3);
+  --api-method-color: #ff7d00;
+}
+
+.api-method-select.method-put {
+  --api-method-bg: #e8f3ff;
+  --api-method-border: #e8f3ff;
+  --api-method-border-hover: rgba(22, 93, 255, 0.28);
+  --api-method-color: #165dff;
+}
+
+.api-method-select.method-patch,
+.api-method-select.method-options {
+  --api-method-bg: #f5e8ff;
+  --api-method-border: #f5e8ff;
+  --api-method-border-hover: rgba(120, 22, 255, 0.26);
+  --api-method-color: #7816ff;
+}
+
+.api-method-select.method-delete {
+  --api-method-bg: #ffece8;
+  --api-method-border: #ffece8;
+  --api-method-border-hover: rgba(245, 63, 63, 0.28);
+  --api-method-color: #f53f3f;
+}
+
+.api-method-select.method-head {
+  --api-method-bg: #e8ffea;
+  --api-method-border: #e8ffea;
+  --api-method-border-hover: rgba(0, 180, 42, 0.26);
+  --api-method-color: #15803d;
+}
+
+.api-method-select.method-trace {
+  --api-method-bg: #f2f3f5;
+  --api-method-border: #f2f3f5;
+  --api-method-border-hover: #c9cdd4;
+  --api-method-color: #4e5969;
 }
 
 .api-method-select.method-get :deep(.el-select__selected-item),
@@ -358,15 +394,17 @@ defineExpose({
 }
 
 .api-url-compose :deep(.el-input__wrapper) {
-  padding-inline: 14px;
-  background: var(--app-bg-panel);
+  box-sizing: border-box;
+  padding-inline: 11.5px;
+  border: 1px solid var(--app-border);
+  background: #ffffff;
   box-shadow: none;
 }
 
 .api-url-compose :deep(.el-input__inner) {
   color: var(--app-text-primary);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .api-url-compose :deep(.el-input__inner::placeholder) {
@@ -374,9 +412,14 @@ defineExpose({
 }
 
 .api-curl-button {
-  border-width: 0 0 0 1px;
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 11.5px;
+  border-width: 1px;
   border-color: var(--app-border);
-  background: var(--app-bg-panel);
+  border-style: solid;
+  background: #ffffff;
   color: var(--app-text-secondary);
   font-size: 12px;
   font-weight: 500;
@@ -389,15 +432,16 @@ defineExpose({
 
 .api-send-button {
   display: inline-flex;
-  width: 80px;
-  min-width: 80px;
-  height: 36px;
+  box-sizing: border-box;
+  width: 72.25px;
+  min-width: 72.25px;
+  height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 16px;
+  gap: 5.25px;
+  padding: 0 14px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--app-primary);
   color: #fff;
   cursor: pointer;
@@ -420,51 +464,69 @@ defineExpose({
 .api-button-icon {
   width: 13px;
   height: 13px;
+  flex: 0 0 auto;
 }
 
 .api-save-label {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  line-height: 1;
 }
 
 .api-save-dropdown {
-  width: 92px;
-  min-width: 92px;
+  display: inline-flex;
+  width: auto;
+  min-width: 95px;
+  height: 32px;
+  align-items: center;
+  vertical-align: middle;
 }
 
 .api-save-dropdown :deep(.el-button-group) {
   display: flex;
   width: 100%;
-  height: 36px;
+  height: 32px;
   align-items: stretch;
 }
 
 .api-save-dropdown :deep(.el-button),
 .api-save-dropdown :deep(.el-button-group > .el-button) {
-  height: 36px;
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
   border-color: var(--app-border);
-  background: var(--app-bg-panel);
-  color: #374151;
+  background: #ffffff;
+  color: #4e5969;
   font-size: 13px;
   font-weight: 500;
-  line-height: 20px;
+  line-height: 1;
 }
 
 .api-save-dropdown :deep(.el-button-group > .el-button:first-child) {
   flex: 1 1 auto;
   min-width: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-  padding: 0 8px;
+  border-radius: 7px 0 0 7px;
+  padding: 0 10px 0 11.5px;
 }
 
 .api-save-dropdown :deep(.el-button-group > .el-button:last-child) {
-  flex: 0 0 30px;
-  width: 30px;
+  display: inline-flex;
+  flex: 0 0 28px;
+  width: 28px;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   padding: 0;
+  border-left-color: var(--app-border-soft);
+}
+
+.api-save-dropdown :deep(.el-button-group > .el-button:last-child .el-icon) {
+  width: 12px;
+  height: 12px;
+  color: #86909c;
 }
 
 .api-save-dropdown :deep(.el-button:hover:not(.is-disabled)) {
@@ -481,11 +543,11 @@ defineExpose({
 
 @media (max-width: 1280px) {
   .api-request-line {
-    grid-template-columns: minmax(300px, 1fr) 152px 76px 88px;
+    grid-template-columns: minmax(0, 1fr) 104px 72.25px auto;
   }
 
   .api-url-compose {
-    grid-template-columns: 88px minmax(0, 1fr) 62px;
+    grid-template-columns: 88px minmax(0, 1fr) 47px;
   }
 
   .api-method-select {
