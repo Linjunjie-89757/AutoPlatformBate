@@ -3,6 +3,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import AppLayout from '@/app/layouts/AppLayout.vue'
 import { loadCurrentUser, sessionState } from '@/entities/session'
 import ApiAutomationPage from '@/pages/automation-api/ApiAutomationPage.vue'
+import AutomationTasksPage from '@/pages/automation-tasks/AutomationTasksPage.vue'
 import WebAutomationPage from '@/pages/automation-web/WebAutomationPage.vue'
 import WebUiSharedReportPage from '@/pages/automation-web/WebUiSharedReportPage.vue'
 import CaseAiConfigPage from '@/pages/cases/CaseAiConfigPage.vue'
@@ -16,6 +17,8 @@ import DefectDetailPage from '@/pages/defects/DefectDetailPage.vue'
 import DefectsPage from '@/pages/defects/DefectsPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage.vue'
+import ReportCenterPage from '@/pages/reports/ReportCenterPage.vue'
+import ReportSharePage from '@/pages/reports/ReportSharePage.vue'
 import SystemSettingsPage from '@/pages/system-settings/SystemSettingsPage.vue'
 import WorkspaceSelectPage from '@/pages/workspace-select/WorkspaceSelectPage.vue'
 
@@ -26,6 +29,16 @@ const routes: RouteRecordRaw[] = [
     component: LoginPage,
     meta: {
       title: '登录',
+      bare: true,
+      public: true,
+    },
+  },
+  {
+    path: '/share/report',
+    name: 'report-shared-report',
+    component: ReportSharePage,
+    meta: {
+      title: '报告分享',
       bare: true,
       public: true,
     },
@@ -190,6 +203,24 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '缺陷详情',
           description: '通过分享链接直接查看缺陷详情。',
+        },
+      },
+      {
+        path: 'tasks',
+        name: 'tasks',
+        component: AutomationTasksPage,
+        meta: {
+          title: '任务中心',
+          description: '按 Figma 任务中心视觉展示自动化任务列表、执行状态和 AI 分析。',
+        },
+      },
+      {
+        path: 'reports',
+        name: 'reports',
+        component: ReportCenterPage,
+        meta: {
+          title: '报告中心',
+          description: '按 Figma 报告中心视觉展示执行报告、步骤结果和步骤详情抽屉。',
         },
       },
       {

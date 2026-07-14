@@ -1,0 +1,123 @@
+{
+  "result": [
+    {
+      "sel": ".workspace-select-page__panel",
+      "text": "AutoTest选择工作区你的账号下有 3 个工作区XX-MAN 最近访问 测试负责人电商平台 · 订单/风控全链路自动化8 名成员上次访问 今天 09:31KKRATOS测试工程师风控中台 · 规则引擎和策略测试12 名成员上次访问 3 天前MMINERVA只读访客数据平台 · BI 报表和数据质量测试5 名成员上次访问 7 天前 + 创建新工作区 或 申请加入其他工作区 不是你的账号？退出登录",
+      "rect": {
+        "x": 445.5,
+        "y": 126.5,
+        "w": 660,
+        "h": 609
+      },
+      "style": {
+        "padding": "0px",
+        "height": "609px",
+        "boxSizing": "border-box",
+        "border": "0px none rgb(29, 33, 41)",
+        "boxShadow": "none",
+        "transform": "none"
+      }
+    },
+    {
+      "sel": ".workspace-select-page__list",
+      "text": "XX-MAN 最近访问 测试负责人电商平台 · 订单/风控全链路自动化8 名成员上次访问 今天 09:31KKRATOS测试工程师风控中台 · 规则引擎和策略测试12 名成员上次访问 3 天前MMINERVA只读访客数据平台 · BI 报表和数据质量测试5 名成员上次访问 7 天前 + 创建新工作区 或 申请加入其他工作区",
+      "rect": {
+        "x": 445.5,
+        "y": 278.75,
+        "w": 660,
+        "h": 410.75
+      },
+      "style": {
+        "padding": "0px",
+        "height": "410.75px",
+        "boxSizing": "border-box",
+        "border": "0px none rgb(29, 33, 41)",
+        "boxShadow": "none",
+        "transform": "none"
+      }
+    },
+    {
+      "sel": ".workspace-select-page__card",
+      "text": "XX-MAN 最近访问 测试负责人电商平台 · 订单/风控全链路自动化8 名成员上次访问 今天 09:31",
+      "rect": {
+        "x": 445.5,
+        "y": 278.75,
+        "w": 660,
+        "h": 109.75
+      },
+      "style": {
+        "padding": "21px 25px",
+        "height": "109.75px",
+        "boxSizing": "border-box",
+        "border": "1px solid rgb(229, 230, 235)",
+        "boxShadow": "rgba(0, 0, 0, 0.04) 0px 1px 2px 0px",
+        "transform": "none"
+      }
+    },
+    {
+      "sel": ".workspace-select-page__create",
+      "text": "+ 创建新工作区 或 申请加入其他工作区",
+      "rect": {
+        "x": 445.5,
+        "y": 639.5,
+        "w": 660,
+        "h": 50
+      },
+      "style": {
+        "padding": "15px 25px",
+        "height": "50px",
+        "boxSizing": "border-box",
+        "border": "1px dashed rgb(229, 230, 235)",
+        "boxShadow": "none",
+        "transform": "none"
+      }
+    },
+    {
+      "sel": ".workspace-select-page__footer",
+      "text": "不是你的账号？退出登录",
+      "rect": {
+        "x": 707.5,
+        "y": 689.5,
+        "w": 136,
+        "h": 46
+      },
+      "style": {
+        "padding": "28px 0px 0px",
+        "height": "46px",
+        "boxSizing": "border-box",
+        "border": "0px none rgb(201, 205, 212)",
+        "boxShadow": "none",
+        "transform": "none"
+      }
+    },
+    {
+      "sel": ".workspace-select-page__footer button",
+      "text": "退出登录",
+      "rect": {
+        "x": 795.5,
+        "y": 717.5,
+        "w": 48,
+        "h": 18
+      },
+      "style": {
+        "padding": "0px",
+        "height": "18px",
+        "boxSizing": "border-box",
+        "border": "0px none rgb(22, 93, 255)",
+        "boxShadow": "none",
+        "transform": "none"
+      }
+    }
+  ],
+  "hover": {
+    "rect": {
+      "x": 445.5,
+      "y": 278.75,
+      "w": 660,
+      "h": 109.75
+    },
+    "border": "1px solid rgb(22, 93, 255)",
+    "boxShadow": "rgba(22, 93, 255, 0.12) 0px 4px 20px 0px",
+    "transform": "none"
+  }
+}

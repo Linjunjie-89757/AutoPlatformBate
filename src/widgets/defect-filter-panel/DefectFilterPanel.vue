@@ -17,12 +17,16 @@ const props = defineProps<{
   workspaceOptions?: Array<{ label: string; value: string }>
   assigneeOptions?: Array<{ label: string; value: string }>
   showWorkspaceFilter?: boolean
+  selectedCount?: number
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: DefectClientFilter]
   reset: []
   create: []
+  batchAssign: []
+  batchClose: []
+  batchDelete: []
 }>()
 
 const form = reactive<DefectClientFilter>({
@@ -139,7 +143,33 @@ watch(
       />
     </div>
 
-    <div v-if="false" class="defect-filter-panel__right" />
+    <div v-if="selectedCount && selectedCount > 0" class="defect-filter-panel__right">
+      <span class="defect-filter-panel__selected-count">已选 {{ selectedCount }}</span>
+      <button type="button" class="defect-filter-panel__batch-button" @click="emit('batchAssign')">
+        <svg viewBox="0 0 13 13" aria-hidden="true">
+          <path d="M1.083 6.5s1.971-3.792 5.417-3.792S11.917 6.5 11.917 6.5 9.946 10.292 6.5 10.292 1.083 6.5 1.083 6.5Z" />
+          <path d="M6.5 8.125a1.625 1.625 0 1 0 0-3.25 1.625 1.625 0 0 0 0 3.25Z" />
+        </svg>
+        批量指派
+      </button>
+      <button type="button" class="defect-filter-panel__batch-button" @click="emit('batchClose')">
+        <svg viewBox="0 0 13 13" aria-hidden="true">
+          <path d="M11.917 5.998v.499a5.417 5.417 0 1 1-3.213-4.949" />
+          <path d="M11.917 2.167 6.5 7.59 4.875 5.965" />
+        </svg>
+        批量关闭
+      </button>
+      <button type="button" class="defect-filter-panel__batch-button is-danger" @click="emit('batchDelete')">
+        <svg viewBox="0 0 13 13" aria-hidden="true">
+          <path d="M1.625 3.25h9.75" />
+          <path d="M10.292 3.25v7.583c0 .542-.542 1.084-1.084 1.084H3.792c-.542 0-1.084-.542-1.084-1.084V3.25" />
+          <path d="M4.333 3.25V2.167c0-.542.542-1.084 1.084-1.084h2.166c.542 0 1.084.542 1.084 1.084V3.25" />
+          <path d="M5.417 5.958v3.25" />
+          <path d="M7.583 5.958v3.25" />
+        </svg>
+        删除
+      </button>
+    </div>
   </section>
 </template>
 
@@ -181,7 +211,59 @@ watch(
 
 .defect-filter-panel__right {
   flex: 0 0 auto;
+  gap: 6px;
   margin-left: auto;
+}
+
+.defect-filter-panel__selected-count {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.defect-filter-panel__batch-button {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.defect-filter-panel__batch-button svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.083px;
+}
+
+.defect-filter-panel__batch-button:hover {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+}
+
+.defect-filter-panel__batch-button.is-danger {
+  color: #4e5969;
+}
+
+.defect-filter-panel__batch-button.is-danger:hover {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
 }
 
 .defect-filter-panel__search {

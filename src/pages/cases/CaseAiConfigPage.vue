@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, ChevronDown, ClipboardCheck, Info, RotateCcw, Save, Sparkles, Wrench, Zap } from '@lucide/vue'
+import { Check, CheckCircle, ChevronDown, ClipboardCheck, Info, RotateCcw, Save, Settings, Sparkles, Wrench, Zap } from '@lucide/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { aiProviderApi, type AiProviderConnectionItem } from '@/entities/ai-provider'
@@ -17,7 +17,6 @@ import {
   AppButton,
   AppEmptyState,
   AppLoadingState,
-  AppPage,
 } from '@/shared/ui'
 
 type RoleType = 'CASE_GENERATOR' | 'CASE_REVIEWER'
@@ -92,6 +91,7 @@ const configState = ref<AiCaseConfigResponse | null>(null)
 const providers = ref<AiProviderConnectionItem[]>([])
 const workspaces = ref<WorkspaceItem[]>([])
 const openModelRole = ref<RoleType | null>(null)
+const advancedVisible = ref(false)
 
 const promptExpanded = reactive<Record<RoleType, boolean>>({
   CASE_GENERATOR: false,
@@ -174,6 +174,23 @@ const canBootstrapFromLegacy = computed(() => configState.value?.canBootstrapFro
 
 const showWorkspaceSelector = computed(() => isAllScope.value)
 const totalModelCount = computed(() => modelPoolOptions.value.length)
+
+const figmaSummaryCards = computed(() => [
+  {
+    roleType: 'CASE_GENERATOR' as const,
+    label: '生成模型',
+    name: forms.CASE_GENERATOR.model || 'GPT-4o',
+    provider: selectedProviderText('CASE_GENERATOR') || 'OpenAI',
+    tone: 'generator',
+  },
+  {
+    roleType: 'CASE_REVIEWER' as const,
+    label: '评审模型',
+    name: forms.CASE_REVIEWER.model || 'Claude 3.5 Sonnet',
+    provider: selectedProviderText('CASE_REVIEWER') || 'Anthropic',
+    tone: 'reviewer',
+  },
+])
 function getSelectedProvider(roleType: RoleType) {
   const form = forms[roleType]
   return providers.value.find(item => item.id === form.providerConnectionId) ?? null
@@ -522,12 +539,42 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppPage
-    title="AI 配置"
-    description="分别配置用例生成和用例评审模型，保持与旧项目一致的双角色工作方式。"
-    fill
-  >
-    <section class="case-ai-config-page">
+  <section class="case-ai-config-page">
+    <header class="case-ai-config-page__figma-header">
+      <h2>AI 配置</h2>
+      <p>配置用于生成和评审测试用例的 AI 模型</p>
+    </header>
+
+    <div class="case-ai-config-page__summary-row">
+      <article
+        v-for="card in figmaSummaryCards"
+        :key="card.roleType"
+        class="case-ai-config-page__summary-card"
+        :class="`is-${card.tone}`"
+      >
+        <div class="case-ai-config-page__summary-icon">
+          <Zap v-if="card.tone === 'generator'" />
+          <CheckCircle v-else />
+        </div>
+        <div class="case-ai-config-page__summary-copy">
+          <div class="case-ai-config-page__summary-label">{{ card.label }}</div>
+          <div class="case-ai-config-page__summary-model">
+            <span>{{ card.name }}</span>
+            <code>{{ card.provider }}</code>
+          </div>
+        </div>
+        <button type="button" class="case-ai-config-page__summary-button" @click="advancedVisible = true">
+          <Settings />
+          配置
+        </button>
+      </article>
+    </div>
+
+    <p class="case-ai-config-page__figma-footer">
+      更多 AI 连接配置请前往「配置中心 › AI 连接配置」进行管理。
+    </p>
+
+    <section v-if="advancedVisible" class="case-ai-config-page__advanced">
       <div class="case-ai-config-page__tip">
         <div class="case-ai-config-page__tip-copy">
           <Info class="case-ai-config-page__tip-icon" />
@@ -803,17 +850,155 @@ onBeforeUnmount(() => {
         </article>
       </div>
     </section>
-  </AppPage>
+  </section>
 </template>
 
 <style scoped>
 .case-ai-config-page {
   display: flex;
-  flex: 1;
   min-width: 0;
-  min-height: 0;
+  flex-direction: column;
+  gap: 17.5px;
+  padding: 21px;
+}
+
+.case-ai-config-page__figma-header h2 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.case-ai-config-page__figma-header p {
+  margin: 0;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.case-ai-config-page__summary-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.case-ai-config-page__summary-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 76px;
+  min-width: 0;
+  padding: 16px 19.5px;
+  border: 2px solid rgb(22 93 255 / 19%);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.case-ai-config-page__summary-card.is-generator {
+  border-color: rgb(0 180 42 / 19%);
+}
+
+.case-ai-config-page__summary-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  background: rgb(22 93 255 / 8%);
+  color: #165dff;
+}
+
+.case-ai-config-page__summary-card.is-generator .case-ai-config-page__summary-icon {
+  background: rgb(0 180 42 / 8%);
+  color: #00b42a;
+}
+
+.case-ai-config-page__summary-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.case-ai-config-page__summary-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3.5px;
+}
+
+.case-ai-config-page__summary-label {
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.275px;
+  line-height: 16.5px;
+}
+
+.case-ai-config-page__summary-card.is-generator .case-ai-config-page__summary-label {
+  color: #00b42a;
+}
+
+.case-ai-config-page__summary-model {
+  display: flex;
+  align-items: baseline;
+  gap: 6.3px;
+  min-width: 0;
+}
+
+.case-ai-config-page__summary-model span {
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-ai-config-page__summary-model code {
+  color: #86909c;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16.5px;
+}
+
+.case-ai-config-page__summary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5.25px;
+  width: 65.25px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.case-ai-config-page__summary-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.case-ai-config-page__figma-footer {
+  margin: 0;
+  color: #86909c;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.case-ai-config-page__advanced {
+  display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: var(--app-space-5);
+  padding-top: 10.5px;
 }
 
 .case-ai-config-page__tip {

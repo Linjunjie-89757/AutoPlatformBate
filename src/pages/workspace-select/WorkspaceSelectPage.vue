@@ -360,7 +360,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 25px;
+  padding: 20px 24px;
   border: 1px solid #e5e6eb;
   border-radius: 14px;
   background: #fff;
@@ -369,14 +369,12 @@ onMounted(() => {
   cursor: pointer;
   transition:
     border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease;
+    box-shadow 0.18s ease;
 }
 
 .workspace-select-page__card:hover:not(:disabled) {
-  border-color: rgba(22, 93, 255, 0.32);
-  box-shadow: 0 10px 24px rgba(22, 93, 255, 0.08);
-  transform: translateY(-1px);
+  border-color: #165dff;
+  box-shadow: 0 4px 20px rgba(22, 93, 255, 0.12);
 }
 
 .workspace-select-page__card:disabled {
@@ -407,6 +405,7 @@ onMounted(() => {
 
 .workspace-select-page__title-row {
   max-width: 100%;
+  min-height: 23px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -451,6 +450,8 @@ onMounted(() => {
 }
 
 .workspace-select-page__meta {
+  min-height: 22.25px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -472,7 +473,6 @@ onMounted(() => {
 .workspace-select-page__create,
 .workspace-select-page__state {
   width: 100%;
-  min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -489,6 +489,8 @@ onMounted(() => {
 }
 
 .workspace-select-page__create {
+  height: 50px;
+  box-sizing: border-box;
   cursor: pointer;
   transition:
     border-color 0.18s ease,
@@ -503,6 +505,7 @@ onMounted(() => {
 }
 
 .workspace-select-page__state {
+  min-height: 52px;
   border-style: solid;
   background: rgba(255, 255, 255, 0.52);
 }
@@ -540,6 +543,9 @@ onMounted(() => {
 }
 
 .workspace-select-page__footer button {
+  width: 48px;
+  height: 18px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: #165dff;

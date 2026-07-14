@@ -1027,7 +1027,12 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="ai-generate-page">
-    <div v-if="isAllScope" class="workspace-select-bar panel-card">
+    <header class="ai-generate-page__heading">
+      <h2>AI 用例生成</h2>
+      <p>基于需求文档或手动输入，自动生成并 AI 评审测试用例草稿</p>
+    </header>
+
+    <div v-if="isAllScope" class="workspace-select-bar panel-card ai-generate-page__legacy-workspace">
       <div class="workspace-select-bar__label">目标空间</div>
       <el-select
         v-model="selectedTargetWorkspaceCode"
@@ -1223,20 +1228,20 @@ onBeforeUnmount(() => {
             <span class="output-mode-icon output-mode-icon-stream" aria-hidden="true">⚡</span>
             <span>实时流式输出</span>
           </div>
-          <div class="output-mode-desc">优先展示任务执行进度和阶段状态。</div>
+          <div class="output-mode-desc">优先展示任务执行进度和阶段状态。适合需要实时观察生成过程、希望尽快看到部分结果的场景。每条用例生成后立即展示。</div>
         </label>
         <label class="output-mode-card output-mode-card-visual" :class="{ 'output-mode-card-active': manualForm.outputMode === 'COMPLETE' }">
           <input v-model="manualForm.outputMode" type="radio" value="COMPLETE">
           <div class="output-mode-title">
-            <span class="output-mode-icon output-mode-icon-complete" aria-hidden="true">📄</span>
+            <span class="output-mode-icon output-mode-icon-complete" aria-hidden="true">📋</span>
             <span>完整输出</span>
           </div>
-          <div class="output-mode-desc">等待生成和评审全部完成后统一返回结果。</div>
+          <div class="output-mode-desc">等待生成和评审全部完成后统一返回结果。适合需要批量处理、追求结果完整性的场景。所有用例评审完成后一次性展示。</div>
         </label>
       </div>
     </div>
 
-    <div class="panel-card ai-config-card">
+    <div class="panel-card ai-config-card ai-generate-page__legacy-config">
       <div class="panel-title-row">
         <div>
             <div class="section-title section-title-with-icon">
@@ -1287,7 +1292,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="recent-task-card">
+    <div class="recent-task-card ai-generate-page__legacy-recent">
       <div class="panel-title-row recent-task-header">
         <div>
           <div class="section-title section-title-with-icon">
@@ -1472,14 +1477,31 @@ onBeforeUnmount(() => {
 <style scoped>
 .ai-generate-page {
   display: grid;
-  gap: 16px;
+  align-content: start;
+  gap: 17.5px;
+  padding: 21px;
+}
+
+.ai-generate-page__heading h2 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 25.5px;
+}
+
+.ai-generate-page__heading p {
+  margin: 3.5px 0 0;
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 19.5px;
 }
 
 .panel-card {
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 11px;
   background: #fff;
-  box-shadow: var(--app-shadow-card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
 .workspace-select-bar {
@@ -1500,38 +1522,53 @@ onBeforeUnmount(() => {
   width: 260px;
 }
 
+.ai-generate-page :deep(.el-input__wrapper),
+.ai-generate-page :deep(.el-select__wrapper) {
+  min-height: 28px;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+  font-size: 13px;
+}
+
+.ai-generate-page :deep(.el-input__inner) {
+  height: 28px;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 28px;
+}
+
 .ai-output-mode-card,
 .input-panel,
 .upload-panel,
 .bottom-action-card {
-  padding: 18px;
+  padding: 18.5px;
 }
 
 .input-panel,
 .upload-panel {
-  min-height: 520px;
+  min-height: 462.25px;
 }
 
 .section-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--app-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 21px;
+  color: #1d2129;
 }
 
 .section-title-with-icon {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 18px;
+  gap: 7px;
 }
 
 .section-title-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  font-size: 22px;
+  width: 18px;
+  height: 21px;
+  font-size: 14px;
   line-height: 1;
   flex-shrink: 0;
 }
@@ -1547,9 +1584,9 @@ onBeforeUnmount(() => {
 .process-dialog-subtitle,
 .process-step-desc,
 .process-current-text {
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+  color: #86909c;
 }
 
 .section-desc {
@@ -1573,12 +1610,12 @@ onBeforeUnmount(() => {
 .output-mode-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
   margin-top: 14px;
 }
 
 .output-mode-grid-visual {
-  gap: 18px;
+  gap: 14px;
 }
 
 .output-mode-card {
@@ -1592,12 +1629,16 @@ onBeforeUnmount(() => {
 }
 
 .output-mode-card-visual {
-  min-height: 116px;
-  align-content: start;
-  padding: 20px 22px;
-  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 79.5px;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 16px;
+  border: 2px solid #e5e6eb;
+  border-radius: 11px;
   background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(221, 229, 240, 0.92);
+  box-shadow: none;
 }
 
 .output-mode-card input {
@@ -1607,19 +1648,40 @@ onBeforeUnmount(() => {
 }
 
 .output-mode-card-active {
-  border-color: rgba(36, 107, 255, 0.72);
-  background: rgba(233, 240, 255, 0.92);
-  box-shadow: inset 0 0 0 1px rgba(36, 107, 255, 0.3);
+  border-color: #165dff;
+  background: rgb(22 93 255 / 2%);
+  box-shadow: none;
 }
 
 .output-mode-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+  color: #1d2129;
+}
+
+.output-mode-card-active .output-mode-title {
+  color: #165dff;
+}
+
+.output-mode-card-active .output-mode-title::after {
+  content: '✓';
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--app-text-primary);
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: #165dff;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
 }
 
 .output-mode-icon {
@@ -1634,17 +1696,18 @@ onBeforeUnmount(() => {
 }
 
 .output-mode-desc {
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--app-text-muted);
-  max-width: 30ch;
+  margin-top: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 19.5px;
+  color: #86909c;
+  max-width: none;
 }
 
 .main-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: 10.5px;
   align-items: stretch;
 }
 
@@ -1653,21 +1716,22 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  min-height: 36px;
-  margin-bottom: 18px;
+  min-height: 21px;
+  margin-bottom: 14px;
 }
 
 .form-stack {
   display: grid;
-  gap: 12px;
+  gap: 10.5px;
   min-height: 100%;
   align-content: start;
 }
 
 .field-label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--app-text-primary);
+  line-height: 16.5px;
+  color: #4e5969;
 }
 
 .field-required {
@@ -1707,11 +1771,12 @@ onBeforeUnmount(() => {
 }
 
 .requirement-textarea :deep(.el-textarea__inner) {
-  min-height: 280px !important;
-  padding: 14px 14px 16px;
-  line-height: 1.75;
-  font-size: 14px;
-  border-radius: 10px;
+  min-height: 175.5px !important;
+  padding: 9.75px 11.5px;
+  border-radius: 7px;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 19.5px;
 }
 
 .char-count {
@@ -1723,18 +1788,18 @@ onBeforeUnmount(() => {
 .path-action-stack,
 .upload-card-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10.5px;
+  margin-top: 0;
 }
 
 .generate-primary-btn {
   width: 100%;
-  height: 54px;
-  border-radius: 10px;
-  border-color: #2fb15d;
-  background: #2fb15d;
-  font-size: 15px;
+  height: 35px;
+  border-radius: 11px;
+  border-color: #c9cdd4;
+  background: #c9cdd4;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -1751,14 +1816,14 @@ onBeforeUnmount(() => {
 }
 
 .flow-secondary-btn {
-  width: 100%;
-  height: 54px;
+  width: auto;
+  height: 35px;
   margin-left: 0;
-  border-radius: 10px;
-  border-color: var(--app-border);
+  border-radius: 11px;
+  border-color: #e5e6eb;
   background: #fff;
-  color: var(--app-text-primary);
-  font-size: 15px;
+  color: #4e5969;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -1774,16 +1839,16 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 3.5px;
   width: 100%;
-  min-height: 432px;
-  border: 1px dashed var(--app-border);
-  border-radius: 10px;
+  min-height: 260px;
+  border: 2px dashed #e5e6eb;
+  border-radius: 11px;
   background: #fff;
   color: var(--app-text-primary);
   cursor: pointer;
   padding: 20px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .upload-large-box:hover {
@@ -1794,7 +1859,7 @@ onBeforeUnmount(() => {
 .upload-panel-body {
   display: grid;
   align-content: start;
-  padding-top: 38px;
+  padding-top: 14px;
 }
 
 .upload-success-shell {
@@ -1880,7 +1945,14 @@ onBeforeUnmount(() => {
 }
 
 .upload-box-icon {
-  font-size: 28px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: #f2f3f5;
+  color: #c9cdd4;
+  font-size: 24px;
 }
 
 .upload-box-center {
@@ -1890,26 +1962,35 @@ onBeforeUnmount(() => {
 }
 
 .upload-box-title {
-  font-size: 14px;
-  color: var(--app-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+  color: #4e5969;
 }
 
 .upload-primary-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 84px;
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 8px;
-  background: #409eff;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
+  min-width: 77px;
+  height: 28px;
+  padding: 0 11.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .ai-config-card {
-  padding: 20px 22px;
+  padding: 18.5px;
+}
+
+.ai-generate-page__legacy-workspace,
+.ai-generate-page__legacy-config,
+.ai-generate-page__legacy-recent {
+  display: none;
 }
 
 .ai-config-grid {

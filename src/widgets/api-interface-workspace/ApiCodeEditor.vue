@@ -1,7 +1,7 @@
 <template>
   <div
     class="api-code-editor"
-    :class="{ 'is-fit-content': fitContent, 'is-plain': plain, 'is-fill': fill }"
+    :class="{ 'is-fit-content': fitContent, 'is-plain': plain, 'is-fill': fill, 'is-dark': themeVariant === 'dark' }"
     :style="editorShellStyle"
   >
     <div v-if="showToolbar" class="api-code-editor__toolbar">
@@ -28,6 +28,7 @@ type ApiCodeLanguage = 'api-console' | 'javascript' | 'json' | 'sql' | 'text' | 
 
 const API_CONSOLE_LANGUAGE = 'api-console'
 const API_CODE_THEME = 'api-code-light'
+const API_CODE_DARK_THEME = 'api-code-dark'
 let apiConsoleLanguageReady = false
 
 const props = withDefaults(defineProps<{
@@ -44,6 +45,7 @@ const props = withDefaults(defineProps<{
   plain?: boolean
   minFitContentHeight?: number
   maxFitContentHeight?: number
+  themeVariant?: 'light' | 'dark'
 }>(), {
   language: 'javascript',
   height: '260px',
@@ -57,6 +59,7 @@ const props = withDefaults(defineProps<{
   plain: false,
   minFitContentHeight: 120,
   maxFitContentHeight: 1000,
+  themeVariant: 'light',
 })
 
 const emit = defineEmits<{
@@ -124,6 +127,22 @@ function ensureApiConsoleLanguage() {
     colors: {},
   })
 
+  monaco.editor.defineTheme(API_CODE_DARK_THEME, {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#1E1E2E',
+      'editor.foreground': '#CDD6F4',
+      'editorLineNumber.foreground': '#565675',
+      'editorLineNumber.activeForeground': '#7C7C9A',
+      'editor.lineHighlightBackground': '#2D2D3F66',
+      'editorCursor.foreground': '#CBA6F7',
+      'editor.selectionBackground': '#45475A',
+      'editor.inactiveSelectionBackground': '#313244',
+    },
+  })
+
   apiConsoleLanguageReady = true
 }
 
@@ -173,7 +192,7 @@ function createEditor() {
   editor = monaco.editor.create(containerRef.value, {
     value: props.modelValue ?? '',
     language: mapLanguage(props.language),
-    theme: API_CODE_THEME,
+    theme: props.themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME,
     readOnly: props.readOnly,
     automaticLayout: true,
     minimap: { enabled: false },
@@ -250,6 +269,13 @@ watch(
       contextmenu: !readOnly,
     })
     syncEditorHeight()
+  },
+)
+
+watch(
+  () => props.themeVariant,
+  (themeVariant) => {
+    monaco.editor.setTheme(themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME)
   },
 )
 
@@ -360,5 +386,29 @@ onBeforeUnmount(() => {
 .api-code-editor__body :deep(.monaco-editor),
 .api-code-editor__body :deep(.overflow-guard) {
   border-radius: 0;
+}
+
+.api-code-editor.is-dark {
+  flex: 0 0 auto;
+  padding: 1px;
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #1e1e2e;
+}
+
+.api-code-editor.is-dark .api-code-editor__toolbar {
+  padding: 5.25px 10.5px 6.25px;
+  border-bottom: 1px solid #2d2d3f;
+  background: #16162a;
+}
+
+.api-code-editor.is-dark .api-code-editor__format {
+  height: 20px;
+  padding: 0 6px;
+  border-color: #2d2d3f;
+  background: #2d2d3f;
+  color: #7c7c9a;
+  font-size: 10px;
+  line-height: 18px;
 }
 </style>

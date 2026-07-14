@@ -89,9 +89,62 @@ import runnerNavApp from './config-center/runner/runner-07.svg'
 import runnerNavBug from './config-center/runner/runner-04.svg'
 import runnerNavCase from './config-center/runner/runner-03.svg'
 import runnerNavConfig from './config-center/runner/runner-02.svg'
+import runnerNavConfigSliders from './config-center/runner/runner-nav-config-sliders.svg'
 import runnerNavDashboard from './config-center/runner/runner-01.svg'
-import runnerNavSetting from './config-center/runner/runner-10.svg'
 import runnerNavWeb from './config-center/runner/runner-06.svg'
+import taskNav from './tasks/task-nav.svg'
+import taskActionDelete from './tasks/action-delete.svg'
+import taskActionEdit from './tasks/action-edit.svg'
+import taskActionClose from './tasks/action-close.svg'
+import taskActionHistory from './tasks/action-history.svg'
+import taskActionReport from './tasks/action-report.svg'
+import taskActionReportRow from './tasks/action-report-row.svg'
+import taskActionRun from './tasks/action-run.svg'
+import taskActionRunHeader from './tasks/action-run-header.svg'
+import taskActionView from './tasks/action-view.svg'
+import taskEditCronResult from './tasks/edit-cron-result.svg'
+import taskEditNextRun from './tasks/edit-next-run.svg'
+import taskEditSave from './tasks/edit-save.svg'
+import taskEditTestRun from './tasks/edit-test-run.svg'
+import taskEditTriggerManual from './tasks/edit-trigger-manual.svg'
+import taskEditTriggerSchedule from './tasks/edit-trigger-schedule.svg'
+import taskScheduleManual from './tasks/schedule-manual.svg'
+import taskScheduleTimer from './tasks/schedule-timer.svg'
+import taskPanelAi from './tasks/panel-ai.svg'
+import taskPanelSuggest from './tasks/panel-suggest.svg'
+import taskPanelSuggestAlt from './tasks/panel-suggest-alt.svg'
+import taskPanelStability from './tasks/panel-stability.svg'
+import taskPanelWarning from './tasks/panel-warning.svg'
+import taskStatEnabled from './tasks/stat-enabled.svg'
+import taskStatFailed from './tasks/stat-failed.svg'
+import taskStatRunning from './tasks/stat-running.svg'
+import taskStatTotal from './tasks/stat-total.svg'
+import reportActionExport from './reports/action-export.svg'
+import reportActionRerun from './reports/action-rerun.svg'
+import reportActionShare from './reports/action-share.svg'
+import reportBatchExport from './reports/batch-export.svg'
+import reportBreadcrumbChevron from './reports/breadcrumb-chevron.svg'
+import reportBreadcrumbList from './reports/breadcrumb-list.svg'
+import reportDrawerClose from './reports/drawer-close.svg'
+import reportEmptyAi from './reports/empty-ai.svg'
+import reportExpandDetail from './reports/expand-detail.svg'
+import reportFilter from './reports/filter.svg'
+import reportListSearch from './reports/list-search.svg'
+import reportNav from './reports/nav-report.svg'
+import reportOpenDetail from './reports/open-detail.svg'
+import reportQuickSearch from './reports/quick-search.svg'
+import reportRowCopy from './reports/row-copy.svg'
+import reportRowDelete from './reports/row-delete.svg'
+import reportRowShare from './reports/row-share.svg'
+import reportRowView from './reports/row-view.svg'
+import reportRunNow from './reports/run-now.svg'
+import reportShareCopy from './reports/share-copy.svg'
+import reportShareExport from './reports/share-export.svg'
+import reportShareLogo from './reports/share-logo.svg'
+import reportStatusFailed from './reports/status-failed.svg'
+import reportStatusSkipped from './reports/status-skipped.svg'
+import reportStatusSuccess from './reports/status-success.svg'
+import reportUserChevron from './reports/user-chevron.svg'
 import overviewAi from './config-center/overview/overview-ai.svg'
 import overviewDatabase from './config-center/overview/overview-database.svg'
 import overviewEnvironment from './config-center/overview/overview-environment.svg'
@@ -217,13 +270,15 @@ export const figmaConfigRunnerIcons = {
 
 export const figmaGlobalNavIcons = {
   dashboard: runnerNavDashboard,
-  config: runnerNavConfig,
+  config: runnerNavConfigSliders,
   case: runnerNavCase,
   bug: runnerNavBug,
   api: runnerNavApi,
   web: runnerNavWeb,
   app: runnerNavApp,
-  setting: runnerNavSetting,
+  task: taskNav,
+  report: reportNav,
+  setting: runnerNavConfig,
 } as const
 
 export const figmaConfigOverviewIcons = {
@@ -288,5 +343,81 @@ export const figmaDefectIcons = {
     edit: defectActionEdit,
     transition: defectActionTransition,
     delete: defectActionDelete,
+  },
+} as const
+
+export const figmaTaskIcons = {
+  stat: {
+    total: taskStatTotal,
+    enabled: taskStatEnabled,
+    running: taskStatRunning,
+    failed: taskStatFailed,
+  },
+  action: {
+    run: taskActionRun,
+    runHeader: taskActionRunHeader,
+    view: taskActionView,
+    edit: taskActionEdit,
+    close: taskActionClose,
+    history: taskActionHistory,
+    report: taskActionReport,
+    reportRow: taskActionReportRow,
+    delete: taskActionDelete,
+  },
+  editDrawer: {
+    triggerManual: taskEditTriggerManual,
+    triggerSchedule: taskEditTriggerSchedule,
+    cronResult: taskEditCronResult,
+    nextRun: taskEditNextRun,
+    testRun: taskEditTestRun,
+    save: taskEditSave,
+  },
+  schedule: {
+    timer: taskScheduleTimer,
+    manual: taskScheduleManual,
+  },
+  panel: {
+    ai: taskPanelAi,
+    stability: taskPanelStability,
+    warning: taskPanelWarning,
+    suggest: taskPanelSuggest,
+    suggestAlt: taskPanelSuggestAlt,
+  },
+} as const
+
+export const figmaReportIcons = {
+  nav: reportNav,
+  breadcrumbList: reportBreadcrumbList,
+  breadcrumbChevron: reportBreadcrumbChevron,
+  filter: reportFilter,
+  quickSearch: reportQuickSearch,
+  listSearch: reportListSearch,
+  openDetail: reportOpenDetail,
+  expandDetail: reportExpandDetail,
+  drawerClose: reportDrawerClose,
+  emptyAi: reportEmptyAi,
+  userChevron: reportUserChevron,
+  action: {
+    share: reportActionShare,
+    export: reportActionExport,
+    rerun: reportActionRerun,
+    batchExport: reportBatchExport,
+    runNow: reportRunNow,
+  },
+  sharePage: {
+    logo: reportShareLogo,
+    copy: reportShareCopy,
+    export: reportShareExport,
+  },
+  rowAction: {
+    view: reportRowView,
+    share: reportRowShare,
+    copy: reportRowCopy,
+    delete: reportRowDelete,
+  },
+  status: {
+    success: reportStatusSuccess,
+    failed: reportStatusFailed,
+    skipped: reportStatusSkipped,
   },
 } as const

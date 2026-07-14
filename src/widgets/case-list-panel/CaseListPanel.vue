@@ -146,7 +146,7 @@ function resolveCaseTableColumnWidth(column: CaseTableColumnDefinition) {
 }
 
 function formatCaseTableGridTrack(width: number) {
-  return `minmax(${width}px, ${width}fr)`
+  return `${width}px`
 }
 
 const dataGridMinWidth = computed(() => {

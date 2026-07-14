@@ -1,0 +1,229 @@
+{
+  "empty": {
+    "text": "选择左侧步骤查看执行详情仅查看失败步骤 (3)",
+    "rect": {
+      "x": 369.5,
+      "y": 151.25,
+      "w": 1533,
+      "h": 693.25
+    }
+  },
+  "successSelected": {
+    "card": {
+      "x": 369.5,
+      "y": 151.25,
+      "w": 1533,
+      "h": 111
+    },
+    "sections": [
+      {
+        "cls": "report-section-card",
+        "text": "断言结果 (2)$.code等于0$.data.token存在eyJhbGci...",
+        "rect": {
+          "x": 369.5,
+          "y": 276.25,
+          "w": 1533,
+          "h": 129.5
+        }
+      },
+      {
+        "cls": "report-section-card",
+        "text": "响应摘要Status Code200响应耗时98msjson复制{ \"code\": 0, \"data\": { \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ",
+        "rect": {
+          "x": 369.5,
+          "y": 419.75,
+          "w": 1533,
+          "h": 318.5
+        }
+      },
+      {
+        "cls": "report-step-pass-card",
+        "text": "步骤执行通过点击「展开详情」查看完整请求和响应",
+        "rect": {
+          "x": 369.5,
+          "y": 752.25,
+          "w": 1533,
+          "h": 116.75
+        }
+      }
+    ]
+  },
+  "successDrawer": {
+    "request": {
+      "active": "请求",
+      "drawer": {
+        "x": 1220,
+        "y": 0,
+        "w": 700,
+        "h": 862
+      },
+      "content": {
+        "x": 1220,
+        "y": 131.5,
+        "w": 700,
+        "h": 730.5
+      },
+      "code": {
+        "x": 1237.5,
+        "y": 238.5,
+        "w": 665,
+        "h": 126.5
+      },
+      "text": "请求地址POSThttps://staging-api.company.com/api/auth/loginRequest Bodyjson复制{ \"username\": \"qatest001\", \"password\": \"Test@1234\" }"
+    },
+    "response": {
+      "active": "响应",
+      "drawer": {
+        "x": 1220,
+        "y": 0,
+        "w": 700,
+        "h": 862
+      },
+      "content": {
+        "x": 1220,
+        "y": 131.5,
+        "w": 700,
+        "h": 730.5
+      },
+      "code": {
+        "x": 1237.5,
+        "y": 219.5,
+        "w": 665,
+        "h": 204.5
+      },
+      "text": "Status Code200响应耗时98msResponse Bodyjson复制{ \"code\": 0, \"data\": { \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\", \"userId\": 10042, \"role\": \"user\" } }"
+    },
+    "assertion": {
+      "active": "断言 (2)",
+      "drawer": {
+        "x": 1220,
+        "y": 0,
+        "w": 700,
+        "h": 862
+      },
+      "content": {
+        "x": 1220,
+        "y": 131.5,
+        "w": 700,
+        "h": 730.5
+      },
+      "text": "$.code通过操作符等于期望值0实际值0$.data.token通过操作符存在期望值—实际值eyJhbGci..."
+    },
+    "log": {
+      "active": "日志",
+      "drawer": {
+        "x": 1220,
+        "y": 0,
+        "w": 700,
+        "h": 862
+      },
+      "content": {
+        "x": 1220,
+        "y": 131.5,
+        "w": 700,
+        "h": 730.5
+      },
+      "text": "该步骤执行成功，无错误日志"
+    },
+    "ai": {
+      "active": "AI 分析",
+      "drawer": {
+        "x": 1220,
+        "y": 0,
+        "w": 700,
+        "h": 862
+      },
+      "content": {
+        "x": 1220,
+        "y": 131.5,
+        "w": 700,
+        "h": 730.5
+      },
+      "text": "仅在步骤失败时提供 AI 分析"
+    }
+  },
+  "failedSelected": [
+    {
+      "cls": "report-section-card",
+      "text": "断言结果 (2)$.code等于0$.message包含success",
+      "rect": {
+        "x": 369.5,
+        "y": 276.25,
+        "w": 1533,
+        "h": 129.5
+      }
+    },
+    {
+      "cls": "report-section-card",
+      "text": "响应摘要Status Code200响应耗时188msjson复制{ \"code\": 0, \"message\": \"success\", \"data\": { \"orderId\": \"ORD-20260703-99001\" } }",
+      "rect": {
+        "x": 369.5,
+        "y": 419.75,
+        "w": 1533,
+        "h": 318.5
+      }
+    },
+    {
+      "cls": "report-section-card is-failed-note",
+      "text": "错误日志 log复制[2026-07-03 13:30:38.214] [ASSERT FAIL] Step 4: POST /api/orders/create 断言失败: $.code 期望 403，实际 0 断言失败: $.message 期望包含 \"blacklist\"，",
+      "rect": {
+        "x": 369.5,
+        "y": 752.25,
+        "w": 1533,
+        "h": 226.5
+      }
+    },
+    {
+      "cls": "report-section-card",
+      "text": "AI 失败诊断AI 失败诊断展开⌄",
+      "rect": {
+        "x": 369.5,
+        "y": 992.75,
+        "w": 1533,
+        "h": 99.5
+      }
+    }
+  ],
+  "skippedDrawer": {
+    "request": {
+      "active": "请求",
+      "text": "该步骤无请求信息",
+      "tabs": [
+        "请求",
+        "断言 (0)",
+        "日志",
+        "AI 分析"
+      ]
+    },
+    "assertion": {
+      "active": "断言 (0)",
+      "text": "该步骤无断言配置",
+      "tabs": [
+        "请求",
+        "断言 (0)",
+        "日志",
+        "AI 分析"
+      ]
+    },
+    "log": {
+      "active": "日志",
+      "text": "该步骤执行成功，无错误日志",
+      "tabs": [
+        "请求",
+        "断言 (0)",
+        "日志",
+        "AI 分析"
+      ]
+    },
+    "ai": {
+      "active": "AI 分析",
+      "text": "仅在步骤失败时提供 AI 分析",
+      "tabs": [
+        "请求",
+        "断言 (0)",
+        "日志",
+        "AI 分析"
+      ]
+    }
+  }
+}

@@ -3896,19 +3896,61 @@
 
 .scenario-suite-like-name-row strong {
   color: #1d2129;
-  font-size: 17px;
-  font-weight: 700;
-  line-height: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
 }
 
 .scenario-suite-like-priority-badge {
+  --scenario-priority-bg: #ffedd5;
+  --scenario-priority-border: #fed7aa;
+  --scenario-priority-color: #c2410c;
+  --scenario-priority-hover-bg: #fed7aa;
+  --scenario-priority-hover-border: #fdba74;
   height: 22px;
-  border-color: #ffddc2;
+  border-color: var(--scenario-priority-border);
   border-radius: 6px;
-  background: #fff3e8;
-  color: #ff7d00;
+  background: var(--scenario-priority-bg);
+  color: var(--scenario-priority-color);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.scenario-suite-like-priority-badge:hover {
+  border-color: var(--scenario-priority-hover-border);
+  background: var(--scenario-priority-hover-bg);
+}
+
+.scenario-suite-like-priority-badge.is-p0 {
+  --scenario-priority-bg: #fef2f2;
+  --scenario-priority-border: #fecaca;
+  --scenario-priority-color: #dc2626;
+  --scenario-priority-hover-bg: #fee2e2;
+  --scenario-priority-hover-border: #fca5a5;
+}
+
+.scenario-suite-like-priority-badge.is-p1 {
+  --scenario-priority-bg: #ffedd5;
+  --scenario-priority-border: #fed7aa;
+  --scenario-priority-color: #c2410c;
+  --scenario-priority-hover-bg: #fed7aa;
+  --scenario-priority-hover-border: #fdba74;
+}
+
+.scenario-suite-like-priority-badge.is-p2 {
+  --scenario-priority-bg: #eff6ff;
+  --scenario-priority-border: #bfdbfe;
+  --scenario-priority-color: #2563eb;
+  --scenario-priority-hover-bg: #dbeafe;
+  --scenario-priority-hover-border: #93c5fd;
+}
+
+.scenario-suite-like-priority-badge.is-p3 {
+  --scenario-priority-bg: #f1f5f9;
+  --scenario-priority-border: #cbd5e1;
+  --scenario-priority-color: #475569;
+  --scenario-priority-hover-bg: #e2e8f0;
+  --scenario-priority-hover-border: #94a3b8;
 }
 
 .scenario-suite-like-description-input {
@@ -3917,7 +3959,14 @@
 
 .scenario-suite-like-description-input .el-input__wrapper {
   min-height: 28px;
+  padding: 0 8px;
   border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.scenario-suite-like-description-input .el-input__wrapper:hover,
+.scenario-suite-like-description-input .el-input__wrapper.is-focus {
   background: #ffffff;
   box-shadow: inset 0 0 0 1px #e5e6eb;
 }
@@ -4092,23 +4141,6 @@
   font-size: 13px;
 }
 
-.scenario-step-node .el-switch {
-  height: 16px;
-  line-height: 16px;
-  transform: none;
-}
-
-.scenario-step-node .el-switch__core {
-  min-width: 28px;
-  height: 16px;
-  border-radius: 999px;
-}
-
-.scenario-step-node .el-switch__action {
-  width: 12px;
-  height: 12px;
-}
-
 .scenario-property-run-button {
   border-color: #165dff;
   background: #165dff;
@@ -4177,4 +4209,625 @@
 
 .scenario-property-field-grid {
   gap: 10px;
+}
+
+.scenario-step-tree {
+  flex: 0 1 auto;
+  margin: 12px 16px 0;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px 8px 0 0;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(29, 33, 41, 0.03);
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+}
+
+.scenario-step-node {
+  position: relative;
+  grid-template-columns: 166px minmax(0, 1fr) auto;
+  min-height: 59.5px;
+  padding: 10.5px 14px 10.5px 17px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.scenario-step-node::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: #165dff;
+  content: "";
+}
+
+.scenario-step-node.is-api-case::before,
+.scenario-step-node.is-api::before {
+  background: #165dff;
+}
+
+.scenario-step-node.is-custom-request::before {
+  background: #0fc6c2;
+}
+
+.scenario-step-node.is-loop-controller::before,
+.scenario-step-node.is-once-only-controller::before {
+  background: #ff7d00;
+}
+
+.scenario-step-node.is-if-controller::before {
+  background: #00b42a;
+}
+
+.scenario-step-node.is-constant-timer::before {
+  background: #ff7d00;
+}
+
+.scenario-step-node.is-script::before {
+  background: #7816ff;
+}
+
+.scenario-step-node:hover {
+  background: #fbfcff;
+}
+
+.scenario-step-node-left {
+  gap: 8px;
+}
+
+.scenario-step-drag-handle {
+  display: grid;
+  grid-template-columns: repeat(2, 2px);
+  gap: 3px 2px;
+  width: 8px;
+  color: #c9cdd4;
+}
+
+.scenario-step-drag-handle span {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.scenario-step-switch {
+  position: relative;
+  width: 28px;
+  height: 14px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #c9cdd4;
+  cursor: pointer;
+}
+
+.scenario-step-switch.is-checked {
+  background: #165dff;
+}
+
+.scenario-step-switch span {
+  position: absolute;
+  top: 1.75px;
+  left: 1.75px;
+  width: 10.5px;
+  height: 10.5px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(29, 33, 41, 0.12);
+}
+
+.scenario-step-switch.is-checked span {
+  left: 15.75px;
+}
+
+.scenario-step-order {
+  justify-content: flex-end;
+  width: 17.5px;
+  height: 18px;
+  background: transparent;
+  color: #c9cdd4;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.scenario-step-type-badge {
+  height: 21px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 21px;
+}
+
+.scenario-step-type-badge.is-api,
+.scenario-step-type-badge.is-api-case {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.scenario-step-type-badge.is-custom-request {
+  background: #e8fffb;
+  color: #0fc6c2;
+}
+
+.scenario-step-type-badge.is-loop-controller,
+.scenario-step-type-badge.is-once-only-controller,
+.scenario-step-type-badge.is-constant-timer {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.scenario-step-type-badge.is-if-controller {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.scenario-step-type-badge.is-script {
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.scenario-step-node-main {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  padding: 0 12px;
+}
+
+.scenario-step-title-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px;
+}
+
+.scenario-step-name-text,
+.scenario-step-name-button {
+  max-width: 100%;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.scenario-step-name-button.is-strong {
+  font-weight: 500;
+}
+
+.scenario-step-method {
+  height: 18px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.scenario-step-node-actions {
+  gap: 2px;
+  opacity: 1;
+}
+
+.scenario-step-icon-action {
+  width: 21px;
+  height: 21px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #c9cdd4;
+}
+
+.scenario-step-icon-action .el-icon {
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+}
+
+.scenario-step-icon-action.is-run {
+  color: #86909c;
+}
+
+.scenario-step-icon-action:hover {
+  background: #f2f3f5;
+  color: #165dff;
+}
+
+.scenario-step-name-edit-button {
+  width: 18px;
+  height: 18px;
+  color: #c9cdd4;
+  opacity: 0;
+}
+
+.scenario-step-node:hover .scenario-step-name-edit-button {
+  opacity: 1;
+}
+
+.scenario-step-name-inline-input {
+  width: 260px;
+}
+
+.scenario-step-name-inline-input .el-input__wrapper {
+  min-height: 24px;
+  border-radius: 6px;
+}
+
+.scenario-step-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 32px);
+  height: 41px;
+  margin: 0 16px;
+  border: 1px solid #e5e6eb;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: #ffffff;
+  color: #c9cdd4;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 7px;
+}
+
+.scenario-step-add-row:hover {
+  color: #165dff;
+  background: #fbfcff;
+}
+
+/* Scenario editor Figma convergence: align scenario-only affordances with API directory and WebUI step visuals. */
+.scenario-workbench {
+  grid-template-columns: 250px minmax(0, 1fr);
+}
+
+.scenario-sidebar-tools {
+  gap: 7px;
+  padding: 10.5px;
+  background: #ffffff;
+}
+
+.scenario-sidebar-primary {
+  height: 28px;
+  min-height: 28px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.scenario-sidebar-primary-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.scenario-sidebar-search .el-input__wrapper {
+  height: 28px;
+  min-height: 28px;
+  padding-left: 10px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #e5e6eb;
+}
+
+.scenario-sidebar-search .el-input__inner {
+  height: 28px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 28px;
+}
+
+.scenario-sidebar-search .el-input__inner::placeholder {
+  color: rgba(29, 33, 41, 0.5);
+}
+
+.scenario-sidebar-search-icon {
+  width: 14px;
+  height: 14px;
+  color: #c9cdd4;
+}
+
+.ms-like-directory-shell {
+  padding: 0;
+  background: #ffffff;
+}
+
+.scenario-directory-title-row {
+  box-sizing: border-box;
+  min-height: 33px;
+  height: 33px;
+  margin: 0;
+  padding: 3.5px 14px 4.5px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.scenario-directory-title-main {
+  gap: 8px;
+}
+
+.scenario-directory-title-main span {
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.scenario-directory-title-main small,
+.ms-like-directory-count {
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.scenario-module-tree {
+  padding: 3.5px 0 8px;
+}
+
+.scenario-module-tree .el-tree-node {
+  margin-bottom: 0;
+}
+
+.scenario-module-tree .el-tree-node__expand-icon {
+  padding: 0;
+  color: #c9cdd4;
+  font-size: 12px;
+}
+
+.scenario-module-tree .el-tree-node__expand-icon.is-leaf {
+  color: transparent;
+}
+
+.scenario-module-tree .el-tree-node__content {
+  min-height: 30px;
+  height: 30px;
+  padding-right: 10.5px;
+  border-radius: 0;
+  color: #4e5969;
+  font-size: 13px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.scenario-module-tree .el-tree-node__content:hover {
+  background: #fafbff;
+}
+
+.scenario-module-tree .el-tree-node.is-current > .el-tree-node__content {
+  background: #e8f3ff;
+  box-shadow: inset 0 0 0 1px rgba(22, 93, 255, 0.12);
+  color: #1d2129;
+}
+
+.ms-like-directory-node {
+  position: relative;
+  justify-content: flex-start;
+  gap: 5.25px;
+  min-height: 30px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ms-like-directory-main {
+  width: 100%;
+  gap: 5.25px;
+  padding-right: 18px;
+}
+
+.tree-node-folder-svg {
+  width: 13px;
+  height: 13px;
+  color: #ff7d00;
+}
+
+.tree-node-folder-svg.is-open {
+  color: #ff7d00;
+}
+
+.ms-like-directory-label {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.ms-like-directory-actions {
+  position: absolute;
+  right: 0;
+  width: 0;
+  height: 28px;
+  justify-content: flex-end;
+  gap: 0;
+  overflow: hidden;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ms-like-directory-node:hover .ms-like-directory-actions,
+.ms-like-directory-node:focus-within .ms-like-directory-actions,
+.scenario-module-tree .el-tree-node.is-current > .el-tree-node__content .ms-like-directory-actions {
+  width: auto;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ms-like-directory-node:hover .ms-like-directory-count,
+.ms-like-directory-node:focus-within .ms-like-directory-count,
+.scenario-module-tree .el-tree-node.is-current > .el-tree-node__content .ms-like-directory-count {
+  opacity: 0;
+}
+
+.ms-like-directory-actions .tree-icon-button,
+.scenario-directory-title-actions .tree-icon-button,
+.scenario-directory-collapse-button {
+  width: 18px;
+  height: 22px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #c9cdd4;
+}
+
+.ms-like-directory-actions .tree-icon-button:hover,
+.scenario-directory-title-actions .tree-icon-button:hover,
+.scenario-directory-collapse-button:hover {
+  background: transparent;
+  color: #4e5969;
+}
+
+.scenario-step-toolbar {
+  min-height: 36px;
+  padding: 0 16px;
+  background: #ffffff;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.scenario-step-toolbar .el-button--primary {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.scenario-step-tree {
+  margin: 10.5px 16px 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.scenario-step-node {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 40.5px;
+  padding: 9.5px 14px 9.5px 17px;
+}
+
+.scenario-step-node-left {
+  gap: 7px;
+}
+
+.scenario-step-drag-handle {
+  gap: 2.5px 2px;
+}
+
+.scenario-step-node-main {
+  align-items: center;
+  padding: 0 8px;
+}
+
+.scenario-step-title-row {
+  gap: 5.25px;
+}
+
+.scenario-step-type-badge {
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 3.5px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.scenario-step-method {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 3.5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.scenario-step-name-text,
+.scenario-step-name-button {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.scenario-step-node-actions {
+  gap: 1.75px;
+}
+
+.scenario-step-icon-action {
+  width: 21px;
+  height: 21px;
+  border-radius: 3.5px;
+  color: #c9cdd4;
+}
+
+.scenario-step-icon-action .el-icon,
+.scenario-step-icon-action svg {
+  width: 12px;
+  height: 12px;
+  font-size: 12px;
+}
+
+.scenario-step-action-glyph {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  align-items: center;
+  justify-content: center;
+  color: #c9cdd4;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 12px;
+}
+
+.scenario-step-icon-action:hover .scenario-step-action-glyph {
+  color: #86909c;
+}
+
+.scenario-step-name-edit-button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  color: #c9cdd4;
+}
+
+.scenario-figma-edit-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+}
+
+.scenario-step-tree + .el-dropdown {
+  display: block;
+  margin: 0 16px;
+}
+
+.scenario-step-add-row {
+  width: 100%;
+  height: 40.5px;
+  min-height: 40.5px;
+  margin: 0;
+  border-color: #e5e6eb;
+  border-radius: 0 0 8px 8px;
+  background: #ffffff;
+  color: #c9cdd4;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.scenario-step-add-row .el-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
 }

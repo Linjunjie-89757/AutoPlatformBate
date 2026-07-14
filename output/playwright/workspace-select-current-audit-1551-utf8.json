@@ -1,0 +1,301 @@
+[
+  {
+    "sel": ".workspace-select-page__panel",
+    "text": "AutoTest选择工作区你的账号下有 3 个工作区XX-MAN 最近访问 测试负责人电商平台 · 订单/风控全链路自动化8 名成员上次访问 今天 09:31KKRATOS测试工程师风控中台 · 规则引擎和策略测试12 名成员上次访问 3 天前MMINERVA只读访客数据平台 · BI 报表和数据质量测试5 名成员上次访问 7 天前 + 创建新工作区 或 申请加入其他工作区 不是你的账号？退出登录",
+    "rect": {
+      "x": 445.5,
+      "y": 127.5,
+      "w": 660,
+      "h": 607
+    },
+    "style": {
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "20px",
+      "color": "rgb(29, 33, 41)",
+      "padding": "0px",
+      "gap": "normal",
+      "border": "0px none rgb(29, 33, 41)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__brand",
+    "text": "AutoTest",
+    "rect": {
+      "x": 718.2,
+      "y": 127.5,
+      "w": 114.58,
+      "h": 66.5
+    },
+    "style": {
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "20px",
+      "color": "rgb(29, 33, 41)",
+      "padding": "0px 0px 35px",
+      "gap": "8.75px",
+      "border": "0px none rgb(29, 33, 41)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__heading",
+    "text": "选择工作区你的账号下有 3 个工作区",
+    "rect": {
+      "x": 702.78,
+      "y": 194,
+      "w": 145.42,
+      "h": 85.75
+    },
+    "style": {
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "20px",
+      "color": "rgb(29, 33, 41)",
+      "padding": "0px 0px 28px",
+      "gap": "normal",
+      "border": "0px none rgb(29, 33, 41)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__list",
+    "text": "XX-MAN 最近访问 测试负责人电商平台 · 订单/风控全链路自动化8 名成员上次访问 今天 09:31KKRATOS测试工程师风控中台 · 规则引擎和策略测试12 名成员上次访问 3 天前MMINERVA只读访客数据平台 · BI 报表和数据质量测试5 名成员上次访问 7 天前 + 创建新工作区 或 申请加入其他工作区",
+    "rect": {
+      "x": 445.5,
+      "y": 279.75,
+      "w": 660,
+      "h": 406.75
+    },
+    "style": {
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "20px",
+      "color": "rgb(29, 33, 41)",
+      "padding": "0px",
+      "gap": "10.5px",
+      "border": "0px none rgb(29, 33, 41)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__card",
+    "text": "XX-MAN 最近访问 测试负责人电商平台 · 订单/风控全链路自动化8 名成员上次访问 今天 09:31",
+    "rect": {
+      "x": 445.5,
+      "y": 279.75,
+      "w": 660,
+      "h": 107.75
+    },
+    "style": {
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "20px",
+      "color": "rgb(0, 0, 0)",
+      "padding": "20px 25px",
+      "gap": "14px",
+      "border": "1px solid rgb(229, 230, 235)",
+      "borderRadius": "14px",
+      "boxShadow": "rgba(0, 0, 0, 0.04) 0px 1px 2px 0px",
+      "backgroundColor": "rgb(255, 255, 255)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__avatar",
+    "text": "X",
+    "rect": {
+      "x": 471.5,
+      "y": 312.63,
+      "w": 42,
+      "h": 42
+    },
+    "style": {
+      "fontSize": "16px",
+      "fontWeight": "700",
+      "lineHeight": "24px",
+      "color": "rgb(255, 255, 255)",
+      "padding": "0px",
+      "gap": "normal",
+      "border": "0px none rgb(255, 255, 255)",
+      "borderRadius": "11px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "linear-gradient(135deg, rgb(22, 93, 255) 0%, rgba(22, 93, 255, 0.733) 100%)"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__title-row strong",
+    "text": "X-MAN",
+    "rect": {
+      "x": 527.5,
+      "y": 300.75,
+      "w": 56.08,
+      "h": 22.5
+    },
+    "style": {
+      "fontSize": "15px",
+      "fontWeight": "600",
+      "lineHeight": "22.5px",
+      "color": "rgb(29, 33, 41)",
+      "padding": "0px",
+      "gap": "normal",
+      "border": "0px none rgb(29, 33, 41)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__badge--primary",
+    "text": "最近访问",
+    "rect": {
+      "x": 590.58,
+      "y": 302.75,
+      "w": 54,
+      "h": 18.5
+    },
+    "style": {
+      "fontSize": "10px",
+      "fontWeight": "500",
+      "lineHeight": "15px",
+      "color": "rgb(22, 93, 255)",
+      "padding": "1.75px 7px",
+      "gap": "normal",
+      "border": "0px none rgb(22, 93, 255)",
+      "borderRadius": "999px",
+      "boxShadow": "none",
+      "backgroundColor": "rgb(232, 243, 255)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__badge:not(.workspace-select-page__badge--primary)",
+    "text": "测试负责人",
+    "rect": {
+      "x": 651.58,
+      "y": 302.75,
+      "w": 64,
+      "h": 18.5
+    },
+    "style": {
+      "fontSize": "10px",
+      "fontWeight": "500",
+      "lineHeight": "15px",
+      "color": "rgb(134, 144, 156)",
+      "padding": "1.75px 7px",
+      "gap": "normal",
+      "border": "0px none rgb(134, 144, 156)",
+      "borderRadius": "999px",
+      "boxShadow": "none",
+      "backgroundColor": "rgb(242, 243, 245)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__description",
+    "text": "电商平台 · 订单/风控全链路自动化",
+    "rect": {
+      "x": 527.5,
+      "y": 323.25,
+      "w": 182.53,
+      "h": 21.5
+    },
+    "style": {
+      "fontSize": "12px",
+      "fontWeight": "500",
+      "lineHeight": "18px",
+      "color": "rgb(134, 144, 156)",
+      "padding": "3.5px 0px 0px",
+      "gap": "normal",
+      "border": "0px none rgb(134, 144, 156)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__meta",
+    "text": "8 名成员上次访问 今天 09:31",
+    "rect": {
+      "x": 527.5,
+      "y": 344.75,
+      "w": 160.47,
+      "h": 21.75
+    },
+    "style": {
+      "fontSize": "11px",
+      "fontWeight": "500",
+      "lineHeight": "16.5px",
+      "color": "rgb(201, 205, 212)",
+      "padding": "5.25px 0px 0px",
+      "gap": "14px",
+      "border": "0px none rgb(201, 205, 212)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__create",
+    "text": "+ 创建新工作区 或 申请加入其他工作区",
+    "rect": {
+      "x": 445.5,
+      "y": 634.5,
+      "w": 660,
+      "h": 52
+    },
+    "style": {
+      "fontSize": "13px",
+      "fontWeight": "500",
+      "lineHeight": "19.5px",
+      "color": "rgb(134, 144, 156)",
+      "padding": "15px 25px",
+      "gap": "8px",
+      "border": "1px dashed rgb(229, 230, 235)",
+      "borderRadius": "14px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  },
+  {
+    "sel": ".workspace-select-page__footer",
+    "text": "不是你的账号？退出登录",
+    "rect": {
+      "x": 701.5,
+      "y": 686.5,
+      "w": 148,
+      "h": 48
+    },
+    "style": {
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "18px",
+      "color": "rgb(201, 205, 212)",
+      "padding": "28px 0px 0px",
+      "gap": "4px",
+      "border": "0px none rgb(201, 205, 212)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "backgroundImage": "none"
+    }
+  }
+]

@@ -45,6 +45,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   loaded: [items: DefectSummaryItem[]]
+  'selection-change': [count: number]
 }>()
 
 const router = useRouter()
@@ -60,6 +61,7 @@ const detailDrawerVisible = ref(false)
 const detailDefectId = ref<number | null>(null)
 const activeDetailRowId = ref<number | null>(null)
 const hoveredRowId = ref<number | null>(null)
+const selectedDefectIds = ref<number[]>([])
 const assigningDefectId = ref<number | null>(null)
 const transitionDialogVisible = ref(false)
 const transitioningDefect = ref<DefectSummaryItem | null>(null)
@@ -93,14 +95,15 @@ const activeDetailIndex = computed(() => {
   const index = pagedDefects.value.findIndex(item => item.id === detailDefectId.value)
   return index >= 0 ? index : null
 })
+const selectedDefects = computed(() => defects.value.filter(item => selectedDefectIds.value.includes(item.id)))
 const tableColumnDefinitions = computed<DefectTableColumnDefinition[]>(() => [
   { key: 'select', label: '', width: 43.5, required: true, defaultVisible: true },
   { key: 'bugNo', label: '缺陷 ID', width: 130.578, required: true, defaultVisible: true },
   { key: 'title', label: '缺陷标题', minWidth: 362.766, required: true, defaultVisible: true, showOverflowTooltip: true },
   { key: 'severity', label: '严重程度', width: 116.078, required: true, defaultVisible: true },
-  { key: 'priority', label: '优先级', width: 101.562, defaultVisible: true },
+  { key: 'priority', label: '优先级', width: 101.562, required: true, defaultVisible: true },
   { key: 'status', label: '状态', width: 116.078, required: true, defaultVisible: true },
-  { key: 'assigneeName', label: '负责人', width: 101.562, defaultVisible: true, showOverflowTooltip: true },
+  { key: 'assigneeName', label: '负责人', width: 101.562, required: true, defaultVisible: true, showOverflowTooltip: true },
   { key: 'workspaceName', label: '所属模块', width: 130.578, required: true, defaultVisible: true, showOverflowTooltip: true },
   { key: 'updatedAt', label: '更新时间', width: 210.156, required: true, defaultVisible: true },
   { key: 'tags', label: '标签', width: 190, defaultVisible: false, showOverflowTooltip: true },
@@ -184,6 +187,26 @@ function isRowHighlighted(rowId: number) {
   return hoveredRowId.value === rowId || activeDetailRowId.value === rowId
 }
 
+function isDefectSelected(rowId: number) {
+  return selectedDefectIds.value.includes(rowId)
+}
+
+function toggleDefectSelection(rowId: number) {
+  selectedDefectIds.value = isDefectSelected(rowId)
+    ? selectedDefectIds.value.filter(id => id !== rowId)
+    : [...selectedDefectIds.value, rowId]
+  emit('selection-change', selectedDefectIds.value.length)
+}
+
+function clearDefectSelection() {
+  if (!selectedDefectIds.value.length) {
+    return
+  }
+
+  selectedDefectIds.value = []
+  emit('selection-change', 0)
+}
+
 function normalizePageNo() {
   if (totalPages.value > 0 && pageNo.value > totalPages.value) {
     pageNo.value = totalPages.value
@@ -232,6 +255,8 @@ async function loadDefects() {
     })
     if (requestSeq === loadRequestSeq) {
       defects.value = Array.isArray(page.items) ? page.items : []
+      selectedDefectIds.value = selectedDefectIds.value.filter(id => defects.value.some(item => item.id === id))
+      emit('selection-change', selectedDefectIds.value.length)
       pageNo.value = page.pageNo
       total.value = filteredDefects.value.length
       totalPages.value = getClientTotalPages(filteredDefects.value.length)
@@ -368,6 +393,53 @@ async function deleteRowDefect(item: DefectSummaryItem) {
   }
 }
 
+function batchAssignSelectedDefects() {
+  if (!selectedDefects.value.length) {
+    return
+  }
+
+  ElMessage.info('批量指派接口暂未接入，已保留 Figma 批量操作入口')
+}
+
+function batchCloseSelectedDefects() {
+  if (!selectedDefects.value.length) {
+    return
+  }
+
+  ElMessage.info('批量关闭接口暂未接入，已保留 Figma 批量操作入口')
+}
+
+async function deleteSelectedDefects() {
+  const targets = selectedDefects.value
+  if (!targets.length || deletingDefectId.value !== null) {
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(`确认删除已选 ${targets.length} 个缺陷吗？删除后不可恢复。`, '删除缺陷', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger',
+    })
+
+    for (const item of targets) {
+      deletingDefectId.value = item.id
+      await defectApi.deleteDefect(props.workspaceCode, item.id)
+    }
+    ElMessage.success('已删除选中缺陷')
+    clearDefectSelection()
+    await loadDefects()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    deletingDefectId.value = null
+  }
+}
+
 async function submitTransitionDefect(payload: TransitionDefectPayload) {
   if (!transitioningDefect.value || transitioningDefectId.value !== null || assigningDefectId.value !== null) {
     return
@@ -451,6 +523,9 @@ onMounted(() => {
 defineExpose({
   reload: loadDefects,
   openCreateDialog,
+  batchAssignSelectedDefects,
+  batchCloseSelectedDefects,
+  deleteSelectedDefects,
 })
 </script>
 
@@ -514,11 +589,15 @@ defineExpose({
                   :key="`${row.id}-${column.key}`"
                   :class="['defect-list-panel__cell', `defect-list-panel__cell--${column.key}`]"
                 >
-                  <span
+                  <input
                     v-if="column.key === 'select'"
+                    type="checkbox"
                     class="defect-list-panel__checkbox"
-                    aria-hidden="true"
-                  />
+                    :checked="isDefectSelected(row.id)"
+                    :aria-label="isDefectSelected(row.id) ? '取消选择缺陷' : '选择缺陷'"
+                    @change.stop="toggleDefectSelection(row.id)"
+                    @click.stop
+                  >
 
                   <button
                     v-else-if="column.key === 'bugNo'"
@@ -865,12 +944,12 @@ defineExpose({
 }
 
 .defect-list-panel__checkbox {
-  display: block;
   width: 12.25px;
   height: 12.25px;
-  border: 1px solid #767676;
-  border-radius: 2px;
-  background: #ffffff;
+  flex: 0 0 12.25px;
+  margin: 0;
+  accent-color: #f53f3f;
+  cursor: pointer;
 }
 
 .defect-list-panel__table-actions {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, MagicStick, MoreFilled } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, CopyDocument, Delete, MagicStick, MoreFilled } from '@element-plus/icons-vue'
 import ApiCodeEditor from './ApiCodeEditor.vue'
 
 interface ProcessorOption {
@@ -103,35 +103,42 @@ function activeIndex() {
 function setMoreSettingsVisible(index: number, visible: boolean) {
   emit('setMoreSettingsVisible', props.activeProcessor?.id, index, visible)
 }
+
+function processorTone(type?: string | null) {
+  if (type === 'SQL') return { label: 'SQL', color: '#0E42D2', bg: '#E8F3FF' }
+  if (type === 'TIME_WAITING') return { label: '等待', color: '#876800', bg: '#FFFBE8' }
+  if (type === 'EXTRACT') return { label: '提取', color: '#00B42A', bg: '#E8FFEA' }
+  return { label: '脚本', color: '#7816FF', bg: '#F5E8FF' }
+}
+
+function toggleProcessor(processor: ApiProcessorPanelRow) {
+  processor.enabled = !processor.enabled
+  emit('dirty')
+}
+
+function addLabel() {
+  return props.stage === 'pre' ? '添加处理器' : '添加处理器'
+}
 </script>
 
 <template>
   <div class="api-processor-panel">
-    <div class="api-advanced-toolbar">
-      <div>
-        <strong>{{ stage === 'pre' ? '前置处理' : '后置处理' }}</strong>
-        <span>{{ stage === 'pre' ? '请求发送前执行' : '响应返回后执行' }}</span>
-      </div>
-      <el-dropdown trigger="click" @command="add">
-        <button type="button" class="api-sidebar-primary">添加处理器</button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item v-for="item in typeOptions" :key="item.value" :command="item.value">{{ item.label }}</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-    </div>
     <div class="api-processor-editor">
       <aside class="api-processor-sidebar">
         <div class="api-processor-toolbar">
           <el-dropdown trigger="click" @command="add">
-            <button type="button" class="api-legacy-primary">添加</button>
+            <button type="button" class="api-legacy-primary">
+              <span class="api-button-plus">+</span>
+              {{ addLabel() }}
+              <span class="api-button-chevron">⌄</span>
+            </button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item v-for="item in typeOptions" :key="item.value" :command="item.value">{{ item.label }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+          <span class="api-processor-count">{{ rows.length }} 项</span>
         </div>
         <div v-if="rows.length" class="api-processor-sidebar-list">
           <button
@@ -142,15 +149,39 @@ function setMoreSettingsVisible(index: number, visible: boolean) {
             @click="emit('select', processor)"
           >
             <span class="api-processor-list-item__main">
-              <el-switch v-model="processor.enabled" size="small" @click.stop @change="emit('dirty')" />
+              <span
+                :class="['api-figma-switch', { 'is-on': processor.enabled !== false }]"
+                role="switch"
+                :aria-checked="processor.enabled !== false"
+                @click.stop="toggleProcessor(processor)"
+              >
+                <span></span>
+              </span>
               <span class="api-processor-list-copy">
-                <span class="api-processor-list-title">{{ processor.name || processorDefaultName(stage, processor.processorType) }}</span>
-                <span class="api-processor-list-meta">{{ processorTypeLabel(processor.processorType) }}</span>
+                <span class="api-processor-list-row">
+                  <span
+                    class="api-processor-type-badge"
+                    :style="{ color: processorTone(processor.processorType).color, backgroundColor: processorTone(processor.processorType).bg }"
+                  >
+                    {{ processorTone(processor.processorType).label }}
+                  </span>
+                  <span class="api-processor-list-title">{{ processor.name || processorDefaultName(stage, processor.processorType) }}</span>
+                </span>
               </span>
             </span>
             <span class="api-processor-list-actions">
-              <el-button text :icon="ArrowUp" :disabled="index === 0" @click.stop="emit('move', stage, index, -1)" />
-              <el-button text :icon="ArrowDown" :disabled="index === rows.length - 1" @click.stop="emit('move', stage, index, 1)" />
+              <button type="button" class="api-processor-list-action" :disabled="index === 0" aria-label="上移" title="上移" @click.stop="emit('move', stage, index, -1)">
+                <el-icon><ArrowUp /></el-icon>
+              </button>
+              <button type="button" class="api-processor-list-action" :disabled="index === rows.length - 1" aria-label="下移" title="下移" @click.stop="emit('move', stage, index, 1)">
+                <el-icon><ArrowDown /></el-icon>
+              </button>
+              <button type="button" class="api-processor-list-action" aria-label="复制" title="复制" @click.stop="emit('copy', stage, index)">
+                <el-icon><CopyDocument /></el-icon>
+              </button>
+              <button type="button" class="api-processor-list-action is-danger" aria-label="删除" title="删除" @click.stop="emit('remove', stage, index)">
+                <el-icon><Delete /></el-icon>
+              </button>
             </span>
           </button>
         </div>
@@ -159,24 +190,50 @@ function setMoreSettingsVisible(index: number, visible: boolean) {
 
       <section class="api-processor-detail">
         <template v-if="activeProcessor">
-          <div class="api-processor-detail-header">
-            <div class="api-processor-detail-fields">
+          <div class="api-processor-name-row">
+            <label class="api-figma-field api-figma-field--fluid">
+              <span>处理器名称</span>
               <el-input v-model="activeProcessor.name" placeholder="处理器名称" @input="emit('dirty')" />
-              <el-tag size="small" effect="plain">{{ processorTypeLabel(activeProcessor.processorType) }}</el-tag>
-            </div>
-            <div class="api-processor-detail-actions">
+            </label>
+            <div class="api-processor-name-actions">
               <button type="button" @click="emit('copy', stage, activeIndex())">复制</button>
               <button type="button" class="api-row-remove" @click="emit('remove', stage, activeIndex())">删除</button>
             </div>
+            <label class="api-figma-enable">
+              <span
+                :class="['api-figma-switch', { 'is-on': activeProcessor.enabled !== false }]"
+                role="switch"
+                :aria-checked="activeProcessor.enabled !== false"
+                @click="toggleProcessor(activeProcessor)"
+              >
+                <span></span>
+              </span>
+              <em>启用</em>
+            </label>
           </div>
 
           <template v-if="activeProcessor.processorType === 'SCRIPT'">
-            <div class="api-processor-editor-actions">
-              <span class="api-processor-language-tag">JavaScript</span>
-              <button type="button" @click="activeProcessor.script = ''; emit('dirty')">清空</button>
-              <button type="button" @click="activeProcessor.script = (activeProcessor.script || '').trim(); emit('dirty')">格式化</button>
+            <div class="api-processor-script-head">
+              <span>脚本内容</span>
+              <div class="api-processor-script-actions">
+                <button type="button" @click="activeProcessor.script = ''; emit('dirty')">清空</button>
+                <button type="button" @click="activeProcessor.script = (activeProcessor.script || '').trim(); emit('dirty')">格式化</button>
+              </div>
             </div>
-            <ApiCodeEditor v-model="activeProcessor.script" height="360px" language="javascript" placeholder="请输入 JavaScript 脚本" @change="emit('dirty')" />
+            <ApiCodeEditor
+              v-model="activeProcessor.script"
+              height="253px"
+              language="javascript"
+              placeholder="请输入 JavaScript 脚本"
+              :show-format-button="false"
+              theme-variant="dark"
+              @change="emit('dirty')"
+            >
+              <template #toolbar>
+                <span class="api-processor-language-tag">JavaScript</span>
+                <span class="api-processor-api-chip">setVar / getVar / request / response / log / fail</span>
+              </template>
+            </ApiCodeEditor>
             <div class="api-processor-hint">可使用 setVar / getVar / removeVar / log / fail / request / response。</div>
           </template>
 
@@ -187,7 +244,19 @@ function setMoreSettingsVisible(index: number, visible: boolean) {
               <label><span>按列存储变量</span><el-input v-model="activeProcessor.variableNames" placeholder="id,email" @input="emit('dirty')" /></label>
               <label><span>完整结果变量</span><el-input v-model="activeProcessor.resultVariable" placeholder="resultJson" @input="emit('dirty')" /></label>
             </div>
-            <ApiCodeEditor v-model="activeProcessor.sql" height="260px" language="sql" placeholder="请输入 SQL 语句" @change="emit('syncScript', activeProcessor)" />
+            <ApiCodeEditor
+              v-model="activeProcessor.sql"
+              height="253px"
+              language="sql"
+              placeholder="请输入 SQL 语句"
+              :show-format-button="false"
+              theme-variant="dark"
+              @change="emit('syncScript', activeProcessor)"
+            >
+              <template #toolbar>
+                <span class="api-processor-language-tag">SQL</span>
+              </template>
+            </ApiCodeEditor>
             <div class="api-sql-extract-table">
               <div class="api-sql-extract-table__header"><span>变量名</span><span>列名</span><span></span></div>
               <div v-for="(param, sqlParamIndex) in normalizeSqlExtractParams(activeProcessor.extractParams)" :key="`${activeProcessor.id}-sql-${sqlParamIndex}`" class="api-sql-extract-table__row">
@@ -243,7 +312,10 @@ function setMoreSettingsVisible(index: number, visible: boolean) {
             <div class="api-processor-form-row"><span class="api-processor-form-label">等待时长(ms)</span><el-input-number v-model="activeProcessor.delayMs" :min="1" :max="600000" :step="100" @change="emit('dirty')" /></div>
           </template>
 
-          <el-input v-model="activeProcessor.description" placeholder="说明" @input="emit('dirty')" />
+          <label class="api-figma-field">
+            <span>说明</span>
+            <el-input v-model="activeProcessor.description" placeholder="选填" @input="emit('dirty')" />
+          </label>
         </template>
         <div v-else class="api-processor-empty api-processor-empty--inline">请选择一个处理器进行编辑</div>
       </section>
@@ -444,5 +516,433 @@ function setMoreSettingsVisible(index: number, visible: boolean) {
 .api-sql-extract-table__row {
   min-height: 34.5px;
   border-color: #e5e6eb;
+}
+
+/* Figma node 149:7707 processing tabs */
+.api-processor-panel {
+  display: flex;
+  min-height: 0;
+  padding: 0;
+}
+
+.api-processor-editor {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  height: 363px;
+  min-height: 363px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.api-processor-sidebar {
+  border: 0;
+  border-right: 1px solid #e5e6eb;
+  border-radius: 0;
+  background: #fafafa;
+}
+
+.api-processor-detail {
+  height: 363px;
+  min-height: 363px;
+  padding: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.api-processor-toolbar {
+  height: 39.5px;
+  gap: 7px;
+  padding: 7px 10.5px 8px;
+  background: #fafafa;
+}
+
+.api-legacy-primary {
+  display: inline-flex;
+  width: auto;
+  height: 24.5px;
+  align-items: center;
+  gap: 5.25px;
+  padding: 0 8.75px;
+  border: 0;
+  border-radius: 7px;
+  background: #165dff;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-button-plus {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.api-button-chevron {
+  font-size: 10px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.api-processor-count {
+  color: #c9cdd4;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.api-processor-sidebar-list {
+  padding: 3.5px;
+  gap: 0;
+}
+
+.api-processor-list-item {
+  width: 100%;
+  min-height: 34.5px;
+  margin: 0;
+  padding: 8px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.api-processor-list-item:hover {
+  background: #f2f3f5;
+}
+
+.api-processor-list-item.is-active {
+  border-color: rgba(22, 93, 255, 0.13);
+  background: #eef3ff;
+}
+
+.api-processor-list-item__main {
+  gap: 7px;
+}
+
+.api-processor-list-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5.25px;
+}
+
+.api-processor-type-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  height: 18.5px;
+  padding: 1.75px 5.25px;
+  border-radius: 3.5px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.api-processor-list-title {
+  min-width: 0;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-processor-list-item.is-active .api-processor-list-title {
+  color: #165dff;
+}
+
+.api-processor-list-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 1.75px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.api-processor-list-item:hover .api-processor-list-actions {
+  opacity: 1;
+}
+
+.api-processor-list-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 3.5px;
+  background: transparent;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.api-processor-list-action .el-icon {
+  width: 10px;
+  height: 10px;
+  font-size: 10px;
+}
+
+.api-processor-list-action:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.api-processor-list-action.is-danger {
+  color: #f53f3f;
+}
+
+.api-processor-list-action:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.api-processor-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10.5px;
+}
+
+.api-processor-name-actions,
+.api-processor-script-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.api-processor-name-actions {
+  padding-top: 17.5px;
+}
+
+.api-processor-name-actions button,
+.api-processor-script-actions button {
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid #e5e6eb;
+  border-radius: 5.25px;
+  background: #ffffff;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.api-processor-name-actions button {
+  border-color: transparent;
+  background: transparent;
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.api-processor-name-actions .api-row-remove {
+  color: #f53f3f;
+}
+
+.api-processor-script-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10.5px;
+  min-height: 22px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-figma-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5px;
+  width: 100%;
+}
+
+.api-figma-field--fluid {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.api-figma-field > span {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-figma-field :deep(.el-input__wrapper),
+.api-processor-detail-fields :deep(.el-input__wrapper),
+.api-processor-form-grid :deep(.el-input__wrapper),
+.api-processor-form-grid :deep(.el-select__wrapper) {
+  height: 28px;
+  min-height: 28px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px #e5e6eb;
+}
+
+.api-figma-field :deep(.el-input__inner),
+.api-processor-detail-fields :deep(.el-input__inner) {
+  height: 28px;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.api-figma-enable {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding-top: 17.5px;
+}
+
+.api-figma-enable em {
+  color: #4e5969;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 18px;
+}
+
+.api-figma-switch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 14px;
+  border-radius: 999px;
+  background: #c9cdd4;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+
+.api-figma-switch > span {
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 1px 2px rgba(0, 0, 0, .1);
+  transition: transform .15s ease;
+}
+
+.api-figma-switch.is-on {
+  background: #165dff;
+}
+
+.api-figma-switch.is-on > span {
+  transform: translateX(14px);
+}
+
+.api-row-remove {
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.api-row-remove {
+  color: #f53f3f;
+}
+
+.api-processor-language-tag {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #7c7c9a;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.api-processor-api-chip {
+  margin-left: auto;
+  padding: 1.75px 5.25px;
+  border-radius: 3.5px;
+  background: #2d2d3f;
+  color: #7c7c9a;
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.api-processor-hint {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.api-processor-form-grid {
+  gap: 10.5px;
+}
+
+.api-processor-form-grid label {
+  gap: 3.5px;
+}
+
+.api-processor-extract-grid,
+.api-sql-extract-table {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-color: #e5e6eb;
+  border-radius: 7px;
+}
+
+.api-processor-extract-scroll {
+  overflow-x: hidden;
+  padding-bottom: 0;
+}
+
+.api-processor-extract-header,
+.api-processor-extract-row {
+  grid-template-columns: 112px 112px 96px 92px 82px minmax(0, 1fr) 52px;
+  gap: 7px;
+  padding: 7px 10.5px;
+}
+
+.api-processor-extract-header,
+.api-sql-extract-table__header {
+  min-height: 31px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-processor-extract-row {
+  min-height: 34.5px;
+  border-color: #e5e6eb;
+}
+
+.api-processor-extract-row > *,
+.api-sql-extract-table__row > * {
+  min-width: 0;
+}
+
+.api-processor-extract-actions {
+  min-width: 0;
+  min-height: 28px;
+  gap: 1.75px;
+}
+
+.api-processor-extract-more {
+  width: 24px;
+  height: 24px;
+  border-radius: 3.5px;
+}
+
+.api-processor-extract-delete {
+  min-width: 0;
+  font-size: 11px;
 }
 </style>

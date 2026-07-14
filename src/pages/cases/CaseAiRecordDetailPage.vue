@@ -2,18 +2,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type HistoryState } from 'vue-router'
 import {
-  ArrowDown,
   ArrowLeft,
   ArrowRight,
-  ArrowUp,
   Check,
   CircleClose,
   CopyDocument,
   Download,
   FolderOpened,
-  Memo,
   RefreshRight,
-  View,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -23,7 +19,6 @@ import { useSession } from '@/entities/session'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
-import AppCard from '@/shared/ui/app-card/AppCard.vue'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -225,6 +220,34 @@ const optimizedCaseCount = computed(() => detailCases.value.filter(item => item.
 const supplementedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'SUPPLEMENTED' || item.aiSource === 'REVIEW_SUPPLEMENTED').length)
 const confirmRequiredCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'CONFIRM_REQUIRED').length)
 const notRecommendedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'NOT_RECOMMENDED').length)
+const reviewedCaseCount = computed(() => detailCases.value.filter(item => (item.aiReviewStatus || 'PENDING') !== 'PENDING').length)
+const reviewPassedCaseCount = computed(() => detailCases.value.filter(item => ['APPROVED', 'OPTIMIZED', 'SUPPLEMENTED'].includes(item.aiReviewStatus || '')).length)
+const figmaDetailStats = computed(() => {
+  const generated = detailRecord.value?.generatedCount ?? detailCases.value.length
+  return [
+    { label: '生成总数', value: generated, tone: 'main' },
+    { label: '已评审', value: reviewedCaseCount.value || generated, tone: 'primary' },
+    { label: '评审通过', value: reviewPassedCaseCount.value, tone: 'success' },
+    { label: '已采纳', value: adoptedCaseCount.value || detailRecord.value?.savedCaseCount || 0, tone: 'success' },
+    { label: '已废弃', value: discardedCaseCount.value, tone: 'muted' },
+  ]
+})
+const figmaTimelineSteps = computed(() => {
+  const record = detailRecord.value
+  const currentStep = record?.currentStep ?? 4
+  const isCompleted = record?.status === 'COMPLETED'
+  const isFailed = record?.status === 'FAILED'
+  return [
+    { label: '任务创建', step: 1 },
+    { label: 'AI 生成', step: 2 },
+    { label: 'AI 评审', step: 3 },
+    { label: '完成', step: 4 },
+  ].map(item => ({
+    ...item,
+    done: isCompleted || currentStep >= item.step,
+    failed: isFailed && currentStep === item.step,
+  }))
+})
 const outputEvents = computed(() => [...(detailRecord.value?.events ?? [])].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0)))
 const showTaskOutputBoard = computed(() => Boolean(detailRecord.value && (
   detailRecord.value.status === 'FAILED'
@@ -592,7 +615,10 @@ function getOutputEventClass(level?: string | null) {
   return 'is-info'
 }
 
-function getFailureStageLabel(record: AiGenerationTaskItem) {
+function getFailureStageLabel(record: AiGenerationTaskItem | null | undefined) {
+  if (!record) {
+    return '当前阶段'
+  }
   const labelMap: Record<number, string> = {
     1: '任务创建',
     2: 'AI 生成用例',
@@ -602,13 +628,13 @@ function getFailureStageLabel(record: AiGenerationTaskItem) {
   return labelMap[record.currentStep ?? 0] || '当前阶段'
 }
 
-function getFailureSuggestions(record: AiGenerationTaskItem) {
+function getFailureSuggestions(record: AiGenerationTaskItem | null | undefined) {
   const list = [
     '先检查 AI 配置页里的生成模型和评审模型是否可用。',
     '如果需求过长，先精简需求描述，再重新生成。',
     '如果是模型波动，可直接点击“重新生成”再试一次。',
   ]
-  if (record.cancelRequested) {
+  if (record?.cancelRequested) {
     return ['当前任务已标记为取消，确认不需要继续生成后可关闭此记录。']
   }
   return list
@@ -681,6 +707,45 @@ function getAiReviewListClass(row: DetailCaseRow) {
   return map[row.aiReviewStatus || 'PENDING'] || 'status-neutral'
 }
 
+function getFigmaReviewLabel(row: DetailCaseRow) {
+  const map: Record<string, string> = {
+    APPROVED: '评审通过',
+    OPTIMIZED: '评审通过',
+    SUPPLEMENTED: '评审通过',
+    CONFIRM_REQUIRED: '建议确认',
+    NOT_RECOMMENDED: '评审未通过',
+    PENDING: '待评审',
+  }
+  return map[row.aiReviewStatus || 'PENDING'] || getAiReviewListLabel(row)
+}
+
+function getFigmaCaseTags(row: DetailCaseRow) {
+  return [
+    row.testAngle || row.sceneFocus || '主流程',
+    row.caseType || '功能',
+  ].filter(Boolean)
+}
+
+function getFigmaCaseSteps(row: DetailCaseRow) {
+  const normalized = row.steps?.trim()
+  if (!normalized) {
+    return ['暂无步骤']
+  }
+  return normalized
+    .split(/\r?\n|[；;]/)
+    .map(item => item.replace(/^\s*\d+[.、)]?\s*/, '').trim())
+    .filter(Boolean)
+    .slice(0, 4)
+}
+
+function getFigmaReviewComment(row: DetailCaseRow) {
+  return row.aiReviewSummary || row.reviewComment || row.optimizationReason || row.supplementReason || row.coverageGap || 'AI 评审暂未返回说明。'
+}
+
+function getFigmaReviewSuggestion(row: DetailCaseRow) {
+  return row.warnings?.[0] || row.optimizationReason || row.supplementReason || ''
+}
+
 function getAiSourceLabel(row: DetailCaseRow | null | undefined) {
   const source = row?.aiSource || 'INITIAL'
   const map: Record<string, string> = {
@@ -698,8 +763,8 @@ function getCaseSavedDirectoryName(row: DetailCaseRow) {
   return detailRecord.value?.directoryName || '未采纳'
 }
 
-function getDefaultDirectoryPath(record: AiGenerationTaskItem) {
-  if (!record.directoryName) {
+function getDefaultDirectoryPath(record: AiGenerationTaskItem | null | undefined) {
+  if (!record?.directoryName) {
     return '未设置默认路径'
   }
   const workspaceLabel = record.workspaceName || record.workspaceCode
@@ -1290,6 +1355,13 @@ function openCasePreview(row: DetailCaseRow) {
   previewVisible.value = true
 }
 
+function openCasePreviewForEdit(row: DetailCaseRow) {
+  openCasePreview(row)
+  void nextTick(() => {
+    caseEditing.value = true
+  })
+}
+
 function moveCasePreview(delta: number) {
   const nextIndex = activeCaseCursor.value + delta
   if (nextIndex < 0 || nextIndex >= detailCases.value.length) {
@@ -1506,313 +1578,178 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else-if="detailRecord">
-      <div class="case-ai-record-detail-page__header">
-        <div class="case-ai-record-detail-page__header-row">
-          <el-button class="case-ai-record-detail-page__back-button" text :icon="ArrowLeft" @click="goBack">
-            返回记录页
-          </el-button>
-          <div class="case-ai-record-detail-page__header-right">
-            <div class="case-ai-record-detail-page__path">
-              <span class="case-ai-record-detail-page__path-label">当前采纳保存路径：</span>
-              <span class="case-ai-record-detail-page__path-value">{{ getDefaultDirectoryPath(detailRecord) }}</span>
-              <el-button class="case-ai-record-detail-page__path-edit" text @click="openPathDialog">修改保存路径</el-button>
-            </div>
-            <div class="case-ai-record-detail-page__header-actions">
-              <el-button :icon="View" @click="openProcessDialog">查看流程</el-button>
-              <el-button
-                v-if="detailRecord.status === 'FAILED'"
-                type="warning"
-                :icon="RefreshRight"
-                @click="retryTask"
-              >
-                重新生成
-              </el-button>
-              <el-button type="primary" :icon="Download" @click="exportExcel">导出 Excel</el-button>
-            </div>
-          </div>
-        </div>
+      <div class="case-ai-record-detail-page__figma-breadcrumb">
+        <button type="button" class="case-ai-record-detail-page__figma-back" @click="goBack">
+          <el-icon><ArrowLeft /></el-icon>
+          AI 生成记录
+        </button>
+        <span>/</span>
+        <strong>任务详情</strong>
       </div>
 
-      <AppCard class="case-ai-record-detail-page__summary-card">
-        <button class="case-ai-record-detail-page__summary-toggle" type="button" @click="requirementExpanded = !requirementExpanded">
-          <div class="case-ai-record-detail-page__summary-header">
-            <div class="case-ai-record-detail-page__summary-title-row">
-              <el-icon class="case-ai-record-detail-page__summary-icon"><Memo /></el-icon>
-              <span class="case-ai-record-detail-page__summary-title">{{ detailRecord.requirementTitle }}</span>
-              <span class="case-ai-record-detail-page__summary-tip">点击展开查看完整需求内容</span>
+      <section class="case-ai-record-detail-page__figma-summary">
+        <div class="case-ai-record-detail-page__figma-summary-head">
+          <div class="case-ai-record-detail-page__figma-title-block">
+            <div class="case-ai-record-detail-page__figma-tags">
+              <code>{{ detailRecord.taskId }}</code>
+              <span class="case-ai-record-detail-page__status-pill" :class="getStatusClass(detailRecord.status)">
+                {{ getStatusLabel(detailRecord.status) }}
+              </span>
             </div>
-            <el-icon class="case-ai-record-detail-page__summary-arrow">
-              <component :is="requirementExpanded ? ArrowUp : ArrowDown" />
-            </el-icon>
+            <h2>{{ detailRecord.requirementTitle }}</h2>
           </div>
-        </button>
-
-        <div v-if="requirementExpanded" class="case-ai-record-detail-page__summary-expanded">
-          <div class="case-ai-record-detail-page__summary-content-shell">
-            <div class="case-ai-record-detail-page__summary-content">{{ detailRecord.requirementContent || '-' }}</div>
-          </div>
-          <div class="case-ai-record-detail-page__summary-actions">
-            <el-button :icon="CopyDocument" @click="copyRequirementContent">复制需求描述</el-button>
-          </div>
+          <button type="button" class="case-ai-record-detail-page__figma-regenerate" @click="retryTask">
+            <el-icon><RefreshRight /></el-icon>
+            重新生成
+          </button>
         </div>
-      </AppCard>
-
-      <AppCard v-if="showTaskOutputBoard" class="case-ai-record-detail-page__output-card" :class="{ 'is-failed': detailRecord.status === 'FAILED' }">
-        <button class="case-ai-record-detail-page__output-toggle" type="button" @click="outputExpanded = !outputExpanded">
-          <div class="case-ai-record-detail-page__output-header">
-          <div>
-            <div class="case-ai-record-detail-page__output-title">
-              {{ detailRecord.status === 'FAILED' ? '任务失败详情' : detailRecord.status === 'COMPLETED' ? 'AI 输出记录' : '实时输出' }}
-            </div>
-            <div v-if="detailRecord.status !== 'COMPLETED' && detailRecord.status !== 'FAILED'" class="case-ai-record-detail-page__output-subtitle">
-              {{ detailRecord.stepMessage || '等待任务执行...' }}
-            </div>
-          </div>
-            <div class="case-ai-record-detail-page__output-header-right">
-              <div class="case-ai-record-detail-page__output-pills">
-                <span class="case-ai-record-detail-page__status-pill" :class="getStatusClass(detailRecord.status)">
-                  {{ getStatusLabel(detailRecord.status) }}
-                </span>
-                <span
-                  v-if="detailRecord.outputMode === 'STREAM' && ['PENDING', 'GENERATING', 'REVIEWING'].includes(detailRecord.status)"
-                  class="case-ai-record-detail-page__status-pill"
-                  :class="getOutputConnectionClass()"
-                >
-                  {{ outputConnectionLabel }}
-                </span>
-              </div>
-              <el-icon class="case-ai-record-detail-page__output-arrow">
-                <component :is="outputExpanded ? ArrowUp : ArrowDown" />
-              </el-icon>
-            </div>
-          </div>
-        </button>
-
-        <div v-if="outputExpanded" class="case-ai-record-detail-page__output-expanded">
-          <template v-if="detailRecord.status === 'FAILED'">
-          <div class="case-ai-record-detail-page__failure-grid">
-            <div class="case-ai-record-detail-page__failure-item">
-              <div class="case-ai-record-detail-page__failure-label">失败阶段</div>
-              <div class="case-ai-record-detail-page__failure-value">{{ getFailureStageLabel(detailRecord) }}</div>
-            </div>
-            <div class="case-ai-record-detail-page__failure-item">
-              <div class="case-ai-record-detail-page__failure-label">结束时间</div>
-              <div class="case-ai-record-detail-page__failure-value">{{ formatDateTime(detailRecord.finishedAt) }}</div>
-            </div>
-            <div class="case-ai-record-detail-page__failure-item case-ai-record-detail-page__failure-item--full">
-              <div class="case-ai-record-detail-page__failure-label">失败原因</div>
-              <div class="case-ai-record-detail-page__failure-value case-ai-record-detail-page__failure-value--danger">
-                {{ detailRecord.errorMessage || detailRecord.stepMessage || '-' }}
-              </div>
-            </div>
-            <div class="case-ai-record-detail-page__failure-item case-ai-record-detail-page__failure-item--full">
-              <div class="case-ai-record-detail-page__failure-label">建议处理</div>
-              <ul class="case-ai-record-detail-page__failure-list">
-                <li v-for="item in getFailureSuggestions(detailRecord)" :key="item">{{ item }}</li>
-              </ul>
-            </div>
-          </div>
-          </template>
-
-          <template v-else>
-          <div class="case-ai-record-detail-page__output-meta">
-            <span>输出模式：{{ getOutputModeLabel(detailRecord.outputMode) }}</span>
-            <span>生成用例：{{ detailRecord.generatedCount ?? 0 }}</span>
-            <span>已采纳：{{ detailRecord.savedCaseCount ?? 0 }}</span>
-            <span>生成模型：{{ formatModelDisplay(generationModelInfo.provider, generationModelInfo.model) }}</span>
-            <span v-if="reviewModelInfo.provider || reviewModelInfo.model">评审模型：{{ formatModelDisplay(reviewModelInfo.provider, reviewModelInfo.model) }}</span>
-          </div>
-          <div class="case-ai-record-detail-page__output-body">
-            <div class="case-ai-record-detail-page__timeline">
-              <div
-                v-for="item in outputTimeline"
-                :key="item.key"
-                class="case-ai-record-detail-page__timeline-item"
-                :class="{ 'is-active': item.active, 'is-done': item.done }"
-              >
-                <span class="case-ai-record-detail-page__timeline-dot" />
-                <div class="case-ai-record-detail-page__timeline-main">
-                  <div class="case-ai-record-detail-page__timeline-label">{{ item.label }}</div>
-                  <div class="case-ai-record-detail-page__timeline-meta">{{ item.meta }}</div>
-                </div>
-              </div>
-            </div>
-            <div ref="outputLogRef" class="case-ai-record-detail-page__output-log" @scroll="handleOutputLogScroll">
-              <div v-if="!outputEvents.length" class="case-ai-record-detail-page__output-empty">等待任务输出事件...</div>
-              <div
-                v-for="event in outputEvents"
-                :key="event.id"
-                class="case-ai-record-detail-page__output-row"
-                :class="getOutputEventClass(event.level)"
-              >
-                <span class="case-ai-record-detail-page__output-time">{{ formatTime(event.createdAt) }}</span>
-                <span class="case-ai-record-detail-page__output-message">{{ formatOutputEventMessage(event) }}</span>
-              </div>
-            </div>
-          </div>
-          </template>
-        </div>
-      </AppCard>
-
-      <AppCard class="case-ai-record-detail-page__toolbar-card">
-        <div class="case-ai-record-detail-page__toolbar-row">
-          <div class="case-ai-record-detail-page__toolbar-meta">
-            <span>最终用例数：{{ detailRecord.generatedCases.length }}</span>
-            <span>初始生成：{{ initialCaseCount }}</span>
-            <span>已优化：{{ optimizedCaseCount }}</span>
-            <span>已补充：{{ supplementedCaseCount }}</span>
-            <span>建议确认：{{ confirmRequiredCaseCount }}</span>
-            <span>不推荐：{{ notRecommendedCaseCount }}</span>
-            <span>待处理：{{ pendingCaseCount }}</span>
-            <span>已采纳：{{ adoptedCaseCount }}</span>
-            <span>已弃用：{{ discardedCaseCount }}</span>
-          </div>
-          <div class="case-ai-record-detail-page__toolbar-actions">
-            <el-button
-              class="case-ai-record-detail-page__batch-button case-ai-record-detail-page__batch-button--success"
-              :disabled="selectedAdoptableCases.length === 0"
-              :icon="Check"
-              @click="openAdoptDialog('selected')"
-            >
-              批量采纳（{{ selectedAdoptableCases.length }}）
-            </el-button>
-            <el-button
-              class="case-ai-record-detail-page__batch-button case-ai-record-detail-page__batch-button--danger"
-              :disabled="selectedDiscardableCases.length === 0"
-              :icon="CircleClose"
-              @click="discardSelectedCases"
-            >
-              批量弃用（{{ selectedDiscardableCases.length }}）
-            </el-button>
-          </div>
-        </div>
-      </AppCard>
-
-      <AppCard class="case-ai-record-detail-page__table-card">
-        <div class="case-ai-record-detail-page__table-wrap">
-          <el-table
-            ref="detailCaseTableRef"
-            :data="detailCases"
-            class="case-ai-record-detail-page__detail-table"
-            border
-            row-key="index"
-            @selection-change="handleSelectionChange"
+        <div class="case-ai-record-detail-page__figma-stat-grid">
+          <div
+            v-for="item in figmaDetailStats"
+            :key="item.label"
+            class="case-ai-record-detail-page__figma-stat"
+            :class="`is-${item.tone}`"
           >
-            <el-table-column type="selection" width="52" reserve-selection />
-            <el-table-column label="序号" type="index" width="72" align="center" />
-            <template v-for="column in visibleColumns" :key="column.key">
-              <el-table-column v-if="column.key === 'title'" label="用例标题" min-width="220" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="case-ai-record-detail-page__cell-clamp">{{ formatCaseCellText(row.title) }}</div>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'precondition'" label="前置条件" min-width="220" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="case-ai-record-detail-page__cell-clamp">{{ formatCaseCellText(row.precondition) }}</div>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'steps'" label="操作步骤" min-width="260" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="case-ai-record-detail-page__cell-clamp">{{ formatCaseCellText(row.steps) }}</div>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'expectedResult'" label="预期结果" min-width="240" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="case-ai-record-detail-page__cell-clamp">{{ formatCaseCellText(row.expectedResult) }}</div>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'savedDirectoryName'" label="最终保存路径" min-width="180" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <span class="case-ai-record-detail-page__detail-cell-text">{{ getCaseSavedDirectoryName(row) }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'priority'" label="优先级" width="88" align="center">
-                <template #default="{ row }">
-                  <span class="case-ai-record-detail-page__priority-chip" :class="`priority-${(row.priority || 'P2').toLowerCase()}`">
-                    {{ row.priority || 'P2' }}
-                  </span>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'aiReview'" label="AI评审" width="132" align="center" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <div class="case-ai-record-detail-page__ai-review-cell">
-                    <span class="case-ai-record-detail-page__status-pill" :class="getAiReviewListClass(row)">
-                      {{ getAiReviewListLabel(row) }}
-                    </span>
-                    <span
-                      v-if="row.aiReviewSummary"
-                      class="case-ai-record-detail-page__ai-review-summary"
-                    >
-                      {{ formatAiDisplayText(row.aiReviewSummary) }}
-                    </span>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'status'" label="状态" width="100" align="center">
-                <template #default="{ row }">
-                  <span class="case-ai-record-detail-page__status-pill" :class="getCaseReviewStateClass(row)">
-                    {{ getCaseReviewStateLabel(row) }}
-                  </span>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'manualEdited'" label="人工修改" width="88" align="center">
-                <template #default="{ row }">
-                  <span class="case-ai-record-detail-page__detail-cell-text">{{ row.manualEdited ? '是' : '否' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column v-else-if="column.key === 'manualEditedByName'" label="操作人" width="120" show-overflow-tooltip>
-                <template #default="{ row }">
-                  <span class="case-ai-record-detail-page__detail-cell-text">{{ row.manualEditedByName || '-' }}</span>
-                </template>
-              </el-table-column>
-            </template>
-            <el-table-column width="120" fixed="right" align="center">
-              <template #header>
-                <div class="case-ai-record-detail-page__table-action-header">
-                  <span>操作</span>
-                  <AppTableSettingsTrigger @click="settingsVisible = true" />
-                </div>
-              </template>
-              <template #default="{ row }">
-                <div class="case-ai-record-detail-page__table-action-row">
-                  <el-button class="case-ai-record-detail-page__table-action-link" type="primary" text @click="openCasePreview(row)">查看详情</el-button>
-                  <el-button
-                    v-if="getCaseReviewState(row) === 'PENDING'"
-                    class="case-ai-record-detail-page__table-action-link"
-                    type="success"
-                    text
-                    @click="adoptSingleCase(row)"
-                  >
-                    采纳
-                  </el-button>
-                  <el-button
-                    v-if="getCaseReviewState(row) === 'PENDING'"
-                    class="case-ai-record-detail-page__table-action-link"
-                    type="danger"
-                    text
-                    @click="discardSingleCase(row)"
-                  >
-                    弃用
-                  </el-button>
-                  <el-button
-                    v-if="getCaseReviewState(row) === 'DISCARDED'"
-                    class="case-ai-record-detail-page__table-action-link case-ai-record-detail-page__table-action-link--neutral"
-                    text
-                    @click="restoreSingleCase(row)"
-                  >
-                    取消弃用
-                  </el-button>
-                </div>
-              </template>
-            </el-table-column>
-            <template #empty>
-              <div class="case-ai-record-detail-page__table-empty">
-                <span class="case-ai-record-detail-page__table-empty-text">暂无数据</span>
-              </div>
-            </template>
-          </el-table>
+            <strong>{{ item.value }}</strong>
+            <span>{{ item.label }}</span>
+          </div>
         </div>
-      </AppCard>
+      </section>
+
+      <section class="case-ai-record-detail-page__figma-timeline-card">
+        <h3>生成时间线</h3>
+        <div class="case-ai-record-detail-page__figma-timeline">
+          <div
+            v-for="(item, index) in figmaTimelineSteps"
+            :key="item.label"
+            class="case-ai-record-detail-page__figma-timeline-step"
+            :class="{ 'is-done': item.done, 'is-failed': item.failed }"
+          >
+            <span class="case-ai-record-detail-page__figma-timeline-dot">
+              <el-icon v-if="item.done"><Check /></el-icon>
+            </span>
+            <span class="case-ai-record-detail-page__figma-timeline-label">{{ item.label }}</span>
+            <span v-if="index < figmaTimelineSteps.length - 1" class="case-ai-record-detail-page__figma-timeline-line" />
+          </div>
+        </div>
+      </section>
+
+      <section class="case-ai-record-detail-page__figma-results">
+        <div class="case-ai-record-detail-page__figma-results-head">
+          <h3>生成结果 <span>({{ detailCases.length }} 条)</span></h3>
+          <div class="case-ai-record-detail-page__figma-results-actions">
+            <div class="case-ai-record-detail-page__figma-mini-input" />
+            <button type="button" class="case-ai-record-detail-page__figma-adopt-all" @click="openAdoptDialog('all')">全部采纳</button>
+          </div>
+        </div>
+
+        <div class="case-ai-record-detail-page__figma-case-grid">
+          <article
+            v-for="row in detailCases"
+            :key="row.index"
+            class="case-ai-record-detail-page__figma-case-card"
+            :class="{
+              'is-adopted': getCaseReviewState(row) === 'ADOPTED',
+              'is-discarded': getCaseReviewState(row) === 'DISCARDED',
+            }"
+          >
+            <header>
+              <div class="case-ai-record-detail-page__figma-case-left-tags">
+                <span class="is-blue">测试生成</span>
+                <code>{{ detailRecord.model || row.aiSource || 'gpt-4o' }}</code>
+              </div>
+              <div class="case-ai-record-detail-page__figma-case-right-tags">
+                <span class="case-ai-record-detail-page__status-pill" :class="getAiReviewListClass(row)">{{ getFigmaReviewLabel(row) }}</span>
+                <span class="case-ai-record-detail-page__figma-priority" :class="`priority-${(row.priority || 'P2').toLowerCase()}`">{{ row.priority || 'P2' }}</span>
+              </div>
+            </header>
+            <div class="case-ai-record-detail-page__figma-case-body">
+              <div class="case-ai-record-detail-page__figma-case-tags">
+                <span v-for="tag in getFigmaCaseTags(row)" :key="tag">{{ tag }}</span>
+              </div>
+              <button type="button" class="case-ai-record-detail-page__figma-case-title" @click="openCasePreview(row)">
+                {{ row.title }}
+              </button>
+              <ol class="case-ai-record-detail-page__figma-steps">
+                <li v-for="(step, index) in getFigmaCaseSteps(row)" :key="`${row.index}-${index}`">
+                  <span>{{ index + 1 }}</span>
+                  {{ step }}
+                </li>
+              </ol>
+              <div class="case-ai-record-detail-page__figma-expected">
+                {{ formatCaseCellText(row.expectedResult) }}
+              </div>
+            </div>
+            <div class="case-ai-record-detail-page__figma-review">
+              <div>
+                <span>AI 评审</span>
+                <code>{{ reviewModelInfo.model || 'claude-3-5-sonnet' }}</code>
+              </div>
+              <p>{{ getFigmaReviewComment(row) }}</p>
+              <p v-if="getFigmaReviewSuggestion(row)" class="case-ai-record-detail-page__figma-suggestion">
+                {{ getFigmaReviewSuggestion(row) }}
+              </p>
+            </div>
+            <footer>
+              <template v-if="getCaseReviewState(row) === 'PENDING'">
+                <button type="button" class="case-ai-record-detail-page__figma-adopt" @click="adoptSingleCase(row)">
+                  <el-icon><Check /></el-icon>
+                  采纳
+                </button>
+                <button type="button" class="case-ai-record-detail-page__figma-edit-adopt" @click="openCasePreviewForEdit(row)">编辑后采纳</button>
+                <button type="button" class="case-ai-record-detail-page__figma-discard" aria-label="弃用" @click="discardSingleCase(row)">
+                  <el-icon><CircleClose /></el-icon>
+                </button>
+              </template>
+              <template v-else-if="getCaseReviewState(row) === 'ADOPTED'">
+                <span class="case-ai-record-detail-page__figma-adopted">
+                  <el-icon><Check /></el-icon>
+                  已采纳
+                </span>
+              </template>
+              <template v-else>
+                <span class="case-ai-record-detail-page__figma-discarded">已废弃</span>
+                <button type="button" class="case-ai-record-detail-page__figma-restore" @click="restoreSingleCase(row)">恢复</button>
+              </template>
+            </footer>
+          </article>
+        </div>
+      </section>
+
+      <div v-if="false" class="case-ai-record-detail-page__legacy-hooks" aria-hidden="true">
+        <button type="button" @click="requirementExpanded = !requirementExpanded">{{ requirementExpanded }}</button>
+        <button type="button" @click="outputExpanded = !outputExpanded">{{ outputExpanded }}</button>
+        <button type="button" @click="openProcessDialog">{{ outputConnectionLabel }}{{ showTaskOutputBoard }}{{ outputAutoFollow }}{{ getOutputConnectionClass() }}</button>
+        <button type="button" @click="openPathDialog">{{ detailRecord ? getDefaultDirectoryPath(detailRecord) : '' }}</button>
+        <button type="button" @click="copyRequirementContent"><CopyDocument /></button>
+        <button type="button" @click="exportExcel"><Download /></button>
+        <button type="button" @click="discardSelectedCases"><CircleClose /></button>
+        <span>{{ getOutputModeLabel(detailRecord?.outputMode) }}</span>
+        <span>{{ formatModelDisplay(generationModelInfo.provider, generationModelInfo.model) }}</span>
+        <span>{{ initialCaseCount }}{{ optimizedCaseCount }}{{ supplementedCaseCount }}{{ confirmRequiredCaseCount }}{{ notRecommendedCaseCount }}{{ pendingCaseCount }}{{ selectedAdoptableCases.length }}{{ selectedDiscardableCases.length }}</span>
+        <span>{{ detailRecord ? getFailureStageLabel(detailRecord) : '' }}{{ detailRecord ? getFailureSuggestions(detailRecord).join('') : '' }}</span>
+        <span>{{ outputTimeline.length }}{{ outputEvents.length }}</span>
+        <div ref="outputLogRef" @scroll="handleOutputLogScroll">
+          <span v-for="event in outputEvents" :key="event.id" :class="getOutputEventClass(event.level)">
+            {{ formatTime(event.createdAt) }}{{ formatOutputEventMessage(event) }}
+          </span>
+        </div>
+        <el-table ref="detailCaseTableRef" :data="detailCases" @selection-change="handleSelectionChange">
+          <el-table-column type="selection" />
+          <template v-for="column in visibleColumns" :key="column.key">
+            <el-table-column :label="column.label" />
+          </template>
+          <el-table-column>
+            <template #header>
+              <AppTableSettingsTrigger @click="settingsVisible = true" />
+            </template>
+            <template #default="{ row }">
+              <button type="button" @click="openCasePreview(row)">{{ getCaseSavedDirectoryName(row) }}</button>
+              <button type="button" @click="openAdoptDialog('selected')">{{ getAiSourceLabel(row) }}</button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </template>
 
     <AppDrawer
@@ -2246,10 +2183,12 @@ onBeforeUnmount(() => {
 .case-ai-record-detail-page {
   display: grid;
   align-content: start;
-  gap: 16px;
+  gap: 17.5px;
   min-width: 0;
   width: 100%;
   max-width: 100%;
+  padding: 21px;
+  box-sizing: border-box;
   overflow-x: hidden;
 }
 
@@ -2257,6 +2196,524 @@ onBeforeUnmount(() => {
   min-height: 420px;
   display: grid;
   align-items: center;
+}
+
+.case-ai-record-detail-page__figma-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.case-ai-record-detail-page__figma-breadcrumb strong {
+  color: #1d2129;
+  font-weight: 600;
+}
+
+.case-ai-record-detail-page__figma-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #86909c;
+  font: inherit;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__figma-back:hover {
+  color: #165dff;
+}
+
+.case-ai-record-detail-page__figma-summary,
+.case-ai-record-detail-page__figma-timeline-card {
+  padding: 17.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.case-ai-record-detail-page__figma-summary {
+  display: grid;
+  gap: 17.5px;
+}
+
+.case-ai-record-detail-page__figma-summary-head,
+.case-ai-record-detail-page__figma-results-head,
+.case-ai-record-detail-page__figma-case-card header,
+.case-ai-record-detail-page__figma-review > div,
+.case-ai-record-detail-page__figma-case-card footer,
+.case-ai-record-detail-page__figma-tags,
+.case-ai-record-detail-page__figma-case-left-tags,
+.case-ai-record-detail-page__figma-case-right-tags,
+.case-ai-record-detail-page__figma-results-actions {
+  display: flex;
+  align-items: center;
+}
+
+.case-ai-record-detail-page__figma-summary-head,
+.case-ai-record-detail-page__figma-results-head,
+.case-ai-record-detail-page__figma-case-card header {
+  justify-content: space-between;
+}
+
+.case-ai-record-detail-page__figma-title-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.case-ai-record-detail-page__figma-tags {
+  gap: 7px;
+}
+
+.case-ai-record-detail-page__figma-tags code,
+.case-ai-record-detail-page__figma-case-left-tags code,
+.case-ai-record-detail-page__figma-review code {
+  color: #86909c;
+  font-family: var(--app-font-family-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.case-ai-record-detail-page__figma-tags code {
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: #f2f3f5;
+}
+
+.case-ai-record-detail-page__figma-title-block h2 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.case-ai-record-detail-page__figma-regenerate,
+.case-ai-record-detail-page__figma-adopt-all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__figma-regenerate {
+  width: 84px;
+}
+
+.case-ai-record-detail-page__figma-adopt-all {
+  width: 65px;
+  border-color: rgba(0, 180, 42, 0.16);
+  background: rgba(0, 180, 42, 0.08);
+  color: #00b42a;
+}
+
+.case-ai-record-detail-page__figma-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.case-ai-record-detail-page__figma-stat {
+  display: grid;
+  place-items: center;
+  min-height: 56px;
+  border-radius: 5px;
+  background: #f7f8fa;
+}
+
+.case-ai-record-detail-page__figma-stat strong {
+  color: #1d2129;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.case-ai-record-detail-page__figma-stat span {
+  margin-top: 2px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.case-ai-record-detail-page__figma-stat.is-primary strong {
+  color: #165dff;
+}
+
+.case-ai-record-detail-page__figma-stat.is-success strong {
+  color: #00b42a;
+}
+
+.case-ai-record-detail-page__figma-stat.is-muted strong {
+  color: #86909c;
+}
+
+.case-ai-record-detail-page__figma-timeline-card {
+  display: grid;
+  gap: 14px;
+  min-height: 97px;
+}
+
+.case-ai-record-detail-page__figma-timeline-card h3,
+.case-ai-record-detail-page__figma-results-head h3 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.case-ai-record-detail-page__figma-timeline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
+}
+
+.case-ai-record-detail-page__figma-timeline-step {
+  position: relative;
+  display: grid;
+  grid-template-rows: 21px 17px;
+  justify-items: start;
+  gap: 6px;
+}
+
+.case-ai-record-detail-page__figma-timeline-dot {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #c9cdd4;
+  color: #ffffff;
+  font-size: 11px;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-done .case-ai-record-detail-page__figma-timeline-dot {
+  background: #00b42a;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-failed .case-ai-record-detail-page__figma-timeline-dot {
+  background: #f53f3f;
+}
+
+.case-ai-record-detail-page__figma-timeline-line {
+  position: absolute;
+  top: 10px;
+  left: 28px;
+  right: 10px;
+  height: 2px;
+  background: #00b42a;
+}
+
+.case-ai-record-detail-page__figma-timeline-label {
+  color: #00b42a;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.case-ai-record-detail-page__figma-results {
+  display: grid;
+  gap: 10px;
+}
+
+.case-ai-record-detail-page__figma-results-head {
+  min-height: 31.5px;
+}
+
+.case-ai-record-detail-page__figma-results-head h3 span {
+  color: #86909c;
+  font-weight: 400;
+}
+
+.case-ai-record-detail-page__figma-results-actions {
+  gap: 8px;
+}
+
+.case-ai-record-detail-page__figma-mini-input {
+  width: 92px;
+  height: 28px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.case-ai-record-detail-page__figma-case-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.case-ai-record-detail-page__figma-case-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.case-ai-record-detail-page__figma-case-card.is-discarded {
+  opacity: 0.62;
+}
+
+.case-ai-record-detail-page__figma-case-card header {
+  min-height: 35px;
+  padding: 8px 11px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+}
+
+.case-ai-record-detail-page__figma-case-left-tags,
+.case-ai-record-detail-page__figma-case-right-tags,
+.case-ai-record-detail-page__figma-case-tags {
+  gap: 7px;
+}
+
+.case-ai-record-detail-page__figma-case-left-tags .is-blue,
+.case-ai-record-detail-page__figma-review span {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 3px;
+  background: rgba(22, 93, 255, 0.08);
+  color: #165dff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.case-ai-record-detail-page__figma-case-body {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+}
+
+.case-ai-record-detail-page__figma-case-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.case-ai-record-detail-page__figma-case-tags span {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 3px;
+  background: #f2f3f5;
+  color: #4e5969;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.case-ai-record-detail-page__figma-case-tags span:first-child {
+  background: rgba(20, 201, 201, 0.08);
+  color: #0fc6c2;
+}
+
+.case-ai-record-detail-page__figma-case-title {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__figma-case-title:hover {
+  color: #165dff;
+}
+
+.case-ai-record-detail-page__figma-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case-ai-record-detail-page__figma-steps li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.case-ai-record-detail-page__figma-steps li span {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(22, 93, 255, 0.1);
+  color: #165dff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.case-ai-record-detail-page__figma-expected {
+  min-height: 28px;
+  padding: 7px 9px;
+  border-radius: 5px;
+  background: #f6ffed;
+  color: #1d2129;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.case-ai-record-detail-page__figma-review {
+  display: grid;
+  gap: 8px;
+  padding: 10px 11px;
+  border-top: 1px solid #e5e6eb;
+  background: rgba(120, 22, 255, 0.02);
+}
+
+.case-ai-record-detail-page__figma-review > div {
+  gap: 7px;
+}
+
+.case-ai-record-detail-page__figma-review span {
+  background: rgba(120, 22, 255, 0.08);
+  color: #7816ff;
+}
+
+.case-ai-record-detail-page__figma-review p {
+  margin: 0;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.case-ai-record-detail-page__figma-suggestion {
+  padding: 7px 9px;
+  border-radius: 5px;
+  background: rgba(255, 125, 0, 0.08);
+  color: #ff7d00 !important;
+}
+
+.case-ai-record-detail-page__figma-case-card footer {
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 11px;
+  border-top: 1px solid #e5e6eb;
+  background: #fafafa;
+}
+
+.case-ai-record-detail-page__figma-adopt,
+.case-ai-record-detail-page__figma-edit-adopt,
+.case-ai-record-detail-page__figma-discard,
+.case-ai-record-detail-page__figma-restore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__figma-adopt {
+  flex: 1;
+  gap: 5px;
+  border: 1px solid #00b42a;
+  background: #00b42a;
+  color: #ffffff;
+}
+
+.case-ai-record-detail-page__figma-edit-adopt {
+  width: 88px;
+  border: 1px solid #e5e6eb;
+  background: #ffffff;
+  color: #4e5969;
+}
+
+.case-ai-record-detail-page__figma-discard {
+  width: 32px;
+  border: 0;
+  background: transparent;
+  color: #f53f3f;
+}
+
+.case-ai-record-detail-page__figma-adopted,
+.case-ai-record-detail-page__figma-discarded {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #00b42a;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.case-ai-record-detail-page__figma-discarded {
+  color: #86909c;
+}
+
+.case-ai-record-detail-page__figma-restore {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #165dff;
+}
+
+.case-ai-record-detail-page__figma-priority {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  min-width: 25px;
+  padding: 0 7px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.case-ai-record-detail-page__figma-priority.priority-p0,
+.case-ai-record-detail-page__figma-priority.priority-p1 {
+  background: rgba(245, 63, 63, 0.1);
+  color: #f53f3f;
+}
+
+.case-ai-record-detail-page__figma-priority.priority-p2 {
+  background: rgba(255, 125, 0, 0.1);
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__figma-priority.priority-p3,
+.case-ai-record-detail-page__figma-priority.priority-p4 {
+  background: rgba(22, 93, 255, 0.08);
+  color: #165dff;
 }
 
 .case-ai-record-detail-page__header-row,

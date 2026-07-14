@@ -47,7 +47,7 @@ const caseCenterCrumbTitle = computed(() => {
     'case-execution': '用例执行',
     'cases-ai-generate': 'AI 用例生成',
     'cases-ai-records': 'AI 生成记录',
-    'cases-ai-record-detail': '生成记录详情',
+    'cases-ai-record-detail': 'AI 生成记录',
     'cases-ai-config': 'AI 配置',
   }
   return labels[routeName] || '用例管理'
@@ -153,7 +153,9 @@ const navigationItems: NavigationItem[] = [
     ],
   },
   { path: '/automation/app', label: 'APP 自动化', icon: figmaGlobalNavIcons.app, color: '#7816FF', lightBg: '#F5E8FF' },
-  { path: '/settings', label: '系统设置', icon: figmaGlobalNavIcons.setting, color: '#4E5969', lightBg: '#F2F3F5', separated: true },
+  { path: '/tasks', label: '任务中心', icon: figmaGlobalNavIcons.task, color: '#F59E0B', lightBg: '#FFF7E8' },
+  { path: '/reports', label: '报告中心', icon: figmaGlobalNavIcons.report, color: '#7816FF', lightBg: '#F5E8FF', separated: true },
+  { path: '/settings', label: '系统设置', icon: figmaGlobalNavIcons.setting, color: '#4E5969', lightBg: '#F2F3F5' },
 ]
 
 function matchesNavigationPath(path: string) {
@@ -409,12 +411,13 @@ onMounted(() => {
   width: 28px;
   height: 28px;
   border-radius: 8px;
+  background: linear-gradient(135deg, var(--app-primary), #4f8eff);
 }
 
 .app-layout__brand-mark img {
   display: block;
-  width: 28px;
-  height: 28px;
+  width: 17px;
+  height: 17px;
 }
 
 .app-layout__nav {
@@ -475,6 +478,18 @@ onMounted(() => {
 
 .app-layout__nav-item[title="配置中心"]:not(.is-active) .app-layout__nav-icon {
   filter: brightness(0) saturate(100%) invert(37%) sepia(19%) saturate(1795%) hue-rotate(199deg) brightness(88%) contrast(89%);
+}
+
+.app-layout__nav-item[title="系统设置"]:not(.is-active) .app-layout__nav-icon {
+  filter: brightness(0) saturate(100%) invert(34%) sepia(9%) saturate(732%) hue-rotate(178deg) brightness(91%) contrast(86%);
+}
+
+.app-layout__nav-item[title="报告中心"]:not(.is-active) .app-layout__nav-icon {
+  filter: brightness(0) saturate(100%) invert(16%) sepia(94%) saturate(4739%) hue-rotate(265deg) brightness(98%) contrast(105%);
+}
+
+.app-layout__nav-item[title="任务中心"]:not(.is-active) .app-layout__nav-icon {
+  filter: brightness(0) saturate(100%) invert(72%) sepia(60%) saturate(2463%) hue-rotate(354deg) brightness(101%) contrast(92%);
 }
 
 .app-layout__nav-icon-shell {
@@ -565,7 +580,7 @@ onMounted(() => {
   overflow: hidden;
   font-size: 13px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 19.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--app-text-secondary);
@@ -583,11 +598,12 @@ onMounted(() => {
   height: 24.5px;
   padding: 0 10.5px;
   border: 1px solid var(--app-border);
-  border-radius: 6px;
+  border-radius: 7px;
   background: #ffffff;
   color: var(--app-text-muted);
   cursor: pointer;
   font-size: 12px;
+  font-weight: 500;
   line-height: 18px;
   transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
 }
@@ -612,12 +628,12 @@ onMounted(() => {
   margin-left: 7px;
   place-items: center;
   border: 1px solid var(--app-border);
-  border-radius: 4px;
+  border-radius: 3.5px;
   background: var(--app-bg-muted);
   color: var(--app-text-muted);
-  font-family: var(--app-font-family);
+  font-family: var(--app-font-family-mono);
   font-size: 10px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 15px;
 }
 
@@ -672,7 +688,7 @@ onMounted(() => {
   overflow: hidden;
   font-size: 13px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 19.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

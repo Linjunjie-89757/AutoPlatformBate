@@ -447,9 +447,11 @@ function navigateTo(path: string) {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  height: calc(100dvh - 72px);
+  box-sizing: border-box;
+  height: calc(100dvh - 42px);
   min-height: 720px;
   overflow: hidden;
+  padding: 14px;
   background: #f4f6fa;
   color: #1d2129;
   font-family: var(--app-font-family);
@@ -458,10 +460,10 @@ function navigateTo(path: string) {
 .dashboard-page__hero {
   display: flex;
   align-items: center;
-  gap: 22px;
-  min-height: 64px;
-  padding: 12px 18px;
-  border-radius: 14px;
+  gap: 24px;
+  min-height: 62px;
+  padding: 12px 20px;
+  border-radius: 16px;
   background: linear-gradient(135deg, #1d2129 0%, #2d3748 100%);
   color: #fff;
   overflow: hidden;
@@ -479,7 +481,7 @@ function navigateTo(path: string) {
 
 .dashboard-page__greeting strong {
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 25.5px;
 }
 
@@ -588,7 +590,7 @@ function navigateTo(path: string) {
 .dashboard-panel {
   min-width: 0;
   border: 1px solid #e5e6eb;
-  border-radius: 14px;
+  border-radius: 16px;
   background: #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
@@ -609,7 +611,7 @@ function navigateTo(path: string) {
   display: flex;
   align-items: center;
   min-height: 47px;
-  padding: 14px 18px 12px;
+  padding: 16px 20px 12px;
   border-bottom: 1px solid #e5e6eb;
   gap: 8px;
 }
@@ -617,7 +619,7 @@ function navigateTo(path: string) {
 .dashboard-panel__title {
   color: #1d2129;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 21px;
 }
 
@@ -673,7 +675,7 @@ function navigateTo(path: string) {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 18px;
+  padding: 8px 20px;
 }
 
 .dashboard-timeline__item {
@@ -736,7 +738,7 @@ function navigateTo(path: string) {
   min-width: 0;
   color: #1d2129;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -810,9 +812,9 @@ function navigateTo(path: string) {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   min-height: 40px;
-  padding: 10px 18px;
+  padding: 10px 20px;
   border-top: 1px solid #e5e6eb;
   background: #fafafa;
   color: #86909c;
@@ -859,7 +861,7 @@ function navigateTo(path: string) {
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  padding: 12px 14px;
+  padding: 12px 16px;
 }
 
 .dashboard-attention-card {
@@ -897,7 +899,7 @@ function navigateTo(path: string) {
   overflow: hidden;
   color: #1d2129;
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -937,7 +939,7 @@ function navigateTo(path: string) {
 
 .dashboard-panel--quality {
   flex: 0 0 auto;
-  padding: 15px 18px 16px;
+  padding: 16px 20px;
 }
 
 .dashboard-quality__header {
@@ -976,7 +978,7 @@ function navigateTo(path: string) {
 .dashboard-quality__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 9px 21px;
+  gap: 10px 24px;
 }
 
 .dashboard-quality__item {
@@ -1027,7 +1029,7 @@ function navigateTo(path: string) {
 .dashboard-panel--health,
 .dashboard-panel--upcoming {
   flex: 0 0 auto;
-  padding: 15px;
+  padding: 16px;
 }
 
 .dashboard-health-list {
@@ -1084,7 +1086,7 @@ function navigateTo(path: string) {
   overflow: hidden;
   color: #1d2129;
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1152,7 +1154,7 @@ function navigateTo(path: string) {
   overflow: hidden;
   color: #1d2129;
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1182,7 +1184,7 @@ function navigateTo(path: string) {
   flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
-  padding: 15px;
+  padding: 16px;
   border-color: #d8b4fe;
   background: linear-gradient(160deg, #fafaff, #f5f0ff);
   box-shadow: none;
@@ -1258,7 +1260,7 @@ function navigateTo(path: string) {
 @media (max-width: 1280px) {
   .dashboard-page {
     height: auto;
-    min-height: calc(100dvh - 72px);
+    min-height: calc(100dvh - 42px);
     overflow: visible;
   }
 

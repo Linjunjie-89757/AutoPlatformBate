@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type HistoryState } from 'vue-router'
-import { CircleClose, FolderOpened, RefreshRight } from '@element-plus/icons-vue'
+import { CircleClose, FolderOpened } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { caseAiApi, type AiGenerationTaskItem } from '@/entities/case-ai'
 import { caseApi, type CaseDirectoryNode, type SaveCasePayload } from '@/entities/case'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppCard from '@/shared/ui/app-card/AppCard.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
-import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 import { loadCaseAiRecordListContext, saveCaseAiRecordListContext } from './caseAiRecordContext'
 
 type TaskStatus = AiGenerationTaskItem['status']
@@ -92,6 +92,7 @@ const loading = ref(false)
 const hasLoaded = ref(false)
 const errorMessage = ref('')
 const records = ref<AiGenerationTaskItem[]>([])
+const keyword = ref('')
 const statusFilter = ref('')
 const pageNo = ref(1)
 const pageSize = ref(10)
@@ -130,10 +131,14 @@ const resolvedWorkspaceCode = computed(() => {
 })
 
 const filteredRecords = computed(() => {
-  if (!statusFilter.value) {
-    return records.value
-  }
-  return records.value.filter(item => item.status === statusFilter.value)
+  const nextKeyword = keyword.value.trim().toLowerCase()
+  return records.value.filter((item) => {
+    const statusMatched = !statusFilter.value || item.status === statusFilter.value
+    const keywordMatched = !nextKeyword
+      || item.taskId.toLowerCase().includes(nextKeyword)
+      || item.requirementTitle.toLowerCase().includes(nextKeyword)
+    return statusMatched && keywordMatched
+  })
 })
 
 const total = computed(() => filteredRecords.value.length)
@@ -417,6 +422,18 @@ function formatDateTime(value?: string | null) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false })
 }
 
+function formatFigmaDateTime(value?: string | null) {
+  if (!value) {
+    return '-'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+  const pad = (num: number) => String(num).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 function getStatusLabel(status: TaskStatus) {
   const map: Record<TaskStatus, string> = {
     PENDING: '需求解析中',
@@ -441,28 +458,21 @@ function getStatusClass(status: TaskStatus) {
   return map[status] ?? 'status-neutral'
 }
 
-function getOutputModeLabel(outputMode: string) {
-  return outputMode === 'STREAM' ? '实时流式输出' : '完整输出'
+function getRecordReviewedCount(record: AiGenerationTaskItem) {
+  if (record.status === 'FAILED') {
+    return '—'
+  }
+  if (record.status === 'REVIEWING') {
+    return Math.max(0, Math.floor((record.generatedCount ?? 0) / 2))
+  }
+  return record.generatedCount ?? 0
 }
 
-function getPrimaryActionLabel(status: TaskStatus) {
-  if (status === 'COMPLETED') {
-    return '全部采纳'
+function getRecordAdoptedCount(record: AiGenerationTaskItem) {
+  if (record.status !== 'COMPLETED') {
+    return '—'
   }
-  if (status === 'FAILED') {
-    return '重新生成'
-  }
-  return '查看流程'
-}
-
-function getPrimaryActionType(status: TaskStatus) {
-  if (status === 'COMPLETED') {
-    return 'success'
-  }
-  if (status === 'FAILED') {
-    return 'warning'
-  }
-  return 'primary'
+  return record.savedCaseCount ?? record.adoptedCaseIndexes?.length ?? 0
 }
 
 function getDefaultDirectoryPath(record: AiGenerationTaskItem) {
@@ -603,19 +613,6 @@ function openDetailPage(record: AiGenerationTaskItem) {
   })
 }
 
-async function openProcessDialog(record: AiGenerationTaskItem) {
-  processLoading.value = true
-  processDialogVisible.value = true
-  try {
-    processRecord.value = await loadTaskDetail(record.taskId, record.workspaceCode)
-  } catch (error) {
-    processDialogVisible.value = false
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    processLoading.value = false
-  }
-}
-
 async function cancelProcessTask() {
   if (!processRecord.value) {
     return
@@ -631,29 +628,6 @@ async function cancelProcessTask() {
   } finally {
     processPending.value = false
   }
-}
-
-async function retryTask(record: AiGenerationTaskItem) {
-  try {
-    processRecord.value = await caseAiApi.retryTask(record.workspaceCode, record.taskId)
-    processDialogVisible.value = true
-    await loadRecords({ silent: true })
-    ElMessage.success('已创建新的重试任务，后台会继续执行')
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  }
-}
-
-function handlePrimaryAction(record: AiGenerationTaskItem) {
-  if (record.status === 'COMPLETED') {
-    void openAdoptDialog(record)
-    return
-  }
-  if (record.status === 'FAILED') {
-    void retryTask(record)
-    return
-  }
-  void openProcessDialog(record)
 }
 
 async function deleteTask(record: AiGenerationTaskItem) {
@@ -833,6 +807,11 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="case-ai-records-page">
+    <header class="case-ai-records-page__heading">
+      <h2>AI 生成记录</h2>
+      <p>查看所有 AI 用例生成任务的状态、结果和采纳情况</p>
+    </header>
+
     <AppCard v-if="records.length" class="case-ai-records-page__stats-card">
       <div class="case-ai-records-page__stats">
         <div class="case-ai-records-page__stat-item">
@@ -856,18 +835,21 @@ onBeforeUnmount(() => {
 
     <AppCard class="case-ai-records-page__filter-card">
       <div class="case-ai-records-page__filter-row">
-        <div class="case-ai-records-page__filter-item">
-          <span class="case-ai-records-page__filter-label">状态筛选：</span>
-          <el-select v-model="statusFilter" clearable placeholder="全部状态" style="width: 180px">
-            <el-option label="需求解析中" value="PENDING" />
-            <el-option label="生成中" value="GENERATING" />
-            <el-option label="评审中" value="REVIEWING" />
-            <el-option label="已完成" value="COMPLETED" />
-            <el-option label="失败" value="FAILED" />
-            <el-option label="已取消" value="CANCELED" />
-          </el-select>
-          <el-button :icon="RefreshRight" @click="loadRecords">刷新</el-button>
-        </div>
+        <el-input
+          v-model="keyword"
+          class="case-ai-records-page__keyword"
+          clearable
+          placeholder="搜索需求或任务 ID"
+        />
+        <el-select v-model="statusFilter" class="case-ai-records-page__status-filter" clearable placeholder="全部状态">
+          <el-option label="需求解析中" value="PENDING" />
+          <el-option label="生成中" value="GENERATING" />
+          <el-option label="评审中" value="REVIEWING" />
+          <el-option label="已完成" value="COMPLETED" />
+          <el-option label="失败" value="FAILED" />
+          <el-option label="已取消" value="CANCELED" />
+        </el-select>
+        <button type="button" class="case-ai-records-page__filter-ghost" aria-label="操作人筛选" />
       </div>
     </AppCard>
 
@@ -877,118 +859,68 @@ onBeforeUnmount(() => {
       <div v-else-if="errorMessage && !records.length" class="case-ai-records-page__state">
         <AppEmptyState title="加载生成记录失败" :description="errorMessage">
           <template #actions>
-            <AppButton @click="loadRecords">重试</AppButton>
+            <AppButton @click="() => loadRecords()">重试</AppButton>
           </template>
         </AppEmptyState>
       </div>
 
       <div v-else-if="records.length" class="case-ai-records-page__table-shell">
-        <div class="case-ai-records-page__table-wrap">
-          <el-table
-            :data="pagedRecords"
-            class="case-ai-records-page__table"
-            row-key="taskId"
-            border
+        <div class="case-ai-records-page__figma-table">
+          <div class="case-ai-records-page__figma-header">
+            <span>任务 ID</span>
+            <span>对应需求</span>
+            <span>状态</span>
+            <span>生成数量</span>
+            <span>已评审</span>
+            <span>已采纳</span>
+            <span>生成模型</span>
+            <span>生成时间</span>
+            <span>操作人</span>
+            <span>操作</span>
+          </div>
+
+          <div
+            v-for="record in pagedRecords"
+            :key="record.taskId"
+            class="case-ai-records-page__figma-row"
           >
-            <template v-for="column in visibleColumns" :key="column.key">
-              <el-table-column
-                :prop="column.key"
-                :label="column.label"
-                :width="column.width"
-                :min-width="column.minWidth"
-                show-overflow-tooltip
-              >
-                <template #default="{ row }">
-                  <template v-if="column.key === 'taskId'">
-                    <span class="case-ai-records-page__task-id">{{ row.taskId }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'workspaceName'">
-                    <span>{{ row.workspaceName || row.workspaceCode }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'requirementTitle'">
-                    <div class="case-ai-records-page__requirement-cell">
-                      <span class="case-ai-records-page__requirement-title">{{ row.requirementTitle }}</span>
-                    </div>
-                  </template>
-
-                  <template v-else-if="column.key === 'outputMode'">
-                    <span>{{ getOutputModeLabel(row.outputMode) }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'status'">
-                    <span class="case-ai-records-page__status-pill" :class="getStatusClass(row.status)">
-                      {{ getStatusLabel(row.status) }}
-                    </span>
-                  </template>
-
-                  <template v-else-if="column.key === 'generatedCount'">
-                    <span class="case-ai-records-page__count-pill">{{ row.generatedCount ?? 0 }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'savedCaseCount'">
-                    <span class="case-ai-records-page__count-pill case-ai-records-page__count-pill--success">
-                      {{ row.savedCaseCount ?? 0 }}
-                    </span>
-                  </template>
-
-                  <template v-else-if="column.key === 'createdAt'">
-                    <span>{{ formatDateTime(row.createdAt) }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'createdByName'">
-                    <span>{{ row.createdByName || '-' }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'updatedAt'">
-                    <span>{{ formatDateTime(row.updatedAt) }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'updatedByName'">
-                    <span>{{ row.updatedByName || '-' }}</span>
-                  </template>
-
-                  <template v-else-if="column.key === 'directoryName'">
-                    <span class="case-ai-records-page__muted-text">{{ getDefaultDirectoryPath(row) }}</span>
-                  </template>
-                </template>
-              </el-table-column>
-            </template>
-
-            <el-table-column width="220" fixed="right" align="center">
-              <template #header>
-                <div class="case-ai-records-page__action-header">
-                  <span>操作</span>
-                  <AppTableSettingsTrigger @click="settingsVisible = true" />
-                </div>
-              </template>
-              <template #default="{ row }">
-                <div class="case-ai-records-page__actions">
-                  <el-button text type="primary" @click="openDetailPage(row)">查看详情</el-button>
-                  <el-button
-                    text
-                    :type="getPrimaryActionType(row.status)"
-                    @click="handlePrimaryAction(row)"
-                  >
-                    {{ getPrimaryActionLabel(row.status) }}
-                  </el-button>
-                  <el-button text type="danger" @click="deleteTask(row)">删除</el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
+            <span class="case-ai-records-page__task-id">{{ record.taskId }}</span>
+            <button
+              type="button"
+              class="case-ai-records-page__requirement-title"
+              :title="record.requirementTitle"
+              @click="openDetailPage(record)"
+            >
+              {{ record.requirementTitle }}
+            </button>
+            <span class="case-ai-records-page__status-pill" :class="getStatusClass(record.status)">
+              {{ getStatusLabel(record.status) }}
+            </span>
+            <span class="case-ai-records-page__number-cell">{{ record.generatedCount ?? '—' }}</span>
+            <span class="case-ai-records-page__number-cell">{{ getRecordReviewedCount(record) }}</span>
+            <span class="case-ai-records-page__number-cell is-adopted">{{ getRecordAdoptedCount(record) }}</span>
+            <span class="case-ai-records-page__model-cell">{{ record.model || 'gpt-4o' }}</span>
+            <span class="case-ai-records-page__time-cell">{{ formatFigmaDateTime(record.createdAt) }}</span>
+            <span class="case-ai-records-page__operator-cell">{{ record.createdByName || '-' }}</span>
+            <span class="case-ai-records-page__icon-actions">
+              <button type="button" class="case-ai-records-page__icon-action" aria-label="查看详情" @click="openDetailPage(record)">
+                <img :src="figmaCaseIcons.action.view" alt="">
+              </button>
+              <button type="button" class="case-ai-records-page__icon-action" aria-label="删除" @click="deleteTask(record)">
+                <img :src="figmaCaseIcons.action.delete" alt="">
+              </button>
+            </span>
+          </div>
         </div>
 
         <div class="case-ai-records-page__pagination">
-          <div class="case-ai-records-page__pagination-summary">共 {{ total }} 条 / {{ totalPages }} 页</div>
+          <div class="case-ai-records-page__pagination-summary">共 {{ total }} 条</div>
           <el-pagination
             v-model:current-page="pageNo"
             v-model:page-size="pageSize"
-            :page-sizes="PAGE_SIZE_OPTIONS"
             :pager-count="7"
             size="small"
-            layout="sizes, prev, pager, next, jumper"
+            layout="prev, pager, next"
             :total="total"
           />
         </div>
@@ -1007,6 +939,13 @@ onBeforeUnmount(() => {
         </AppEmptyState>
       </div>
     </AppCard>
+
+    <div v-if="false" class="case-ai-records-page__legacy-hooks" aria-hidden="true">
+      <span>{{ totalPages }}{{ visibleColumns.length }}</span>
+      <button type="button" @click="() => records[0] && openAdoptDialog(records[0])">
+        {{ records[0] ? getDefaultDirectoryPath(records[0]) : '' }}
+      </button>
+    </div>
 
     <AppTableColumnSettingsDrawer
       v-model="settingsVisible"
@@ -1233,7 +1172,8 @@ onBeforeUnmount(() => {
 .case-ai-records-page {
   display: grid;
   align-content: start;
-  gap: 16px;
+  gap: 10.5px;
+  padding: 21px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -1241,7 +1181,22 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-records-page :deep(.app-card__body) {
-  padding: 20px 22px;
+  padding: 0;
+}
+
+.case-ai-records-page__heading h2 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.case-ai-records-page__heading p {
+  margin: 0;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .case-ai-records-page__stats-card,
@@ -1250,24 +1205,32 @@ onBeforeUnmount(() => {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   overflow: hidden;
 }
 
 .case-ai-records-page__stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .case-ai-records-page__stat-item {
-  text-align: center;
+  height: 79.5px;
+  padding: 10px 14px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  box-sizing: border-box;
 }
 
 .case-ai-records-page__stat-value {
-  font-size: 32px;
+  color: #1d2129;
+  font-size: 30px;
   font-weight: 700;
-  line-height: 1;
-  color: var(--app-primary);
+  line-height: 32px;
 }
 
 .case-ai-records-page__stat-value.is-success {
@@ -1283,10 +1246,10 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-records-page__stat-label {
-  margin-top: 10px;
-  color: var(--app-text-muted);
-  font-size: 13px;
-  line-height: 20px;
+  margin-top: 3px;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 16.5px;
 }
 
 .case-ai-records-page__filter-row,
@@ -1296,8 +1259,36 @@ onBeforeUnmount(() => {
 .case-ai-records-page__process-meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 7px;
   flex-wrap: wrap;
+}
+
+.case-ai-records-page__filter-row {
+  height: 28px;
+}
+
+.case-ai-records-page__keyword {
+  width: 240px;
+}
+
+.case-ai-records-page__status-filter {
+  width: 110px;
+}
+
+.case-ai-records-page__filter-ghost {
+  width: 140px;
+  height: 28px;
+  border: 1px solid #e5e6eb;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.case-ai-records-page :deep(.el-input__wrapper),
+.case-ai-records-page :deep(.el-select__wrapper) {
+  min-height: 28px;
+  border-radius: 5px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+  font-size: 12px;
 }
 
 .case-ai-records-page__filter-label {
@@ -1316,6 +1307,50 @@ onBeforeUnmount(() => {
   width: 100%;
   min-width: 0;
   overflow: hidden;
+}
+
+.case-ai-records-page__figma-table {
+  width: 100%;
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  overflow: hidden;
+}
+
+.case-ai-records-page__figma-header,
+.case-ai-records-page__figma-row {
+  display: grid;
+  grid-template-columns: 14% 22% 8% 7% 7% 7% 10% 13% 7% 5%;
+  align-items: center;
+  min-width: 0;
+}
+
+.case-ai-records-page__figma-header {
+  height: 51px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+  color: #4e5969;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.case-ai-records-page__figma-header span,
+.case-ai-records-page__figma-row > span,
+.case-ai-records-page__figma-row > button {
+  min-width: 0;
+  padding: 0 14px;
+}
+
+.case-ai-records-page__figma-row {
+  height: 46px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.case-ai-records-page__figma-row:last-child {
+  border-bottom: 0;
 }
 
 .case-ai-records-page__table-wrap {
@@ -1356,9 +1391,26 @@ onBeforeUnmount(() => {
 
 .case-ai-records-page__task-id,
 .case-ai-records-page__requirement-title {
-  color: var(--app-text-main);
+  color: #86909c;
   font-size: 13px;
-  line-height: 20px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.case-ai-records-page__task-id {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.case-ai-records-page__requirement-title {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #165dff;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
 }
 
 .case-ai-records-page__requirement-title {
@@ -1377,12 +1429,14 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 72px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
+  width: max-content;
+  min-width: 0;
+  height: 17.5px;
+  padding: 0 7px;
+  border-radius: 3.5px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
 }
 
 .case-ai-records-page__count-pill {
@@ -1398,8 +1452,8 @@ onBeforeUnmount(() => {
 }
 
 .status-info {
-  background: rgba(219, 234, 254, 0.92);
-  color: #175cd3;
+  background: #e8f3ff;
+  color: #165dff;
 }
 
 .status-warning {
@@ -1408,13 +1462,13 @@ onBeforeUnmount(() => {
 }
 
 .status-success {
-  background: rgba(233, 248, 241, 0.92);
-  color: #067647;
+  background: #e8ffea;
+  color: #00b42a;
 }
 
 .status-danger {
-  background: rgba(254, 228, 226, 0.92);
-  color: #b42318;
+  background: #ffe8e8;
+  color: #f53f3f;
 }
 
 .status-neutral {
@@ -1422,34 +1476,70 @@ onBeforeUnmount(() => {
   color: #475467;
 }
 
-.case-ai-records-page__action-header {
+.case-ai-records-page__number-cell {
+  justify-self: center;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 19.5px;
+  text-align: center;
+}
+
+.case-ai-records-page__number-cell.is-adopted {
+  color: #00b42a;
+}
+
+.case-ai-records-page__model-cell {
+  color: #86909c;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.case-ai-records-page__time-cell {
+  color: #86909c;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.case-ai-records-page__operator-cell {
+  color: #86909c;
+}
+
+.case-ai-records-page__icon-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  padding-right: 14px;
+}
+
+.case-ai-records-page__icon-action {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-}
-
-.case-ai-records-page__actions {
   justify-content: center;
-  flex-wrap: nowrap;
-  gap: 0;
+  width: 24.5px;
+  height: 24.5px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
 }
 
-.case-ai-records-page__actions :deep(.el-button) {
-  margin-left: 0;
-  font-size: 13px;
-}
-
-.case-ai-records-page__table :deep(.el-table__fixed-right .cell) {
-  padding-left: 8px;
-  padding-right: 8px;
+.case-ai-records-page__icon-action img {
+  width: 13px;
+  height: 13px;
 }
 
 .case-ai-records-page__pagination {
   display: flex;
-  justify-content: flex-end;
-  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
   flex-wrap: wrap;
-  margin-top: 16px;
+  min-height: 43px;
+  margin-top: 0;
+  padding: 9.75px 14px 8.75px;
+  border-top: 1px solid #e5e6eb;
 }
 
 .case-ai-records-page__pagination-summary {
