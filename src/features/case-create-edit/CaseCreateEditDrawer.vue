@@ -273,27 +273,43 @@ watch(
   <AppDrawer
     :model-value="modelValue"
     :title="drawerTitle"
-    size="720px"
+    size="640px"
     drawer-class="case-editor-drawer"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="case-editor-drawer__body">
       <el-form label-position="top" class="case-editor-drawer__form">
-        <el-form-item label="用例名称" required class="case-editor-drawer__form-item">
+        <el-form-item label="用例标题" class="case-editor-drawer__form-item">
           <el-input v-model="form.title" placeholder="请输入用例名称" />
         </el-form-item>
 
-        <el-form-item label="用例模块" class="case-editor-drawer__form-item">
+        <el-form-item label="优先级" class="case-editor-drawer__form-item case-editor-drawer__form-item--priority">
+          <el-select
+            v-model="form.priority"
+            class="case-editor-drawer__priority"
+            popper-class="case-editor-drawer__select-popper"
+          >
+            <el-option
+              v-for="item in casePriorityOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="用例路径" class="case-editor-drawer__form-item">
           <el-input
             :model-value="modulePath"
             readonly
             class="case-editor-drawer__path-input"
+            :title="modulePath"
           >
             <template #suffix>
               <button
                 type="button"
                 class="case-editor-drawer__path-button"
-                aria-label="修改目录"
+                aria-label="修改用例路径"
                 :disabled="!form.workspaceCode || form.workspaceCode === 'ALL'"
                 @click.stop="openModulePicker"
               >
@@ -303,24 +319,16 @@ watch(
           </el-input>
         </el-form-item>
 
-        <el-form-item label="优先级" class="case-editor-drawer__form-item">
-          <el-segmented
-            v-model="form.priority"
-            :options="casePriorityOptions.map(item => item.value)"
-            class="case-editor-drawer__priority"
-          />
+        <el-form-item label="前置条件" class="case-editor-drawer__form-item case-editor-drawer__form-item--precondition">
+          <el-input v-model="form.precondition" type="textarea" :rows="4" resize="none" />
         </el-form-item>
 
-        <el-form-item label="前置条件" class="case-editor-drawer__form-item">
-          <el-input v-model="form.precondition" type="textarea" :rows="3" resize="vertical" />
+        <el-form-item label="测试步骤" class="case-editor-drawer__form-item case-editor-drawer__form-item--steps">
+          <el-input v-model="form.steps" type="textarea" :rows="7" resize="none" />
         </el-form-item>
 
-        <el-form-item label="测试步骤" class="case-editor-drawer__form-item">
-          <el-input v-model="form.steps" type="textarea" :rows="6" resize="vertical" />
-        </el-form-item>
-
-        <el-form-item label="预期结果" class="case-editor-drawer__form-item">
-          <el-input v-model="form.expectedResult" type="textarea" :rows="4" resize="vertical" />
+        <el-form-item label="预期结果" class="case-editor-drawer__form-item case-editor-drawer__form-item--expected">
+          <el-input v-model="form.expectedResult" type="textarea" :rows="4" resize="none" />
         </el-form-item>
 
         <p v-if="formError.message" class="case-editor-drawer__error">{{ formError.message }}</p>
@@ -352,12 +360,14 @@ watch(
 
   <AppDialog
     v-model="modulePickerVisible"
-    title="选择保存路径"
-    width="760px"
+    title="选择用例路径"
+    width="640px"
+    dialog-class="case-module-picker-dialog"
+    modal-class="case-module-picker-dialog-modal"
   >
     <div class="case-module-picker">
       <div class="case-module-picker__current">
-        <span>当前保存路径</span>
+        <span>当前用例路径</span>
         <strong>{{ modulePath }}</strong>
       </div>
 
@@ -395,97 +405,189 @@ watch(
 
       <div class="case-module-picker__selected">
         <span>已选路径</span>
-        <strong>{{ modulePickerSelectedPath || '请在上方目录树中选择保存路径' }}</strong>
+        <strong>{{ modulePickerSelectedPath || '请在上方目录树中选择用例路径' }}</strong>
       </div>
     </div>
 
     <template #footer>
       <AppButton @click="modulePickerVisible = false">取消</AppButton>
       <AppButton type="primary" :icon="FolderOpened" @click="confirmModulePickerSelection">
-        确认修改
+        确认
       </AppButton>
     </template>
   </AppDialog>
 </template>
 
 <style scoped>
-.case-editor-drawer :deep(.el-drawer__header) {
-  margin-bottom: 0;
-  padding: var(--app-space-5) var(--app-space-6) var(--app-space-2);
-  border-bottom: 1px solid var(--app-border-soft);
+:global(.case-editor-drawer) {
+  --case-editor-drawer-border: #e5e6eb;
+  --case-editor-drawer-text-primary: #1d2129;
+  --case-editor-drawer-text-secondary: #4e5969;
+  --case-editor-drawer-text-muted: #86909c;
+  --case-editor-drawer-bg-muted: #f7f8fa;
 }
 
-.case-editor-drawer :deep(.el-drawer__body) {
+:global(.case-editor-drawer.el-drawer) {
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.12);
+}
+
+:global(.case-editor-drawer .el-drawer__header) {
+  box-sizing: border-box;
+  flex: 0 0 52px;
+  margin-bottom: 0;
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--case-editor-drawer-border);
+  color: var(--case-editor-drawer-text-primary);
+}
+
+:global(.case-editor-drawer .el-drawer__title) {
+  color: var(--case-editor-drawer-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22.5px;
+}
+
+:global(.case-editor-drawer .el-drawer__close-btn) {
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  color: #86909c;
+}
+
+:global(.case-editor-drawer .el-drawer__close-btn .el-icon) {
+  width: 18px;
+  height: 18px;
+}
+
+:global(.case-editor-drawer .el-drawer__body) {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
   padding: 0;
 }
 
-.case-editor-drawer :deep(.el-drawer__footer) {
+:global(.case-editor-drawer .el-drawer__footer) {
   padding: 0;
 }
 
 .case-editor-drawer__body {
-  padding: var(--app-space-3) var(--app-space-6) 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px;
 }
 
 .case-editor-drawer__form {
   display: flex;
   flex-direction: column;
+  gap: 14px;
 }
 
 .case-editor-drawer__form-item {
-  margin-bottom: var(--app-space-5);
+  margin-bottom: 0;
 }
 
-.case-editor-drawer :deep(.el-form-item__label) {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
+:global(.case-editor-drawer .el-form-item__label) {
+  height: 25px;
+  padding: 0 0 5px;
+  color: var(--case-editor-drawer-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
 }
 
-.case-editor-drawer :deep(.el-input__wrapper),
-.case-editor-drawer :deep(.el-textarea__inner) {
-  border-radius: var(--app-radius-md);
+:global(.case-editor-drawer .el-input__wrapper),
+:global(.case-editor-drawer .el-select__wrapper),
+:global(.case-editor-drawer .el-textarea__inner) {
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--case-editor-drawer-border) inset;
 }
 
-.case-editor-drawer :deep(.el-textarea__inner) {
-  line-height: 1.7;
+:global(.case-editor-drawer .el-input__wrapper),
+:global(.case-editor-drawer .el-select__wrapper) {
+  min-height: 34px;
+  padding: 1px 13px;
+}
+
+:global(.case-editor-drawer .el-input__inner),
+:global(.case-editor-drawer .el-select__placeholder),
+:global(.case-editor-drawer .el-select__selected-item) {
+  color: var(--case-editor-drawer-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+:global(.case-editor-drawer .el-textarea__inner) {
+  padding: 9px 13px;
+  color: var(--case-editor-drawer-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.case-editor-drawer__form-item--precondition :deep(.el-textarea__inner) {
+  min-height: 100px;
+}
+
+.case-editor-drawer__form-item--steps :deep(.el-textarea__inner) {
+  min-height: 166px;
+}
+
+.case-editor-drawer__form-item--expected :deep(.el-textarea__inner) {
+  min-height: 100px;
+}
+
+.case-editor-drawer__form-item--priority {
+  width: 294px;
 }
 
 .case-editor-drawer__path-input :deep(.el-input__wrapper) {
-  padding-right: 4px;
+  padding-right: 6px;
 }
 
 .case-editor-drawer__path-button {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
   padding: 0;
   border: 0;
-  border-radius: var(--app-radius-sm);
+  border-radius: 4px;
   background: transparent;
-  color: var(--app-primary);
+  color: var(--case-editor-drawer-text-muted);
   cursor: pointer;
 }
 
 .case-editor-drawer__path-button:hover:not(:disabled) {
-  background: var(--app-primary-soft);
+  background: var(--case-editor-drawer-bg-muted);
+  color: #165dff;
 }
 
 .case-editor-drawer__path-button:disabled {
-  color: var(--app-text-subtle);
+  color: #c9cdd4;
   cursor: not-allowed;
 }
 
 .case-editor-drawer__priority {
-  max-width: 320px;
+  width: 100%;
+}
+
+.case-editor-drawer__path-input :deep(.el-input__inner) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .case-editor-drawer__error {
-  margin: 0 0 var(--app-space-4);
+  margin: 0;
   color: var(--app-danger);
-  font-size: var(--app-font-size-sm);
+  font-size: 13px;
+  line-height: 19.5px;
 }
 
 .case-editor-drawer__footer {
@@ -493,14 +595,14 @@ watch(
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  gap: var(--app-space-2);
+  gap: 8px;
 }
 
 .case-editor-drawer__nav,
 .case-editor-drawer__submit {
   display: inline-flex;
   align-items: center;
-  gap: var(--app-space-2);
+  gap: 8px;
 }
 
 .case-editor-drawer__submit {
@@ -509,77 +611,205 @@ watch(
 
 .case-editor-drawer__nav-counter {
   display: inline-flex;
-  min-width: 48px;
-  height: 30px;
+  min-width: 36px;
+  height: 18px;
   align-items: center;
   justify-content: center;
-  border-radius: var(--app-radius-sm);
-  background: var(--app-bg-muted);
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
+  color: var(--case-editor-drawer-text-muted);
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
 }
 
 .case-editor-drawer__next-icon {
-  margin-left: 4px;
+  margin-left: 1px;
+}
+
+:global(.case-editor-drawer .app-drawer__footer) {
+  min-height: 58px;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid var(--case-editor-drawer-border);
+  background: var(--case-editor-drawer-bg-muted);
+}
+
+:global(.case-editor-drawer .app-button.el-button) {
+  min-height: 32px;
+  padding: 6px 13px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+:global(.case-editor-drawer .app-button.el-button--primary) {
+  border-color: #165dff;
+  background: #165dff;
+}
+
+:global(.el-dialog.case-module-picker-dialog) {
+  --case-module-picker-border: #e5e6eb;
+  --case-module-picker-text-primary: #1d2129;
+  --case-module-picker-text-secondary: #4e5969;
+  --case-module-picker-text-muted: #86909c;
+  --case-module-picker-bg-muted: #f7f8fa;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: 0 12px 36px rgba(29, 33, 41, 0.16);
+}
+
+:global(.el-dialog.case-module-picker-dialog > .el-dialog__header) {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  margin: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--case-module-picker-border);
+}
+
+:global(.case-module-picker-dialog .el-dialog__title) {
+  color: var(--case-module-picker-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22.5px;
+}
+
+:global(.case-module-picker-dialog .el-dialog__headerbtn) {
+  top: 13px;
+  right: 16px;
+  width: 26px;
+  height: 26px;
+  color: var(--case-module-picker-text-muted);
+}
+
+:global(.case-module-picker-dialog .el-dialog__body) {
+  padding: 16px 20px;
+}
+
+:global(.case-module-picker-dialog .el-dialog__footer) {
+  padding: 12px 20px;
+  border-top: 1px solid var(--case-module-picker-border);
+  background: var(--case-module-picker-bg-muted);
+}
+
+:global(.case-module-picker-dialog .el-button) {
+  min-height: 32px;
+  padding: 6px 13px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+:global(.case-module-picker-dialog .el-button--primary) {
+  border-color: #165dff;
+  background: #165dff;
 }
 
 .case-module-picker {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-4);
+  gap: 12px;
 }
 
 .case-module-picker__current,
 .case-module-picker__selected {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-subtle);
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
+  background: #f7f8fa;
 }
 
 .case-module-picker__current span,
 .case-module-picker__selected span {
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
+  color: #86909c;
+  font-size: 12px;
   line-height: 18px;
 }
 
 .case-module-picker__current strong,
 .case-module-picker__selected strong {
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 13px;
   font-weight: 500;
-  line-height: 22px;
+  line-height: 19.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-module-picker :deep(.el-input__wrapper) {
+  min-height: 34px;
+  padding: 1px 13px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+.case-module-picker :deep(.el-input__inner) {
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 19.5px;
 }
 
 .case-module-picker__tree-panel {
-  min-height: 280px;
-  max-height: 360px;
+  min-height: 300px;
+  max-height: 340px;
   overflow: auto;
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
+  padding: 8px;
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
+  background: #fff;
 }
 
 .case-module-picker__empty {
-  padding: var(--app-space-8) 0;
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-sm);
+  padding: 54px 0;
+  color: #86909c;
+  font-size: 13px;
   text-align: center;
+}
+
+.case-module-picker__tree {
+  --el-tree-node-hover-bg-color: #f7f8fa;
+  color: #4e5969;
+}
+
+.case-module-picker__tree :deep(.el-tree-node__content) {
+  height: 32px;
+  border-radius: 4px;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.case-module-picker__tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  background: rgba(22, 93, 255, 0.08);
+  color: #165dff;
 }
 
 .case-module-picker__node {
   display: flex;
   align-items: center;
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
+  min-width: 0;
+  color: inherit;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.case-module-picker__node span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .case-module-picker__node.is-workspace {
-  color: var(--app-text-primary);
+  color: #1d2129;
   font-weight: 600;
 }
 

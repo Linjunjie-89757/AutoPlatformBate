@@ -61,6 +61,7 @@ import {
 } from '@/entities/local-runner'
 import { startLocalRunnerTaskPolling } from '@/entities/web-ui-automation/lib/localRunnerClient'
 import type { WorkspaceItem } from '@/entities/workspace'
+import { confirmDelete } from '@/shared/ui'
 import ApiRunStepDetailViewer from '../api-scenario-workspace/ApiRunStepDetailViewer.vue'
 
 type ExecutionSuiteCaseType = 'api' | 'scene'
@@ -1074,11 +1075,10 @@ async function addSelectedArrangeItems() {
 async function deleteArrangeItem(row: ExecutionSuiteCase) {
   if (!activeSuiteDetail.value) return
   try {
-    await ElMessageBox.confirm('确认删除该编排项吗？', '删除编排项', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      customClass: 'execution-soft-message-box',
+    await confirmDelete({
+      title: '删除编排项',
+      message: '确认删除该编排项吗？删除后不可恢复。',
+      confirmText: '确认删除',
     })
   } catch {
     return
@@ -1483,11 +1483,10 @@ async function renameSuiteModule(node: ExecutionSuiteNode) {
 async function deleteSuiteModule(node: ExecutionSuiteNode) {
   if (!node.moduleId || !node.workspaceCode) return
   try {
-    await ElMessageBox.confirm('只能删除空模块，确认删除吗？', '删除模块', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      customClass: 'execution-soft-message-box',
+    await confirmDelete({
+      title: '删除模块',
+      message: '只能删除空模块，确认删除吗？删除后不可恢复。',
+      confirmText: '确认删除',
     })
   } catch {
     return

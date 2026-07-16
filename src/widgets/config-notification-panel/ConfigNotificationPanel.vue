@@ -20,6 +20,7 @@ import {
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaConfigNotificationIcons, type FigmaConfigNotificationChannelIcon } from '@/shared/assets/figma-icons'
 import { debounce } from '@/shared/lib/debounce'
+import { confirmDelete } from '@/shared/ui'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 
@@ -56,17 +57,6 @@ interface ChannelTypeCard {
   color: string
   bg: string
   disabled?: boolean
-}
-
-type DeleteConfirmType = 'channel' | 'rule'
-
-interface DeleteConfirmState {
-  type: DeleteConfirmType
-  id: number
-  title: string
-  message: string
-  workspaceCode: string
-  name: string
 }
 
 interface NotificationFigmaContentOption {
@@ -137,7 +127,6 @@ const ruleDialogMode = ref<DialogMode>('create')
 const editingRule = ref<NotificationRuleItem | null>(null)
 const ruleForm = ref<CreateNotificationRulePayload>(defaultRuleForm())
 
-const deleteConfirm = ref<DeleteConfirmState | null>(null)
 const historyDetailVisible = ref(false)
 const selectedHistoryRecord = ref<NotificationRecordItem | null>(null)
 
@@ -641,57 +630,58 @@ async function testChannelFromDrawer() {
   }
 }
 
-function openDeleteChannelConfirm(row: NotificationChannelItem) {
+async function openDeleteChannelConfirm(row: NotificationChannelItem) {
   const count = getChannelRulesCount(row)
-  deleteConfirm.value = {
-    type: 'channel',
-    id: row.id,
-    workspaceCode: row.workspaceCode,
-    name: row.channelName,
-    title: '删除渠道',
-    message: `确认删除「${row.channelName}」？该渠道关联了 ${count} 条通知规则，删除后相关规则将停止发送。`,
-  }
-}
-
-function openDeleteRuleConfirm(row: NotificationRuleItem) {
-  deleteConfirm.value = {
-    type: 'rule',
-    id: row.id,
-    workspaceCode: row.workspaceCode,
-    name: row.ruleName,
-    title: '删除通知规则',
-    message: `确认删除「${row.ruleName}」？删除后该规则将不再触发任何通知。`,
-  }
-}
-
-function closeDeleteConfirm() {
-  if (operatingId.value !== null) {
-    return
-  }
-  deleteConfirm.value = null
-}
-
-async function confirmDeleteTarget() {
-  const target = deleteConfirm.value
-  if (!target) {
-    return
-  }
-  operatingId.value = target.id
   try {
-    if (target.type === 'channel') {
-      await configApi.deleteNotificationChannel(target.workspaceCode, target.id)
-      ElMessage.success('通知渠道已删除')
-      await Promise.all([loadChannels(), loadRules()])
-    } else {
-      await configApi.deleteNotificationRule(target.workspaceCode, target.id)
-      ElMessage.success('通知规则已删除')
-      await loadRules()
-    }
-    deleteConfirm.value = null
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    operatingId.value = null
+    await confirmDelete({
+      title: '删除渠道',
+      message: `确认删除「${row.channelName}」？该渠道关联了 ${count} 条通知规则，删除后相关规则将停止发送。`,
+      confirmText: '确认删除',
+      density: 'compact',
+      zIndex: 3000,
+      beforeConfirm: async () => {
+        operatingId.value = row.id
+        try {
+          await configApi.deleteNotificationChannel(row.workspaceCode, row.id)
+          ElMessage.success('通知渠道已删除')
+          await Promise.all([loadChannels(), loadRules()])
+        } catch (error) {
+          ElMessage.error(getRequestErrorMessage(error))
+          throw error
+        } finally {
+          operatingId.value = null
+        }
+      },
+    })
+  } catch {
+    // 用户取消或关闭弹窗时不需要提示。
+  }
+}
+
+async function openDeleteRuleConfirm(row: NotificationRuleItem) {
+  try {
+    await confirmDelete({
+      title: '删除通知规则',
+      message: `确认删除「${row.ruleName}」？删除后该规则将不再触发任何通知。`,
+      confirmText: '确认删除',
+      density: 'compact',
+      zIndex: 3000,
+      beforeConfirm: async () => {
+        operatingId.value = row.id
+        try {
+          await configApi.deleteNotificationRule(row.workspaceCode, row.id)
+          ElMessage.success('通知规则已删除')
+          await loadRules()
+        } catch (error) {
+          ElMessage.error(getRequestErrorMessage(error))
+          throw error
+        } finally {
+          operatingId.value = null
+        }
+      },
+    })
+  } catch {
+    // 用户取消或关闭弹窗时不需要提示。
   }
 }
 
@@ -813,7 +803,6 @@ watch(
   () => {
     channelDialogVisible.value = false
     ruleDialogVisible.value = false
-    deleteConfirm.value = null
     void refreshAll()
   },
 )
@@ -1666,38 +1655,6 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
       </div>
     </el-drawer>
 
-    <teleport to="body">
-      <div
-        v-if="deleteConfirm"
-        class="notification-delete-modal"
-        role="dialog"
-        aria-modal="true"
-        @click.self="closeDeleteConfirm"
-      >
-        <div class="notification-delete-modal__panel">
-          <div class="notification-delete-modal__content">
-            <span class="notification-delete-modal__icon">
-              <img :src="figmaConfigNotificationIcons.modal.deleteWarning" alt="">
-            </span>
-            <div>
-              <h3>{{ deleteConfirm.title }}</h3>
-              <p>{{ deleteConfirm.message }}</p>
-            </div>
-          </div>
-          <div class="notification-delete-modal__footer">
-            <button type="button" class="notification-delete-modal__cancel" @click="closeDeleteConfirm">取消</button>
-            <button
-              type="button"
-              class="notification-delete-modal__confirm"
-              :disabled="operatingId === deleteConfirm.id"
-              @click="confirmDeleteTarget"
-            >
-              确认删除
-            </button>
-          </div>
-        </div>
-      </div>
-    </teleport>
   </section>
 </template>
 
@@ -2670,106 +2627,6 @@ button.notification-rule-toggle {
   color: #4e5969;
   font-size: 12px;
   line-height: 18px;
-}
-
-.notification-delete-modal {
-  position: fixed;
-  z-index: 3000;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.28);
-}
-
-.notification-delete-modal__panel {
-  box-sizing: border-box;
-  width: 400px;
-  padding: 21px;
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.16);
-}
-
-.notification-delete-modal__content {
-  display: flex;
-  align-items: flex-start;
-  gap: 10.5px;
-}
-
-.notification-delete-modal__icon {
-  display: inline-flex;
-  width: 35px;
-  height: 35px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #ffe8e8;
-}
-
-.notification-delete-modal__icon img {
-  width: 18px;
-  height: 18px;
-}
-
-.notification-delete-modal h3 {
-  margin: 0;
-  color: #1d2129;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22.5px;
-}
-
-.notification-delete-modal p {
-  margin: 3.5px 0 0;
-  color: #86909c;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 19.5px;
-}
-
-.notification-delete-modal__footer {
-  display: flex;
-  height: 49.5px;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 7px;
-  padding-top: 17.5px;
-}
-
-.notification-delete-modal__cancel,
-.notification-delete-modal__confirm {
-  display: inline-flex;
-  box-sizing: border-box;
-  align-items: center;
-  justify-content: center;
-  border-radius: 7px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 19.5px;
-}
-
-.notification-delete-modal__cancel {
-  height: 28px;
-  padding: 1px 11.5px;
-  border: 1px solid #e5e6eb;
-  background: #ffffff;
-  color: #4e5969;
-}
-
-.notification-delete-modal__confirm {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid #f53f3f;
-  background: #f53f3f;
-  color: #ffffff;
-}
-
-.notification-delete-modal__confirm:disabled {
-  cursor: not-allowed;
-  opacity: 0.58;
 }
 
 @media (max-width: 960px) {

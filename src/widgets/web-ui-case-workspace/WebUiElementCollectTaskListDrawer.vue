@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { Delete, RefreshRight, Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   webUiAutomationApi,
@@ -9,6 +9,7 @@ import {
 } from '@/entities/web-ui-automation'
 import { isCollectTaskTerminalStatus } from '@/entities/web-ui-automation/lib/collectTask'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 
@@ -161,15 +162,11 @@ async function deleteTask(task: WebUiElementCollectTaskListItem) {
   }
 
   try {
-    await ElMessageBox.confirm(
-      `确定删除采集任务 #${task.taskId} 吗？删除后无法从任务列表打开该历史任务。`,
-      '删除采集任务',
-      {
-        type: 'warning',
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-      },
-    )
+    await confirmDelete({
+      title: '删除采集任务',
+      message: `确认删除采集任务 #${task.taskId} 吗？删除后无法从任务列表打开该历史任务。`,
+      confirmText: '确认删除',
+    })
   } catch {
     return
   }

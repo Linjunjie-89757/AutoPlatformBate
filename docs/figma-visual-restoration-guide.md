@@ -122,8 +122,16 @@ Figma 迁移遗留问题处理：
 | shadcn Tabs | `el-tabs` 或现有自定义 Tab，保持 32-44px 高度 |
 | Radix Dialog | Element Plus `el-dialog` |
 | Radix Drawer / Sheet | Element Plus `el-drawer` |
+| 删除确认 Dialog | `confirmDelete()` / `AppDeleteConfirmDialog`，禁止新增删除场景直接使用 `ElMessageBox.confirm` |
 | lucide-react | `@lucide/vue` |
 | Tailwind class | 转换为项目 CSS token 和局部 scoped class |
+
+删除确认弹窗统一规则：
+
+- 删除类确认必须优先使用 `confirmDelete()`，视觉按 Figma 红色图标、标题、说明、取消、确认删除按钮样式落地。
+- 保留 `ElMessageBox.confirm` 仅限暂未迁移的历史代码、非删除类确认、输入型 `prompt` 或特殊业务确认；新增删除入口不得继续使用 Element Plus 默认确认框。
+- 批量删除、删除附件、删除模块、删除接口 / 场景 / 用例 / 缺陷等，后续迁移时都应先替换为公共删除确认，再接原业务接口。
+- 若当前删除入口只有视觉按钮但没有后端能力，保留入口样式并记录到 `设计/遗留问题.md`，不能伪造删除成功。
 
 ## 推荐实施阶段
 

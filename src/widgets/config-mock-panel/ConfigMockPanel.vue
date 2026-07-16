@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Connection, CopyDocument, Delete, Edit, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   ConfigTypeBadge,
@@ -19,6 +19,7 @@ import {
   type MockScenarioItem,
 } from '@/entities/config'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 import ConfigReferenceDrawer from '@/widgets/config-reference-drawer/ConfigReferenceDrawer.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -552,10 +553,10 @@ async function removeBusinessScenario(row: MockBusinessScenarioItem) {
 
 async function confirmAndRun(message: string, action: () => Promise<void>) {
   try {
-    await ElMessageBox.confirm(message, '删除确认', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await confirmDelete({
+      title: '删除确认',
+      message,
+      confirmText: '确认删除',
     })
     await action()
     ElMessage.success('已删除')

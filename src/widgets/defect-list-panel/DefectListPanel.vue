@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 
 import {
@@ -23,6 +23,7 @@ import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
+import { confirmDelete } from '@/shared/ui'
 import { DefectDetailDrawer } from '@/widgets/defect-detail-drawer'
 import {
   useDefectTableSettings,
@@ -341,11 +342,10 @@ async function deleteActiveDetailDefect() {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除缺陷“${item.bugNo || item.title}”吗？删除后不可恢复。`, '删除缺陷', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger',
+    await confirmDelete({
+      title: '删除缺陷',
+      message: `确认删除缺陷“${item.bugNo || item.title}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
 
     deletingDefectId.value = item.id
@@ -369,11 +369,10 @@ async function deleteRowDefect(item: DefectSummaryItem) {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除缺陷“${item.bugNo || item.title}”吗？删除后不可恢复。`, '删除缺陷', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger',
+    await confirmDelete({
+      title: '删除缺陷',
+      message: `确认删除缺陷“${item.bugNo || item.title}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
 
     deletingDefectId.value = item.id
@@ -416,11 +415,10 @@ async function deleteSelectedDefects() {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除已选 ${targets.length} 个缺陷吗？删除后不可恢复。`, '删除缺陷', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger',
+    await confirmDelete({
+      title: '删除缺陷',
+      message: `确认删除已选 ${targets.length} 个缺陷吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
 
     for (const item of targets) {

@@ -12,8 +12,9 @@ import { ConfigDbDialog, type ConfigDbDialogMode } from '@/features/config-db-cr
 import { deleteConfigDbConnection } from '@/features/config-db-delete'
 import { testConfigDbConnection } from '@/features/config-db-test-connection'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { figmaConfigDbIcons, figmaConfigNotificationIcons, type FigmaConfigDbCylinderIcon } from '@/shared/assets/figma-icons'
+import { figmaConfigDbIcons, type FigmaConfigDbCylinderIcon } from '@/shared/assets/figma-icons'
 import { debounce } from '@/shared/lib/debounce'
+import { confirmDelete } from '@/shared/ui'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 
@@ -36,8 +37,6 @@ const dialogMode = ref<ConfigDbDialogMode>('create')
 const editingDbConnection = ref<DbConnectionItem | null>(null)
 const testingDbConnectionId = ref<number | null>(null)
 const deletingDbConnectionId = ref<number | null>(null)
-const deleteDialogVisible = ref(false)
-const deleteTargetDbConnection = ref<DbConnectionItem | null>(null)
 const filterKeyword = ref('')
 
 const filteredDbConnections = computed(() => {
@@ -115,28 +114,29 @@ async function testConnection(dbConnection: DbConnectionItem) {
   }
 }
 
-function openDeleteDialog(dbConnection: DbConnectionItem) {
-  deleteTargetDbConnection.value = dbConnection
-  deleteDialogVisible.value = true
-}
-
-async function confirmDeleteDbConnection() {
-  const dbConnection = deleteTargetDbConnection.value
-  if (!dbConnection) {
-    return
-  }
-
-  deletingDbConnectionId.value = dbConnection.id
+async function openDeleteDialog(dbConnection: DbConnectionItem) {
   try {
-    await deleteConfigDbConnection(dbConnection, props.workspaceCode)
-    ElMessage.success('数据库连接已删除')
-    deleteDialogVisible.value = false
-    deleteTargetDbConnection.value = null
-    await loadDbConnections()
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    deletingDbConnectionId.value = null
+    await confirmDelete({
+      title: '删除数据库连接',
+      message: `确认删除“${dbConnection.connectionName}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+      loadingText: '删除中...',
+      beforeConfirm: async () => {
+        deletingDbConnectionId.value = dbConnection.id
+        try {
+          await deleteConfigDbConnection(dbConnection, props.workspaceCode)
+          ElMessage.success('数据库连接已删除')
+          await loadDbConnections()
+        } catch (error) {
+          ElMessage.error(getRequestErrorMessage(error))
+          throw error
+        } finally {
+          deletingDbConnectionId.value = null
+        }
+      },
+    })
+  } catch {
+    // 用户取消或关闭弹窗时不需要提示。
   }
 }
 
@@ -393,34 +393,6 @@ watch(filterKeyword, () => {
       @submit="submitDbConnection"
     />
 
-    <div
-      v-if="deleteDialogVisible && deleteTargetDbConnection"
-      class="config-db-delete-overlay"
-      @click.self="deleteDialogVisible = false"
-    >
-      <div class="config-db-delete-modal" role="dialog" aria-modal="true" aria-labelledby="config-db-delete-title">
-        <div class="config-db-delete-modal__body">
-          <span>
-            <img :src="figmaConfigNotificationIcons.modal.deleteWarning" alt="">
-          </span>
-          <div>
-            <h3 id="config-db-delete-title">删除数据库连接</h3>
-            <p>确认删除“{{ deleteTargetDbConnection.connectionName }}”吗？删除后不可恢复。</p>
-          </div>
-        </div>
-        <div class="config-db-delete-modal__footer">
-          <button type="button" class="config-db-secondary-button" @click="deleteDialogVisible = false">取消</button>
-          <button
-            type="button"
-            class="config-db-danger-button"
-            :disabled="deletingDbConnectionId === deleteTargetDbConnection.id"
-            @click="confirmDeleteDbConnection"
-          >
-            {{ deletingDbConnectionId === deleteTargetDbConnection.id ? '删除中...' : '确认删除' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </section>
 </template>
 
@@ -760,69 +732,6 @@ watch(filterKeyword, () => {
 .config-db-danger-button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-}
-
-.config-db-delete-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2050;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.28);
-}
-
-.config-db-delete-modal {
-  width: 400px;
-  padding: 24px;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
-}
-
-.config-db-delete-modal__body {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.config-db-delete-modal__body > span {
-  display: inline-flex;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #ffe8e8;
-}
-
-.config-db-delete-modal__body img {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-
-.config-db-delete-modal__body h3 {
-  margin: 0 0 4px;
-  color: #1d2129;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
-}
-
-.config-db-delete-modal__body p {
-  margin: 0;
-  color: #86909c;
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.config-db-delete-modal__footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 .config-db-pagination {

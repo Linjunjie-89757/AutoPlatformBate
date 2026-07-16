@@ -57,6 +57,7 @@ import {
   type WebUiCollectCandidateFilter,
 } from '@/entities/web-ui-automation/lib/collectTask'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -3160,10 +3161,10 @@ async function batchDeleteElements() {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除选中的 ${selectedElements.value.length} 个元素吗？`, '批量删除元素', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await confirmDelete({
+      title: '批量删除元素',
+      message: `确认删除选中的 ${selectedElements.value.length} 个元素吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
   } catch {
     return
@@ -3398,10 +3399,10 @@ async function cleanEmptyLocalQualityIssue(issue: LocalQualityIssue) {
   }
 
   try {
-    await ElMessageBox.confirm(`确认清理空${targetType}“${targetName || '-'}”吗？`, `清理空${targetType}`, {
-      type: 'warning',
-      confirmButtonText: '清理',
-      cancelButtonText: '取消',
+    await confirmDelete({
+      title: `清理空${targetType}`,
+      message: `确认清理空${targetType}“${targetName || '-'}”吗？清理后不可恢复。`,
+      confirmText: '确认清理',
     })
   } catch {
     return
@@ -3480,10 +3481,10 @@ async function deleteElement(item: WebUiElementItem) {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除元素“${item.elementName}”吗？`, '删除元素', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await confirmDelete({
+      title: '删除元素',
+      message: `确认删除元素“${item.elementName}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
   } catch {
     return

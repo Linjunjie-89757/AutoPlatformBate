@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ArrowLeft, ChevronDown, FileSpreadsheet, Plus, Trash2 } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   apiAutomationApi,
@@ -11,6 +11,7 @@ import {
   type ApiScenarioTestDatasetRow,
 } from '@/entities/api-automation'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 
 const props = defineProps<{
   scenarioId: number | null
@@ -223,10 +224,10 @@ async function saveDataset() {
 
 async function deleteDataset(item: ApiScenarioTestDatasetItem) {
   if (!props.scenarioId) return
-  await ElMessageBox.confirm(`确认删除测试数据集「${item.datasetName}」吗？`, '删除测试数据集', {
-    type: 'warning',
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
+  await confirmDelete({
+    title: '删除测试数据集',
+    message: `确认删除测试数据集「${item.datasetName}」吗？删除后不可恢复。`,
+    confirmText: '确认删除',
   })
   await apiAutomationApi.deleteScenarioTestDataset(props.workspaceCode, props.scenarioId, item.id)
   ElMessage.success('测试数据集已删除')

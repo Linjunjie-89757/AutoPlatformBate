@@ -6,8 +6,6 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { caseApi, type CaseSummaryItem } from '@/entities/case'
 import {
-  DefectAttachmentPanel,
-  type DefectAttachmentPanelItem,
   defectApi,
   defectPriorityOptions,
   defectSeverityOptions,
@@ -23,6 +21,7 @@ import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 import AppTagInput from '@/shared/ui/app-tag-input/AppTagInput.vue'
 import AppUserSelect from '@/shared/ui/app-user-select/AppUserSelect.vue'
+import { AttachmentFileWall, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
 import {
   buildSaveDefectPayload,
   createDefaultDefectForm,
@@ -57,8 +56,6 @@ const inlineImages = ref<Array<{ file: File; src: string }>>([])
 const pendingFiles = ref<PendingDefectFile[]>([])
 const existingAttachments = ref<DefectAttachment[]>([])
 const attachmentImageUrls = ref<Record<number, string>>({})
-const uploadInput = ref<HTMLInputElement | null>(null)
-const evidenceDropActive = ref(false)
 const initialSnapshot = ref('')
 const suppressLeaveGuard = ref(false)
 const deletingAttachmentIds = ref<Set<number>>(new Set())
@@ -80,13 +77,7 @@ const routeWorkspaceCode = computed(() => {
 const pageTitle = computed(() => (isCreateMode.value ? '新增缺陷' : '编辑缺陷'))
 const primaryActionText = computed(() => (isCreateMode.value ? '创建' : '保存'))
 const canSubmit = computed(() => !loading.value && !errorMessage.value)
-const pendingImageFiles = computed(() => pendingFiles.value.filter(item => item.previewUrl))
-const existingImageAttachments = computed(() => existingAttachments.value.filter(item => isImageAttachment(item)))
-const attachmentPreviewUrls = computed(() => [
-  ...existingImageAttachments.value.map(item => getAttachmentImageUrl(item)),
-  ...pendingImageFiles.value.map(item => item.previewUrl || ''),
-].filter(Boolean))
-const attachmentPanelItems = computed<DefectAttachmentPanelItem[]>(() => [
+const attachmentWallItems = computed<AttachmentFileWallItem[]>(() => [
   ...existingAttachments.value.map(item => ({
     id: item.id,
     fileName: item.fileName,
@@ -102,6 +93,7 @@ const attachmentPanelItems = computed<DefectAttachmentPanelItem[]>(() => [
     fileSize: item.file.size,
     contentType: item.file.type,
     imageUrl: item.previewUrl || undefined,
+    metaText: '待上传',
     pending: true,
   })),
 ])
@@ -231,39 +223,6 @@ function clearPendingFiles() {
   pendingFiles.value = []
 }
 
-function openUploadPicker() {
-  uploadInput.value?.click()
-}
-
-function handleUploadChange(event: Event) {
-  const input = event.target as HTMLInputElement | null
-  const files = Array.from(input?.files ?? [])
-  if (input) {
-    input.value = ''
-  }
-  addPendingFiles(files)
-}
-
-function handleEvidencePaste(event: ClipboardEvent) {
-  const files = Array.from(event.clipboardData?.items ?? [])
-    .filter(item => item.kind === 'file')
-    .map(item => item.getAsFile())
-    .filter((item): item is File => !!item)
-  if (!files.length || saving.value) {
-    return
-  }
-  event.preventDefault()
-  addPendingFiles(files)
-}
-
-function handleEvidenceDrop(event: DragEvent) {
-  evidenceDropActive.value = false
-  if (saving.value) {
-    return
-  }
-  addPendingFiles(Array.from(event.dataTransfer?.files ?? []))
-}
-
 async function downloadAttachment(item: DefectAttachment) {
   if (!detail.value) {
     return
@@ -286,11 +245,10 @@ async function deleteAttachment(item: DefectAttachment) {
     return
   }
   try {
-    await ElMessageBox.confirm(`确认删除附件“${item.fileName}”吗？`, '删除附件', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      confirmButtonClass: 'el-button--danger',
+    await confirmDelete({
+      title: '删除附件',
+      message: `确认删除附件“${item.fileName}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
     const nextIds = new Set(deletingAttachmentIds.value)
     nextIds.add(item.id)
@@ -317,7 +275,7 @@ async function deleteAttachment(item: DefectAttachment) {
   }
 }
 
-function handleAttachmentPanelDownload(item: DefectAttachmentPanelItem) {
+function handleAttachmentPanelDownload(item: AttachmentFileWallItem) {
   if (item.pending) {
     return
   }
@@ -327,7 +285,7 @@ function handleAttachmentPanelDownload(item: DefectAttachmentPanelItem) {
   }
 }
 
-function handleAttachmentPanelRemove(item: DefectAttachmentPanelItem) {
+function handleAttachmentPanelRemove(item: AttachmentFileWallItem) {
   if (item.pending) {
     removePendingFile(String(item.id))
     return
@@ -643,7 +601,7 @@ watch(
         <AppLoadingState v-if="loading" title="正在加载缺陷详情" description="请稍候，系统正在读取最新缺陷信息。" />
         <div v-else-if="errorMessage" class="defect-edit-page__error">
           <span>{{ errorMessage }}</span>
-          <AppButton size="small" @click="loadDefectDetail">閲嶈瘯</AppButton>
+          <AppButton size="small" @click="loadDefectDetail">重试</AppButton>
         </div>
 
         <div v-else class="defect-edit-page__form-surface">
@@ -668,35 +626,19 @@ watch(
               />
             </div>
 
-            <section
-              class="defect-edit-page__evidence"
-              :class="{ 'is-drop-active': evidenceDropActive }"
-              tabindex="0"
-              @paste="handleEvidencePaste"
-              @dragenter.prevent="evidenceDropActive = true"
-              @dragover.prevent
-              @dragleave="evidenceDropActive = false"
-              @drop.prevent="handleEvidenceDrop"
-            >
-              <div class="defect-edit-page__evidence-head">
-                <div>
-                  <strong>附件 / 截图</strong>
-                  <span>点击上传，或在此区域粘贴、拖拽文件。</span>
-                </div>
-                <AppButton size="small" :disabled="saving" @click="openUploadPicker">上传附件</AppButton>
-              </div>
-
-              <DefectAttachmentPanel
-                :items="attachmentPanelItems"
-                :preview-urls="attachmentPreviewUrls"
+            <div class="defect-edit-page__field">
+              <span>附件 / 截图</span>
+              <AttachmentFileWall
+                :items="attachmentWallItems"
+                :disabled="saving"
                 :removing-id="Array.from(deletingAttachmentIds)[0] ?? null"
-                empty-title="添加附件或截图"
-                empty-description="当前还没有待上传附件，点击上方按钮或在此区域粘贴、拖拽文件。"
+                empty-title="点击上传，或将文件拖拽至此处"
+                empty-description="支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB"
+                @add-files="addPendingFiles"
                 @download="handleAttachmentPanelDownload"
                 @remove="handleAttachmentPanelRemove"
               />
-              <input ref="uploadInput" class="defect-edit-page__hidden-file" type="file" multiple @change="handleUploadChange">
-            </section>
+            </div>
           </section>
 
           <aside class="defect-edit-page__side">
@@ -815,7 +757,7 @@ watch(
   display: flex;
   min-height: 0;
   height: calc(100dvh - 64px - var(--app-space-6) * 2);
-  background: var(--app-bg-page);
+  background: #f4f6fa;
 }
 
 .defect-edit-page__shell {
@@ -825,76 +767,67 @@ watch(
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 
 .defect-edit-page__header {
   display: grid;
-  border-bottom: 1px solid var(--app-border);
-  background: var(--app-bg-panel);
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
 }
 
 .defect-edit-page__backbar {
   display: flex;
   align-items: center;
-  padding: var(--app-space-4) var(--app-space-6) 0;
-}
-
-.defect-edit-page__back-button {
-  min-height: 32px;
-  padding: 0 12px;
-  border-color: var(--app-border);
-  border-radius: var(--app-radius-sm);
-  background: var(--app-bg-panel);
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 500;
-}
-
-.defect-edit-page__back-button:hover,
-.defect-edit-page__back-button:focus-visible {
-  border-color: #93c5fd;
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
-  outline: none;
+  padding: 16px 24px 0;
 }
 
 .defect-edit-page__titlebar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--app-space-4);
-  padding: var(--app-space-4) var(--app-space-6) var(--app-space-5);
+  gap: 16px;
+  padding: 12px 24px 16px;
 }
 
 .defect-edit-page__titlebar h1 {
   margin: 0;
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-lg);
+  color: #1d2129;
+  font-size: 16px;
   font-weight: 600;
-  line-height: var(--app-line-height-lg);
+  line-height: 24px;
 }
 
-.defect-edit-page__titlebar p {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--app-space-2);
-  margin: var(--app-space-1) 0 0;
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-  line-height: var(--app-line-height-xs);
+.defect-edit-page__back-button {
+  min-height: 30px;
+  padding: 0 12px;
+  border-color: #e5e6eb;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.defect-edit-page__back-button:hover,
+.defect-edit-page__back-button:focus-visible {
+  border-color: #c9cdd4;
+  background: #f7f8fa;
+  color: #f53f3f;
+  outline: none;
 }
 
 .defect-edit-page__content {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: var(--app-space-4);
+  gap: 14px;
   overflow: auto;
-  padding: var(--app-space-5) var(--app-space-6);
+  padding: 18px 24px;
+  background: #ffffff;
 }
 
 .defect-edit-page__form-surface {
@@ -902,9 +835,9 @@ watch(
   grid-template-columns: minmax(0, 1fr) 360px;
   min-height: 0;
   overflow: visible;
-  border: 1px solid var(--app-border-soft);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .defect-edit-page__main,
@@ -912,70 +845,66 @@ watch(
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--app-space-4);
-  padding: var(--app-space-5);
+  gap: 14px;
+  padding: 18px 20px;
 }
 
 .defect-edit-page__side {
-  border-left: 1px solid var(--app-border-soft);
-  background: var(--app-bg-subtle);
-}
-
-.defect-edit-page__section-header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--app-space-1);
-  padding-bottom: var(--app-space-3);
-  border-bottom: 1px solid var(--app-border-soft);
-}
-
-.defect-edit-page__section-header h2 {
-  margin: 0;
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 700;
-  line-height: var(--app-line-height-sm);
-}
-
-.defect-edit-page__section-header span {
-  color: var(--app-text-subtle);
-  font-size: var(--app-font-size-xs);
-  line-height: var(--app-line-height-xs);
+  border-left: 1px solid #e5e6eb;
+  background: #f7f8fa;
 }
 
 .defect-edit-page__field {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--app-space-2);
+  gap: 6px;
 }
 
 .defect-edit-page__field > span {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
-  line-height: var(--app-line-height-sm);
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
 }
 
 .defect-edit-page__field > span.is-required::before {
-  margin-right: 3px;
-  color: var(--app-danger);
+  margin-right: 4px;
+  color: #f53f3f;
   content: '*';
 }
 
 .defect-edit-page__field :deep(.el-input__wrapper),
-.defect-edit-page__field :deep(.el-textarea__inner),
 .defect-edit-page__field :deep(.el-select__wrapper) {
-  border-radius: var(--app-radius-md);
-  box-shadow: 0 0 0 1px var(--app-border-strong) inset;
+  min-height: 34px;
+  padding: 1px 13px;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
 }
 
-.defect-edit-page__field :deep(.el-textarea__inner) {
-  min-height: 288px;
-  padding: 12px 14px;
-  color: var(--app-text-main);
-  font-size: var(--app-font-size-sm);
-  line-height: 1.75;
+.defect-edit-page__field :deep(.el-input__wrapper:hover),
+.defect-edit-page__field :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c9cdd4 inset;
+}
+
+.defect-edit-page__field :deep(.el-input__wrapper.is-focus),
+.defect-edit-page__field :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #f53f3f inset, 0 0 0 2px rgba(245, 63, 63, 0.1);
+}
+
+.defect-edit-page__field :deep(.el-input__inner),
+.defect-edit-page__field :deep(.el-select__placeholder),
+.defect-edit-page__field :deep(.el-select__selected-item) {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.defect-edit-page__field :deep(.el-input__count-inner) {
+  color: #c9cdd4;
+  font-size: 11px;
 }
 
 .defect-edit-page__select {
@@ -986,140 +915,96 @@ watch(
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--app-space-3);
-  min-height: 66px;
-  padding: var(--app-space-3);
-  border: 1px solid var(--app-border-strong);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-panel);
+  gap: 10px;
+  min-height: 52px;
+  padding: 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
+  background: #ffffff;
 }
 
 .defect-edit-page__case-picker.is-empty {
   border-style: dashed;
-  background: var(--app-bg-subtle);
+  background: #fafafa;
 }
 
 .defect-edit-page__case-picker-main {
   display: grid;
   min-width: 0;
-  gap: 3px;
 }
 
 .defect-edit-page__case-picker-main strong {
   overflow: hidden;
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
-  line-height: var(--app-line-height-sm);
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .defect-edit-page__case-picker.is-empty .defect-edit-page__case-picker-main strong {
-  color: var(--app-text-muted);
-}
-
-.defect-edit-page__case-picker-main span {
-  overflow: hidden;
-  color: var(--app-text-subtle);
-  font-size: var(--app-font-size-xs);
-  line-height: var(--app-line-height-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #86909c;
 }
 
 .defect-edit-page__case-picker-actions {
   display: flex;
   align-items: center;
-  gap: var(--app-space-2);
+  flex-shrink: 0;
+  gap: 4px;
 }
 
-.defect-edit-page__evidence {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--app-space-3);
-  padding: var(--app-space-4);
-  border: 1px solid var(--app-border-soft);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
-  outline: none;
-}
-
-.defect-edit-page__evidence.is-drop-active {
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
-}
-
-.defect-edit-page__evidence-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--app-space-3);
-}
-
-.defect-edit-page__evidence-head div {
-  display: grid;
-  gap: 3px;
-}
-
-.defect-edit-page__evidence-head strong {
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
-  line-height: var(--app-line-height-sm);
-}
-
-.defect-edit-page__evidence-head span {
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-  line-height: var(--app-line-height-xs);
-}
-
-.defect-edit-page__hidden-file {
-  display: none;
+.defect-edit-page__case-picker-actions :deep(.app-button) {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .defect-edit-page__priority {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--app-space-2);
+  gap: 8px;
 }
 
 .defect-edit-page__priority button {
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-panel);
-  color: var(--app-text-secondary);
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #4e5969;
   cursor: pointer;
-  font-size: var(--app-font-size-sm);
+  font-size: 13px;
   font-weight: 600;
+  line-height: 19.5px;
 }
 
 .defect-edit-page__priority button:hover,
 .defect-edit-page__priority button.is-active {
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
+  border-color: rgba(245, 63, 63, 0.5);
+  background: #fff0f0;
+  color: #f53f3f;
 }
 
 .defect-edit-page__error,
 .defect-edit-page__inline-error {
-  padding: 10px 12px;
-  border: 1px solid #fecaca;
-  border-radius: var(--app-radius-md);
-  background: var(--app-danger-soft);
-  color: var(--app-danger);
-  font-size: var(--app-font-size-sm);
-  line-height: var(--app-line-height-sm);
+  padding: 9px 12px;
+  border: 1px solid #ffa39e;
+  border-radius: 8px;
+  background: #fff0f0;
+  color: #f53f3f;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .defect-edit-page__error {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--app-space-3);
+  gap: 12px;
 }
 
 .defect-edit-page__inline-error {
@@ -1131,15 +1016,96 @@ watch(
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--app-space-3);
-  padding: var(--app-space-3) var(--app-space-6);
-  border-top: 1px solid var(--app-border);
-  background: var(--app-bg-panel);
+  gap: 8px;
+  padding: 14px 24px;
+  border-top: 1px solid #e5e6eb;
+  background: #fafafa;
 }
 
 .defect-edit-page__footer :deep(.app-button) {
-  min-width: 88px;
+  min-width: 82px;
   height: 36px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.defect-edit-page :deep(.defect-rich-text-editor) {
+  border-color: #e5e6eb;
+  border-radius: 6px;
+}
+
+.defect-edit-page :deep(.defect-rich-text-editor__toolbar) {
+  min-height: 38px;
+  padding: 4px 8px;
+  border-bottom-color: #e5e6eb;
+  background: #f7f8fa;
+}
+
+.defect-edit-page :deep(.defect-rich-text-editor__button),
+.defect-edit-page :deep(.defect-rich-text-editor__select) {
+  height: 28px;
+  border-radius: 4px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.defect-edit-page :deep(.defect-rich-text-editor__button:hover),
+.defect-edit-page :deep(.defect-rich-text-editor__select:hover),
+.defect-edit-page :deep(.defect-rich-text-editor__button.is-active) {
+  background: #ffffff;
+  color: #f53f3f;
+}
+
+.defect-edit-page :deep(.defect-rich-text-editor__content) {
+  min-height: 270px;
+}
+
+.defect-edit-page :deep(.defect-rich-text-editor__content .defect-rich-text-editor__input) {
+  min-height: 242px;
+  padding: 12px 14px;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.defect-edit-page :deep(.attachment-file-wall__drop-zone) {
+  min-height: 112px;
+  border-color: #e5e6eb;
+  border-radius: 4px;
+  background: #f7f8fa;
+}
+
+.defect-edit-page :deep(.attachment-file-wall__drop-zone.has-files) {
+  min-height: 180px;
+}
+
+.defect-edit-page :deep(.attachment-file-wall__drop-zone > span) {
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.defect-edit-page :deep(.attachment-file-wall__drop-zone > em) {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.defect-edit-page :deep(.attachment-file-wall__file) {
+  border-color: #e5e6eb;
+  box-shadow: none;
+}
+
+.defect-edit-page :deep(.attachment-file-wall__meta > strong) {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.defect-edit-page :deep(.attachment-file-wall__meta-row > span) {
+  color: #86909c;
 }
 
 @media (max-width: 1080px) {
@@ -1148,21 +1114,21 @@ watch(
   }
 
   .defect-edit-page__side {
-    border-top: 1px solid var(--app-border-soft);
+    border-top: 1px solid #e5e6eb;
     border-left: 0;
   }
 }
 
 @media (max-width: 720px) {
   .defect-edit-page {
-    padding: var(--app-space-3);
+    padding: 12px;
   }
 
   .defect-edit-page__content,
   .defect-edit-page__titlebar,
   .defect-edit-page__footer {
-    padding-right: var(--app-space-4);
-    padding-left: var(--app-space-4);
+    padding-right: 16px;
+    padding-left: 16px;
   }
 }
 </style>

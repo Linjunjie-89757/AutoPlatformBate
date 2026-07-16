@@ -11,6 +11,7 @@ import {
   type SaveApiDefinitionCasePayload,
 } from '@/entities/api-automation'
 import type { WorkspaceItem } from '@/entities/workspace'
+import { confirmDelete } from '@/shared/ui'
 import ApiAiCaseModule from './ApiAiCaseModule.vue'
 import ApiDefinitionWorkspaceOverlays from './ApiDefinitionWorkspaceOverlays.vue'
 import ApiEditorTabBar from './ApiEditorTabBar.vue'
@@ -172,6 +173,18 @@ function confirmApiAction(
   title: string,
   options: { confirmText?: string; cancelText?: string; danger?: boolean } = {},
 ) {
+  if (options.danger) {
+    return confirmDelete({
+      title,
+      message,
+      confirmText: options.confirmText || '确认删除',
+      cancelText: options.cancelText || '取消',
+    }).then(
+      () => true,
+      () => false,
+    )
+  }
+
   return ElMessageBox.confirm(message, title, {
     type: options.danger ? 'error' : 'warning',
     confirmButtonText: options.confirmText || '确定',

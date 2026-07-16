@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
 
 import {
@@ -18,6 +18,7 @@ import { ApiCaseCreateEditDialog, type ApiCaseDialogMode } from '@/features/api-
 import { deleteApiCase } from '@/features/api-delete'
 import { runApiCase } from '@/features/api-run'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -130,11 +131,10 @@ async function handleRunCase(item: ApiDefinitionCaseItem) {
 
 async function handleDeleteCase(item: ApiDefinitionCaseItem) {
   try {
-    await ElMessageBox.confirm(`确认删除接口用例「${item.name}」？`, '删除接口用例', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger',
+    await confirmDelete({
+      title: '删除接口用例',
+      message: `确认删除接口用例「${item.name}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
   } catch {
     return

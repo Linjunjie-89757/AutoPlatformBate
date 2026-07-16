@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Delete, RefreshCw, Upload } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import { apiAutomationApi, type ApiDataFileDetail, type ApiDataFileItem } from '@/entities/api-automation'
+import { confirmDelete } from '@/shared/ui'
 
 const props = defineProps<{
   workspaceCode: string
@@ -88,10 +89,10 @@ async function handleFileChange(event: Event) {
 }
 
 async function deleteFile(row: ApiDataFileItem) {
-  await ElMessageBox.confirm(`确认删除数据文件「${row.fileName}」？`, '删除数据文件', {
-    type: 'warning',
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
+  await confirmDelete({
+    title: '删除数据文件',
+    message: `确认删除数据文件「${row.fileName}」吗？删除后不可恢复。`,
+    confirmText: '确认删除',
   })
   await apiAutomationApi.deleteDataFile(props.workspaceCode, row.id)
   ElMessage.success('数据文件已删除')

@@ -117,10 +117,10 @@ const routes: RouteRecordRaw[] = [
           {
             path: 'manage/execute/:id',
             name: 'case-execution',
-            component: () => import('@/pages/cases/CaseExecutionPage.vue'),
+            component: () => import('@/pages/cases/CaseExecutionWorkstationPage.vue'),
             meta: {
               title: '用例执行',
-              description: '按旧项目执行工作台方向接入用例执行。',
+              description: '按 Figma 执行工作台接入用例执行。',
             },
           },
           {

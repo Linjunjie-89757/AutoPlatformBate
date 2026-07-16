@@ -869,7 +869,7 @@ function savePermissions() {
 
     <div v-if="confirmToggleUser" class="settings-modal-backdrop" @click="confirmToggleUser = null" />
     <section v-if="confirmToggleUser" class="settings-modal">
-      <div class="settings-delete-modal">
+      <div class="settings-delete-modal settings-toggle-confirm-modal">
         <span
           class="settings-delete-modal__icon"
           :class="{ 'is-enable': confirmToggleUser.status === 'disabled', 'is-warning': confirmToggleUser.status === 'active' }"
@@ -1123,16 +1123,17 @@ function savePermissions() {
 .settings-avatar,
 .settings-user-cell i {
   display: inline-grid;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   place-items: center;
   border-radius: 999px;
   background: #165dff;
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 700;
+  line-height: 18px;
 }
 
 .settings-current-user strong {
@@ -1142,13 +1143,17 @@ function savePermissions() {
 
 .settings-current-user em,
 .settings-role-tag {
-  padding: 2px 8px;
+  display: inline-flex;
+  height: 17.5px;
+  align-items: center;
+  padding: 0 7px;
   border-radius: 999px;
   background: #f5e8ff;
   color: #7816ff;
   font-size: 11px;
   font-style: normal;
   font-weight: 500;
+  line-height: 16.5px;
 }
 
 .settings-current-user small {
@@ -1269,9 +1274,8 @@ function savePermissions() {
 
 .settings-status-strip i,
 .settings-status-cell i {
-  width: 6px;
-  height: 6px;
-  margin-top: 7px;
+  width: 5.25px;
+  height: 5.25px;
   border-radius: 999px;
   background: #00b42a;
 }
@@ -1570,7 +1574,7 @@ function savePermissions() {
 }
 
 .settings-user-table {
-  grid-template-columns: 160px 260px 160px 140px 230px minmax(140px, 1fr);
+  grid-template-columns: 14.92% 24.73% 13.95% 10.71% 20.59% 15.1%;
 }
 
 .settings-audit-table {
@@ -1578,17 +1582,18 @@ function savePermissions() {
 }
 
 .settings-table-head {
-  min-height: 40px;
+  min-height: 34.5px;
   border-bottom: 1px solid #e5e6eb;
   background: #fafafa;
 }
 
 .settings-table-head span {
-  padding: 0 16px;
+  padding: 0 14px;
   color: #86909c;
   font-size: 11px;
   font-weight: 600;
-  line-height: 17px;
+  line-height: 16.5px;
+  letter-spacing: 0.275px;
 }
 
 .settings-table-row {
@@ -1606,9 +1611,9 @@ function savePermissions() {
 
 .settings-table-row > span {
   min-width: 0;
-  padding: 0 16px;
+  padding: 0 14px;
   color: #4e5969;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .settings-table-row.is-muted {
@@ -1618,7 +1623,7 @@ function savePermissions() {
 .settings-user-cell {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8.75px;
 }
 
 .settings-user-cell strong {
@@ -1659,11 +1664,11 @@ function savePermissions() {
 
 .settings-row-actions button {
   display: inline-grid;
-  width: 28px;
-  height: 28px;
+  width: 24.5px;
+  height: 24.5px;
   place-items: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: #c9cdd4;
   cursor: pointer;
@@ -1680,10 +1685,11 @@ function savePermissions() {
 }
 
 .settings-table-card footer {
-  padding: 10px 16px;
+  padding: 9.75px 14px 8.75px;
   border-top: 1px solid #e5e6eb;
   color: #86909c;
   font-size: 12px;
+  line-height: 18px;
 }
 
 .settings-role-grid {
@@ -2051,7 +2057,7 @@ function savePermissions() {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .settings-modal {
@@ -2243,6 +2249,60 @@ function savePermissions() {
 .settings-delete-modal footer button.settings-confirm-toggle-button.is-enable {
   border-color: #00b42a;
   background: #00b42a;
+}
+
+.settings-toggle-confirm-modal {
+  grid-template-columns: 35px 1fr;
+  width: 380px;
+  column-gap: 10.5px;
+  row-gap: 0;
+  padding: 21px;
+  border-radius: 14px;
+  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.16);
+}
+
+.settings-toggle-confirm-modal .settings-delete-modal__icon {
+  width: 35px;
+  height: 35px;
+}
+
+.settings-toggle-confirm-modal > span:not(.settings-delete-modal__icon) {
+  width: 208px;
+}
+
+.settings-toggle-confirm-modal strong {
+  margin-bottom: 0;
+  line-height: 22.5px;
+}
+
+.settings-toggle-confirm-modal small {
+  display: block;
+  padding-top: 3.5px;
+  line-height: 19.5px;
+}
+
+.settings-toggle-confirm-modal footer {
+  grid-column: 1 / -1;
+  gap: 7px;
+  margin-top: 0;
+  padding: 17.5px 0 0;
+  border-top: 0;
+}
+
+.settings-toggle-confirm-modal footer button {
+  width: 49px;
+  height: 28px;
+  padding: 0;
+  border-radius: 7px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.settings-toggle-confirm-modal footer button.settings-confirm-toggle-button {
+  width: 80px;
+  min-width: 80px;
+  height: 32px;
+  padding: 0;
 }
 
 @media (max-width: 1180px) {

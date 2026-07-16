@@ -135,35 +135,106 @@ watch(
     <template #footer>
       <AppButton :disabled="associating" @click="visible = false">取消</AppButton>
       <AppButton type="primary" :disabled="!canSubmit" :loading="associating" @click="submitAssociate">
-        关联
+        确认关联
       </AppButton>
     </template>
   </AppDrawer>
 </template>
 
 <style scoped>
+:global(.case-defect-associate-drawer-host) {
+  --case-defect-drawer-border: #e5e6eb;
+  --case-defect-drawer-text-primary: #1d2129;
+  --case-defect-drawer-text-secondary: #4e5969;
+  --case-defect-drawer-text-muted: #86909c;
+  --case-defect-drawer-bg-muted: #f7f8fa;
+  --case-defect-drawer-bg-hover: #fafbff;
+  --case-defect-drawer-primary: #165dff;
+}
+
+:global(.case-defect-associate-drawer-host.el-drawer) {
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
 .case-defect-associate-drawer {
   display: flex;
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  gap: var(--app-space-4);
-  padding: var(--app-space-5) var(--app-space-6);
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fff;
 }
 
 :global(.case-defect-associate-drawer-host .el-drawer__header) {
+  box-sizing: border-box;
+  flex: 0 0 52px;
   margin-bottom: 0;
-  padding: var(--app-space-5) var(--app-space-6) var(--app-space-3);
-  border-bottom: 1px solid var(--app-border);
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--case-defect-drawer-border);
+  color: var(--case-defect-drawer-text-primary);
+}
+
+:global(.case-defect-associate-drawer-host .el-drawer__title) {
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22.5px;
+}
+
+:global(.case-defect-associate-drawer-host .el-drawer__close-btn) {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--case-defect-drawer-text-muted);
+}
+
+:global(.case-defect-associate-drawer-host .el-drawer__close-btn:hover) {
+  background: var(--case-defect-drawer-bg-muted);
+  color: var(--case-defect-drawer-text-primary);
+}
+
+:global(.case-defect-associate-drawer-host .el-drawer__close-btn .el-icon) {
+  width: 16px;
+  height: 16px;
 }
 
 :global(.case-defect-associate-drawer-host .el-drawer__body) {
+  display: flex;
   min-height: 0;
+  flex-direction: column;
   padding: 0;
 }
 
 :global(.case-defect-associate-drawer-host .el-drawer__footer) {
   padding: 0;
+}
+
+:global(.case-defect-associate-drawer-host .app-drawer__footer) {
+  min-height: 58px;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--case-defect-drawer-border);
+  background: var(--case-defect-drawer-bg-muted);
+}
+
+:global(.case-defect-associate-drawer-host .app-button.el-button) {
+  min-height: 32px;
+  padding: 6px 13px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+:global(.case-defect-associate-drawer-host .app-button.el-button--primary) {
+  border-color: var(--case-defect-drawer-primary);
+  background: var(--case-defect-drawer-primary);
 }
 
 .case-defect-associate-drawer__toolbar {
@@ -176,36 +247,100 @@ watch(
 }
 
 .case-defect-associate-drawer__toolbar :deep(.el-input__wrapper) {
-  min-height: 36px;
-  border-radius: var(--app-radius-md);
-  box-shadow: 0 0 0 1px var(--app-border-strong) inset;
+  min-height: 32px;
+  padding: 1px 12px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--case-defect-drawer-border) inset;
+}
+
+.case-defect-associate-drawer__toolbar :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--case-defect-drawer-primary) inset, 0 0 0 2px rgba(22, 93, 255, 0.1);
+}
+
+.case-defect-associate-drawer__toolbar :deep(.el-input__inner) {
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.case-defect-associate-drawer__toolbar :deep(.el-input__prefix) {
+  color: var(--case-defect-drawer-text-muted);
 }
 
 .case-defect-associate-drawer__table {
   flex: 1;
   min-height: 420px;
   overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
+  border: 1px solid var(--case-defect-drawer-border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 .case-defect-associate-drawer__table :deep(.el-table__inner-wrapper::before) {
   display: none;
 }
 
+.case-defect-associate-drawer__table :deep(.el-table) {
+  --el-table-border-color: var(--case-defect-drawer-border);
+  --el-table-header-bg-color: #fafafa;
+  --el-table-row-hover-bg-color: var(--case-defect-drawer-bg-hover);
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 13px;
+}
+
 .case-defect-associate-drawer__table :deep(th.el-table__cell) {
-  height: 44px;
-  background: var(--app-bg-muted);
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
+  height: 38px !important;
+  padding: 0;
+  background: #fafafa;
+  color: var(--case-defect-drawer-text-muted);
+  font-size: 11px;
   font-weight: 600;
+  line-height: 16.5px;
+}
+
+.case-defect-associate-drawer__table :deep(.el-table__row) {
+  height: 46px !important;
 }
 
 .case-defect-associate-drawer__table :deep(td.el-table__cell) {
-  height: 52px;
-  border-bottom-color: var(--app-border-soft);
-  color: var(--app-text-main);
-  font-size: var(--app-font-size-sm);
+  height: 46px !important;
+  padding: 0;
+  border-bottom-color: var(--case-defect-drawer-border);
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.case-defect-associate-drawer__table :deep(th.el-table__cell .cell),
+.case-defect-associate-drawer__table :deep(td.el-table__cell .cell) {
+  padding: 0 16px;
+}
+
+.case-defect-associate-drawer__table :deep(.el-table-column--selection .cell) {
+  padding: 0 14px;
+}
+
+.case-defect-associate-drawer__table :deep(.el-checkbox__inner) {
+  width: 14px;
+  height: 14px;
+  border-color: #c9cdd4;
+  border-radius: 3px;
+}
+
+.case-defect-associate-drawer__table :deep(.el-checkbox__input.is-checked .el-checkbox__inner),
+.case-defect-associate-drawer__table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  border-color: var(--case-defect-drawer-primary);
+  background: var(--case-defect-drawer-primary);
+}
+
+.case-defect-associate-drawer__table :deep(.el-checkbox__input.is-checked .el-checkbox__inner::after) {
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border-width: 1px;
 }
 </style>

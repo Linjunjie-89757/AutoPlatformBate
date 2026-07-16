@@ -1,18 +1,12 @@
-import { ElMessageBox } from 'element-plus'
-
 import { caseApi, type CaseSummaryItem } from '@/entities/case'
+import { confirmDelete } from '@/shared/ui'
 
 export async function deleteCase(item: CaseSummaryItem, workspaceCode = 'ALL') {
-  await ElMessageBox.confirm(
-    `确定删除用例「${item.title || item.caseNo}」吗？`,
-    '删除用例',
-    {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger',
-    },
-  )
+  await confirmDelete({
+    title: '删除用例',
+    message: `确认删除「${item.title || item.caseNo}」吗？删除后不可恢复。`,
+    confirmText: '确认删除',
+  })
 
   await caseApi.deleteCase(item.id, workspaceCode)
 }

@@ -233,7 +233,8 @@ public class CaseService {
         UserEntity updater = item.getUpdatedBy() == null ? null : userService.requireUser(item.getUpdatedBy());
         List<CaseExecutionAttachmentResponse> attachments = caseExecutionAttachmentMapper.selectList(new LambdaQueryWrapper<CaseExecutionAttachmentEntity>()
                         .eq(CaseExecutionAttachmentEntity::getCaseId, item.getId())
-                        .orderByAsc(CaseExecutionAttachmentEntity::getId))
+                        .orderByDesc(CaseExecutionAttachmentEntity::getCreatedAt)
+                        .orderByDesc(CaseExecutionAttachmentEntity::getId))
                 .stream()
                 .map(attachment -> caseExecutionAttachmentSupport.toAttachmentResponse(item, attachment))
                 .toList();

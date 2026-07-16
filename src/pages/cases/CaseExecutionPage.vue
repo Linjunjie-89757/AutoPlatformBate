@@ -25,8 +25,6 @@ import {
   type SaveCasePayload,
 } from '@/entities/case'
 import {
-  DefectAttachmentPanel,
-  type DefectAttachmentPanelItem,
   DefectPriorityBadge,
   DefectSeverityBadge,
   DefectStatusBadge,
@@ -47,6 +45,7 @@ import {
   validateDefectForm,
 } from '@/features/defect-create-edit/model'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { AttachmentFileWall, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -74,8 +73,6 @@ const pendingAttachments = ref<Array<{
   previewUrl: string | null
 }>>([])
 const attachmentImageUrls = ref<Record<number, string>>({})
-const uploadInput = ref<HTMLInputElement | null>(null)
-const evidenceDropActive = ref(false)
 const uploadingAttachments = ref(false)
 const downloadingAttachmentId = ref<number | string | null>(null)
 const removingAttachmentId = ref<number | string | null>(null)
@@ -186,18 +183,7 @@ const historyRows = computed(() => executionHistory.value.map(item => ({
   executionNote: item.executionNote || '-',
 })))
 
-const pendingAttachmentPreviewUrls = computed(() => (
-  pendingAttachments.value.map(item => item.previewUrl).filter((item): item is string => !!item)
-))
-
-const existingImageAttachments = computed(() => (detail.value?.attachments ?? []).filter(isImageAttachment))
-
-const attachmentPreviewUrls = computed(() => [
-  ...existingImageAttachments.value.map(item => getAttachmentImageUrl(item)),
-  ...pendingAttachmentPreviewUrls.value,
-].filter(Boolean))
-
-const attachmentPanelItems = computed<DefectAttachmentPanelItem[]>(() => [
+const attachmentWallItems = computed<AttachmentFileWallItem[]>(() => [
   ...(detail.value?.attachments ?? []).map(item => ({
     id: item.id,
     fileName: item.fileName,
@@ -213,6 +199,7 @@ const attachmentPanelItems = computed<DefectAttachmentPanelItem[]>(() => [
     fileSize: item.file.size,
     contentType: item.file.type,
     imageUrl: item.previewUrl || undefined,
+    metaText: '待上传',
     pending: true,
   })),
 ])
@@ -464,36 +451,6 @@ async function uploadPendingDefectAttachments(defectId: number, workspaceCode: s
   clearPendingDefectFiles()
 }
 
-function openUploadPicker() {
-  uploadInput.value?.click()
-}
-
-function handleUploadChange(event: Event) {
-  const input = event.target as HTMLInputElement | null
-  const files = Array.from(input?.files ?? [])
-  if (input) {
-    input.value = ''
-  }
-  addPendingAttachments(files)
-}
-
-function handleEvidencePaste(event: ClipboardEvent) {
-  const files = Array.from(event.clipboardData?.items ?? [])
-    .filter(item => item.kind === 'file')
-    .map(item => item.getAsFile())
-    .filter((item): item is File => !!item)
-  if (!files.length) {
-    return
-  }
-  event.preventDefault()
-  addPendingAttachments(files)
-}
-
-function handleEvidenceDrop(event: DragEvent) {
-  evidenceDropActive.value = false
-  addPendingAttachments(Array.from(event.dataTransfer?.files ?? []))
-}
-
 async function uploadPendingAttachments(items = pendingAttachments.value) {
   if (!detail.value || !items.length || uploadingAttachments.value) {
     return
@@ -551,11 +508,10 @@ async function deleteAttachment(item: CaseExecutionAttachment) {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除附件“${item.fileName}”吗？`, '删除附件', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      confirmButtonClass: 'el-button--danger',
+    await confirmDelete({
+      title: '删除附件',
+      message: `确认删除附件“${item.fileName}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
     removingAttachmentId.value = item.id
     await caseApi.deleteCaseExecutionAttachment(detail.value.workspaceCode, detail.value.id, item.id)
@@ -580,7 +536,7 @@ async function deleteAttachment(item: CaseExecutionAttachment) {
   }
 }
 
-function handleAttachmentPanelDownload(item: DefectAttachmentPanelItem) {
+function handleAttachmentPanelDownload(item: AttachmentFileWallItem) {
   if (item.pending) {
     return
   }
@@ -590,7 +546,7 @@ function handleAttachmentPanelDownload(item: DefectAttachmentPanelItem) {
   }
 }
 
-function handleAttachmentPanelRemove(item: DefectAttachmentPanelItem) {
+function handleAttachmentPanelRemove(item: AttachmentFileWallItem) {
   if (item.pending) {
     removePendingAttachment(String(item.id))
     return
@@ -1250,35 +1206,19 @@ onBeforeUnmount(() => {
                     />
                   </section>
                 </div>
-                <section
-                  class="case-execution-page__evidence"
-                  :class="{ 'is-drop-active': evidenceDropActive }"
-                  tabindex="0"
-                  @paste="handleEvidencePaste"
-                  @dragenter.prevent="evidenceDropActive = true"
-                  @dragover.prevent
-                  @dragleave="evidenceDropActive = false"
-                  @drop.prevent="handleEvidenceDrop"
-                >
-                  <div class="case-execution-page__evidence-head">
-                    <div>
-                      <strong class="case-execution-page__detail-label">附件 / 截图</strong>
-                      <span>点击上传，或在此区域粘贴、拖拽文件。</span>
-                    </div>
-                    <AppButton size="small" :loading="uploadingAttachments" @click="openUploadPicker">上传附件</AppButton>
-                  </div>
-                  <DefectAttachmentPanel
-                    :items="attachmentPanelItems"
-                    :preview-urls="attachmentPreviewUrls"
+                <section class="case-execution-page__evidence">
+                  <strong class="case-execution-page__detail-label">附件 / 截图</strong>
+                  <AttachmentFileWall
+                    :items="attachmentWallItems"
+                    :uploading="uploadingAttachments"
                     :downloading-id="downloadingAttachmentId"
                     :removing-id="removingAttachmentId"
-                    :show-image-group-title="false"
-                    empty-title="添加附件或截图"
-                    empty-description="当前还没有待上传附件，点击上方按钮或在此区域粘贴、拖拽文件。"
+                    empty-title="点击上传，或将文件拖拽至此处"
+                    empty-description="支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB"
+                    @add-files="addPendingAttachments"
                     @download="handleAttachmentPanelDownload"
                     @remove="handleAttachmentPanelRemove"
                   />
-                  <input ref="uploadInput" class="case-execution-page__hidden-file" type="file" multiple @change="handleUploadChange">
                 </section>
                 <section class="case-execution-page__note">
                   <span class="case-execution-page__detail-label">备注</span>
@@ -1873,46 +1813,6 @@ onBeforeUnmount(() => {
 .case-execution-page__note :deep(.el-textarea__inner:focus) {
   border-color: var(--app-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.case-execution-page__evidence {
-  outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-
-.case-execution-page__evidence.is-drop-active {
-  border-color: rgba(64, 158, 255, 0.55);
-  background: rgba(239, 246, 255, 0.72);
-  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.12);
-}
-
-.case-execution-page__evidence-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--app-space-3);
-}
-
-.case-execution-page__evidence-head > div {
-  display: grid;
-  gap: var(--app-space-1);
-}
-
-.case-execution-page__evidence-head strong {
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-  font-weight: 600;
-  line-height: var(--app-line-height-xs);
-}
-
-.case-execution-page__evidence-head span {
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-  line-height: var(--app-line-height-xs);
-}
-
-.case-execution-page__hidden-file {
-  display: none;
 }
 
 .case-execution-page__bugs,

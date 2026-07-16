@@ -1,20 +1,16 @@
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import { webUiAutomationApi, type WebUiCaseItem } from '@/entities/web-ui-automation'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 
 export async function deleteWebUiCase(caseItem: WebUiCaseItem, workspaceCode = 'ALL') {
   try {
-    await ElMessageBox.confirm(
-      `确认删除用例 "${caseItem.name}" 吗？删除后不可恢复。`,
-      '删除 Web UI 用例',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      },
-    )
+    await confirmDelete({
+      title: '删除 Web UI 用例',
+      message: `确认删除「${caseItem.name}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+    })
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
       return false

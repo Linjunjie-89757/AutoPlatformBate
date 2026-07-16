@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Search,
   Server,
-  Trash2,
   Upload,
   Wifi,
   WifiOff,
@@ -34,6 +33,7 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
+import { confirmDelete } from '@/shared/ui'
 import { figmaConfigRunnerIcons } from '@/shared/assets/figma-icons'
 
 const runners = ref<RunnerNodeSummary[]>([])
@@ -50,8 +50,6 @@ const selectedRunner = ref<RunnerNodeSummary | null>(null)
 const runnerEditorVisible = ref(false)
 const runnerEditorMode = ref<'create' | 'edit'>('create')
 const runnerEditorTarget = ref<RunnerNodeSummary | null>(null)
-const runnerDeleteVisible = ref(false)
-const runnerDeleteTarget = ref<RunnerNodeSummary | null>(null)
 const runnerDetailTab = ref<'info' | 'tasks' | 'logs'>('info')
 const autoRefresh = ref(true)
 const lastRefreshedAt = ref<Date | null>(null)
@@ -274,14 +272,19 @@ function openRunnerEditor(mode: 'create' | 'edit', row?: RunnerNodeSummary) {
   runnerEditorVisible.value = true
 }
 
-function openRunnerDelete(row: RunnerNodeSummary) {
-  runnerDeleteTarget.value = row
-  runnerDeleteVisible.value = true
-}
-
-function confirmUnsupportedRunnerDelete() {
-  notifyUnsupportedRunnerAction('删除 Runner 节点')
-  runnerDeleteVisible.value = false
+async function openRunnerDelete(row: RunnerNodeSummary) {
+  try {
+    await confirmDelete({
+      title: '删除节点',
+      message: `确认删除「${formatRunnerName(row)}」？删除后任务调度将不再使用该节点，已执行的历史记录不受影响。`,
+      confirmText: '确认删除',
+      beforeConfirm: () => {
+        notifyUnsupportedRunnerAction('删除 Runner 节点')
+      },
+    })
+  } catch {
+    // 用户取消或关闭弹窗时不需要提示。
+  }
 }
 
 function isRunnerEditorCapabilitySelected(capability: string) {
@@ -1341,31 +1344,6 @@ onBeforeUnmount(() => {
         </footer>
       </div>
     </el-drawer>
-
-    <div
-      v-if="runnerDeleteVisible"
-      class="config-runner-delete-overlay"
-      role="presentation"
-      @click.self="runnerDeleteVisible = false"
-    >
-      <div class="config-runner-delete-modal" role="dialog" aria-modal="true" aria-labelledby="config-runner-delete-title">
-        <div class="config-runner-delete-modal__body">
-          <span>
-            <Trash2 :size="18" :stroke-width="1.8" />
-          </span>
-          <div>
-            <h3 id="config-runner-delete-title">删除节点</h3>
-            <p>
-              确认删除「{{ runnerDeleteTarget ? formatRunnerName(runnerDeleteTarget) : '-' }}」？删除后任务调度将不再使用该节点，已执行的历史记录不受影响。
-            </p>
-          </div>
-        </div>
-        <div class="config-runner-delete-modal__footer">
-          <button type="button" class="config-runner-secondary-button" @click="runnerDeleteVisible = false">取消</button>
-          <button type="button" class="config-runner-danger-button" @click="confirmUnsupportedRunnerDelete">确认删除</button>
-        </div>
-      </div>
-    </div>
 
     <el-drawer v-model="guideVisible" title="本地执行器启动指引" size="520px">
       <div class="config-runner-guide">
@@ -3369,64 +3347,6 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-}
-
-.config-runner-delete-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2050;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.28);
-}
-
-.config-runner-delete-modal {
-  width: 400px;
-  padding: 24px;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
-}
-
-.config-runner-delete-modal__body {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.config-runner-delete-modal__body > span {
-  display: inline-flex;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #ffe8e8;
-  color: #f53f3f;
-}
-
-.config-runner-delete-modal__body h3 {
-  margin: 0 0 4px;
-  color: #1d2129;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
-}
-
-.config-runner-delete-modal__body p {
-  margin: 0;
-  color: #86909c;
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.config-runner-delete-modal__footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 .config-runner-guide {

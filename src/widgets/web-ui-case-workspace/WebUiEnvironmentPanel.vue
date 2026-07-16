@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Delete, Edit, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import { configApi, type ParamSetItem } from '@/entities/config'
 import {
@@ -16,6 +16,7 @@ import {
   type WebUiEnvironmentStatus,
 } from '@/entities/web-ui-automation'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 
@@ -195,16 +196,11 @@ async function deleteEnvironment(environment: WebUiEnvironmentItem) {
   const workspaceCode = props.workspaceCode
   deletingId.value = environment.id
   try {
-    await ElMessageBox.confirm(
-      `确认删除环境 "${environment.name}" 吗？删除后不可恢复。`,
-      '删除环境配置',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      },
-    )
+    await confirmDelete({
+      title: '删除环境配置',
+      message: `确认删除环境 "${environment.name}" 吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+    })
     if (props.workspaceCode !== workspaceCode) {
       ElMessage.warning('工作空间已切换，请刷新后重试')
       return

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
 
 import {
@@ -19,6 +19,7 @@ import { ApiDefinitionCreateEditDialog, type ApiDefinitionDialogMode } from '@/f
 import { deleteApiDefinition } from '@/features/api-delete'
 import { runApiDefinition } from '@/features/api-run'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -137,16 +138,11 @@ async function handleRunDefinition(item: ApiDefinitionItem) {
 
 async function handleDeleteDefinition(item: ApiDefinitionItem) {
   try {
-    await ElMessageBox.confirm(
-      `确认删除接口定义「${item.name}」？如果该定义仍被用例或场景引用，后端会拒绝删除。`,
-      '删除接口定义',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      },
-    )
+    await confirmDelete({
+      title: '删除接口定义',
+      message: `确认删除接口定义「${item.name}」吗？如果该定义仍被用例或场景引用，后端会拒绝删除。`,
+      confirmText: '确认删除',
+    })
   } catch {
     return
   }

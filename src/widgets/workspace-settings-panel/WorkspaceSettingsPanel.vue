@@ -30,6 +30,7 @@ import {
   type WorkspaceMemberDialogMode,
 } from '@/features/workspace-member-manage'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction, confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -552,19 +553,19 @@ async function toggleUserStatus(row: UserItem) {
 
   const nextStatus = Number(row.status) === 1 ? 0 : 1
   const actionText = nextStatus === 1 ? '启用' : '停用'
+  const actionTitle = nextStatus === 1 ? '启用账号' : '禁用账号'
+  const actionMessage = nextStatus === 1
+    ? `启用后「${getUserDisplayName(row)}」可重新登录平台。`
+    : `禁用后「${getUserDisplayName(row)}」将无法登录平台。`
 
   setMutatingUser(row.id, true)
   try {
-    await ElMessageBox.confirm(
-      `确定${actionText}用户“${getUserDisplayName(row)}”吗？`,
-      `${actionText}用户`,
-      {
-        confirmButtonText: actionText,
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: nextStatus === 0 ? 'el-button--danger' : undefined,
-      },
-    )
+    await confirmAction({
+      title: actionTitle,
+      message: actionMessage,
+      confirmText: nextStatus === 1 ? '确认启用' : '确认禁用',
+      tone: nextStatus === 1 ? 'success' : 'warning',
+    })
     await userApi.updateUser(row.id, buildUserUpdatePayload(row, { status: nextStatus }))
     ElMessage.success(`用户已${actionText}`)
     await loadUsers()
@@ -706,16 +707,11 @@ async function submitWorkspace(payload: SaveWorkspacePayload) {
 async function confirmDeleteWorkspace(workspace: WorkspaceItem) {
   const workspaceCode = workspaceDisplayCode(workspace)
   try {
-    await ElMessageBox.confirm(
-      `删除后将无法恢复工作空间“${workspaceDisplayName(workspace)}”。只有无依赖数据的空间允许删除，是否继续？`,
-      '删除工作空间',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      },
-    )
+    await confirmDelete({
+      title: '删除工作空间',
+      message: `删除后将无法恢复工作空间“${workspaceDisplayName(workspace)}”。只有无依赖数据的空间允许删除，是否继续？`,
+      confirmText: '确认删除',
+    })
 
     await workspaceApi.deleteWorkspace(workspaceCode)
     ElMessage.success('工作空间删除成功')

@@ -22,9 +22,10 @@ import java.util.UUID;
 @Service
 public class CaseExecutionAttachmentStorageService {
 
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024L;
+    private static final long MAX_FILE_SIZE = 20 * 1024 * 1024L;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-            "png", "jpg", "jpeg", "webp", "gif", "bmp", "pdf", "txt", "log", "json", "csv", "zip"
+            "png", "jpg", "jpeg", "webp", "gif", "bmp", "pdf", "txt", "log", "json", "csv", "zip",
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx"
     );
 
     private final Path storageRoot;
@@ -102,7 +103,7 @@ public class CaseExecutionAttachmentStorageService {
             throw new BadRequestException("请先选择要上传的截图或附件");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BadRequestException("单个附件大小不能超过 10MB");
+            throw new BadRequestException("单个附件大小不能超过 20MB");
         }
         String extension = resolveExtension(cleanFileName(file));
         if (!ALLOWED_EXTENSIONS.contains(extension)) {

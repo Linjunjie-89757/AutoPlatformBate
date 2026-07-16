@@ -41,6 +41,7 @@ import {
   type WebUiScreenshotPolicy,
   type WebUiStepType,
 } from '@/entities/web-ui-automation'
+import { confirmDelete } from '@/shared/ui'
 import {
   buildRecordedCaseAutoRematchMessage,
   WEB_UI_RECORDED_CASE_AUTO_REMATCH_QUERY,
@@ -50,7 +51,6 @@ import {
   buildWebUiRecordingDraftStorageKey,
   createWebUiRecordingDraft,
   parseWebUiRecordingDraft,
-  shouldOfferWebUiRecordingDraftReplay,
   shouldRestoreWebUiRecordingDraft,
   type WebUiRecordingDraftPayload,
 } from '@/entities/web-ui-automation/lib/recordingDraft'
@@ -105,7 +105,6 @@ type RecordingStatus = 'IDLE' | 'RECORDING' | 'PAUSED' | 'STOPPED'
 type RecordingElementMatchStatus = 'MATCHED' | 'CANDIDATE'
 type CollectTaskReturnSource = typeof WEB_UI_RECORDED_CASE_COLLECT_RETURN_ORIGIN | null
 type UploadArtifactBinding = WebUiFileUploadArtifactBinding & { updatedAt: number }
-type StepGroupKey = 'NAVIGATION' | 'INTERACTION' | 'UPLOAD' | 'ASSERTION' | 'WAITING' | 'EVIDENCE'
 type RecordingRepairAction =
   | 'UPLOAD_FIRST'
   | 'UPLOAD_NEXT'
@@ -118,6 +117,7 @@ type RecordingRepairAction =
   | 'REPLAY_FOCUS'
   | 'REPLAY_RUN'
   | 'REPLAY_REPORT'
+type WebUiCaseDetailTab = 'steps' | 'info' | 'settings'
 
 interface EditableStep {
   id?: number | null
@@ -207,7 +207,7 @@ const recordingReplayRunId = ref<string | null>(null)
 const errorMessage = ref('')
 const selectedStepIndex = ref(0)
 const selectedStepIndexes = ref<number[]>([])
-const collapsedStepGroupKeys = ref<string[]>([])
+const detailActiveTab = ref<WebUiCaseDetailTab>('steps')
 const draggingStepIndex = ref<number | null>(null)
 const form = ref<CaseForm>(createEmptyForm())
 const uploadArtifactBindings = ref<Record<string, UploadArtifactBinding>>({})
@@ -251,11 +251,6 @@ function getRouteQueryNumber(name: string) {
 }
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
-const selectedStepIndexSet = computed(() => new Set(selectedStepIndexes.value))
-const selectedStepCount = computed(() => selectedStepIndexes.value.length)
-const hasSelectedSteps = computed(() => selectedStepCount.value > 0)
-const allStepsSelected = computed(() => form.value.steps.length > 0 && selectedStepCount.value === form.value.steps.length)
-const someStepsSelected = computed(() => selectedStepCount.value > 0 && !allStepsSelected.value)
 const selectedStepUploadFileId = computed(() => {
   const step = selectedStep.value
   return step?.type === 'FILE_UPLOAD' ? artifactFileIdFromInputValue(step.inputValue) : null
@@ -448,12 +443,6 @@ const recordingStatusDescription = computed(() => {
   return '打开目标页后，可开始录制页面操作'
 })
 const recordingRecoveryHint = computed(() => recordingStatusErrorMessage.value || recordingRecoveryMessage.value || recordingDraftMessage.value)
-const recordingReplayAvailable = computed(() => shouldOfferWebUiRecordingDraftReplay({
-  draftActive: recordingDraftActive.value,
-  savedStepCount: savedCaseStepCount.value,
-  draftStepCount: form.value.steps.length,
-  recorderId: appliedRecordingRecorderId.value,
-}))
 const recordingElapsedText = computed(() => {
   if (!recordingStartedAt.value || !recordingInProgress.value) {
     return ''
@@ -467,51 +456,7 @@ const recordingElapsedText = computed(() => {
   const seconds = totalSeconds % 60
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 })
-const stepGroups = computed(() => {
-  const groups: Array<{
-    key: string
-    label: string
-    startIndex: number
-    endIndex: number
-    steps: Array<{ step: EditableStep; index: number }>
-  }> = []
-  for (const [index, step] of form.value.steps.entries()) {
-    const group = getStepGroupMeta(step.type)
-    const previous = groups[groups.length - 1]
-    if (previous && previous.label === group.label) {
-      previous.endIndex = index
-      previous.steps.push({ step, index })
-      continue
-    }
-    groups.push({
-      key: `${group.key}-${index}`,
-      label: group.label,
-      startIndex: index,
-      endIndex: index,
-      steps: [{ step, index }],
-    })
-  }
-  return groups
-})
-
-function getStepGroupMeta(stepType: WebUiStepType): { key: StepGroupKey; label: string } {
-  if (stepType === 'OPEN') {
-    return { key: 'NAVIGATION', label: '页面导航' }
-  }
-  if (stepType === 'FILE_UPLOAD') {
-    return { key: 'UPLOAD', label: '文件上传' }
-  }
-  if (stepType.startsWith('ASSERT_')) {
-    return { key: 'ASSERTION', label: '断言校验' }
-  }
-  if (stepType === 'WAIT_FOR') {
-    return { key: 'WAITING', label: '等待同步' }
-  }
-  if (stepType === 'SCREENSHOT') {
-    return { key: 'EVIDENCE', label: '证据截图' }
-  }
-  return { key: 'INTERACTION', label: '页面操作' }
-}
+const enabledStepCount = computed(() => form.value.steps.filter(step => step.enabled).length)
 
 function createEmptyForm(): CaseForm {
   return {
@@ -704,7 +649,6 @@ function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: bool
   appliedRecordingRecorderId.value = null
   appliedRecordingStepCount.value = 0
   selectedStepIndexes.value = []
-  collapsedStepGroupKeys.value = []
   draggingStepIndex.value = null
   lastRecordingCandidateCollectTaskFingerprint.value = ''
   uploadArtifactBindings.value = toUploadArtifactBindingsFromSavedSteps(item.steps)
@@ -834,7 +778,6 @@ function restoreRecordingDraft(item: WebUiCaseDetail) {
   suppressRecordingDraftPersist = false
   recordingDraftActive.value = true
   selectedStepIndexes.value = []
-  collapsedStepGroupKeys.value = []
   appliedRecordingRecorderId.value = recordingDraft.recorderId || null
   appliedRecordingStepCount.value = Math.max(
     0,
@@ -2302,10 +2245,10 @@ async function removeStepAt(index: number) {
     return
   }
   try {
-    await ElMessageBox.confirm(`删除第 ${index + 1} 步后需要保存才会生效，确认删除？`, '删除步骤', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await confirmDelete({
+      title: '删除步骤',
+      message: `删除第 ${index + 1} 步后需要保存才会生效，确认删除吗？`,
+      confirmText: '确认删除',
     })
   } catch {
     return
@@ -2328,31 +2271,6 @@ function moveStep(index: number, direction: -1 | 1) {
   selectedStepIndex.value = targetIndex
   restoreStepSelectionByRefs(selectedRefs)
   reorderSteps()
-}
-
-function isStepSelected(index: number) {
-  return selectedStepIndexSet.value.has(index)
-}
-
-function setStepSelected(index: number, checked: unknown) {
-  const next = new Set(selectedStepIndexes.value)
-  if (Boolean(checked)) {
-    next.add(index)
-  } else {
-    next.delete(index)
-  }
-  selectedStepIndexes.value = Array.from(next).filter(isValidStepIndex).sort((left, right) => left - right)
-}
-
-function toggleAllStepSelection(checked: unknown) {
-  selectedStepIndexes.value = Boolean(checked) ? form.value.steps.map((_, index) => index) : []
-}
-
-function invertStepSelection() {
-  const selected = selectedStepIndexSet.value
-  selectedStepIndexes.value = form.value.steps
-    .map((_, index) => index)
-    .filter(index => !selected.has(index))
 }
 
 function clearStepSelection() {
@@ -2378,59 +2296,6 @@ function restoreStepSelectionByRefs(steps: EditableStep[]) {
     .map(step => form.value.steps.indexOf(step))
     .filter(index => index >= 0)
     .sort((left, right) => left - right)
-}
-
-function setSelectedStepsEnabled(enabled: boolean) {
-  const indexes = selectedStepIndexes.value.filter(isValidStepIndex)
-  if (!indexes.length) {
-    return
-  }
-  indexes.forEach(index => {
-    form.value.steps[index].enabled = enabled
-  })
-  ElMessage.success(`已${enabled ? '启用' : '停用'} ${indexes.length} 个步骤，保存后生效`)
-}
-
-async function removeSelectedSteps() {
-  const indexes = selectedStepIndexes.value.filter(isValidStepIndex)
-  if (!indexes.length) {
-    return
-  }
-  try {
-    await ElMessageBox.confirm(`删除选中的 ${indexes.length} 个步骤后需要保存才会生效，确认删除？`, '批量删除步骤', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-    })
-  } catch {
-    return
-  }
-  const deleted = new Set(indexes)
-  const selectedStepRef = selectedStep.value
-  form.value.steps = form.value.steps.filter((_, index) => !deleted.has(index))
-  selectedStepIndex.value = selectedStepRef
-    ? Math.max(0, form.value.steps.indexOf(selectedStepRef))
-    : Math.max(0, Math.min(selectedStepIndex.value, form.value.steps.length - 1))
-  if (selectedStepIndex.value < 0) {
-    selectedStepIndex.value = Math.max(0, Math.min(indexes[0] || 0, form.value.steps.length - 1))
-  }
-  clearStepSelection()
-  reorderSteps()
-  ElMessage.success(`已删除 ${indexes.length} 个步骤，保存后生效`)
-}
-
-function isStepGroupCollapsed(groupKey: string) {
-  return collapsedStepGroupKeys.value.includes(groupKey)
-}
-
-function toggleStepGroup(groupKey: string) {
-  const next = new Set(collapsedStepGroupKeys.value)
-  if (next.has(groupKey)) {
-    next.delete(groupKey)
-  } else {
-    next.add(groupKey)
-  }
-  collapsedStepGroupKeys.value = Array.from(next)
 }
 
 function startStepDrag(index: number, event: DragEvent) {
@@ -2688,6 +2553,23 @@ function getStepCardTypeTone(type: WebUiStepType) {
   if (['FILL', 'SELECT', 'FILE_UPLOAD', 'FILE_PICKER', 'PRESS_KEY'].includes(type)) return 'primary'
   if (['ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL', 'ASSERT_TITLE', 'ASSERT_ATTRIBUTE', 'ASSERT_COUNT'].includes(type)) return 'warning'
   return 'default'
+}
+
+function getStepFigmaTypeMeta(type: WebUiStepType) {
+  const tone = getStepCardTypeTone(type)
+  if (type === 'OPEN') {
+    return { color: '#165DFF', background: '#E8F3FF' }
+  }
+  if (tone === 'success') {
+    return { color: '#00B42A', background: '#E8FFEA' }
+  }
+  if (tone === 'primary') {
+    return { color: '#7816FF', background: '#F5E8FF' }
+  }
+  if (tone === 'warning') {
+    return { color: '#0FC6C2', background: '#E8FFFB' }
+  }
+  return { color: '#4E5969', background: '#F2F3F5' }
 }
 
 function getStepFileUploadReplayIssue(step: EditableStep) {
@@ -3167,16 +3049,54 @@ watch(elementPickerLocatorType, () => {
 
     <div class="web-ui-case-detail__toolbar">
       <div class="web-ui-case-detail__title">
-        <AppButton :icon="ArrowLeft" @click="backToList">返回列表</AppButton>
+        <button class="web-ui-case-detail__back" type="button" @click="backToList">
+          <ArrowLeft />
+          返回列表
+        </button>
+        <span class="web-ui-case-detail__divider" />
         <h2>{{ form.name || 'Web UI 用例详情' }}</h2>
+        <span class="web-ui-case-detail__status" :class="`is-${form.status.toLowerCase()}`">
+          {{ form.status === 'ENABLED' ? '已启用' : '已停用' }}
+        </span>
       </div>
       <div class="web-ui-case-detail__actions">
-        <AppButton :icon="VideoCamera" :loading="recordingOpening" :disabled="saving || running || localRunning || recordingCapturing || recordingInProgress" @click="openRecordingPage">打开目标页</AppButton>
-        <AppButton :loading="localRunning" :disabled="saving || running" @click="runCase(true)">本地运行</AppButton>
-        <AppButton :loading="running" :disabled="saving || localRunning" @click="runCase(false)">调试运行</AppButton>
-        <AppButton v-if="recordingReplayAvailable" :loading="saving" :disabled="loading || running || localRunning || recordingInProgress" @click="saveCaseAndRunRecordingReplay">保存并本地回放</AppButton>
-        <AppButton type="primary" :loading="saving" :disabled="loading || running || localRunning" @click="saveCase">保存</AppButton>
+        <AppButton :loading="recordingOpening" :disabled="saving || running || localRunning || recordingCapturing || recordingInProgress" @click="openRecordingPage">
+          重新录制
+        </AppButton>
+        <AppButton :loading="recordingStarting" :disabled="recordingOpening || recordingCapturing || recordingInProgress" @click="startRecordingSteps">
+          追加录制
+        </AppButton>
+        <span class="web-ui-case-detail__divider" />
+        <AppButton :disabled="!selectedStep" @click="selectedStepIndex = Math.min(selectedStepIndex + 1, form.steps.length - 1)">单步调试</AppButton>
+        <AppButton :loading="localRunning" :disabled="saving || running" @click="runCase(true)">整体回放</AppButton>
+        <span class="web-ui-case-detail__divider" />
+        <AppButton type="primary" :loading="running" :disabled="saving || localRunning" @click="runCase(false)">调试运行</AppButton>
+        <AppButton :loading="saving" :disabled="loading || running || localRunning" @click="saveCase">保存</AppButton>
       </div>
+    </div>
+
+    <div class="web-ui-case-detail__tabs">
+      <button
+        type="button"
+        :class="{ 'is-active': detailActiveTab === 'steps' }"
+        @click="detailActiveTab = 'steps'"
+      >
+        测试步骤 ({{ form.steps.length }})
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': detailActiveTab === 'info' }"
+        @click="detailActiveTab = 'info'"
+      >
+        基本信息
+      </button>
+      <button
+        type="button"
+        :class="{ 'is-active': detailActiveTab === 'settings' }"
+        @click="detailActiveTab = 'settings'"
+      >
+        运行设置
+      </button>
     </div>
 
     <AppLoadingState v-if="loading" title="正在加载 Web UI 用例" description="正在读取基础信息、步骤和最近一次执行记录。" />
@@ -3324,108 +3244,77 @@ watch(elementPickerLocatorType, () => {
         </div>
       </section>
 
-      <div class="web-ui-case-detail__body">
+      <div v-if="detailActiveTab === 'steps'" class="web-ui-case-detail__body">
       <aside class="web-ui-case-detail__steps" aria-label="步骤列表">
         <div class="web-ui-case-detail__panel-header">
-          <div>
-            <h3>步骤列表</h3>
-            <p>共 {{ form.steps.length }} 步<span v-if="selectedStepCount"> · 已选 {{ selectedStepCount }}</span></p>
-          </div>
-          <AppButton type="primary" :icon="Plus" @click="addStep">新增</AppButton>
-        </div>
-        <div v-if="form.steps.length" class="web-ui-step-list-toolbar" aria-label="步骤批量整理">
-          <el-checkbox
-            :model-value="allStepsSelected"
-            :indeterminate="someStepsSelected"
-            @change="toggleAllStepSelection"
-          >
-            全选
-          </el-checkbox>
-          <AppButton size="small" :disabled="!form.steps.length" @click="invertStepSelection">反选</AppButton>
-          <AppButton size="small" :disabled="!hasSelectedSteps" @click="() => setSelectedStepsEnabled(true)">启用</AppButton>
-          <AppButton size="small" :disabled="!hasSelectedSteps" @click="() => setSelectedStepsEnabled(false)">停用</AppButton>
-          <AppButton size="small" :disabled="!hasSelectedSteps" :icon="Delete" @click="removeSelectedSteps">删除</AppButton>
+          <span>步骤列表 ({{ form.steps.length }})</span>
+          <AppButton size="small" :icon="Plus" @click="addStep">添加步骤</AppButton>
         </div>
         <div v-if="form.steps.length" class="web-ui-step-list">
-          <section
-            v-for="group in stepGroups"
-            :key="group.key"
-            class="web-ui-step-list__group"
+          <div
+            v-for="(step, index) in form.steps"
+            :key="`${step.id || 'new'}-${index}`"
+            role="button"
+            tabindex="0"
+            class="web-ui-step-list__item"
+            :class="{ 'is-active': selectedStepIndex === index, 'is-disabled': !step.enabled, 'is-dragging': draggingStepIndex === index }"
+            :style="{ borderLeftColor: selectedStepIndex === index ? getStepFigmaTypeMeta(step.type).color : 'transparent' }"
+            :aria-current="selectedStepIndex === index ? 'step' : undefined"
+            draggable="true"
+            @click="selectedStepIndex = index"
+            @keydown.enter.prevent="selectedStepIndex = index"
+            @keydown.space.prevent="selectedStepIndex = index"
+            @dragstart="startStepDrag(index, $event)"
+            @dragover.prevent
+            @drop.prevent="dropStep(index)"
+            @dragend="finishStepDrag"
           >
-            <button
-              type="button"
-              class="web-ui-step-list__group-header"
-              :aria-expanded="!isStepGroupCollapsed(group.key)"
-              @click="toggleStepGroup(group.key)"
-            >
-              <el-icon>
-                <ArrowDown v-if="!isStepGroupCollapsed(group.key)" />
-                <ArrowUp v-else />
-              </el-icon>
-              <strong>{{ group.label }}</strong>
-              <small>第 {{ group.startIndex + 1 }}-{{ group.endIndex + 1 }} 步 · {{ group.steps.length }} 步</small>
-            </button>
-            <div v-show="!isStepGroupCollapsed(group.key)" class="web-ui-step-list__group-body">
-              <div
-                v-for="{ step, index } in group.steps"
-                :key="`${step.id || 'new'}-${index}`"
-                role="button"
-                tabindex="0"
-                class="web-ui-step-list__item"
-                :class="{ 'is-active': selectedStepIndex === index, 'is-disabled': !step.enabled, 'is-selected': isStepSelected(index), 'is-dragging': draggingStepIndex === index }"
-                :aria-current="selectedStepIndex === index ? 'step' : undefined"
-                draggable="true"
-                @click="selectedStepIndex = index"
-                @keydown.enter.prevent="selectedStepIndex = index"
-                @keydown.space.prevent="selectedStepIndex = index"
-                @dragstart="startStepDrag(index, $event)"
-                @dragover.prevent
-                @drop.prevent="dropStep(index)"
-                @dragend="finishStepDrag"
-              >
-                <el-checkbox
-                  class="web-ui-step-list__select"
-                  :model-value="isStepSelected(index)"
-                  :aria-label="`选择第 ${index + 1} 步`"
-                  @click.stop
-                  @change="setStepSelected(index, $event)"
-                />
-                <span class="web-ui-step-list__order">{{ index + 1 }}</span>
-                <span class="web-ui-step-list__content">
-                  <span
-                    class="web-ui-step-list__type"
-                    :class="`is-${getStepCardTypeTone(step.type)}`"
-                  >
-                    {{ getStepCardTypeLabel(step.type) }}
-                  </span>
-                  <small>{{ getStepSummary(step) }}</small>
-                  <el-tag v-if="getStepFileUploadReplayLabel(step)" type="warning" effect="light" size="small">
-                    {{ getStepFileUploadReplayLabel(step) }}
-                  </el-tag>
-                  <el-tag v-if="getStepRecordedUploadArtifactLabel(step)" :type="getStepRecordedUploadArtifactTagType(step)" effect="light" size="small">
-                    {{ getStepRecordedUploadArtifactLabel(step) }}
-                  </el-tag>
-                  <el-tag v-if="step.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(step)" effect="light" size="small">
-                    {{ getRecordingElementMatchLabel(step) }}
-                  </el-tag>
+            <el-switch
+              class="web-ui-step-list__switch"
+              :model-value="step.enabled"
+              @click.stop
+              @change="step.enabled = Boolean($event)"
+            />
+            <span class="web-ui-step-list__order">{{ index + 1 }}</span>
+            <span class="web-ui-step-list__content">
+              <span class="web-ui-step-list__badges">
+                <span
+                  class="web-ui-step-list__type"
+                  :style="{ color: getStepFigmaTypeMeta(step.type).color, backgroundColor: getStepFigmaTypeMeta(step.type).background }"
+                >
+                  {{ getStepCardTypeLabel(step.type) }}
                 </span>
-                <span class="web-ui-step-list__actions" aria-label="步骤操作">
-                  <button type="button" title="上移" aria-label="上移" :disabled="index === 0" @click.stop="moveStep(index, -1)">
-                    <el-icon><ArrowUp /></el-icon>
-                  </button>
-                  <button type="button" title="下移" aria-label="下移" :disabled="index === form.steps.length - 1" @click.stop="moveStep(index, 1)">
-                    <el-icon><ArrowDown /></el-icon>
-                  </button>
-                  <button type="button" title="复制" aria-label="复制" @click.stop="copyStepAt(index)">
-                    <el-icon><CopyDocument /></el-icon>
-                  </button>
-                  <button type="button" title="删除" aria-label="删除" @click.stop="removeStepAt(index)">
-                    <el-icon><Delete /></el-icon>
-                  </button>
-                </span>
-              </div>
-            </div>
-          </section>
+                <el-tag v-if="getStepFileUploadReplayLabel(step)" type="warning" effect="light" size="small">
+                  {{ getStepFileUploadReplayLabel(step) }}
+                </el-tag>
+                <el-tag v-if="getStepRecordedUploadArtifactLabel(step)" :type="getStepRecordedUploadArtifactTagType(step)" effect="light" size="small">
+                  {{ getStepRecordedUploadArtifactLabel(step) }}
+                </el-tag>
+                <el-tag v-if="step.recordingElementMatchStatus" :type="getRecordingElementMatchTagType(step)" effect="light" size="small">
+                  {{ getRecordingElementMatchLabel(step) }}
+                </el-tag>
+              </span>
+              <strong>{{ getStepSummary(step) }}</strong>
+            </span>
+            <span class="web-ui-step-list__actions" aria-label="步骤操作">
+              <button type="button" title="上移" aria-label="上移" :disabled="index === 0" @click.stop="moveStep(index, -1)">
+                <el-icon><ArrowUp /></el-icon>
+              </button>
+              <button type="button" title="下移" aria-label="下移" :disabled="index === form.steps.length - 1" @click.stop="moveStep(index, 1)">
+                <el-icon><ArrowDown /></el-icon>
+              </button>
+              <button type="button" title="复制" aria-label="复制" @click.stop="copyStepAt(index)">
+                <el-icon><CopyDocument /></el-icon>
+              </button>
+              <button type="button" title="删除" aria-label="删除" @click.stop="removeStepAt(index)">
+                <el-icon><Delete /></el-icon>
+              </button>
+            </span>
+          </div>
+          <button type="button" class="web-ui-step-list__add" @click="addStep">
+            <Plus />
+            添加测试步骤
+          </button>
         </div>
         <AppEmptyState v-else title="还没有步骤" description="新增第一步后即可配置打开页面、点击、输入和断言。" />
       </aside>
@@ -3910,6 +3799,115 @@ watch(elementPickerLocatorType, () => {
           </div>
         </section>
       </aside>
+      </div>
+
+      <div v-else class="web-ui-case-detail__body web-ui-case-detail__body--tab">
+        <section v-if="detailActiveTab === 'info'" class="web-ui-case-detail__tab-panel">
+          <div class="web-ui-case-detail__form-card">
+            <label>
+              <span>用例名称</span>
+              <el-input v-model="form.name" maxlength="80" clearable />
+            </label>
+            <label>
+              <span>所属目录</span>
+              <el-input v-model="form.moduleName" maxlength="80" clearable />
+            </label>
+            <label>
+              <span>优先级</span>
+              <el-input :model-value="'P1'" disabled />
+            </label>
+            <label>
+              <span>浏览器</span>
+              <el-select v-model="form.browserType">
+                <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </label>
+            <label>
+              <span>创建人</span>
+              <el-input :model-value="props.workspaceCode || '-'" disabled />
+            </label>
+            <label>
+              <span>状态</span>
+              <el-select v-model="form.status">
+                <el-option label="已启用" value="ENABLED" />
+                <el-option label="已停用" value="DISABLED" />
+              </el-select>
+            </label>
+            <label class="is-full">
+              <span>标签 / 描述</span>
+              <el-input v-model="form.description" type="textarea" :rows="3" maxlength="500" clearable />
+            </label>
+          </div>
+        </section>
+
+        <section v-else class="web-ui-case-detail__tab-panel">
+          <div class="web-ui-case-detail__form-card">
+            <label>
+              <span>执行环境</span>
+              <el-input v-model="form.baseUrl" placeholder="环境默认地址或完整 URL" clearable />
+            </label>
+            <label>
+              <span>浏览器</span>
+              <el-select v-model="form.browserType">
+                <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+            </label>
+            <label>
+              <span>默认超时时长 (ms)</span>
+              <el-input-number v-model="form.defaultTimeoutMs" :min="1000" :max="60000" :step="1000" controls-position="right" />
+            </label>
+            <label>
+              <span>失败重试次数</span>
+              <el-input-number :model-value="2" :min="0" :max="5" controls-position="right" disabled />
+            </label>
+            <label>
+              <span>截图策略</span>
+              <el-select :model-value="'ON_FAILURE'" disabled>
+                <el-option label="仅失败时截图" value="ON_FAILURE" />
+              </el-select>
+            </label>
+            <label>
+              <span>变量集</span>
+              <el-select :model-value="'默认变量集'" disabled>
+                <el-option label="默认变量集" value="默认变量集" />
+              </el-select>
+            </label>
+          </div>
+        </section>
+
+        <aside class="web-ui-case-detail__inspector web-ui-case-detail__inspector--quick" aria-label="快速运行">
+          <section class="web-ui-case-detail__section">
+            <h3>快速运行</h3>
+            <div class="web-ui-run-settings">
+              <el-select v-model="form.baseUrl" placeholder="测试环境">
+                <el-option label="测试环境" :value="form.baseUrl || '测试环境'" />
+                <el-option label="预发布环境" value="预发布环境" />
+              </el-select>
+              <el-select v-model="form.browserType">
+                <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+              </el-select>
+              <AppButton type="primary" :loading="running" :disabled="saving || localRunning" @click="runCase(false)">运行此用例</AppButton>
+            </div>
+          </section>
+          <section class="web-ui-case-detail__section">
+            <div class="web-ui-quick-run-stat">
+              <span>步骤数</span>
+              <strong>{{ form.steps.length }}</strong>
+            </div>
+            <div class="web-ui-quick-run-stat">
+              <span>已启用</span>
+              <strong>{{ enabledStepCount }}</strong>
+            </div>
+            <div class="web-ui-quick-run-stat">
+              <span>最近结果</span>
+              <strong>{{ localRunnerTask?.status || '-' }}</strong>
+            </div>
+            <div class="web-ui-quick-run-stat">
+              <span>最近运行</span>
+              <strong>{{ localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt || '-' }}</strong>
+            </div>
+          </section>
+        </aside>
       </div>
     </template>
 
@@ -5158,6 +5156,527 @@ watch(elementPickerLocatorType, () => {
 .web-ui-element-picker__footer > div {
   display: flex;
   gap: var(--app-space-2);
+}
+
+.web-ui-case-detail {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__toolbar {
+  min-height: 54px;
+  flex: 0 0 auto;
+  padding: 11px 20px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__title {
+  gap: 10px;
+}
+
+.web-ui-case-detail__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+  transition: color .16s ease;
+}
+
+.web-ui-case-detail__back:hover {
+  color: #0fc6c2;
+}
+
+.web-ui-case-detail__back svg {
+  width: 14px;
+  height: 14px;
+}
+
+.web-ui-case-detail__divider {
+  width: 1px;
+  height: 20px;
+  background: #e5e6eb;
+}
+
+.web-ui-case-detail__title h2 {
+  max-width: 420px;
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.web-ui-case-detail__status {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: #e8ffea;
+  color: #00b42a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.web-ui-case-detail__status.is-disabled {
+  background: #f2f3f5;
+  color: #86909c;
+}
+
+.web-ui-case-detail__actions {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.web-ui-case-detail__actions :deep(.app-button) {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.web-ui-case-detail__actions :deep(.app-button.el-button--primary) {
+  border-color: #0fc6c2;
+  background: #0fc6c2;
+}
+
+.web-ui-case-detail__tabs {
+  display: flex;
+  height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__tabs button {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.web-ui-case-detail__tabs button.is-active {
+  border-bottom-color: #0fc6c2;
+  color: #0fc6c2;
+}
+
+.web-ui-case-detail__body {
+  display: flex;
+  gap: 0;
+  overflow: hidden;
+  background: #f4f6fa;
+}
+
+.web-ui-case-detail__steps {
+  width: 340px;
+  min-width: 340px;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #e5e6eb;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__panel-header {
+  min-height: 42px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.web-ui-case-detail__panel-header span {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  line-height: 16.5px;
+}
+
+.web-ui-case-detail__panel-header :deep(.app-button) {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: #86909c;
+  font-size: 11px;
+}
+
+.web-ui-step-list {
+  display: block;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.web-ui-step-list__item {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px 9px 7px;
+  border: 0;
+  border-bottom: 1px solid #e5e6eb;
+  border-left: 3px solid transparent;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.web-ui-step-list__item:hover {
+  background: #fafbff;
+}
+
+.web-ui-step-list__item.is-active {
+  border-color: #e5e6eb;
+  border-left-color: #0fc6c2;
+  background: rgba(15, 198, 194, .04);
+}
+
+.web-ui-step-list__item.is-disabled {
+  opacity: .55;
+}
+
+.web-ui-step-list__switch {
+  flex: 0 0 auto;
+}
+
+.web-ui-step-list__switch :deep(.el-switch) {
+  height: 16px;
+}
+
+.web-ui-step-list__switch :deep(.el-switch__core) {
+  width: 32px;
+  height: 16px;
+  min-width: 32px;
+  border: 0;
+  border-radius: 999px;
+}
+
+.web-ui-step-list__switch :deep(.el-switch__action) {
+  width: 12px;
+  height: 12px;
+}
+
+.web-ui-step-list__order {
+  width: 16px;
+  height: auto;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #c9cdd4;
+  font-family: var(--app-font-family-mono);
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 15px;
+  text-align: right;
+}
+
+.web-ui-step-list__item.is-active .web-ui-step-list__order {
+  background: transparent;
+  color: #c9cdd4;
+}
+
+.web-ui-step-list__content {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.web-ui-step-list__badges {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.web-ui-step-list__type {
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.web-ui-step-list__content strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-step-list__actions {
+  position: static;
+  flex: 0 0 auto;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transform: none;
+}
+
+.web-ui-step-list__item:hover .web-ui-step-list__actions,
+.web-ui-step-list__item:focus-within .web-ui-step-list__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.web-ui-step-list__actions button {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+
+.web-ui-step-list__add {
+  display: flex;
+  width: 100%;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
+  color: #c9cdd4;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.web-ui-step-list__add:hover {
+  background: #f4f6fa;
+  color: #0fc6c2;
+}
+
+.web-ui-step-list__add svg {
+  width: 14px;
+  height: 14px;
+}
+
+.web-ui-case-detail__editor {
+  flex: 1;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.web-ui-case-detail__section {
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__section-title h3,
+.web-ui-case-detail__section h3 {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.web-ui-step-editor {
+  gap: 20px;
+}
+
+.web-ui-step-config {
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.web-ui-step-config h4 {
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.web-ui-step-config h4::before {
+  display: none;
+}
+
+.web-ui-step-config__grid {
+  gap: 12px 16px;
+}
+
+.web-ui-step-config :deep(.el-form-item__label),
+.web-ui-run-settings :deep(.el-form-item__label) {
+  margin-bottom: 6px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+
+.web-ui-step-config :deep(.el-input__wrapper),
+.web-ui-step-config :deep(.el-select__wrapper),
+.web-ui-run-settings :deep(.el-input__wrapper),
+.web-ui-run-settings :deep(.el-select__wrapper),
+.web-ui-run-settings :deep(.el-input-number) {
+  min-height: 32px;
+  border-radius: 8px;
+}
+
+.web-ui-case-detail__inspector {
+  width: 210px;
+  min-width: 210px;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 14px;
+  border: 0;
+  border-left: 1px solid #e5e6eb;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__inspector .web-ui-case-detail__section {
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.web-ui-run-settings {
+  gap: 10px;
+}
+
+.web-ui-run-settings :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
+.web-ui-case-detail__tab-panel {
+  flex: 1;
+  overflow: auto;
+  padding: 17.5px;
+  background: #f4f6fa;
+}
+
+.web-ui-case-detail__form-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__form-card label {
+  display: grid;
+  gap: 6px;
+}
+
+.web-ui-case-detail__form-card label.is-full {
+  grid-column: 1 / -1;
+}
+
+.web-ui-case-detail__form-card label > span {
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.web-ui-case-detail__form-card :deep(.el-input__wrapper),
+.web-ui-case-detail__form-card :deep(.el-select__wrapper),
+.web-ui-case-detail__form-card :deep(.el-input-number) {
+  min-height: 31.5px;
+  border-radius: 7px;
+}
+
+.web-ui-case-detail__body--tab {
+  display: flex;
+  gap: 0;
+  background: #f4f6fa;
+}
+
+.web-ui-case-detail__body--tab .web-ui-case-detail__tab-panel {
+  min-width: 0;
+}
+
+.web-ui-case-detail__inspector--quick {
+  padding: 14px 15px;
+}
+
+.web-ui-case-detail__inspector--quick .web-ui-run-settings {
+  display: grid;
+  gap: 10.5px;
+}
+
+.web-ui-case-detail__inspector--quick :deep(.el-select__wrapper),
+.web-ui-case-detail__inspector--quick :deep(.el-input__wrapper) {
+  min-height: 28px;
+  border-radius: 7px;
+}
+
+.web-ui-case-detail__inspector--quick :deep(.app-button) {
+  width: 100%;
+  min-height: 28px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.web-ui-quick-run-stat {
+  display: flex;
+  min-height: 16.5px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.web-ui-quick-run-stat + .web-ui-quick-run-stat {
+  margin-top: 7px;
+}
+
+.web-ui-quick-run-stat span {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.web-ui-quick-run-stat strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1240px) {

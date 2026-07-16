@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
@@ -41,6 +41,7 @@ import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTagInput from '@/shared/ui/app-tag-input/AppTagInput.vue'
 import AppUserSelect from '@/shared/ui/app-user-select/AppUserSelect.vue'
+import { confirmDelete } from '@/shared/ui'
 import { CaseDetailDrawer } from '@/widgets/case-detail-drawer'
 import {
   useCaseTableSettings,
@@ -602,10 +603,10 @@ async function handleBatchDeleteCases() {
   }
 
   try {
-    await ElMessageBox.confirm(`确认删除当前页选中的 ${selectedCaseIds.value.length} 条用例吗？`, '批量删除', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await confirmDelete({
+      title: '批量删除',
+      message: `确认删除当前页选中的 ${selectedCaseIds.value.length} 条用例吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
     deletingCaseId.value = -1
     await caseApi.batchDeleteCases(props.workspaceCode, {

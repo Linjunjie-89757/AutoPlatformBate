@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 import {
-  DefectAttachmentPanel,
-  type DefectAttachmentPanelItem,
   defectPriorityOptions,
   defectSeverityOptions,
 } from '@/entities/defect'
@@ -13,6 +11,7 @@ import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import AppTagInput from '@/shared/ui/app-tag-input/AppTagInput.vue'
 import AppUserSelect from '@/shared/ui/app-user-select/AppUserSelect.vue'
+import { AttachmentFileWall, type AttachmentFileWallItem } from '@/shared/ui'
 
 export type CaseDefectPendingFile = {
   id: string
@@ -44,64 +43,28 @@ const emit = defineEmits<{
   'add-inline-image': [payload: { file: File; src: string }]
 }>()
 
-const uploadInput = ref<HTMLInputElement | null>(null)
-const evidenceDropActive = ref(false)
-
 const visible = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
 })
 
-const attachmentPreviewUrls = computed(() => (
-  props.pendingFiles.map(item => item.previewUrl).filter((item): item is string => !!item)
-))
-
-const attachmentPanelItems = computed<DefectAttachmentPanelItem[]>(() => (
+const attachmentWallItems = computed<AttachmentFileWallItem[]>(() => (
   props.pendingFiles.map(item => ({
     id: item.id,
     fileName: item.file.name,
     fileSize: item.file.size,
     contentType: item.file.type,
     imageUrl: item.previewUrl || undefined,
+    metaText: '待上传',
     pending: true,
   }))
 ))
-
-function openUploadPicker() {
-  uploadInput.value?.click()
-}
 
 function addFiles(files: File[]) {
   if (!files.length || props.saving) {
     return
   }
   emit('add-files', files)
-}
-
-function handleUploadChange(event: Event) {
-  const input = event.target as HTMLInputElement | null
-  const files = Array.from(input?.files ?? [])
-  if (input) {
-    input.value = ''
-  }
-  addFiles(files)
-}
-
-function handleEvidencePaste(event: ClipboardEvent) {
-  const files = Array.from(event.clipboardData?.items ?? [])
-    .filter(item => item.kind === 'file')
-    .map(item => item.getAsFile())
-    .filter((item): item is File => !!item)
-  if (!files.length) {
-    return
-  }
-  event.preventDefault()
-  addFiles(files)
-}
-
-function handleEvidenceDrop(event: DragEvent) {
-  evidenceDropActive.value = false
-  addFiles(Array.from(event.dataTransfer?.files ?? []))
 }
 </script>
 
@@ -134,34 +97,18 @@ function handleEvidenceDrop(event: DragEvent) {
           />
         </div>
 
-        <section
-          class="case-defect-editor-drawer__evidence"
-          :class="{ 'is-drop-active': evidenceDropActive }"
-          tabindex="0"
-          @paste="handleEvidencePaste"
-          @dragenter.prevent="evidenceDropActive = true"
-          @dragover.prevent
-          @dragleave="evidenceDropActive = false"
-          @drop.prevent="handleEvidenceDrop"
-        >
-          <div class="case-defect-editor-drawer__evidence-head">
-            <div>
-              <strong>附件 / 截图</strong>
-              <span>点击上传，或在此区域粘贴、拖拽文件。</span>
-            </div>
-            <AppButton size="small" :disabled="saving" @click="openUploadPicker">上传附件</AppButton>
-          </div>
-
-          <DefectAttachmentPanel
-            :items="attachmentPanelItems"
-            :preview-urls="attachmentPreviewUrls"
+        <div class="case-defect-editor-drawer__field">
+          <span>附件 / 截图</span>
+          <AttachmentFileWall
+            :items="attachmentWallItems"
+            :disabled="saving"
             :show-download="false"
-            empty-title="添加附件或截图"
-            empty-description="当前还没有待上传附件，点击上方按钮或在此区域粘贴、拖拽文件。"
+            empty-title="点击上传，或将文件拖拽至此处"
+            empty-description="支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB"
+            @add-files="addFiles"
             @remove="emit('remove-file', String($event.id))"
           />
-          <input ref="uploadInput" class="case-defect-editor-drawer__hidden-file" type="file" multiple @change="handleUploadChange">
-        </section>
+        </div>
       </section>
 
       <aside class="case-defect-editor-drawer__side">
@@ -223,21 +170,68 @@ function handleEvidenceDrop(event: DragEvent) {
 </template>
 
 <style scoped>
+:global(.case-defect-editor-drawer-host) {
+  --case-defect-drawer-border: #e5e6eb;
+  --case-defect-drawer-text-primary: #1d2129;
+  --case-defect-drawer-text-secondary: #4e5969;
+  --case-defect-drawer-text-muted: #86909c;
+  --case-defect-drawer-bg-muted: #f7f8fa;
+  --case-defect-drawer-primary: #165dff;
+  --case-defect-drawer-danger: #f53f3f;
+}
+
+:global(.case-defect-editor-drawer-host.el-drawer) {
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+}
+
 .case-defect-editor-drawer {
   display: grid;
   min-height: 100%;
   grid-template-columns: minmax(0, 1fr) 360px;
-  background: var(--app-bg-panel);
+  background: #fff;
 }
 
 :global(.case-defect-editor-drawer-host .el-drawer__header) {
+  box-sizing: border-box;
+  flex: 0 0 52px;
   margin-bottom: 0;
-  padding: var(--app-space-5) var(--app-space-6) var(--app-space-3);
-  border-bottom: 1px solid var(--app-border);
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--case-defect-drawer-border);
+  color: var(--case-defect-drawer-text-primary);
+}
+
+:global(.case-defect-editor-drawer-host .el-drawer__title) {
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22.5px;
+}
+
+:global(.case-defect-editor-drawer-host .el-drawer__close-btn) {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--case-defect-drawer-text-muted);
+}
+
+:global(.case-defect-editor-drawer-host .el-drawer__close-btn:hover) {
+  background: var(--case-defect-drawer-bg-muted);
+  color: var(--case-defect-drawer-text-primary);
+}
+
+:global(.case-defect-editor-drawer-host .el-drawer__close-btn .el-icon) {
+  width: 16px;
+  height: 16px;
 }
 
 :global(.case-defect-editor-drawer-host .el-drawer__body) {
+  display: flex;
   min-height: 0;
+  flex-direction: column;
   padding: 0;
   overflow: auto;
 }
@@ -246,69 +240,111 @@ function handleEvidenceDrop(event: DragEvent) {
   padding: 0;
 }
 
+:global(.case-defect-editor-drawer-host .app-drawer__footer) {
+  min-height: 58px;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--case-defect-drawer-border);
+  background: var(--case-defect-drawer-bg-muted);
+}
+
+:global(.case-defect-editor-drawer-host .app-button.el-button) {
+  min-height: 32px;
+  padding: 6px 13px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+:global(.case-defect-editor-drawer-host .app-button.el-button--primary) {
+  border-color: var(--case-defect-drawer-primary);
+  background: var(--case-defect-drawer-primary);
+}
+
 .case-defect-editor-drawer__main,
 .case-defect-editor-drawer__side {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--app-space-4);
-  padding: var(--app-space-5) var(--app-space-6);
+  gap: 14px;
+  padding: 16px 20px;
 }
 
 .case-defect-editor-drawer__side {
-  border-left: 1px solid var(--app-border-soft);
-  background: var(--app-bg-subtle);
+  border-left: 1px solid var(--case-defect-drawer-border);
+  background: var(--case-defect-drawer-bg-muted);
 }
 
 .case-defect-editor-drawer__field {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--app-space-2);
+  gap: 6px;
 }
 
 .case-defect-editor-drawer__field > span {
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
-  font-weight: 600;
-  line-height: var(--app-line-height-sm);
+  color: var(--case-defect-drawer-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
 }
 
-.case-defect-editor-drawer__field > span.is-required::before {
-  margin-right: 3px;
-  color: var(--app-danger);
+.case-defect-editor-drawer__field > span.is-required::after {
+  margin-left: 3px;
+  color: var(--case-defect-drawer-danger);
   content: '*';
 }
 
 .case-defect-editor-drawer__field :deep(.el-input__wrapper),
 .case-defect-editor-drawer__field :deep(.el-select__wrapper) {
-  border-radius: var(--app-radius-md);
-  box-shadow: 0 0 0 1px var(--app-border-strong) inset;
+  min-height: 34px;
+  padding: 1px 13px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--case-defect-drawer-border) inset;
+}
+
+.case-defect-editor-drawer__field :deep(.el-input__wrapper.is-focus),
+.case-defect-editor-drawer__field :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--case-defect-drawer-primary) inset, 0 0 0 2px rgba(22, 93, 255, 0.1);
+}
+
+.case-defect-editor-drawer__field :deep(.el-input__inner),
+.case-defect-editor-drawer__field :deep(.el-select__placeholder),
+.case-defect-editor-drawer__field :deep(.el-select__selected-item) {
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
 }
 
 .case-defect-editor-drawer__priority {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--app-space-2);
+  gap: 8px;
 }
 
 .case-defect-editor-drawer__priority button {
+  box-sizing: border-box;
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-panel);
-  color: var(--app-text-secondary);
+  border: 1px solid var(--case-defect-drawer-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--case-defect-drawer-text-secondary);
   cursor: pointer;
-  font-size: var(--app-font-size-sm);
+  font-size: 13px;
   font-weight: 600;
+  line-height: 19.5px;
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
 }
 
 .case-defect-editor-drawer__priority button:hover,
 .case-defect-editor-drawer__priority button.is-active {
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
-  color: var(--app-primary);
+  border-color: var(--case-defect-drawer-primary);
+  background: rgba(22, 93, 255, 0.08);
+  color: var(--case-defect-drawer-primary);
 }
 
 .case-defect-editor-drawer__priority button:disabled {
@@ -316,49 +352,82 @@ function handleEvidenceDrop(event: DragEvent) {
   opacity: 0.65;
 }
 
-.case-defect-editor-drawer__evidence {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--app-space-3);
-  padding: var(--app-space-4);
-  border: 1px solid var(--app-border-soft);
-  border-radius: var(--app-radius-lg);
-  background: var(--app-bg-panel);
-  outline: none;
+.case-defect-editor-drawer :deep(.defect-rich-text-editor) {
+  border-color: var(--case-defect-drawer-border);
+  border-radius: 6px;
 }
 
-.case-defect-editor-drawer__evidence.is-drop-active {
-  border-color: var(--app-primary);
-  background: var(--app-primary-soft);
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__toolbar) {
+  min-height: 38px;
+  padding: 4px 8px;
+  border-bottom-color: var(--case-defect-drawer-border);
+  background: var(--case-defect-drawer-bg-muted);
 }
 
-.case-defect-editor-drawer__evidence-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--app-space-3);
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__button),
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__select) {
+  height: 28px;
+  border-radius: 4px;
+  color: var(--case-defect-drawer-text-secondary);
+  font-size: 12px;
 }
 
-.case-defect-editor-drawer__evidence-head div {
-  display: grid;
-  gap: 3px;
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__button:hover),
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__select:hover),
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__button.is-active) {
+  background: #fff;
+  color: var(--case-defect-drawer-primary);
 }
 
-.case-defect-editor-drawer__evidence-head strong {
-  color: var(--app-text-primary);
-  font-size: var(--app-font-size-sm);
-  line-height: var(--app-line-height-sm);
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__content) {
+  min-height: 300px;
 }
 
-.case-defect-editor-drawer__evidence-head span {
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-xs);
-  line-height: var(--app-line-height-xs);
+.case-defect-editor-drawer :deep(.defect-rich-text-editor__content .defect-rich-text-editor__input) {
+  min-height: 272px;
+  padding: 12px 14px;
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 13px;
+  line-height: 22px;
 }
 
-.case-defect-editor-drawer__hidden-file {
-  display: none;
+.case-defect-editor-drawer :deep(.attachment-file-wall__drop-zone) {
+  min-height: 112px;
+  border-color: var(--case-defect-drawer-border);
+  border-radius: 4px;
+  background: var(--case-defect-drawer-bg-muted);
+}
+
+.case-defect-editor-drawer :deep(.attachment-file-wall__drop-zone.has-files) {
+  min-height: 180px;
+}
+
+.case-defect-editor-drawer :deep(.attachment-file-wall__drop-zone > span) {
+  color: var(--case-defect-drawer-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.case-defect-editor-drawer :deep(.attachment-file-wall__drop-zone > em) {
+  color: var(--case-defect-drawer-text-muted);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.case-defect-editor-drawer :deep(.attachment-file-wall__file) {
+  border-color: var(--case-defect-drawer-border);
+  box-shadow: none;
+}
+
+.case-defect-editor-drawer :deep(.attachment-file-wall__meta > strong) {
+  color: var(--case-defect-drawer-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.case-defect-editor-drawer :deep(.attachment-file-wall__meta-row > span) {
+  color: var(--case-defect-drawer-text-muted);
 }
 
 @media (max-width: 1080px) {

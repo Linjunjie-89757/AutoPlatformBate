@@ -2,13 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type HistoryState } from 'vue-router'
 import { CircleClose, FolderOpened } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import { caseAiApi, type AiGenerationTaskItem } from '@/entities/case-ai'
 import { caseApi, type CaseDirectoryNode, type SaveCasePayload } from '@/entities/case'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppCard from '@/shared/ui/app-card/AppCard.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -631,15 +632,11 @@ async function cancelProcessTask() {
 }
 
 async function deleteTask(record: AiGenerationTaskItem) {
-  await ElMessageBox.confirm(
-    '确定删除本次生成任务和所有用例吗？',
-    '删除生成任务',
-    {
-      type: 'warning',
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-    },
-  )
+  await confirmDelete({
+    title: '删除生成任务',
+    message: '确认删除本次生成任务和所有用例吗？删除后不可恢复。',
+    confirmText: '确认删除',
+  })
 
   try {
     await caseAiApi.deleteTask(record.workspaceCode, record.taskId)

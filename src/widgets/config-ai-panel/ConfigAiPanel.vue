@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   aiProviderApi,
@@ -11,6 +11,7 @@ import {
 } from '@/entities/ai-provider'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaConfigAiIcons } from '@/shared/assets/figma-icons'
+import { confirmDelete } from '@/shared/ui'
 
 import ConfigAiEditDrawer from './ConfigAiEditDrawer.vue'
 import ConfigAiModelDrawer from './ConfigAiModelDrawer.vue'
@@ -279,11 +280,10 @@ async function deleteProvider(provider: AiProviderConnectionItem) {
     return
   }
   try {
-    await ElMessageBox.confirm(`确定删除 AI 连接「${provider.connectionName}」吗？`, '删除 AI 连接', {
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger',
+    await confirmDelete({
+      title: '删除 AI 连接',
+      message: `确认删除 AI 连接「${provider.connectionName}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
     await aiProviderApi.deleteProviderConnection(props.workspaceCode, provider.id)
     ElMessage.success('AI 连接已删除')

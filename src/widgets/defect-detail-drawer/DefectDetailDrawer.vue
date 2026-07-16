@@ -3,8 +3,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import {
-  DefectAttachmentPanel,
-  type DefectAttachmentPanelItem,
   DefectPriorityBadge,
   DefectSeverityBadge,
   DefectStatusBadge,
@@ -23,6 +21,7 @@ import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
+import { AttachmentFileWall, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
 
 type DefectActivityRecord = Record<string, unknown>
 type DetailTab = 'basic' | 'detail' | 'case' | 'comment' | 'history'
@@ -73,7 +72,6 @@ const attachmentDownloadingId = ref<number | null>(null)
 const attachmentRemovingId = ref<number | null>(null)
 const attachmentUploading = ref(false)
 const attachmentErrorMessage = ref('')
-const attachmentInputRef = ref<HTMLInputElement | null>(null)
 const attachmentImageUrls = ref<Record<number, string>>({})
 const activeTab = ref<DetailTab>('detail')
 const caseKeyword = ref('')
@@ -98,11 +96,7 @@ const activityCount = computed(() => {
   return detail.value.activities.length
 })
 
-const imageAttachments = computed(() => getAttachments(detail.value).filter(isImageAttachment))
-const previewImageUrls = computed(() => imageAttachments.value
-  .map(attachment => attachmentImageUrls.value[attachment.id])
-  .filter(Boolean))
-const attachmentPanelItems = computed<DefectAttachmentPanelItem[]>(() => getAttachments(detail.value).map(attachment => ({
+const attachmentWallItems = computed<AttachmentFileWallItem[]>(() => getAttachments(detail.value).map(attachment => ({
   id: attachment.id,
   fileName: attachment.fileName,
   fileSize: attachment.fileSize,
@@ -581,18 +575,11 @@ async function downloadAttachment(attachment: DefectAttachment) {
   }
 }
 
-function openAttachmentPicker() {
-  attachmentInputRef.value?.click()
-}
-
-async function uploadAttachments(event: Event) {
+async function uploadAttachments(files: File[]) {
   if (!props.defectId || attachmentUploading.value) {
     return
   }
 
-  const input = event.target as HTMLInputElement
-  const files = Array.from(input.files || [])
-  input.value = ''
   if (!files.length) {
     return
   }
@@ -621,11 +608,10 @@ async function removeAttachment(attachment: DefectAttachment) {
     return
   }
 
-  await ElMessageBox.confirm(`确认删除附件“${attachment.fileName}”吗？`, '删除附件', {
-    confirmButtonText: '删除',
-    cancelButtonText: '取消',
-    type: 'warning',
-    confirmButtonClass: 'el-button--danger',
+  await confirmDelete({
+    title: '删除附件',
+    message: `确认删除附件“${attachment.fileName}”吗？删除后不可恢复。`,
+    confirmText: '确认删除',
   })
 
   attachmentRemovingId.value = attachment.id
@@ -645,14 +631,14 @@ async function removeAttachment(attachment: DefectAttachment) {
   }
 }
 
-function handleAttachmentPanelDownload(item: DefectAttachmentPanelItem) {
+function handleAttachmentPanelDownload(item: AttachmentFileWallItem) {
   const attachment = getAttachments(detail.value).find(entry => entry.id === item.id)
   if (attachment) {
     void downloadAttachment(attachment)
   }
 }
 
-function handleAttachmentPanelRemove(item: DefectAttachmentPanelItem) {
+function handleAttachmentPanelRemove(item: AttachmentFileWallItem) {
   const attachment = getAttachments(detail.value).find(entry => entry.id === item.id)
   if (attachment) {
     void removeAttachment(attachment)
@@ -898,26 +884,18 @@ onBeforeUnmount(() => {
             <section class="defect-detail-drawer__figma-section">
               <div class="defect-detail-drawer__attachment-heading">
                 <h4>附件 / 截图</h4>
-                <input
-                  ref="attachmentInputRef"
-                  class="defect-detail-drawer__file-input"
-                  type="file"
-                  multiple
-                  @change="uploadAttachments"
-                />
-                <button type="button" @click="openAttachmentPicker">上传附件</button>
               </div>
-              <div v-if="attachmentPanelItems.length" class="defect-detail-drawer__attachment-panel">
-                <DefectAttachmentPanel
-                  :items="attachmentPanelItems"
-                  :preview-urls="previewImageUrls"
-                  :downloading-id="attachmentDownloadingId"
-                  :removing-id="attachmentRemovingId"
-                  @download="handleAttachmentPanelDownload"
-                  @remove="handleAttachmentPanelRemove"
-                />
-              </div>
-              <div v-else class="defect-detail-drawer__attachment-empty">暂无附件</div>
+              <AttachmentFileWall
+                :items="attachmentWallItems"
+                :uploading="attachmentUploading"
+                :downloading-id="attachmentDownloadingId"
+                :removing-id="attachmentRemovingId"
+                empty-title="点击上传，或将文件拖拽至此处"
+                empty-description="支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB"
+                @add-files="uploadAttachments"
+                @download="handleAttachmentPanelDownload"
+                @remove="handleAttachmentPanelRemove"
+              />
               <p v-if="attachmentErrorMessage" class="defect-detail-drawer__form-error">
                 {{ attachmentErrorMessage }}
               </p>
@@ -1514,31 +1492,6 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-.defect-detail-drawer__attachment-heading button {
-  height: 24.5px;
-  padding: 0 10px;
-  border: 1px solid #e5e6eb;
-  border-radius: 7px;
-  background: #ffffff;
-  color: #4e5969;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.defect-detail-drawer__attachment-empty {
-  display: flex;
-  min-height: 75px;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed #e5e6eb;
-  border-radius: 11px;
-  color: #c9cdd4;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 18px;
-}
-
 .defect-detail-drawer__content-card {
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-md);
@@ -1899,10 +1852,6 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   margin-top: -2px;
-}
-
-.defect-detail-drawer__file-input {
-  display: none;
 }
 
 .defect-detail-drawer__case-toolbar {

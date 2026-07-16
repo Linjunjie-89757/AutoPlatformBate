@@ -1,7 +1,26 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onBeforeUnmount, ref, watch } from 'vue'
 import type { Component } from 'vue'
-import { RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  ChevronDown,
+  Highlighter,
+  Image,
+  Italic,
+  List,
+  ListChecks,
+  ListOrdered,
+  Redo2,
+  RemoveFormatting,
+  Strikethrough,
+  Trash2,
+  Underline as UnderlineIcon,
+  Undo2,
+} from '@lucide/vue'
 import { Extension, Node, mergeAttributes } from '@tiptap/core'
 import Highlight from '@tiptap/extension-highlight'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -399,12 +418,12 @@ function handleInlineImageChange(event: Event) {
       <div class="defect-rich-text-editor__group">
         <el-tooltip v-bind="toolbarTooltipProps" content="撤销" placement="top">
           <el-button text class="defect-rich-text-editor__button" :disabled="disabled || !editor?.can().undo()" @click="chain(editor)?.undo().run()">
-            <el-icon><RefreshLeft /></el-icon>
+            <Undo2 class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.6" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="恢复" placement="top">
           <el-button text class="defect-rich-text-editor__button" :disabled="disabled || !editor?.can().redo()" @click="chain(editor)?.redo().run()">
-            <el-icon><RefreshRight /></el-icon>
+            <Redo2 class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.6" />
           </el-button>
         </el-tooltip>
       </div>
@@ -415,9 +434,7 @@ function handleInlineImageChange(event: Event) {
         <el-dropdown trigger="click" :disabled="disabled" @command="applyHeading">
           <el-button text class="defect-rich-text-editor__select">
             <span>{{ currentHeadingLabel }}</span>
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__caret">
-              <path d="m5.5 7.5 4.5 5 4.5-5" />
-            </svg>
+            <ChevronDown class="defect-rich-text-editor__caret" :size="14" :stroke-width="1.8" />
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -431,9 +448,7 @@ function handleInlineImageChange(event: Event) {
         <el-dropdown trigger="click" :disabled="disabled" @command="applyFontSize">
           <el-button text class="defect-rich-text-editor__select is-size">
             <span>{{ currentFontSizeLabel }}</span>
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__caret">
-              <path d="m5.5 7.5 4.5 5 4.5-5" />
-            </svg>
+            <ChevronDown class="defect-rich-text-editor__caret" :size="14" :stroke-width="1.8" />
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -450,37 +465,27 @@ function handleInlineImageChange(event: Event) {
       <div class="defect-rich-text-editor__group">
         <el-tooltip v-bind="toolbarTooltipProps" content="加粗" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('bold') }" :disabled="disabled" @click="chain(editor)?.toggleBold().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M6 4.5h4.3c1.9 0 3.1.9 3.1 2.4 0 1-.5 1.8-1.5 2.1 1.2.3 2 1.2 2 2.5 0 1.8-1.4 3-3.6 3H6zM8.2 8.3h1.7c.8 0 1.2-.3 1.2-.9s-.4-.9-1.2-.9H8.2zm0 4.2h2c.9 0 1.4-.4 1.4-1.1s-.5-1.1-1.4-1.1h-2z" />
-            </svg>
+            <Bold class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="斜体" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('italic') }" :disabled="disabled" @click="chain(editor)?.toggleItalic().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M9 4.5h6M5 15.5h6M11.5 4.5l-3 11" />
-            </svg>
+            <Italic class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="下划线" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('underline') }" :disabled="disabled" @click="chain(editor)?.toggleUnderline().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M6 4.5v5a4 4 0 0 0 8 0v-5M5 16h10" />
-            </svg>
+            <UnderlineIcon class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="删除线" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('strike') }" :disabled="disabled" @click="chain(editor)?.toggleStrike().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M5 10h10M13.2 6.2A4.8 4.8 0 0 0 10 5c-1.8 0-3 .8-3 2 0 2.8 6 1.3 6 5 0 1.2-1.1 2-3 2a5.6 5.6 0 0 1-3.7-1.3" />
-            </svg>
+            <Strikethrough class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="高亮" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('highlight') }" :disabled="disabled" @click="chain(editor)?.toggleHighlight().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="m5.5 12 6.8-6.8 2.5 2.5L8 14.5H5.5zM4.5 16h11" />
-            </svg>
+            <Highlighter class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
       </div>
@@ -490,23 +495,17 @@ function handleInlineImageChange(event: Event) {
       <div class="defect-rich-text-editor__group">
         <el-tooltip v-bind="toolbarTooltipProps" content="无序列表" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('bulletList') }" :disabled="disabled" @click="chain(editor)?.toggleBulletList().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M5.5 7h.01M5.5 13h.01M8.5 7h7M8.5 13h7" />
-            </svg>
+            <List class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="有序列表" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('orderedList') }" :disabled="disabled" @click="chain(editor)?.toggleOrderedList().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M4.5 6h1.5v4M4.2 14.5c.5-.8 1.2-1.3 2-1.3.9 0 1.5.5 1.5 1.2 0 .5-.3.9-.8 1.4l-1.6 1.4h2.6M10 6h6M10 10h6M10 14h6" />
-            </svg>
+            <ListOrdered class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="任务列表" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive('taskList') }" :disabled="disabled" @click="chain(editor)?.toggleTaskList().run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M4.5 5.5h3v3h-3zM5.2 7l.8.8 1.4-1.8M10 7h6M4.5 11.5h3v3h-3zM5.2 13l.8.8 1.4-1.8M10 13h6" />
-            </svg>
+            <ListChecks class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
       </div>
@@ -516,30 +515,22 @@ function handleInlineImageChange(event: Event) {
       <div class="defect-rich-text-editor__group">
         <el-tooltip v-bind="toolbarTooltipProps" content="左对齐" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive({ textAlign: 'left' }) }" :disabled="disabled" @click="chain(editor)?.setTextAlign('left').run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M4 5.5h11M4 9h8M4 12.5h11M4 16h7" />
-            </svg>
+            <AlignLeft class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="居中" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive({ textAlign: 'center' }) }" :disabled="disabled" @click="chain(editor)?.setTextAlign('center').run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M4.5 5.5h11M6 9h8M4.5 12.5h11M6.5 16h7" />
-            </svg>
+            <AlignCenter class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="右对齐" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive({ textAlign: 'right' }) }" :disabled="disabled" @click="chain(editor)?.setTextAlign('right').run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M5 5.5h11M8 9h8M5 12.5h11M9 16h7" />
-            </svg>
+            <AlignRight class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="两端对齐" placement="top">
           <el-button text class="defect-rich-text-editor__button" :class="{ 'is-active': editor?.isActive({ textAlign: 'justify' }) }" :disabled="disabled" @click="chain(editor)?.setTextAlign('justify').run()">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M4 5.5h12M4 9h12M4 12.5h12M4 16h12" />
-            </svg>
+            <AlignJustify class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
       </div>
@@ -549,23 +540,17 @@ function handleInlineImageChange(event: Event) {
       <div class="defect-rich-text-editor__group">
         <el-tooltip v-bind="toolbarTooltipProps" content="插入图片" placement="top">
           <el-button text class="defect-rich-text-editor__button" :disabled="disabled" @click="openInlineImagePicker">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M4.5 5.5h11v9h-11zM7 12l2.1-2.2 1.8 1.9 1.1-1.2 2.5 2.5M7.2 7.5h.01" />
-            </svg>
+            <Image class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="清除格式" placement="top">
           <el-button text class="defect-rich-text-editor__button" :disabled="disabled" @click="clearFormatting">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M4.5 5.5h8M8.5 5.5v9M6.5 15.5h4M11.5 6.5l4 4M15.5 6.5l-4 4" />
-            </svg>
+            <RemoveFormatting class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
         <el-tooltip v-bind="toolbarTooltipProps" content="清空内容" placement="top">
           <el-button text class="defect-rich-text-editor__button" :disabled="disabled" @click="clearContent">
-            <svg viewBox="0 0 20 20" class="defect-rich-text-editor__svg">
-              <path d="M6 6h8M7 6V4.8h6V6M7 8v6.5M10 8v6.5M13 8v6.5M5.5 6l.7 10h7.6l.7-10" />
-            </svg>
+            <Trash2 class="defect-rich-text-editor__icon" :size="16" :stroke-width="1.8" />
           </el-button>
         </el-tooltip>
       </div>
@@ -617,22 +602,24 @@ function handleInlineImageChange(event: Event) {
 
 .defect-rich-text-editor__button,
 .defect-rich-text-editor__select {
-  height: 30px;
+  --el-button-size: 28px;
+  height: 28px !important;
+  min-height: 28px;
   margin: 0;
   border-radius: var(--app-radius-sm);
   color: var(--app-text-secondary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .defect-rich-text-editor__button {
-  width: 30px;
-  padding: 0;
+  width: 28px !important;
+  padding: 0 !important;
 }
 
 .defect-rich-text-editor__select {
   min-width: 52px;
-  padding: 0 6px;
+  padding: 0 6px !important;
 }
 
 .defect-rich-text-editor__select.is-size {
@@ -650,21 +637,13 @@ function handleInlineImageChange(event: Event) {
   width: 14px;
   height: 14px;
   margin-left: 3px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
+  flex: 0 0 auto;
 }
 
-.defect-rich-text-editor__svg {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
+.defect-rich-text-editor__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .defect-rich-text-editor__content {

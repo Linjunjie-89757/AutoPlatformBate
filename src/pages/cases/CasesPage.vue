@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   buildCaseDirectoryOptions,
@@ -22,6 +22,7 @@ import {
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
@@ -488,10 +489,10 @@ async function submitMoveModule() {
 
 async function deleteModule(payload: { nodeId: string; workspaceCode: string; directoryId: number; label: string }) {
   try {
-    await ElMessageBox.confirm(`确认删除模块“${payload.label}”吗？`, '删除模块', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+    await confirmDelete({
+      title: '删除模块',
+      message: `确认删除模块“${payload.label}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
     })
     await caseApi.deleteCaseDirectory(payload.directoryId, payload.workspaceCode)
     if (selectedNodeId.value === payload.nodeId) {
