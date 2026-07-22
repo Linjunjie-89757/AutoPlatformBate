@@ -2,7 +2,29 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  ArrowLeft,
+  ArrowDown as LucideArrowDown,
+  ArrowUp as LucideArrowUp,
+  Camera,
+  CheckCircle,
+  ChevronDown,
+  ChevronLeft,
+  CirclePlus,
+  Copy,
+  Globe2,
+  GripVertical,
+  MousePointer,
+  Play,
+  Plus as LucidePlus,
+  RotateCcw,
+  Save,
+  SkipForward,
+  Sparkles,
+  Timer,
+  Trash2,
+  Type as LucideType,
+  Variable,
+} from '@lucide/vue'
+import {
   ArrowDown,
   ArrowUp,
   CopyDocument,
@@ -208,6 +230,16 @@ const errorMessage = ref('')
 const selectedStepIndex = ref(0)
 const selectedStepIndexes = ref<number[]>([])
 const detailActiveTab = ref<WebUiCaseDetailTab>('steps')
+// These three controls are part of the Figma editor shell. The current case API
+// does not expose matching case-level fields, so they remain local until that contract exists.
+const caseRetryCount = ref(2)
+const caseScreenshotPolicy = ref<WebUiScreenshotPolicy>('ON_FAILURE')
+const caseVariableSet = ref('默认变量集')
+const quickRunEnvironment = ref('测试环境')
+const legacyDetailToolsVisible = ref(false)
+const figmaAiSuggestionsVisible = ref(true)
+const figmaAiSuggestionsExpanded = ref(false)
+const handledFigmaAiSuggestionKeys = ref<string[]>([])
 const draggingStepIndex = ref<number | null>(null)
 const form = ref<CaseForm>(createEmptyForm())
 const uploadArtifactBindings = ref<Record<string, UploadArtifactBinding>>({})
@@ -251,6 +283,80 @@ function getRouteQueryNumber(name: string) {
 }
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
+const figmaEditorRunStatus = computed(() => {
+  const status = String(localRunnerRunDetail.value?.summary.status || localRunnerTask.value?.status || '').toUpperCase()
+  if (status === 'SUCCESS' || status === 'PASSED' || status === 'PASS') return { label: '通过', tone: 'success' }
+  if (status === 'FAILED' || status === 'FAIL') return { label: '失败', tone: 'danger' }
+  if (status === 'RUNNING' || status === 'PENDING') return { label: '运行中', tone: 'running' }
+  return { label: '待运行', tone: 'pending' }
+})
+
+const webUiModuleTabs = [
+  { key: 'cases', label: '用例管理', path: '/automation/web/cases' },
+  { key: 'elements', label: '元素库', path: '/automation/web/elements' },
+  { key: 'suites', label: '执行套件', path: '' },
+  { key: 'runs', label: '执行记录', path: '/automation/web/runs' },
+  { key: 'environments', label: '环境配置', path: '/automation/web/environments' },
+] as const
+
+function navigateWebUiModuleTab(tab: typeof webUiModuleTabs[number]) {
+  if (!tab.path) {
+    ElMessage.info('执行套件页面需要按 Figma 补齐后接入')
+    return
+  }
+  void router.push({ path: tab.path, query: { workspace: props.workspaceCode } })
+}
+const figmaStepSuggestions = computed(() => {
+  const firstInputIndex = form.value.steps.findIndex(step => String(step.type).includes('INPUT'))
+  const firstClickIndex = form.value.steps.findIndex(step => step.type === 'CLICK')
+  const firstAssertionIndex = form.value.steps.findIndex(step => step.type.startsWith('ASSERT'))
+  return [
+    {
+      key: 'rename',
+      tone: 'purple',
+      tag: '优化名称',
+      target: firstInputIndex >= 0 ? `步骤 ${firstInputIndex + 1}` : '步骤名称',
+      message: '建议使用业务语义补全步骤名称，便于维护和排查。',
+      reason: '元素定位信息已提供明确的业务含义。',
+    },
+    {
+      key: 'assert',
+      tone: 'cyan',
+      tag: '推荐断言',
+      target: firstAssertionIndex >= 0 ? `步骤 ${firstAssertionIndex + 1}` : '流程末尾',
+      message: firstAssertionIndex >= 0 ? '建议复核断言目标是否覆盖本次流程结果。' : '建议在关键操作后补充结果断言。',
+      reason: '关键操作后的结果需要通过断言明确验证。',
+    },
+    {
+      key: 'duplicate',
+      tone: 'warning',
+      tag: '冗余步骤',
+      target: firstClickIndex >= 0 ? `步骤 ${firstClickIndex + 1}` : '步骤列表',
+      message: '可检查仅用于聚焦的点击步骤是否能够合并。',
+      reason: '输入操作通常可以直接定位元素，无需额外聚焦。',
+    },
+  ]
+})
+const visibleFigmaStepSuggestions = computed(() => figmaStepSuggestions.value
+  .filter(suggestion => !handledFigmaAiSuggestionKeys.value.includes(suggestion.key)))
+
+function handleFigmaAiSuggestion(key: string) {
+  handledFigmaAiSuggestionKeys.value = [...handledFigmaAiSuggestionKeys.value, key]
+}
+
+function ignoreAllFigmaAiSuggestions() {
+  handledFigmaAiSuggestionKeys.value = figmaStepSuggestions.value.map(suggestion => suggestion.key)
+  figmaAiSuggestionsVisible.value = false
+}
+
+function toggleFigmaStepSelection(index: number) {
+  selectedStepIndex.value = selectedStepIndex.value === index ? -1 : index
+}
+
+function formatFigmaQuickRunTime(value: string | null | undefined) {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').replace(/:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/, '').slice(0, 16)
+}
 const selectedStepUploadFileId = computed(() => {
   const step = selectedStep.value
   return step?.type === 'FILE_UPLOAD' ? artifactFileIdFromInputValue(step.inputValue) : null
@@ -2531,7 +2637,7 @@ function getStepInputPreview(step: EditableStep, maxLength = 12) {
 }
 
 function getStepCardTypeLabel(type: WebUiStepType) {
-  if (type === 'OPEN') return '打开'
+  if (type === 'OPEN') return '打开页面'
   if (['CLICK', 'DOUBLE_CLICK', 'RIGHT_CLICK'].includes(type)) return '点击'
   if (type === 'FILL') return '输入'
   if (['ASSERT_VISIBLE', 'ASSERT_TEXT', 'ASSERT_URL', 'ASSERT_TITLE', 'ASSERT_ATTRIBUTE', 'ASSERT_COUNT'].includes(type)) return '断言'
@@ -2558,18 +2664,20 @@ function getStepCardTypeTone(type: WebUiStepType) {
 function getStepFigmaTypeMeta(type: WebUiStepType) {
   const tone = getStepCardTypeTone(type)
   if (type === 'OPEN') {
-    return { color: '#165DFF', background: '#E8F3FF' }
+    return { color: '#165DFF', background: '#E8F3FF', icon: Globe2 }
   }
   if (tone === 'success') {
-    return { color: '#00B42A', background: '#E8FFEA' }
+    return { color: '#00B42A', background: '#E8FFEA', icon: MousePointer }
   }
   if (tone === 'primary') {
-    return { color: '#7816FF', background: '#F5E8FF' }
+    return { color: '#7816FF', background: '#F5E8FF', icon: LucideType }
   }
   if (tone === 'warning') {
-    return { color: '#0FC6C2', background: '#E8FFFB' }
+    return { color: '#0FC6C2', background: '#E8FFFB', icon: CheckCircle }
   }
-  return { color: '#4E5969', background: '#F2F3F5' }
+  if (type === 'WAIT_FOR') return { color: '#FF7D00', background: '#FFF3E8', icon: Timer }
+  if (type === 'SCREENSHOT') return { color: '#4E5969', background: '#F2F3F5', icon: Camera }
+  return { color: '#FAAD14', background: '#FFFBE8', icon: Variable }
 }
 
 function getStepFileUploadReplayIssue(step: EditableStep) {
@@ -3047,31 +3155,66 @@ watch(elementPickerLocatorType, () => {
       @change="handleUploadFileSelected"
     />
 
+    <nav class="web-ui-case-detail__module-tabs" aria-label="Web UI 自动化模块">
+      <button
+        v-for="tab in webUiModuleTabs"
+        :key="tab.key"
+        type="button"
+        :class="{ 'is-active': tab.key === 'cases' }"
+        @click="navigateWebUiModuleTab(tab)"
+      >
+        {{ tab.label }}
+      </button>
+    </nav>
+
+    <aside v-if="!loading && !errorMessage" class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--fixed" aria-label="快速运行">
+      <p>快速运行</p>
+      <el-select v-model="quickRunEnvironment" aria-label="执行环境">
+        <el-option label="测试环境" value="测试环境" />
+        <el-option label="预发布环境" value="预发布环境" />
+      </el-select>
+      <el-select v-model="form.browserType" aria-label="浏览器">
+        <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+      </el-select>
+      <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || localRunning" @click="runCase(false)"><Play />运行此用例</button>
+      <span class="web-ui-case-detail__quick-run-divider" />
+      <div class="web-ui-case-detail__quick-run-stats">
+        <div><span>步骤数</span><strong>{{ form.steps.length }}</strong></div>
+        <div><span>已启用</span><strong>{{ enabledStepCount }}</strong></div>
+        <div><span>最近结果</span><strong :class="`is-${figmaEditorRunStatus.tone}`">{{ figmaEditorRunStatus.label }}</strong></div>
+        <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt) }}</strong></div>
+      </div>
+    </aside>
+
     <div class="web-ui-case-detail__toolbar">
       <div class="web-ui-case-detail__title">
         <button class="web-ui-case-detail__back" type="button" @click="backToList">
-          <ArrowLeft />
+          <ChevronLeft />
           返回列表
         </button>
         <span class="web-ui-case-detail__divider" />
         <h2>{{ form.name || 'Web UI 用例详情' }}</h2>
-        <span class="web-ui-case-detail__status" :class="`is-${form.status.toLowerCase()}`">
-          {{ form.status === 'ENABLED' ? '已启用' : '已停用' }}
+        <span class="web-ui-case-detail__status" :class="`is-${figmaEditorRunStatus.tone}`">
+          {{ figmaEditorRunStatus.label }}
         </span>
       </div>
       <div class="web-ui-case-detail__actions">
-        <AppButton :loading="recordingOpening" :disabled="saving || running || localRunning || recordingCapturing || recordingInProgress" @click="openRecordingPage">
+        <button
+          type="button"
+          class="web-ui-case-detail__record-action"
+          :disabled="saving || running || localRunning || recordingCapturing || recordingInProgress"
+          @click="openRecordingPage"
+        >
+          <i />
           重新录制
-        </AppButton>
-        <AppButton :loading="recordingStarting" :disabled="recordingOpening || recordingCapturing || recordingInProgress" @click="startRecordingSteps">
-          追加录制
-        </AppButton>
+        </button>
+        <button type="button" class="web-ui-case-detail__editor-button" :disabled="recordingOpening || recordingCapturing || recordingInProgress" @click="startRecordingSteps"><CirclePlus />追加录制</button>
         <span class="web-ui-case-detail__divider" />
-        <AppButton :disabled="!selectedStep" @click="selectedStepIndex = Math.min(selectedStepIndex + 1, form.steps.length - 1)">单步调试</AppButton>
-        <AppButton :loading="localRunning" :disabled="saving || running" @click="runCase(true)">整体回放</AppButton>
+        <button type="button" class="web-ui-case-detail__editor-button" :disabled="!selectedStep" @click="selectedStepIndex = Math.min(selectedStepIndex + 1, form.steps.length - 1)"><SkipForward />单步调试</button>
+        <button type="button" class="web-ui-case-detail__editor-button" :disabled="saving || running" @click="runCase(true)"><Play />整体回放</button>
         <span class="web-ui-case-detail__divider" />
-        <AppButton type="primary" :loading="running" :disabled="saving || localRunning" @click="runCase(false)">调试运行</AppButton>
-        <AppButton :loading="saving" :disabled="loading || running || localRunning" @click="saveCase">保存</AppButton>
+        <button type="button" class="web-ui-case-detail__editor-button is-primary" :disabled="saving || localRunning" @click="runCase(false)"><Play />调试运行</button>
+        <button type="button" class="web-ui-case-detail__editor-button" :disabled="loading || running || localRunning" @click="() => saveCase()"><Save />保存</button>
       </div>
     </div>
 
@@ -3108,7 +3251,7 @@ watch(elementPickerLocatorType, () => {
     </AppEmptyState>
 
     <template v-else>
-      <section v-if="localRunnerTask" class="web-ui-local-runner-result">
+      <section v-if="legacyDetailToolsVisible && localRunnerTask" class="web-ui-local-runner-result">
         <div class="web-ui-local-runner-result__main">
           <el-tag :type="getLocalRunnerTaskStatusType(localRunnerTask.status)" effect="light">
             {{ formatLocalRunnerTaskStatus(localRunnerTask.status) }}
@@ -3244,7 +3387,108 @@ watch(elementPickerLocatorType, () => {
         </div>
       </section>
 
-      <div v-if="detailActiveTab === 'steps'" class="web-ui-case-detail__body">
+      <div v-if="detailActiveTab === 'steps'" class="web-ui-case-detail__body web-ui-case-detail__body--figma">
+        <section class="web-ui-case-detail__figma-main web-ui-case-detail__figma-main--steps">
+          <section v-if="figmaAiSuggestionsVisible && visibleFigmaStepSuggestions.length" class="web-ui-case-detail__ai-suggestions">
+            <header @click="figmaAiSuggestionsExpanded = !figmaAiSuggestionsExpanded">
+              <Sparkles />
+              <strong>AI 步骤优化建议 <span>· {{ visibleFigmaStepSuggestions.length }} 条</span></strong>
+              <button type="button" @click.stop="ignoreAllFigmaAiSuggestions">忽略全部</button>
+              <ChevronDown :class="{ 'is-expanded': figmaAiSuggestionsExpanded }" />
+            </header>
+            <div v-show="figmaAiSuggestionsExpanded">
+              <article v-for="suggestion in visibleFigmaStepSuggestions" :key="suggestion.key">
+                <em :class="`is-${suggestion.tone}`">{{ suggestion.tag }}</em>
+                <div class="web-ui-case-detail__ai-suggestion-copy">
+                  <p><code>{{ suggestion.target }}</code>{{ suggestion.message }}</p>
+                  <small>理由：{{ suggestion.reason }}</small>
+                </div>
+                <span class="web-ui-case-detail__ai-suggestion-actions">
+                  <button type="button" class="is-adopt" @click="handleFigmaAiSuggestion(suggestion.key)">采纳</button>
+                  <button type="button" class="is-ignore" @click="handleFigmaAiSuggestion(suggestion.key)">忽略</button>
+                </span>
+              </article>
+            </div>
+          </section>
+          <div class="web-ui-case-detail__steps-toolbar">
+            <p>拖拽调整步骤顺序，点击步骤行进入详细编辑</p>
+            <div>
+              <button type="button" class="web-ui-case-detail__secondary-action" @click="selectedStepIndex = 0"><RotateCcw />重置</button>
+              <button type="button" class="web-ui-case-detail__primary-action" @click="addStep">
+                <LucidePlus />
+                添加步骤
+              </button>
+            </div>
+          </div>
+
+          <div v-if="form.steps.length" class="web-ui-case-detail__figma-step-list">
+            <div
+              v-for="(step, index) in form.steps"
+              :key="`${step.id || 'new'}-figma-${index}`"
+              class="web-ui-case-detail__figma-step-row"
+              :class="{ 'is-selected': selectedStepIndex === index, 'is-disabled': !step.enabled }"
+              :style="{ '--step-accent': step.enabled ? getStepFigmaTypeMeta(step.type).color : '#c9cdd4' }"
+              role="button"
+              tabindex="0"
+              @click="toggleFigmaStepSelection(index)"
+              @keydown.enter.prevent="toggleFigmaStepSelection(index)"
+              @keydown.space.prevent="toggleFigmaStepSelection(index)"
+            >
+              <GripVertical class="web-ui-case-detail__drag-handle" aria-hidden="true" />
+              <el-switch
+                class="web-ui-case-detail__figma-step-switch"
+                :model-value="step.enabled"
+                @click.stop
+                @change="step.enabled = Boolean($event)"
+              />
+              <span class="web-ui-case-detail__figma-step-order">{{ index + 1 }}</span>
+              <span
+                class="web-ui-case-detail__figma-step-type"
+              :style="{ color: getStepFigmaTypeMeta(step.type).color, backgroundColor: getStepFigmaTypeMeta(step.type).background }"
+              >
+                <component :is="getStepFigmaTypeMeta(step.type).icon" />
+                {{ getStepCardTypeLabel(step.type) }}
+              </span>
+              <div class="web-ui-case-detail__figma-step-copy">
+                <strong>{{ getStepSummary(step) }}</strong>
+                <small v-if="step.elementName">元素：{{ step.elementName }}</small>
+                <small v-else-if="step.inputValue">{{ step.inputValue }}</small>
+              </div>
+              <div class="web-ui-case-detail__figma-step-actions" aria-label="步骤操作">
+                <button type="button" title="上移" aria-label="上移" :disabled="index === 0" @click.stop="moveStep(index, -1)"><LucideArrowUp /></button>
+                <button type="button" title="下移" aria-label="下移" :disabled="index === form.steps.length - 1" @click.stop="moveStep(index, 1)"><LucideArrowDown /></button>
+                <button type="button" title="复制" aria-label="复制" @click.stop="copyStepAt(index)"><Copy /></button>
+                <button type="button" class="is-danger" title="删除" aria-label="删除" @click.stop="removeStepAt(index)"><Trash2 /></button>
+              </div>
+            </div>
+            <button type="button" class="web-ui-case-detail__figma-add-step" @click="addStep"><LucidePlus />添加测试步骤</button>
+          </div>
+          <AppEmptyState v-else title="还没有步骤" description="新增第一步后即可继续配置。">
+            <template #actions><AppButton type="primary" @click="addStep">添加步骤</AppButton></template>
+          </AppEmptyState>
+        </section>
+
+        <aside class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--legacy" aria-label="快速运行">
+          <p>快速运行</p>
+          <el-select v-model="quickRunEnvironment" aria-label="执行环境">
+            <el-option label="测试环境" value="测试环境" />
+            <el-option label="预发布环境" value="预发布环境" />
+          </el-select>
+          <el-select v-model="form.browserType" aria-label="浏览器">
+            <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || localRunning" @click="runCase(false)"><Play />运行此用例</button>
+          <span class="web-ui-case-detail__quick-run-divider" />
+          <div class="web-ui-case-detail__quick-run-stats">
+            <div><span>步骤数</span><strong>{{ form.steps.length }}</strong></div>
+            <div><span>已启用</span><strong>{{ enabledStepCount }}</strong></div>
+            <div><span>最近结果</span><strong :class="`is-${figmaEditorRunStatus.tone}`">{{ figmaEditorRunStatus.label }}</strong></div>
+            <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt) }}</strong></div>
+          </div>
+        </aside>
+      </div>
+
+      <div v-else-if="legacyDetailToolsVisible" class="web-ui-case-detail__body">
       <aside class="web-ui-case-detail__steps" aria-label="步骤列表">
         <div class="web-ui-case-detail__panel-header">
           <span>步骤列表 ({{ form.steps.length }})</span>
@@ -3801,7 +4045,7 @@ watch(elementPickerLocatorType, () => {
       </aside>
       </div>
 
-      <div v-else class="web-ui-case-detail__body web-ui-case-detail__body--tab">
+      <div v-else class="web-ui-case-detail__body web-ui-case-detail__body--figma">
         <section v-if="detailActiveTab === 'info'" class="web-ui-case-detail__tab-panel">
           <div class="web-ui-case-detail__form-card">
             <label>
@@ -3814,28 +4058,23 @@ watch(elementPickerLocatorType, () => {
             </label>
             <label>
               <span>优先级</span>
-              <el-input :model-value="'P1'" disabled />
+              <el-input :model-value="'P1'" readonly />
             </label>
             <label>
               <span>浏览器</span>
-              <el-select v-model="form.browserType">
-                <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-              </el-select>
+              <el-input :model-value="WEB_UI_BROWSER_OPTIONS.find(item => item.value === form.browserType)?.label || form.browserType" readonly />
             </label>
             <label>
               <span>创建人</span>
-              <el-input :model-value="props.workspaceCode || '-'" disabled />
+              <el-input :model-value="props.workspaceCode || '-'" readonly />
             </label>
             <label>
               <span>状态</span>
-              <el-select v-model="form.status">
-                <el-option label="已启用" value="ENABLED" />
-                <el-option label="已停用" value="DISABLED" />
-              </el-select>
+              <el-input :model-value="form.status === 'ENABLED' ? '已启用' : '已停用'" readonly />
             </label>
             <label class="is-full">
-              <span>标签 / 描述</span>
-              <el-input v-model="form.description" type="textarea" :rows="3" maxlength="500" clearable />
+              <span>标签</span>
+              <el-input v-model="form.description" maxlength="500" clearable />
             </label>
           </div>
         </section>
@@ -3844,7 +4083,10 @@ watch(elementPickerLocatorType, () => {
           <div class="web-ui-case-detail__form-card">
             <label>
               <span>执行环境</span>
-              <el-input v-model="form.baseUrl" placeholder="环境默认地址或完整 URL" clearable />
+              <el-select v-model="quickRunEnvironment">
+                <el-option label="测试环境" value="测试环境" />
+                <el-option label="预发布环境" value="预发布环境" />
+              </el-select>
             </label>
             <label>
               <span>浏览器</span>
@@ -3854,59 +4096,45 @@ watch(elementPickerLocatorType, () => {
             </label>
             <label>
               <span>默认超时时长 (ms)</span>
-              <el-input-number v-model="form.defaultTimeoutMs" :min="1000" :max="60000" :step="1000" controls-position="right" />
+              <el-input v-model.number="form.defaultTimeoutMs" type="number" />
             </label>
             <label>
               <span>失败重试次数</span>
-              <el-input-number :model-value="2" :min="0" :max="5" controls-position="right" disabled />
+              <el-input v-model.number="caseRetryCount" type="number" />
             </label>
             <label>
               <span>截图策略</span>
-              <el-select :model-value="'ON_FAILURE'" disabled>
-                <el-option label="仅失败时截图" value="ON_FAILURE" />
+              <el-select v-model="caseScreenshotPolicy">
+                <el-option v-for="item in WEB_UI_SCREENSHOT_POLICY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </label>
             <label>
               <span>变量集</span>
-              <el-select :model-value="'默认变量集'" disabled>
+              <el-select v-model="caseVariableSet">
                 <el-option label="默认变量集" value="默认变量集" />
+                <el-option label="测试数据集 A" value="测试数据集 A" />
               </el-select>
             </label>
           </div>
         </section>
 
-        <aside class="web-ui-case-detail__inspector web-ui-case-detail__inspector--quick" aria-label="快速运行">
-          <section class="web-ui-case-detail__section">
-            <h3>快速运行</h3>
-            <div class="web-ui-run-settings">
-              <el-select v-model="form.baseUrl" placeholder="测试环境">
-                <el-option label="测试环境" :value="form.baseUrl || '测试环境'" />
-                <el-option label="预发布环境" value="预发布环境" />
-              </el-select>
-              <el-select v-model="form.browserType">
-                <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
-              </el-select>
-              <AppButton type="primary" :loading="running" :disabled="saving || localRunning" @click="runCase(false)">运行此用例</AppButton>
-            </div>
-          </section>
-          <section class="web-ui-case-detail__section">
-            <div class="web-ui-quick-run-stat">
-              <span>步骤数</span>
-              <strong>{{ form.steps.length }}</strong>
-            </div>
-            <div class="web-ui-quick-run-stat">
-              <span>已启用</span>
-              <strong>{{ enabledStepCount }}</strong>
-            </div>
-            <div class="web-ui-quick-run-stat">
-              <span>最近结果</span>
-              <strong>{{ localRunnerTask?.status || '-' }}</strong>
-            </div>
-            <div class="web-ui-quick-run-stat">
-              <span>最近运行</span>
-              <strong>{{ localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt || '-' }}</strong>
-            </div>
-          </section>
+        <aside class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--legacy" aria-label="快速运行">
+          <p>快速运行</p>
+          <el-select v-model="quickRunEnvironment" aria-label="执行环境">
+            <el-option label="测试环境" value="测试环境" />
+            <el-option label="预发布环境" value="预发布环境" />
+          </el-select>
+          <el-select v-model="form.browserType" aria-label="浏览器">
+            <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || localRunning" @click="runCase(false)"><Play />运行此用例</button>
+          <span class="web-ui-case-detail__quick-run-divider" />
+          <div class="web-ui-case-detail__quick-run-stats">
+            <div><span>步骤数</span><strong>{{ form.steps.length }}</strong></div>
+            <div><span>已启用</span><strong>{{ enabledStepCount }}</strong></div>
+            <div><span>最近结果</span><strong :class="`is-${figmaEditorRunStatus.tone}`">{{ figmaEditorRunStatus.label }}</strong></div>
+            <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt) }}</strong></div>
+          </div>
         </aside>
       </div>
     </template>
@@ -5161,14 +5389,14 @@ watch(elementPickerLocatorType, () => {
 .web-ui-case-detail {
   gap: 0;
   overflow: hidden;
-  border: 1px solid #e5e6eb;
-  border-radius: 8px;
+  position: relative;
   background: #ffffff;
 }
 
 .web-ui-case-detail__toolbar {
   min-height: 54px;
   flex: 0 0 auto;
+  margin-right: 210px;
   padding: 11px 20px;
   border-bottom: 1px solid #e5e6eb;
   background: #ffffff;
@@ -5232,6 +5460,21 @@ watch(elementPickerLocatorType, () => {
   color: #86909c;
 }
 
+.web-ui-case-detail__status.is-danger {
+  background: #ffe8e8;
+  color: #f53f3f;
+}
+
+.web-ui-case-detail__status.is-running {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.web-ui-case-detail__status.is-pending {
+  background: #f2f3f5;
+  color: #86909c;
+}
+
 .web-ui-case-detail__actions {
   flex-wrap: nowrap;
   gap: 8px;
@@ -5251,10 +5494,43 @@ watch(elementPickerLocatorType, () => {
   background: #0fc6c2;
 }
 
+.web-ui-case-detail__record-action {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 63, 63, .25);
+  border-radius: 8px;
+  background: rgba(245, 63, 63, .06);
+  color: #f53f3f;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.web-ui-case-detail__record-action:hover:not(:disabled) {
+  background: rgba(245, 63, 63, .1);
+}
+
+.web-ui-case-detail__record-action:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.web-ui-case-detail__record-action i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .web-ui-case-detail__tabs {
   display: flex;
   height: 36px;
   flex: 0 0 auto;
+  margin-right: 210px;
   align-items: center;
   padding: 0 20px;
   border-bottom: 1px solid #e5e6eb;
@@ -5677,6 +5953,655 @@ watch(elementPickerLocatorType, () => {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Figma UICaseEditor: one scrollable editor column plus a fixed 210px quick-run rail. */
+.web-ui-case-detail__body--figma {
+  display: flex;
+  min-height: 0;
+  padding-right: 210px;
+  gap: 0;
+  overflow: hidden;
+  background: #f4f6fa;
+}
+
+.web-ui-case-detail__module-tabs {
+  display: flex;
+  height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 17.5px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__module-tabs button {
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.web-ui-case-detail__module-tabs button.is-active {
+  border-bottom-color: #0fc6c2;
+  color: #0fc6c2;
+}
+
+.web-ui-case-detail__figma-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+  padding: 20px;
+}
+
+.web-ui-case-detail__figma-main--steps {
+  gap: 16px;
+}
+
+.web-ui-case-detail__steps-toolbar {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.web-ui-case-detail__ai-suggestions {
+  overflow: hidden;
+  border: 1px solid rgba(15, 198, 194, .31);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__ai-suggestions header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(15, 198, 194, .18);
+  background: rgba(15, 198, 194, .05);
+}
+
+.web-ui-case-detail__ai-suggestions header svg {
+  width: 13px;
+  height: 13px;
+  color: #0fc6c2;
+}
+
+.web-ui-case-detail__ai-suggestions header strong {
+  flex: 1;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.web-ui-case-detail__ai-suggestions header strong span {
+  color: #86909c;
+  font-weight: 400;
+}
+
+.web-ui-case-detail__ai-suggestions header button {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.web-ui-case-detail__ai-suggestions > div {
+  display: grid;
+  background: #fafffe;
+}
+
+.web-ui-case-detail__ai-suggestions article {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f2f3f5;
+}
+
+.web-ui-case-detail__ai-suggestions article:last-child {
+  border-bottom: 0;
+}
+
+.web-ui-case-detail__ai-suggestions article em {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.web-ui-case-detail__ai-suggestions article em.is-purple {
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.web-ui-case-detail__ai-suggestions article em.is-cyan {
+  background: #e8fffb;
+  color: #0fc6c2;
+}
+
+.web-ui-case-detail__ai-suggestions article em.is-warning {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.web-ui-case-detail__ai-suggestion-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.web-ui-case-detail__ai-suggestions article p {
+  margin: 0;
+  color: #1d2129;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.web-ui-case-detail__ai-suggestion-copy small {
+  display: block;
+  margin-top: 4px;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.web-ui-case-detail__ai-suggestions article code {
+  margin-right: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  color: #4e5969;
+  font-family: var(--app-font-family-mono);
+  font-size: 10px;
+}
+
+.web-ui-case-detail__ai-suggestions article button {
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(15, 198, 194, .09);
+  color: #0fc6c2;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.web-ui-case-detail__steps-toolbar p {
+  margin: 0;
+  color: #86909c;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.web-ui-case-detail__steps-toolbar > div {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.web-ui-case-detail__secondary-action,
+.web-ui-case-detail__primary-action,
+.web-ui-case-detail__quick-run-button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+
+.web-ui-case-detail__secondary-action {
+  border: 1px solid #e5e6eb;
+  background: #ffffff;
+  color: #4e5969;
+}
+
+.web-ui-case-detail__secondary-action:hover {
+  background: #f4f6fa;
+}
+
+.web-ui-case-detail__primary-action {
+  border: 1px solid #0fc6c2;
+  background: #0fc6c2;
+  color: #ffffff;
+}
+
+.web-ui-case-detail__primary-action:hover,
+.web-ui-case-detail__quick-run-button:hover:not(:disabled) {
+  border-color: #0bb8b4;
+  background: #0bb8b4;
+}
+
+.web-ui-case-detail__primary-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.web-ui-case-detail__figma-step-list {
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__figma-step-row {
+  display: grid;
+  grid-template-columns: 14px 32px 20px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 13px;
+  border-bottom: 1px solid #e5e6eb;
+  border-left: 3px solid var(--step-accent);
+  background: #ffffff;
+  cursor: pointer;
+  transition: background-color .16s ease;
+}
+
+.web-ui-case-detail__figma-step-row:hover {
+  background: #ffffff;
+}
+
+.web-ui-case-detail__figma-step-row.is-selected {
+  background: color-mix(in srgb, var(--step-accent) 2.35%, #ffffff);
+}
+
+.web-ui-case-detail__figma-step-row.is-disabled {
+  opacity: .5;
+}
+
+.web-ui-case-detail__drag-handle {
+  display: block;
+  width: 14px;
+  height: 14px;
+  color: #c9cdd4;
+  cursor: grab;
+}
+
+.web-ui-case-detail__figma-step-switch :deep(.el-switch__core) {
+  width: 28px;
+  min-width: 28px;
+  height: 14px;
+  border: 0;
+}
+
+.web-ui-case-detail__figma-step-switch :deep(.el-switch__action) {
+  width: 12px;
+  height: 12px;
+}
+
+.web-ui-case-detail__figma-step-order {
+  color: #c9cdd4;
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+}
+
+.web-ui-case-detail__figma-step-type {
+  display: inline-flex;
+  min-width: 0;
+  height: 20px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.web-ui-case-detail__figma-step-type svg {
+  width: 10px;
+  height: 10px;
+}
+
+.web-ui-case-detail__figma-step-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.web-ui-case-detail__figma-step-copy strong,
+.web-ui-case-detail__figma-step-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-case-detail__figma-step-copy strong {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.web-ui-case-detail__figma-step-copy small {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.web-ui-case-detail__figma-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.web-ui-case-detail__figma-step-actions button {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+}
+
+.web-ui-case-detail__figma-step-actions button:nth-child(-n + 2) {
+  width: 24px;
+  height: 24px;
+}
+
+.web-ui-case-detail__figma-step-actions button:nth-child(n + 3) {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #c9cdd4;
+}
+
+.web-ui-case-detail__figma-step-actions button:nth-child(-n + 2) svg {
+  width: 12px;
+  height: 12px;
+}
+
+.web-ui-case-detail__figma-step-actions button:nth-child(n + 3) svg {
+  width: 13px;
+  height: 13px;
+}
+
+.web-ui-case-detail__figma-step-actions button:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.web-ui-case-detail__figma-step-actions button:nth-child(-n + 2):hover:not(:disabled) {
+  color: #86909c;
+}
+
+.web-ui-case-detail__figma-step-actions button.is-danger:hover:not(:disabled) {
+  background: #fff0f0;
+  color: #f53f3f;
+}
+
+.web-ui-case-detail__figma-step-actions button:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.web-ui-case-detail__figma-add-step {
+  display: flex;
+  width: 100%;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  background: #ffffff;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.web-ui-case-detail__figma-add-step:hover {
+  background: #f4f6fa;
+  color: #0fc6c2;
+}
+
+.web-ui-case-detail__figma-add-step svg {
+  width: 14px;
+  height: 14px;
+}
+
+.web-ui-case-detail__body--figma .web-ui-case-detail__tab-panel {
+  min-width: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 17.5px;
+  background: #f4f6fa;
+}
+
+.web-ui-case-detail__body--figma .web-ui-case-detail__form-card {
+  gap: 14px;
+  padding: 18.5px;
+  border-radius: 8px;
+}
+
+.web-ui-case-detail__body--figma .web-ui-case-detail__form-card label {
+  gap: 5.25px;
+}
+
+.web-ui-case-detail__figma-quick-run {
+  position: absolute;
+  z-index: 2;
+  top: 44px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: 210px;
+  min-width: 210px;
+  flex-direction: column;
+  gap: 10.5px;
+  overflow: auto;
+  padding: 14px 15px;
+  border-left: 1px solid #e5e6eb;
+  background: #ffffff;
+}
+
+.web-ui-case-detail__figma-quick-run--legacy {
+  display: none;
+}
+
+.web-ui-case-detail__figma-quick-run > p {
+  margin: 0;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.web-ui-case-detail__figma-quick-run :deep(.el-select__wrapper) {
+  min-height: 28px;
+  border-radius: 7px;
+}
+
+.web-ui-case-detail__figma-quick-run :deep(.el-select__selected-item) {
+  font-size: 12px;
+}
+
+.web-ui-case-detail__quick-run-button {
+  width: 100%;
+  border: 1px solid #0fc6c2;
+  background: #0fc6c2;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.web-ui-case-detail__quick-run-button svg {
+  width: 12px;
+  height: 12px;
+}
+
+.web-ui-case-detail__quick-run-button:disabled {
+  border-color: #c9cdd4;
+  background: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.web-ui-case-detail__quick-run-divider {
+  display: block;
+  height: 1px;
+  margin: 0;
+  background: #e5e6eb;
+}
+
+.web-ui-case-detail__quick-run-stats {
+  display: grid;
+  gap: 7px;
+}
+
+.web-ui-case-detail__quick-run-stats div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 16.5px;
+}
+
+.web-ui-case-detail__quick-run-stats span {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.web-ui-case-detail__quick-run-stats strong {
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-case-detail__quick-run-stats strong.is-success {
+  color: #00b42a;
+}
+
+.web-ui-case-detail__quick-run-stats strong.is-danger {
+  color: #f53f3f;
+}
+
+.web-ui-case-detail__quick-run-stats strong.is-running {
+  color: #165dff;
+}
+
+.web-ui-case-detail__editor-button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.web-ui-case-detail__editor-button:hover:not(:disabled) {
+  background: #f4f6fa;
+}
+
+.web-ui-case-detail__editor-button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.web-ui-case-detail__editor-button.is-primary {
+  border-color: #0fc6c2;
+  background: #0fc6c2;
+  color: #ffffff;
+}
+
+.web-ui-case-detail__editor-button.is-primary:hover:not(:disabled) {
+  background: #0bb8b4;
+}
+
+.web-ui-case-detail__editor-button svg {
+  width: 11px;
+  height: 11px;
+}
+
+.web-ui-case-detail__secondary-action svg {
+  width: 11px;
+  height: 11px;
+}
+
+.web-ui-case-detail__ai-suggestions header {
+  cursor: pointer;
+}
+
+.web-ui-case-detail__ai-suggestions header > svg:last-child {
+  color: #86909c;
+  transition: transform .2s ease;
+}
+
+.web-ui-case-detail__ai-suggestions header > svg.is-expanded {
+  transform: rotate(180deg);
+}
+
+.web-ui-case-detail__ai-suggestion-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.web-ui-case-detail__ai-suggestion-actions button {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.web-ui-case-detail__ai-suggestion-actions .is-adopt {
+  background: rgba(15, 198, 194, .09);
+  color: #0fc6c2;
+}
+
+.web-ui-case-detail__ai-suggestion-actions .is-ignore {
+  background: transparent;
+  color: #86909c;
 }
 
 @media (max-width: 1240px) {

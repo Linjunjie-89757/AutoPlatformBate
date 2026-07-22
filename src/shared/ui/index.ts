@@ -20,5 +20,7 @@ export { default as AppTableColumnSettingsDrawer } from './app-table-column-sett
 export { default as AppTableSettingsTrigger } from './app-table-settings-trigger/AppTableSettingsTrigger.vue'
 export { default as AppTagInput } from './app-tag-input/AppTagInput.vue'
 export { default as AppUserSelect } from './app-user-select/AppUserSelect.vue'
+export { default as AiGenerationLiveLogDialog } from './ai-live-log/AiGenerationLiveLogDialog.vue'
+export { default as AiLiveLogPanel } from './ai-live-log/AiLiveLogPanel.vue'
 export { default as AttachmentFileWall } from './attachment-file-wall/AttachmentFileWall.vue'
 export type { AttachmentFileWallItem } from './attachment-file-wall/AttachmentFileWall.vue'

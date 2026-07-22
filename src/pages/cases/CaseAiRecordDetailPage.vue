@@ -18,6 +18,7 @@ import { caseApi, type CaseDirectoryNode, type SaveCasePayload } from '@/entitie
 import { useSession } from '@/entities/session'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import AiGenerationLiveLogDialog from '@/shared/ui/ai-live-log/AiGenerationLiveLogDialog.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -234,26 +235,40 @@ const figmaDetailStats = computed(() => {
 })
 const figmaTimelineSteps = computed(() => {
   const record = detailRecord.value
-  const currentStep = record?.currentStep ?? 4
+  const currentStep = record?.currentStep ?? 1
   const isCompleted = record?.status === 'COMPLETED'
   const isFailed = record?.status === 'FAILED'
+  const isCanceled = record?.status === 'CANCELED'
   return [
     { label: '任务创建', step: 1 },
-    { label: 'AI 生成', step: 2 },
-    { label: 'AI 评审', step: 3 },
-    { label: '完成', step: 4 },
-  ].map(item => ({
-    ...item,
-    done: isCompleted || currentStep >= item.step,
-    failed: isFailed && currentStep === item.step,
-  }))
+    { label: 'AI生成用例', step: 2 },
+    { label: 'AI自动评审', step: 3 },
+    { label: '任务完成', step: 4 },
+  ].map((item) => {
+    const failed = isFailed && currentStep === item.step
+    const canceled = isCanceled && currentStep === item.step
+    const active = !isCompleted && !isFailed && !isCanceled && currentStep === item.step
+    const done = isCompleted || currentStep > item.step || ((isFailed || isCanceled) && currentStep > item.step)
+    const statusText = failed
+      ? '失败'
+      : canceled
+        ? '已取消'
+        : active
+          ? '进行中'
+          : done
+            ? '已完成'
+            : '等待中'
+    return {
+      ...item,
+      active,
+      canceled,
+      done,
+      failed,
+      statusText,
+    }
+  })
 })
 const outputEvents = computed(() => [...(detailRecord.value?.events ?? [])].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0)))
-const showTaskOutputBoard = computed(() => Boolean(detailRecord.value && (
-  detailRecord.value.status === 'FAILED'
-  || detailRecord.value.status === 'COMPLETED'
-  || ['PENDING', 'GENERATING', 'REVIEWING'].includes(detailRecord.value.status)
-)))
 
 const generationModelInfo = computed(() => {
   const event = [...outputEvents.value].reverse().find(item => item.phase === 'GENERATING' && (item.provider || item.model))
@@ -269,18 +284,6 @@ const reviewModelInfo = computed(() => {
     provider: event?.provider || '',
     model: event?.model || '',
   }
-})
-
-const outputConnectionLabel = computed(() => {
-  if (!detailRecord.value) {
-    return '-'
-  }
-  if (['PENDING', 'GENERATING', 'REVIEWING'].includes(detailRecord.value.status)) {
-    return detailRecord.value.outputMode === 'STREAM'
-      ? (streamConnected.value ? '实时连接中' : '轮询兜底')
-      : '轮询刷新'
-  }
-  return '未连接'
 })
 
 const outputTimeline = computed(() => {
@@ -1598,12 +1601,17 @@ onBeforeUnmount(() => {
             </div>
             <h2>{{ detailRecord.requirementTitle }}</h2>
           </div>
-          <button type="button" class="case-ai-record-detail-page__figma-regenerate" @click="retryTask">
-            <el-icon><RefreshRight /></el-icon>
-            重新生成
-          </button>
+          <div class="case-ai-record-detail-page__figma-summary-actions">
+            <button type="button" class="case-ai-record-detail-page__figma-detail-action" @click="openProcessDialog">
+              生成详情
+            </button>
+            <button type="button" class="case-ai-record-detail-page__figma-regenerate" @click="retryTask">
+              <el-icon><RefreshRight /></el-icon>
+              重新生成
+            </button>
+          </div>
         </div>
-        <div class="case-ai-record-detail-page__figma-stat-grid">
+        <div v-if="detailRecord.status === 'COMPLETED'" class="case-ai-record-detail-page__figma-stat-grid">
           <div
             v-for="item in figmaDetailStats"
             :key="item.label"
@@ -1614,21 +1622,18 @@ onBeforeUnmount(() => {
             <span>{{ item.label }}</span>
           </div>
         </div>
-      </section>
-
-      <section class="case-ai-record-detail-page__figma-timeline-card">
-        <h3>生成时间线</h3>
-        <div class="case-ai-record-detail-page__figma-timeline">
+        <div v-else class="case-ai-record-detail-page__figma-timeline case-ai-record-detail-page__figma-summary-timeline">
           <div
             v-for="(item, index) in figmaTimelineSteps"
             :key="item.label"
             class="case-ai-record-detail-page__figma-timeline-step"
-            :class="{ 'is-done': item.done, 'is-failed': item.failed }"
+            :class="{ 'is-done': item.done, 'is-active': item.active, 'is-failed': item.failed, 'is-canceled': item.canceled }"
           >
             <span class="case-ai-record-detail-page__figma-timeline-dot">
               <el-icon v-if="item.done"><Check /></el-icon>
             </span>
             <span class="case-ai-record-detail-page__figma-timeline-label">{{ item.label }}</span>
+            <span class="case-ai-record-detail-page__figma-timeline-status">{{ item.statusText }}</span>
             <span v-if="index < figmaTimelineSteps.length - 1" class="case-ai-record-detail-page__figma-timeline-line" />
           </div>
         </div>
@@ -1719,7 +1724,7 @@ onBeforeUnmount(() => {
       <div v-if="false" class="case-ai-record-detail-page__legacy-hooks" aria-hidden="true">
         <button type="button" @click="requirementExpanded = !requirementExpanded">{{ requirementExpanded }}</button>
         <button type="button" @click="outputExpanded = !outputExpanded">{{ outputExpanded }}</button>
-        <button type="button" @click="openProcessDialog">{{ outputConnectionLabel }}{{ showTaskOutputBoard }}{{ outputAutoFollow }}{{ getOutputConnectionClass() }}</button>
+        <button type="button" @click="openProcessDialog">{{ outputAutoFollow }}{{ getOutputConnectionClass() }}</button>
         <button type="button" @click="openPathDialog">{{ detailRecord ? getDefaultDirectoryPath(detailRecord) : '' }}</button>
         <button type="button" @click="copyRequirementContent"><CopyDocument /></button>
         <button type="button" @click="exportExcel"><Download /></button>
@@ -1970,68 +1975,15 @@ onBeforeUnmount(() => {
       @reset="resetTableSettings"
     />
 
-    <el-dialog v-model="processDialogVisible" width="720px" destroy-on-close class="case-ai-record-detail-page__dialog">
-      <template #header>
-        <div class="case-ai-record-detail-page__dialog-title-block">
-          <div class="case-ai-record-detail-page__dialog-title">生成流程</div>
-          <div class="case-ai-record-detail-page__dialog-subtitle">
-            {{ processRecord?.requirementTitle || '正在加载任务信息...' }}
-          </div>
-        </div>
-      </template>
-
-      <AppLoadingState v-if="processLoading" text="正在加载流程信息..." />
-      <template v-else-if="processRecord">
-        <div class="case-ai-record-detail-page__process-meta">
-          <span class="case-ai-record-detail-page__status-pill" :class="getStatusClass(processRecord.status)">
-            {{ getStatusLabel(processRecord.status) }}
-          </span>
-          <span>任务 ID：{{ processRecord.taskId }}</span>
-          <span>更新时间：{{ formatDateTime(processRecord.updatedAt) }}</span>
-        </div>
-
-        <div class="case-ai-record-detail-page__process-steps">
-          <article
-            v-for="step in [
-              { index: 1, title: '任务已创建', description: '已经记录需求内容、目标空间和输出模式。' },
-              { index: 2, title: 'AI 生成用例', description: '正在根据需求生成候选测试用例。' },
-              { index: 3, title: 'AI 自动评审', description: '正在汇总评审意见、优化建议和补充结论。' },
-              { index: 4, title: '任务完成', description: '生成结果已经进入 AI 生成记录，可继续查看和采纳。' },
-            ]"
-            :key="step.index"
-            :class="[
-              'case-ai-record-detail-page__process-step',
-              {
-                'is-active': processRecord.currentStep === step.index && ['PENDING', 'GENERATING', 'REVIEWING'].includes(processRecord.status),
-                'is-done': processRecord.status === 'COMPLETED' ? step.index <= 4 : (processRecord.currentStep || 0) > step.index,
-                'is-failed': processRecord.status === 'FAILED' && processRecord.currentStep === step.index,
-              },
-            ]"
-          >
-            <div class="case-ai-record-detail-page__process-step-index">{{ step.index }}</div>
-            <div>
-              <div class="case-ai-record-detail-page__process-step-title">{{ step.title }}</div>
-              <div class="case-ai-record-detail-page__process-step-desc">{{ step.description }}</div>
-            </div>
-          </article>
-        </div>
-      </template>
-
-      <template #footer>
-        <div class="case-ai-record-detail-page__dialog-footer">
-          <AppButton
-            v-if="processRecord && ['PENDING', 'GENERATING', 'REVIEWING'].includes(processRecord.status)"
-            type="danger"
-            :icon="CircleClose"
-            :loading="processPending"
-            @click="cancelProcessTask"
-          >
-            取消生成
-          </AppButton>
-          <AppButton @click="processDialogVisible = false">关闭</AppButton>
-        </div>
-      </template>
-    </el-dialog>
+    <AiGenerationLiveLogDialog
+      v-model="processDialogVisible"
+      :record="processRecord"
+      :loading="processLoading"
+      :pending="processPending"
+      title="ai_case_generation.log"
+      @cancel="cancelProcessTask"
+      @view-result="processDialogVisible = false"
+    />
 
     <el-dialog v-model="pathDialogVisible" width="620px" destroy-on-close class="case-ai-record-detail-page__dialog">
       <template #header>
@@ -2297,7 +2249,15 @@ onBeforeUnmount(() => {
   line-height: 22px;
 }
 
+.case-ai-record-detail-page__figma-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
 .case-ai-record-detail-page__figma-regenerate,
+.case-ai-record-detail-page__figma-detail-action,
 .case-ai-record-detail-page__figma-adopt-all {
   display: inline-flex;
   align-items: center;
@@ -2312,6 +2272,10 @@ onBeforeUnmount(() => {
   font-weight: 500;
   line-height: 18px;
   cursor: pointer;
+}
+
+.case-ai-record-detail-page__figma-detail-action {
+  width: 72px;
 }
 
 .case-ai-record-detail-page__figma-regenerate {
@@ -2387,12 +2351,17 @@ onBeforeUnmount(() => {
   align-items: start;
 }
 
+.case-ai-record-detail-page__figma-summary-timeline {
+  min-height: 56px;
+  padding: 4px 8px 0;
+}
+
 .case-ai-record-detail-page__figma-timeline-step {
   position: relative;
   display: grid;
-  grid-template-rows: 21px 17px;
+  grid-template-rows: 21px 16px 16px;
   justify-items: start;
-  gap: 6px;
+  gap: 2px;
 }
 
 .case-ai-record-detail-page__figma-timeline-dot {
@@ -2411,8 +2380,17 @@ onBeforeUnmount(() => {
   background: #00b42a;
 }
 
+.case-ai-record-detail-page__figma-timeline-step.is-active .case-ai-record-detail-page__figma-timeline-dot {
+  background: #165dff;
+  box-shadow: 0 0 0 4px rgba(22, 93, 255, 0.12);
+}
+
 .case-ai-record-detail-page__figma-timeline-step.is-failed .case-ai-record-detail-page__figma-timeline-dot {
   background: #f53f3f;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-canceled .case-ai-record-detail-page__figma-timeline-dot {
+  background: #86909c;
 }
 
 .case-ai-record-detail-page__figma-timeline-line {
@@ -2421,14 +2399,50 @@ onBeforeUnmount(() => {
   left: 28px;
   right: 10px;
   height: 2px;
+  background: #e5e6eb;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-done .case-ai-record-detail-page__figma-timeline-line {
   background: #00b42a;
 }
 
+.case-ai-record-detail-page__figma-timeline-step.is-failed .case-ai-record-detail-page__figma-timeline-line {
+  background: #f53f3f;
+}
+
 .case-ai-record-detail-page__figma-timeline-label {
-  color: #00b42a;
+  color: #86909c;
   font-size: 11px;
   font-weight: 500;
   line-height: 16px;
+}
+
+.case-ai-record-detail-page__figma-timeline-status {
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-done .case-ai-record-detail-page__figma-timeline-label,
+.case-ai-record-detail-page__figma-timeline-step.is-done .case-ai-record-detail-page__figma-timeline-status {
+  color: #00b42a;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-active .case-ai-record-detail-page__figma-timeline-label,
+.case-ai-record-detail-page__figma-timeline-step.is-active .case-ai-record-detail-page__figma-timeline-status {
+  color: #165dff;
+  font-weight: 500;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-failed .case-ai-record-detail-page__figma-timeline-label,
+.case-ai-record-detail-page__figma-timeline-step.is-failed .case-ai-record-detail-page__figma-timeline-status {
+  color: #f53f3f;
+}
+
+.case-ai-record-detail-page__figma-timeline-step.is-canceled .case-ai-record-detail-page__figma-timeline-label,
+.case-ai-record-detail-page__figma-timeline-step.is-canceled .case-ai-record-detail-page__figma-timeline-status {
+  color: #86909c;
 }
 
 .case-ai-record-detail-page__figma-results {

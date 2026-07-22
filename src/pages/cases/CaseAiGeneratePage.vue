@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  CircleClose,
   DocumentAdd,
   FolderOpened,
   MagicStick,
@@ -11,10 +10,11 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-import { caseAiApi, type AiGenerationTaskItem, type AiRequirementAssetItem } from '@/entities/case-ai'
+import { caseAiApi, type AiGenerationTaskEventItem, type AiGenerationTaskItem, type AiRequirementAssetItem } from '@/entities/case-ai'
 import { caseApi, type CaseDirectoryNode, type CaseDirectoryWorkspace } from '@/entities/case'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import AiGenerationLiveLogDialog from '@/shared/ui/ai-live-log/AiGenerationLiveLogDialog.vue'
 
 type OutputMode = 'STREAM' | 'COMPLETE'
 type DirectoryPickerMode = 'manual' | 'document'
@@ -51,6 +51,7 @@ const loadingDirectories = ref(false)
 const importingRequirement = ref(false)
 const generating = ref(false)
 const processDialogVisible = ref(false)
+const processPending = ref(false)
 const directoryPickerVisible = ref(false)
 
 const workspaces = ref<WorkspaceItem[]>([])
@@ -91,30 +92,10 @@ const documentForm = ref({
   directoryPath: '',
 })
 
-const processSteps = [
-  {
-    index: 1 as const,
-    title: '任务已创建',
-    description: '已记录需求内容、目标空间和输出模式。',
-  },
-  {
-    index: 2 as const,
-    title: 'AI 生成用例',
-    description: '正在根据需求描述和附件生成候选测试用例。',
-  },
-  {
-    index: 3 as const,
-    title: 'AI 自动评审',
-    description: '正在自动完成用例评审和建议汇总。',
-  },
-  {
-    index: 4 as const,
-    title: '任务完成',
-    description: '生成结果已进入 AI 生成记录。',
-  },
-]
-
 let taskPollingTimer: number | null = null
+let streamAbortController: AbortController | null = null
+let streamTaskId: string | null = null
+let streamRefreshTimer: number | null = null
 let syncingManualDirectoryPath = false
 let syncingDocumentDirectoryPath = false
 
@@ -416,62 +397,6 @@ function getCurrentProcessRecord() {
   return latestTaskRecord.value
 }
 
-function getFailureStepLabel(step: number | null) {
-  const labelMap: Record<number, string> = {
-    1: '任务创建',
-    2: 'AI 生成用例',
-    3: 'AI 自动评审',
-    4: '任务完成',
-  }
-  return step ? labelMap[step] || '未知阶段' : '未知阶段'
-}
-
-function isStepDone(step: number) {
-  const record = getCurrentProcessRecord()
-  if (!record?.currentStep) {
-    return false
-  }
-  if (record.status === 'FAILED') {
-    return step < record.currentStep
-  }
-  if (record.status === 'COMPLETED') {
-    return step <= 4
-  }
-  return step < record.currentStep
-}
-
-function isStepActive(step: number) {
-  const record = getCurrentProcessRecord()
-  return !!record?.currentStep && record.currentStep === step && ['PENDING', 'GENERATING', 'REVIEWING'].includes(record.status)
-}
-
-function isStepFailed(step: number) {
-  const record = getCurrentProcessRecord()
-  return record?.status === 'FAILED' && record.currentStep === step
-}
-
-function getStepStatusLabel(step: number) {
-  const record = getCurrentProcessRecord()
-  if (!record) {
-    return ''
-  }
-  if (record.status === 'FAILED') {
-    return record.currentStep === step ? '失败' : ''
-  }
-  if (record.status === 'COMPLETED') {
-    return step === 4 ? '已完成' : ''
-  }
-  if (record.currentStep === step) {
-    const labelMap: Record<string, string> = {
-      PENDING: '等待中',
-      GENERATING: '进行中',
-      REVIEWING: '进行中',
-    }
-    return labelMap[record.status] ?? ''
-  }
-  return ''
-}
-
 function isTaskResultAvailable(task: AiGenerationTaskItem | null | undefined) {
   return task?.status === 'COMPLETED'
 }
@@ -493,11 +418,134 @@ function stopTaskPolling() {
   }
 }
 
+function stopEventStream() {
+  if (streamAbortController) {
+    streamAbortController.abort()
+    streamAbortController = null
+  }
+  streamTaskId = null
+}
+
 function startTaskPolling() {
   stopTaskPolling()
   taskPollingTimer = window.setInterval(() => {
     void refreshLatestTaskRecord()
   }, 2500)
+}
+
+function isRunningTask(record: AiGenerationTaskItem | null | undefined) {
+  return Boolean(record && ['PENDING', 'GENERATING', 'REVIEWING'].includes(record.status))
+}
+
+function mergeTaskEvents(
+  incomingEvents: AiGenerationTaskEventItem[] | null | undefined,
+  existingEvents: AiGenerationTaskEventItem[] | null | undefined,
+) {
+  const eventMap = new Map<number, AiGenerationTaskEventItem>()
+  for (const event of existingEvents ?? []) {
+    eventMap.set(event.seq, event)
+  }
+  for (const event of incomingEvents ?? []) {
+    eventMap.set(event.seq, event)
+  }
+  return [...eventMap.values()].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0))
+}
+
+function mergeTaskRecord(incoming: AiGenerationTaskItem, existing?: AiGenerationTaskItem | null) {
+  if (!existing || existing.taskId !== incoming.taskId) {
+    return incoming
+  }
+  return {
+    ...incoming,
+    events: mergeTaskEvents(incoming.events, existing.events),
+  }
+}
+
+function updateTaskRecordSnapshot(record: AiGenerationTaskItem) {
+  const nextRecord = mergeTaskRecord(record, latestTaskRecord.value)
+  latestTaskRecord.value = nextRecord
+  const existingIndex = taskRecords.value.findIndex(item => item.taskId === nextRecord.taskId)
+  if (existingIndex >= 0) {
+    taskRecords.value = taskRecords.value.map(item => (item.taskId === nextRecord.taskId ? mergeTaskRecord(nextRecord, item) : item))
+  } else {
+    taskRecords.value = [nextRecord, ...taskRecords.value]
+  }
+  syncEventStream(nextRecord)
+}
+
+function shouldRefreshForEvent(event: AiGenerationTaskEventItem) {
+  return [
+    'CASE_GENERATED',
+    'CASE_REVIEWED',
+    'CASE_SUPPLEMENTED',
+    'GENERATION_COMPLETED',
+    'REVIEW_COMPLETED',
+    'TASK_COMPLETED',
+    'TASK_FAILED',
+    'TASK_CANCELED',
+  ].includes(event.eventType)
+}
+
+function mergeTaskEvent(event: AiGenerationTaskEventItem) {
+  if (!latestTaskRecord.value || latestTaskRecord.value.taskId !== event.taskId) {
+    return
+  }
+  latestTaskRecord.value = {
+    ...latestTaskRecord.value,
+    events: mergeTaskEvents([event], latestTaskRecord.value.events),
+  }
+  taskRecords.value = taskRecords.value.map(item => item.taskId === event.taskId
+    ? { ...item, events: mergeTaskEvents([event], item.events) }
+    : item)
+  if (shouldRefreshForEvent(event)) {
+    scheduleStreamRecordRefresh()
+  }
+}
+
+function scheduleStreamRecordRefresh() {
+  if (streamRefreshTimer != null) {
+    return
+  }
+  streamRefreshTimer = window.setTimeout(() => {
+    streamRefreshTimer = null
+    void refreshLatestTaskRecord()
+  }, 350)
+}
+
+function startEventStream(record: AiGenerationTaskItem) {
+  if (streamTaskId === record.taskId && streamAbortController) {
+    return
+  }
+  stopEventStream()
+  const controller = new AbortController()
+  streamAbortController = controller
+  streamTaskId = record.taskId
+  void caseAiApi.streamTaskEvents(record.workspaceCode, record.taskId, {
+    signal: controller.signal,
+    onEvent: mergeTaskEvent,
+  }).then(() => {
+    if (streamTaskId === record.taskId) {
+      streamAbortController = null
+      streamTaskId = null
+      void refreshLatestTaskRecord()
+    }
+  }).catch((error) => {
+    if ((error as Error).name !== 'AbortError' && streamTaskId === record.taskId) {
+      void refreshLatestTaskRecord()
+    }
+    if (streamTaskId === record.taskId) {
+      streamAbortController = null
+      streamTaskId = null
+    }
+  })
+}
+
+function syncEventStream(record: AiGenerationTaskItem | null) {
+  if (processDialogVisible.value && record?.outputMode === 'STREAM' && isRunningTask(record)) {
+    startEventStream(record)
+    return
+  }
+  stopEventStream()
 }
 
 async function loadWorkspaces() {
@@ -587,14 +635,22 @@ async function refreshLatestTaskRecord() {
     latestTaskRecord.value = null
     activeProcessTaskId.value = ''
     stopTaskPolling()
+    stopEventStream()
     return
   }
 
-  taskRecords.value = await caseAiApi.listTasks(targetWorkspaceCode.value)
+  const records = await caseAiApi.listTasks(targetWorkspaceCode.value)
+  taskRecords.value = records.map((record) => {
+    const existing = record.taskId === latestTaskRecord.value?.taskId
+      ? latestTaskRecord.value
+      : taskRecords.value.find(item => item.taskId === record.taskId)
+    return mergeTaskRecord(record, existing)
+  })
   if (processDialogVisible.value && activeProcessTaskId.value) {
-    latestTaskRecord.value = await caseAiApi.getTask(targetWorkspaceCode.value, activeProcessTaskId.value)
+    updateTaskRecordSnapshot(await caseAiApi.getTask(targetWorkspaceCode.value, activeProcessTaskId.value))
   } else {
     latestTaskRecord.value = pickLatestTaskRecord(taskRecords.value)
+    syncEventStream(latestTaskRecord.value)
   }
 
   if (taskRecords.value.some(item => ['PENDING', 'GENERATING', 'REVIEWING'].includes(item.status))) {
@@ -758,9 +814,14 @@ function confirmDirectoryPickerSelection() {
 async function openTaskProcessDialog(taskId?: string) {
   await refreshLatestTaskRecord()
   activeProcessTaskId.value = taskId || ''
-  latestTaskRecord.value = taskId && targetWorkspaceCode.value
+  const record = taskId && targetWorkspaceCode.value
     ? await caseAiApi.getTask(targetWorkspaceCode.value, taskId)
     : pickLatestTaskRecord(taskRecords.value)
+  if (record) {
+    updateTaskRecordSnapshot(record)
+  } else {
+    latestTaskRecord.value = null
+  }
 
   if (!latestTaskRecord.value) {
     ElMessage.info('暂无可查看的任务')
@@ -769,6 +830,7 @@ async function openTaskProcessDialog(taskId?: string) {
 
   activeProcessTaskId.value = latestTaskRecord.value.taskId
   processDialogVisible.value = true
+  syncEventStream(latestTaskRecord.value)
 }
 
 async function openScopedProcessDialog(source: DirectoryPickerMode) {
@@ -783,7 +845,7 @@ async function openScopedProcessDialog(source: DirectoryPickerMode) {
     return
   }
 
-  latestTaskRecord.value = await caseAiApi.getTask(targetWorkspaceCode.value, taskId)
+  updateTaskRecordSnapshot(await caseAiApi.getTask(targetWorkspaceCode.value, taskId))
   if (!latestTaskRecord.value) {
     ElMessage.info('当前任务记录不存在或已被删除')
     return
@@ -791,6 +853,7 @@ async function openScopedProcessDialog(source: DirectoryPickerMode) {
 
   activeProcessTaskId.value = latestTaskRecord.value.taskId
   processDialogVisible.value = true
+  syncEventStream(latestTaskRecord.value)
 }
 
 function openTaskDetail(taskId: string) {
@@ -916,10 +979,11 @@ async function handleGenerateCases(source: DirectoryPickerMode = 'manual') {
     } else {
       manualTaskRecordId.value = baseRecord.taskId
     }
-    latestTaskRecord.value = baseRecord
-    await refreshLatestTaskRecord()
     activeProcessTaskId.value = baseRecord.taskId
+    updateTaskRecordSnapshot(baseRecord)
     processDialogVisible.value = true
+    syncEventStream(baseRecord)
+    await refreshLatestTaskRecord()
     startTaskPolling()
     ElMessage.success('AI 生成与评审任务已创建，后台会继续执行')
   } catch (error) {
@@ -949,9 +1013,16 @@ async function cancelCurrentTask() {
     return
   }
 
-  latestTaskRecord.value = await caseAiApi.cancelTask(targetWorkspaceCode.value, currentRecord.taskId)
-  await refreshLatestTaskRecord()
-  ElMessage.success('已取消当前生成任务')
+  processPending.value = true
+  try {
+    updateTaskRecordSnapshot(await caseAiApi.cancelTask(targetWorkspaceCode.value, currentRecord.taskId))
+    await refreshLatestTaskRecord()
+    ElMessage.success('已取消当前生成任务')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    processPending.value = false
+  }
 }
 
 watch(
@@ -1009,6 +1080,7 @@ watch(
   () => processDialogVisible.value,
   (visible) => {
     if (!visible) {
+      stopEventStream()
       activeProcessTaskId.value = ''
       latestTaskRecord.value = pickLatestTaskRecord(taskRecords.value)
     }
@@ -1022,6 +1094,11 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopTaskPolling()
+  stopEventStream()
+  if (streamRefreshTimer != null) {
+    window.clearTimeout(streamRefreshTimer)
+    streamRefreshTimer = null
+  }
 })
 </script>
 
@@ -1345,81 +1422,14 @@ onBeforeUnmount(() => {
       @change="handleRequirementFileChange"
     >
 
-    <el-dialog v-model="processDialogVisible" title="AI生成用例流程" width="760px" destroy-on-close>
-      <template v-if="getCurrentProcessRecord()">
-        <div class="process-dialog-meta">
-          <div>
-            <div class="process-dialog-title">{{ getCurrentProcessRecord()?.requirementTitle }}</div>
-            <div class="process-dialog-subtitle">
-              {{ getCurrentProcessRecord()?.workspaceName || currentWorkspaceName }} /
-              {{ getCurrentProcessRecord()?.outputMode === 'STREAM' ? '实时流式输出' : '完整输出' }}
-            </div>
-          </div>
-        </div>
-
-        <div class="process-step-list">
-          <div
-            v-for="step in processSteps"
-            :key="step.index"
-            class="process-step-card"
-            :class="{
-              'process-step-card-active': isStepActive(step.index),
-              'process-step-card-done': isStepDone(step.index),
-              'process-step-card-failed': isStepFailed(step.index),
-            }"
-          >
-            <div
-              class="process-step-index"
-              :class="{
-                'process-step-index-active': isStepActive(step.index),
-                'process-step-index-done': isStepDone(step.index),
-                'process-step-index-failed': isStepFailed(step.index),
-              }"
-            >
-              {{ step.index }}
-            </div>
-            <div>
-              <div class="process-step-title">
-                {{ step.title }}
-                <span v-if="getStepStatusLabel(step.index)" class="process-step-status">{{ getStepStatusLabel(step.index) }}</span>
-              </div>
-              <div class="process-step-desc">{{ step.description }}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="process-current-log">
-          <div class="process-current-label">当前进度</div>
-          <div class="process-current-text">{{ getCurrentProcessRecord()?.stepMessage || '等待任务执行...' }}</div>
-        </div>
-
-        <div v-if="getCurrentProcessRecord()?.status === 'FAILED'" class="process-failure-card">
-          <div class="process-failure-stage">失败阶段：{{ getFailureStepLabel(getCurrentProcessRecord()?.currentStep ?? null) }}</div>
-          <div class="process-failure-text">失败原因：{{ getCurrentProcessRecord()?.errorMessage || getCurrentProcessRecord()?.stepMessage || '-' }}</div>
-        </div>
-      </template>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button
-            v-if="getCurrentProcessRecord() && isTaskResultAvailable(getCurrentProcessRecord())"
-            type="primary"
-            @click="openTaskResult(getCurrentProcessRecord()!.taskId)"
-          >
-            查看结果
-          </el-button>
-          <el-button
-            v-if="getCurrentProcessRecord() && ['PENDING', 'GENERATING', 'REVIEWING'].includes(getCurrentProcessRecord()!.status)"
-            type="danger"
-            :icon="CircleClose"
-            @click="cancelCurrentTask"
-          >
-            取消生成
-          </el-button>
-          <el-button @click="processDialogVisible = false">关闭</el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <AiGenerationLiveLogDialog
+      v-model="processDialogVisible"
+      :record="getCurrentProcessRecord()"
+      :pending="processPending"
+      title="ai_case_generation.log"
+      @cancel="cancelCurrentTask"
+      @view-result="record => openTaskResult(record.taskId)"
+    />
 
     <el-dialog v-model="directoryPickerVisible" width="720px" destroy-on-close class="path-picker-dialog">
       <template #header>
@@ -2455,7 +2465,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-
-
-
-

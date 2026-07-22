@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type HistoryState } from 'vue-router'
-import { CircleClose, FolderOpened } from '@element-plus/icons-vue'
+import { FolderOpened } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 import { caseAiApi, type AiGenerationTaskItem } from '@/entities/case-ai'
@@ -10,6 +10,7 @@ import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 import { confirmDelete } from '@/shared/ui'
+import AiGenerationLiveLogDialog from '@/shared/ui/ai-live-log/AiGenerationLiveLogDialog.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppCard from '@/shared/ui/app-card/AppCard.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -80,13 +81,6 @@ const tableColumns: ColumnDefinition[] = [
   { key: 'updatedAt', label: '更新时间', minWidth: 168, defaultVisible: false },
   { key: 'updatedByName', label: '更新人', minWidth: 120, defaultVisible: false },
   { key: 'directoryName', label: '当前采纳路径', minWidth: 220, defaultVisible: false },
-]
-
-const processSteps = [
-  { index: 1 as const, title: '任务已创建', description: '已经记录需求内容、目标空间和输出模式。' },
-  { index: 2 as const, title: 'AI 生成用例', description: '正在根据需求生成候选测试用例。' },
-  { index: 3 as const, title: 'AI 自动评审', description: '正在汇总评审意见、优化建议和补充结论。' },
-  { index: 4 as const, title: '任务完成', description: '生成结果已经进入 AI 生成记录，可继续查看和采纳。' },
 ]
 
 const loading = ref(false)
@@ -416,13 +410,6 @@ function restoreListContext() {
   }
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) {
-    return '-'
-  }
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
-}
-
 function formatFigmaDateTime(value?: string | null) {
   if (!value) {
     return '-'
@@ -484,55 +471,8 @@ function getDefaultDirectoryPath(record: AiGenerationTaskItem) {
   return workspaceLabel ? `${workspaceLabel} / ${record.directoryName}` : record.directoryName
 }
 
-function getFailureStepLabel(step: number | null) {
-  const labelMap: Record<number, string> = {
-    1: '任务创建',
-    2: 'AI 生成用例',
-    3: 'AI 自动评审',
-    4: '任务完成',
-  }
-  return step ? (labelMap[step] || '当前步骤') : '当前步骤'
-}
-
 function isRunningStatus(status: TaskStatus) {
   return runningStatuses.includes(status)
-}
-
-function isStepDone(record: AiGenerationTaskItem | null, step: number) {
-  if (!record?.currentStep) {
-    return false
-  }
-  if (record.status === 'FAILED') {
-    return step < record.currentStep
-  }
-  if (record.status === 'COMPLETED') {
-    return step <= 4
-  }
-  return step < record.currentStep
-}
-
-function isStepActive(record: AiGenerationTaskItem | null, step: number) {
-  return !!record?.currentStep && record.currentStep === step && isRunningStatus(record.status)
-}
-
-function isStepFailed(record: AiGenerationTaskItem | null, step: number) {
-  return record?.status === 'FAILED' && record.currentStep === step
-}
-
-function getStepStatusLabel(record: AiGenerationTaskItem | null, step: number) {
-  if (!record) {
-    return ''
-  }
-  if (record.status === 'FAILED') {
-    return record.currentStep === step ? '失败' : ''
-  }
-  if (record.status === 'COMPLETED') {
-    return step === 4 ? '已完成' : ''
-  }
-  if (record.currentStep === step) {
-    return '进行中'
-  }
-  return ''
 }
 
 function flattenDirectories(nodes: CaseDirectoryNode[], prefix = ''): DirectoryOption[] {
@@ -628,6 +568,19 @@ async function cancelProcessTask() {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
     processPending.value = false
+  }
+}
+
+async function openProcessDialog(record: AiGenerationTaskItem) {
+  processLoading.value = true
+  processDialogVisible.value = true
+  try {
+    processRecord.value = await loadTaskDetail(record.taskId, record.workspaceCode)
+  } catch (error) {
+    processDialogVisible.value = false
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    processLoading.value = false
   }
 }
 
@@ -903,6 +856,9 @@ onBeforeUnmount(() => {
               <button type="button" class="case-ai-records-page__icon-action" aria-label="查看详情" @click="openDetailPage(record)">
                 <img :src="figmaCaseIcons.action.view" alt="">
               </button>
+              <button type="button" class="case-ai-records-page__icon-action" aria-label="查看流程" @click="openProcessDialog(record)">
+                <img :src="figmaCaseIcons.action.run" alt="">
+              </button>
               <button type="button" class="case-ai-records-page__icon-action" aria-label="删除" @click="deleteTask(record)">
                 <img :src="figmaCaseIcons.action.delete" alt="">
               </button>
@@ -955,85 +911,15 @@ onBeforeUnmount(() => {
       @reset="resetTableSettings"
     />
 
-    <el-dialog
+    <AiGenerationLiveLogDialog
       v-model="processDialogVisible"
-      width="720px"
-      destroy-on-close
-      class="case-ai-records-page__process-dialog"
-    >
-      <template #header>
-        <div class="case-ai-records-page__process-header">
-          <div class="case-ai-records-page__process-title">生成流程</div>
-          <div class="case-ai-records-page__process-subtitle">
-            {{ processRecord?.requirementTitle || '正在加载任务信息...' }}
-          </div>
-        </div>
-      </template>
-
-      <AppLoadingState v-if="processLoading" text="正在加载流程信息..." />
-      <template v-else-if="processRecord">
-        <div class="case-ai-records-page__process-meta">
-          <span class="case-ai-records-page__status-pill" :class="getStatusClass(processRecord.status)">
-            {{ getStatusLabel(processRecord.status) }}
-          </span>
-          <span>任务 ID：{{ processRecord.taskId }}</span>
-          <span>更新时间：{{ formatDateTime(processRecord.updatedAt) }}</span>
-        </div>
-
-        <div class="case-ai-records-page__process-steps">
-          <article
-            v-for="step in processSteps"
-            :key="step.index"
-            :class="[
-              'case-ai-records-page__process-step',
-              {
-                'is-active': isStepActive(processRecord, step.index),
-                'is-done': isStepDone(processRecord, step.index),
-                'is-failed': isStepFailed(processRecord, step.index),
-              },
-            ]"
-          >
-            <div class="case-ai-records-page__process-step-index">{{ step.index }}</div>
-            <div>
-              <div class="case-ai-records-page__process-step-title">
-                {{ step.title }}
-                <span v-if="getStepStatusLabel(processRecord, step.index)">
-                  {{ getStepStatusLabel(processRecord, step.index) }}
-                </span>
-              </div>
-              <div class="case-ai-records-page__process-step-desc">{{ step.description }}</div>
-            </div>
-          </article>
-        </div>
-
-        <div class="case-ai-records-page__process-current">
-          <div class="case-ai-records-page__detail-label">当前进度</div>
-          <div class="case-ai-records-page__process-current-text">
-            {{ processRecord.stepMessage || '等待任务执行...' }}
-          </div>
-        </div>
-
-        <div v-if="processRecord.status === 'FAILED'" class="case-ai-records-page__process-failure">
-          <div>失败阶段：{{ getFailureStepLabel(processRecord.currentStep ?? null) }}</div>
-          <div>失败原因：{{ processRecord.errorMessage || processRecord.stepMessage || '-' }}</div>
-        </div>
-      </template>
-
-      <template #footer>
-        <div class="case-ai-records-page__dialog-footer">
-          <AppButton
-            v-if="processRecord && isRunningStatus(processRecord.status)"
-            type="danger"
-            :icon="CircleClose"
-            :loading="processPending"
-            @click="cancelProcessTask"
-          >
-            取消生成
-          </AppButton>
-          <AppButton @click="processDialogVisible = false">关闭</AppButton>
-        </div>
-      </template>
-    </el-dialog>
+      :record="processRecord"
+      :loading="processLoading"
+      :pending="processPending"
+      title="ai_case_generation.log"
+      @cancel="cancelProcessTask"
+      @view-result="openDetailPage"
+    />
 
     <el-dialog
       v-model="adoptDialogVisible"
@@ -1316,7 +1202,7 @@ onBeforeUnmount(() => {
 .case-ai-records-page__figma-header,
 .case-ai-records-page__figma-row {
   display: grid;
-  grid-template-columns: 14% 22% 8% 7% 7% 7% 10% 13% 7% 5%;
+  grid-template-columns: 14% 20% 8% 7% 7% 7% 10% 13% 7% 7%;
   align-items: center;
   min-width: 0;
 }
@@ -1505,7 +1391,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0;
+  gap: 2px;
   padding-right: 14px;
 }
 

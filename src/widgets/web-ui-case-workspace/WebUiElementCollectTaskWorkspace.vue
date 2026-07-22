@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, RefreshRight } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Check, Filter, Monitor, RefreshRight } from '@element-plus/icons-vue'
+import { CircleCheck, Sparkles } from '@lucide/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
@@ -107,6 +108,7 @@ const localRunnerValidationProgress = ref({
 })
 const saving = ref(false)
 const candidateSearchKeyword = ref('')
+const reviewStatusFilter = ref<'ALL' | 'PENDING' | 'ADOPTED' | 'IGNORED'>('ALL')
 const activeCandidateId = ref('')
 const candidateAiSnapshots = ref(new Map<string, CandidateAiSnapshot>())
 const collapsedCandidateGroupKeys = ref(new Set<string>())
@@ -153,6 +155,15 @@ const filteredCandidates = computed(() =>
 const visibleCandidates = computed(() =>
   [...filteredCandidates.value].sort((left, right) => left.sourceIndex - right.sourceIndex),
 )
+const reviewCandidates = computed(() => visibleCandidates.value.filter((candidate) => {
+  if (reviewStatusFilter.value === 'ADOPTED') return candidate.selected && !candidate.markedInvalid
+  if (reviewStatusFilter.value === 'IGNORED') return candidate.markedInvalid
+  if (reviewStatusFilter.value === 'PENDING') return !candidate.selected && !candidate.markedInvalid
+  return true
+}))
+const adoptedCandidateCount = computed(() => candidates.value.filter(item => item.selected && !item.markedInvalid).length)
+const ignoredCandidateCount = computed(() => candidates.value.filter(item => item.markedInvalid).length)
+const pendingCandidateCount = computed(() => candidates.value.filter(item => !item.selected && !item.markedInvalid).length)
 const groupedVisibleCandidates = computed<CandidateRegionGroup[]>(() => {
   const regionMap = new Map<string, WebUiElementCollectCandidateView[]>()
   visibleCandidates.value.forEach((candidate) => {
@@ -1706,12 +1717,12 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="web-ui-collect-workspace">
-    <header class="web-ui-collect-workspace__header">
+    <header v-if="false" class="web-ui-collect-workspace__header">
       <div class="web-ui-collect-workspace__title">
         <AppButton :icon="ArrowLeft" size="small" @click="goBackToElements">返回</AppButton>
         <div v-if="task" class="web-ui-collect-workspace__summary-main">
-          <el-tag :type="getCollectTaskStatusTagType(task.status)" effect="light">
-            {{ formatCollectTaskStatus(task.status) }}
+          <el-tag :type="getCollectTaskStatusTagType(task?.status || '')" effect="light">
+            {{ formatCollectTaskStatus(task?.status || '') }}
           </el-tag>
           <span>页面：{{ taskPageLabel }}</span>
           <span>共识别 {{ taskRecognizedCount }} 个元素</span>
@@ -1757,6 +1768,28 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <header v-if="task" class="web-ui-collect-figma__header">
+      <button class="web-ui-collect-figma__back" type="button" @click="goBackToElements">
+        <el-icon><ArrowLeft /></el-icon>
+        返回元素库
+      </button>
+      <span class="web-ui-collect-figma__divider" />
+      <span class="web-ui-collect-figma__icon"><el-icon><Sparkles /></el-icon></span>
+      <h1>AI 元素采集</h1>
+      <span class="web-ui-collect-figma__done">采集完成 · {{ candidates.length }} 个候选元素</span>
+      <div class="web-ui-collect-figma__spacer" />
+      <AppButton
+        type="primary"
+        size="small"
+        :loading="saving"
+        :disabled="!selectedCandidates.length"
+        @click="saveSelectedCandidates"
+      >
+        <el-icon><Check /></el-icon>
+        确认入库 ({{ selectedCandidates.length }})
+      </AppButton>
+    </header>
+
     <AppLoadingState v-if="loading && !task" text="正在加载采集任务..." />
     <AppEmptyState
       v-else-if="!task"
@@ -1764,7 +1797,7 @@ onBeforeUnmount(() => {
       description="请从元素库重新创建 AI 采集任务。"
     />
     <template v-else>
-      <section class="web-ui-collect-workspace__review">
+      <section v-if="false" class="web-ui-collect-workspace__review">
         <div class="web-ui-collect-workspace__review-body">
           <aside class="web-ui-collect-workspace__candidate-list">
             <div class="web-ui-collect-workspace__candidate-list-head">
@@ -1980,7 +2013,7 @@ onBeforeUnmount(() => {
                 <el-tab-pane label="任务信息">
                   <div class="web-ui-collect-workspace__detail-stack">
                     <WebUiElementCollectTaskPanel
-                      :task="task"
+                      :task="task!"
                       :refreshing="refreshing"
                       :polling="polling"
                       @refresh="refreshTask"
@@ -2014,11 +2047,178 @@ onBeforeUnmount(() => {
           </div>
         </footer>
       </section>
+
+      <section class="web-ui-collect-figma__review">
+        <aside class="web-ui-collect-figma__config">
+          <div class="web-ui-collect-figma__config-scroll">
+            <section>
+              <label>目标页面地址</label>
+              <div class="web-ui-collect-figma__url">{{ task?.actualUrl || routePageUrl || '-' }}</div>
+              <p>采集任务已绑定当前目标页面</p>
+            </section>
+            <section>
+              <label>采集范围</label>
+              <div class="web-ui-collect-figma__scope-row is-active">全页可操作元素</div>
+            </section>
+            <section class="web-ui-collect-figma__progress">
+              <label>采集进度</label>
+              <div class="web-ui-collect-figma__progress-item is-finished"><span><el-icon><Check /></el-icon></span>连接目标页面</div>
+              <div class="web-ui-collect-figma__progress-item is-finished"><span><el-icon><Check /></el-icon></span>解析 DOM 结构</div>
+              <div class="web-ui-collect-figma__progress-item is-finished"><span><el-icon><Check /></el-icon></span>AI 识别元素</div>
+              <div class="web-ui-collect-figma__progress-item is-finished"><span><el-icon><Check /></el-icon></span>生成定位策略</div>
+              <div class="web-ui-collect-figma__progress-item is-finished"><span><el-icon><Check /></el-icon></span>完成</div>
+            </section>
+            <section class="web-ui-collect-figma__stats">
+              <div><strong>{{ candidates.filter(item => item.confidence >= 90).length }}</strong><span>高置信度</span></div>
+              <div><strong>{{ candidates.filter(item => item.confidence >= 80 && item.confidence < 90).length }}</strong><span>中置信度</span></div>
+              <div><strong>{{ candidates.filter(item => item.confidence < 80).length }}</strong><span>低置信度</span></div>
+            </section>
+          </div>
+        </aside>
+
+        <main class="web-ui-collect-figma__main">
+          <div class="web-ui-collect-figma__filters">
+            <div class="web-ui-collect-figma__filter-tabs">
+              <button :class="{ 'is-active': reviewStatusFilter === 'ALL' }" type="button" @click="reviewStatusFilter = 'ALL'">全部 {{ candidates.length }}</button>
+              <button :class="{ 'is-active': reviewStatusFilter === 'PENDING' }" type="button" @click="reviewStatusFilter = 'PENDING'">待确认 {{ pendingCandidateCount }}</button>
+              <button :class="{ 'is-active': reviewStatusFilter === 'ADOPTED' }" type="button" @click="reviewStatusFilter = 'ADOPTED'">已采纳 {{ adoptedCandidateCount }}</button>
+              <button :class="{ 'is-active': reviewStatusFilter === 'IGNORED' }" type="button" @click="reviewStatusFilter = 'IGNORED'">已忽略 {{ ignoredCandidateCount }}</button>
+            </div>
+            <el-input v-model="candidateSearchKeyword" class="web-ui-collect-figma__search" placeholder="搜索元素名称 / 定位器" clearable>
+              <template #prefix><el-icon><Filter /></el-icon></template>
+            </el-input>
+            <div class="web-ui-collect-figma__spacer" />
+            <span class="web-ui-collect-figma__count">共 <strong>{{ reviewCandidates.length }}</strong> 项</span>
+            <button class="web-ui-collect-figma__adopt-all" type="button" @click="selectRecommendedPassedCandidates">全部采纳</button>
+          </div>
+
+          <el-scrollbar class="web-ui-collect-figma__cards-scroll">
+            <section class="web-ui-collect-figma__page-group">
+              <div class="web-ui-collect-figma__page-title">
+                <el-icon><Monitor /></el-icon>
+                <strong>{{ taskPageLabel }}</strong>
+                <span>{{ reviewCandidates.length }} 个元素</span>
+              </div>
+
+              <article
+                v-for="candidate in reviewCandidates"
+                :key="candidate.id"
+                class="web-ui-collect-figma__candidate"
+                :class="{ 'is-adopted': candidate.selected && !candidate.markedInvalid, 'is-ignored': candidate.markedInvalid }"
+              >
+                <div class="web-ui-collect-figma__confidence" :class="`is-${getConfidenceTagType(getCandidateQualityScore(candidate).total)}`">
+                  <strong>{{ getCandidateQualityScore(candidate).total }}%</strong>
+                  <span>置信度</span>
+                </div>
+                <div class="web-ui-collect-figma__candidate-content">
+                  <div class="web-ui-collect-figma__candidate-title">
+                    <strong>{{ candidate.elementName || '未命名元素' }}</strong>
+                    <span>{{ formatElementType(candidate.elementType) }}</span>
+                    <em v-if="candidate.selected && !candidate.markedInvalid">已采纳</em>
+                  </div>
+                  <p>{{ candidate.reason || candidate.businessMeaning || 'AI 已识别该可操作页面元素。' }}</p>
+                  <div class="web-ui-collect-figma__locator">
+                    <code>{{ formatLocatorTypeLabel(candidate.locatorType) }}</code>
+                    <span>{{ candidate.locatorValue }}</span>
+                  </div>
+                </div>
+                <div class="web-ui-collect-figma__candidate-actions">
+                  <template v-if="candidate.markedInvalid">
+                    <button type="button" class="is-link" @click="toggleCandidateInvalid(candidate)">恢复</button>
+                  </template>
+                  <template v-else-if="candidate.selected">
+                    <span class="web-ui-collect-figma__adopted"><CircleCheck />已采纳</span>
+                    <button type="button" class="is-link" @click="candidate.selected = false">撤销</button>
+                  </template>
+                  <template v-else>
+                    <button type="button" class="is-primary" @click="candidate.selected = true">采纳</button>
+                    <button type="button" class="is-outline" @click="setActiveCandidate(candidate)">编辑</button>
+                    <button type="button" class="is-link" @click="toggleCandidateInvalid(candidate)">忽略</button>
+                  </template>
+                </div>
+              </article>
+            </section>
+            <div v-if="!reviewCandidates.length" class="web-ui-collect-figma__no-results">
+              <el-icon><Filter /></el-icon>
+              当前筛选条件下没有匹配元素
+            </div>
+          </el-scrollbar>
+        </main>
+      </section>
     </template>
   </section>
 </template>
 
 <style scoped>
+.web-ui-collect-figma__header { display:flex; flex:0 0 48px; align-items:center; gap:12px; padding:0 20px; border-bottom:1px solid #e5e6eb; background:#fff; }
+.web-ui-collect-figma__back { display:inline-flex; align-items:center; gap:6px; padding:0; border:0; background:transparent; color:#4e5969; font-size:13px; font-weight:500; cursor:pointer; }
+.web-ui-collect-figma__back:hover { color:#00b8b0; }
+.web-ui-collect-figma__divider { width:1px; height:16px; background:#e5e6eb; }
+.web-ui-collect-figma__icon { display:grid; width:28px; height:28px; place-items:center; border-radius:6px; background:#e8fffb; color:#00b8b0; font-size:14px; }
+.web-ui-collect-figma__header h1 { margin:0; color:#1d2129; font-size:15px; font-weight:600; }
+.web-ui-collect-figma__done { padding:2px 10px; border-radius:999px; background:#e8fffb; color:#00b8b0; font-size:11px; font-weight:500; }
+.web-ui-collect-figma__spacer { flex:1; }
+.web-ui-collect-figma__review { display:flex; min-width:0; min-height:0; flex:1; overflow:hidden; background:#f7f8fc; }
+.web-ui-collect-figma__config { width:300px; flex:0 0 300px; border-right:1px solid #e5e6eb; background:#fff; overflow:hidden; }
+.web-ui-collect-figma__config-scroll { display:grid; align-content:start; gap:18px; height:100%; box-sizing:border-box; padding:16px; overflow:auto; }
+.web-ui-collect-figma__config section { display:grid; gap:8px; }
+.web-ui-collect-figma__config label { color:#4e5969; font-size:12px; font-weight:600; }
+.web-ui-collect-figma__config p { margin:0; color:#86909c; font-size:11px; line-height:1.5; }
+.web-ui-collect-figma__url { overflow:hidden; padding:9px 10px; border:1px solid #e5e6eb; border-radius:6px; background:#fff; color:#4e5969; font-family:"JetBrains Mono", "Fira Code", monospace; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.web-ui-collect-figma__scope-row { min-height:34px; padding:0 10px; border-radius:6px; background:#e8fffb; color:#00b8b0; font-size:12px; line-height:34px; }
+.web-ui-collect-figma__progress { padding-top:16px; border-top:1px solid #e5e6eb; }
+.web-ui-collect-figma__progress-item { display:flex; align-items:center; gap:10px; color:#1d2129; font-size:12px; }
+.web-ui-collect-figma__progress-item > span { display:grid; width:20px; height:20px; place-items:center; border-radius:50%; background:#00b8b0; color:#fff; font-size:10px; }
+.web-ui-collect-figma__stats { grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+.web-ui-collect-figma__stats div { display:grid; gap:3px; padding:10px 4px; border-radius:6px; text-align:center; }
+.web-ui-collect-figma__stats div:nth-child(1) { background:#e8ffea; color:#00b42a; }
+.web-ui-collect-figma__stats div:nth-child(2) { background:#fff3e8; color:#ff7d00; }
+.web-ui-collect-figma__stats div:nth-child(3) { background:#fff1f0; color:#f53f3f; }
+.web-ui-collect-figma__stats strong { font-size:18px; font-weight:600; }
+.web-ui-collect-figma__stats span { font-size:10px; }
+.web-ui-collect-figma__main { display:flex; min-width:0; min-height:0; flex:1; flex-direction:column; overflow:hidden; }
+.web-ui-collect-figma__filters { display:flex; flex:0 0 58px; align-items:center; gap:10px; padding:0 20px; border-bottom:1px solid #e5e6eb; background:#fff; }
+.web-ui-collect-figma__filter-tabs { display:flex; overflow:hidden; border:1px solid #e5e6eb; border-radius:6px; }
+.web-ui-collect-figma__filter-tabs button { min-height:30px; padding:0 10px; border:0; border-right:1px solid #e5e6eb; background:#fff; color:#4e5969; font-size:12px; cursor:pointer; }
+.web-ui-collect-figma__filter-tabs button:last-child { border-right:0; }
+.web-ui-collect-figma__filter-tabs button.is-active { background:#e8fffb; color:#00b8b0; }
+.web-ui-collect-figma__search { width:220px; }
+.web-ui-collect-figma__count { color:#86909c; font-size:12px; }
+.web-ui-collect-figma__count strong { color:#1d2129; }
+.web-ui-collect-figma__adopt-all { height:30px; padding:0 14px; border:0; border-radius:6px; background:#e8fffb; color:#00b8b0; font-size:12px; font-weight:500; cursor:pointer; }
+.web-ui-collect-figma__cards-scroll { min-height:0; flex:1; }
+.web-ui-collect-figma__cards-scroll :deep(.el-scrollbar__view) { box-sizing:border-box; min-height:100%; padding:20px 24px 28px; }
+.web-ui-collect-figma__page-group { max-width:1080px; margin:0 auto; }
+.web-ui-collect-figma__page-title { display:flex; align-items:center; gap:8px; margin-bottom:12px; color:#1d2129; font-size:13px; }
+.web-ui-collect-figma__page-title .el-icon { color:#00b8b0; }
+.web-ui-collect-figma__page-title span { padding:2px 8px; border-radius:999px; background:#e8fffb; color:#00b8b0; font-size:10px; }
+.web-ui-collect-figma__candidate { display:flex; align-items:flex-start; gap:16px; margin-bottom:10px; padding:16px 18px; border:1px solid #e5e6eb; border-radius:8px; background:#fff; transition:border-color .16s ease, box-shadow .16s ease, opacity .16s ease; }
+.web-ui-collect-figma__candidate:hover { border-color:#b9eeea; box-shadow:0 2px 8px rgb(29 33 41 / 6%); }
+.web-ui-collect-figma__candidate.is-adopted { border-color:#00b8b0; }
+.web-ui-collect-figma__candidate.is-ignored { opacity:.48; }
+.web-ui-collect-figma__confidence { display:grid; width:48px; height:48px; flex:0 0 48px; align-content:center; place-items:center; border:3px solid currentColor; border-radius:50%; color:#f53f3f; }
+.web-ui-collect-figma__confidence.is-success { color:#00b42a; }
+.web-ui-collect-figma__confidence.is-warning { color:#ff7d00; }
+.web-ui-collect-figma__confidence strong { font-size:12px; font-weight:600; line-height:1; }
+.web-ui-collect-figma__confidence span { margin-top:3px; color:#86909c; font-size:9px; }
+.web-ui-collect-figma__candidate-content { min-width:0; flex:1; }
+.web-ui-collect-figma__candidate-title { display:flex; align-items:center; gap:8px; min-width:0; }
+.web-ui-collect-figma__candidate-title strong { overflow:hidden; color:#1d2129; font-size:14px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.web-ui-collect-figma__candidate-title span, .web-ui-collect-figma__candidate-title em { padding:1px 6px; border-radius:3px; background:#f2f3f5; color:#4e5969; font-size:10px; font-style:normal; font-weight:500; white-space:nowrap; }
+.web-ui-collect-figma__candidate-title em { background:#e8fffb; color:#00b8b0; }
+.web-ui-collect-figma__candidate-content p { margin:7px 0 10px; color:#86909c; font-size:12px; line-height:1.5; }
+.web-ui-collect-figma__locator { display:flex; align-items:center; gap:8px; min-width:0; }
+.web-ui-collect-figma__locator code:first-child { padding:2px 7px; border-radius:3px; background:#eef0fa; color:#4e5ac8; font-family:"JetBrains Mono", "Fira Code", monospace; font-size:10px; font-weight:600; }
+.web-ui-collect-figma__locator span { overflow:hidden; color:#4e5969; font-family:"JetBrains Mono", "Fira Code", monospace; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+.web-ui-collect-figma__candidate-actions { display:flex; flex:0 0 72px; align-items:flex-end; flex-direction:column; gap:6px; }
+.web-ui-collect-figma__candidate-actions button { height:28px; border-radius:5px; font-size:12px; cursor:pointer; }
+.web-ui-collect-figma__candidate-actions .is-primary { width:52px; border:0; background:#00b8b0; color:#fff; }
+.web-ui-collect-figma__candidate-actions .is-outline { width:52px; border:1px solid #e5e6eb; background:#fff; color:#4e5969; }
+.web-ui-collect-figma__candidate-actions .is-link { height:20px; padding:0; border:0; background:transparent; color:#86909c; }
+.web-ui-collect-figma__adopted { display:inline-flex; align-items:center; gap:4px; color:#00b8b0; font-size:12px; font-weight:500; }
+.web-ui-collect-figma__no-results { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; min-height:260px; color:#86909c; font-size:13px; }
+.web-ui-collect-figma__no-results .el-icon { color:#c9cdd4; font-size:32px; }
+@media (max-width:980px) { .web-ui-collect-figma__config { width:250px; flex-basis:250px; } .web-ui-collect-figma__filters { padding:0 12px; } .web-ui-collect-figma__search { display:none; } }
 .web-ui-collect-workspace {
   display: flex;
   flex: 1;

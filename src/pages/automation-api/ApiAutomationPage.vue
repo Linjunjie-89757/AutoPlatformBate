@@ -9,7 +9,9 @@ import type {
 } from '@/entities/api-automation'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
+import ApiExecutionSuiteFigmaWorkspace from '@/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue'
 import { ApiInterfaceWorkspace } from '@/widgets/api-interface-workspace'
+import ApiScenarioFigmaWorkspace from '@/widgets/api-scenario-workspace/ApiScenarioFigmaWorkspace.vue'
 
 type ApiAutomationSection = 'definitions' | 'scenarios' | 'execution' | 'reports' | 'settings'
 
@@ -78,7 +80,14 @@ watch(selectedWorkspaceCode, (value) => {
     fill
   >
     <div class="api-automation-page">
+      <ApiScenarioFigmaWorkspace
+        v-if="activeSection === 'scenarios'"
+      />
+      <ApiExecutionSuiteFigmaWorkspace
+        v-else-if="activeSection === 'execution'"
+      />
       <ApiInterfaceWorkspace
+        v-else
         :active-section="activeSection"
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
@@ -91,7 +100,9 @@ watch(selectedWorkspaceCode, (value) => {
 
 <style scoped>
 .api-automation-app-page {
+  height: calc(100dvh - 86px);
   min-height: calc(100dvh - 86px);
+  overflow: hidden;
 }
 
 .api-automation-page {

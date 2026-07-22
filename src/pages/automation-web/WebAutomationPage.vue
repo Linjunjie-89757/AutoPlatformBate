@@ -9,7 +9,9 @@ import AppPage from '@/shared/ui/app-page/AppPage.vue'
 import { WebUiCaseWorkspace } from '@/widgets/web-ui-case-workspace'
 import WebUiCaseDetailWorkspace from '@/widgets/web-ui-case-workspace/WebUiCaseDetailWorkspace.vue'
 import WebUiElementCollectTaskWorkspace from '@/widgets/web-ui-case-workspace/WebUiElementCollectTaskWorkspace.vue'
-import WebUiElementLibraryPanel from '@/widgets/web-ui-case-workspace/WebUiElementLibraryPanel.vue'
+import WebUiElementFigmaLibrary from '@/widgets/web-ui-case-workspace/WebUiElementFigmaLibrary.vue'
+import WebUiRunRecordsFigmaPage from '@/widgets/web-ui-case-workspace/WebUiRunRecordsFigmaPage.vue'
+import WebUiSuiteFigmaWorkspace from '@/widgets/web-ui-case-workspace/WebUiSuiteFigmaWorkspace.vue'
 import WebUiVariableSetDetailPage from '@/widgets/web-ui-case-workspace/WebUiVariableSetDetailPage.vue'
 import WebUiVariableSetPanel from '@/widgets/web-ui-case-workspace/WebUiVariableSetPanel.vue'
 import { webUiAutomationApi, type WebUiEnvironmentItem } from '@/entities/web-ui-automation'
@@ -22,12 +24,13 @@ const route = useRoute()
 const router = useRouter()
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
 
-type WebUiSection = 'cases' | 'caseDetail' | 'elements' | 'collectTask' | 'templates' | 'runs' | 'batches' | 'environments' | 'variables' | 'variableDetail'
+type WebUiSection = 'cases' | 'caseDetail' | 'elements' | 'suites' | 'collectTask' | 'templates' | 'runs' | 'batches' | 'environments' | 'variables' | 'variableDetail'
 
 const routeSectionMap: Record<string, WebUiSection> = {
   'automation-web-cases': 'cases',
   'automation-web-case-detail': 'caseDetail',
   'automation-web-elements': 'elements',
+  'automation-web-suites': 'suites',
   'automation-web-element-collect-task': 'collectTask',
   'automation-web-templates': 'templates',
   'automation-web-runs': 'runs',
@@ -42,7 +45,7 @@ const activeSection = computed<WebUiSection>(() => {
   return routeSectionMap[routeName] || 'cases'
 })
 const workspaceMode = computed<'cases' | 'templates' | 'runs' | 'batches' | 'environments'>(() =>
-  activeSection.value === 'caseDetail' || activeSection.value === 'elements' || activeSection.value === 'collectTask' || activeSection.value === 'variables' || activeSection.value === 'variableDetail'
+  activeSection.value === 'caseDetail' || activeSection.value === 'elements' || activeSection.value === 'suites' || activeSection.value === 'runs' || activeSection.value === 'collectTask' || activeSection.value === 'variables' || activeSection.value === 'variableDetail'
     ? 'cases'
     : activeSection.value,
 )
@@ -50,8 +53,20 @@ const workspaceMode = computed<'cases' | 'templates' | 'runs' | 'batches' | 'env
 const pageCopy = computed(() => {
   if (activeSection.value === 'elements') {
     return {
-      title: 'Web UI 元素库',
-      description: '维护页面对象和元素定位器，后续用于用例步骤、录制和 AI 生成。',
+      title: 'Web UI 自动化',
+      description: '',
+    }
+  }
+  if (activeSection.value === 'suites') {
+    return {
+      title: 'Web UI 自动化',
+      description: '',
+    }
+  }
+  if (activeSection.value === 'runs') {
+    return {
+      title: 'Web UI 自动化',
+      description: '',
     }
   }
   if (activeSection.value === 'collectTask') {
@@ -64,12 +79,6 @@ const pageCopy = computed(() => {
     return {
       title: 'Web UI 模板库',
       description: '沉淀登录、查询、表单、审批等常用 Web UI 用例模板。',
-    }
-  }
-  if (activeSection.value === 'runs') {
-    return {
-      title: 'Web UI 执行记录',
-      description: '查看单次运行报告、失败步骤、截图证据和分享链接。',
     }
   }
   if (activeSection.value === 'batches') {
@@ -98,12 +107,12 @@ const pageCopy = computed(() => {
   }
   if (activeSection.value === 'caseDetail') {
     return {
-      title: 'Web UI 用例工作台',
-      description: '编辑用例步骤、运行调试，并为本地 Runner 录制入口预留控制台。',
+      title: 'Web UI 自动化',
+      description: '管理 Web UI 自动化用例、步骤和调试运行。',
     }
   }
   return {
-    title: 'Web UI 用例管理',
+    title: 'Web UI 自动化',
     description: '管理 Web UI 自动化用例、步骤和调试运行。',
   }
 })
@@ -211,7 +220,7 @@ watch(
   >
     <div class="web-automation-page">
       <WebUiCaseWorkspace
-        v-if="activeSection !== 'caseDetail' && activeSection !== 'elements' && activeSection !== 'collectTask' && activeSection !== 'variables' && activeSection !== 'variableDetail'"
+        v-if="activeSection !== 'caseDetail' && activeSection !== 'elements' && activeSection !== 'suites' && activeSection !== 'runs' && activeSection !== 'collectTask' && activeSection !== 'variables' && activeSection !== 'variableDetail'"
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
         :workspaces="workspaces"
@@ -222,11 +231,14 @@ watch(
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
       />
-      <WebUiElementLibraryPanel
+      <WebUiElementFigmaLibrary
         v-else-if="activeSection === 'elements'"
-        :workspace-code="workspaceCode"
-        :workspace-ready="workspaceReady"
-        :environments="environments"
+      />
+      <WebUiSuiteFigmaWorkspace
+        v-else-if="activeSection === 'suites'"
+      />
+      <WebUiRunRecordsFigmaPage
+        v-else-if="activeSection === 'runs'"
       />
       <WebUiElementCollectTaskWorkspace
         v-else-if="activeSection === 'collectTask'"

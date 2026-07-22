@@ -2,22 +2,28 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  CircleClose,
   CopyDocument,
   Delete,
-  Download,
-  Edit,
+  DocumentChecked,
   Folder,
   FolderOpened,
   Link,
-  MoreFilled,
   Plus,
   RefreshRight,
   Search,
   Upload,
+  VideoPause,
   VideoPlay,
   View,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Edit2, Monitor as LucideMonitor, Sparkles, X } from '@lucide/vue'
+import WebUiModuleTabs from './WebUiModuleTabs.vue'
 
 import { configApi, type ParamSetItem } from '@/entities/config'
 import {
@@ -32,7 +38,6 @@ import {
   formatWebUiDateTime,
   parseWebUiCaseImportJson,
   webUiAutomationApi,
-  WebUiCaseStatusBadge,
   WEB_UI_CASE_TEMPLATES,
   WebUiRunStatusBadge,
   type WebUiCaseTemplate,
@@ -55,6 +60,7 @@ import type { WorkspaceItem } from '@/entities/workspace'
 import { deleteWebUiCase } from '@/features/web-ui-case-delete'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { confirmDelete } from '@/shared/ui'
+import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -67,7 +73,6 @@ import WebUiRunDetailDrawer from './WebUiRunDetailDrawer.vue'
 
 type WorkspaceMode = 'cases' | 'templates' | 'runs' | 'batches' | 'environments'
 type WorkspaceTab = Exclude<WorkspaceMode, 'templates'>
-type WebUiModuleTabKey = 'cases' | 'elements' | 'suites' | 'records' | 'env'
 type WebUiRecordingFlowMode = 'idle' | 'recording' | 'confirm'
 type WebUiRecordingPhase = 'recording' | 'paused'
 type WebUiRecordingStepType = 'navigate' | 'click' | 'input' | 'wait' | 'assert' | 'screenshot'
@@ -114,6 +119,8 @@ function resolveModeTab(mode: WorkspaceMode): WorkspaceTab {
 
 const activeTab = ref<WorkspaceTab>(resolveModeTab(props.mode))
 const selectedDirectoryId = ref('root')
+const caseTableFrameRef = ref<HTMLElement | null>(null)
+const figmaCaseTableWidth = ref(0)
 const loadingCases = ref(false)
 const loadingEnvironments = ref(false)
 const loadingRuns = ref(false)
@@ -140,6 +147,9 @@ const pageSize = ref(10)
 const keyword = ref('')
 const status = ref<WebUiCaseStatus | ''>('')
 const moduleName = ref('')
+const directoryKeyword = ref('')
+const priorityFilter = ref('')
+const browserFilter = ref('')
 const appliedFilter = ref({
   keyword: '',
   status: '' as WebUiCaseStatus | '',
@@ -200,16 +210,18 @@ const selectedRecordedStepId = ref('')
 const recordingConfirmCaseName = ref('')
 const recordingConfig = reactive<WebUiRecordingConfig>({
   name: '',
-  directory: '电商平台/用户模块',
-  environment: '测试环境',
-  startUrl: 'https://test.example.com/login',
+  directory: '',
+  environment: '',
+  startUrl: 'https://test.example.com',
   browser: 'Chrome (headed)',
   autoCapture: true,
   autoAssert: true,
 })
 const recordedSteps = ref<WebUiRecordingStep[]>([])
+const recordingConfigValid = computed(() => Boolean(recordingConfig.name.trim() && recordingConfig.startUrl.trim()))
 
 let visualRecordingTimer: ReturnType<typeof window.setTimeout> | null = null
+let caseTableFrameObserver: ResizeObserver | null = null
 
 const webUiRecordingMockSteps: WebUiRecordingStep[] = [
   { id: 'r1', order: 1, enabled: true, type: 'navigate', description: '打开登录页面', value: 'https://test.example.com/login' },
@@ -358,20 +370,12 @@ const stats = computed(() => [
   { label: '环境数', value: environments.value.length },
 ])
 
-const webUiModuleTabs: Array<{ key: WebUiModuleTabKey; label: string; path: string | null }> = [
-  { key: 'cases', label: '用例管理', path: '/automation/web/cases' },
-  { key: 'elements', label: '元素库', path: '/automation/web/elements' },
-  { key: 'suites', label: '执行套件', path: null },
-  { key: 'records', label: '执行记录', path: '/automation/web/runs' },
-  { key: 'env', label: '环境配置', path: '/automation/web/environments' },
-]
-
-const activeWebUiModuleTab = computed<WebUiModuleTabKey>(() => {
+const activeWebUiModuleTab = computed<'cases' | 'records' | 'environments'>(() => {
   if (isRunsMode.value) {
     return 'records'
   }
   if (isEnvironmentsMode.value) {
-    return 'env'
+    return 'environments'
   }
   return 'cases'
 })
@@ -397,6 +401,40 @@ const figmaDirectoryNodes = computed(() => {
       children,
     },
   ]
+})
+
+const visibleFigmaDirectoryNodes = computed(() => {
+  const keywordValue = directoryKeyword.value.trim().toLowerCase()
+  if (!keywordValue) {
+    return figmaDirectoryNodes.value
+  }
+
+  return figmaDirectoryNodes.value.map(root => ({
+    ...root,
+    children: root.children.filter(child => child.label.toLowerCase().includes(keywordValue)),
+  }))
+})
+
+const visibleCases = computed(() => cases.value.filter((item) => {
+  if (priorityFilter.value && getVisualCasePriority(item) !== priorityFilter.value) {
+    return false
+  }
+  return !browserFilter.value || item.browserType === browserFilter.value
+}))
+
+const figmaCaseColumnWidths = computed(() => {
+  const width = figmaCaseTableWidth.value || 1440
+  return {
+    selection: Math.round(width * 0.03),
+    name: Math.round(width * 0.25),
+    directory: Math.round(width * 0.15),
+    status: Math.round(width * 0.08),
+    priority: Math.round(width * 0.07),
+    result: Math.round(width * 0.09),
+    lastRun: Math.round(width * 0.12),
+    creator: Math.round(width * 0.07),
+    actions: Math.round(width * 0.14),
+  }
 })
 
 const ciEndpoint = computed(() => '/api/automation/web/ci/batches/run')
@@ -856,32 +894,29 @@ function searchCases() {
   void loadCases()
 }
 
-function resetFilters() {
-  keyword.value = ''
-  status.value = ''
-  moduleName.value = ''
-  selectedDirectoryId.value = 'root'
-  appliedFilter.value = {
-    keyword: '',
-    status: '',
-    moduleName: '',
-  }
-  pageNo.value = 1
-  void loadCases()
-}
-
-function navigateWebUiModuleTab(tab: { key: WebUiModuleTabKey; path: string | null }) {
-  if (!tab.path) {
-    ElMessage.info('执行套件页面需要按 Figma 补齐后接入')
-    return
-  }
-  void router.push(tab.path)
-}
-
 function selectFigmaDirectory(node: { id: string; moduleName: string }) {
   selectedDirectoryId.value = node.id
   moduleName.value = node.moduleName
   searchCases()
+}
+
+function applyFigmaCaseFilters() {
+  pageNo.value = 1
+  searchCases()
+}
+
+function handleFigmaBatchDelete() {
+  ElMessage.info('Web UI 用例批量删除接口暂未接入')
+}
+
+function getCaseTags(row: WebUiCaseItem) {
+  const tags = (row.description || '')
+    .split(/[，,、|]/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+
+  return tags.length ? tags : [formatBrowserType(row.browserType), `${row.stepCount} 个步骤`]
 }
 
 function clearVisualRecordingTimer() {
@@ -893,11 +928,10 @@ function clearVisualRecordingTimer() {
 
 function openRecordCasePlaceholder() {
   recordingConfig.name = ''
-  recordingConfig.directory = figmaDirectoryNodes.value[0]?.children?.[0]?.label
-    ? `电商平台/${figmaDirectoryNodes.value[0].children[0].label}`
-    : '电商平台/用户模块'
-  recordingConfig.environment = enabledEnvironments.value[0]?.name || '测试环境'
-  recordingConfig.startUrl = enabledEnvironments.value[0]?.baseUrl || 'https://test.example.com/login'
+  // The design starts these fields blank; recording data is selected after entering the workstation.
+  recordingConfig.directory = ''
+  recordingConfig.environment = ''
+  recordingConfig.startUrl = 'https://test.example.com'
   recordingConfig.browser = 'Chrome (headed)'
   recordingConfig.autoCapture = true
   recordingConfig.autoAssert = true
@@ -1020,6 +1054,25 @@ function getPriorityTone(priority: string) {
   if (priority === 'P2') return { backgroundColor: '#FAAD14', color: '#FFFFFF' }
   if (priority === 'P3') return { backgroundColor: '#165DFF', color: '#FFFFFF' }
   return { backgroundColor: '#C9CDD4', color: '#4E5969' }
+}
+
+function getFigmaCaseStatusMeta(value: string | null | undefined) {
+  if (value === 'ENABLED') return { label: '已启用', color: '#00b42a' }
+  if (value === 'DRAFT') return { label: '草稿', color: '#ff7d00' }
+  return { label: '已停用', color: '#c9cdd4' }
+}
+
+function getFigmaRunResultMeta(value: string | null | undefined) {
+  if (value === 'SUCCESS' || value === 'PASSED' || value === 'PASS') {
+    return { label: '通过', backgroundColor: '#e8ffea', color: '#00b42a' }
+  }
+  if (value === 'FAILED' || value === 'FAIL') {
+    return { label: '失败', backgroundColor: '#ffe8e8', color: '#f53f3f' }
+  }
+  if (value === 'RUNNING') {
+    return { label: '运行中', backgroundColor: '#e8f3ff', color: '#165dff' }
+  }
+  return { label: '待运行', backgroundColor: '#f2f3f5', color: '#86909c' }
 }
 
 function getCaseCreator(row: WebUiCaseItem) {
@@ -1558,16 +1611,6 @@ function openRunDetail(runId: number) {
   runDetailVisible.value = true
 }
 
-async function openLatestRunForCase(caseItem: WebUiCaseItem) {
-  const page = await webUiAutomationApi.getRuns(props.workspaceCode, { caseId: caseItem.id, pageNo: 1, pageSize: 1 })
-  const latest = page.items[0]
-  if (!latest) {
-    ElMessage.warning('暂无执行报告')
-    return
-  }
-  openRunDetail(latest.id)
-}
-
 async function openBatchDetail(batchId: number) {
   const requestId = ++batchDetailRequestSeq
   selectedBatchId.value = batchId
@@ -1748,24 +1791,6 @@ function handleCaseMoreAction(command: string, caseItem: WebUiCaseItem) {
   }
 }
 
-function handleCaseMoreCommand(command: string | number | object, caseItem?: WebUiCaseItem) {
-  if (command === 'template') {
-    openTemplateDialog()
-    return
-  }
-  if (command === 'import') {
-    openImportDialog()
-    return
-  }
-  if (typeof command === 'string' && caseItem) {
-    handleCaseMoreAction(command, caseItem)
-  }
-}
-
-function handleRowCaseMoreCommand(command: string | number | object, caseItem: WebUiCaseItem) {
-  handleCaseMoreCommand(command, caseItem)
-}
-
 function handleBatchPageChange(value: number) {
   batchPageNo.value = value
   void loadBatches()
@@ -1812,6 +1837,22 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearVisualRecordingTimer()
+  caseTableFrameObserver?.disconnect()
+})
+
+watch(caseTableFrameRef, (element) => {
+  caseTableFrameObserver?.disconnect()
+  caseTableFrameObserver = null
+  if (!element) {
+    return
+  }
+
+  const syncWidth = () => {
+    figmaCaseTableWidth.value = element.clientWidth
+  }
+  syncWidth()
+  caseTableFrameObserver = new ResizeObserver(syncWidth)
+  caseTableFrameObserver.observe(element)
 })
 
 watch([recordFlowMode, recordPhase, recordingVisibleCount], () => {
@@ -1915,18 +1956,10 @@ watch(
       </div>
     </header>
 
-    <div v-if="isCasesMode" class="web-ui-module-tabs">
-      <button
-        v-for="tab in webUiModuleTabs"
-        :key="tab.key"
-        type="button"
-        class="web-ui-module-tabs__item"
-        :class="{ 'is-active': activeWebUiModuleTab === tab.key }"
-        @click="navigateWebUiModuleTab(tab)"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <WebUiModuleTabs
+      v-if="isCasesMode || isRunsMode || isEnvironmentsMode"
+      :active="activeWebUiModuleTab"
+    />
 
     <div v-if="isCasesMode" class="web-ui-stats">
       <article v-for="stat in stats" :key="stat.label" class="web-ui-stat-card">
@@ -1940,42 +1973,44 @@ watch(
         <div class="web-ui-case-workspace-shell">
           <aside class="web-ui-case-directory">
             <div class="web-ui-case-directory__head">
-              <AppButton size="small" :icon="Plus" @click="openCreateDrawer">新建目录</AppButton>
+              <button type="button" class="web-ui-figma-primary-button web-ui-figma-primary-button--small" @click="openCreateDrawer">
+                <img :src="figmaCaseIcons.addDirectory" alt="" />
+                新建目录
+              </button>
             </div>
             <div class="web-ui-case-directory__search">
               <el-input
-                v-model="moduleName"
+                v-model="directoryKeyword"
                 clearable
                 placeholder="搜索目录"
                 :prefix-icon="Search"
-                @keyup.enter="searchCases"
               />
             </div>
             <div class="web-ui-case-directory__tree">
-              <button
-                v-for="root in figmaDirectoryNodes"
-                :key="root.id"
-                type="button"
-                class="web-ui-case-directory__node web-ui-case-directory__node--root"
-                :class="{ 'is-active': selectedDirectoryId === root.id }"
-                @click="selectFigmaDirectory(root)"
-              >
-                <FolderOpened :size="12" />
-                <span>{{ root.label }}</span>
-                <em>{{ root.count }}</em>
-              </button>
-              <button
-                v-for="child in figmaDirectoryNodes[0]?.children || []"
-                :key="child.id"
-                type="button"
-                class="web-ui-case-directory__node"
-                :class="{ 'is-active': selectedDirectoryId === child.id }"
-                @click="selectFigmaDirectory(child)"
-              >
-                <Folder :size="12" />
-                <span>{{ child.label }}</span>
-                <em>{{ child.count }}</em>
-              </button>
+              <template v-for="root in visibleFigmaDirectoryNodes" :key="root.id">
+                <button
+                  type="button"
+                  class="web-ui-case-directory__node web-ui-case-directory__node--root"
+                  :class="{ 'is-active': selectedDirectoryId === root.id }"
+                  @click="selectFigmaDirectory(root)"
+                >
+                  <FolderOpened :size="12" />
+                  <span>{{ root.label }}</span>
+                  <em>{{ root.count }}</em>
+                </button>
+                <button
+                  v-for="child in root.children || []"
+                  :key="child.id"
+                  type="button"
+                  class="web-ui-case-directory__node"
+                  :class="{ 'is-active': selectedDirectoryId === child.id }"
+                  @click="selectFigmaDirectory(child)"
+                >
+                  <Folder :size="12" />
+                  <span>{{ child.label }}</span>
+                  <em>{{ child.count }}</em>
+                </button>
+              </template>
             </div>
           </aside>
 
@@ -1989,37 +2024,43 @@ watch(
                 :prefix-icon="Search"
                 @keyup.enter="searchCases"
               />
-              <el-select v-model="status" class="web-ui-case-toolbar__select" clearable placeholder="全部状态">
+              <el-select v-model="status" class="web-ui-case-toolbar__select" clearable placeholder="全部状态" @change="applyFigmaCaseFilters">
                 <el-option label="已启用" value="ENABLED" />
                 <el-option label="已停用" value="DISABLED" />
+                <el-option label="草稿" value="DRAFT" />
               </el-select>
-              <el-select v-model="moduleName" class="web-ui-case-toolbar__select" clearable placeholder="全部目录">
-                <el-option
-                  v-for="node in figmaDirectoryNodes[0]?.children || []"
-                  :key="node.id"
-                  :label="node.label"
-                  :value="node.moduleName"
-                />
+              <el-select v-model="priorityFilter" class="web-ui-case-toolbar__select" clearable placeholder="全部优先级">
+                <el-option label="P0" value="P0" />
+                <el-option label="P1" value="P1" />
+                <el-option label="P2" value="P2" />
+                <el-option label="P3" value="P3" />
+                <el-option label="P4" value="P4" />
               </el-select>
-              <AppButton :icon="Search" @click="searchCases">查询</AppButton>
-              <AppButton :icon="RefreshRight" @click="resetFilters">重置</AppButton>
+              <el-select v-model="browserFilter" class="web-ui-case-toolbar__browser" clearable placeholder="全部浏览器">
+                <el-option label="Chrome" value="CHROMIUM" />
+                <el-option label="Firefox" value="FIREFOX" />
+                <el-option label="Safari" value="WEBKIT" />
+              </el-select>
               <div class="web-ui-case-toolbar__spacer" />
-              <AppButton :icon="VideoPlay" @click="openRecordCasePlaceholder">录制用例</AppButton>
-              <AppButton :icon="Plus" type="primary" @click="openCreateDrawer">新建用例</AppButton>
-              <el-dropdown trigger="click" @command="handleCaseMoreCommand">
-                <AppButton :icon="MoreFilled">更多</AppButton>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="template" :icon="CopyDocument">从模板新建</el-dropdown-item>
-                    <el-dropdown-item command="import" :icon="Upload">导入 JSON</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-
-            <div v-if="selectedCases.length" class="web-ui-selection-bar">
-              已选择 {{ selectedCases.length }} 条用例
-              <AppButton size="small" :icon="VideoPlay" :loading="batchSubmitting" @click="openBatchRunDialog">批量运行</AppButton>
+              <div v-if="selectedCases.length" class="web-ui-case-toolbar__selection">
+                <span>已选 {{ selectedCases.length }}</span>
+                <button type="button" :disabled="batchSubmitting" @click="openBatchRunDialog">
+                  <VideoPlay :size="13" />
+                  批量运行
+                </button>
+                <button type="button" class="is-danger" @click="handleFigmaBatchDelete">
+                  <Delete :size="13" />
+                  删除
+                </button>
+              </div>
+              <button type="button" class="web-ui-case-toolbar__record" @click="openRecordCasePlaceholder">
+                <i />
+                录制用例
+              </button>
+              <button type="button" class="web-ui-figma-primary-button" @click="openCreateDrawer">
+                <img :src="figmaCaseIcons.add" alt="" />
+                新建用例
+              </button>
             </div>
 
             <div v-if="errorMessage && cases.length" class="web-ui-inline-error">
@@ -2040,101 +2081,104 @@ watch(
             </AppEmptyState>
 
             <template v-else>
-              <el-table
-                v-loading="loadingCases"
-                class="web-ui-case-table web-ui-case-table--figma"
-                :data="cases"
-                row-key="id"
-                border
-                empty-text="暂无 Web UI 用例"
-                @selection-change="handleCaseSelectionChange"
-              >
-                <el-table-column type="selection" width="46" />
-                <el-table-column prop="name" label="用例名称" min-width="180" show-overflow-tooltip />
-                <el-table-column label="所属目录" min-width="150" show-overflow-tooltip>
+              <div class="web-ui-case-list__content">
+                <div ref="caseTableFrameRef" class="web-ui-case-table-frame">
+                  <el-table
+                    v-loading="loadingCases"
+                    class="web-ui-case-table web-ui-case-table--figma"
+                    :data="visibleCases"
+                    row-key="id"
+                    empty-text="暂无 Web UI 用例"
+                    @row-click="openStepDrawer"
+                    @selection-change="handleCaseSelectionChange"
+                  >
+                <el-table-column type="selection" :width="figmaCaseColumnWidths.selection" />
+                <el-table-column label="用例名称" :width="figmaCaseColumnWidths.name" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <div class="web-ui-case-name-cell">
+                      <strong>{{ row.name }}</strong>
+                      <span>
+                        <em v-for="tag in getCaseTags(row)" :key="tag">{{ tag }}</em>
+                      </span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="所属目录" :width="figmaCaseColumnWidths.directory" show-overflow-tooltip>
                   <template #default="{ row }">
                     {{ getCaseDirectory(row) }}
                   </template>
                 </el-table-column>
-                <el-table-column label="状态" width="104">
+                <el-table-column label="状态" :width="figmaCaseColumnWidths.status">
                   <template #default="{ row }">
-                    <WebUiCaseStatusBadge :status="row.status" />
+                    <span class="web-ui-case-status" :style="{ '--web-ui-case-status-color': getFigmaCaseStatusMeta(row.status).color }">
+                      <i />
+                      {{ getFigmaCaseStatusMeta(row.status).label }}
+                    </span>
                   </template>
                 </el-table-column>
-                <el-table-column label="优先级" width="84">
+                <el-table-column label="优先级" :width="figmaCaseColumnWidths.priority">
                   <template #default="{ row }">
                     <span class="web-ui-case-priority" :style="getPriorityTone(getVisualCasePriority(row))">
                       {{ getVisualCasePriority(row) }}
                     </span>
                   </template>
                 </el-table-column>
-                <el-table-column label="最近结果" width="112">
+                <el-table-column label="最近结果" :width="figmaCaseColumnWidths.result">
                   <template #default="{ row }">
-                    <WebUiRunStatusBadge v-if="row.lastRunResult" :status="row.lastRunResult" />
+                    <span
+                      v-if="row.lastRunResult"
+                      class="web-ui-case-run-result"
+                      :style="getFigmaRunResultMeta(row.lastRunResult)"
+                    >
+                      {{ getFigmaRunResultMeta(row.lastRunResult).label }}
+                    </span>
                     <span v-else class="web-ui-case-run-empty">未运行</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="最近运行" width="150">
+                <el-table-column label="最近运行" :width="figmaCaseColumnWidths.lastRun">
                   <template #default="{ row }">
-                    {{ formatWebUiDateTime(row.lastRunAt) }}
+                    <span class="web-ui-case-last-run">{{ formatWebUiDateTime(row.lastRunAt) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column label="创建人" width="100" show-overflow-tooltip>
+                <el-table-column label="创建人" :width="figmaCaseColumnWidths.creator" show-overflow-tooltip>
                   <template #default="{ row }">
                     {{ getCaseCreator(row) }}
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140" fixed="right">
+                <el-table-column label="操作" :width="figmaCaseColumnWidths.actions" align="right">
                   <template #default="{ row }">
                     <div class="web-ui-case-actions">
-                      <el-button :icon="Edit" link type="primary" @click="openStepDrawer(row)" />
-                      <el-button
-                        :icon="VideoPlay"
-                        link
-                        type="primary"
-                        :loading="runningCaseId === row.id"
-                        :disabled="runSubmitting && runningCaseId !== row.id"
-                        @click="openRunDialog(row)"
-                      />
-                      <el-button :icon="View" link type="primary" :disabled="!row.lastRunAt" @click="openLatestRunForCase(row)" />
-                      <el-dropdown trigger="click" @command="handleRowCaseMoreCommand($event, row)">
-                        <el-button class="web-ui-case-actions__more" :icon="MoreFilled" link type="primary" aria-label="更多操作" />
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item command="basic-edit" :icon="Edit">编辑基础信息</el-dropdown-item>
-                            <el-dropdown-item command="copy" :icon="CopyDocument">复制为新用例</el-dropdown-item>
-                            <el-dropdown-item
-                              command="save-template"
-                              :icon="CopyDocument"
-                              :disabled="savingTemplateCaseId === row.id"
-                            >
-                              保存为模板
-                            </el-dropdown-item>
-                            <el-dropdown-item command="export" :icon="Download" :disabled="exportingCaseId === row.id">
-                              导出 JSON
-                            </el-dropdown-item>
-                            <el-dropdown-item command="delete" :icon="Delete" class="web-ui-case-actions__danger">
-                              删除
-                            </el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
+                      <button type="button" title="编辑" @click.stop="openStepDrawer(row)">
+                        <img :src="figmaCaseIcons.action.edit" alt="" />
+                      </button>
+                      <button type="button" title="运行" :disabled="runSubmitting && runningCaseId !== row.id" @click.stop="openRunDialog(row)">
+                        <img :src="figmaCaseIcons.action.run" alt="" />
+                      </button>
+                      <button type="button" title="复制" @click.stop="openCopyDrawer(row)">
+                        <CopyDocument :size="13" />
+                      </button>
+                      <button type="button" class="is-danger" title="删除" @click.stop="handleCaseMoreAction('delete', row)">
+                        <img :src="figmaCaseIcons.action.delete" alt="" />
+                      </button>
+                      <span v-if="runningCaseId === row.id" class="web-ui-case-actions__running" />
                     </div>
                   </template>
                 </el-table-column>
-              </el-table>
+                  </el-table>
 
-              <div class="web-ui-pagination">
-                <el-pagination
-                  v-model:current-page="pageNo"
-                  v-model:page-size="pageSize"
-                  :total="caseListTotal"
-                  :page-sizes="[10, 20, 50]"
-                  layout="total, sizes, prev, pager, next"
-                  background
-                  @current-change="handlePageChange"
-                  @size-change="handlePageSizeChange"
-                />
+                  <div class="web-ui-pagination">
+                    <el-pagination
+                      v-model:current-page="pageNo"
+                      v-model:page-size="pageSize"
+                      :total="caseListTotal"
+                      :page-sizes="[10, 20, 50]"
+                      layout="total, sizes, prev, pager, next"
+                      background
+                      @current-change="handlePageChange"
+                      @size-change="handlePageSizeChange"
+                    />
+                  </div>
+                </div>
               </div>
             </template>
           </main>
@@ -2826,9 +2870,9 @@ watch(
           <span>步骤</span>
         </div>
         <div class="web-ui-record-page__actions">
-          <AppButton @click="toggleVisualRecordingPhase">{{ recordPhase === 'recording' ? '暂停' : '继续' }}</AppButton>
-          <AppButton @click="stopVisualRecording">停止</AppButton>
-          <AppButton v-if="recordingIsComplete" type="primary" @click="stopVisualRecording">进入步骤确认</AppButton>
+          <AppButton :icon="recordPhase === 'recording' ? VideoPause : VideoPlay" @click="toggleVisualRecordingPhase">{{ recordPhase === 'recording' ? '暂停' : '继续' }}</AppButton>
+          <AppButton class="web-ui-record-stop" :icon="CircleClose" @click="stopVisualRecording">停止</AppButton>
+          <AppButton v-if="recordingIsComplete" type="primary" :icon="DocumentChecked" @click="stopVisualRecording">进入步骤确认</AppButton>
           <AppButton @click="discardVisualRecording">放弃</AppButton>
         </div>
       </header>
@@ -2892,14 +2936,14 @@ watch(
 
     <div v-if="recordFlowMode === 'confirm'" class="web-ui-record-page web-ui-record-page--confirm">
       <header class="web-ui-record-page__bar">
-        <button class="web-ui-record-back" type="button" @click="recordFlowMode = 'recording'">录制工作台</button>
-        <span class="web-ui-record-chevron">/</span>
+        <button class="web-ui-record-back" type="button" @click="recordFlowMode = 'recording'"><ArrowLeft />录制工作台</button>
+        <span class="web-ui-record-chevron"><el-icon><ArrowRight /></el-icon></span>
         <strong class="web-ui-record-title">步骤确认</strong>
         <span class="web-ui-record-complete">录制完成</span>
         <span class="web-ui-record-muted">{{ recordedSteps.length }} 个步骤</span>
         <div class="web-ui-record-page__actions">
-          <AppButton @click="openCreateDrawer">追加到已有用例</AppButton>
-          <AppButton type="primary" @click="saveVisualRecordingCase">保存为新用例</AppButton>
+          <AppButton :icon="CopyDocument" @click="openCreateDrawer">追加到已有用例</AppButton>
+          <AppButton type="primary" :icon="DocumentChecked" @click="saveVisualRecordingCase">保存为新用例</AppButton>
         </div>
       </header>
 
@@ -2936,9 +2980,9 @@ watch(
               <strong>{{ step.description }}</strong>
             </span>
             <span class="web-ui-record-confirm-step__actions" @click.stop>
-              <button type="button" :disabled="index === 0" @click="moveRecordedStep(step, -1)">↑</button>
-              <button type="button" :disabled="index === recordedSteps.length - 1" @click="moveRecordedStep(step, 1)">↓</button>
-              <button type="button" @click="deleteRecordedStep(step)">×</button>
+              <button type="button" title="上移" :disabled="index === 0" @click="moveRecordedStep(step, -1)"><el-icon><ArrowUp /></el-icon></button>
+              <button type="button" title="下移" :disabled="index === recordedSteps.length - 1" @click="moveRecordedStep(step, 1)"><el-icon><ArrowDown /></el-icon></button>
+              <button type="button" title="删除" @click="deleteRecordedStep(step)"><el-icon><Delete /></el-icon></button>
             </span>
           </button>
         </aside>
@@ -3004,15 +3048,15 @@ watch(
           <p>平台将打开指定浏览器并启动录制代理。在浏览器中的每次操作都会被自动捕获为测试步骤，无需手动编写代码。</p>
           <div class="web-ui-record-config__tips">
             <article>
-              <VideoPlay />
+              <LucideMonitor />
               <div><strong>自动捕获操作</strong><span>点击、输入、导航均自动转为步骤</span></div>
             </article>
             <article>
-              <Plus />
+              <Sparkles />
               <div><strong>AI 智能优化</strong><span>自动生成步骤名称和断言建议</span></div>
             </article>
             <article>
-              <Edit />
+              <Edit2 />
               <div><strong>录制后可编辑</strong><span>录完即可删除、调序、修改步骤</span></div>
             </article>
           </div>
@@ -3022,33 +3066,24 @@ watch(
         <main class="web-ui-record-config__form">
           <header>
             <h3>录制配置</h3>
-            <button type="button" @click="recordConfigVisible = false">×</button>
+            <button type="button" aria-label="关闭录制配置" @click="recordConfigVisible = false"><X /></button>
           </header>
           <div class="web-ui-record-config__fields">
             <label class="web-ui-record-field is-full">
               <span><em>*</em>用例名称</span>
-              <el-input v-model="recordingConfig.name" placeholder="例：用户登录正常流程" />
+              <input v-model="recordingConfig.name" class="web-ui-record-input" placeholder="例：用户登录正常流程" />
             </label>
             <label class="web-ui-record-field">
               <span><em>*</em>所属目录</span>
-              <el-select v-model="recordingConfig.directory">
-                <el-option label="电商平台/用户模块" value="电商平台/用户模块" />
-                <el-option label="电商平台/商品模块" value="电商平台/商品模块" />
-                <el-option label="电商平台/购物车" value="电商平台/购物车" />
-                <el-option label="电商平台/订单模块" value="电商平台/订单模块" />
-              </el-select>
+              <input v-model="recordingConfig.directory" class="web-ui-record-input" />
             </label>
             <label class="web-ui-record-field">
               <span><em>*</em>目标环境</span>
-              <el-select v-model="recordingConfig.environment">
-                <el-option label="测试环境" value="测试环境" />
-                <el-option label="预发布环境" value="预发布环境" />
-                <el-option label="开发环境" value="开发环境" />
-              </el-select>
+              <input v-model="recordingConfig.environment" class="web-ui-record-input" />
             </label>
             <label class="web-ui-record-field is-full">
               <span><em>*</em>起始 URL</span>
-              <el-input v-model="recordingConfig.startUrl" placeholder="https://test.example.com/login" />
+              <input v-model="recordingConfig.startUrl" class="web-ui-record-input is-mono" placeholder="https://test.example.com" />
             </label>
             <div class="web-ui-record-field is-full">
               <span>浏览器</span>
@@ -3077,8 +3112,8 @@ watch(
             </section>
           </div>
           <footer>
-            <AppButton @click="recordConfigVisible = false">取消</AppButton>
-            <AppButton type="primary" @click="startVisualRecording">开始录制</AppButton>
+            <button type="button" class="web-ui-record-config__cancel" @click="recordConfigVisible = false">取消</button>
+            <button type="button" class="web-ui-record-config__start" :disabled="!recordingConfigValid" @click="startVisualRecording"><i />开始录制</button>
           </footer>
         </main>
       </section>
@@ -3198,8 +3233,8 @@ watch(
 .web-ui-workspace--cases {
   gap: 0;
   overflow: hidden;
-  border: 1px solid #e5e6eb;
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
   background: #ffffff;
 }
 
@@ -3229,34 +3264,6 @@ watch(
   flex: 1;
 }
 
-.web-ui-module-tabs {
-  display: flex;
-  height: 44px;
-  flex: 0 0 auto;
-  align-items: center;
-  padding: 0 20px;
-  border-bottom: 1px solid #e5e6eb;
-  background: #ffffff;
-}
-
-.web-ui-module-tabs__item {
-  height: 44px;
-  padding: 0 16px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: #86909c;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 19.5px;
-}
-
-.web-ui-module-tabs__item.is-active {
-  border-bottom-color: #0fc6c2;
-  color: #0fc6c2;
-}
-
 .web-ui-case-workspace-shell {
   display: flex;
   min-width: 0;
@@ -3280,12 +3287,36 @@ watch(
   padding: 12px 12px 8px;
 }
 
-.web-ui-case-directory__head :deep(.app-button) {
-  height: 28px;
-  padding: 0 10px;
-  border-color: #0fc6c2;
+.web-ui-figma-primary-button {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
   background: #0fc6c2;
   color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  transition: background .15s ease;
+}
+
+.web-ui-figma-primary-button:hover {
+  background: #0ba8a5;
+}
+
+.web-ui-figma-primary-button img {
+  width: 13px;
+  height: 13px;
+}
+
+.web-ui-figma-primary-button--small {
+  height: 28px;
+  padding: 0 10px;
   font-size: 12px;
 }
 
@@ -3395,7 +3426,11 @@ watch(
 }
 
 .web-ui-case-toolbar__select {
-  width: 112px;
+  width: 100px;
+}
+
+.web-ui-case-toolbar__browser {
+  width: 110px;
 }
 
 .web-ui-case-toolbar__spacer {
@@ -3403,18 +3438,77 @@ watch(
   min-width: 8px;
 }
 
-.web-ui-case-toolbar :deep(.app-button) {
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
+.web-ui-case-toolbar__selection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
 }
 
-.web-ui-case-toolbar :deep(.app-button.el-button--primary),
-.web-ui-case-directory__head :deep(.app-button.el-button--primary) {
+.web-ui-case-toolbar__selection > span {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.web-ui-case-toolbar__selection button,
+.web-ui-case-toolbar__record {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.web-ui-case-toolbar__selection button:hover:not(:disabled) {
   border-color: #0fc6c2;
-  background: #0fc6c2;
+  color: #0fc6c2;
+}
+
+.web-ui-case-toolbar__selection button.is-danger:hover:not(:disabled) {
+  border-color: #f53f3f;
+  color: #f53f3f;
+}
+
+.web-ui-case-toolbar__selection button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.web-ui-case-toolbar__record {
+  border-color: rgba(15, 198, 194, .38);
+  background: rgba(15, 198, 194, .03);
+  color: #0fc6c2;
+}
+
+.web-ui-case-toolbar__record:hover {
+  background: rgba(15, 198, 194, .08);
+}
+
+.web-ui-case-toolbar__record i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #f53f3f;
+  animation: web-ui-record-pulse 1.1s ease-in-out infinite;
+}
+
+.web-ui-figma-primary-button:focus-visible,
+.web-ui-case-toolbar__record:focus-visible,
+.web-ui-case-toolbar__selection button:focus-visible,
+.web-ui-case-actions button:focus-visible {
+  outline: 2px solid rgba(15, 198, 194, .28);
+  outline-offset: 2px;
 }
 
 .web-ui-case-priority {
@@ -3430,6 +3524,34 @@ watch(
   line-height: 16.5px;
 }
 
+.web-ui-case-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.web-ui-case-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--web-ui-case-status-color);
+}
+
+.web-ui-case-run-result {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
 .web-ui-case-run-empty {
   color: #c9cdd4;
   font-size: 12px;
@@ -3437,8 +3559,27 @@ watch(
 }
 
 .web-ui-case-table--figma {
-  flex: 1;
+  --el-table-border-color: transparent;
+  --el-table-header-bg-color: #fafafa;
+  --el-table-row-hover-bg-color: #fafbff;
+  width: 100%;
+}
+
+.web-ui-case-list__content {
   min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 16px 20px;
+  background: #ffffff;
+}
+
+.web-ui-case-table-frame {
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .04);
 }
 
 .web-ui-case-table--figma :deep(.el-table__header-wrapper th) {
@@ -3452,6 +3593,7 @@ watch(
 
 .web-ui-case-table--figma :deep(.el-table__row) {
   height: 46px;
+  cursor: pointer;
 }
 
 .web-ui-case-table--figma :deep(.el-table__cell) {
@@ -3477,17 +3619,105 @@ watch(
   background: #0fc6c2;
 }
 
-.web-ui-case-table--figma :deep(.el-button.is-link) {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  color: #c9cdd4;
+.web-ui-case-name-cell {
+  min-width: 0;
 }
 
-.web-ui-case-table--figma :deep(.el-button.is-link:hover) {
+.web-ui-case-name-cell > strong {
+  display: block;
+  overflow: hidden;
+  color: #165dff;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-case-name-cell > span {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+  overflow: hidden;
+}
+
+.web-ui-case-name-cell em {
+  overflow: hidden;
+  max-width: 96px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  color: #86909c;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-ui-case-last-run {
+  color: #86909c;
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.web-ui-case-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+}
+
+.web-ui-case-actions button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
   border-radius: 6px;
+  background: transparent;
+  color: #c9cdd4;
+  cursor: pointer;
+}
+
+.web-ui-case-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.web-ui-case-actions button img,
+.web-ui-case-actions button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.web-ui-case-actions button:hover:not(:disabled) {
   background: #f2f3f5;
   color: #1d2129;
+}
+
+.web-ui-case-actions button.is-danger:hover:not(:disabled) {
+  background: #fff0f0;
+}
+
+.web-ui-case-actions__running {
+  width: 4px;
+  height: 4px;
+  margin-left: -5px;
+  border-radius: 999px;
+  background: #0fc6c2;
+}
+
+.web-ui-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0;
+  padding: 10px 16px;
+  border-top: 1px solid #e5e6eb;
 }
 
 .web-ui-record-page {
@@ -3610,6 +3840,17 @@ watch(
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
+}
+
+.web-ui-record-page__actions :deep(.web-ui-record-stop) {
+  border-color: #1d2129;
+  background: #1d2129;
+  color: #ffffff;
+}
+
+.web-ui-record-page__actions :deep(.web-ui-record-stop:hover) {
+  border-color: #2e3542;
+  background: #2e3542;
 }
 
 .web-ui-record-page__body {
@@ -3885,12 +4126,21 @@ watch(
 }
 
 .web-ui-record-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 0;
   border: 0;
   background: transparent;
   color: #86909c;
   cursor: pointer;
   font-size: 12px;
+}
+
+.web-ui-record-back svg,
+.web-ui-record-chevron svg {
+  width: 13px;
+  height: 13px;
 }
 
 .web-ui-record-chevron {
@@ -4193,6 +4443,8 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: clip;
+  overscroll-behavior: none;
 }
 
 .web-ui-record-config__mask {
@@ -4205,9 +4457,10 @@ watch(
   position: relative;
   display: flex;
   width: 840px;
-  height: 558.5px;
+  min-height: 558px;
+  height: 558px;
+  max-height: 558px;
   max-width: calc(100vw - 48px);
-  max-height: 88vh;
   overflow: hidden;
   border-radius: 16px;
   background: #ffffff;
@@ -4301,6 +4554,7 @@ watch(
 .web-ui-record-config__form {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex: 1;
   flex-direction: column;
 }
@@ -4334,7 +4588,11 @@ watch(
   background: transparent;
   color: #c9cdd4;
   cursor: pointer;
-  font-size: 16px;
+}
+
+.web-ui-record-config__form > header button svg {
+  width: 15px;
+  height: 15px;
 }
 
 .web-ui-record-config__form > header button:hover {
@@ -4344,9 +4602,11 @@ watch(
 .web-ui-record-config__fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
   gap: 14px;
+  min-height: 0;
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   padding: 17.5px 21px;
 }
 
@@ -4373,13 +4633,38 @@ watch(
   font-style: normal;
 }
 
-.web-ui-record-field :deep(.el-input__wrapper),
-.web-ui-record-field :deep(.el-select__wrapper),
 .web-ui-record-step-editor :deep(.el-input__wrapper) {
   height: 31.5px;
   min-height: 31.5px;
   border-radius: 7px;
   box-shadow: inset 0 0 0 1px #e5e6eb;
+}
+
+.web-ui-record-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 31.5px;
+  min-height: 31.5px;
+  padding: 0 11px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  outline: 0;
+  background: #ffffff;
+  color: #1d2129;
+  font: 400 13px/19.5px Inter, "Noto Sans SC", sans-serif;
+}
+
+.web-ui-record-input::placeholder {
+  color: rgba(29, 33, 41, .5);
+}
+
+.web-ui-record-input:focus {
+  border-color: #0fc6c2;
+  box-shadow: 0 0 0 2px rgba(15, 198, 194, .09);
+}
+
+.web-ui-record-input.is-mono {
+  font-family: "JetBrains Mono", monospace;
 }
 
 .web-ui-record-browser-options {
@@ -4447,6 +4732,53 @@ watch(
   gap: 7px;
   padding: 14px 21px;
   border-top: 1px solid #e5e6eb;
+}
+
+.web-ui-record-config__cancel {
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font: 500 13px/19.5px Inter, "Noto Sans SC", sans-serif;
+}
+
+.web-ui-record-config__cancel:hover {
+  background: #f4f6fa;
+}
+
+.web-ui-record-config__start {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 7px;
+  background: #f53f3f;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.web-ui-record-config__start:hover:not(:disabled) {
+  background: #e13a3a;
+}
+
+.web-ui-record-config__start:disabled {
+  background: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.web-ui-record-config__start i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
 }
 
 .web-ui-figma-switch {
@@ -4663,31 +4995,6 @@ watch(
 .web-ui-run-table,
 .web-ui-batch-table {
   width: 100%;
-}
-
-.web-ui-case-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--app-space-1);
-  white-space: nowrap;
-}
-
-.web-ui-case-actions .el-button + .el-button {
-  margin-left: 0;
-}
-
-.web-ui-case-actions__more {
-  padding: 0 2px;
-}
-
-.web-ui-case-actions__danger {
-  color: var(--app-danger);
-}
-
-.web-ui-pagination {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--app-space-4);
 }
 
 .web-ui-template-list {

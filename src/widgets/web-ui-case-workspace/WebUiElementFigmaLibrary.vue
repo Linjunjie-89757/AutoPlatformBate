@@ -1,0 +1,396 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import {
+  Check,
+  ChevronLeft,
+  CircleCheck,
+  Eye,
+  Monitor,
+  Pencil,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+} from '@lucide/vue'
+import WebUiModuleTabs from './WebUiModuleTabs.vue'
+
+type PageId = 'root' | 'login' | 'home' | 'product' | 'cart'
+type CaptureStatus = 'list' | 'config' | 'scanning' | 'result'
+type AdoptStatus = 'pending' | 'adopted' | 'ignored'
+
+type ElementRow = {
+  id: string
+  name: string
+  description: string
+  page: string
+  pageId: PageId
+  group: string
+  locatorType: string
+  locatorValue: string
+  refCount: number
+  verified: 'pass' | 'fail' | null
+}
+
+type Candidate = {
+  id: string
+  name: string
+  type: string
+  purpose: string
+  locatorType: string
+  locatorValue: string
+  confidence: number
+  page: string
+  status: AdoptStatus
+}
+
+const pages: Array<{ id: PageId; label: string }> = [
+  { id: 'root', label: '全部元素' },
+  { id: 'login', label: '登录页' },
+  { id: 'home', label: '首页' },
+  { id: 'product', label: '商品详情页' },
+  { id: 'cart', label: '购物车页面' },
+]
+
+const rows = ref<ElementRow[]>([
+  { id: 'el-1', name: '用户名输入框', description: '主登录表单的用户名输入字段', page: '登录页', pageId: 'login', group: '登录表单', locatorType: 'id', locatorValue: '#username-input', refCount: 14, verified: 'pass' },
+  { id: 'el-2', name: '密码输入框', description: '主登录表单的密码输入字段', page: '登录页', pageId: 'login', group: '登录表单', locatorType: 'id', locatorValue: '#password-input', refCount: 12, verified: 'pass' },
+  { id: 'el-3', name: '登录按钮', description: '提交登录表单的主操作按钮', page: '登录页', pageId: 'login', group: '登录表单', locatorType: 'css', locatorValue: '.btn-login', refCount: 18, verified: 'pass' },
+  { id: 'el-4', name: '欢迎提示文字', description: '登录成功后显示的用户欢迎语', page: '首页', pageId: 'home', group: '顶部栏', locatorType: 'xpath', locatorValue: "//span[@class='welcome-text']", refCount: 8, verified: 'pass' },
+  { id: 'el-5', name: '搜索输入框', description: '全站主搜索输入框', page: '首页', pageId: 'home', group: '搜索栏', locatorType: 'role', locatorValue: 'searchbox', refCount: 22, verified: 'fail' },
+  { id: 'el-6', name: '加入购物车按钮', description: '商品详情页加购操作按钮', page: '商品详情页', pageId: 'product', group: '商品操作', locatorType: 'text', locatorValue: '加入购物车', refCount: 9, verified: 'pass' },
+  { id: 'el-7', name: '购物车数量徽章', description: '导航栏上的购物车商品数量提示', page: '首页', pageId: 'home', group: '导航栏', locatorType: 'css', locatorValue: '.cart-badge', refCount: 6, verified: null },
+])
+
+const initialCandidates: Candidate[] = [
+  { id: 'ai-1', name: '登录按钮', type: 'button', purpose: '触发用户登录操作，提交表单数据', locatorType: 'role', locatorValue: "button[name='登录']", confidence: 97, page: '登录页', status: 'pending' },
+  { id: 'ai-2', name: '用户名输入框', type: 'input', purpose: '接收用户输入的账号或手机号', locatorType: 'id', locatorValue: '#username', confidence: 95, page: '登录页', status: 'pending' },
+  { id: 'ai-3', name: '密码输入框', type: 'input', purpose: '接收用户输入的登录密码', locatorType: 'id', locatorValue: '#password', confidence: 95, page: '登录页', status: 'pending' },
+  { id: 'ai-4', name: '忘记密码链接', type: 'link', purpose: '跳转到密码重置流程的入口链接', locatorType: 'text', locatorValue: '忘记密码', confidence: 88, page: '登录页', status: 'pending' },
+  { id: 'ai-5', name: '第三方登录-微信', type: 'button', purpose: '使用微信账号授权登录', locatorType: 'css', locatorValue: '.login-wechat-btn', confidence: 82, page: '登录页', status: 'pending' },
+  { id: 'ai-6', name: '登录错误提示', type: 'text', purpose: '显示登录失败或参数错误信息', locatorType: 'css', locatorValue: '.error-msg', confidence: 91, page: '登录页', status: 'pending' },
+  { id: 'ai-7', name: '搜索输入框', type: 'input', purpose: '商品关键词搜索入口', locatorType: 'placeholder', locatorValue: '请输入商品名称、品牌', confidence: 96, page: '商品列表页', status: 'pending' },
+  { id: 'ai-8', name: '搜索提交按钮', type: 'button', purpose: '触发商品搜索请求', locatorType: 'css', locatorValue: '.search-submit-btn', confidence: 93, page: '商品列表页', status: 'pending' },
+  { id: 'ai-9', name: '加入购物车按钮', type: 'button', purpose: '将选中商品加入购物车', locatorType: 'xpath', locatorValue: "//button[contains(@class,'add-cart')]", confidence: 89, page: '商品列表页', status: 'pending' },
+  { id: 'ai-10', name: '价格区间-最低价', type: 'input', purpose: '商品价格筛选区间最低值', locatorType: 'css', locatorValue: 'input.price-min', confidence: 85, page: '商品列表页', status: 'pending' },
+  { id: 'ai-11', name: '价格区间-最高价', type: 'input', purpose: '商品价格筛选区间最高值', locatorType: 'css', locatorValue: 'input.price-max', confidence: 85, page: '商品列表页', status: 'pending' },
+  { id: 'ai-12', name: '分类筛选-下拉框', type: 'select', purpose: '按商品分类筛选列表结果', locatorType: 'role', locatorValue: "combobox[name='商品分类']", confidence: 79, page: '商品列表页', status: 'pending' },
+  { id: 'ai-13', name: '结算按钮', type: 'button', purpose: '跳转到订单确认页完成结算', locatorType: 'role', locatorValue: "button[name='去结算']", confidence: 98, page: '购物车页', status: 'pending' },
+  { id: 'ai-14', name: '全选复选框', type: 'checkbox', purpose: '一键选中购物车内所有商品', locatorType: 'css', locatorValue: 'input.select-all-checkbox', confidence: 94, page: '购物车页', status: 'pending' },
+  { id: 'ai-15', name: '商品数量+号', type: 'button', purpose: '增加购物车内对应商品数量', locatorType: 'xpath', locatorValue: "//button[@data-action='quantity-increase']", confidence: 90, page: '购物车页', status: 'pending' },
+  { id: 'ai-16', name: '删除商品按钮', type: 'button', purpose: '从购物车中移除选中商品', locatorType: 'css', locatorValue: '.cart-delete-btn', confidence: 87, page: '购物车页', status: 'pending' },
+  { id: 'ai-17', name: '收货地址-下拉', type: 'select', purpose: '选择已保存收货地址', locatorType: 'role', locatorValue: "combobox[name='收货地址']", confidence: 92, page: '订单确认页', status: 'pending' },
+  { id: 'ai-18', name: '支付方式-微信', type: 'radio', purpose: '选择微信支付方式', locatorType: 'css', locatorValue: "input[value='wechat']", confidence: 96, page: '订单确认页', status: 'pending' },
+  { id: 'ai-19', name: '提交订单按钮', type: 'button', purpose: '最终提交订单并发起支付', locatorType: 'role', locatorValue: "button[name='提交订单']", confidence: 99, page: '订单确认页', status: 'pending' },
+  { id: 'ai-20', name: '优惠券输入框', type: 'input', purpose: '手动输入优惠码兑换折扣', locatorType: 'placeholder', locatorValue: '输入优惠码', confidence: 83, page: '订单确认页', status: 'pending' },
+]
+
+const state = ref<CaptureStatus>('list')
+const selectedPage = ref<PageId>('root')
+const pageKeyword = ref('')
+const keyword = ref('')
+const locatorFilter = ref('')
+const verifyFilter = ref('')
+const captureUrl = ref('https://test.example.com/login')
+const captureScope = ref('全页可操作元素')
+const includeIframe = ref(false)
+const waitForIdle = ref(2000)
+const maxElements = ref(50)
+const scanStep = ref(0)
+const candidates = ref<Candidate[]>([])
+const candidateStatus = ref<'all' | AdoptStatus>('all')
+const candidateType = ref('')
+const candidateConfidence = ref('')
+
+let captureTimer: ReturnType<typeof window.setInterval> | null = null
+
+const pageCounts = computed(() => pages.reduce<Record<PageId, number>>((result, page) => {
+  result[page.id] = page.id === 'root' ? rows.value.length : rows.value.filter(row => row.pageId === page.id).length
+  return result
+}, { root: 0, login: 0, home: 0, product: 0, cart: 0 }))
+
+const visiblePages = computed(() => pages.filter(page => page.label.includes(pageKeyword.value.trim())))
+const visibleRows = computed(() => rows.value.filter((row) => {
+  if (selectedPage.value !== 'root' && row.pageId !== selectedPage.value) return false
+  if (keyword.value && !`${row.name} ${row.locatorValue}`.toLowerCase().includes(keyword.value.toLowerCase())) return false
+  if (locatorFilter.value && row.locatorType !== locatorFilter.value) return false
+  if (verifyFilter.value === 'pass' && row.verified !== 'pass') return false
+  if (verifyFilter.value === 'fail' && row.verified !== 'fail') return false
+  if (verifyFilter.value === 'unverified' && row.verified !== null) return false
+  return true
+}))
+
+const candidateTypes = computed(() => [...new Set(candidates.value.map(item => item.type))])
+const filteredCandidates = computed(() => candidates.value.filter((candidate) => {
+  if (candidateStatus.value !== 'all' && candidate.status !== candidateStatus.value) return false
+  if (candidateType.value && candidate.type !== candidateType.value) return false
+  if (candidateConfidence.value === 'high' && candidate.confidence < 90) return false
+  if (candidateConfidence.value === 'medium' && (candidate.confidence < 80 || candidate.confidence >= 90)) return false
+  if (candidateConfidence.value === 'low' && candidate.confidence >= 80) return false
+  return true
+}))
+const candidatePages = computed(() => [...new Set(filteredCandidates.value.map(item => item.page))])
+const adoptedCount = computed(() => candidates.value.filter(item => item.status === 'adopted').length)
+const pendingCount = computed(() => candidates.value.filter(item => item.status === 'pending').length)
+const ignoredCount = computed(() => candidates.value.filter(item => item.status === 'ignored').length)
+const highCount = computed(() => candidates.value.filter(item => item.confidence >= 90).length)
+const mediumCount = computed(() => candidates.value.filter(item => item.confidence >= 80 && item.confidence < 90).length)
+const lowCount = computed(() => candidates.value.filter(item => item.confidence < 80).length)
+
+const scanSteps = ['连接目标页面', '解析 DOM 树', 'AI 识别元素', '生成定位策略', '完成']
+
+function openCapture() {
+  state.value = 'config'
+  scanStep.value = 0
+  candidates.value = []
+}
+
+function backToLibrary() {
+  if (captureTimer) window.clearInterval(captureTimer)
+  captureTimer = null
+  state.value = 'list'
+}
+
+function startCapture() {
+  if (captureTimer) window.clearInterval(captureTimer)
+  candidates.value = []
+  scanStep.value = 0
+  state.value = 'scanning'
+  captureTimer = window.setInterval(() => {
+    if (scanStep.value >= scanSteps.length - 1) {
+      if (captureTimer) window.clearInterval(captureTimer)
+      captureTimer = null
+      candidates.value = initialCandidates.map(item => ({ ...item, status: 'pending' }))
+      state.value = 'result'
+      return
+    }
+    scanStep.value += 1
+  }, 800)
+}
+
+function setCandidateStatus(id: string, status: AdoptStatus) {
+  const candidate = candidates.value.find(item => item.id === id)
+  if (candidate) candidate.status = status
+}
+
+function adoptAll() {
+  candidates.value.forEach((candidate) => {
+    if (candidate.status === 'pending') candidate.status = 'adopted'
+  })
+}
+
+function confidenceClass(confidence: number) {
+  if (confidence >= 90) return 'is-high'
+  if (confidence >= 80) return 'is-medium'
+  return 'is-low'
+}
+
+</script>
+
+<template>
+  <section class="figma-elements">
+    <WebUiModuleTabs v-if="state === 'list'" active="elements" />
+
+    <div v-if="state === 'list'" class="figma-elements__list">
+      <aside class="figma-elements__tree">
+        <button class="figma-elements__collect-entry" type="button" @click="openCapture"><Sparkles />AI 采集元素</button>
+        <label class="figma-elements__tree-search"><Search /><input v-model="pageKeyword" placeholder="搜索页面" /></label>
+        <nav>
+          <button
+            v-for="page in visiblePages"
+            :key="page.id"
+            type="button"
+            :class="{ 'is-active': selectedPage === page.id }"
+            @click="selectedPage = page.id"
+          >
+            <Monitor />
+            <span>{{ page.label }}</span>
+            <small>{{ pageCounts[page.id] }}</small>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="figma-elements__table-panel">
+        <div class="figma-elements__toolbar">
+          <label class="figma-elements__search"><Search /><input v-model="keyword" placeholder="搜索元素名称或定位值" /></label>
+          <select v-model="locatorFilter"><option value="">全部定位方式</option><option>id</option><option>css</option><option>xpath</option><option>text</option><option>role</option></select>
+          <select v-model="verifyFilter"><option value="">全部验证状态</option><option value="pass">验证通过</option><option value="fail">验证失败</option><option value="unverified">未验证</option></select>
+          <span class="figma-elements__fill" />
+          <button class="figma-elements__ghost" type="button"><Plus />手动添加</button>
+          <button class="figma-elements__primary" type="button" @click="openCapture"><Sparkles />AI 采集</button>
+        </div>
+        <div class="figma-elements__table-wrap">
+          <table>
+            <colgroup><col class="col-name"><col class="col-page"><col class="col-group"><col class="col-type"><col class="col-value"><col class="col-reference"><col class="col-verify"><col class="col-actions"></colgroup>
+            <thead><tr><th>元素名称</th><th>所属页面</th><th>分组</th><th>定位方式</th><th>定位值</th><th>引用次数</th><th>最近验证</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr v-for="row in visibleRows" :key="row.id">
+                <td><strong>{{ row.name }}</strong><span>{{ row.description }}</span></td>
+                <td>{{ row.page }}</td><td>{{ row.group }}</td>
+                <td><code>{{ row.locatorType }}</code></td><td class="is-mono">{{ row.locatorValue }}</td>
+                <td class="is-reference" :class="{ 'is-hot': row.refCount > 10 }">{{ row.refCount }}</td>
+                <td><span v-if="row.verified === 'pass'" class="figma-elements__verify is-pass">验证通过</span><span v-else-if="row.verified === 'fail'" class="figma-elements__verify is-fail">验证失败</span><span v-else class="figma-elements__unverified">未验证</span></td>
+                <td><div class="figma-elements__actions"><button title="验证"><CircleCheck /></button><button title="查看"><Eye /></button><button title="编辑"><Pencil /></button><button title="删除"><Trash2 /></button></div></td>
+              </tr>
+            </tbody>
+          </table>
+          <footer><span>共 {{ visibleRows.length }} 条</span><b>1</b></footer>
+        </div>
+      </main>
+    </div>
+
+    <template v-else>
+      <header class="figma-elements__capture-head">
+        <button type="button" @click="backToLibrary"><ChevronLeft />返回元素库</button><i />
+        <span><Sparkles /></span><h1>AI 元素采集</h1>
+        <em v-if="state === 'result'">采集完成 · {{ candidates.length }} 个候选元素</em>
+        <div class="figma-elements__fill" />
+        <button v-if="state === 'result' && adoptedCount" class="figma-elements__confirm" type="button" @click="backToLibrary"><Check />确认入库 ({{ adoptedCount }})</button>
+      </header>
+      <div class="figma-elements__capture">
+        <aside class="figma-elements__capture-side">
+          <section class="figma-elements__capture-url"><label>目标页面地址</label><input v-model="captureUrl" /><p>确保测试环境 / Runner 可访问该地址</p></section>
+          <section class="figma-elements__capture-scope"><label>采集范围</label><label v-for="scope in ['全页可操作元素', '仅表单元素', '按钮与链接']" :key="scope" class="figma-elements__scope-option" :class="{ 'is-active': captureScope === scope }"><input v-model="captureScope" type="radio" :value="scope" /><span>{{ scope }}</span></label></section>
+          <section class="figma-elements__advanced"><label>高级选项</label><div><span>包含 iframe 内元素</span><button class="figma-elements__iframe-toggle" :class="{ 'is-active': includeIframe }" type="button" :aria-pressed="includeIframe" @click="includeIframe = !includeIframe"><i /></button></div><div><span>等待动态渲染 (ms)</span><input v-model.number="waitForIdle" type="number" /></div><div><span>最大采集元素数</span><input v-model.number="maxElements" type="number" /></div></section>
+          <button class="figma-elements__start" :disabled="state === 'scanning'" type="button" @click="startCapture"><Sparkles />{{ state === 'scanning' ? 'AI 采集中...' : '开始 AI 采集' }}</button>
+          <section v-if="state !== 'config'" class="figma-elements__progress"><header><b>采集进度</b><small>{{ state === 'result' ? '已完成' : scanSteps[scanStep] }}</small></header><div v-for="(step, index) in scanSteps" :key="step" :class="{ 'is-done': state === 'result' || index < scanStep, 'is-current': state === 'scanning' && index === scanStep }"><span>{{ state === 'result' || index < scanStep ? '✓' : index + 1 }}</span>{{ step }}</div></section>
+          <section v-if="state === 'result'" class="figma-elements__capture-stats"><div class="is-high"><strong>{{ highCount }}</strong><span>高置信度</span></div><div class="is-medium"><strong>{{ mediumCount }}</strong><span>中置信度</span></div><div class="is-low"><strong>{{ lowCount }}</strong><span>低置信度</span></div></section>
+        </aside>
+        <main v-if="state === 'config'" class="figma-elements__capture-empty"><span><Sparkles /></span><h2>配置目标地址后开始采集</h2><p>AI 将自动识别页面所有可操作元素，人工确认后一键入库</p></main>
+        <main v-else-if="state === 'scanning'" class="figma-elements__capture-empty is-scanning"><span><Sparkles /></span><h2>AI 正在分析页面结构...</h2><p>{{ scanSteps[scanStep] }}</p></main>
+        <main v-else class="figma-elements__result">
+          <div class="figma-elements__result-filter"><div><button :class="{ 'is-active': candidateStatus === 'all' }" type="button" @click="candidateStatus = 'all'">全部 {{ candidates.length }}</button><button :class="{ 'is-active': candidateStatus === 'pending' }" type="button" @click="candidateStatus = 'pending'">待确认 {{ pendingCount }}</button><button :class="{ 'is-active': candidateStatus === 'adopted' }" type="button" @click="candidateStatus = 'adopted'">已采纳 {{ adoptedCount }}</button><button :class="{ 'is-active': candidateStatus === 'ignored' }" type="button" @click="candidateStatus = 'ignored'">已忽略 {{ ignoredCount }}</button></div><select v-model="candidateType"><option value="">全部类型</option><option v-for="item in candidateTypes" :key="item">{{ item }}</option></select><select v-model="candidateConfidence"><option value="">全部置信度</option><option value="high">高 (≥90%)</option><option value="medium">中 (80-89%)</option><option value="low">低 (&lt;80%)</option></select><span class="figma-elements__fill" /><p>共 <b>{{ filteredCandidates.length }}</b> 项</p><button type="button" @click="adoptAll">全部采纳</button></div>
+          <div class="figma-elements__candidate-scroll"><section v-for="page in candidatePages" :key="page"><header><Monitor /><b>{{ page }}</b><em>{{ filteredCandidates.filter(item => item.page === page).length }} 个元素</em></header><article v-for="candidate in filteredCandidates.filter(item => item.page === page)" :key="candidate.id" :class="{ 'is-adopted': candidate.status === 'adopted', 'is-ignored': candidate.status === 'ignored' }"><div class="figma-elements__confidence-wrap"><div class="figma-elements__confidence" :class="confidenceClass(candidate.confidence)"><b>{{ candidate.confidence }}%</b></div><small>置信度</small></div><div><h3>{{ candidate.name }} <em>{{ candidate.type }}</em><i v-if="candidate.status === 'adopted'">已采纳</i></h3><p>{{ candidate.purpose }}</p><code>{{ candidate.locatorType }}</code><span>{{ candidate.locatorValue }}</span></div><aside v-if="candidate.status === 'pending'"><button class="is-adopt" type="button" @click="setCandidateStatus(candidate.id, 'adopted')">采纳</button><button type="button">编辑</button><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'ignored')">忽略</button></aside><aside v-else-if="candidate.status === 'adopted'"><strong><CircleCheck />已采纳</strong><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'pending')">撤销</button></aside><aside v-else><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'pending')">恢复</button></aside></article></section></div>
+        </main>
+      </div>
+    </template>
+  </section>
+</template>
+
+<style scoped>
+.figma-elements { display:flex; flex:1; min-width:0; min-height:0; flex-direction:column; overflow:hidden; background:#f7f8fc; color:#1d2129; font-family:Inter,"Noto Sans SC",sans-serif; }
+.figma-elements button { font:inherit; cursor:pointer; }
+.figma-elements__list { display:flex; min-width:0; min-height:0; flex:1; overflow:hidden; }
+.figma-elements__tree { display:flex; width:290px; flex:0 0 290px; flex-direction:column; border-right:1px solid #e5e6eb; background:#fff; }
+.figma-elements__collect-entry { display:flex; align-items:center; gap:6px; align-self:flex-start; height:36px; margin:14px 12px 10px; padding:0 12px; border:0; border-radius:7px; background:#14c9c1; color:#fff; font-size:13px; font-weight:600; }
+.figma-elements__collect-entry svg { width:14px; height:14px; }
+.figma-elements__tree-search, .figma-elements__search { display:flex; align-items:center; gap:8px; height:36px; box-sizing:border-box; border:1px solid #e5e6eb; border-radius:7px; background:#fff; color:#86909c; }
+.figma-elements__tree-search { margin:0 12px 10px; padding:0 10px; }
+.figma-elements__tree-search svg, .figma-elements__search svg { width:14px; flex:0 0 auto; }
+.figma-elements__tree-search input, .figma-elements__search input { width:100%; min-width:0; border:0; outline:0; color:#4e5969; font-size:12px; }
+.figma-elements__tree nav { display:grid; gap:2px; padding:2px 8px; }
+.figma-elements__tree nav button { display:flex; height:36px; align-items:center; gap:8px; padding:0 10px; border:0; border-radius:7px; background:transparent; color:#4e5969; font-size:12px; text-align:left; }
+.figma-elements__tree nav button svg { width:13px; color:#c9cdd4; }
+.figma-elements__tree nav button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.figma-elements__tree nav button small { margin-left:auto; color:#c9cdd4; font-size:11px; }
+.figma-elements__tree nav button.is-active { background:#e8fffb; color:#14c9c1; font-weight:600; }
+.figma-elements__tree nav button.is-active svg { color:#14c9c1; }
+.figma-elements__table-panel { display:flex; min-width:0; min-height:0; flex:1; flex-direction:column; overflow:hidden; }
+.figma-elements__toolbar { display:flex; flex:0 0 66px; align-items:center; gap:10px; padding:0 24px; border-bottom:1px solid #e5e6eb; background:#fafafa; }
+.figma-elements__search { width:290px; padding:0 11px; }
+.figma-elements__toolbar select, .figma-elements__result-filter select { height:36px; min-width:120px; padding:0 30px 0 11px; border:1px solid #e5e6eb; border-radius:7px; background:#fff; color:#86909c; font-size:12px; outline:0; }
+.figma-elements__fill { flex:1; }
+.figma-elements__ghost, .figma-elements__primary { display:inline-flex; height:36px; align-items:center; gap:6px; padding:0 13px; border-radius:7px; font-size:13px; font-weight:600; }
+.figma-elements__ghost { border:1px solid #e5e6eb; background:#fff; color:#4e5969; }.figma-elements__primary { border:1px solid #14c9c1; background:#14c9c1; color:#fff; }.figma-elements__ghost svg, .figma-elements__primary svg { width:14px; }
+.figma-elements__table-wrap { min-width:0; margin:18px 24px; border:1px solid #e5e6eb; border-radius:14px; background:#fff; box-shadow:0 2px 5px rgb(29 33 41 / 4%); overflow:hidden; }
+.figma-elements__table-wrap table { width:100%; border-collapse:collapse; table-layout:fixed; }.col-name { width:18%; }.col-page { width:10%; }.col-group { width:9%; }.col-type { width:8%; }.col-value { width:22%; }.col-reference { width:8%; }.col-verify { width:9%; }.col-actions { width:16%; }
+.figma-elements__table-wrap th { height:44px; padding:0 18px; background:#fafafa; color:#86909c; font-size:12px; font-weight:600; text-align:left; }.figma-elements__table-wrap th:last-child { text-align:right; }
+.figma-elements__table-wrap td { height:66px; padding:0 18px; border-top:1px solid #e5e6eb; color:#86909c; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.figma-elements__table-wrap td:first-child strong { display:block; overflow:hidden; color:#1d2129; font-size:13px; font-weight:600; text-overflow:ellipsis; }.figma-elements__table-wrap td:first-child span { display:block; margin-top:3px; overflow:hidden; color:#86909c; font-size:11px; text-overflow:ellipsis; }.figma-elements__table-wrap td code, .figma-elements__candidate-scroll code { padding:3px 6px; border-radius:4px; background:#eef0fa; color:#4e5ac8; font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:600; }.figma-elements__table-wrap td.is-mono { color:#86909c; font-family:"JetBrains Mono",monospace; }.figma-elements__table-wrap td.is-reference { text-align:center; }.figma-elements__table-wrap td.is-hot { color:#14c9c1; font-size:13px; font-weight:600; }
+.figma-elements__verify { display:inline-flex; align-items:center; gap:5px; font-size:12px; }.figma-elements__verify::before { width:6px; height:6px; border-radius:50%; background:currentColor; content:""; }.figma-elements__verify.is-pass { color:#00b42a; }.figma-elements__verify.is-fail { color:#f53f3f; }.figma-elements__unverified { color:#c9cdd4; }.figma-elements__actions { display:flex; justify-content:flex-end; gap:12px; }.figma-elements__actions button { padding:0; border:0; background:transparent; color:#c9cdd4; }.figma-elements__actions svg { width:16px; height:16px; }.figma-elements__table-wrap footer { display:flex; height:54px; align-items:center; justify-content:space-between; padding:0 18px; border-top:1px solid #e5e6eb; color:#86909c; font-size:12px; }.figma-elements__table-wrap footer b { display:grid; width:28px; height:28px; place-items:center; border-radius:6px; background:#2166f3; color:#fff; }
+.figma-elements__capture-head { display:flex; flex:0 0 48px; align-items:center; gap:12px; padding:0 20px; border-bottom:1px solid #e5e6eb; background:#fff; }.figma-elements__capture-head > button:first-child { display:flex; align-items:center; gap:5px; padding:0; border:0; background:transparent; color:#4e5969; font-size:13px; font-weight:600; }.figma-elements__capture-head i { width:1px; height:16px; background:#e5e6eb; }.figma-elements__capture-head > span { display:grid; width:28px; height:28px; place-items:center; border-radius:6px; background:#e8fffb; color:#14c9c1; }.figma-elements__capture-head > span svg { width:14px; }.figma-elements__capture-head h1 { margin:0; font-size:15px; font-weight:600; }.figma-elements__capture-head em { padding:4px 10px; border-radius:999px; background:#e8fffb; color:#14c9c1; font-size:11px; font-style:normal; font-weight:600; }.figma-elements__confirm { display:flex; height:32px; align-items:center; gap:5px; padding:0 15px; border:0; border-radius:8px; background:linear-gradient(135deg,#14c9c1,#2166f3); color:#fff; font-size:12px; font-weight:600; }.figma-elements__confirm svg { width:13px; }
+.figma-elements__capture { display:flex; min-width:0; min-height:0; flex:1; overflow:hidden; }.figma-elements__capture-side { width:320px; flex:0 0 320px; padding:16px; border-right:1px solid #e5e6eb; background:#fff; overflow:auto; }.figma-elements__capture-side section { display:grid; gap:8px; margin-bottom:18px; }.figma-elements__capture-side label { color:#4e5969; font-size:12px; font-weight:600; }.figma-elements__capture-side section > input { box-sizing:border-box; width:100%; height:34px; padding:0 10px; border:1px solid #e5e6eb; border-radius:7px; color:#4e5969; font-family:"JetBrains Mono",monospace; font-size:12px; }.figma-elements__capture-side p { margin:0; color:#86909c; font-size:11px; }.figma-elements__capture-side section > button { display:flex; height:34px; align-items:center; gap:10px; padding:0 12px; border:0; border-radius:7px; background:transparent; color:#4e5969; font-size:12px; text-align:left; }.figma-elements__capture-side section > button span { width:11px; height:11px; box-sizing:border-box; border:1px solid #86909c; border-radius:50%; }.figma-elements__capture-side section > button.is-active { background:#e8fffb; color:#14c9c1; }.figma-elements__capture-side section > button.is-active span { border:3px solid #14c9c1; }.figma-elements__advanced { padding-top:16px; border-top:1px solid #e5e6eb; }.figma-elements__advanced div { display:flex; min-height:40px; align-items:center; justify-content:space-between; border-bottom:1px solid #f2f3f5; color:#4e5969; font-size:12px; }.figma-elements__advanced input[type="number"] { width:74px; height:25px; box-sizing:border-box; border:1px solid #e5e6eb; border-radius:4px; text-align:right; }.figma-elements__advanced input[type="checkbox"] { accent-color:#14c9c1; }.figma-elements__start { display:flex; width:100%; height:40px; align-items:center; justify-content:center; gap:8px; border:0; border-radius:9px; background:linear-gradient(135deg,#14c9c1,#2166f3); color:#fff; font-size:13px; font-weight:600; }.figma-elements__start:disabled { background:#c9cdd4; }.figma-elements__start svg { width:15px; }.figma-elements__progress { padding:14px; border:1px solid #e5e6eb; border-radius:10px; background:#fafbfe; }.figma-elements__progress header { display:flex; justify-content:space-between; color:#4e5969; font-size:12px; }.figma-elements__progress header small { color:#86909c; }.figma-elements__progress > div { display:flex; align-items:center; gap:10px; margin-top:10px; color:#c9cdd4; font-size:12px; }.figma-elements__progress > div span { display:grid; width:20px; height:20px; place-items:center; border-radius:50%; background:#f2f3f5; font-size:10px; }.figma-elements__progress > div.is-done, .figma-elements__progress > div.is-current { color:#1d2129; }.figma-elements__progress > div.is-done span { background:#14c9c1; color:#fff; }.figma-elements__progress > div.is-current span { background:#fff3e8; color:#ff7d00; }.figma-elements__capture-stats { grid-template-columns:repeat(3,1fr); gap:8px; }.figma-elements__capture-stats div { display:grid; gap:3px; padding:10px 3px; border-radius:8px; text-align:center; }.figma-elements__capture-stats strong { font-size:19px; }.figma-elements__capture-stats span { font-size:10px; }.figma-elements__capture-stats .is-high { background:#e8ffea; color:#00b42a; }.figma-elements__capture-stats .is-medium { background:#fff3e8; color:#ff7d00; }.figma-elements__capture-stats .is-low { background:#fff1f0; color:#f53f3f; }
+.figma-elements__capture-empty { display:flex; min-width:0; flex:1; align-items:center; justify-content:center; flex-direction:column; background:#f7f8fc; }.figma-elements__capture-empty > span { display:grid; width:64px; height:64px; place-items:center; border-radius:12px; background:#f0fffe; color:#c9cdd4; }.figma-elements__capture-empty > span svg { width:32px; }.figma-elements__capture-empty h2 { margin:14px 0 6px; color:#4e5969; font-size:15px; }.figma-elements__capture-empty p { margin:0; color:#86909c; font-size:13px; }.figma-elements__capture-empty.is-scanning > span { width:80px; height:80px; border-radius:18px; background:linear-gradient(135deg,#14c9c1,#2166f3); color:#fff; animation:figma-pulse 1.4s ease-in-out infinite; }.figma-elements__capture-empty.is-scanning > span svg { width:36px; }
+.figma-elements__result { display:flex; min-width:0; min-height:0; flex:1; flex-direction:column; overflow:hidden; }.figma-elements__result-filter { display:flex; flex:0 0 58px; align-items:center; gap:10px; padding:0 20px; border-bottom:1px solid #e5e6eb; background:#fff; }.figma-elements__result-filter > div { display:flex; overflow:hidden; border:1px solid #e5e6eb; border-radius:7px; }.figma-elements__result-filter > div button { height:30px; padding:0 10px; border:0; border-right:1px solid #e5e6eb; background:#fff; color:#4e5969; font-size:12px; }.figma-elements__result-filter > div button:last-child { border-right:0; }.figma-elements__result-filter > div button.is-active { background:#e8fffb; color:#14c9c1; }.figma-elements__result-filter p { color:#86909c; font-size:12px; }.figma-elements__result-filter p b { color:#1d2129; }.figma-elements__result-filter > button { height:30px; padding:0 14px; border:0; border-radius:7px; background:#e8fffb; color:#14c9c1; font-size:12px; font-weight:600; }.figma-elements__candidate-scroll { min-height:0; flex:1; padding:20px 24px; overflow:auto; }.figma-elements__candidate-scroll > section { max-width:1160px; margin:0 auto 24px; }.figma-elements__candidate-scroll > section > header { display:flex; align-items:center; gap:8px; margin-bottom:12px; color:#1d2129; font-size:13px; }.figma-elements__candidate-scroll > section > header svg { width:14px; color:#14c9c1; }.figma-elements__candidate-scroll > section > header em { padding:2px 8px; border-radius:999px; background:#e8fffb; color:#14c9c1; font-size:10px; font-style:normal; }.figma-elements__candidate-scroll article { display:flex; align-items:flex-start; gap:16px; margin-bottom:10px; padding:16px 18px; border:1px solid #e5e6eb; border-radius:12px; background:#fff; }.figma-elements__candidate-scroll article.is-adopted { border-color:#14c9c1; }.figma-elements__candidate-scroll article.is-ignored { opacity:.45; }.figma-elements__confidence { display:grid; width:48px; height:48px; flex:0 0 48px; align-content:center; place-items:center; border:3px solid currentColor; border-radius:50%; color:#f53f3f; }.figma-elements__confidence.is-high { color:#00b42a; }.figma-elements__confidence.is-medium { color:#ff7d00; }.figma-elements__confidence b { font-size:12px; }.figma-elements__confidence small { margin-top:2px; color:#86909c; font-size:9px; }.figma-elements__candidate-scroll article > div:nth-child(2) { min-width:0; flex:1; }.figma-elements__candidate-scroll h3 { display:flex; align-items:center; gap:8px; margin:0; font-size:14px; }.figma-elements__candidate-scroll h3 em, .figma-elements__candidate-scroll h3 i { padding:2px 6px; border-radius:4px; background:#f2f3f5; color:#4e5969; font-size:10px; font-style:normal; font-weight:500; }.figma-elements__candidate-scroll h3 i { background:#e8fffb; color:#14c9c1; }.figma-elements__candidate-scroll article p { margin:7px 0 10px; color:#86909c; font-size:12px; }.figma-elements__candidate-scroll article code { margin-right:8px; }.figma-elements__candidate-scroll article > div:nth-child(2) > span { color:#4e5969; font-family:"JetBrains Mono",monospace; font-size:12px; }.figma-elements__candidate-scroll article > aside { display:flex; width:62px; flex:0 0 62px; align-items:flex-end; flex-direction:column; gap:6px; }.figma-elements__candidate-scroll article > aside button { height:27px; padding:0 10px; border:1px solid #e5e6eb; border-radius:6px; background:#fff; color:#4e5969; font-size:11px; }.figma-elements__candidate-scroll article > aside .is-adopt { border-color:#14c9c1; background:#14c9c1; color:#fff; }.figma-elements__candidate-scroll article > aside .is-text { height:20px; padding:0; border:0; background:transparent; color:#86909c; }.figma-elements__candidate-scroll article > aside strong { display:flex; align-items:center; gap:4px; color:#14c9c1; font-size:12px; }.figma-elements__candidate-scroll article > aside strong svg { width:13px; }
+@keyframes figma-pulse { 50% { transform:scale(.94); opacity:.82; } }
+.figma-elements__candidate-scroll > section { max-width:none; margin:0 0 24px; }
+.figma-elements__result-filter > div button { min-width:68px; font-weight:500; }
+.figma-elements__candidate-scroll article { min-height:122px; box-sizing:border-box; }
+.figma-elements__candidate-scroll h3 { font-weight:600; }
+.figma-elements__capture-head > span,
+.figma-elements__capture-head em,
+.figma-elements__capture-side section > button.is-active,
+.figma-elements__result-filter > div button.is-active,
+.figma-elements__result-filter > button,
+.figma-elements__candidate-scroll > section > header svg,
+.figma-elements__candidate-scroll > section > header em,
+.figma-elements__candidate-scroll h3 i,
+.figma-elements__candidate-scroll article > aside strong { color:#0fc6c2; }
+.figma-elements__capture-side section > button.is-active span { border-color:#0fc6c2; }
+.figma-elements__progress > div.is-done span { background:#0fc6c2; }
+.figma-elements__confirm,
+.figma-elements__start { background:linear-gradient(135deg,#0fc6c2,#165dff); }
+.figma-elements__capture-side { width:300px; flex-basis:300px; }
+.figma-elements__capture-head h1 { color:#1d2129; line-height:20px; }
+.figma-elements__iframe-toggle { position:relative; width:32px; height:16px; padding:0; border:0; border-radius:999px; background:#c9cdd4; transition:background-color .2s ease; }
+.figma-elements__iframe-toggle i { position:absolute; top:2px; left:2px; display:block; width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgb(29 33 41 / 16%); transition:left .2s ease; }
+.figma-elements__iframe-toggle.is-active { background:#165dff; }
+.figma-elements__iframe-toggle.is-active i { left:18px; }
+.figma-elements__candidate-scroll article { min-height:0; padding:16px 20px; border-radius:16px; }
+.figma-elements__confidence-wrap { display:flex; flex:0 0 48px; flex-direction:column; align-items:center; padding-top:2px; }
+.figma-elements__confidence { flex:0 0 48px; align-content:normal; place-items:center; }
+.figma-elements__confidence small { display:none; }
+.figma-elements__confidence-wrap > small { margin-top:4px; color:#c9cdd4; font-size:9px; line-height:12px; }
+.figma-elements__candidate-scroll h3 { min-height:20px; align-items:center; color:#1d2129; font-size:14px; font-weight:600; line-height:20px; }
+.figma-elements__candidate-scroll article p { margin:6px 0 10px; color:#86909c; font-size:12px; line-height:18px; }
+.figma-elements__capture-side section > input,
+.figma-elements__candidate-scroll code,
+.figma-elements__candidate-scroll article > div:nth-child(2) > span { font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace; }
+.figma-elements__candidate-scroll code { font-weight:700; }
+.figma-elements__candidate-scroll article > div:nth-child(2) > span { color:#4e5969; font-size:12px; line-height:18px; }
+.figma-elements__candidate-scroll article.is-adopted { border-color:#0fc6c2; }
+.figma-elements__candidate-scroll article > aside .is-adopt { border-color:#0fc6c2; background:#0fc6c2; }
+.figma-elements__capture-side { padding:12px 16px; }
+.figma-elements__capture-side section { display:block; margin:0; }
+.figma-elements__capture-side label { display:block; line-height:18px; }
+.figma-elements__capture-url { display:grid !important; gap:4px; margin-bottom:18px !important; }
+.figma-elements__capture-side .figma-elements__capture-url > input { height:32px; }
+.figma-elements__capture-url > p { line-height:16px; }
+.figma-elements__capture-scope { display:grid !important; gap:4px; margin-bottom:12px !important; }
+.figma-elements__capture-scope > label { margin-bottom:0; }
+.figma-elements__capture-side .figma-elements__capture-scope > button { height:32px; padding:0 12px; }
+.figma-elements__advanced { display:block; margin-bottom:14px !important; padding-top:16px; }
+.figma-elements__advanced > label { margin-bottom:8px; }
+.figma-elements__advanced div { min-height:38px; }
+.figma-elements__start { height:34px; border-radius:8px; }
+.figma-elements__progress { display:block !important; margin-top:14px !important; }
+.figma-elements__capture-stats { display:grid !important; margin-top:14px !important; }
+
+/* Design nodes 1:6727, 153:8924 and 153:9156 share this Web UI shell. */
+.figma-elements { font-family:Inter,"Noto Sans SC",sans-serif; }
+.figma-elements__tree { width:220px; flex-basis:220px; }
+.figma-elements__collect-entry { height:28px; margin:10px 10px 7px; padding:0 10px; border-radius:7px; background:#0fc6c2; font-size:12px; font-weight:500; line-height:18px; }
+.figma-elements__collect-entry svg { width:13px; height:13px; }
+.figma-elements__tree-search { height:26px; margin:0 10px 7px; padding:0 9px; border-radius:7px; }
+.figma-elements__tree-search input { font-size:11px; line-height:16.5px; }
+.figma-elements__tree nav { gap:2px; padding:2px 6px; }
+.figma-elements__tree nav button { height:32px; gap:7px; padding:0 8px; border-radius:7px; font-size:12px; font-weight:400; line-height:18px; }
+.figma-elements__tree nav button.is-active { background:#e8fffb; color:#0fc6c2; font-weight:500; }
+.figma-elements__tree nav button.is-active svg { color:#0fc6c2; }
+.figma-elements__toolbar { flex-basis:48px; gap:7px; padding:0 18px; }
+.figma-elements__search { width:220px; height:28px; padding:0 10px; }
+.figma-elements__search input { font-size:13px; line-height:19.5px; }
+.figma-elements__toolbar select { height:28px; min-width:120px; padding:0 24px 0 10px; font-size:12px; }
+.figma-elements__ghost, .figma-elements__primary { height:28px; gap:5px; padding:0 11px; border-radius:7px; font-size:13px; font-weight:500; line-height:19.5px; }
+.figma-elements__primary { border-color:#0fc6c2; background:#0fc6c2; }
+.figma-elements__table-wrap { margin:14px 18px; border-radius:11px; }
+.figma-elements__table-wrap th { height:36px; padding:0 14px; font-size:11px; font-weight:600; }
+.figma-elements__table-wrap td { height:53px; padding:0 14px; font-size:13px; }
+.figma-elements__table-wrap td:first-child strong { font-size:13px; font-weight:600; line-height:19.5px; }
+.figma-elements__table-wrap td:first-child span { margin-top:1px; font-size:11px; line-height:16.5px; }
+.figma-elements__table-wrap td.is-mono { font-family:"JetBrains Mono",monospace; font-size:13px; }
+.figma-elements__table-wrap td.is-hot { color:#0fc6c2; }
+.figma-elements__table-wrap footer { height:42px; padding:0 14px; }
+.figma-elements__table-wrap footer b { width:24px; height:24px; border-radius:5px; background:#165dff; }
+.figma-elements__capture-head { flex-basis:44px; gap:12px; padding:0 18px; }
+.figma-elements__capture-head > button:first-child { font-size:13px; font-weight:500; line-height:19.5px; }
+.figma-elements__capture-head h1 { font-size:15px; font-weight:600; line-height:22.5px; }
+.figma-elements__capture-side label { font-size:12px; font-weight:600; line-height:18px; }
+.figma-elements__capture-side p { font-size:11px; font-weight:400; line-height:16.5px; }
+.figma-elements__capture-side section > input,
+.figma-elements__candidate-scroll code,
+.figma-elements__candidate-scroll article > div:nth-child(2) > span { font-family:"JetBrains Mono",monospace; }
+.figma-elements__scope-option { display:flex !important; height:32px; align-items:center; gap:10px; padding:0 12px; border-radius:8px; color:#4e5969; font-size:12px !important; font-weight:500 !important; line-height:18px !important; cursor:pointer; }
+.figma-elements__scope-option.is-active { background:#e8fffb; color:#0fc6c2; }
+.figma-elements__scope-option input { width:12px; height:12px; margin:0; accent-color:#0fc6c2; flex:0 0 auto; }
+.figma-elements__scope-option span { line-height:18px; }
+@media (max-width:1100px) { .figma-elements__table-wrap { margin:14px; }.figma-elements__toolbar { padding:0 14px; }.figma-elements__toolbar select:last-of-type { display:none; }.figma-elements__tree { width:250px; flex-basis:250px; }.figma-elements__capture-side { width:260px; flex-basis:260px; }.figma-elements__result-filter { padding:0 12px; }.figma-elements__result-filter select { display:none; } }
+</style>

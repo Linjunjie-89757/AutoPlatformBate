@@ -290,8 +290,8 @@ const routes: RouteRecordRaw[] = [
         name: 'automation-web-case-detail',
         component: WebAutomationPage,
         meta: {
-          title: 'Web UI 用例工作台',
-          description: '编辑 Web UI 用例步骤、运行调试，并预留本地 Runner 录制入口。',
+          title: 'Web UI 自动化',
+          description: '管理 Web UI 自动化用例、步骤和调试运行。',
         },
       },
       {
@@ -299,8 +299,17 @@ const routes: RouteRecordRaw[] = [
         name: 'automation-web-elements',
         component: WebAutomationPage,
         meta: {
-          title: 'Web UI 元素库',
+          title: 'Web UI 自动化',
           description: '维护页面对象、元素定位器、验证结果和用例引用关系。',
+        },
+      },
+      {
+        path: 'automation/web/suites',
+        name: 'automation-web-suites',
+        component: WebAutomationPage,
+        meta: {
+          title: 'Web UI 自动化',
+          description: '按 Figma 维护 Web UI 执行套件、用例编排和运行配置。',
         },
       },
       {

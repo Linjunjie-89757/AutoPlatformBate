@@ -62,6 +62,7 @@ import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 import WebUiElementAiCollectDrawer from './WebUiElementAiCollectDrawer.vue'
+import WebUiElementAiCaptureWorkspace from './WebUiElementAiCaptureWorkspace.vue'
 import WebUiElementCollectLaunchDialog from './WebUiElementCollectLaunchDialog.vue'
 import WebUiElementCollectTaskListDrawer from './WebUiElementCollectTaskListDrawer.vue'
 import type { WebUiElementCollectRecentTask } from './WebUiElementCollectRecentTasks.vue'
@@ -187,6 +188,8 @@ const router = useRouter()
 const directoryKeyword = ref('')
 const keyword = ref('')
 const status = ref<'ENABLED' | 'DISABLED' | ''>('')
+const locatorTypeFilter = ref<WebUiLocatorType | ''>('')
+const validationFilter = ref<'PASSED' | 'FAILED' | 'UNVERIFIED' | ''>('')
 const pageNo = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
@@ -352,6 +355,12 @@ const aiCollectForm = reactive<WebUiElementCollectLaunchForm & {
   htmlText: '',
   screenshotNote: '',
 })
+
+const visibleElements = computed(() => elements.value.filter((item) => {
+  if (!validationFilter.value) return true
+  if (validationFilter.value === 'UNVERIFIED') return !item.lastValidateResult
+  return item.lastValidateResult === validationFilter.value
+}))
 const aiCandidateFilter = ref<AiCandidateFilter>('ALL')
 let collectTaskPollingTimer: ReturnType<typeof window.setTimeout> | null = null
 let localRunnerDebugTaskTimer: ReturnType<typeof window.setTimeout> | null = null
@@ -766,6 +775,7 @@ async function loadElements() {
       pageId: selectedPageId.value,
       groupId: selectedGroupId.value,
       status: status.value,
+      locatorType: locatorTypeFilter.value,
       pageNo: pageNo.value,
       pageSize: pageSize.value,
     })
@@ -806,6 +816,8 @@ function searchElements() {
 function resetFilters() {
   keyword.value = ''
   status.value = ''
+  locatorTypeFilter.value = ''
+  validationFilter.value = ''
   selectedTree.value = {
     id: 'all',
     type: 'ALL',
@@ -4289,7 +4301,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="web-ui-element-library">
+  <WebUiElementAiCaptureWorkspace
+    v-if="aiCollectLaunchVisible"
+    :form="aiCollectForm"
+    :ai-provider-loading="aiProviderLoading"
+    :available-ai-providers="availableAiProviders"
+    :enabled-environments="enabledEnvironments"
+    :modules="modules"
+    :page-options="aiCollectPageOptions"
+    :local-runner-checking="localRunnerChecking"
+    :local-runner-opening="localRunnerOpening"
+    :local-runner-capturing="localRunnerCapturing"
+    :local-runner-online="Boolean(localRunnerHealth?.online)"
+    :local-runner-url="localRunnerHealth?.currentUrl || ''"
+    @back="aiCollectLaunchVisible = false"
+    @module-change="handleAiModuleChange"
+    @page-change="handleAiPageChange"
+    @check-local-runner="checkLocalRunner"
+    @open-local-runner-page="openLocalRunnerCollectPage"
+    @start="startCollectTaskWorkbench"
+  />
+  <section v-else class="web-ui-element-library">
     <WebUiElementDirectoryPanel
       v-model:directory-keyword="directoryKeyword"
       :directory-total="directoryTotal"
@@ -4298,6 +4330,7 @@ onBeforeUnmount(() => {
       :expanded-tree-keys="expandedTreeKeys"
       :selected-tree-id="selectedTree.id"
       :get-node-icon="getNodeIcon"
+      @ai-collect="openAiCollectDrawer"
       @node-click="handleTreeNodeClick"
       @node-add="handleNodeAdd"
     />
@@ -4306,6 +4339,8 @@ onBeforeUnmount(() => {
       <WebUiElementToolbar
         v-model:keyword="keyword"
         v-model:status="status"
+        v-model:locator-type="locatorTypeFilter"
+        v-model:validation-status="validationFilter"
         :quality-checking="qualityChecking"
         :recent-collect-tasks="recentCollectTasks"
         @search="searchElements"
@@ -4320,10 +4355,6 @@ onBeforeUnmount(() => {
         @open-collect-task-list="openCollectTaskListDrawer"
         @ai-collect="openAiCollectDrawer"
       />
-
-      <div class="web-ui-element-library__scope">
-        当前范围：{{ selectedTree.label }}
-      </div>
 
       <AppLoadingState v-if="loading && !elements.length" text="正在加载元素库..." />
       <div
@@ -4355,7 +4386,7 @@ onBeforeUnmount(() => {
 
         <WebUiElementTable
           :loading="loading"
-          :elements="elements"
+          :elements="visibleElements"
           :validating-id="validatingId"
           :deleting-id="deletingId"
           @selection-change="handleElementSelectionChange"
@@ -4608,9 +4639,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .web-ui-element-library {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: var(--app-space-4);
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  background: #f4f6fa;
   min-width: 0;
 }
 
@@ -4624,18 +4657,16 @@ onBeforeUnmount(() => {
 .web-ui-element-batch-toolbar {
   display: flex;
   align-items: center;
-  gap: var(--app-space-3);
+  overflow: auto;
+  gap: 0;
+  padding: 0 20px 16px;
+  background: #ffffff;
   justify-content: flex-start;
   flex-wrap: wrap;
   padding: var(--app-space-3);
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-md);
   background: var(--app-bg-panel);
-  color: var(--app-text-muted);
-  font-size: var(--app-font-size-sm);
-}
-
-.web-ui-element-library__scope {
   color: var(--app-text-muted);
   font-size: var(--app-font-size-sm);
 }
