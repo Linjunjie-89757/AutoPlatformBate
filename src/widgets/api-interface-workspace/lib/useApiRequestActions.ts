@@ -23,7 +23,7 @@ interface UseApiRequestActionsOptions {
   guardWorkspaceAction: (editor: EditorTab, actionText: string) => boolean
   guardRunEnvironmentForPath: (path: string) => boolean
   setSelectedDirectoryKey: (key: string) => void
-  loadWorkspaceData: () => Promise<void>
+  refreshWorkspaceDirectoryData: (workspaceCode: string) => Promise<void>
 }
 
 export function useApiRequestActions(options: UseApiRequestActionsOptions) {
@@ -51,7 +51,7 @@ export function useApiRequestActions(options: UseApiRequestActionsOptions) {
       editor.dirty = false
       options.activeEditorKey.value = editor.key
       options.setSelectedDirectoryKey(`request:${saved.id}`)
-      await options.loadWorkspaceData()
+      await options.refreshWorkspaceDirectoryData(saved.workspaceCode)
       ElMessage.success('接口已保存')
     } catch (error) {
       ElMessage.error(getRequestErrorMessage(error))

@@ -1,6 +1,8 @@
 package com.company.autoplatform.apiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
@@ -10,6 +12,7 @@ import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,9 +54,12 @@ public class ApiDefinitionDomainService {
             String workspaceCode,
             String keyword,
             Long moduleId,
+            boolean includeDescendants,
+            boolean rootOnly,
             Integer pageNo,
             Integer pageSize
     ) {
+        Map<Long, WorkspaceEntity> readableWorkspaces = readableWorkspaceMap();
         LambdaQueryWrapper<ApiDefinitionEntity> query = new LambdaQueryWrapper<>();
         workspaceScopeSupport.applyWorkspaceScope(query, ApiDefinitionEntity::getWorkspaceId, workspaceCode);
         String trimmedKeyword = blankToNull(keyword);
@@ -69,15 +75,131 @@ public class ApiDefinitionDomainService {
                     .or()
                     .like(ApiDefinitionEntity::getTagsJson, trimmedKeyword));
         }
-        String modulePath = resolveDefinitionModulePath(moduleId, workspaceCode);
-        List<ApiDefinitionItem> items = definitionMapper.selectList(query.orderByDesc(ApiDefinitionEntity::getUpdatedAt))
-                .stream()
-                .filter(definition -> matchesDefinitionModule(definition, modulePath))
-                .map(this::toDefinitionItem)
-                .toList();
+        DefinitionModuleFilter moduleFilter = resolveDefinitionModuleFilter(
+                moduleId, workspaceCode, includeDescendants);
+        if (rootOnly) {
+            query.isNull(ApiDefinitionEntity::getModuleId)
+                    .and(wrapper -> wrapper
+                            .isNull(ApiDefinitionEntity::getDirectoryName)
+                            .or()
+                            .eq(ApiDefinitionEntity::getDirectoryName, ""));
+        } else if (moduleFilter != null) {
+            query.and(wrapper -> wrapper
+                    .in(ApiDefinitionEntity::getModuleId, moduleFilter.moduleIds())
+                    .or(legacy -> {
+                        legacy.isNull(ApiDefinitionEntity::getModuleId);
+                        if (includeDescendants) {
+                            legacy.and(path -> path
+                                    .eq(ApiDefinitionEntity::getDirectoryName, moduleFilter.modulePath())
+                                    .or()
+                                    .likeRight(ApiDefinitionEntity::getDirectoryName, moduleFilter.modulePath() + "/"));
+                        } else {
+                            legacy.eq(ApiDefinitionEntity::getDirectoryName, moduleFilter.modulePath());
+                        }
+                    }));
+        }
+        query.select(
+                        ApiDefinitionEntity::getId,
+                        ApiDefinitionEntity::getWorkspaceId,
+                        ApiDefinitionEntity::getDefinitionName,
+                        ApiDefinitionEntity::getHttpMethod,
+                        ApiDefinitionEntity::getPath,
+                        ApiDefinitionEntity::getDirectoryName,
+                        ApiDefinitionEntity::getModuleId,
+                        ApiDefinitionEntity::getDescription,
+                        ApiDefinitionEntity::getTagsJson,
+                        ApiDefinitionEntity::getLastRunResult,
+                        ApiDefinitionEntity::getLastRunAt,
+                        ApiDefinitionEntity::getUpdatedAt
+                )
+                .orderByDesc(ApiDefinitionEntity::getUpdatedAt)
+                .orderByDesc(ApiDefinitionEntity::getId);
+
         int safePageNo = safePageNo(pageNo);
-        int safePageSize = safePageSize(pageSize, items.size());
-        return PageResponse.of(paginate(items, safePageNo, safePageSize), items.size(), safePageNo, safePageSize);
+        if (pageSize == null || pageSize < 1) {
+            List<ApiDefinitionItem> items = definitionMapper.selectList(query).stream()
+                    .map(entity -> toDefinitionItem(entity, readableWorkspaces))
+                    .toList();
+            int compatiblePageSize = safePageSize(pageSize, items.size());
+            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
+        }
+
+        Page<ApiDefinitionEntity> page = definitionMapper.selectPage(new Page<>(safePageNo, pageSize), query);
+        List<ApiDefinitionItem> items = page.getRecords().stream()
+                .map(entity -> toDefinitionItem(entity, readableWorkspaces))
+                .toList();
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
+    }
+
+    public ApiDefinitionTreeSearchResult searchDefinitionTree(
+            String workspaceCode,
+            String keyword,
+            Integer limit
+    ) {
+        String trimmedKeyword = blankToNull(keyword);
+        if (trimmedKeyword == null) {
+            return new ApiDefinitionTreeSearchResult(List.of(), List.of(), 0, 0);
+        }
+        int safeLimit = Math.min(Math.max(Optional.ofNullable(limit).orElse(100), 1), 200);
+        WorkspaceEntity scopedWorkspace = workspaceScopeSupport.resolveScopedWorkspace(workspaceCode);
+        List<WorkspaceEntity> readableWorkspaceItems = scopedWorkspace == null
+                ? workspaceService.listReadableWorkspaceEntities()
+                : List.of(scopedWorkspace);
+        if (readableWorkspaceItems.isEmpty()) {
+            return new ApiDefinitionTreeSearchResult(List.of(), List.of(), 0, 0);
+        }
+
+        Map<Long, WorkspaceEntity> readableWorkspaces = readableWorkspaceItems.stream()
+                .collect(java.util.stream.Collectors.toMap(WorkspaceEntity::getId, item -> item));
+        List<Long> workspaceIds = readableWorkspaceItems.stream().map(WorkspaceEntity::getId).toList();
+        PageResponse<ApiDefinitionItem> definitionPage = listDefinitions(
+                workspaceCode, trimmedKeyword, null, true, false, 1, safeLimit);
+
+        LambdaQueryWrapper<ApiDefinitionModuleEntity> moduleQuery = new LambdaQueryWrapper<ApiDefinitionModuleEntity>()
+                .in(ApiDefinitionModuleEntity::getWorkspaceId, workspaceIds)
+                .like(ApiDefinitionModuleEntity::getModuleName, trimmedKeyword)
+                .select(
+                        ApiDefinitionModuleEntity::getId,
+                        ApiDefinitionModuleEntity::getWorkspaceId,
+                        ApiDefinitionModuleEntity::getParentId,
+                        ApiDefinitionModuleEntity::getModuleName,
+                        ApiDefinitionModuleEntity::getSortOrder,
+                        ApiDefinitionModuleEntity::getCreatedAt,
+                        ApiDefinitionModuleEntity::getUpdatedAt)
+                .orderByAsc(ApiDefinitionModuleEntity::getSortOrder)
+                .orderByAsc(ApiDefinitionModuleEntity::getId);
+        Page<ApiDefinitionModuleEntity> modulePage = definitionModuleMapper.selectPage(
+                new Page<>(1, safeLimit), moduleQuery);
+
+        java.util.LinkedHashSet<Long> matchedModuleIds = new java.util.LinkedHashSet<>();
+        modulePage.getRecords().stream()
+                .map(ApiDefinitionModuleEntity::getId)
+                .forEach(matchedModuleIds::add);
+        definitionPage.items().stream()
+                .map(ApiDefinitionItem::moduleId)
+                .filter(java.util.Objects::nonNull)
+                .forEach(matchedModuleIds::add);
+
+        if (matchedModuleIds.isEmpty()) {
+            return new ApiDefinitionTreeSearchResult(
+                    List.of(), definitionPage.items(), modulePage.getTotal(), definitionPage.total());
+        }
+
+        List<ApiDefinitionModuleEntity> ancestors = definitionModuleMapper.selectAncestorModules(
+                workspaceIds, List.copyOf(matchedModuleIds));
+        Map<Long, String> pathMap = buildDefinitionModulePathMap(ancestors);
+        Map<Long, Long> matchingDefinitionCounts = new HashMap<>();
+        definitionPage.items().stream()
+                .map(ApiDefinitionItem::moduleId)
+                .filter(java.util.Objects::nonNull)
+                .forEach(moduleId -> matchingDefinitionCounts.merge(moduleId, 1L, Long::sum));
+        List<ApiDefinitionModuleItem> moduleTree = withDefinitionModuleDescendantCounts(
+                buildDefinitionModuleTree(ancestors, pathMap, matchingDefinitionCounts, readableWorkspaces));
+        return new ApiDefinitionTreeSearchResult(
+                moduleTree,
+                definitionPage.items(),
+                modulePage.getTotal(),
+                definitionPage.total());
     }
 
     public ApiDefinitionDetail getDefinition(Long id, String workspaceCode) {
@@ -147,35 +269,89 @@ public class ApiDefinitionDomainService {
     }
 
     public List<ApiDefinitionModuleItem> listDefinitionModules(String workspaceCode) {
-        ensureDefinitionModulesFromDefinitions(workspaceCode);
         WorkspaceEntity scopedWorkspace = workspaceScopeSupport.resolveScopedWorkspace(workspaceCode);
-        LambdaQueryWrapper<ApiDefinitionModuleEntity> query = new LambdaQueryWrapper<>();
-        if (scopedWorkspace != null) {
-            query.eq(ApiDefinitionModuleEntity::getWorkspaceId, scopedWorkspace.getId());
-        } else if (!workspaceService.isPlatformAdmin()) {
-            List<Long> workspaceIds = workspaceService.listReadableWorkspaceIds();
-            query.in(ApiDefinitionModuleEntity::getWorkspaceId, workspaceIds.isEmpty() ? List.of(-1L) : workspaceIds);
+        List<WorkspaceEntity> readableWorkspaceItems = scopedWorkspace == null
+                ? workspaceService.listReadableWorkspaceEntities()
+                : List.of(scopedWorkspace);
+        if (readableWorkspaceItems.isEmpty()) {
+            return List.of();
         }
-        List<ApiDefinitionModuleEntity> modules = definitionModuleMapper.selectList(query
+
+        Map<Long, WorkspaceEntity> readableWorkspaces = readableWorkspaceItems.stream()
+                .collect(java.util.stream.Collectors.toMap(WorkspaceEntity::getId, item -> item));
+        List<Long> workspaceIds = readableWorkspaceItems.stream().map(WorkspaceEntity::getId).toList();
+        List<ApiDefinitionModuleEntity> modules = new ArrayList<>(definitionModuleMapper.selectList(
+                new LambdaQueryWrapper<ApiDefinitionModuleEntity>()
+                .in(ApiDefinitionModuleEntity::getWorkspaceId, workspaceIds)
                 .orderByAsc(ApiDefinitionModuleEntity::getSortOrder)
-                .orderByAsc(ApiDefinitionModuleEntity::getId));
+                .orderByAsc(ApiDefinitionModuleEntity::getId)));
+        List<ApiDefinitionDirectoryCountRow> directoryCounts = definitionMapper.selectDirectoryCounts(workspaceIds);
+        bindUnassignedDefinitionDirectories(directoryCounts, modules);
         Map<Long, String> pathMap = buildDefinitionModulePathMap(modules);
-        Set<Long> moduleWorkspaceIds = modules.stream()
-                .map(ApiDefinitionModuleEntity::getWorkspaceId)
-                .collect(java.util.stream.Collectors.toSet());
         Map<Long, Long> counts = new HashMap<>();
-        definitionMapper.selectList(new LambdaQueryWrapper<ApiDefinitionEntity>())
-                .stream()
-                .filter(definition -> moduleWorkspaceIds.contains(definition.getWorkspaceId()))
-                .filter(definition -> blankToNull(definition.getDirectoryName()) != null)
-                .forEach(definition -> {
-                    Long moduleId = findDefinitionModuleIdByPath(modules, pathMap, definition.getWorkspaceId(), definition.getDirectoryName());
-                    if (moduleId != null) {
-                        counts.merge(moduleId, 1L, Long::sum);
-                    }
-                });
-        List<ApiDefinitionModuleItem> tree = buildDefinitionModuleTree(modules, pathMap, counts, null);
+        for (ApiDefinitionModuleCountRow row : definitionMapper.selectModuleCounts(workspaceIds)) {
+            counts.put(row.getModuleId(), Optional.ofNullable(row.getDefinitionCount()).orElse(0L));
+        }
+        List<ApiDefinitionModuleItem> tree = buildDefinitionModuleTree(
+                modules, pathMap, counts, readableWorkspaces);
         return withDefinitionModuleDescendantCounts(tree);
+    }
+
+    public List<ApiDefinitionModuleItem> listDefinitionModuleChildren(String workspaceCode, Long parentId) {
+        WorkspaceEntity scopedWorkspace = workspaceScopeSupport.resolveScopedWorkspace(workspaceCode);
+        List<WorkspaceEntity> readableWorkspaceItems = scopedWorkspace == null
+                ? workspaceService.listReadableWorkspaceEntities()
+                : List.of(scopedWorkspace);
+        if (readableWorkspaceItems.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, WorkspaceEntity> workspaces = readableWorkspaceItems.stream()
+                .collect(java.util.stream.Collectors.toMap(WorkspaceEntity::getId, item -> item));
+        List<Long> workspaceIds = readableWorkspaceItems.stream().map(WorkspaceEntity::getId).toList();
+
+        List<ApiDefinitionDirectoryCountRow> unboundDirectories = definitionMapper.selectDirectoryCounts(workspaceIds);
+        if (!unboundDirectories.isEmpty()) {
+            List<ApiDefinitionModuleEntity> modules = new ArrayList<>(definitionModuleMapper.selectList(
+                    new LambdaQueryWrapper<ApiDefinitionModuleEntity>()
+                            .in(ApiDefinitionModuleEntity::getWorkspaceId, workspaceIds)));
+            bindUnassignedDefinitionDirectories(unboundDirectories, modules);
+        }
+
+        String parentPath = "";
+        if (parentId != null) {
+            ApiDefinitionModuleEntity parent = requireDefinitionModule(parentId);
+            workspaceScopeSupport.validateReadable(parent.getWorkspaceId(), workspaceCode,
+                    "Current workspace cannot access the definition module");
+            parentPath = String.join("/", definitionModuleMapper.selectAncestorNames(parentId));
+        }
+
+        String resolvedParentPath = parentPath;
+        return definitionModuleMapper.selectChildNodes(workspaceIds, parentId).stream()
+                .map(row -> {
+                    WorkspaceEntity workspace = workspaces.get(row.getWorkspaceId());
+                    if (workspace == null) {
+                        workspace = workspaceService.requireWorkspaceById(row.getWorkspaceId());
+                    }
+                    boolean hasChildren = Boolean.TRUE.equals(row.getHasChildren());
+                    String fullPath = resolvedParentPath.isBlank()
+                            ? row.getModuleName()
+                            : resolvedParentPath + "/" + row.getModuleName();
+                    return new ApiDefinitionModuleItem(
+                            row.getId(),
+                            workspace.getWorkspaceCode(),
+                            workspace.getWorkspaceName(),
+                            row.getParentId(),
+                            row.getModuleName(),
+                            fullPath,
+                            row.getSortOrder(),
+                            Optional.ofNullable(row.getDefinitionCount()).orElse(0L),
+                            Optional.ofNullable(row.getDirectDefinitionCount()).orElse(0L),
+                            hasChildren,
+                            !hasChildren,
+                            List.of()
+                    );
+                })
+                .toList();
     }
 
     public ApiDefinitionModuleItem createDefinitionModule(String headerWorkspaceCode, ApiDefinitionModuleRequest request) {
@@ -210,7 +386,7 @@ public class ApiDefinitionDomainService {
         definitionModuleMapper.updateById(entity);
         String nextPath = getDefinitionModulePath(entity);
         syncDefinitionDirectoryPrefix(entity.getWorkspaceId(), previousPath, nextPath);
-        return toDefinitionModuleItem(entity, currentDefinitionModulePathMap(entity.getWorkspaceId()), countDefinitionsInModulePath(entity.getWorkspaceId(), nextPath), List.of());
+        return toDefinitionModuleItem(entity, currentDefinitionModulePathMap(entity.getWorkspaceId()), countDefinitionsInModule(entity.getWorkspaceId(), id), List.of());
     }
 
     public ApiDefinitionModuleItem moveDefinitionModule(Long id, String workspaceCode, MoveApiDefinitionModuleRequest request) {
@@ -234,7 +410,7 @@ public class ApiDefinitionDomainService {
         definitionModuleMapper.updateById(entity);
         String nextPath = getDefinitionModulePath(entity);
         syncDefinitionDirectoryPrefix(entity.getWorkspaceId(), previousPath, nextPath);
-        return toDefinitionModuleItem(entity, currentDefinitionModulePathMap(entity.getWorkspaceId()), countDefinitionsInModulePath(entity.getWorkspaceId(), nextPath), List.of());
+        return toDefinitionModuleItem(entity, currentDefinitionModulePathMap(entity.getWorkspaceId()), countDefinitionsInModule(entity.getWorkspaceId(), id), List.of());
     }
 
     public void deleteDefinitionModule(Long id, String workspaceCode) {
@@ -245,7 +421,17 @@ public class ApiDefinitionDomainService {
                 .eq(ApiDefinitionModuleEntity::getParentId, id)) > 0) {
             throw new BadRequestException("Cannot delete a module that contains child modules");
         }
-        syncDefinitionDirectoryPrefix(entity.getWorkspaceId(), getDefinitionModulePath(entity), "");
+        String modulePath = getDefinitionModulePath(entity);
+        definitionMapper.update(null, new LambdaUpdateWrapper<ApiDefinitionEntity>()
+                .eq(ApiDefinitionEntity::getWorkspaceId, entity.getWorkspaceId())
+                .and(query -> query
+                        .eq(ApiDefinitionEntity::getModuleId, id)
+                        .or(legacy -> legacy
+                                .isNull(ApiDefinitionEntity::getModuleId)
+                                .eq(ApiDefinitionEntity::getDirectoryName, modulePath)))
+                .set(ApiDefinitionEntity::getModuleId, null)
+                .set(ApiDefinitionEntity::getDirectoryName, null)
+                .set(ApiDefinitionEntity::getUpdatedAt, LocalDateTime.now()));
         definitionModuleMapper.deleteById(id);
     }
 
@@ -255,7 +441,7 @@ public class ApiDefinitionDomainService {
         entity.setHttpMethod(request.requestConfig().method().trim().toUpperCase());
         entity.setPath(request.requestConfig().path().trim());
         entity.setDirectoryName(blankToNull(request.directoryName()));
-        ensureDefinitionModulePath(workspace.getId(), entity.getDirectoryName());
+        entity.setModuleId(ensureDefinitionModulePath(workspace.getId(), entity.getDirectoryName()));
         entity.setDescription(blankToNull(request.description()));
         entity.setTagsJson(ApiAutomationJsonSupport.toJson(defaultList(request.tags()), "Failed to serialize tags"));
         entity.setRequestJson(ApiAutomationJsonSupport.toJson(request.requestConfig(), "Failed to serialize request config"));
@@ -283,12 +469,16 @@ public class ApiDefinitionDomainService {
     public record ImportedApiDefinition(boolean created, ApiDefinitionDetail detail) {
     }
 
-    private ApiDefinitionItem toDefinitionItem(ApiDefinitionEntity entity) {
-        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+    private ApiDefinitionItem toDefinitionItem(ApiDefinitionEntity entity, Map<Long, WorkspaceEntity> workspaces) {
+        WorkspaceEntity workspace = workspaces.get(entity.getWorkspaceId());
+        if (workspace == null) {
+            workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        }
         return new ApiDefinitionItem(
                 entity.getId(),
                 workspace.getWorkspaceCode(),
                 workspace.getWorkspaceName(),
+                entity.getModuleId(),
                 entity.getDefinitionName(),
                 entity.getHttpMethod(),
                 entity.getPath(),
@@ -347,12 +537,36 @@ public class ApiDefinitionDomainService {
             List<ApiDefinitionModuleEntity> modules,
             Map<Long, String> pathMap,
             Map<Long, Long> counts,
-            Long parentId
+            Map<Long, WorkspaceEntity> workspaces
+    ) {
+        List<ApiDefinitionModuleEntity> roots = new ArrayList<>();
+        Map<Long, List<ApiDefinitionModuleEntity>> childrenByParent = new HashMap<>();
+        for (ApiDefinitionModuleEntity module : modules) {
+            if (module.getParentId() == null) {
+                roots.add(module);
+            } else {
+                childrenByParent.computeIfAbsent(module.getParentId(), ignored -> new ArrayList<>()).add(module);
+            }
+        }
+        return buildDefinitionModuleTreeNodes(roots, childrenByParent, pathMap, counts, workspaces);
+    }
+
+    private List<ApiDefinitionModuleItem> buildDefinitionModuleTreeNodes(
+            List<ApiDefinitionModuleEntity> modules,
+            Map<Long, List<ApiDefinitionModuleEntity>> childrenByParent,
+            Map<Long, String> pathMap,
+            Map<Long, Long> counts,
+            Map<Long, WorkspaceEntity> workspaces
     ) {
         return modules.stream()
-                .filter(module -> parentId == null ? module.getParentId() == null : parentId.equals(module.getParentId()))
                 .map(module -> toDefinitionModuleItem(module, pathMap, counts.getOrDefault(module.getId(), 0L),
-                        buildDefinitionModuleTree(modules, pathMap, counts, module.getId())))
+                        buildDefinitionModuleTreeNodes(
+                                childrenByParent.getOrDefault(module.getId(), List.of()),
+                                childrenByParent,
+                                pathMap,
+                                counts,
+                                workspaces
+                        ), workspaces))
                 .toList();
     }
 
@@ -362,7 +576,20 @@ public class ApiDefinitionDomainService {
             Long definitionCount,
             List<ApiDefinitionModuleItem> children
     ) {
-        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        return toDefinitionModuleItem(entity, pathMap, definitionCount, children, Map.of());
+    }
+
+    private ApiDefinitionModuleItem toDefinitionModuleItem(
+            ApiDefinitionModuleEntity entity,
+            Map<Long, String> pathMap,
+            Long definitionCount,
+            List<ApiDefinitionModuleItem> children,
+            Map<Long, WorkspaceEntity> workspaces
+    ) {
+        WorkspaceEntity workspace = workspaces.get(entity.getWorkspaceId());
+        if (workspace == null) {
+            workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        }
         String path = pathMap.getOrDefault(entity.getId(), entity.getModuleName());
         return new ApiDefinitionModuleItem(
                 entity.getId(),
@@ -373,6 +600,9 @@ public class ApiDefinitionDomainService {
                 path,
                 entity.getSortOrder(),
                 definitionCount,
+                definitionCount,
+                !children.isEmpty(),
+                true,
                 children
         );
     }
@@ -399,6 +629,9 @@ public class ApiDefinitionDomainService {
                 item.fullPath(),
                 item.sortOrder(),
                 Optional.ofNullable(item.definitionCount()).orElse(0L) + childCount,
+                item.directDefinitionCount(),
+                item.hasChildren(),
+                item.childrenLoaded(),
                 children
         );
     }
@@ -433,23 +666,6 @@ public class ApiDefinitionDomainService {
         return currentDefinitionModulePathMap(module.getWorkspaceId()).getOrDefault(module.getId(), module.getModuleName());
     }
 
-    private Long findDefinitionModuleIdByPath(
-            List<ApiDefinitionModuleEntity> modules,
-            Map<Long, String> pathMap,
-            Long workspaceId,
-            String path
-    ) {
-        if (path == null || path.isBlank()) {
-            return null;
-        }
-        return modules.stream()
-                .filter(module -> module.getWorkspaceId().equals(workspaceId))
-                .filter(module -> path.equals(pathMap.get(module.getId())))
-                .map(ApiDefinitionModuleEntity::getId)
-                .findFirst()
-                .orElse(null);
-    }
-
     private void ensureDefinitionModuleNameUnique(Long workspaceId, Long parentId, Long excludeId, String name) {
         LambdaQueryWrapper<ApiDefinitionModuleEntity> query = new LambdaQueryWrapper<ApiDefinitionModuleEntity>()
                 .eq(ApiDefinitionModuleEntity::getWorkspaceId, workspaceId)
@@ -482,60 +698,106 @@ public class ApiDefinitionDomainService {
                 .orElse(0) + 1;
     }
 
-    private void ensureDefinitionModulesFromDefinitions(String workspaceCode) {
-        LambdaQueryWrapper<ApiDefinitionEntity> query = new LambdaQueryWrapper<>();
-        workspaceScopeSupport.applyWorkspaceScope(query, ApiDefinitionEntity::getWorkspaceId, workspaceCode);
-        definitionMapper.selectList(query).stream()
-                .filter(definition -> blankToNull(definition.getDirectoryName()) != null)
-                .forEach(definition -> ensureDefinitionModulePath(definition.getWorkspaceId(), definition.getDirectoryName()));
+    private Long ensureDefinitionModulePath(Long workspaceId, String directoryName) {
+        String normalizedPath = normalizeDefinitionDirectoryPath(directoryName);
+        if (normalizedPath == null) {
+            return null;
+        }
+        List<ApiDefinitionModuleEntity> modules = new ArrayList<>(definitionModuleMapper.selectList(
+                new LambdaQueryWrapper<ApiDefinitionModuleEntity>()
+                        .eq(ApiDefinitionModuleEntity::getWorkspaceId, workspaceId)));
+        ensureDefinitionModulePaths(
+                List.of(new ApiDefinitionDirectoryCountRow(workspaceId, normalizedPath, 0L)), modules);
+        Map<Long, String> pathMap = buildDefinitionModulePathMap(modules);
+        return modules.stream()
+                .filter(module -> normalizedPath.equals(pathMap.get(module.getId())))
+                .map(ApiDefinitionModuleEntity::getId)
+                .findFirst()
+                .orElse(null);
     }
 
-    private void ensureDefinitionModulePath(Long workspaceId, String directoryName) {
-        if (directoryName == null || directoryName.isBlank()) {
+    private void ensureDefinitionModulePaths(
+            List<ApiDefinitionDirectoryCountRow> directoryPaths,
+            List<ApiDefinitionModuleEntity> modules
+    ) {
+        Map<Long, String> pathMap = buildDefinitionModulePathMap(modules);
+        Map<DefinitionModulePathKey, ApiDefinitionModuleEntity> modulesByPath = new HashMap<>();
+        Map<DefinitionModuleParentKey, Integer> maxSortByParent = new HashMap<>();
+        for (ApiDefinitionModuleEntity module : modules) {
+            modulesByPath.put(
+                    new DefinitionModulePathKey(module.getWorkspaceId(), pathMap.get(module.getId())), module);
+            maxSortByParent.merge(
+                    new DefinitionModuleParentKey(module.getWorkspaceId(), module.getParentId()),
+                    Optional.ofNullable(module.getSortOrder()).orElse(0),
+                    Math::max
+            );
+        }
+
+        List<ApiDefinitionDirectoryCountRow> sortedPaths = directoryPaths.stream()
+                .filter(row -> normalizeDefinitionDirectoryPath(row.getDirectoryName()) != null)
+                .sorted(java.util.Comparator.comparingInt(
+                        row -> normalizeDefinitionDirectoryPath(row.getDirectoryName()).split("/").length))
+                .toList();
+        for (ApiDefinitionDirectoryCountRow row : sortedPaths) {
+            Long parentId = null;
+            String currentPath = "";
+            for (String part : normalizeDefinitionDirectoryPath(row.getDirectoryName()).split("/")) {
+                currentPath = currentPath.isEmpty() ? part : currentPath + "/" + part;
+                DefinitionModulePathKey pathKey = new DefinitionModulePathKey(row.getWorkspaceId(), currentPath);
+                ApiDefinitionModuleEntity module = modulesByPath.get(pathKey);
+                if (module == null) {
+                    DefinitionModuleParentKey parentKey = new DefinitionModuleParentKey(row.getWorkspaceId(), parentId);
+                    int sortOrder = maxSortByParent.getOrDefault(parentKey, 0) + 1;
+                    maxSortByParent.put(parentKey, sortOrder);
+
+                    module = new ApiDefinitionModuleEntity();
+                    module.setWorkspaceId(row.getWorkspaceId());
+                    module.setParentId(parentId);
+                    module.setModuleName(part);
+                    module.setSortOrder(sortOrder);
+                    module.setCreatedAt(LocalDateTime.now());
+                    module.setUpdatedAt(LocalDateTime.now());
+                    definitionModuleMapper.insert(module);
+                    modules.add(module);
+                    modulesByPath.put(pathKey, module);
+                }
+                parentId = module.getId();
+            }
+        }
+    }
+
+    private void bindUnassignedDefinitionDirectories(
+            List<ApiDefinitionDirectoryCountRow> directoryCounts,
+            List<ApiDefinitionModuleEntity> modules
+    ) {
+        if (directoryCounts.isEmpty()) {
             return;
         }
-        Long parentId = null;
-        for (String rawPart : directoryName.split("/")) {
-            String part = rawPart.trim();
-            if (part.isBlank()) {
-                continue;
+        ensureDefinitionModulePaths(directoryCounts, modules);
+        Map<Long, String> pathMap = buildDefinitionModulePathMap(modules);
+        Map<DefinitionModulePathKey, Long> moduleIdsByPath = new HashMap<>();
+        for (ApiDefinitionModuleEntity module : modules) {
+            moduleIdsByPath.put(
+                    new DefinitionModulePathKey(module.getWorkspaceId(), pathMap.get(module.getId())),
+                    module.getId()
+            );
+        }
+        for (ApiDefinitionDirectoryCountRow row : directoryCounts) {
+            String path = normalizeDefinitionDirectoryPath(row.getDirectoryName());
+            Long moduleId = path == null ? null : moduleIdsByPath.get(
+                    new DefinitionModulePathKey(row.getWorkspaceId(), path));
+            if (moduleId != null) {
+                definitionMapper.bindUnassignedDirectoryToModule(
+                        row.getWorkspaceId(), row.getDirectoryName(), moduleId);
             }
-            ApiDefinitionModuleEntity existing = findDefinitionModuleByName(workspaceId, parentId, part);
-            if (existing != null) {
-                parentId = existing.getId();
-                continue;
-            }
-            ApiDefinitionModuleEntity entity = new ApiDefinitionModuleEntity();
-            entity.setWorkspaceId(workspaceId);
-            entity.setParentId(parentId);
-            entity.setModuleName(part);
-            entity.setSortOrder(nextDefinitionModuleSort(workspaceId, parentId));
-            entity.setCreatedAt(LocalDateTime.now());
-            entity.setUpdatedAt(LocalDateTime.now());
-            definitionModuleMapper.insert(entity);
-            parentId = entity.getId();
         }
     }
 
-    private ApiDefinitionModuleEntity findDefinitionModuleByName(Long workspaceId, Long parentId, String name) {
-        LambdaQueryWrapper<ApiDefinitionModuleEntity> query = new LambdaQueryWrapper<ApiDefinitionModuleEntity>()
-                .eq(ApiDefinitionModuleEntity::getWorkspaceId, workspaceId)
-                .eq(ApiDefinitionModuleEntity::getModuleName, name);
-        if (parentId == null) {
-            query.isNull(ApiDefinitionModuleEntity::getParentId);
-        } else {
-            query.eq(ApiDefinitionModuleEntity::getParentId, parentId);
-        }
-        return definitionModuleMapper.selectList(query).stream().findFirst().orElse(null);
-    }
-
-    private long countDefinitionsInModulePath(Long workspaceId, String modulePath) {
-        return definitionMapper.selectList(new LambdaQueryWrapper<ApiDefinitionEntity>()
-                        .eq(ApiDefinitionEntity::getWorkspaceId, workspaceId))
-                .stream()
-                .filter(definition -> modulePath.equals(definition.getDirectoryName())
-                        || (definition.getDirectoryName() != null && definition.getDirectoryName().startsWith(modulePath + "/")))
-                .count();
+    private long countDefinitionsInModule(Long workspaceId, Long moduleId) {
+        List<Long> moduleIds = definitionModuleSubtreeIds(workspaceId, moduleId);
+        return definitionMapper.selectCount(new LambdaQueryWrapper<ApiDefinitionEntity>()
+                .eq(ApiDefinitionEntity::getWorkspaceId, workspaceId)
+                .in(ApiDefinitionEntity::getModuleId, moduleIds));
     }
 
     private void syncDefinitionDirectoryPrefix(Long workspaceId, String sourcePath, String targetPath) {
@@ -543,7 +805,12 @@ public class ApiDefinitionDomainService {
             return;
         }
         definitionMapper.selectList(new LambdaQueryWrapper<ApiDefinitionEntity>()
-                        .eq(ApiDefinitionEntity::getWorkspaceId, workspaceId))
+                        .eq(ApiDefinitionEntity::getWorkspaceId, workspaceId)
+                        .and(query -> query
+                                .eq(ApiDefinitionEntity::getDirectoryName, sourcePath)
+                                .or()
+                                .likeRight(ApiDefinitionEntity::getDirectoryName, sourcePath + "/"))
+                        .select(ApiDefinitionEntity::getId, ApiDefinitionEntity::getDirectoryName))
                 .forEach(definition -> {
                     String directory = definition.getDirectoryName();
                     if (directory == null) {
@@ -615,37 +882,32 @@ public class ApiDefinitionDomainService {
     }
 
     private List<Long> definitionModuleDescendantIds(Long workspaceId, Long moduleId) {
-        List<ApiDefinitionModuleEntity> modules = definitionModuleMapper.selectList(new LambdaQueryWrapper<ApiDefinitionModuleEntity>()
-                .eq(ApiDefinitionModuleEntity::getWorkspaceId, workspaceId));
-        List<Long> ids = new java.util.ArrayList<>();
-        collectDefinitionModuleDescendantIds(modules, moduleId, ids);
-        return ids;
+        return definitionModuleSubtreeIds(workspaceId, moduleId).stream()
+                .filter(id -> !id.equals(moduleId))
+                .toList();
     }
 
-    private void collectDefinitionModuleDescendantIds(List<ApiDefinitionModuleEntity> modules, Long parentId, List<Long> ids) {
-        for (ApiDefinitionModuleEntity module : modules) {
-            if (parentId.equals(module.getParentId())) {
-                ids.add(module.getId());
-                collectDefinitionModuleDescendantIds(modules, module.getId(), ids);
-            }
-        }
+    private List<Long> definitionModuleSubtreeIds(Long workspaceId, Long moduleId) {
+        List<Long> ids = definitionModuleMapper.selectSubtreeIds(workspaceId, moduleId);
+        return ids.isEmpty() ? List.of(moduleId) : ids;
     }
 
-    private String resolveDefinitionModulePath(Long moduleId, String workspaceCode) {
+    private DefinitionModuleFilter resolveDefinitionModuleFilter(
+            Long moduleId,
+            String workspaceCode,
+            boolean includeDescendants
+    ) {
         if (moduleId == null) {
             return null;
         }
         ApiDefinitionModuleEntity module = requireDefinitionModule(moduleId);
         workspaceScopeSupport.validateReadable(module.getWorkspaceId(), workspaceCode, "Current workspace cannot access the definition module");
-        return getDefinitionModulePath(module);
-    }
-
-    private boolean matchesDefinitionModule(ApiDefinitionEntity definition, String modulePath) {
-        if (modulePath == null || modulePath.isBlank()) {
-            return true;
-        }
-        String directory = definition.getDirectoryName();
-        return modulePath.equals(directory) || (directory != null && directory.startsWith(modulePath + "/"));
+        return new DefinitionModuleFilter(
+                includeDescendants
+                        ? definitionModuleSubtreeIds(module.getWorkspaceId(), moduleId)
+                        : List.of(moduleId),
+                getDefinitionModulePath(module)
+        );
     }
 
     private int safePageNo(Integer pageNo) {
@@ -663,6 +925,32 @@ public class ApiDefinitionDomainService {
         int fromIndex = Math.min((pageNo - 1) * pageSize, items.size());
         int toIndex = Math.min(fromIndex + pageSize, items.size());
         return items.subList(fromIndex, toIndex);
+    }
+
+    private Map<Long, WorkspaceEntity> readableWorkspaceMap() {
+        return workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(java.util.stream.Collectors.toMap(WorkspaceEntity::getId, item -> item));
+    }
+
+    private String normalizeDefinitionDirectoryPath(String value) {
+        String normalized = blankToNull(value);
+        if (normalized == null) {
+            return null;
+        }
+        List<String> parts = java.util.Arrays.stream(normalized.replace('\\', '/').split("/"))
+                .map(String::trim)
+                .filter(part -> !part.isBlank())
+                .toList();
+        return parts.isEmpty() ? null : String.join("/", parts);
+    }
+
+    private record DefinitionModulePathKey(Long workspaceId, String path) {
+    }
+
+    private record DefinitionModuleParentKey(Long workspaceId, Long parentId) {
+    }
+
+    private record DefinitionModuleFilter(List<Long> moduleIds, String modulePath) {
     }
 }
 

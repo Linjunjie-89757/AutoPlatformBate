@@ -35,7 +35,7 @@ interface UseApiRequestPeripheralActionsOptions {
   markDirty: () => void
   openNewRequestTab: (detail?: ApiDefinitionDetail, options?: { directoryName?: string | null }) => void
   closeEditorTab: (key: string, force?: boolean) => void | Promise<void>
-  loadWorkspaceData: (options?: { openDefaultTab?: boolean }) => Promise<void>
+  refreshWorkspaceDirectoryData: (workspaceCode: string) => Promise<void>
   revealDefinition: (definition: ApiDefinitionItem) => Promise<void> | void
   openApiSoftPrompt: (options: SoftPromptOptions) => Promise<string | null>
   confirmApiAction: (
@@ -67,7 +67,7 @@ export function useApiRequestPeripheralActions(options: UseApiRequestPeripheralA
       opened.method = saved.requestConfig.method || saved.method
       opened.dirty = false
     }
-    await options.loadWorkspaceData()
+    await options.refreshWorkspaceDirectoryData(saved.workspaceCode)
     ElMessage.success('请求已重命名')
   }
 
@@ -80,7 +80,7 @@ export function useApiRequestPeripheralActions(options: UseApiRequestPeripheralA
         ...options.buildPayload(detail),
         name: copyName,
       })
-      await options.loadWorkspaceData({ openDefaultTab: false })
+      await options.refreshWorkspaceDirectoryData(saved.workspaceCode)
       const summary: ApiDefinitionItem = {
         id: saved.id,
         workspaceCode: saved.workspaceCode,
@@ -111,7 +111,7 @@ export function useApiRequestPeripheralActions(options: UseApiRequestPeripheralA
     if (opened) {
       await options.closeEditorTab(opened.key, true)
     }
-    await options.loadWorkspaceData()
+    await options.refreshWorkspaceDirectoryData(node.workspaceCode)
     ElMessage.success('请求已删除')
   }
 
@@ -128,7 +128,7 @@ export function useApiRequestPeripheralActions(options: UseApiRequestPeripheralA
     try {
       await apiAutomationApi.deleteDefinition(options.workspaceCode.value, editor.definitionId)
       await options.closeEditorTab(editor.key, true)
-      await options.loadWorkspaceData()
+      await options.refreshWorkspaceDirectoryData(editor.detail.workspaceCode)
       ElMessage.success('接口已删除')
     } catch (error) {
       ElMessage.error(getRequestErrorMessage(error))

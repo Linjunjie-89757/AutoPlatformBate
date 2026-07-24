@@ -19,6 +19,7 @@ import type {
   ApiDefinitionCaseItem,
   ApiDefinitionItem,
   ApiDefinitionModuleItem,
+  ApiDefinitionTreeSearchResult,
   ApiAutomationEnvironmentItem,
   ApiAutomationVariableSetItem,
   ApiDataFileDetail,
@@ -146,6 +147,8 @@ function normalizeDefinitionDetail(item: ApiDefinitionDetail): ApiDefinitionDeta
 }
 
 function normalizeDefinitionModule(item: ApiDefinitionModuleItem): ApiDefinitionModuleItem {
+  const children = Array.isArray(item.children) ? item.children.map(normalizeDefinitionModule) : []
+  const hasChildren = Boolean(item.hasChildren ?? (children.length > 0))
   return {
     ...item,
     workspaceCode: item.workspaceCode || 'ALL',
@@ -155,7 +158,10 @@ function normalizeDefinitionModule(item: ApiDefinitionModuleItem): ApiDefinition
     fullPath: item.fullPath || null,
     sortOrder: item.sortOrder ?? null,
     definitionCount: Number(item.definitionCount || 0),
-    children: Array.isArray(item.children) ? item.children.map(normalizeDefinitionModule) : [],
+    directDefinitionCount: Number(item.directDefinitionCount ?? item.definitionCount ?? 0),
+    hasChildren,
+    childrenLoaded: Boolean(item.childrenLoaded ?? (!hasChildren || children.length > 0)),
+    children,
   }
 }
 
@@ -822,6 +828,30 @@ export const apiAutomationApi = {
 
     const modules = unwrapApiResponse(payload)
     return Array.isArray(modules) ? modules.map(normalizeDefinitionModule) : []
+  },
+
+  async getDefinitionModuleChildren(workspaceCode = 'ALL', parentId?: number | null) {
+    const payload = await httpGet<ApiResponse<ApiDefinitionModuleItem[]>>('/automation/api/definition-modules/children', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery({ parentId }),
+    })
+
+    const modules = unwrapApiResponse(payload)
+    return Array.isArray(modules) ? modules.map(normalizeDefinitionModule) : []
+  },
+
+  async searchDefinitionTree(workspaceCode = 'ALL', keyword: string, limit = 100) {
+    const payload = await httpGet<ApiResponse<ApiDefinitionTreeSearchResult>>('/automation/api/definition-tree/search', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery({ keyword, limit }),
+    })
+    const result = unwrapApiResponse(payload)
+    return {
+      modules: Array.isArray(result.modules) ? result.modules.map(normalizeDefinitionModule) : [],
+      definitions: Array.isArray(result.definitions) ? result.definitions.map(normalizeDefinition) : [],
+      moduleTotal: Number(result.moduleTotal || 0),
+      definitionTotal: Number(result.definitionTotal || 0),
+    }
   },
 
   async createDefinitionModule(workspaceCode = 'ALL', data: SaveApiDefinitionModulePayload) {

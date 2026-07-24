@@ -27,6 +27,9 @@ public class ApiDefinitionEntity extends BaseEntity {
     @TableField("directory_name")
     private String directoryName;
 
+    @TableField("module_id")
+    private Long moduleId;
+
     private String description;
 
     @TableField("tags_json")

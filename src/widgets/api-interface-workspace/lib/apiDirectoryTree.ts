@@ -19,7 +19,9 @@ export interface DirectoryNode {
   method?: string
   definition?: ApiDefinitionItem
   loading?: boolean
-  placeholderAction?: 'lazy' | 'loading' | 'load-more' | 'show-more'
+  placeholderAction?: 'lazy' | 'loading' | 'load-more' | 'show-more' | 'module-lazy'
+  hasModuleChildren?: boolean
+  moduleChildrenLoaded?: boolean
   parentKey?: string | null
   loadedCount?: number
   totalCount?: number
@@ -51,7 +53,6 @@ export function definitionModuleLoadKey(workspaceCode: string, moduleId: number 
 
 export function canLoadDefinitionsForDirectoryNode(node: DirectoryNode) {
   if (node.type !== 'module') return false
-  if (node.children.some(child => child.type === 'module')) return false
   return (node.directCount ?? node.count) > 0
 }
 
@@ -75,6 +76,7 @@ function ensureNode(
   fullPath: string,
   moduleId: number | null,
   count?: number,
+  directCount?: number,
 ) {
   let node = parentMap.get(fullPath)
   if (!node) {
@@ -100,7 +102,7 @@ function ensureNode(
   }
   if (count != null) {
     node.count = count
-    node.directCount = count
+    node.directCount = directCount ?? count
   }
   return node
 }
@@ -152,6 +154,26 @@ function stripChildMap(
       : requestChildren
     const hasHiddenLoadedRequests = visibleRequestChildren.length < requestChildren.length
     const renderedChildren = [...nonRequestChildren, ...visibleRequestChildren]
+    const shouldAddModuleLazyPlaceholder = node.type === 'module'
+      && node.hasModuleChildren
+      && !node.moduleChildrenLoaded
+      && !nonRequestChildren.some(child => child.type === 'module')
+    if (shouldAddModuleLazyPlaceholder) {
+      renderedChildren.unshift({
+        key: `${node.key}:module-lazy-placeholder`,
+        type: 'placeholder',
+        label: '',
+        count: 0,
+        directCount: 0,
+        moduleId: node.moduleId,
+        workspaceCode: node.workspaceCode,
+        definitionId: null,
+        fullPath: node.fullPath,
+        placeholderAction: 'module-lazy',
+        parentKey: node.key,
+        children: [],
+      })
+    }
     const hasRequestChild = actualLoadedRequestCount > 0
     const shouldLoadDefinitions = canLoadDefinitionsForDirectoryNode({ ...node, children })
     const shouldAddLazyPlaceholder = shouldLoadDefinitions
@@ -239,6 +261,8 @@ function stripChildMap(
       fullPath: node.fullPath,
       method: node.method,
       definition: node.definition,
+      hasModuleChildren: node.hasModuleChildren,
+      moduleChildrenLoaded: node.moduleChildrenLoaded,
       children: renderedChildren,
     }
   })
@@ -298,7 +322,12 @@ export function buildApiDirectoryTree(options: BuildApiDirectoryTreeOptions): Di
         assembled,
         index === segments.length - 1 ? item.id : null,
         index === segments.length - 1 ? item.definitionCount : undefined,
+        index === segments.length - 1 ? item.directDefinitionCount : undefined,
       )
+      if (index === segments.length - 1) {
+        node.hasModuleChildren = item.hasChildren
+        node.moduleChildrenLoaded = item.childrenLoaded
+      }
       currentChildren = node.children as MutableDirectoryNode[]
       currentMap = node.childMap ?? new Map<string, MutableDirectoryNode>()
     })

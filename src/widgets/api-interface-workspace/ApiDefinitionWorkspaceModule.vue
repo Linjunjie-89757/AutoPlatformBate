@@ -294,7 +294,7 @@ const {
   setSelectedDirectoryKey: key => {
     selectedDirectoryKey.value = key
   },
-  loadWorkspaceData: () => loadWorkspaceData(),
+  refreshWorkspaceDirectoryData: workspaceCode => refreshWorkspaceDirectoryData(workspaceCode),
 })
 
 const {
@@ -486,6 +486,7 @@ const {
   setDirectoryNodeExpanded,
   handleDirectorySelect,
   loadWorkspaceData,
+  refreshWorkspaceDirectoryData,
   revealDefinition,
   createModule,
   renameModule,
@@ -645,7 +646,7 @@ const {
   markDirty,
   openNewRequestTab,
   closeEditorTab,
-  loadWorkspaceData,
+  refreshWorkspaceDirectoryData,
   revealDefinition,
   openApiSoftPrompt,
   confirmApiAction,

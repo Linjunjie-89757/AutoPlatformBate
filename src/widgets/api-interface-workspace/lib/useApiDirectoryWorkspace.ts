@@ -25,7 +25,6 @@ export const DIRECTORY_SEARCH_RESULT_LIMIT = 150
 const DIRECTORY_REMOTE_SEARCH_MIN_LENGTH = 3
 export const DIRECTORY_MODULE_REQUEST_PAGE_SIZE = 200
 const DIRECTORY_MODULE_VISIBLE_REQUEST_BATCH = 80
-const DIRECTORY_MODULE_LOADING_MIN_MS = 320
 
 export interface ImportModuleOption {
   label: string
@@ -67,12 +66,52 @@ interface UseApiDirectoryWorkspaceOptions {
   ) => Promise<boolean>
 }
 
-function waitForMs(ms: number) {
-  return new Promise(resolve => window.setTimeout(resolve, ms))
-}
-
 function isDirectDefinitionInPath(item: ApiDefinitionItem, fullPath: string | null) {
   return (item.directoryName || '').trim() === (fullPath || '').trim()
+}
+
+function flattenDefinitionModules(items: ApiDefinitionModuleItem[]) {
+  const result: ApiDefinitionModuleItem[] = []
+  const visit = (modules: ApiDefinitionModuleItem[]) => {
+    modules.forEach((module) => {
+      result.push(module)
+      visit(module.children || [])
+    })
+  }
+  visit(items)
+  return result
+}
+
+function replaceDefinitionModuleChildren(
+  items: ApiDefinitionModuleItem[],
+  moduleId: number,
+  children: ApiDefinitionModuleItem[],
+): ApiDefinitionModuleItem[] {
+  return items.map((item) => {
+    if (item.id === moduleId) {
+      return {
+        ...item,
+        hasChildren: children.length > 0,
+        childrenLoaded: true,
+        children,
+      }
+    }
+    return {
+      ...item,
+      children: replaceDefinitionModuleChildren(item.children || [], moduleId, children),
+    }
+  })
+}
+
+function replaceDefinitionModuleRoots(
+  items: ApiDefinitionModuleItem[],
+  workspaceCode: string,
+  roots: ApiDefinitionModuleItem[],
+) {
+  const firstWorkspaceIndex = items.findIndex(item => item.workspaceCode === workspaceCode)
+  const next = items.filter(item => item.workspaceCode !== workspaceCode)
+  next.splice(firstWorkspaceIndex < 0 ? next.length : firstWorkspaceIndex, 0, ...roots)
+  return next
 }
 
 export function directoryNameFromNode(node: DirectoryNode | null | undefined) {
@@ -94,11 +133,14 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
   const definitionErrorMessage = ref('')
   const modules = ref<ApiDefinitionModuleItem[]>([])
   const definitions = ref<ApiDefinitionItem[]>([])
+  const directorySearchModules = ref<ApiDefinitionModuleItem[]>([])
   const directorySearchDefinitions = ref<ApiDefinitionItem[]>([])
+  const directorySearchModuleTotal = ref(0)
   const directorySearchTotal = ref(0)
   const directorySearchLoading = ref(false)
   const loadedDefinitionModuleKeys = ref<Set<string>>(new Set())
   const loadingDefinitionModuleKeys = ref<Set<string>>(new Set())
+  const loadingDefinitionModuleChildKeys = ref<Set<string>>(new Set())
   const definitionModuleRequestStateByKey = ref(new Map<string, {
     pageNo: number
     loadedCount: number
@@ -116,6 +158,9 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
 
   let directorySearchTimer = 0
   let directorySearchRequestSeq = 0
+  let workspaceDataRequestSeq = 0
+  const moduleChildrenRequests = new Map<string, Promise<ApiDefinitionModuleItem[]>>()
+  const definitionRequestSeqByKey = new Map<string, number>()
 
   const normalizedDirectoryKeyword = computed(() => debouncedDirectoryKeyword.value.trim())
   const shouldFilterDirectoryTree = computed(() => Boolean(normalizedDirectoryKeyword.value))
@@ -198,11 +243,38 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     definitions.value = Array.from(merged.values())
   }
 
+  function moduleChildrenRequestKey(workspaceCode: string, parentId: number | null) {
+    return `${workspaceCode}:${parentId == null ? 'root' : parentId}`
+  }
+
+  function fetchDefinitionModuleChildren(
+    workspaceCode: string,
+    parentId: number | null,
+    requestOptions: { force?: boolean } = {},
+  ) {
+    const key = moduleChildrenRequestKey(workspaceCode, parentId)
+    if (requestOptions.force) {
+      moduleChildrenRequests.delete(key)
+    }
+    const existing = moduleChildrenRequests.get(key)
+    if (existing) return existing
+    const request = apiAutomationApi.getDefinitionModuleChildren(workspaceCode, parentId)
+      .finally(() => {
+        if (moduleChildrenRequests.get(key) === request) {
+          moduleChildrenRequests.delete(key)
+        }
+      })
+    moduleChildrenRequests.set(key, request)
+    return request
+  }
+
   async function searchDirectoryDefinitions(keyword: string) {
     const trimmedKeyword = keyword.trim()
     const requestSeq = ++directorySearchRequestSeq
     if (!trimmedKeyword || !shouldUseRemoteDirectorySearch.value) {
+      directorySearchModules.value = []
       directorySearchDefinitions.value = []
+      directorySearchModuleTotal.value = 0
       directorySearchTotal.value = 0
       directorySearchLoading.value = false
       return
@@ -210,17 +282,21 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
 
     directorySearchLoading.value = true
     try {
-      const page = await apiAutomationApi.getDefinitions(options.workspaceCode.value, {
-        keyword: trimmedKeyword,
-        pageNo: 1,
-        pageSize: DIRECTORY_SEARCH_RESULT_LIMIT,
-      })
+      const result = await apiAutomationApi.searchDefinitionTree(
+        options.workspaceCode.value,
+        trimmedKeyword,
+        DIRECTORY_SEARCH_RESULT_LIMIT,
+      )
       if (requestSeq !== directorySearchRequestSeq) return
-      directorySearchDefinitions.value = page.items
-      directorySearchTotal.value = page.total
+      directorySearchModules.value = result.modules
+      directorySearchDefinitions.value = result.definitions
+      directorySearchModuleTotal.value = result.moduleTotal
+      directorySearchTotal.value = result.definitionTotal
     } catch (error) {
       if (requestSeq !== directorySearchRequestSeq) return
+      directorySearchModules.value = []
       directorySearchDefinitions.value = []
+      directorySearchModuleTotal.value = 0
       directorySearchTotal.value = 0
       ElMessage.warning(getRequestErrorMessage(error))
     } finally {
@@ -235,12 +311,17 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       ? directorySearchDefinitions.value
       : definitions.value
   ))
+  const directoryTreeSourceModules = computed(() => (
+    shouldUseRemoteDirectorySearch.value
+      ? directorySearchModules.value
+      : modules.value
+  ))
 
   const baseDirectoryTree = computed<DirectoryNode[]>(() => {
     return buildApiDirectoryTree({
       workspaceCode: options.workspaceCode.value,
       workspaces: options.workspaces.value,
-      modules: modules.value,
+      modules: directoryTreeSourceModules.value,
       definitions: directoryTreeSourceDefinitions.value,
       loadedModuleKeys: loadedDefinitionModuleKeys.value,
       loadingModuleKeys: loadingDefinitionModuleKeys.value,
@@ -270,7 +351,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
   const visibleDirectoryTree = computed<DirectoryNode[]>(() => directoryTree.value[0]?.children ?? [])
   const directorySearchMatchedCount = computed(() => {
     if (shouldUseRemoteDirectorySearch.value) {
-      return directorySearchTotal.value
+      return directorySearchModuleTotal.value + directorySearchTotal.value
     }
     if (shouldUseLocalDirectorySearch.value) {
       return countDirectoryTreeRequestNodes(visibleDirectoryTree.value)
@@ -280,7 +361,8 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
 
   const directorySearchLimited = computed(() =>
     shouldUseRemoteDirectorySearch.value
-    && directorySearchMatchedCount.value > DIRECTORY_SEARCH_RESULT_LIMIT,
+    && (directorySearchModuleTotal.value > DIRECTORY_SEARCH_RESULT_LIMIT
+      || directorySearchTotal.value > DIRECTORY_SEARCH_RESULT_LIMIT),
   )
 
   const directoryTreeRenderKey = computed(() => options.workspaceCode.value || 'ALL')
@@ -304,7 +386,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       value: '',
       workspaceCode: code,
     }))
-    modules.value.forEach((item) => {
+    flattenDefinitionModules(modules.value).forEach((item) => {
       const fullPath = (item.fullPath || item.name || '').trim()
       if (!fullPath) return
       directoryOptions.push({
@@ -351,13 +433,42 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     if (expanded) {
       expandedKeys.value = Array.from(new Set([...expandedKeys.value, node.key]))
       void syncDirectoryTreeExpandedState()
-      if (canLoadDefinitionsForDirectoryNode(node) && !restoringDirectoryExpanded.value) {
+      if (node.type === 'module' && node.hasModuleChildren && !node.moduleChildrenLoaded) {
+        void loadDefinitionModuleChildren(node)
+      }
+      if (canLoadDefinitionsForDirectoryNode(node)) {
         void loadDefinitionsForDirectoryNode(node)
       }
       return
     }
     expandedKeys.value = expandedKeys.value.filter(key => key !== node.key)
     void syncDirectoryTreeExpandedState()
+  }
+
+  async function loadDefinitionModuleChildren(node: DirectoryNode) {
+    if (node.type !== 'module' || node.moduleId == null) return
+    const key = definitionModuleLoadKey(node.workspaceCode, node.moduleId, node.fullPath ?? null)
+    const module = flattenDefinitionModules(modules.value).find(item => item.id === node.moduleId)
+    if (module?.childrenLoaded || loadingDefinitionModuleChildKeys.value.has(key)) {
+      await keepDirectoryNodeExpanded(node)
+      return
+    }
+
+    loadingDefinitionModuleChildKeys.value = new Set([...loadingDefinitionModuleChildKeys.value, key])
+    const workspaceRequestSeq = workspaceDataRequestSeq
+    try {
+      const children = await fetchDefinitionModuleChildren(node.workspaceCode, node.moduleId)
+      if (workspaceRequestSeq !== workspaceDataRequestSeq) return
+      modules.value = replaceDefinitionModuleChildren(modules.value, node.moduleId, children)
+      await nextTick()
+      await keepDirectoryNodeExpanded(node)
+    } catch (error) {
+      ElMessage.warning(getRequestErrorMessage(error))
+    } finally {
+      const next = new Set(loadingDefinitionModuleChildKeys.value)
+      next.delete(key)
+      loadingDefinitionModuleChildKeys.value = next
+    }
   }
 
   async function loadDefinitionsForDirectoryNode(node: DirectoryNode, loadOptions: { append?: boolean } = {}) {
@@ -380,16 +491,21 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     }
     node.loading = true
     markDefinitionModuleLoading(key, true)
+    const workspaceRequestSeq = workspaceDataRequestSeq
+    const definitionRequestSeq = (definitionRequestSeqByKey.get(key) ?? 0) + 1
+    definitionRequestSeqByKey.set(key, definitionRequestSeq)
     await keepDirectoryNodeExpanded(node)
     await nextTick()
-    await waitForMs(DIRECTORY_MODULE_LOADING_MIN_MS)
     try {
       const nextPageNo = append ? (requestState?.pageNo ?? 0) + 1 : 1
       const page = await apiAutomationApi.getDefinitions(node.workspaceCode, {
         moduleId: node.moduleId,
+        includeDescendants: false,
         pageNo: nextPageNo,
         pageSize: DIRECTORY_MODULE_REQUEST_PAGE_SIZE,
       })
+      if (workspaceRequestSeq !== workspaceDataRequestSeq
+        || definitionRequestSeqByKey.get(key) !== definitionRequestSeq) return
       const directDefinitions = page.items.filter(item => isDirectDefinitionInPath(item, moduleFullPath))
       mergeDefinitions(directDefinitions)
       markDefinitionModuleLoaded(key)
@@ -413,18 +529,23 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       })
       await keepDirectoryNodeExpanded(node)
     } catch (error) {
+      if (workspaceRequestSeq !== workspaceDataRequestSeq
+        || definitionRequestSeqByKey.get(key) !== definitionRequestSeq) return
       ElMessage.warning(getRequestErrorMessage(error))
     } finally {
-      node.loading = false
-      markDefinitionModuleLoading(key, false)
-      void syncDirectoryTreeExpandedState()
+      if (definitionRequestSeqByKey.get(key) === definitionRequestSeq) {
+        node.loading = false
+        markDefinitionModuleLoading(key, false)
+        void syncDirectoryTreeExpandedState()
+      }
     }
   }
 
   function findModuleByDirectoryName(workspaceCode: string, directoryName: string | null | undefined) {
     const targetPath = (directoryName || '').trim()
     if (!targetPath) return null
-    const sameWorkspaceModules = modules.value.filter(item => item.workspaceCode === workspaceCode)
+    const sameWorkspaceModules = flattenDefinitionModules(modules.value)
+      .filter(item => item.workspaceCode === workspaceCode)
     return sameWorkspaceModules.find(item => (item.fullPath || item.name || '').trim() === targetPath) || null
   }
 
@@ -435,20 +556,64 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       type: 'module',
       label: module.name,
       count: module.definitionCount || 0,
-      directCount: module.definitionCount || 0,
+      directCount: module.directDefinitionCount || 0,
       moduleId: module.id,
       workspaceCode: module.workspaceCode,
       definitionId: null,
       fullPath,
+      hasModuleChildren: module.hasChildren,
+      moduleChildrenLoaded: module.childrenLoaded,
       children: [],
     } satisfies DirectoryNode
   }
 
+  async function ensureDefinitionModulePathLoaded(workspaceCode: string, directoryName: string | null | undefined) {
+    const segments = (directoryName || '').split('/').map(segment => segment.trim()).filter(Boolean)
+    if (!segments.length) return null
+
+    let parentId: number | null = null
+    let assembledPath = ''
+    for (const segment of segments) {
+      assembledPath = assembledPath ? `${assembledPath}/${segment}` : segment
+      let module = findModuleByDirectoryName(workspaceCode, assembledPath)
+      if (!module) {
+        const requestSeq = workspaceDataRequestSeq
+        const children = await fetchDefinitionModuleChildren(workspaceCode, parentId)
+        if (requestSeq !== workspaceDataRequestSeq) return null
+        modules.value = parentId == null
+          ? replaceDefinitionModuleRoots(modules.value, workspaceCode, children)
+          : replaceDefinitionModuleChildren(modules.value, parentId, children)
+        module = findModuleByDirectoryName(workspaceCode, assembledPath)
+      }
+      if (!module) return null
+      parentId = module.id
+    }
+    return findModuleByDirectoryName(workspaceCode, assembledPath)
+  }
+
+  function definitionModulePathKeys(workspaceCode: string, directoryName: string | null | undefined) {
+    const targetPath = (directoryName || '').trim()
+    if (!targetPath) return []
+    return flattenDefinitionModules(modules.value)
+      .filter(item => item.workspaceCode === workspaceCode)
+      .filter(item => targetPath === item.fullPath || targetPath.startsWith(`${item.fullPath}/`))
+      .sort((left, right) => (left.fullPath || '').length - (right.fullPath || '').length)
+      .map(item => `module:${item.workspaceCode}:${item.id}`)
+  }
+
   async function revealDefinition(summary: ApiDefinitionItem) {
-    const module = findModuleByDirectoryName(summary.workspaceCode, summary.directoryName)
+    const module = await ensureDefinitionModulePathLoaded(summary.workspaceCode, summary.directoryName)
     if (module) {
       const workspaceKey = `workspace:${module.workspaceCode}`
-      expandedKeys.value = Array.from(new Set([...expandedKeys.value, workspaceKey, `module:${module.workspaceCode}:${module.id}`]))
+      const pathKeys = definitionModulePathKeys(summary.workspaceCode, summary.directoryName)
+      expandedKeys.value = Array.from(new Set([...expandedKeys.value, workspaceKey, ...pathKeys]))
+      if (directoryExpandedKeysBeforeSearch.value) {
+        directoryExpandedKeysBeforeSearch.value = Array.from(new Set([
+          ...directoryExpandedKeysBeforeSearch.value,
+          workspaceKey,
+          ...pathKeys,
+        ]))
+      }
       await keepDirectoryNodeExpanded({
         key: workspaceKey,
         type: 'workspace',
@@ -497,11 +662,38 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     }
   }
 
+  async function hydrateStoredExpandedModuleBranches(
+    items: ApiDefinitionModuleItem[],
+    storedKeys: Set<string>,
+    requestSeq: number,
+  ): Promise<ApiDefinitionModuleItem[]> {
+    return Promise.all(items.map(async (item) => {
+      const key = `module:${item.workspaceCode}:${item.id}`
+      let children = item.children || []
+      let childrenLoaded = item.childrenLoaded
+      if (storedKeys.has(key) && item.hasChildren && !childrenLoaded) {
+        try {
+          children = await fetchDefinitionModuleChildren(item.workspaceCode, item.id)
+          if (requestSeq !== workspaceDataRequestSeq) return item
+          childrenLoaded = true
+        } catch {
+          return item
+        }
+      }
+      if (children.length > 0) {
+        children = await hydrateStoredExpandedModuleBranches(children, storedKeys, requestSeq)
+      }
+      return { ...item, children, childrenLoaded }
+    }))
+  }
+
   async function loadWorkspaceData(loadOptions?: { openDefaultTab?: boolean }) {
     if (!options.workspaceReady.value) {
       return
     }
     const openDefaultTab = loadOptions?.openDefaultTab ?? true
+    const requestSeq = ++workspaceDataRequestSeq
+    const requestedWorkspaceCode = options.workspaceCode.value
 
     loading.value = true
     moduleLoading.value = true
@@ -510,25 +702,36 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     definitionErrorMessage.value = ''
 
     try {
+      const storedExpandedKeys = directoryKeyword.value.trim() ? [] : readStoredExpandedKeys()
       const [moduleItems, definitionPage] = await Promise.all([
-        apiAutomationApi.getDefinitionModules(options.workspaceCode.value),
-        apiAutomationApi.getDefinitions(options.workspaceCode.value, { pageNo: 1, pageSize: DIRECTORY_MODULE_REQUEST_PAGE_SIZE }),
+        fetchDefinitionModuleChildren(requestedWorkspaceCode, null),
+        apiAutomationApi.getDefinitions(requestedWorkspaceCode, {
+          rootOnly: true,
+          pageNo: 1,
+          pageSize: DIRECTORY_MODULE_REQUEST_PAGE_SIZE,
+        }),
       ])
-      modules.value = moduleItems
+      if (requestSeq !== workspaceDataRequestSeq || requestedWorkspaceCode !== options.workspaceCode.value) return
+      modules.value = await hydrateStoredExpandedModuleBranches(moduleItems, new Set(storedExpandedKeys), requestSeq)
+      if (requestSeq !== workspaceDataRequestSeq || requestedWorkspaceCode !== options.workspaceCode.value) return
       definitions.value = definitionPage.items.filter(item => !(item.directoryName || '').trim())
+      directorySearchModules.value = []
       directorySearchDefinitions.value = []
+      directorySearchModuleTotal.value = 0
       directorySearchTotal.value = 0
       directorySearchLoading.value = false
       directorySearchRequestSeq += 1
       loadedDefinitionModuleKeys.value = new Set()
       loadingDefinitionModuleKeys.value = new Set()
+      loadingDefinitionModuleChildKeys.value = new Set()
       definitionModuleRequestStateByKey.value = new Map()
       definitionModuleVisibleRequestCountByKey.value = new Map()
+      definitionRequestSeqByKey.clear()
       directoryExpandedKeysBeforeSearch.value = null
       await nextTick()
       directoryExpandedRestored.value = false
       const availableKeys = new Set(collectExpandableDirectoryKeys(directoryTree.value))
-      const restoredKeys = readStoredExpandedKeys().filter(key => availableKeys.has(key))
+      const restoredKeys = storedExpandedKeys.filter(key => availableKeys.has(key))
       expandedKeys.value = directoryKeyword.value.trim()
         ? collectExpandableDirectoryKeys(directoryTree.value)
         : restoredKeys
@@ -541,19 +744,89 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       }
       options.restoreRunOptions()
       options.onLoaded({ definitions: definitions.value, modules: modules.value })
+      const restoredKeySet = new Set(restoredKeys)
+      flattenDefinitionModules(modules.value)
+        .filter(module => restoredKeySet.has(`module:${module.workspaceCode}:${module.id}`))
+        .filter(module => (module.directDefinitionCount || 0) > 0)
+        .forEach(module => {
+          void loadDefinitionsForDirectoryNode(moduleNodeFromModule(module))
+        })
       await openRouteTargetDefinition()
       if (openDefaultTab && !options.hasAnyEditor()) {
         options.openNewRequestTab(null)
       }
     } catch (error) {
+      if (requestSeq !== workspaceDataRequestSeq) return
       const message = getRequestErrorMessage(error)
       moduleErrorMessage.value = message
       definitionErrorMessage.value = message
     } finally {
-      loading.value = false
-      moduleLoading.value = false
-      definitionLoading.value = false
+      if (requestSeq === workspaceDataRequestSeq) {
+        loading.value = false
+        moduleLoading.value = false
+        definitionLoading.value = false
+      }
     }
+  }
+
+  function invalidateWorkspaceDirectoryCache(workspaceCode: string) {
+    const prefix = `${workspaceCode}:`
+    moduleChildrenRequests.forEach((_request, key) => {
+      if (key.startsWith(prefix)) moduleChildrenRequests.delete(key)
+    })
+    definitionRequestSeqByKey.forEach((value, key) => {
+      if (key.startsWith(prefix)) definitionRequestSeqByKey.set(key, value + 1)
+    })
+    loadedDefinitionModuleKeys.value = new Set(
+      [...loadedDefinitionModuleKeys.value].filter(key => !key.startsWith(prefix)),
+    )
+    loadingDefinitionModuleKeys.value = new Set(
+      [...loadingDefinitionModuleKeys.value].filter(key => !key.startsWith(prefix)),
+    )
+    loadingDefinitionModuleChildKeys.value = new Set(
+      [...loadingDefinitionModuleChildKeys.value].filter(key => !key.startsWith(prefix)),
+    )
+    definitionModuleRequestStateByKey.value = new Map(
+      [...definitionModuleRequestStateByKey.value].filter(([key]) => !key.startsWith(prefix)),
+    )
+    definitionModuleVisibleRequestCountByKey.value = new Map(
+      [...definitionModuleVisibleRequestCountByKey.value].filter(([key]) => !key.startsWith(prefix)),
+    )
+  }
+
+  async function refreshWorkspaceDirectoryData(workspaceCode: string) {
+    const requestSeq = ++workspaceDataRequestSeq
+    invalidateWorkspaceDirectoryCache(workspaceCode)
+    const storedKeys = new Set(expandedKeys.value.filter(key => key.includes(`:${workspaceCode}:`)))
+    const [rootModules, definitionPage] = await Promise.all([
+      fetchDefinitionModuleChildren(workspaceCode, null, { force: true }),
+      apiAutomationApi.getDefinitions(workspaceCode, {
+        rootOnly: true,
+        pageNo: 1,
+        pageSize: DIRECTORY_MODULE_REQUEST_PAGE_SIZE,
+      }),
+    ])
+    if (requestSeq !== workspaceDataRequestSeq) return
+    const hydratedRoots = await hydrateStoredExpandedModuleBranches(rootModules, storedKeys, requestSeq)
+    if (requestSeq !== workspaceDataRequestSeq) return
+
+    modules.value = options.workspaceCode.value === 'ALL'
+      ? replaceDefinitionModuleRoots(modules.value, workspaceCode, hydratedRoots)
+      : hydratedRoots
+    definitions.value = [
+      ...definitions.value.filter(item => item.workspaceCode !== workspaceCode),
+      ...definitionPage.items.filter(item => !(item.directoryName || '').trim()),
+    ]
+    options.onLoaded({ definitions: definitions.value, modules: modules.value })
+    flattenDefinitionModules(hydratedRoots)
+      .filter(module => storedKeys.has(`module:${module.workspaceCode}:${module.id}`))
+      .filter(module => (module.directDefinitionCount || 0) > 0)
+      .forEach(module => void loadDefinitionsForDirectoryNode(moduleNodeFromModule(module)))
+    if (shouldUseRemoteDirectorySearch.value) {
+      void searchDirectoryDefinitions(normalizedDirectoryKeyword.value)
+    }
+    await nextTick()
+    await syncDirectoryTreeExpandedState()
   }
 
   async function createModule(parentId: number | null = null) {
@@ -563,12 +836,16 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       requiredMessage: '模块名称不能为空',
     })
     if (!value) return
-    await apiAutomationApi.createDefinitionModule(options.workspaceCode.value, {
-      workspaceCode: options.workspaceCode.value === 'ALL' ? undefined : options.workspaceCode.value,
+    const parentModule = parentId == null
+      ? null
+      : flattenDefinitionModules(modules.value).find(item => item.id === parentId) ?? null
+    const targetWorkspaceCode = parentModule?.workspaceCode || options.workspaceCode.value
+    await apiAutomationApi.createDefinitionModule(targetWorkspaceCode, {
+      workspaceCode: targetWorkspaceCode === 'ALL' ? undefined : targetWorkspaceCode,
       parentId,
       name: value,
     })
-    await loadWorkspaceData()
+    await refreshWorkspaceDirectoryData(targetWorkspaceCode)
     ElMessage.success('模块已创建')
   }
 
@@ -581,11 +858,11 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       requiredMessage: '模块名称不能为空',
     })
     if (!value) return
-    await apiAutomationApi.updateDefinitionModule(options.workspaceCode.value, node.moduleId, {
-      workspaceCode: options.workspaceCode.value === 'ALL' ? undefined : options.workspaceCode.value,
+    await apiAutomationApi.updateDefinitionModule(node.workspaceCode, node.moduleId, {
+      workspaceCode: node.workspaceCode,
       name: value,
     })
-    await loadWorkspaceData()
+    await refreshWorkspaceDirectoryData(node.workspaceCode)
     ElMessage.success('模块已重命名')
   }
 
@@ -597,8 +874,8 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     }
     const confirmed = await options.confirmApiAction('删除后不可恢复，确认删除该模块吗？', '删除模块', { danger: true })
     if (!confirmed) return
-    await apiAutomationApi.deleteDefinitionModule(options.workspaceCode.value, node.moduleId)
-    await loadWorkspaceData()
+    await apiAutomationApi.deleteDefinitionModule(node.workspaceCode, node.moduleId)
+    await refreshWorkspaceDirectoryData(node.workspaceCode)
     ElMessage.success('模块已删除')
   }
 
@@ -653,7 +930,11 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       }
     }
     if (node.type === 'request' && node.definition) {
-      void options.openDefinition(node.definition)
+      if (directorySearchActive.value) {
+        void revealDefinition(node.definition)
+      } else {
+        void options.openDefinition(node.definition)
+      }
     }
   }
 
@@ -717,6 +998,9 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
 
   onBeforeUnmount(() => {
     window.clearTimeout(directorySearchTimer)
+    directorySearchRequestSeq += 1
+    workspaceDataRequestSeq += 1
+    moduleChildrenRequests.clear()
   })
 
   return {
@@ -745,6 +1029,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     loadDefinitionsForDirectoryNode,
     handleDirectorySelect,
     loadWorkspaceData,
+    refreshWorkspaceDirectoryData,
     mergeDefinitions,
     revealDefinition,
     findModuleByDirectoryName,

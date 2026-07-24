@@ -18,15 +18,27 @@ interface UseApiDefinitionWorkspaceLifecycleOptions {
 }
 
 export function useApiDefinitionWorkspaceLifecycle(options: UseApiDefinitionWorkspaceLifecycleOptions) {
+  let mounted = false
+  let loadedWorkspaceKey = ''
+
+  function loadCurrentWorkspaceOnce() {
+    if (!mounted || !options.workspaceReady.value) {
+      if (!options.workspaceReady.value) loadedWorkspaceKey = ''
+      return
+    }
+    const workspaceKey = options.workspaceCode.value
+    if (workspaceKey === loadedWorkspaceKey) return
+    loadedWorkspaceKey = workspaceKey
+    options.tabs.value = []
+    options.activeEditorKey.value = ''
+    options.selectedDirectoryKey.value = 'definition-root'
+    options.clearCases()
+    void options.loadWorkspaceData()
+  }
+
   watch(
     () => [options.workspaceCode.value, options.workspaceReady.value],
-    () => {
-      options.tabs.value = []
-      options.activeEditorKey.value = ''
-      options.selectedDirectoryKey.value = 'definition-root'
-      options.clearCases()
-      void options.loadWorkspaceData()
-    },
+    loadCurrentWorkspaceOnce,
   )
 
   watch(options.activeEditorKey, () => {
@@ -36,8 +48,9 @@ export function useApiDefinitionWorkspaceLifecycle(options: UseApiDefinitionWork
   })
 
   onMounted(() => {
+    mounted = true
     options.restoreResponsePanelHeight()
-    void options.loadWorkspaceData()
+    loadCurrentWorkspaceOnce()
   })
 
   onBeforeUnmount(() => {

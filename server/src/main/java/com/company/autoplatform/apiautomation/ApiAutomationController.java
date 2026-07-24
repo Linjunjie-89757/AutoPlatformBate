@@ -47,10 +47,13 @@ public class ApiAutomationController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long moduleId,
+            @RequestParam(defaultValue = "true") boolean includeDescendants,
+            @RequestParam(defaultValue = "false") boolean rootOnly,
             @RequestParam(required = false) Integer pageNo,
             @RequestParam(required = false) Integer pageSize
     ) {
-        return ApiResponse.ok(apiAutomationService.listDefinitions(workspaceCode, keyword, moduleId, pageNo, pageSize));
+        return ApiResponse.ok(apiAutomationService.listDefinitions(
+                workspaceCode, keyword, moduleId, includeDescendants, rootOnly, pageNo, pageSize));
     }
 
     @GetMapping("/definitions/{id}")
@@ -286,6 +289,23 @@ public class ApiAutomationController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
     ) {
         return ApiResponse.ok(apiAutomationService.listDefinitionModules(workspaceCode));
+    }
+
+    @GetMapping("/definition-modules/children")
+    public ApiResponse<List<ApiDefinitionModuleItem>> listDefinitionModuleChildren(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(required = false) Long parentId
+    ) {
+        return ApiResponse.ok(apiAutomationService.listDefinitionModuleChildren(workspaceCode, parentId));
+    }
+
+    @GetMapping("/definition-tree/search")
+    public ApiResponse<ApiDefinitionTreeSearchResult> searchDefinitionTree(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam String keyword,
+            @RequestParam(required = false) Integer limit
+    ) {
+        return ApiResponse.ok(apiAutomationService.searchDefinitionTree(workspaceCode, keyword, limit));
     }
 
     @PostMapping("/definition-modules")

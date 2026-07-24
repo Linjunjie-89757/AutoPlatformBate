@@ -259,6 +259,7 @@ public final class ApiAutomationModels {
             Long id,
             String workspaceCode,
             String workspaceName,
+            Long moduleId,
             String name,
             String method,
             String path,
@@ -315,7 +316,18 @@ public final class ApiAutomationModels {
             String fullPath,
             Integer sortOrder,
             Long definitionCount,
+            Long directDefinitionCount,
+            Boolean hasChildren,
+            Boolean childrenLoaded,
             List<ApiDefinitionModuleItem> children
+    ) {
+    }
+
+    public record ApiDefinitionTreeSearchResult(
+            List<ApiDefinitionModuleItem> modules,
+            List<ApiDefinitionItem> definitions,
+            long moduleTotal,
+            long definitionTotal
     ) {
     }
 

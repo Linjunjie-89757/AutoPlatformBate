@@ -54,10 +54,13 @@ public class ApiAutomationService {
             String workspaceCode,
             String keyword,
             Long moduleId,
+            boolean includeDescendants,
+            boolean rootOnly,
             Integer pageNo,
             Integer pageSize
     ) {
-        return definitionDomainService.listDefinitions(workspaceCode, keyword, moduleId, pageNo, pageSize);
+        return definitionDomainService.listDefinitions(
+                workspaceCode, keyword, moduleId, includeDescendants, rootOnly, pageNo, pageSize);
     }
 
     public ApiDefinitionDetail getDefinition(Long id, String workspaceCode) {
@@ -201,6 +204,14 @@ public class ApiAutomationService {
 
     public List<ApiDefinitionModuleItem> listDefinitionModules(String workspaceCode) {
         return definitionDomainService.listDefinitionModules(workspaceCode);
+    }
+
+    public List<ApiDefinitionModuleItem> listDefinitionModuleChildren(String workspaceCode, Long parentId) {
+        return definitionDomainService.listDefinitionModuleChildren(workspaceCode, parentId);
+    }
+
+    public ApiDefinitionTreeSearchResult searchDefinitionTree(String workspaceCode, String keyword, Integer limit) {
+        return definitionDomainService.searchDefinitionTree(workspaceCode, keyword, limit);
     }
 
     public ApiDefinitionModuleItem createDefinitionModule(String headerWorkspaceCode, ApiDefinitionModuleRequest request) {

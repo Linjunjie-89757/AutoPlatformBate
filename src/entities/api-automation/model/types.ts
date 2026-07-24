@@ -10,6 +10,7 @@ export interface ApiDefinitionItem {
   id: number
   workspaceCode: string
   workspaceName: string | null
+  moduleId?: number | null
   name: string
   method: string
   path: string
@@ -260,7 +261,17 @@ export interface ApiDefinitionModuleItem {
   fullPath: string | null
   sortOrder: number | null
   definitionCount: number
+  directDefinitionCount?: number
+  hasChildren?: boolean
+  childrenLoaded?: boolean
   children: ApiDefinitionModuleItem[]
+}
+
+export interface ApiDefinitionTreeSearchResult {
+  modules: ApiDefinitionModuleItem[]
+  definitions: ApiDefinitionItem[]
+  moduleTotal: number
+  definitionTotal: number
 }
 
 export interface SaveApiDefinitionModulePayload {
@@ -824,6 +835,8 @@ export interface ApiAutomationReportListQuery {
 export interface ApiDefinitionListQuery {
   keyword?: string
   moduleId?: number | null
+  includeDescendants?: boolean
+  rootOnly?: boolean
   pageNo?: number
   pageSize?: number
 }
