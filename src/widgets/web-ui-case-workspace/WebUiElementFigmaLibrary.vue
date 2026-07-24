@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   Check,
   ChevronLeft,
@@ -12,7 +12,26 @@ import {
   Sparkles,
   Trash2,
 } from '@lucide/vue'
+import { useSession } from '@/entities/session'
+import {
+  type AppTableColumnDefinition,
+  useLocalPagedTable,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
+import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 import WebUiModuleTabs from './WebUiModuleTabs.vue'
+
+const props = withDefaults(defineProps<{
+  workspaceCode?: string
+}>(), {
+  workspaceCode: 'ALL',
+})
 
 type PageId = 'root' | 'login' | 'home' | 'product' | 'cart'
 type CaptureStatus = 'list' | 'config' | 'scanning' | 'result'
@@ -100,6 +119,11 @@ const candidates = ref<Candidate[]>([])
 const candidateStatus = ref<'all' | AdoptStatus>('all')
 const candidateType = ref('')
 const candidateConfidence = ref('')
+const tableFrameRef = ref<HTMLElement | null>(null)
+const tableFrameWidth = ref(0)
+const { currentUser } = useSession()
+
+let tableFrameObserver: ResizeObserver | null = null
 
 let captureTimer: ReturnType<typeof window.setInterval> | null = null
 
@@ -118,6 +142,88 @@ const visibleRows = computed(() => rows.value.filter((row) => {
   if (verifyFilter.value === 'unverified' && row.verified !== null) return false
   return true
 }))
+
+const tableColumns: AppTableColumnDefinition[] = [
+  { key: 'name', label: '元素名称', defaultVisible: true, required: true },
+  { key: 'page', label: '所属页面', defaultVisible: true },
+  { key: 'group', label: '分组', defaultVisible: true },
+  { key: 'locatorType', label: '定位方式', defaultVisible: true },
+  { key: 'locatorValue', label: '定位值', defaultVisible: true },
+  { key: 'refCount', label: '引用次数', defaultVisible: true },
+  { key: 'verified', label: '最近验证', defaultVisible: true },
+]
+
+const columnSettings = useTableColumnSettings({
+  columns: tableColumns,
+  storageKey: computed(() => `app-figma-table:web-ui-elements:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
+  immediate: true,
+})
+
+const {
+  items: pagedRows,
+  total: filteredTotal,
+  pageNo,
+  pageSize,
+  setPage,
+  setPageSize,
+  resetPage,
+} = useLocalPagedTable(visibleRows, { initialPageSize: 10 })
+
+const columnWeights: Record<string, number> = {
+  name: 18,
+  page: 10,
+  group: 9,
+  locatorType: 8,
+  locatorValue: 22,
+  refCount: 8,
+  verified: 9,
+}
+const operationActionCount = 4
+const operationWidth = Math.max(168, getAppFigmaActionColumnWidth(operationActionCount))
+const baselineTableWidth = computed(() => Math.max(1100, tableFrameWidth.value ? tableFrameWidth.value - 2 : 1100))
+const tableNeedsScroll = computed(() => Boolean(tableFrameWidth.value && baselineTableWidth.value > tableFrameWidth.value))
+const tableColumnWidths = computed<Record<string, number>>(() => {
+  const entries = Object.entries(columnWeights)
+  const totalWeight = entries.reduce((total, [, weight]) => total + weight, 0)
+  const targetWidth = baselineTableWidth.value - operationWidth
+  let allocatedWidth = 0
+
+  return entries.reduce<Record<string, number>>((widths, [key, weight], index) => {
+    const width = index === entries.length - 1
+      ? targetWidth - allocatedWidth
+      : Math.round(targetWidth * weight / totalWeight)
+    widths[key] = width
+    allocatedWidth += width
+    return widths
+  }, {})
+})
+
+function getColumnWidth(column: AppTableColumnDefinition) {
+  return tableColumnWidths.value[column.key] || column.width || column.minWidth || 120
+}
+
+function openColumnSettings() {
+  columnSettings.open()
+}
+
+watch([selectedPage, pageKeyword, keyword, locatorFilter, verifyFilter], resetPage)
+
+watch(tableFrameRef, (element) => {
+  tableFrameObserver?.disconnect()
+  tableFrameObserver = null
+  if (!element) return
+
+  const syncWidth = () => {
+    tableFrameWidth.value = element.clientWidth
+  }
+  syncWidth()
+  tableFrameObserver = new ResizeObserver(syncWidth)
+  tableFrameObserver.observe(element)
+})
+
+onBeforeUnmount(() => {
+  tableFrameObserver?.disconnect()
+})
 
 const candidateTypes = computed(() => [...new Set(candidates.value.map(item => item.type))])
 const filteredCandidates = computed(() => candidates.value.filter((candidate) => {
@@ -218,22 +324,66 @@ function confidenceClass(confidence: number) {
           <button class="figma-elements__ghost" type="button"><Plus />手动添加</button>
           <button class="figma-elements__primary" type="button" @click="openCapture"><Sparkles />AI 采集</button>
         </div>
-        <div class="figma-elements__table-wrap">
-          <table>
-            <colgroup><col class="col-name"><col class="col-page"><col class="col-group"><col class="col-type"><col class="col-value"><col class="col-reference"><col class="col-verify"><col class="col-actions"></colgroup>
-            <thead><tr><th>元素名称</th><th>所属页面</th><th>分组</th><th>定位方式</th><th>定位值</th><th>引用次数</th><th>最近验证</th><th>操作</th></tr></thead>
-            <tbody>
-              <tr v-for="row in visibleRows" :key="row.id">
-                <td><strong>{{ row.name }}</strong><span>{{ row.description }}</span></td>
-                <td>{{ row.page }}</td><td>{{ row.group }}</td>
-                <td><code>{{ row.locatorType }}</code></td><td class="is-mono">{{ row.locatorValue }}</td>
-                <td class="is-reference" :class="{ 'is-hot': row.refCount > 10 }">{{ row.refCount }}</td>
-                <td><span v-if="row.verified === 'pass'" class="figma-elements__verify is-pass">验证通过</span><span v-else-if="row.verified === 'fail'" class="figma-elements__verify is-fail">验证失败</span><span v-else class="figma-elements__unverified">未验证</span></td>
-                <td><div class="figma-elements__actions"><button title="验证"><CircleCheck /></button><button title="查看"><Eye /></button><button title="编辑"><Pencil /></button><button title="删除"><Trash2 /></button></div></td>
-              </tr>
-            </tbody>
-          </table>
-          <footer><span>共 {{ visibleRows.length }} 条</span><b>1</b></footer>
+        <div ref="tableFrameRef" class="figma-elements__table-frame">
+          <AppFigmaTable
+            class="figma-elements__data-table"
+            :data="pagedRows"
+            :page-no="pageNo"
+            :page-size="pageSize"
+            :total="filteredTotal"
+            show-page-size
+            show-jumper
+            :header-height="36"
+            :row-height="53"
+            :footer-height="42"
+            row-key="id"
+            empty-text="暂无匹配的元素"
+            @page-change="setPage"
+            @page-size-change="setPageSize"
+          >
+            <el-table-column
+              v-for="column in columnSettings.visibleColumns.value"
+              :key="column.key"
+              :label="column.label"
+              :width="getColumnWidth(column)"
+              :align="column.key === 'refCount' ? 'center' : 'left'"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">
+                <span v-if="column.key === 'name'" class="figma-elements__name-cell">
+                  <strong>{{ row.name }}</strong>
+                  <small>{{ row.description }}</small>
+                </span>
+                <code v-else-if="column.key === 'locatorType'" class="figma-elements__locator-type">{{ row.locatorType }}</code>
+                <span v-else-if="column.key === 'locatorValue'" class="figma-elements__locator-value">{{ row.locatorValue }}</span>
+                <span v-else-if="column.key === 'refCount'" class="figma-elements__reference" :class="{ 'is-hot': row.refCount > 10 }">{{ row.refCount }}</span>
+                <template v-else-if="column.key === 'verified'">
+                  <span v-if="row.verified === 'pass'" class="figma-elements__verify is-pass">验证通过</span>
+                  <span v-else-if="row.verified === 'fail'" class="figma-elements__verify is-fail">验证失败</span>
+                  <span v-else class="figma-elements__unverified">未验证</span>
+                </template>
+                <span v-else>{{ row[column.key] }}</span>
+              </template>
+            </el-table-column>
+
+            <AppFigmaActionColumn
+              :action-count="operationActionCount"
+              :width="operationWidth"
+              :icon-size="16"
+              :action-gap="12"
+              :scroll-shadow="tableNeedsScroll"
+            >
+              <template #settings>
+                <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openColumnSettings" />
+              </template>
+              <template #default>
+                <button type="button" title="验证" aria-label="验证" @click.stop><CircleCheck /></button>
+                <button type="button" title="查看" aria-label="查看" @click.stop><Eye /></button>
+                <button type="button" title="编辑" aria-label="编辑" @click.stop><Pencil /></button>
+                <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop><Trash2 /></button>
+              </template>
+            </AppFigmaActionColumn>
+          </AppFigmaTable>
         </div>
       </main>
     </div>
@@ -263,6 +413,20 @@ function confidenceClass(confidence: number) {
         </main>
       </div>
     </template>
+
+    <AppTableColumnSettingsDrawer
+      :model-value="columnSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
+      :columns="columnSettings.drawerColumns.value"
+      :dragging-key="columnSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) columnSettings.cancel() }"
+      @toggle-column="columnSettings.toggleColumn"
+      @drag-start="columnSettings.dragStart"
+      @drag-end="columnSettings.dragEnd"
+      @drop-column="columnSettings.dropColumn"
+      @reset="columnSettings.resetDraft"
+    />
   </section>
 </template>
 
@@ -291,11 +455,18 @@ function confidenceClass(confidence: number) {
 .figma-elements__fill { flex:1; }
 .figma-elements__ghost, .figma-elements__primary { display:inline-flex; height:36px; align-items:center; gap:6px; padding:0 13px; border-radius:7px; font-size:13px; font-weight:600; }
 .figma-elements__ghost { border:1px solid #e5e6eb; background:#fff; color:#4e5969; }.figma-elements__primary { border:1px solid #14c9c1; background:#14c9c1; color:#fff; }.figma-elements__ghost svg, .figma-elements__primary svg { width:14px; }
-.figma-elements__table-wrap { min-width:0; margin:18px 24px; border:1px solid #e5e6eb; border-radius:14px; background:#fff; box-shadow:0 2px 5px rgb(29 33 41 / 4%); overflow:hidden; }
-.figma-elements__table-wrap table { width:100%; border-collapse:collapse; table-layout:fixed; }.col-name { width:18%; }.col-page { width:10%; }.col-group { width:9%; }.col-type { width:8%; }.col-value { width:22%; }.col-reference { width:8%; }.col-verify { width:9%; }.col-actions { width:16%; }
-.figma-elements__table-wrap th { height:44px; padding:0 18px; background:#fafafa; color:#86909c; font-size:12px; font-weight:600; text-align:left; }.figma-elements__table-wrap th:last-child { text-align:right; }
-.figma-elements__table-wrap td { height:66px; padding:0 18px; border-top:1px solid #e5e6eb; color:#86909c; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.figma-elements__table-wrap td:first-child strong { display:block; overflow:hidden; color:#1d2129; font-size:13px; font-weight:600; text-overflow:ellipsis; }.figma-elements__table-wrap td:first-child span { display:block; margin-top:3px; overflow:hidden; color:#86909c; font-size:11px; text-overflow:ellipsis; }.figma-elements__table-wrap td code, .figma-elements__candidate-scroll code { padding:3px 6px; border-radius:4px; background:#eef0fa; color:#4e5ac8; font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:600; }.figma-elements__table-wrap td.is-mono { color:#86909c; font-family:"JetBrains Mono",monospace; }.figma-elements__table-wrap td.is-reference { text-align:center; }.figma-elements__table-wrap td.is-hot { color:#14c9c1; font-size:13px; font-weight:600; }
-.figma-elements__verify { display:inline-flex; align-items:center; gap:5px; font-size:12px; }.figma-elements__verify::before { width:6px; height:6px; border-radius:50%; background:currentColor; content:""; }.figma-elements__verify.is-pass { color:#00b42a; }.figma-elements__verify.is-fail { color:#f53f3f; }.figma-elements__unverified { color:#c9cdd4; }.figma-elements__actions { display:flex; justify-content:flex-end; gap:12px; }.figma-elements__actions button { padding:0; border:0; background:transparent; color:#c9cdd4; }.figma-elements__actions svg { width:16px; height:16px; }.figma-elements__table-wrap footer { display:flex; height:54px; align-items:center; justify-content:space-between; padding:0 18px; border-top:1px solid #e5e6eb; color:#86909c; font-size:12px; }.figma-elements__table-wrap footer b { display:grid; width:28px; height:28px; place-items:center; border-radius:6px; background:#2166f3; color:#fff; }
+.figma-elements__table-frame { min-width:0; margin:14px 18px; }
+.figma-elements__data-table { --app-figma-table-border:1px solid #e5e6eb; --app-figma-table-radius:11px; --app-figma-table-background:#fff; --app-figma-table-shadow:0 2px 5px rgb(29 33 41 / 4%); --app-figma-table-header-background:#fafafa; --app-figma-table-header-color:#86909c; --app-figma-table-header-font-size:11px; --app-figma-table-header-font-weight:600; --app-figma-table-header-letter-spacing:0; --app-figma-table-header-line-height:16.5px; --app-figma-table-text-color:#86909c; --app-figma-table-font-size:13px; --app-figma-table-line-height:19.5px; --app-figma-table-cell-padding:14px; --app-figma-table-row-hover-background:#fafcff; font-family:Inter,"Noto Sans SC",sans-serif; }
+.figma-elements__data-table :deep(.el-table__fixed-right-patch) { background:#fafafa; }
+.figma-elements__name-cell { display:block; min-width:0; overflow:hidden; }
+.figma-elements__name-cell strong { display:block; overflow:hidden; color:#1d2129; font-size:13px; font-weight:600; line-height:19.5px; text-overflow:ellipsis; white-space:nowrap; }
+.figma-elements__name-cell small { display:block; overflow:hidden; margin-top:1px; color:#86909c; font-size:11px; font-weight:400; line-height:16.5px; text-overflow:ellipsis; white-space:nowrap; }
+.figma-elements__locator-type, .figma-elements__candidate-scroll code { padding:3px 6px; border-radius:4px; background:#eef0fa; color:#4e5ac8; font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:600; }
+.figma-elements__locator-value { display:block; overflow:hidden; color:#86909c; font-family:"JetBrains Mono",monospace; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+.figma-elements__reference { display:block; text-align:center; }
+.figma-elements__reference.is-hot { color:#0fc6c2; font-size:13px; font-weight:600; }
+.figma-elements__verify { display:inline-flex; align-items:center; gap:5px; font-size:12px; }.figma-elements__verify::before { width:6px; height:6px; border-radius:50%; background:currentColor; content:""; }.figma-elements__verify.is-pass { color:#00b42a; }.figma-elements__verify.is-fail { color:#f53f3f; }.figma-elements__unverified { color:#c9cdd4; }
+.figma-elements__data-table :deep(.app-figma-action-column__actions button) { color:#c9cdd4; }
 .figma-elements__capture-head { display:flex; flex:0 0 48px; align-items:center; gap:12px; padding:0 20px; border-bottom:1px solid #e5e6eb; background:#fff; }.figma-elements__capture-head > button:first-child { display:flex; align-items:center; gap:5px; padding:0; border:0; background:transparent; color:#4e5969; font-size:13px; font-weight:600; }.figma-elements__capture-head i { width:1px; height:16px; background:#e5e6eb; }.figma-elements__capture-head > span { display:grid; width:28px; height:28px; place-items:center; border-radius:6px; background:#e8fffb; color:#14c9c1; }.figma-elements__capture-head > span svg { width:14px; }.figma-elements__capture-head h1 { margin:0; font-size:15px; font-weight:600; }.figma-elements__capture-head em { padding:4px 10px; border-radius:999px; background:#e8fffb; color:#14c9c1; font-size:11px; font-style:normal; font-weight:600; }.figma-elements__confirm { display:flex; height:32px; align-items:center; gap:5px; padding:0 15px; border:0; border-radius:8px; background:linear-gradient(135deg,#14c9c1,#2166f3); color:#fff; font-size:12px; font-weight:600; }.figma-elements__confirm svg { width:13px; }
 .figma-elements__capture { display:flex; min-width:0; min-height:0; flex:1; overflow:hidden; }.figma-elements__capture-side { width:320px; flex:0 0 320px; padding:16px; border-right:1px solid #e5e6eb; background:#fff; overflow:auto; }.figma-elements__capture-side section { display:grid; gap:8px; margin-bottom:18px; }.figma-elements__capture-side label { color:#4e5969; font-size:12px; font-weight:600; }.figma-elements__capture-side section > input { box-sizing:border-box; width:100%; height:34px; padding:0 10px; border:1px solid #e5e6eb; border-radius:7px; color:#4e5969; font-family:"JetBrains Mono",monospace; font-size:12px; }.figma-elements__capture-side p { margin:0; color:#86909c; font-size:11px; }.figma-elements__capture-side section > button { display:flex; height:34px; align-items:center; gap:10px; padding:0 12px; border:0; border-radius:7px; background:transparent; color:#4e5969; font-size:12px; text-align:left; }.figma-elements__capture-side section > button span { width:11px; height:11px; box-sizing:border-box; border:1px solid #86909c; border-radius:50%; }.figma-elements__capture-side section > button.is-active { background:#e8fffb; color:#14c9c1; }.figma-elements__capture-side section > button.is-active span { border:3px solid #14c9c1; }.figma-elements__advanced { padding-top:16px; border-top:1px solid #e5e6eb; }.figma-elements__advanced div { display:flex; min-height:40px; align-items:center; justify-content:space-between; border-bottom:1px solid #f2f3f5; color:#4e5969; font-size:12px; }.figma-elements__advanced input[type="number"] { width:74px; height:25px; box-sizing:border-box; border:1px solid #e5e6eb; border-radius:4px; text-align:right; }.figma-elements__advanced input[type="checkbox"] { accent-color:#14c9c1; }.figma-elements__start { display:flex; width:100%; height:40px; align-items:center; justify-content:center; gap:8px; border:0; border-radius:9px; background:linear-gradient(135deg,#14c9c1,#2166f3); color:#fff; font-size:13px; font-weight:600; }.figma-elements__start:disabled { background:#c9cdd4; }.figma-elements__start svg { width:15px; }.figma-elements__progress { padding:14px; border:1px solid #e5e6eb; border-radius:10px; background:#fafbfe; }.figma-elements__progress header { display:flex; justify-content:space-between; color:#4e5969; font-size:12px; }.figma-elements__progress header small { color:#86909c; }.figma-elements__progress > div { display:flex; align-items:center; gap:10px; margin-top:10px; color:#c9cdd4; font-size:12px; }.figma-elements__progress > div span { display:grid; width:20px; height:20px; place-items:center; border-radius:50%; background:#f2f3f5; font-size:10px; }.figma-elements__progress > div.is-done, .figma-elements__progress > div.is-current { color:#1d2129; }.figma-elements__progress > div.is-done span { background:#14c9c1; color:#fff; }.figma-elements__progress > div.is-current span { background:#fff3e8; color:#ff7d00; }.figma-elements__capture-stats { grid-template-columns:repeat(3,1fr); gap:8px; }.figma-elements__capture-stats div { display:grid; gap:3px; padding:10px 3px; border-radius:8px; text-align:center; }.figma-elements__capture-stats strong { font-size:19px; }.figma-elements__capture-stats span { font-size:10px; }.figma-elements__capture-stats .is-high { background:#e8ffea; color:#00b42a; }.figma-elements__capture-stats .is-medium { background:#fff3e8; color:#ff7d00; }.figma-elements__capture-stats .is-low { background:#fff1f0; color:#f53f3f; }
 .figma-elements__capture-empty { display:flex; min-width:0; flex:1; align-items:center; justify-content:center; flex-direction:column; background:#f7f8fc; }.figma-elements__capture-empty > span { display:grid; width:64px; height:64px; place-items:center; border-radius:12px; background:#f0fffe; color:#c9cdd4; }.figma-elements__capture-empty > span svg { width:32px; }.figma-elements__capture-empty h2 { margin:14px 0 6px; color:#4e5969; font-size:15px; }.figma-elements__capture-empty p { margin:0; color:#86909c; font-size:13px; }.figma-elements__capture-empty.is-scanning > span { width:80px; height:80px; border-radius:18px; background:linear-gradient(135deg,#14c9c1,#2166f3); color:#fff; animation:figma-pulse 1.4s ease-in-out infinite; }.figma-elements__capture-empty.is-scanning > span svg { width:36px; }
@@ -371,15 +542,6 @@ function confidenceClass(confidence: number) {
 .figma-elements__toolbar select { height:28px; min-width:120px; padding:0 24px 0 10px; font-size:12px; }
 .figma-elements__ghost, .figma-elements__primary { height:28px; gap:5px; padding:0 11px; border-radius:7px; font-size:13px; font-weight:500; line-height:19.5px; }
 .figma-elements__primary { border-color:#0fc6c2; background:#0fc6c2; }
-.figma-elements__table-wrap { margin:14px 18px; border-radius:11px; }
-.figma-elements__table-wrap th { height:36px; padding:0 14px; font-size:11px; font-weight:600; }
-.figma-elements__table-wrap td { height:53px; padding:0 14px; font-size:13px; }
-.figma-elements__table-wrap td:first-child strong { font-size:13px; font-weight:600; line-height:19.5px; }
-.figma-elements__table-wrap td:first-child span { margin-top:1px; font-size:11px; line-height:16.5px; }
-.figma-elements__table-wrap td.is-mono { font-family:"JetBrains Mono",monospace; font-size:13px; }
-.figma-elements__table-wrap td.is-hot { color:#0fc6c2; }
-.figma-elements__table-wrap footer { height:42px; padding:0 14px; }
-.figma-elements__table-wrap footer b { width:24px; height:24px; border-radius:5px; background:#165dff; }
 .figma-elements__capture-head { flex-basis:44px; gap:12px; padding:0 18px; }
 .figma-elements__capture-head > button:first-child { font-size:13px; font-weight:500; line-height:19.5px; }
 .figma-elements__capture-head h1 { font-size:15px; font-weight:600; line-height:22.5px; }
@@ -392,5 +554,5 @@ function confidenceClass(confidence: number) {
 .figma-elements__scope-option.is-active { background:#e8fffb; color:#0fc6c2; }
 .figma-elements__scope-option input { width:12px; height:12px; margin:0; accent-color:#0fc6c2; flex:0 0 auto; }
 .figma-elements__scope-option span { line-height:18px; }
-@media (max-width:1100px) { .figma-elements__table-wrap { margin:14px; }.figma-elements__toolbar { padding:0 14px; }.figma-elements__toolbar select:last-of-type { display:none; }.figma-elements__tree { width:250px; flex-basis:250px; }.figma-elements__capture-side { width:260px; flex-basis:260px; }.figma-elements__result-filter { padding:0 12px; }.figma-elements__result-filter select { display:none; } }
+@media (max-width:1100px) { .figma-elements__table-frame { margin:14px; }.figma-elements__toolbar { padding:0 14px; }.figma-elements__toolbar select:last-of-type { display:none; }.figma-elements__tree { width:250px; flex-basis:250px; }.figma-elements__capture-side { width:260px; flex-basis:260px; }.figma-elements__result-filter { padding:0 12px; }.figma-elements__result-filter select { display:none; } }
 </style>

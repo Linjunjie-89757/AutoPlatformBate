@@ -22,12 +22,12 @@ test('resolveRunnerRuntimeConfig builds productized defaults', () => {
   });
 
   assert.equal(config.runnerVersion, RUNNER_VERSION);
-  assert.equal(config.productName, 'Web UI Local Runner');
+  assert.equal(config.productName, 'Auto Platform Local Runner');
   assert.equal(config.host, '127.0.0.1');
   assert.equal(config.port, 39118);
   assert.equal(config.sessionTtlMinutes, 15);
   assert.equal(config.installId, 'web-ui-runner-qa-machine');
-  assert.equal(config.runnerName, 'Web UI Local Runner');
+  assert.equal(config.runnerName, 'Auto Platform Local Runner');
   assert.equal(config.machineHint.deviceName, 'qa-machine');
   assert.equal(config.dataDir, join('C:\\Users\\tester', '.auto-web-ui-runner'));
   assert.equal(config.authDir, join('C:\\Users\\tester', '.auto-web-ui-runner', 'auth'));

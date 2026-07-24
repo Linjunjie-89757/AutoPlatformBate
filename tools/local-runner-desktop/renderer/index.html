@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auto Platform Local Runner</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Local Runner</p>
+          <h1>本地执行器</h1>
+          <p class="subtle">连接平台任务队列，在本机执行 Web UI 和接口自动化任务。</p>
+        </div>
+        <div class="status-pill" id="processStatus">检测中</div>
+      </section>
+
+      <section class="grid">
+        <article class="panel span-2">
+          <div class="panel-title">
+            <div>
+              <h2>运行状态</h2>
+              <p>本地服务、浏览器依赖和平台轮询状态</p>
+            </div>
+            <div class="actions">
+              <button class="secondary" id="openLogsBtn">日志</button>
+              <button class="secondary" id="stopBtn">停止</button>
+              <button class="primary" id="startBtn">启动</button>
+            </div>
+          </div>
+          <div class="status-grid">
+            <div class="metric">
+              <span>Runner 服务</span>
+              <strong id="healthText">-</strong>
+            </div>
+            <div class="metric">
+              <span>平台轮询</span>
+              <strong id="pollText">-</strong>
+            </div>
+            <div class="metric">
+              <span>端口</span>
+              <strong id="portText">-</strong>
+            </div>
+            <div class="metric">
+              <span>进程</span>
+              <strong id="pidText">-</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-title compact">
+            <div>
+              <h2>平台连接</h2>
+              <p>保存服务端地址后连接任务队列</p>
+            </div>
+          </div>
+          <label>
+            <span>服务端地址</span>
+            <input id="apiBaseUrlInput" placeholder="http://127.0.0.1:8080" />
+          </label>
+          <label>
+            <span>Runner 名称</span>
+            <input id="runnerNameInput" placeholder="本机 Local Runner" />
+          </label>
+          <label>
+            <span>本地端口</span>
+            <input id="portInput" type="number" min="1" max="65535" />
+          </label>
+          <label class="check-row">
+            <input id="autoStartInput" type="checkbox" />
+            <span>启动桌面应用时自动启动 Runner</span>
+          </label>
+          <div class="actions">
+            <button class="secondary" id="saveBtn">保存配置</button>
+            <button class="primary" id="connectBtn">连接平台</button>
+            <button class="secondary" id="disconnectBtn">断开</button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-title compact">
+            <div>
+              <h2>能力模块</h2>
+              <p>APP 自动化已在桌面壳中预留</p>
+            </div>
+          </div>
+          <div class="capability-list" id="capabilityList"></div>
+        </article>
+
+        <article class="panel span-2">
+          <div class="panel-title compact">
+            <div>
+              <h2>最近日志</h2>
+              <p id="logPathText">-</p>
+            </div>
+          </div>
+          <pre class="logs" id="logs"></pre>
+        </article>
+      </section>
+    </main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

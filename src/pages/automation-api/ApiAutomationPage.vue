@@ -82,9 +82,11 @@ watch(selectedWorkspaceCode, (value) => {
     <div class="api-automation-page">
       <ApiScenarioFigmaWorkspace
         v-if="activeSection === 'scenarios'"
+        :workspace-code="workspaceCode"
       />
       <ApiExecutionSuiteFigmaWorkspace
         v-else-if="activeSection === 'execution'"
+        :workspace-code="workspaceCode"
       />
       <ApiInterfaceWorkspace
         v-else

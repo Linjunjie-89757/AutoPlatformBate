@@ -18,6 +18,8 @@ export { default as AppStatusBadge } from './app-status-badge/AppStatusBadge.vue
 export { default as AppTable } from './app-table/AppTable.vue'
 export { default as AppTableColumnSettingsDrawer } from './app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 export { default as AppTableSettingsTrigger } from './app-table-settings-trigger/AppTableSettingsTrigger.vue'
+export * from './app-figma-action-column'
+export * from './app-figma-table'
 export { default as AppTagInput } from './app-tag-input/AppTagInput.vue'
 export { default as AppUserSelect } from './app-user-select/AppUserSelect.vue'
 export { default as AiGenerationLiveLogDialog } from './ai-live-log/AiGenerationLiveLogDialog.vue'

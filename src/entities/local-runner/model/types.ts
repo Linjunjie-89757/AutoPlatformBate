@@ -35,6 +35,19 @@ export interface RunnerOfflineScanResult {
   timedOutTasks?: number | null
 }
 
+export interface LocalRunnerReleaseInfo {
+  version: string
+  platform: string
+  architecture: string
+  packageType: string
+  fileName: string
+  fileSize: number
+  updatedAt: string | null
+  available: boolean
+  downloadPath: string
+  downloadUrl: string
+}
+
 export interface RunnerTaskAckResponse {
   runId: string
   status: string

@@ -1,12 +1,16 @@
 import { httpGet, httpPost, type ApiResponse } from '@/shared/api/request'
+import { env } from '@/shared/config/env'
 
 import type {
+  LocalRunnerReleaseInfo,
   LocalRunnerTaskDetailResponse,
   RunnerNodeSummary,
   RunnerOfflineScanResult,
   RunnerTaskAckResponse,
 } from '../model/types'
 import { normalizeLocalRunnerTaskDetail } from '../lib/taskDetailView'
+
+type LocalRunnerReleasePayload = Omit<LocalRunnerReleaseInfo, 'downloadUrl'>
 
 export interface RunnerNodeQuery {
   taskType?: string | null
@@ -20,7 +24,24 @@ function unwrapApiResponse<T>(payload: ApiResponse<T>) {
   return payload.data
 }
 
+function resolveDownloadUrl(downloadPath: string) {
+  const browserOrigin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+  const apiUrl = new URL(env.apiBaseUrl, `${browserOrigin}/`)
+  return new URL(downloadPath, apiUrl.origin).toString()
+}
+
 export const localRunnerApi = {
+  async getLatestWindowsRelease(): Promise<LocalRunnerReleaseInfo> {
+    const response = await httpGet<ApiResponse<LocalRunnerReleasePayload>>(
+      '/local-runner/releases/latest/windows-x64',
+    )
+    const release = unwrapApiResponse(response)
+    return {
+      ...release,
+      downloadUrl: resolveDownloadUrl(release.downloadPath),
+    }
+  },
+
   async getRunnerNodes(query: RunnerNodeQuery = {}) {
     const search = new URLSearchParams()
     if (query.taskType) {

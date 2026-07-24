@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -16,20 +16,27 @@ import {
   type DefectSummaryItem,
   type TransitionDefectPayload,
 } from '@/entities/defect'
+import { useSession } from '@/entities/session'
 import { assignDefect } from '@/features/defect-assign'
 import { DefectTransitionDialog, transitionDefect } from '@/features/defect-transition'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaDefectIcons } from '@/shared/assets/figma-icons'
+import {
+  type AppTableColumnDefinition,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import { confirmDelete } from '@/shared/ui'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import { confirmDelete } from '@/shared/ui'
+import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 import { DefectDetailDrawer } from '@/widgets/defect-detail-drawer'
-import {
-  useDefectTableSettings,
-  type DefectTableColumnDefinition,
-  type DefectTableColumnKey,
-} from './useDefectTableSettings'
 
 const props = withDefaults(
   defineProps<{
@@ -50,6 +57,7 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { currentUser } = useSession()
 const defects = ref<DefectSummaryItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
@@ -61,7 +69,6 @@ const saving = ref(false)
 const detailDrawerVisible = ref(false)
 const detailDefectId = ref<number | null>(null)
 const activeDetailRowId = ref<number | null>(null)
-const hoveredRowId = ref<number | null>(null)
 const selectedDefectIds = ref<number[]>([])
 const assigningDefectId = ref<number | null>(null)
 const transitionDialogVisible = ref(false)
@@ -69,8 +76,11 @@ const transitioningDefect = ref<DefectSummaryItem | null>(null)
 const transitioningDefectId = ref<number | null>(null)
 const deletingDefectId = ref<number | null>(null)
 const detailRefreshKey = ref(0)
+const tableFrameRef = ref<HTMLElement | null>(null)
+const tableFrameWidth = ref(0)
 let loadRequestSeq = 0
 let pendingLoadSignature = ''
+let tableFrameObserver: ResizeObserver | null = null
 
 const assigneeNameMap = computed(() => new Map((props.assigneeOptions ?? []).map((item) => [item.value, item.label])))
 const filteredDefects = computed(() => defects.value.filter((item) => {
@@ -97,60 +107,45 @@ const activeDetailIndex = computed(() => {
   return index >= 0 ? index : null
 })
 const selectedDefects = computed(() => defects.value.filter(item => selectedDefectIds.value.includes(item.id)))
-const tableColumnDefinitions = computed<DefectTableColumnDefinition[]>(() => [
-  { key: 'select', label: '', width: 43.5, required: true, defaultVisible: true },
-  { key: 'bugNo', label: '缺陷 ID', width: 130.578, required: true, defaultVisible: true },
-  { key: 'title', label: '缺陷标题', minWidth: 362.766, required: true, defaultVisible: true, showOverflowTooltip: true },
-  { key: 'severity', label: '严重程度', width: 116.078, required: true, defaultVisible: true },
-  { key: 'priority', label: '优先级', width: 101.562, required: true, defaultVisible: true },
-  { key: 'status', label: '状态', width: 116.078, required: true, defaultVisible: true },
-  { key: 'assigneeName', label: '负责人', width: 101.562, required: true, defaultVisible: true, showOverflowTooltip: true },
-  { key: 'workspaceName', label: '所属模块', width: 130.578, required: true, defaultVisible: true, showOverflowTooltip: true },
-  { key: 'updatedAt', label: '更新时间', width: 210.156, required: true, defaultVisible: true },
-  { key: 'tags', label: '标签', width: 190, defaultVisible: false, showOverflowTooltip: true },
-  { key: 'reporterName', label: '创建人', width: 120, defaultVisible: false, showOverflowTooltip: true },
+const tableColumnDefinitions: AppTableColumnDefinition[] = [
+  { key: 'bugNo', label: '缺陷 ID', width: 130.578, defaultVisible: true },
+  { key: 'title', label: '缺陷标题', minWidth: 362.766, required: true, defaultVisible: true },
+  { key: 'severity', label: '严重程度', width: 116.078, defaultVisible: true },
+  { key: 'priority', label: '优先级', width: 101.562, defaultVisible: true },
+  { key: 'status', label: '状态', width: 116.078, defaultVisible: true },
+  { key: 'assigneeName', label: '负责人', width: 101.562, defaultVisible: true },
+  { key: 'workspaceName', label: '所属模块', width: 130.578, defaultVisible: true },
+  { key: 'updatedAt', label: '更新时间', width: 210.156, defaultVisible: true },
+  { key: 'tags', label: '标签', width: 190, defaultVisible: false },
+  { key: 'reporterName', label: '创建人', width: 120, defaultVisible: false },
   { key: 'createdAt', label: '创建时间', width: 168, defaultVisible: false },
-  { key: 'updatedByName', label: '更新人', width: 120, defaultVisible: false, showOverflowTooltip: true },
+  { key: 'updatedByName', label: '更新人', width: 120, defaultVisible: false },
   { key: 'relatedCaseCount', label: '关联用例数', width: 112, defaultVisible: false },
-])
-const tableSettings = useDefectTableSettings({
-  storageKey: 'defect-list-table-settings-v1',
+]
+const tableSettings = useTableColumnSettings({
+  storageKey: computed(() => `app-figma-table:defects:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
   columns: tableColumnDefinitions,
+  immediate: true,
 })
 const visibleColumns = computed(() => tableSettings.visibleColumns.value)
-const dataGridMinWidth = computed(() => {
-  const columnWidth = visibleColumns.value.reduce((total, column) => {
-    if (typeof column.width === 'number') {
-      return total + column.width
-    }
-    if (typeof column.minWidth === 'number') {
-      return total + column.minWidth
-    }
-    return total + 120
-  }, 0)
+const selectionColumnWidth = 43.5
+const operationActionCount = 4
+const operationColumnWidth = getAppFigmaActionColumnWidth(operationActionCount)
 
-  return `${columnWidth}px`
-})
+function getDefectColumnWidth(column: AppTableColumnDefinition) {
+  return column.width || column.minWidth || 120
+}
 
-const dataGridTemplateColumns = computed(() => visibleColumns.value.map((column) => {
-  if (typeof column.width === 'number') {
-    return `${column.width}px`
-  }
-  if (column.key === 'title' && typeof column.minWidth === 'number') {
-    return `minmax(${column.minWidth}px, 1fr)`
-  }
-  if (typeof column.minWidth === 'number') {
-    return `${column.minWidth}px`
-  }
-  return '120px'
-}).join(' '))
+const tableContentWidth = computed(() => visibleColumns.value.reduce(
+  (width, column) => width + getDefectColumnWidth(column),
+  selectionColumnWidth + operationColumnWidth,
+))
+const tableNeedsScroll = computed(() => Boolean(tableFrameWidth.value && tableContentWidth.value > tableFrameWidth.value))
 
-function formatColumnValue(row: DefectSummaryItem, key: DefectTableColumnKey) {
+function formatColumnValue(row: DefectSummaryItem, key: string) {
   switch (key) {
     case 'bugNo':
       return row.bugNo || '-'
-    case 'select':
-      return ''
     case 'title':
       return row.title || '-'
     case 'status':
@@ -180,23 +175,17 @@ function formatColumnValue(row: DefectSummaryItem, key: DefectTableColumnKey) {
   }
 }
 
-function setHoveredRow(rowId: number | null) {
-  hoveredRowId.value = rowId
-}
-
-function isRowHighlighted(rowId: number) {
-  return hoveredRowId.value === rowId || activeDetailRowId.value === rowId
-}
-
-function isDefectSelected(rowId: number) {
-  return selectedDefectIds.value.includes(rowId)
-}
-
-function toggleDefectSelection(rowId: number) {
-  selectedDefectIds.value = isDefectSelected(rowId)
-    ? selectedDefectIds.value.filter(id => id !== rowId)
-    : [...selectedDefectIds.value, rowId]
+function handleDefectSelectionChange(rows: DefectSummaryItem[]) {
+  selectedDefectIds.value = rows.map(row => row.id)
   emit('selection-change', selectedDefectIds.value.length)
+}
+
+function getDefectRowClassName({ row }: { row: DefectSummaryItem }) {
+  return activeDetailRowId.value === row.id ? 'is-active' : ''
+}
+
+function openColumnSettings() {
+  tableSettings.open()
 }
 
 function clearDefectSelection() {
@@ -214,10 +203,6 @@ function normalizePageNo() {
   }
 }
 
-function getClientTotalPages(totalCount: number) {
-  return totalCount > 0 ? Math.ceil(totalCount / Math.max(pageSize.value, 1)) : 0
-}
-
 function reloadFromFirstPage() {
   if (pageNo.value === 1) {
     void loadDefects()
@@ -225,6 +210,14 @@ function reloadFromFirstPage() {
   }
 
   pageNo.value = 1
+}
+
+function handlePageChange(value: number) {
+  pageNo.value = value
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value
 }
 
 async function loadDefects() {
@@ -259,8 +252,8 @@ async function loadDefects() {
       selectedDefectIds.value = selectedDefectIds.value.filter(id => defects.value.some(item => item.id === id))
       emit('selection-change', selectedDefectIds.value.length)
       pageNo.value = page.pageNo
-      total.value = filteredDefects.value.length
-      totalPages.value = getClientTotalPages(filteredDefects.value.length)
+      total.value = page.total
+      totalPages.value = page.totalPages
       emit('loaded', defects.value)
     }
   } catch (error) {
@@ -493,12 +486,6 @@ watch(
   { deep: true },
 )
 
-watch(filteredDefects, (items) => {
-  total.value = items.length
-  totalPages.value = getClientTotalPages(items.length)
-  normalizePageNo()
-})
-
 watch(pageNo, (value, oldValue) => {
   if (value !== oldValue) {
     void loadDefects()
@@ -514,8 +501,24 @@ watch(pageSize, (value, oldValue) => {
 watch(totalPages, normalizePageNo)
 
 onMounted(() => {
-  tableSettings.load()
   void loadDefects()
+})
+
+watch(tableFrameRef, (element) => {
+  tableFrameObserver?.disconnect()
+  tableFrameObserver = null
+  if (!element) return
+
+  const syncWidth = () => {
+    tableFrameWidth.value = element.clientWidth
+  }
+  syncWidth()
+  tableFrameObserver = new ResizeObserver(syncWidth)
+  tableFrameObserver.observe(element)
+})
+
+onBeforeUnmount(() => {
+  tableFrameObserver?.disconnect()
 })
 
 defineExpose({
@@ -553,169 +556,126 @@ defineExpose({
         <AppButton size="small" :icon="RefreshRight" @click="loadDefects">重试</AppButton>
       </div>
 
-      <div v-loading="loading" class="defect-list-panel__table-shell">
-        <div class="defect-list-panel__table-data">
-          <div class="defect-list-panel__table-scroll">
-            <div
-              class="defect-list-panel__grid defect-list-panel__grid--header"
-              :style="{ gridTemplateColumns: dataGridTemplateColumns, minWidth: dataGridMinWidth }"
-            >
-              <div
-                v-for="column in visibleColumns"
-                :key="`header-${column.key}`"
-                :class="['defect-list-panel__cell', `defect-list-panel__cell--${column.key}`]"
+      <div ref="tableFrameRef" class="defect-list-panel__table-frame">
+        <AppFigmaTable
+          class="defect-list-panel__table"
+          :data="pagedDefects"
+          :loading="loading"
+          :page-no="pageNo"
+          :page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          show-page-size
+          show-jumper
+          :header-height="34.5"
+          :row-height="53.25"
+          :footer-height="43"
+          row-key="id"
+          :row-class-name="getDefectRowClassName"
+          empty-text="当前筛选条件下暂无缺陷记录"
+          @selection-change="handleDefectSelectionChange"
+          @page-change="handlePageChange"
+          @page-size-change="handlePageSizeChange"
+        >
+          <el-table-column type="selection" :width="selectionColumnWidth" />
+
+          <el-table-column
+            v-for="column in visibleColumns"
+            :key="column.key"
+            :label="column.label"
+            :width="column.width"
+            :min-width="column.minWidth"
+            :align="column.key === 'relatedCaseCount' ? 'center' : 'left'"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <button
+                v-if="column.key === 'bugNo'"
+                type="button"
+                class="defect-list-panel__code-trigger"
+                @click.stop="openDetailDrawer(row)"
               >
-                {{ column.label }}
-              </div>
-            </div>
+                {{ formatColumnValue(row, column.key) }}
+              </button>
 
-            <template v-if="pagedDefects.length">
-              <div
-                v-for="row in pagedDefects"
-                :key="row.id"
-                :class="[
-                  'defect-list-panel__grid',
-                  'defect-list-panel__grid--row',
-                  { 'is-active': activeDetailRowId === row.id },
-                ]"
-                :style="{ gridTemplateColumns: dataGridTemplateColumns, minWidth: dataGridMinWidth }"
-                @mouseenter="setHoveredRow(row.id)"
-                @mouseleave="setHoveredRow(null)"
-              >
-                <div
-                  v-for="column in visibleColumns"
-                  :key="`${row.id}-${column.key}`"
-                  :class="['defect-list-panel__cell', `defect-list-panel__cell--${column.key}`]"
-                >
-                  <input
-                    v-if="column.key === 'select'"
-                    type="checkbox"
-                    class="defect-list-panel__checkbox"
-                    :checked="isDefectSelected(row.id)"
-                    :aria-label="isDefectSelected(row.id) ? '取消选择缺陷' : '选择缺陷'"
-                    @change.stop="toggleDefectSelection(row.id)"
-                    @click.stop
-                  >
-
-                  <button
-                    v-else-if="column.key === 'bugNo'"
-                    type="button"
-                    class="defect-list-panel__code-trigger"
-                    @click="openDetailDrawer(row)"
-                  >
-                    {{ formatColumnValue(row, column.key) }}
-                  </button>
-
-                  <div v-else-if="column.key === 'title'" class="defect-list-panel__title-cell">
-                    <el-tooltip :content="row.title" placement="top">
-                      <span class="defect-list-panel__title">{{ row.title || '-' }}</span>
-                    </el-tooltip>
-                    <div v-if="Array.isArray(row.tags) && row.tags.length" class="defect-list-panel__tags">
-                      <span v-for="tag in row.tags.slice(0, 2)" :key="tag">{{ tag }}</span>
-                    </div>
-                  </div>
-
-                  <DefectStatusBadge v-else-if="column.key === 'status'" :status="row.status" />
-                  <DefectPriorityBadge v-else-if="column.key === 'priority'" :priority="row.priority" />
-                  <DefectSeverityBadge v-else-if="column.key === 'severity'" :severity="row.severity" />
-
-                  <el-tooltip
-                    v-else-if="column.key === 'tags'"
-                    :content="formatColumnValue(row, column.key)"
-                    placement="top"
-                  >
-                    <span class="defect-list-panel__cell-text">{{ formatColumnValue(row, column.key) }}</span>
-                  </el-tooltip>
-
-                  <span v-else class="defect-list-panel__cell-text">{{ formatColumnValue(row, column.key) }}</span>
+              <div v-else-if="column.key === 'title'" class="defect-list-panel__title-cell">
+                <el-tooltip :content="row.title" placement="top">
+                  <span class="defect-list-panel__title">{{ row.title || '-' }}</span>
+                </el-tooltip>
+                <div v-if="Array.isArray(row.tags) && row.tags.length" class="defect-list-panel__tags">
+                  <span v-for="tag in row.tags.slice(0, 2)" :key="tag">{{ tag }}</span>
                 </div>
               </div>
+
+              <DefectStatusBadge v-else-if="column.key === 'status'" :status="row.status" />
+              <DefectPriorityBadge v-else-if="column.key === 'priority'" :priority="row.priority" />
+              <DefectSeverityBadge v-else-if="column.key === 'severity'" :severity="row.severity" />
+
+              <el-tooltip
+                v-else-if="column.key === 'tags'"
+                :content="formatColumnValue(row, column.key)"
+                placement="top"
+              >
+                <span class="defect-list-panel__cell-text">{{ formatColumnValue(row, column.key) }}</span>
+              </el-tooltip>
+
+              <span v-else class="defect-list-panel__cell-text">{{ formatColumnValue(row, column.key) }}</span>
             </template>
+          </el-table-column>
 
-            <div v-else class="defect-list-panel__table-empty">
-              当前筛选条件下暂无缺陷记录
-            </div>
-          </div>
-        </div>
-
-        <div class="defect-list-panel__table-actions">
-          <div class="defect-list-panel__actions-header">
-            <span>操作</span>
-          </div>
-
-          <template v-if="pagedDefects.length">
-            <div
-              v-for="row in pagedDefects"
-              :key="`action-${row.id}`"
-              :class="[
-                'defect-list-panel__actions-row',
-                { 'is-active': isRowHighlighted(row.id) },
-              ]"
-              @mouseenter="setHoveredRow(row.id)"
-              @mouseleave="setHoveredRow(null)"
-            >
-              <div class="defect-list-panel__actions">
-                <button
-                  type="button"
-                  class="defect-list-panel__icon-button"
-                  title="查看"
-                  @click="openDetailDrawer(row)"
-                >
-                  <img :src="figmaDefectIcons.action.view" alt="" />
-                </button>
-                <button
-                  type="button"
-                  class="defect-list-panel__icon-button"
-                  title="编辑"
-                  :disabled="saving"
-                  @click="openEditDialog(row)"
-                >
-                  <img :src="figmaDefectIcons.action.edit" alt="" />
-                </button>
-                <button
-                  type="button"
-                  class="defect-list-panel__icon-button"
-                  title="流转"
-                  :disabled="transitioningDefectId === row.id || assigningDefectId === row.id"
-                  @click="openTransitionDialog(row)"
-                >
-                  <img :src="figmaDefectIcons.action.transition" alt="" />
-                </button>
-                <button
-                  type="button"
-                  class="defect-list-panel__icon-button"
-                  title="删除"
-                  :disabled="deletingDefectId === row.id"
-                  @click="deleteRowDefect(row)"
-                >
-                  <img :src="figmaDefectIcons.action.delete" alt="" />
-                </button>
-              </div>
-            </div>
-          </template>
-
-          <div v-else class="defect-list-panel__actions-empty">-</div>
-        </div>
-      </div>
-      <AppEmptyState
-        v-if="!loading && !defects.length && !errorMessage"
-        class="defect-list-panel__empty"
-        title="暂无匹配缺陷"
-        description="当前工作空间或筛选条件下没有可展示的缺陷记录。"
-      />
-
-      <div v-if="defects.length || total > 0" class="defect-list-panel__pagination">
-        <span>共 {{ total }} 条 / {{ totalPages }} 页</span>
-        <el-pagination
-          v-model:current-page="pageNo"
-          v-model:page-size="pageSize"
-          :page-sizes="[10, 20, 30, 50]"
-          :total="total"
-          size="small"
-          layout="sizes, prev, pager, next, jumper"
-        />
+          <AppFigmaActionColumn
+            :action-count="operationActionCount"
+            :width="operationColumnWidth"
+            :scroll-shadow="tableNeedsScroll"
+          >
+            <template #settings>
+              <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openColumnSettings" />
+            </template>
+            <template #default="{ row }">
+              <button type="button" title="查看" aria-label="查看" @click.stop="openDetailDrawer(row)">
+                <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.view" alt="" />
+              </button>
+              <button type="button" title="编辑" aria-label="编辑" :disabled="saving" @click.stop="openEditDialog(row)">
+                <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.edit" alt="" />
+              </button>
+              <button
+                type="button"
+                title="流转"
+                aria-label="流转"
+                :disabled="transitioningDefectId === row.id || assigningDefectId === row.id"
+                @click.stop="openTransitionDialog(row)"
+              >
+                <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.transition" alt="" />
+              </button>
+              <button
+                type="button"
+                data-danger="true"
+                title="删除"
+                aria-label="删除"
+                :disabled="deletingDefectId === row.id"
+                @click.stop="deleteRowDefect(row)"
+              >
+                <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.delete" alt="" />
+              </button>
+            </template>
+          </AppFigmaActionColumn>
+        </AppFigmaTable>
       </div>
     </div>
+
+    <AppTableColumnSettingsDrawer
+      :model-value="tableSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
+      :columns="tableSettings.drawerColumns.value"
+      :dragging-key="tableSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) tableSettings.cancel() }"
+      @toggle-column="tableSettings.toggleColumn"
+      @drag-start="tableSettings.dragStart"
+      @drag-end="tableSettings.dragEnd"
+      @drop-column="tableSettings.dropColumn"
+      @reset="tableSettings.resetDraft"
+    />
 
     <DefectDetailDrawer
       v-model="detailDrawerVisible"
@@ -766,6 +726,70 @@ defineExpose({
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.defect-list-panel__table-frame {
+  width: calc(100% - 42px);
+  min-width: 0;
+  margin: 14px 21px;
+}
+
+.defect-list-panel__table {
+  --app-figma-table-border: 1px solid #e5e6eb;
+  --app-figma-table-radius: 11px;
+  --app-figma-table-background: #ffffff;
+  --app-figma-table-shadow: 0 1px 4px rgba(0, 0, 0, .04);
+  --app-figma-table-header-background: #fafafa;
+  --app-figma-table-header-color: #86909c;
+  --app-figma-table-header-font-size: 11px;
+  --app-figma-table-header-font-weight: 600;
+  --app-figma-table-header-letter-spacing: .275px;
+  --app-figma-table-header-line-height: 16.5px;
+  --app-figma-table-text-color: #86909c;
+  --app-figma-table-font-size: 13px;
+  --app-figma-table-line-height: 19.5px;
+  --app-figma-table-cell-padding: 14px;
+  --app-figma-table-row-hover-background: #fafafa;
+  --app-figma-table-muted-color: #86909c;
+  --app-figma-table-primary-color: #165dff;
+  font-family: var(--app-font-family);
+}
+
+.defect-list-panel__table :deep(.el-table__header-wrapper th.el-table__cell) {
+  text-transform: uppercase;
+}
+
+.defect-list-panel__table :deep(.el-table__row.is-active > td.el-table__cell) {
+  background: #eff6ff;
+}
+
+.defect-list-panel__table :deep(.el-table__row.is-active .defect-list-panel__code-trigger),
+.defect-list-panel__table :deep(.el-table__row.is-active .defect-list-panel__title) {
+  color: var(--app-primary);
+}
+
+.defect-list-panel__table :deep(.el-checkbox__inner) {
+  width: 12.25px;
+  height: 12.25px;
+  border-color: #c9cdd4;
+  border-radius: 3px;
+}
+
+.defect-list-panel__table :deep(.el-checkbox__input.is-checked .el-checkbox__inner),
+.defect-list-panel__table :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) {
+  border-color: #f53f3f;
+  background: #f53f3f;
+}
+
+.defect-list-panel__table :deep(.el-table__fixed-right-patch) {
+  background: #fafafa;
+}
+
+.defect-list-panel__action-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
 }
 
 .defect-list-panel__inline-error {

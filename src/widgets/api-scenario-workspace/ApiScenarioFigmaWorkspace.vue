@@ -1,10 +1,27 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   ArrowDown, ArrowUp, ChevronRight, Clock, Copy, CornerDownRight, Database, Edit2, FileText, Filter, Globe, GripVertical, Layers,
   Link2, MoreHorizontal, Play, Plus, Repeat, Save, Search, Settings, Shield, Terminal, Trash2,
   Upload, X,
 } from '@lucide/vue'
+
+import { useSession } from '@/entities/session'
+import {
+  type AppTableColumnDefinition,
+  useLocalPagedTable,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import { AppFigmaActionColumn } from '@/shared/ui/app-figma-action-column'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
+import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
+
+const props = withDefaults(defineProps<{
+  workspaceCode?: string
+}>(), {
+  workspaceCode: 'ALL',
+})
 
 type ScenarioResult = 'pass' | 'fail' | 'idle'
 type ScenarioPriority = 'P0' | 'P1' | 'P2'
@@ -100,6 +117,10 @@ const showMoreTabs = ref(false)
 const isEditingSceneName = ref(false)
 const sceneNameInput = ref<HTMLInputElement | null>(null)
 const sceneSettings = ref({ continueOnFailure: false, timeout: 30000, retryCount: 0, waitTime: 0 })
+const sceneTableFrameRef = ref<HTMLElement | null>(null)
+const sceneTableFrameWidth = ref(0)
+const { currentUser } = useSession()
+let sceneTableFrameObserver: ResizeObserver | null = null
 
 const scenarios = ref<Scenario[]>([
   makeScenario(1, '产品管理-新增编辑删除闭环', 'pass', 'P1', '获客中心', ['获客中心', 'CRUD闭环', 'Codex生成'], 10),
@@ -145,6 +166,100 @@ const filteredScenarios = computed(() => {
     }
     return true
   })
+})
+
+const scenarioTableColumns: AppTableColumnDefinition[] = [
+  { key: 'id', label: 'ID', defaultVisible: true, required: true },
+  { key: 'name', label: '场景名称', defaultVisible: true, required: true },
+  { key: 'priority', label: '优先级', defaultVisible: true },
+  { key: 'module', label: '所属模块', defaultVisible: true },
+  { key: 'steps', label: '步骤数', defaultVisible: true },
+  { key: 'result', label: '最近结果', defaultVisible: true },
+  { key: 'status', label: '状态', defaultVisible: false, minWidth: 100 },
+  { key: 'environment', label: '执行环境', defaultVisible: false, minWidth: 120 },
+  { key: 'testData', label: '测试数据', defaultVisible: false, minWidth: 150 },
+  { key: 'iterations', label: '循环次数', defaultVisible: false, minWidth: 100 },
+  { key: 'threads', label: '线程数', defaultVisible: false, minWidth: 90 },
+  { key: 'runLocation', label: '运行于', defaultVisible: false, minWidth: 120 },
+  { key: 'runner', label: 'Runner', defaultVisible: false, minWidth: 150 },
+  { key: 'variableSet', label: '变量集', defaultVisible: false, minWidth: 150 },
+  { key: 'lastRun', label: '最近运行时间', defaultVisible: false, minWidth: 170 },
+]
+
+const scenarioColumnSettings = useTableColumnSettings({
+  columns: scenarioTableColumns,
+  storageKey: computed(() => `app-figma-table:api-scenarios:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
+  immediate: true,
+})
+
+const {
+  items: pagedScenarios,
+  total: filteredScenarioTotal,
+  pageNo: scenarioPageNo,
+  pageSize: scenarioPageSize,
+  setPage: setScenarioPage,
+  setPageSize: setScenarioPageSize,
+  resetPage: resetScenarioPage,
+} = useLocalPagedTable(filteredScenarios, { initialPageSize: 10 })
+
+const scenarioDefaultColumnWeights: Record<string, number> = {
+  id: 0.0657,
+  name: 0.3184,
+  priority: 0.0992,
+  module: 0.1178,
+  steps: 0.0992,
+  result: 0.2317,
+}
+
+const scenarioOperationActionCount = 4
+const scenarioTableBaselineWidth = computed(() => Math.max(960, sceneTableFrameWidth.value || 960))
+const scenarioOperationWidth = computed(() => Math.max(96, Math.round(scenarioTableBaselineWidth.value * 0.068)))
+const hasAdditionalScenarioColumns = computed(() => scenarioColumnSettings.visibleColumns.value.some(column => column.defaultVisible === false))
+const scenarioDefaultColumnWidths = computed<Record<string, number>>(() => {
+  const keys = Object.keys(scenarioDefaultColumnWeights)
+  const targetWidth = scenarioTableBaselineWidth.value - scenarioOperationWidth.value
+  let allocatedWidth = 0
+
+  return keys.reduce<Record<string, number>>((widths, key, index) => {
+    const width = index === keys.length - 1
+      ? targetWidth - allocatedWidth
+      : Math.round(scenarioTableBaselineWidth.value * scenarioDefaultColumnWeights[key])
+    widths[key] = width
+    allocatedWidth += width
+    return widths
+  }, {})
+})
+
+function getScenarioColumnWidth(column: AppTableColumnDefinition) {
+  return scenarioDefaultColumnWidths.value[column.key] || column.width || column.minWidth || 140
+}
+
+function formatScenarioColumn(item: Scenario, key: string) {
+  if (key === 'runLocation') return item.runLocation === 'server' ? '服务端执行' : '本地执行器'
+  return item[key as keyof Scenario] ?? '—'
+}
+
+function scenarioRowClassName({ row }: { row: Scenario }) {
+  return row.id % 2 === 0 ? 'is-alt' : ''
+}
+
+watch([keyword, moduleFilter, statusFilter], resetScenarioPage)
+
+watch(sceneTableFrameRef, element => {
+  sceneTableFrameObserver?.disconnect()
+  sceneTableFrameObserver = null
+  if (!element) return
+
+  const syncWidth = () => {
+    sceneTableFrameWidth.value = element.clientWidth
+  }
+  syncWidth()
+  sceneTableFrameObserver = new ResizeObserver(syncWidth)
+  sceneTableFrameObserver.observe(element)
+})
+
+onBeforeUnmount(() => {
+  sceneTableFrameObserver?.disconnect()
 })
 
 function openEditor(item: Scenario) {
@@ -335,18 +450,59 @@ function addChildStep(parent: ScenarioStep) {
           <select v-model="statusFilter" aria-label="场景状态筛选"><option>全部</option><option>进行中</option><option>未激活</option></select>
           <span /><button class="figma-api-scenarios__primary" type="button" @click="createScenario()"><Plus />新建场景</button>
         </div>
-        <div class="figma-api-scenarios__scene-table">
-          <header><span>ID</span><span>场景名称</span><span>优先级</span><span>所属模块</span><span>步骤数</span><span>最近结果</span><span>操作</span></header>
-          <article v-for="item in filteredScenarios" :key="item.id" :class="{ 'is-alt': item.id % 2 === 0 }">
-            <span class="figma-api-scenarios__scene-id">s{{ item.id }}</span>
-            <div class="figma-api-scenarios__scene-name"><button type="button" @click="openEditor(item)">{{ item.name }}</button><div><em v-for="tag in item.tags" :key="tag">{{ tag }}</em></div></div>
-            <span><b class="figma-api-scenarios__scene-priority" :class="`is-${item.priority.toLowerCase()}`">{{ item.priority }}</b></span>
-            <span class="figma-api-scenarios__scene-module">{{ item.module }}</span>
-            <span class="figma-api-scenarios__scene-step-count">{{ item.steps.length }} 个</span>
-            <span class="figma-api-scenarios__scene-result" :class="`is-${item.result}`"><i v-if="item.result !== 'idle'" />{{ resultLabel(item.result) }}</span>
-            <span class="figma-api-scenarios__scene-actions"><button type="button" title="编辑" @click="openEditor(item)"><Edit2 /></button><button type="button" title="执行"><Play /></button><button type="button" title="复制"><Copy /></button><button type="button" title="删除" @click="removeScenario(item)"><Trash2 /></button></span>
-          </article>
-          <p v-if="!filteredScenarios.length" class="figma-api-scenarios__scene-empty">暂无符合条件的场景</p>
+        <div ref="sceneTableFrameRef" class="figma-api-scenarios__scene-table">
+          <AppFigmaTable
+            class="figma-api-scenarios__scene-data-table"
+            :data="pagedScenarios"
+            :page-no="scenarioPageNo"
+            :page-size="scenarioPageSize"
+            :total="filteredScenarioTotal"
+            show-page-size
+            show-jumper
+            :header-height="36"
+            :row-height="65"
+            :row-class-name="scenarioRowClassName"
+            row-key="id"
+            empty-text="暂无符合条件的场景"
+            @page-change="setScenarioPage"
+            @page-size-change="setScenarioPageSize"
+          >
+            <el-table-column
+              v-for="column in scenarioColumnSettings.visibleColumns.value"
+              :key="column.key"
+              :label="column.label"
+              :width="getScenarioColumnWidth(column)"
+              show-overflow-tooltip
+            >
+              <template #default="{ row: item }">
+                <span v-if="column.key === 'id'" class="figma-api-scenarios__scene-id">s{{ item.id }}</span>
+                <div v-else-if="column.key === 'name'" class="figma-api-scenarios__scene-name"><button type="button" @click.stop="openEditor(item)">{{ item.name }}</button><div><em v-for="tag in item.tags" :key="tag">{{ tag }}</em></div></div>
+                <b v-else-if="column.key === 'priority'" class="figma-api-scenarios__scene-priority" :class="`is-${item.priority.toLowerCase()}`">{{ item.priority }}</b>
+                <span v-else-if="column.key === 'module'" class="figma-api-scenarios__scene-module">{{ item.module }}</span>
+                <span v-else-if="column.key === 'steps'" class="figma-api-scenarios__scene-step-count">{{ item.steps.length }} 个</span>
+                <span v-else-if="column.key === 'result'" class="figma-api-scenarios__scene-result" :class="`is-${item.result}`"><i v-if="item.result !== 'idle'" />{{ resultLabel(item.result) }}</span>
+                <span v-else class="figma-api-scenarios__scene-extra">{{ formatScenarioColumn(item, column.key) }}</span>
+              </template>
+            </el-table-column>
+
+            <AppFigmaActionColumn
+              :action-count="scenarioOperationActionCount"
+              :width="scenarioOperationWidth"
+              :button-size="21"
+              :action-gap="1.75"
+              :scroll-shadow="hasAdditionalScenarioColumns"
+            >
+              <template #settings>
+                <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="scenarioColumnSettings.open()" />
+              </template>
+              <template #default="{ row: item }">
+                <button type="button" title="编辑" aria-label="编辑" @click.stop="openEditor(item)"><Edit2 /></button>
+                <button type="button" title="执行" aria-label="执行" @click.stop><Play /></button>
+                <button type="button" title="复制" aria-label="复制" @click.stop><Copy /></button>
+                <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="removeScenario(item)"><Trash2 /></button>
+              </template>
+            </AppFigmaActionColumn>
+          </AppFigmaTable>
         </div>
       </section>
     </main>
@@ -467,6 +623,20 @@ function addChildStep(parent: ScenarioStep) {
       <div v-if="showAddStep || showImportSteps" class="figma-api-scenarios__overlay" @click.self="showAddStep = false; showImportSteps = false"><section class="figma-api-scenarios__dialog" :class="{ 'is-import': showImportSteps }"><header><b>{{ showImportSteps ? '导入步骤' : '选择步骤类型' }}</b><button type="button" @click="showAddStep = false; showImportSteps = false"><X /></button></header><p v-if="showImportSteps">选择资源后会将对应接口和脚本步骤追加到当前场景。</p><div v-else class="figma-api-scenarios__step-type-grid"><button v-for="[type, config] in stepTypeEntries" :key="type" type="button" @click="addStep(type)"><span :style="{ color: config.color, background: config.background }"><component :is="config.icon" /></span><b>{{ config.label }}</b><small>{{ config.description }}</small></button></div><footer v-if="showImportSteps"><button type="button" @click="showAddStep = false; showImportSteps = false">取消</button><button type="button" @click="importSteps()">确认导入</button></footer></section></div>
       <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer"><header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header><nav><button class="is-active" type="button">基础信息</button><button v-if="configuringStep.type === 'custom'" type="button">Params</button><button v-if="configuringStep.type === 'custom'" type="button">Headers</button><button v-if="configuringStep.type === 'custom'" type="button">Body</button><button v-if="configuringStep.type === 'custom'" type="button">Auth</button><button type="button">前置处理</button><button type="button">后置处理</button><button type="button">断言</button><button type="button">设置</button></nav><div class="figma-api-scenarios__drawer-content"><label>步骤名称<input v-model="configuringStep.label" /></label><div v-if="configuringStep.type === 'custom'" class="figma-api-scenarios__request-line"><label>请求方式<select v-model="configuringStep.method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select></label><label>请求路径<input v-model="configuringStep.detail" /></label></div><label v-else>步骤内容<input v-model="configuringStep.detail" /></label><section class="figma-api-scenarios__debug-response"><header><span>调试响应</span><button type="button"><Play />发送</button></header><p>配置完成后可发送请求并查看响应结果。</p></section></div><footer><button type="button" @click="configuringStep = null">关闭</button><button type="button" @click="configuringStep = null">保存配置</button></footer></aside>
     </main>
+
+    <AppTableColumnSettingsDrawer
+      :model-value="scenarioColumnSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
+      :columns="scenarioColumnSettings.drawerColumns.value"
+      :dragging-key="scenarioColumnSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) scenarioColumnSettings.cancel() }"
+      @toggle-column="scenarioColumnSettings.toggleColumn"
+      @drag-start="scenarioColumnSettings.dragStart"
+      @drag-end="scenarioColumnSettings.dragEnd"
+      @drop-column="scenarioColumnSettings.dropColumn"
+      @reset="scenarioColumnSettings.resetDraft"
+    />
   </section>
 </template>
 
@@ -910,4 +1080,37 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__debug-response > header button svg { width: 11px; height: 11px; }
 .figma-api-scenarios__debug-response p { margin: 0; padding: 14px; color: #86909c; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
 .figma-api-scenarios__step-drawer footer { z-index: 1; flex: 0 0 53px; }
+
+/* The shared table preserves the Figma 214:320 list measurements through page-scoped tokens. */
+.figma-api-scenarios__scene-table { width: 100%; min-width: 960px; }
+.figma-api-scenarios__scene-table :deep(.app-figma-table) {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.figma-api-scenarios :deep(.figma-api-scenarios__scene-data-table) {
+  --app-figma-table-border: 0;
+  --app-figma-table-radius: 0;
+  --app-figma-table-shadow: none;
+  --app-figma-table-header-background: #f4f6fa;
+  --app-figma-table-header-color: #86909c;
+  --app-figma-table-header-font-size: 12px;
+  --app-figma-table-header-font-weight: 500;
+  --app-figma-table-header-letter-spacing: 0;
+  --app-figma-table-header-line-height: 18px;
+  --app-figma-table-text-color: #4e5969;
+  --app-figma-table-font-size: 12px;
+  --app-figma-table-line-height: 18px;
+  --app-figma-table-cell-padding: 14px;
+  --app-figma-table-row-hover-background: #f5f8ff;
+  --app-figma-table-muted-color: #86909c;
+  --app-figma-table-primary-color: #165dff;
+  font-family: Inter, "Noto Sans SC", sans-serif;
+}
+.figma-api-scenarios :deep(.figma-api-scenarios__scene-data-table .el-table__fixed-right-patch) { background: #f4f6fa; }
+.figma-api-scenarios :deep(.figma-api-scenarios__scene-data-table .el-table__body tr.is-alt > td.el-table__cell) { background: #fafbfe; }
+.figma-api-scenarios :deep(.figma-api-scenarios__scene-data-table .el-table__body tr:hover > td.el-table__cell) { background: #f5f8ff; }
+.figma-api-scenarios :deep(.figma-api-scenarios__scene-data-table .app-figma-action-column__actions button) { color: #86909c; }
+.figma-api-scenarios__scene-name { padding-left: 0; }
+.figma-api-scenarios__scene-extra { display: block; overflow: hidden; color: #4e5969; text-overflow: ellipsis; white-space: nowrap; }
 </style>

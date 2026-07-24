@@ -233,12 +233,14 @@ watch(
       />
       <WebUiElementFigmaLibrary
         v-else-if="activeSection === 'elements'"
+        :workspace-code="workspaceCode"
       />
       <WebUiSuiteFigmaWorkspace
         v-else-if="activeSection === 'suites'"
       />
       <WebUiRunRecordsFigmaPage
         v-else-if="activeSection === 'runs'"
+        :workspace-code="workspaceCode"
       />
       <WebUiElementCollectTaskWorkspace
         v-else-if="activeSection === 'collectTask'"

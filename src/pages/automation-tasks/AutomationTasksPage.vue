@@ -1,13 +1,25 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Plus, Search } from '@lucide/vue'
 
 import {
   automationTaskApi,
   type AutomationTaskSummaryItem,
 } from '@/entities/automation-task'
+import { useSession } from '@/entities/session'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaTaskIcons } from '@/shared/assets/figma-icons'
+import {
+  type AppTableColumnDefinition,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
+import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
 type TaskResultTone = 'success' | 'danger' | 'running' | 'muted'
 type TaskDetailTab = 'info' | 'history' | 'ai'
@@ -21,8 +33,9 @@ interface TaskCenterFilter {
   environment: string
 }
 
-interface TaskCenterRow {
+interface TaskCenterRow extends Record<string, unknown> {
   id: string
+  taskId: string
   name: string
   description?: string
   type: string
@@ -36,11 +49,14 @@ interface TaskCenterRow {
   lastRunAt: string
   duration: string
   creator: string
+  workspaceCode: string
+  backendStatus: string
 }
 
 const figmaRows: TaskCenterRow[] = [
   {
     id: 'figma-task-1',
+    taskId: 'figma-task-1',
     name: '订单接口回归-全量',
     description: '覆盖订单中心所有接口场景，执行前自动同步环境变量。',
     type: '接口套件',
@@ -54,9 +70,12 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '2026-07-07 02:00',
     duration: '4m 32s',
     creator: '张程远',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'SUCCESS',
   },
   {
     id: 'figma-task-2',
+    taskId: 'figma-task-2',
     name: '风控中心-黑名单场景验证',
     type: '接口场景',
     typeTone: 'api',
@@ -69,9 +88,12 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '2026-07-07 01:00',
     duration: '1m 18s',
     creator: '李明',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'FAILED',
   },
   {
     id: 'figma-task-3',
+    taskId: 'figma-task-3',
     name: '用户中心-登录注册 Web UI 回归',
     type: 'Web UI 套件',
     typeTone: 'web',
@@ -84,9 +106,12 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '2026-07-04 23:01',
     duration: '8m 55s',
     creator: '王芳',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'SUCCESS',
   },
   {
     id: 'figma-task-4',
+    taskId: 'figma-task-4',
     name: '获客中心-产品管理 UI 用例',
     type: 'Web UI 用例',
     typeTone: 'web',
@@ -99,9 +124,12 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '2026-07-05 14:30',
     duration: '3m 02s',
     creator: '陈伟',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'FAILED',
   },
   {
     id: 'figma-task-5',
+    taskId: 'figma-task-5',
     name: '支付回调接口-烟雾测试',
     type: '接口场景',
     typeTone: 'api',
@@ -114,9 +142,12 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '2026-07-07 10:30',
     duration: '—',
     creator: '张程远',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'RUNNING',
   },
   {
     id: 'figma-task-6',
+    taskId: 'figma-task-6',
     name: '订单退款-全流程场景',
     type: '接口场景',
     typeTone: 'api',
@@ -129,9 +160,12 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '—',
     duration: '—',
     creator: '李明',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'READY',
   },
   {
     id: 'figma-task-7',
+    taskId: 'figma-task-7',
     name: '系统并发压测套件',
     type: '接口套件',
     typeTone: 'api',
@@ -144,9 +178,12 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '2026-07-06 16:00',
     duration: '12m 40s',
     creator: '陈伟',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'FAILED',
   },
   {
     id: 'figma-task-8',
+    taskId: 'figma-task-8',
     name: '获客中心-页面管理 Web UI',
     type: 'Web UI 用例',
     typeTone: 'web',
@@ -159,6 +196,8 @@ const figmaRows: TaskCenterRow[] = [
     lastRunAt: '2026-07-07 00:00',
     duration: '5m 17s',
     creator: '王芳',
+    workspaceCode: 'X-MAN',
+    backendStatus: 'SUCCESS',
   },
 ]
 
@@ -173,6 +212,15 @@ const apiTasks = ref<AutomationTaskSummaryItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 const total = ref(0)
+const pageNo = ref(1)
+const pageSize = ref(10)
+const totalPages = ref(0)
+const useFigmaFallback = ref(true)
+const tableFrameRef = ref<HTMLElement | null>(null)
+const tableFrameWidth = ref(0)
+const { currentUser } = useSession()
+let loadRequestSeq = 0
+let tableFrameObserver: ResizeObserver | null = null
 
 function resolveTaskType(item: AutomationTaskSummaryItem): Pick<TaskCenterRow, 'type' | 'typeTone'> {
   if (item.engineType === 'WEB') {
@@ -205,6 +253,7 @@ function mapTaskItem(item: AutomationTaskSummaryItem, index: number): TaskCenter
 
   return {
     id: String(item.id),
+    taskId: String(item.id),
     name: item.taskName || fallback.name,
     description: index === 0 ? fallback.description : undefined,
     type: type.type,
@@ -218,15 +267,13 @@ function mapTaskItem(item: AutomationTaskSummaryItem, index: number): TaskCenter
     lastRunAt: fallback.lastRunAt,
     duration: fallback.duration,
     creator: fallback.creator,
+    workspaceCode: item.workspaceCode || '-',
+    backendStatus: String(item.status || '-'),
   }
 }
 
 const baseRows = computed(() => {
-  if (apiTasks.value.length) {
-    return apiTasks.value.map(mapTaskItem)
-  }
-
-  return figmaRows
+  return useFigmaFallback.value ? figmaRows : apiTasks.value.map(mapTaskItem)
 })
 
 const filteredRows = computed(() => {
@@ -270,7 +317,41 @@ const summaryCards = computed(() => [
   },
 ])
 
-const tableTotalText = computed(() => `共 ${filteredRows.value.length || total.value || baseRows.value.length} 条`)
+const pagedRows = computed(() => {
+  if (!useFigmaFallback.value) return filteredRows.value
+  const start = (pageNo.value - 1) * pageSize.value
+  return filteredRows.value.slice(start, start + pageSize.value)
+})
+const tableTotal = computed(() => useFigmaFallback.value ? filteredRows.value.length : total.value)
+const taskTableColumns: AppTableColumnDefinition[] = [
+  { key: 'name', label: '任务名称', minWidth: 320.75, required: true, defaultVisible: true },
+  { key: 'type', label: '类型', minWidth: 131.22, defaultVisible: true },
+  { key: 'environment', label: '环境', minWidth: 116.62, defaultVisible: true },
+  { key: 'schedule', label: '调度方式', minWidth: 197.97, defaultVisible: true },
+  { key: 'enabled', label: '启用', minWidth: 64.46, defaultVisible: true },
+  { key: 'result', label: '最近结果', minWidth: 131.21, defaultVisible: true },
+  { key: 'lastRunAt', label: '最近执行时间', minWidth: 174.96, defaultVisible: true },
+  { key: 'duration', label: '耗时', minWidth: 87.47, defaultVisible: true },
+  { key: 'creator', label: '创建人', minWidth: 102.04, defaultVisible: true },
+  { key: 'taskId', label: '任务 ID', width: 120, defaultVisible: false },
+  { key: 'workspaceCode', label: '工作空间编码', width: 140, defaultVisible: false },
+  { key: 'backendStatus', label: '原始任务状态', width: 120, defaultVisible: false },
+]
+const tableSettings = useTableColumnSettings({
+  storageKey: computed(() => `app-figma-table:tasks:${currentUser.value?.id || 'anonymous'}:ALL`),
+  columns: taskTableColumns,
+  immediate: true,
+})
+const visibleTaskColumns = computed(() => tableSettings.visibleColumns.value)
+const taskOperationActionCount = 4
+const taskOperationColumnWidth = getAppFigmaActionColumnWidth(taskOperationActionCount)
+const taskTableContentWidth = computed(() => visibleTaskColumns.value.reduce(
+  (width, column) => width + (column.width || column.minWidth || 120),
+  taskOperationColumnWidth,
+))
+const taskTableNeedsScroll = computed(() => Boolean(
+  tableFrameWidth.value && taskTableContentWidth.value > tableFrameWidth.value,
+))
 const selectedTask = ref<TaskCenterRow | null>(null)
 const detailTab = ref<TaskDetailTab>('info')
 const editingTask = ref<TaskCenterRow | null>(null)
@@ -286,6 +367,7 @@ const detailTabs: Array<{ key: TaskDetailTab; label: string }> = [
 const activeDetailTask = computed(() => selectedTask.value || figmaRows[0])
 const blankEditTask: TaskCenterRow = {
   id: 'new-task',
+  taskId: 'new-task',
   name: '',
   description: '',
   type: '接口套件',
@@ -299,6 +381,8 @@ const blankEditTask: TaskCenterRow = {
   lastRunAt: '—',
   duration: '—',
   creator: '张程远',
+  workspaceCode: 'X-MAN',
+  backendStatus: 'READY',
 }
 const showTaskEditor = computed(() => isCreatingTask.value || Boolean(editingTask.value))
 const activeEditTask = computed(() => (isCreatingTask.value ? blankEditTask : editingTask.value || activeDetailTask.value))
@@ -412,37 +496,121 @@ function closeTaskEditor() {
   taskEditorTrigger.value = 'manual'
 }
 
+function normalizePageNo() {
+  const pages = useFigmaFallback.value
+    ? Math.max(1, Math.ceil(tableTotal.value / Math.max(pageSize.value, 1)))
+    : totalPages.value
+  if (pages > 0 && pageNo.value > pages) {
+    pageNo.value = pages
+  }
+}
+
+function reloadFromFirstPage() {
+  if (pageNo.value === 1) {
+    void loadTasks()
+    return
+  }
+  pageNo.value = 1
+}
+
+function handleTaskPageChange(value: number) {
+  pageNo.value = value
+}
+
+function handleTaskPageSizeChange(value: number) {
+  pageSize.value = value
+}
+
+function openTaskColumnSettings() {
+  tableSettings.open()
+}
+
+function getTaskRowClassName({ row }: { row: TaskCenterRow }) {
+  return selectedTask.value?.id === row.id ? 'is-selected' : ''
+}
+
+function formatTaskColumnValue(item: TaskCenterRow, key: string) {
+  switch (key) {
+    case 'taskId':
+      return item.taskId || '-'
+    case 'workspaceCode':
+      return item.workspaceCode || '-'
+    case 'backendStatus':
+      return item.backendStatus || '-'
+    default:
+      return '-'
+  }
+}
+
 async function loadTasks() {
+  const requestSeq = ++loadRequestSeq
   loading.value = true
   errorMessage.value = ''
   try {
     const page = await automationTaskApi.getTasks('ALL', {
-      pageNo: 1,
-      pageSize: 50,
+      pageNo: pageNo.value,
+      pageSize: pageSize.value,
       keyword: filter.value.keyword,
     })
-    apiTasks.value = page.items
-    total.value = page.total
+    if (requestSeq === loadRequestSeq) {
+      apiTasks.value = Array.isArray(page.items) ? page.items : []
+      useFigmaFallback.value = page.total === 0 && apiTasks.value.length === 0
+      total.value = useFigmaFallback.value ? figmaRows.length : page.total
+      pageNo.value = page.pageNo || pageNo.value
+      totalPages.value = useFigmaFallback.value
+        ? Math.ceil(figmaRows.length / Math.max(pageSize.value, 1))
+        : Number(page.totalPages || Math.ceil(page.total / Math.max(pageSize.value, 1)))
+    }
   } catch (error) {
-    errorMessage.value = getRequestErrorMessage(error)
-    apiTasks.value = []
-    total.value = figmaRows.length
+    if (requestSeq === loadRequestSeq) {
+      errorMessage.value = getRequestErrorMessage(error)
+      apiTasks.value = []
+      useFigmaFallback.value = true
+      total.value = figmaRows.length
+      totalPages.value = Math.ceil(figmaRows.length / Math.max(pageSize.value, 1))
+    }
   } finally {
-    loading.value = false
+    if (requestSeq === loadRequestSeq) {
+      loading.value = false
+    }
   }
 }
 
 watch(
-  () => filter.value.keyword,
-  () => {
-    if (apiTasks.value.length) {
-      void loadTasks()
-    }
-  },
+  () => filter.value,
+  reloadFromFirstPage,
+  { deep: true },
 )
+
+watch(pageNo, (value, oldValue) => {
+  if (value !== oldValue) void loadTasks()
+})
+
+watch(pageSize, (value, oldValue) => {
+  if (value !== oldValue) reloadFromFirstPage()
+})
+
+watch([totalPages, tableTotal], normalizePageNo)
+
+watch(tableFrameRef, (element) => {
+  tableFrameObserver?.disconnect()
+  tableFrameObserver = null
+  if (!element) return
+
+  const syncWidth = () => {
+    tableFrameWidth.value = element.clientWidth
+  }
+  syncWidth()
+  tableFrameObserver = new ResizeObserver(syncWidth)
+  tableFrameObserver.observe(element)
+})
 
 onMounted(() => {
   void loadTasks()
+})
+
+onBeforeUnmount(() => {
+  tableFrameObserver?.disconnect()
 })
 </script>
 
@@ -512,92 +680,124 @@ onMounted(() => {
             任务接口暂不可用，当前按 Figma 示例数据展示：{{ errorMessage }}
           </div>
 
-          <div class="task-table-card" :aria-busy="loading">
-            <div class="task-table__header">
-              <span>任务名称</span>
-              <span>类型</span>
-              <span>环境</span>
-              <span>调度方式</span>
-              <span>启用</span>
-              <span>最近结果</span>
-              <span>最近执行时间</span>
-              <span>耗时</span>
-              <span>创建人</span>
-              <span>操作</span>
-            </div>
-
-            <div
-              v-for="item in filteredRows"
-              :key="item.id"
-              role="button"
-              tabindex="0"
-              class="task-table__row"
-              :class="{
-                'has-description': item.description,
-                'has-schedule-detail': item.scheduleTime !== '-',
-                'is-selected': selectedTask?.id === item.id,
-              }"
-              @click="openTaskDetail(item)"
-              @keydown.enter="openTaskDetail(item)"
-              @keydown.space.prevent="openTaskDetail(item)"
+          <div ref="tableFrameRef" class="task-table-frame" :aria-busy="loading">
+            <AppFigmaTable
+              class="task-table-card"
+              :data="pagedRows"
+              :loading="loading"
+              :page-no="pageNo"
+              :page-size="pageSize"
+              :page-sizes="[10, 20, 50, 100]"
+              :total="tableTotal"
+              show-page-size
+              show-jumper
+              :header-height="34.5"
+              :row-height="46"
+              :footer-height="43"
+              row-key="id"
+              :row-class-name="getTaskRowClassName"
+              empty-text="暂无匹配的自动化任务"
+              @row-click="item => openTaskDetail(item)"
+              @page-change="handleTaskPageChange"
+              @page-size-change="handleTaskPageSizeChange"
             >
-              <span class="task-name-cell">
-                <strong>{{ item.name }}</strong>
-                <small v-if="item.description">{{ item.description }}</small>
-              </span>
-              <span>
-                <mark class="task-type-badge" :class="`is-${item.typeTone}`">{{ item.type }}</mark>
-              </span>
-              <span class="task-text-cell">{{ item.environment }}</span>
-              <span class="task-schedule-cell">
-                <img :src="item.scheduleMode === '定时' ? figmaTaskIcons.schedule.timer : figmaTaskIcons.schedule.manual" alt="">
-                <span>
-                  <strong>{{ item.scheduleMode }}</strong>
-                  <small v-if="item.scheduleTime !== '-'">{{ item.scheduleTime }}</small>
-                </span>
-              </span>
-              <span>
-                <button
-                  type="button"
-                  class="task-switch"
-                  :class="{ 'is-on': item.enabled }"
-                  :aria-pressed="item.enabled"
-                  aria-label="切换任务启用状态"
-                  @click.stop
-                />
-              </span>
-              <span>
-                <mark class="task-result-badge" :class="`is-${item.resultTone}`">
-                  <i />
-                  {{ item.result }}
-                </mark>
-              </span>
-              <span class="task-mono-cell">{{ item.lastRunAt }}</span>
-              <span class="task-mono-cell is-dark">{{ item.duration }}</span>
-              <span class="task-creator-cell">{{ item.creator }}</span>
-              <span class="task-action-list">
-                <button type="button" aria-label="立即执行" @click.stop>
-                  <img :src="figmaTaskIcons.action.run" alt="">
-                </button>
-                <button type="button" aria-label="查看" @click.stop="openTaskDetail(item)">
-                  <img :src="figmaTaskIcons.action.view" alt="">
-                </button>
-                <button type="button" aria-label="编辑" @click.stop="openTaskEditor(item)">
-                  <img :src="figmaTaskIcons.action.edit" alt="">
-                </button>
-                <button type="button" aria-label="删除" @click.stop>
-                  <img :src="figmaTaskIcons.action.delete" alt="">
-                </button>
-              </span>
-            </div>
+              <el-table-column
+                v-for="column in visibleTaskColumns"
+                :key="column.key"
+                :label="column.label"
+                :width="column.width"
+                :min-width="column.minWidth"
+                :align="column.key === 'enabled' ? 'center' : 'left'"
+                show-overflow-tooltip
+              >
+                <template #default="{ row: item }">
+                  <span v-if="column.key === 'name'" class="task-name-cell">
+                    <strong>{{ item.name }}</strong>
+                    <small v-if="item.description">{{ item.description }}</small>
+                  </span>
 
-            <div class="task-table-footer">
-              <span>{{ tableTotalText }}</span>
-              <button type="button" class="task-page-button is-active">1</button>
-            </div>
+                  <mark v-else-if="column.key === 'type'" class="task-type-badge" :class="`is-${item.typeTone}`">
+                    {{ item.type }}
+                  </mark>
+
+                  <span v-else-if="column.key === 'environment'" class="task-text-cell">{{ item.environment }}</span>
+
+                  <span v-else-if="column.key === 'schedule'" class="task-schedule-cell">
+                    <img :src="item.scheduleMode === '定时' ? figmaTaskIcons.schedule.timer : figmaTaskIcons.schedule.manual" alt="">
+                    <span>
+                      <strong>{{ item.scheduleMode }}</strong>
+                      <small v-if="item.scheduleTime !== '-'">{{ item.scheduleTime }}</small>
+                    </span>
+                  </span>
+
+                  <button
+                    v-else-if="column.key === 'enabled'"
+                    type="button"
+                    class="task-switch"
+                    :class="{ 'is-on': item.enabled }"
+                    :aria-pressed="item.enabled"
+                    aria-label="切换任务启用状态"
+                    @click.stop
+                  />
+
+                  <mark v-else-if="column.key === 'result'" class="task-result-badge" :class="`is-${item.resultTone}`">
+                    <i />
+                    {{ item.result }}
+                  </mark>
+
+                  <span v-else-if="column.key === 'lastRunAt'" class="task-mono-cell">{{ item.lastRunAt }}</span>
+                  <span v-else-if="column.key === 'duration'" class="task-mono-cell is-dark">{{ item.duration }}</span>
+                  <span v-else-if="column.key === 'creator'" class="task-creator-cell">{{ item.creator }}</span>
+                  <span v-else class="task-text-cell">{{ formatTaskColumnValue(item, column.key) }}</span>
+                </template>
+              </el-table-column>
+
+              <AppFigmaActionColumn
+                :action-count="taskOperationActionCount"
+                :width="taskOperationColumnWidth"
+                :scroll-shadow="taskTableNeedsScroll"
+              >
+                <template #settings>
+                  <AppTableSettingsTrigger
+                    variant="figma"
+                    :size="13"
+                    label="字段展示"
+                    @click.stop="openTaskColumnSettings"
+                  />
+                </template>
+                <template #default="{ row: item }">
+                  <button type="button" aria-label="立即执行" title="立即执行" @click.stop>
+                    <img class="task-action-icon" :src="figmaTaskIcons.action.run" alt="">
+                  </button>
+                  <button type="button" aria-label="查看" title="查看" @click.stop="openTaskDetail(item)">
+                    <img class="task-action-icon" :src="figmaTaskIcons.action.view" alt="">
+                  </button>
+                  <button type="button" aria-label="编辑" title="编辑" @click.stop="openTaskEditor(item)">
+                    <img class="task-action-icon" :src="figmaTaskIcons.action.edit" alt="">
+                  </button>
+                  <button type="button" data-danger="true" aria-label="删除" title="删除" @click.stop>
+                    <img class="task-action-icon" :src="figmaTaskIcons.action.delete" alt="">
+                  </button>
+                </template>
+              </AppFigmaActionColumn>
+            </AppFigmaTable>
           </div>
         </main>
       </div>
+
+      <AppTableColumnSettingsDrawer
+        :model-value="tableSettings.drawerVisible.value"
+        title="字段展示"
+        visual-variant="figma"
+        :columns="tableSettings.drawerColumns.value"
+        :dragging-key="tableSettings.draggingKey.value"
+        @update:model-value="value => { if (!value) tableSettings.cancel() }"
+        @toggle-column="tableSettings.toggleColumn"
+        @drag-start="tableSettings.dragStart"
+        @drag-end="tableSettings.dragEnd"
+        @drop-column="tableSettings.dropColumn"
+        @reset="tableSettings.resetDraft"
+      />
 
       <aside v-if="selectedTask" class="task-detail-panel" aria-label="任务详情">
         <header class="task-detail-header">
@@ -1727,9 +1927,29 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.task-table-card {
-  display: flex;
+.task-table-frame {
+  min-width: 0;
   margin-top: 14px;
+}
+
+.task-table-card {
+  --app-figma-table-border: 1px solid #e5e6eb;
+  --app-figma-table-radius: 11px;
+  --app-figma-table-background: #ffffff;
+  --app-figma-table-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+  --app-figma-table-header-background: #f7f8fa;
+  --app-figma-table-header-color: #86909c;
+  --app-figma-table-header-font-size: 11px;
+  --app-figma-table-header-font-weight: 500;
+  --app-figma-table-header-line-height: 16.5px;
+  --app-figma-table-text-color: #4e5969;
+  --app-figma-table-font-size: 12px;
+  --app-figma-table-line-height: 18px;
+  --app-figma-table-cell-padding: 14px;
+  --app-figma-table-row-hover-background: #ffffff;
+  --app-figma-table-muted-color: #86909c;
+  --app-figma-table-primary-color: #165dff;
+  display: flex;
   min-height: 0;
   flex: 0 0 auto;
   flex-direction: column;
@@ -1740,74 +1960,23 @@ onMounted(() => {
   box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
-.task-table__header,
-.task-table__row {
-  display: grid;
-  grid-template-columns:
-    320.75fr
-    131.22fr
-    116.62fr
-    197.97fr
-    64.46fr
-    131.21fr
-    174.96fr
-    87.47fr
-    102.04fr
-    103.3fr;
-  align-items: center;
-}
-
-.task-table__header {
-  height: 34.5px;
-  flex: 0 0 auto;
-  padding: 0 14px;
-  border-bottom: 1px solid #e5e6eb;
-  background: #f7f8fa;
-  color: #86909c;
-  font-family: var(--app-font-family);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 16.5px;
-}
-
-.task-table__header span:last-child {
-  width: 103.25px;
-  justify-self: start;
-  text-align: center;
-}
-
-.task-table__row {
-  width: 100%;
-  min-height: 46px;
-  padding: 0 14px;
-  border: 0;
-  border-bottom: 1px solid #e5e6eb;
-  background: #ffffff;
-  color: #4e5969;
+.task-table-card :deep(.el-table__row > td.el-table__cell) {
   cursor: pointer;
-  font: inherit;
-  text-align: left;
 }
 
-.task-table__row.has-schedule-detail {
-  min-height: 49.5px;
-}
-
-.task-table__row.has-description {
-  min-height: 52.75px;
-}
-
-.task-table__row:hover {
+.task-table-card :deep(.el-table__row.is-selected > td.el-table__cell) {
   background: #ffffff;
 }
 
-.task-table__row:focus-visible {
-  outline: 2px solid rgb(245 158 11 / 22%);
-  outline-offset: -2px;
+.task-table-card :deep(.el-table__fixed-right-patch) {
+  background: #f7f8fa;
 }
 
-.task-table__row.is-selected {
-  background: #ffffff;
+.task-action-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
 }
 
 .task-name-cell {
@@ -2004,62 +2173,6 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 400;
   line-height: 19.5px;
-}
-
-.task-action-list {
-  display: inline-flex;
-  width: 103.25px;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 1.75px;
-}
-
-.task-action-list button {
-  display: inline-grid;
-  width: 24.5px;
-  height: 24.5px;
-  place-items: center;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.task-action-list button:hover {
-  background: #f2f3f5;
-}
-
-.task-action-list img {
-  width: 13px;
-  height: 13px;
-}
-
-.task-table-footer {
-  display: flex;
-  height: 43px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 14px;
-  border-top: 1px solid #e5e6eb;
-  color: #86909c;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 18px;
-}
-
-.task-page-button {
-  display: inline-grid;
-  width: 24.5px;
-  height: 24.5px;
-  place-items: center;
-  border: 1px solid #165dff;
-  border-radius: 5px;
-  background: #165dff;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 18px;
 }
 
 .task-detail-panel {

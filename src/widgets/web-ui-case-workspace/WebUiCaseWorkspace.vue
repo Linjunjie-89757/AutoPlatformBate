@@ -26,6 +26,7 @@ import { Edit2, Monitor as LucideMonitor, Sparkles, X } from '@lucide/vue'
 import WebUiModuleTabs from './WebUiModuleTabs.vue'
 
 import { configApi, type ParamSetItem } from '@/entities/config'
+import { useSession } from '@/entities/session'
 import {
   buildWebUiCaseExportJson,
   buildWebUiDraftFromTemplate,
@@ -59,11 +60,22 @@ import {
 import type { WorkspaceItem } from '@/entities/workspace'
 import { deleteWebUiCase } from '@/features/web-ui-case-delete'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { confirmDelete } from '@/shared/ui'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+import {
+  type AppTableColumnDefinition,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import { confirmDelete } from '@/shared/ui'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
+import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
 import WebUiCaseEditorDrawer from './WebUiCaseEditorDrawer.vue'
 import WebUiCaseBasicInfoDialog from './WebUiCaseBasicInfoDialog.vue'
@@ -112,6 +124,7 @@ const props = withDefaults(
 )
 const route = useRoute()
 const router = useRouter()
+const { currentUser } = useSession()
 
 function resolveModeTab(mode: WorkspaceMode): WorkspaceTab {
   return mode === 'templates' ? 'cases' : mode
@@ -422,20 +435,86 @@ const visibleCases = computed(() => cases.value.filter((item) => {
   return !browserFilter.value || item.browserType === browserFilter.value
 }))
 
-const figmaCaseColumnWidths = computed(() => {
-  const width = figmaCaseTableWidth.value || 1440
-  return {
-    selection: Math.round(width * 0.03),
-    name: Math.round(width * 0.25),
-    directory: Math.round(width * 0.15),
-    status: Math.round(width * 0.08),
-    priority: Math.round(width * 0.07),
-    result: Math.round(width * 0.09),
-    lastRun: Math.round(width * 0.12),
-    creator: Math.round(width * 0.07),
-    actions: Math.round(width * 0.14),
-  }
+const caseTableColumns: AppTableColumnDefinition[] = [
+  { key: 'name', label: '用例名称', defaultVisible: true, required: true },
+  { key: 'directory', label: '所属目录', defaultVisible: true },
+  { key: 'status', label: '状态', defaultVisible: true },
+  { key: 'priority', label: '优先级', defaultVisible: true },
+  { key: 'result', label: '最近结果', defaultVisible: true },
+  { key: 'lastRun', label: '最近运行', defaultVisible: true },
+  { key: 'creator', label: '创建人', defaultVisible: true },
+  { key: 'browserType', label: '浏览器', defaultVisible: false, minWidth: 120 },
+  { key: 'headless', label: 'Headless', defaultVisible: false, minWidth: 100 },
+  { key: 'defaultTimeoutMs', label: '默认超时', defaultVisible: false, minWidth: 120 },
+  { key: 'baseUrl', label: 'Base URL', defaultVisible: false, minWidth: 220 },
+  { key: 'description', label: '描述', defaultVisible: false, minWidth: 220 },
+  { key: 'stepCount', label: '步骤数', defaultVisible: false, minWidth: 100 },
+  { key: 'updatedAt', label: '更新时间', defaultVisible: false, minWidth: 180 },
+  { key: 'workspaceName', label: '工作空间', defaultVisible: false, minWidth: 140 },
+]
+
+const caseColumnSettings = useTableColumnSettings({
+  columns: caseTableColumns,
+  storageKey: computed(() => `app-figma-table:web-ui-cases:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
+  immediate: true,
 })
+
+const figmaCaseDefaultColumnWeights: Record<string, number> = {
+  name: 25,
+  directory: 15,
+  status: 8,
+  priority: 7,
+  result: 9,
+  lastRun: 12,
+  creator: 7,
+}
+const figmaCaseOperationActionCount = 4
+const figmaCaseOperationWidth = Math.max(168, getAppFigmaActionColumnWidth(figmaCaseOperationActionCount))
+const figmaCaseBaselineTableWidth = computed(() => Math.max(1100, figmaCaseTableWidth.value ? figmaCaseTableWidth.value - 2 : 1100))
+const figmaCaseColumnWidths = computed(() => {
+  const entries = Object.entries(figmaCaseDefaultColumnWeights)
+  const totalWeight = entries.reduce((total, [, weight]) => total + weight, 0)
+  const selection = Math.max(40, Math.round(figmaCaseBaselineTableWidth.value * 0.03))
+  const targetWidth = figmaCaseBaselineTableWidth.value - selection - figmaCaseOperationWidth
+  let allocatedWidth = 0
+  const widths = entries.reduce<Record<string, number>>((result, [key, weight], index) => {
+    const width = index === entries.length - 1
+      ? targetWidth - allocatedWidth
+      : Math.round(targetWidth * weight / totalWeight)
+    result[key] = width
+    allocatedWidth += width
+    return result
+  }, {})
+  widths.selection = selection
+  return widths
+})
+
+function getFigmaCaseColumnWidth(column: AppTableColumnDefinition) {
+  return figmaCaseColumnWidths.value[column.key] || column.width || column.minWidth || 120
+}
+
+const figmaCaseTableNeedsScroll = computed(() => {
+  if (!figmaCaseTableWidth.value) return false
+  const columnsWidth = caseColumnSettings.visibleColumns.value
+    .reduce((total, column) => total + getFigmaCaseColumnWidth(column), 0)
+  return figmaCaseColumnWidths.value.selection + columnsWidth + figmaCaseOperationWidth > figmaCaseTableWidth.value
+})
+
+function openCaseColumnSettings() {
+  caseColumnSettings.open()
+}
+
+function formatFigmaCaseColumnValue(row: WebUiCaseItem, key: string) {
+  if (key === 'browserType') return formatBrowserType(row.browserType)
+  if (key === 'headless') return row.headless ? '是' : '否'
+  if (key === 'defaultTimeoutMs') return `${row.defaultTimeoutMs} ms`
+  if (key === 'baseUrl') return row.baseUrl || '-'
+  if (key === 'description') return row.description || '-'
+  if (key === 'stepCount') return `${row.stepCount} 个`
+  if (key === 'updatedAt') return formatWebUiDateTime(row.updatedAt)
+  if (key === 'workspaceName') return row.workspaceName || row.workspaceCode || '-'
+  return String((row as unknown as Record<string, unknown>)[key] ?? '-')
+}
 
 const ciEndpoint = computed(() => '/api/automation/web/ci/batches/run')
 const ciPayloadExample = computed(() => JSON.stringify({
@@ -2083,101 +2162,104 @@ watch(
             <template v-else>
               <div class="web-ui-case-list__content">
                 <div ref="caseTableFrameRef" class="web-ui-case-table-frame">
-                  <el-table
-                    v-loading="loadingCases"
+                  <AppFigmaTable
                     class="web-ui-case-table web-ui-case-table--figma"
                     :data="visibleCases"
+                    :loading="loadingCases"
+                    :page-no="pageNo"
+                    :page-size="pageSize"
+                    :total="caseListTotal"
+                    show-page-size
+                    show-jumper
+                    :header-height="39"
+                    :row-height="46"
+                    :footer-height="43"
                     row-key="id"
                     empty-text="暂无 Web UI 用例"
                     @row-click="openStepDrawer"
                     @selection-change="handleCaseSelectionChange"
+                    @page-change="handlePageChange"
+                    @page-size-change="handlePageSizeChange"
                   >
-                <el-table-column type="selection" :width="figmaCaseColumnWidths.selection" />
-                <el-table-column label="用例名称" :width="figmaCaseColumnWidths.name" show-overflow-tooltip>
-                  <template #default="{ row }">
-                    <div class="web-ui-case-name-cell">
-                      <strong>{{ row.name }}</strong>
-                      <span>
-                        <em v-for="tag in getCaseTags(row)" :key="tag">{{ tag }}</em>
-                      </span>
-                    </div>
-                  </template>
-                </el-table-column>
-                <el-table-column label="所属目录" :width="figmaCaseColumnWidths.directory" show-overflow-tooltip>
-                  <template #default="{ row }">
-                    {{ getCaseDirectory(row) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="状态" :width="figmaCaseColumnWidths.status">
-                  <template #default="{ row }">
-                    <span class="web-ui-case-status" :style="{ '--web-ui-case-status-color': getFigmaCaseStatusMeta(row.status).color }">
-                      <i />
-                      {{ getFigmaCaseStatusMeta(row.status).label }}
-                    </span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="优先级" :width="figmaCaseColumnWidths.priority">
-                  <template #default="{ row }">
-                    <span class="web-ui-case-priority" :style="getPriorityTone(getVisualCasePriority(row))">
-                      {{ getVisualCasePriority(row) }}
-                    </span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="最近结果" :width="figmaCaseColumnWidths.result">
-                  <template #default="{ row }">
-                    <span
-                      v-if="row.lastRunResult"
-                      class="web-ui-case-run-result"
-                      :style="getFigmaRunResultMeta(row.lastRunResult)"
+                    <el-table-column type="selection" :width="figmaCaseColumnWidths.selection" />
+                    <el-table-column
+                      v-for="column in caseColumnSettings.visibleColumns.value"
+                      :key="column.key"
+                      :label="column.label"
+                      :width="getFigmaCaseColumnWidth(column)"
+                      show-overflow-tooltip
                     >
-                      {{ getFigmaRunResultMeta(row.lastRunResult).label }}
-                    </span>
-                    <span v-else class="web-ui-case-run-empty">未运行</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="最近运行" :width="figmaCaseColumnWidths.lastRun">
-                  <template #default="{ row }">
-                    <span class="web-ui-case-last-run">{{ formatWebUiDateTime(row.lastRunAt) }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="创建人" :width="figmaCaseColumnWidths.creator" show-overflow-tooltip>
-                  <template #default="{ row }">
-                    {{ getCaseCreator(row) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" :width="figmaCaseColumnWidths.actions" align="right">
-                  <template #default="{ row }">
-                    <div class="web-ui-case-actions">
-                      <button type="button" title="编辑" @click.stop="openStepDrawer(row)">
-                        <img :src="figmaCaseIcons.action.edit" alt="" />
-                      </button>
-                      <button type="button" title="运行" :disabled="runSubmitting && runningCaseId !== row.id" @click.stop="openRunDialog(row)">
-                        <img :src="figmaCaseIcons.action.run" alt="" />
-                      </button>
-                      <button type="button" title="复制" @click.stop="openCopyDrawer(row)">
-                        <CopyDocument :size="13" />
-                      </button>
-                      <button type="button" class="is-danger" title="删除" @click.stop="handleCaseMoreAction('delete', row)">
-                        <img :src="figmaCaseIcons.action.delete" alt="" />
-                      </button>
-                      <span v-if="runningCaseId === row.id" class="web-ui-case-actions__running" />
-                    </div>
-                  </template>
-                </el-table-column>
-                  </el-table>
+                      <template #default="{ row }">
+                        <div v-if="column.key === 'name'" class="web-ui-case-name-cell">
+                          <strong>{{ row.name }}</strong>
+                          <span>
+                            <em v-for="tag in getCaseTags(row)" :key="tag">{{ tag }}</em>
+                          </span>
+                        </div>
+                        <span v-else-if="column.key === 'directory'">{{ getCaseDirectory(row) }}</span>
+                        <span
+                          v-else-if="column.key === 'status'"
+                          class="web-ui-case-status"
+                          :style="{ '--web-ui-case-status-color': getFigmaCaseStatusMeta(row.status).color }"
+                        >
+                          <i />
+                          {{ getFigmaCaseStatusMeta(row.status).label }}
+                        </span>
+                        <span
+                          v-else-if="column.key === 'priority'"
+                          class="web-ui-case-priority"
+                          :style="getPriorityTone(getVisualCasePriority(row))"
+                        >
+                          {{ getVisualCasePriority(row) }}
+                        </span>
+                        <template v-else-if="column.key === 'result'">
+                          <span
+                            v-if="row.lastRunResult"
+                            class="web-ui-case-run-result"
+                            :style="getFigmaRunResultMeta(row.lastRunResult)"
+                          >
+                            {{ getFigmaRunResultMeta(row.lastRunResult).label }}
+                          </span>
+                          <span v-else class="web-ui-case-run-empty">未运行</span>
+                        </template>
+                        <span v-else-if="column.key === 'lastRun'" class="web-ui-case-last-run">{{ formatWebUiDateTime(row.lastRunAt) }}</span>
+                        <span v-else-if="column.key === 'creator'">{{ getCaseCreator(row) }}</span>
+                        <span v-else class="web-ui-case-optional-value">{{ formatFigmaCaseColumnValue(row, column.key) }}</span>
+                      </template>
+                    </el-table-column>
 
-                  <div class="web-ui-pagination">
-                    <el-pagination
-                      v-model:current-page="pageNo"
-                      v-model:page-size="pageSize"
-                      :total="caseListTotal"
-                      :page-sizes="[10, 20, 50]"
-                      layout="total, sizes, prev, pager, next"
-                      background
-                      @current-change="handlePageChange"
-                      @size-change="handlePageSizeChange"
-                    />
-                  </div>
+                    <AppFigmaActionColumn
+                      :action-count="figmaCaseOperationActionCount"
+                      :width="figmaCaseOperationWidth"
+                      :scroll-shadow="figmaCaseTableNeedsScroll"
+                    >
+                      <template #settings>
+                        <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openCaseColumnSettings" />
+                      </template>
+                      <template #default="{ row }">
+                        <button type="button" title="编辑" aria-label="编辑" @click.stop="openStepDrawer(row)">
+                          <img class="web-ui-case-action-icon" :src="figmaCaseIcons.action.edit" alt="" />
+                        </button>
+                        <button
+                          class="web-ui-case-run-action"
+                          type="button"
+                          title="运行"
+                          aria-label="运行"
+                          :disabled="runSubmitting && runningCaseId !== row.id"
+                          @click.stop="openRunDialog(row)"
+                        >
+                          <img class="web-ui-case-action-icon" :src="figmaCaseIcons.action.run" alt="" />
+                          <span v-if="runningCaseId === row.id" class="web-ui-case-actions__running" />
+                        </button>
+                        <button type="button" title="复制" aria-label="复制" @click.stop="openCopyDrawer(row)">
+                          <CopyDocument />
+                        </button>
+                        <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="handleCaseMoreAction('delete', row)">
+                          <img class="web-ui-case-action-icon" :src="figmaCaseIcons.action.delete" alt="" />
+                        </button>
+                      </template>
+                    </AppFigmaActionColumn>
+                  </AppFigmaTable>
                 </div>
               </div>
             </template>
@@ -3149,6 +3231,19 @@ watch(
       :share-type="reportShareType"
       :target-id="reportShareTargetId"
     />
+    <AppTableColumnSettingsDrawer
+      :model-value="caseColumnSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
+      :columns="caseColumnSettings.drawerColumns.value"
+      :dragging-key="caseColumnSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) caseColumnSettings.cancel() }"
+      @toggle-column="caseColumnSettings.toggleColumn"
+      @drag-start="caseColumnSettings.dragStart"
+      @drag-end="caseColumnSettings.dragEnd"
+      @drop-column="caseColumnSettings.dropColumn"
+      @reset="caseColumnSettings.resetDraft"
+    />
   </section>
 </template>
 
@@ -3559,10 +3654,23 @@ watch(
 }
 
 .web-ui-case-table--figma {
-  --el-table-border-color: transparent;
-  --el-table-header-bg-color: #fafafa;
-  --el-table-row-hover-bg-color: #fafbff;
+  --app-figma-table-border: 1px solid #e5e6eb;
+  --app-figma-table-radius: 12px;
+  --app-figma-table-background: #ffffff;
+  --app-figma-table-shadow: 0 1px 4px rgba(0, 0, 0, .04);
+  --app-figma-table-header-background: #fafafa;
+  --app-figma-table-header-color: #86909c;
+  --app-figma-table-header-font-size: 11px;
+  --app-figma-table-header-font-weight: 600;
+  --app-figma-table-header-letter-spacing: 0;
+  --app-figma-table-header-line-height: 16.5px;
+  --app-figma-table-text-color: #1d2129;
+  --app-figma-table-font-size: 13px;
+  --app-figma-table-line-height: 19.5px;
+  --app-figma-table-cell-padding: 12px;
+  --app-figma-table-row-hover-background: #fafbff;
   width: 100%;
+  font-family: var(--app-font-family);
 }
 
 .web-ui-case-list__content {
@@ -3575,11 +3683,8 @@ watch(
 }
 
 .web-ui-case-table-frame {
-  overflow: hidden;
-  border: 1px solid #e5e6eb;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .04);
+  width: 100%;
+  min-width: 0;
 }
 
 .web-ui-case-table--figma :deep(.el-table__header-wrapper th) {
@@ -3597,7 +3702,7 @@ watch(
 }
 
 .web-ui-case-table--figma :deep(.el-table__cell) {
-  padding: 7px 0;
+  padding: 0;
   color: #1d2129;
   font-size: 13px;
   line-height: 19.5px;
@@ -3617,6 +3722,10 @@ watch(
 .web-ui-case-table--figma :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
   border-color: #0fc6c2;
   background: #0fc6c2;
+}
+
+.web-ui-case-table--figma :deep(.el-table__fixed-right-patch) {
+  background: #fafafa;
 }
 
 .web-ui-case-name-cell {
@@ -3663,51 +3772,27 @@ watch(
   line-height: 18px;
 }
 
-.web-ui-case-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0;
+.web-ui-case-optional-value {
+  color: #86909c;
 }
 
-.web-ui-case-actions button {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: #c9cdd4;
-  cursor: pointer;
-}
-
-.web-ui-case-actions button:disabled {
-  cursor: not-allowed;
-  opacity: .45;
-}
-
-.web-ui-case-actions button img,
-.web-ui-case-actions button svg {
+.web-ui-case-action-icon {
+  display: block;
   width: 13px;
   height: 13px;
+  object-fit: contain;
 }
 
-.web-ui-case-actions button:hover:not(:disabled) {
-  background: #f2f3f5;
-  color: #1d2129;
-}
-
-.web-ui-case-actions button.is-danger:hover:not(:disabled) {
-  background: #fff0f0;
+.web-ui-case-run-action {
+  position: relative;
 }
 
 .web-ui-case-actions__running {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
   width: 4px;
   height: 4px;
-  margin-left: -5px;
   border-radius: 999px;
   background: #0fc6c2;
 }

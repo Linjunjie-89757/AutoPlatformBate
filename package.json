@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "runner": "node tools/web-ui-runner/server.mjs",
+    "runner:desktop": "electron tools/local-runner-desktop/main.mjs",
+    "runner:desktop:pack": "node tools/local-runner-desktop/packagePortable.mjs",
     "runner:e2e:recording-acceptance": "node tools/web-ui-runner/recordingPlatformAcceptance.e2e.mjs",
     "runner:e2e:recording-boundaries": "node --test tools/web-ui-runner/recordingBoundaries.integration.test.mjs",
     "runner:e2e:recording-context": "node tools/web-ui-runner/recordingPlatformClosure.e2e.mjs",
@@ -46,6 +48,7 @@
     "@types/node": "^24.12.3",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
+    "electron": "^43.2.0",
     "playwright": "^1.57.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",

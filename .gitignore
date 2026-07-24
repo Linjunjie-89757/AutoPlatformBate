@@ -15,6 +15,10 @@ dist-ssr
 # Playwright CLI artifacts
 .playwright-cli/
 
+# Local Runner release artifacts
+release/local-runner/portable*/
+release/local-runner/*.zip
+
 # Backend local artifacts
 data/
 server/target/

@@ -4,9 +4,11 @@ import { Settings2 } from '@lucide/vue'
 withDefaults(defineProps<{
   label?: string
   size?: number
+  variant?: 'default' | 'figma'
 }>(), {
   label: '字段设置',
   size: 14,
+  variant: 'default',
 })
 </script>
 
@@ -14,6 +16,7 @@ withDefaults(defineProps<{
   <button
     type="button"
     class="app-table-settings-trigger"
+    :class="`is-${variant}`"
     :aria-label="label"
     :title="label"
   >
@@ -42,5 +45,19 @@ withDefaults(defineProps<{
   background: rgba(59, 130, 246, 0.08);
   color: var(--app-primary);
   outline: none;
+}
+
+.app-table-settings-trigger.is-figma {
+  width: 24.5px;
+  height: 24.5px;
+  min-width: 24.5px;
+  border-radius: 5px;
+  color: #c9cdd4;
+}
+
+.app-table-settings-trigger.is-figma:hover,
+.app-table-settings-trigger.is-figma:focus-visible {
+  background: #f2f3f5;
+  color: #4e5969;
 }
 </style>

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, type Component } from 'vue'
-import { Connection, DocumentCopy, RefreshRight } from '@element-plus/icons-vue'
+import { DocumentCopy, RefreshRight } from '@element-plus/icons-vue'
 import {
   Activity,
   AlertTriangle,
   Camera,
   ChevronRight,
+  CircleCheck,
+  Download,
   Globe2,
   Power,
   RefreshCw,
@@ -24,6 +26,7 @@ import {
   localRunnerApi,
   readRunnerTaskDurationMs,
   readRunnerTaskSummary,
+  type LocalRunnerReleaseInfo,
   type LocalRunnerTaskDetailResponse,
   type LocalRunnerTaskLogEntry,
   type RunnerActiveTaskSummary,
@@ -41,6 +44,9 @@ const loading = ref(false)
 const scanning = ref(false)
 const errorMessage = ref('')
 const guideVisible = ref(false)
+const runnerRelease = ref<LocalRunnerReleaseInfo | null>(null)
+const runnerReleaseLoading = ref(false)
+const runnerReleaseErrorMessage = ref('')
 const taskDetailVisible = ref(false)
 const taskDetailLoading = ref(false)
 const taskDetailErrorMessage = ref('')
@@ -59,7 +65,17 @@ const runnerEnvFilter = ref('')
 let refreshTimer: ReturnType<typeof window.setInterval> | null = null
 
 const runnerStartCommand = 'npm.cmd run runner'
+const platformApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api').trim()
 const runnerAccentColor = '#0284C7'
+
+const runnerReleaseVersion = computed(() => {
+  const version = runnerRelease.value?.version?.trim()
+  return version ? `v${version.replace(/^v/i, '')}` : '版本检查中'
+})
+const runnerReleaseSize = computed(() => formatFileSize(runnerRelease.value?.fileSize ?? 0))
+const runnerDownloadUrl = computed(() => (
+  runnerRelease.value?.available ? runnerRelease.value.downloadUrl : ''
+))
 
 interface RunnerStatCard {
   label: string
@@ -219,6 +235,47 @@ function stopAutoRefresh() {
 
 async function copyRunnerCommand() {
   await copyText(runnerStartCommand, '启动命令已复制')
+}
+
+function openRunnerGuide() {
+  guideVisible.value = true
+  void loadRunnerRelease()
+}
+
+async function loadRunnerRelease() {
+  runnerReleaseLoading.value = true
+  runnerReleaseErrorMessage.value = ''
+  runnerRelease.value = null
+  try {
+    runnerRelease.value = await localRunnerApi.getLatestWindowsRelease()
+  } catch (error) {
+    runnerRelease.value = null
+    runnerReleaseErrorMessage.value = getRequestErrorMessage(error)
+  } finally {
+    runnerReleaseLoading.value = false
+  }
+}
+
+async function copyPlatformAddress() {
+  await copyText(platformApiBaseUrl, '平台地址已复制')
+}
+
+async function refreshRunnerConnection() {
+  await loadRunners()
+  ElMessage.success('Runner 状态已刷新')
+}
+
+function formatFileSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return ''
+  }
+  if (size >= 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  }
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`
+  }
+  return `${Math.ceil(size / 1024)} KB`
 }
 
 async function copyText(text: string, successMessage: string) {
@@ -847,9 +904,9 @@ onBeforeUnmount(() => {
           <RefreshCw :size="13" :stroke-width="1.8" />
           刷新
         </button>
-        <button type="button" class="config-runner-secondary-button" @click="guideVisible = true">
-          <Server :size="13" :stroke-width="1.8" />
-          启动指引
+        <button type="button" class="config-runner-secondary-button" @click="openRunnerGuide">
+          <Download :size="13" :stroke-width="1.8" />
+          下载 Runner
         </button>
         <button type="button" class="config-runner-secondary-button" :disabled="scanning" @click="triggerOfflineScan">
           <AlertTriangle :size="13" :stroke-width="1.8" />
@@ -1007,7 +1064,7 @@ onBeforeUnmount(() => {
       description="启动本地执行器后，它会自动注册并上报心跳。"
     >
       <template #actions>
-        <AppButton :icon="Connection" @click="guideVisible = true">查看启动指引</AppButton>
+        <AppButton :icon="Download" @click="openRunnerGuide">下载并连接 Runner</AppButton>
         <AppButton :icon="RefreshRight" @click="loadRunners">刷新状态</AppButton>
       </template>
       </AppEmptyState>
@@ -1345,33 +1402,112 @@ onBeforeUnmount(() => {
       </div>
     </el-drawer>
 
-    <el-drawer v-model="guideVisible" title="本地执行器启动指引" size="520px">
+    <el-drawer v-model="guideVisible" title="下载 Local Runner" size="520px">
       <div class="config-runner-guide">
+        <p class="config-runner-guide__intro">
+          Local Runner 用于在本机执行 Web UI 和接口自动化任务，连接后会自动出现在本页节点列表。
+        </p>
+
+        <section class="config-runner-guide__download">
+          <div class="config-runner-guide__download-main">
+            <span class="config-runner-guide__download-icon">
+              <Download :size="22" :stroke-width="1.8" />
+            </span>
+            <div>
+              <h3>Windows 版 Local Runner</h3>
+              <p>
+                {{ runnerReleaseVersion }} · Windows x64 · 便携版
+                <template v-if="runnerReleaseSize"> · {{ runnerReleaseSize }}</template>
+              </p>
+            </div>
+          </div>
+          <a
+            v-if="runnerDownloadUrl"
+            class="config-runner-guide__primary-action"
+            :href="runnerDownloadUrl"
+            download
+          >
+            <Download :size="15" :stroke-width="1.8" />
+            下载 Windows 版
+          </a>
+          <button v-else type="button" class="config-runner-guide__primary-action" disabled>
+            <Download :size="15" :stroke-width="1.8" />
+            {{ runnerReleaseLoading ? '正在检查安装包' : '安装包待发布' }}
+          </button>
+          <p v-if="runnerReleaseErrorMessage" class="config-runner-guide__availability is-error">
+            安装包状态获取失败：{{ runnerReleaseErrorMessage }}
+          </p>
+          <p v-else-if="!runnerReleaseLoading && !runnerDownloadUrl" class="config-runner-guide__availability">
+            当前环境尚未发布 Windows x64 Runner 安装包。
+          </p>
+        </section>
+
         <section>
-          <h3>启动 Runner</h3>
-          <p>在项目根目录执行下面的命令，Runner 会启动本地服务并向平台上报心跳。</p>
+          <h3>连接平台</h3>
+          <ol class="config-runner-guide__steps">
+            <li>
+              <span>1</span>
+              <div>
+                <strong>下载并解压</strong>
+                <p>将 Local Runner 解压到本机固定目录。</p>
+              </div>
+            </li>
+            <li>
+              <span>2</span>
+              <div>
+                <strong>启动 Runner</strong>
+                <p>双击 <code>Auto Platform Local Runner.exe</code>。</p>
+              </div>
+            </li>
+            <li>
+              <span>3</span>
+              <div>
+                <strong>连接平台</strong>
+                <p>在 Runner 窗口填写平台地址，点击“连接平台”。</p>
+              </div>
+            </li>
+          </ol>
+
           <div class="config-runner-guide__command">
-            <code>{{ runnerStartCommand }}</code>
-            <button type="button" @click="copyRunnerCommand">
+            <code>{{ platformApiBaseUrl }}</code>
+            <button type="button" @click="copyPlatformAddress">
               <el-icon><DocumentCopy /></el-icon>
-              复制
+              复制地址
             </button>
           </div>
         </section>
 
-        <section>
-          <h3>常见启动问题</h3>
-          <ul>
-            <li>PowerShell 禁止脚本时，优先使用 <code>npm.cmd run runner</code>。</li>
-            <li>执行目录必须是项目根目录，否则会找不到 <code>package.json</code>。</li>
-            <li>执行 Web UI 任务前，本机需要可用的 Playwright 浏览器内核。</li>
-          </ul>
-        </section>
+        <div class="config-runner-guide__check">
+          <CircleCheck :size="18" :stroke-width="1.8" />
+          <div>
+            <strong>检查连接状态</strong>
+            <p>连接成功后，本页会出现一个在线节点。</p>
+          </div>
+          <button type="button" class="config-runner-secondary-button" :disabled="loading" @click="refreshRunnerConnection">
+            <RefreshCw :size="13" :stroke-width="1.8" />
+            刷新状态
+          </button>
+        </div>
 
-        <section>
-          <h3>状态判断</h3>
-          <p>Runner 正常启动后，本页会在下一次自动刷新时显示在线状态、可用槽位和最近心跳。</p>
-        </section>
+        <el-collapse class="config-runner-guide__collapse">
+          <el-collapse-item title="常见问题" name="faq">
+            <ul>
+              <li>无法连接时，先确认平台地址可从本机访问。</li>
+              <li>Web UI 任务无法启动浏览器时，在 Runner 窗口查看最近日志。</li>
+              <li>节点离线时，检查 Runner 是否正在运行并已连接平台。</li>
+            </ul>
+          </el-collapse-item>
+          <el-collapse-item title="开发调试" name="development">
+            <p>仅源码调试时需要在项目根目录执行：</p>
+            <div class="config-runner-guide__command">
+              <code>{{ runnerStartCommand }}</code>
+              <button type="button" @click="copyRunnerCommand">
+                <el-icon><DocumentCopy /></el-icon>
+                复制命令
+              </button>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
       </div>
     </el-drawer>
 
@@ -3354,9 +3490,78 @@ onBeforeUnmount(() => {
   gap: var(--app-space-5);
 }
 
+.config-runner-guide__intro {
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  line-height: 1.7;
+}
+
 .config-runner-guide section {
   display: grid;
   gap: var(--app-space-3);
+}
+
+.config-runner-guide__download {
+  padding: var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-page);
+}
+
+.config-runner-guide__download-main {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+}
+
+.config-runner-guide__download-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--app-radius-md);
+  background: #e0f2fe;
+  color: var(--app-primary);
+}
+
+.config-runner-guide__primary-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--app-space-3);
+  border: 1px solid var(--app-primary);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.config-runner-guide__primary-action:hover {
+  border-color: #0369a1;
+  background: #0369a1;
+}
+
+.config-runner-guide__primary-action:disabled {
+  border-color: var(--app-border);
+  background: var(--app-bg-muted);
+  color: var(--app-text-muted);
+  cursor: not-allowed;
+}
+
+.config-runner-guide__availability {
+  color: var(--app-text-muted) !important;
+  font-size: var(--app-font-size-xs) !important;
+}
+
+.config-runner-guide__availability.is-error {
+  color: var(--app-danger) !important;
 }
 
 .config-runner-guide h3 {
@@ -3379,6 +3584,73 @@ onBeforeUnmount(() => {
   gap: var(--app-space-2);
   margin: 0;
   padding-left: 18px;
+}
+
+.config-runner-guide__steps {
+  display: grid;
+  gap: var(--app-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.config-runner-guide__steps li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--app-space-3);
+}
+
+.config-runner-guide__steps li > span {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e0f2fe;
+  color: var(--app-primary);
+  font-size: var(--app-font-size-xs);
+  font-weight: 700;
+}
+
+.config-runner-guide__steps strong,
+.config-runner-guide__check strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-runner-guide__check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+  border: 1px solid #bae6fd;
+  border-radius: var(--app-radius-md);
+  background: #f0f9ff;
+  color: var(--app-primary);
+}
+
+.config-runner-guide__check p {
+  margin: 0;
+}
+
+.config-runner-guide__collapse {
+  border-top: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.config-runner-guide__collapse :deep(.el-collapse-item__header) {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+}
+
+.config-runner-guide__collapse :deep(.el-collapse-item__content) {
+  padding-bottom: var(--app-space-4);
 }
 
 .config-runner-guide code {
@@ -3428,6 +3700,17 @@ onBeforeUnmount(() => {
 .config-runner-guide__command button:hover {
   color: var(--app-primary);
   border-color: #bfdbfe;
+}
+
+@media (max-width: 560px) {
+  .config-runner-guide__check {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .config-runner-guide__check .config-runner-secondary-button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
 }
 
 @media (max-width: 1100px) {
