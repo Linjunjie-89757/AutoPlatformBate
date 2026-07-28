@@ -29,6 +29,7 @@ import AppPage from '@/shared/ui/app-page/AppPage.vue'
 import CaseDirectoryTree from '@/widgets/case-directory-tree/CaseDirectoryTree.vue'
 import CaseFilterPanel from '@/widgets/case-filter-panel/CaseFilterPanel.vue'
 import CaseListPanel from '@/widgets/case-list-panel/CaseListPanel.vue'
+import CaseImportDialog from '@/features/case-import/CaseImportDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,6 +49,8 @@ const directoriesLoading = ref(false)
 const directoriesErrorMessage = ref('')
 const currentPageCases = ref<CaseSummaryItem[]>([])
 const caseListRef = ref<InstanceType<typeof CaseListPanel> | null>(null)
+const openedCaseDetailQueryKey = ref('')
+const importDialogVisible = ref(false)
 const moduleDialogVisible = ref(false)
 const moduleDialogMode = ref<'create' | 'rename'>('create')
 const moduleSaving = ref(false)
@@ -107,6 +110,17 @@ const currentPageUserNames = computed(() => {
 const executorOptions = computed(() => currentPageUserNames.value)
 const creatorOptions = computed(() => currentPageUserNames.value)
 const moduleDialogTitle = computed(() => (moduleDialogMode.value === 'create' ? '新建子模块' : '重命名子模块'))
+const currentWorkspaceName = computed(() => {
+  const workspace = workspaces.value.find(item => item.workspaceCode === workspaceCode.value)
+  return workspace?.workspaceName || workspaceCode.value
+})
+const currentDirectoryName = computed(() => {
+  if (selectedDirectoryId.value === null) {
+    return '空间根目录'
+  }
+  const node = findTreeNode(selectedNodeId.value)
+  return node?.label || '空间根目录'
+})
 const moduleSubmitDisabled = computed(() => !moduleForm.name.trim() || moduleSaving.value)
 const moveTargetOptions = computed(() => {
   const node = activeDirectoryNode.value
@@ -360,7 +374,15 @@ function openCreateCase() {
 }
 
 function handleImportCases() {
-  ElMessage.info('用例导入接口暂未接入')
+  if (workspaceCode.value === 'ALL') {
+    ElMessage.warning('请先选择具体工作空间再导入用例')
+    return
+  }
+  importDialogVisible.value = true
+}
+
+function handleCasesImported() {
+  caseListRef.value?.reload()
 }
 
 function openCreateModule(payload: { nodeId: string; workspaceCode: string; directoryId: number | null; label: string; type: 'root' | 'workspace' | 'module' }) {
@@ -541,6 +563,29 @@ watch(
     void handleWorkspaceChange(routeWorkspace)
   },
 )
+
+watch(
+  [() => route.query.caseId, () => route.query.workspace, caseListRef, workspaceCode],
+  ([rawCaseId, rawWorkspace, panel, activeWorkspace]) => {
+    const caseIdValue = Array.isArray(rawCaseId) ? rawCaseId[0] : rawCaseId
+    const routeWorkspace = Array.isArray(rawWorkspace) ? rawWorkspace[0] : rawWorkspace
+    const caseId = Number(caseIdValue)
+    if (!panel || !workspaceReady.value || !Number.isFinite(caseId) || caseId <= 0) {
+      return
+    }
+    if (routeWorkspace && routeWorkspace !== activeWorkspace) {
+      return
+    }
+
+    const queryKey = `${activeWorkspace}:${caseId}`
+    if (openedCaseDetailQueryKey.value === queryKey) {
+      return
+    }
+    openedCaseDetailQueryKey.value = queryKey
+    panel.openDetailById(caseId)
+  },
+  { flush: 'post' },
+)
 </script>
 
 <template>
@@ -709,6 +754,15 @@ watch(
         <AppButton type="primary" :loading="moduleSaving" @click="submitMoveModule">保存</AppButton>
       </template>
     </el-dialog>
+
+    <CaseImportDialog
+      v-model="importDialogVisible"
+      :workspace-code="workspaceCode"
+      :workspace-name="currentWorkspaceName"
+      :directory-id="selectedDirectoryId"
+      :directory-name="currentDirectoryName"
+      @imported="handleCasesImported"
+    />
   </AppPage>
 </template>
 

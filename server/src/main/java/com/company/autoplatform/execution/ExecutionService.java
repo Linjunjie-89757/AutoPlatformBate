@@ -54,8 +54,15 @@ public class ExecutionService {
         return taskDomainService.transitionTask(id, workspaceCode, request);
     }
 
-    public PageResponse<ReportSummaryResponse> listReports(String workspaceCode) {
-        return reportDomainService.listReports(workspaceCode);
+    public PageResponse<ReportSummaryResponse> listReports(
+            String workspaceCode,
+            String keyword,
+            String result,
+            String logSource,
+            Long pageNo,
+            Long pageSize
+    ) {
+        return reportDomainService.listReports(workspaceCode, keyword, result, logSource, pageNo, pageSize);
     }
 
     public ReportDetailResponse getReport(Long id, String workspaceCode) {

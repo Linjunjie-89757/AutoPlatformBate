@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { cp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +45,9 @@ async function copyAppFiles() {
     },
   });
 
+  await cp(join(projectRoot, 'src', 'assets', 'brand'), join(appRoot, 'src', 'assets', 'brand'), { recursive: true });
+  await cp(join(projectRoot, 'src', 'assets', 'fonts'), join(appRoot, 'src', 'assets', 'fonts'), { recursive: true });
+
   await mkdir(join(appRoot, 'node_modules'), { recursive: true });
   await cp(join(projectRoot, 'node_modules', 'playwright'), join(appRoot, 'node_modules', 'playwright'), { recursive: true });
   await cp(join(projectRoot, 'node_modules', 'playwright-core'), join(appRoot, 'node_modules', 'playwright-core'), { recursive: true });
@@ -70,9 +73,10 @@ async function renameExecutable() {
 async function createArchive() {
   await rm(archivePath, { force: true });
   const tarCommand = process.platform === 'win32' ? 'tar.exe' : 'tar';
+  const archiveEntries = await readdir(outputRoot);
   const result = spawnSync(
     tarCommand,
-    ['-a', '-c', '-f', archivePath, '-C', outputRoot, '.'],
+    ['-a', '-c', '-f', archivePath, '-C', outputRoot, ...archiveEntries],
     { stdio: 'inherit' },
   );
   if (result.error) {

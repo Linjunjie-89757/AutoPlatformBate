@@ -25,7 +25,7 @@ import {
   type AppTableColumnDefinition,
   useTableColumnSettings,
 } from '@/shared/lib/table'
-import { confirmDelete } from '@/shared/ui'
+import { confirmAction, confirmDelete } from '@/shared/ui'
 import {
   AppFigmaActionColumn,
   getAppFigmaActionColumnWidth,
@@ -75,6 +75,7 @@ const transitionDialogVisible = ref(false)
 const transitioningDefect = ref<DefectSummaryItem | null>(null)
 const transitioningDefectId = ref<number | null>(null)
 const deletingDefectId = ref<number | null>(null)
+const batchOperationRunning = ref(false)
 const detailRefreshKey = ref(0)
 const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
@@ -390,15 +391,59 @@ function batchAssignSelectedDefects() {
     return
   }
 
-  ElMessage.info('批量指派接口暂未接入，已保留 Figma 批量操作入口')
+  ElMessage.info('后台没有批量指派接口，当前 Figma 也缺少负责人选择弹窗；已记录到遗留问题')
 }
 
-function batchCloseSelectedDefects() {
-  if (!selectedDefects.value.length) {
+async function batchCloseSelectedDefects() {
+  const targets = selectedDefects.value.filter(item => item.status !== 'CLOSED')
+  if (!targets.length || batchOperationRunning.value) {
+    if (selectedDefects.value.length && !targets.length) {
+      ElMessage.info('选中的缺陷均已关闭')
+    }
     return
   }
 
-  ElMessage.info('批量关闭接口暂未接入，已保留 Figma 批量操作入口')
+  try {
+    await confirmAction({
+      title: '批量关闭缺陷',
+      message: `确认关闭已选的 ${targets.length} 个缺陷吗？`,
+      confirmText: '确认关闭',
+      tone: 'warning',
+    })
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error(getRequestErrorMessage(error))
+    return
+  }
+
+  batchOperationRunning.value = true
+  const results = await Promise.allSettled(targets.map((item) => {
+    const workspaceCode = item.workspaceCode || props.workspaceCode
+    return defectApi.transitionDefect(workspaceCode, item.id, {
+      workspaceCode: workspaceCode === 'ALL' ? undefined : workspaceCode,
+      toStatus: 'CLOSED',
+      actionComment: '批量关闭',
+    })
+  }))
+  const failedIds = results.flatMap((result, index) => result.status === 'rejected' ? [targets[index]!.id] : [])
+  const successCount = results.length - failedIds.length
+
+  try {
+    await loadDefects()
+    selectedDefectIds.value = failedIds.filter(id => defects.value.some(item => item.id === id))
+    emit('selection-change', selectedDefectIds.value.length)
+    if (!failedIds.length) {
+      ElMessage.success(`已关闭 ${successCount} 个缺陷`)
+    } else if (successCount) {
+      ElMessage.warning(`已关闭 ${successCount} 个缺陷，${failedIds.length} 个关闭失败`)
+    } else {
+      ElMessage.error('选中的缺陷关闭失败')
+    }
+  } finally {
+    batchOperationRunning.value = false
+  }
 }
 
 async function deleteSelectedDefects() {

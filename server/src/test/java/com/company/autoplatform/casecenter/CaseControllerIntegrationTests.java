@@ -7,6 +7,7 @@ import com.company.autoplatform.workspace.WorkspaceScope;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.mock.web.MockMultipartFile;
@@ -14,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -294,6 +296,70 @@ class CaseControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void excelImportSupportsTemplateValidationAndDuplicateStrategies() throws Exception {
+        String unique = uniquePrefix("excel-import");
+
+        mockMvc.perform(get("/api/cases/import/template"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+
+        byte[] workbook = caseImportWorkbook(List.of(
+                List.of(unique, "功能", "P0", "准备数据", "提交表单", "提交成功", "启用"),
+                List.of(unique, "回归", "P1", "", "重复提交", "仍然成功", "草稿"),
+                List.of(unique + "-invalid", "功能", "PX", "", "", "", "启用")
+        ));
+        mockMvc.perform(multipart("/api/cases/import")
+                        .file(new MockMultipartFile(
+                                "file",
+                                "cases.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                workbook))
+                        .param("duplicateStrategy", "SKIP")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.totalRows").value(3))
+                .andExpect(jsonPath("$.data.createdCount").value(1))
+                .andExpect(jsonPath("$.data.skippedCount").value(1))
+                .andExpect(jsonPath("$.data.failedCount").value(1))
+                .andExpect(jsonPath("$.data.issues[*].type", containsInAnyOrder("SKIPPED", "FAILED")));
+
+        mockMvc.perform(get("/api/cases")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique)
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].sourceType").value("IMPORTED"))
+                .andExpect(jsonPath("$.data.items[0].priority").value("P0"));
+
+        byte[] duplicateWorkbook = caseImportWorkbook(List.of(
+                List.of(unique, "异常", "P2", "", "再次提交", "创建重复用例", "归档")
+        ));
+        mockMvc.perform(multipart("/api/cases/import")
+                        .file(new MockMultipartFile(
+                                "file",
+                                "duplicates.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                duplicateWorkbook))
+                        .param("duplicateStrategy", "ALLOW")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.createdCount").value(1))
+                .andExpect(jsonPath("$.data.skippedCount").value(0))
+                .andExpect(jsonPath("$.data.failedCount").value(0));
+
+        mockMvc.perform(get("/api/cases")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique)
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2));
+    }
+
+    @Test
     void aiReviewCaseSmokeUsesMockedProviderClient() throws Exception {
         String unique = uniquePrefix("ai-review");
         Integer caseId = createCase(unique + "-case", "P1", null);
@@ -440,6 +506,26 @@ class CaseControllerIntegrationTests extends IntegrationTestSupport {
                   "supportsImageInput": false
                 }
                 """.formatted(WORKSPACE_CODE, roleType, providerId, model, promptTemplate);
+    }
+
+    private byte[] caseImportWorkbook(List<List<String>> rows) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("用例导入");
+            var header = sheet.createRow(0);
+            List<String> headers = List.of("用例标题*", "用例类型", "优先级", "前置条件", "测试步骤", "预期结果", "状态");
+            for (int index = 0; index < headers.size(); index++) {
+                header.createCell(index).setCellValue(headers.get(index));
+            }
+            for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+                var row = sheet.createRow(rowIndex + 1);
+                List<String> values = rows.get(rowIndex);
+                for (int columnIndex = 0; columnIndex < values.size(); columnIndex++) {
+                    row.createCell(columnIndex).setCellValue(values.get(columnIndex));
+                }
+            }
+            workbook.write(output);
+            return output.toByteArray();
+        }
     }
 
     private String uniquePrefix(String label) {

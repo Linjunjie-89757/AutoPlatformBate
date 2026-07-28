@@ -1,15 +1,35 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Check, ChevronDown, Filter, Sparkles } from '@lucide/vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Check, Filter } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 
+import {
+  reportApi,
+  type ReportDetail,
+  type ReportShareSummary,
+  type ReportSummaryItem,
+} from '@/entities/report'
+import { useSession } from '@/entities/session'
+import { useWorkspaceContext } from '@/entities/workspace'
+import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaReportIcons } from '@/shared/assets/figma-icons'
+import {
+  type AppTableColumnDefinition,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
+import { confirmAction, confirmDelete } from '@/shared/ui'
+import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
 type PageMode = 'list' | 'detail'
 type ReportTab = 'list' | 'share'
 type ReportStatus = 'success' | 'failed' | 'interrupted'
-type StepStatus = 'success' | 'failed' | 'skipped'
-type DrawerTab = 'request' | 'response' | 'assertion' | 'log' | 'ai'
 
 interface SummaryCard {
   label: string
@@ -17,185 +37,171 @@ interface SummaryCard {
   tone: 'default' | 'success' | 'danger' | 'warning'
 }
 
-interface ReportRow {
+interface ReportRow extends Record<string, unknown> {
   id: string
+  reportId: number
+  taskId: number
   name: string
   trigger: string
   type: string
   typeTone: 'blue' | 'cyan' | 'purple'
   status: ReportStatus
-  passRate: number
+  passRate: number | null
   steps: {
     success: number
     failed?: number
     skipped?: number
-  }
+  } | null
   duration: string
   executor: string
   env: string
+  workspaceCode: string
+  workspaceName: string
+  logSource: string
+  failureSummary: string
 }
 
-interface ReportStep {
-  id: number
-  title: string
-  method?: 'GET' | 'POST' | 'DELETE'
-  duration: string
-  status: StepStatus
-}
-
-interface StepAssertion {
-  path: string
-  op: string
-  expected: string
-  actual: string
-  pass: boolean
-}
+interface ReportShareRow extends ReportShareSummary, Record<string, unknown> {}
 
 const pageMode = ref<PageMode>('list')
 const activeTab = ref<ReportTab>('list')
-const drawerVisible = ref(false)
-const activeDrawerTab = ref<DrawerTab>('request')
-const selectedStepId = ref<number | null>(null)
-const drawerStepId = ref<number | null>(null)
-const failOnly = ref(false)
-const detailAiExpanded = ref(true)
-const drawerAiExpanded = ref(true)
+const route = useRoute()
+const router = useRouter()
 const copiedCodeBlockKey = ref('')
 const copiedResetTimers = new Map<string, ReturnType<typeof window.setTimeout>>()
-const router = useRouter()
+const { currentUser } = useSession()
+const { selectedWorkspaceCode } = useWorkspaceContext()
+const tableFrameRef = ref<HTMLElement | null>(null)
+const tableFrameWidth = ref(0)
+const reportItems = ref<ReportSummaryItem[]>([])
+const reportKeyword = ref('')
+const reportTypeFilter = ref('all')
+const reportStatusFilter = ref('all')
+const reportLoading = ref(false)
+const reportError = ref('')
+const reportTotal = ref(0)
+const reportPageNo = ref(1)
+const reportPageSize = ref(10)
+const reportTotalPages = ref(0)
+const reportStats = ref({ total: 0, success: 0, failed: 0 })
+const selectedReportRow = ref<ReportRow | null>(null)
+const selectedReportDetail = ref<ReportDetail | null>(null)
+const detailLoading = ref(false)
+const detailError = ref('')
+const reportShares = ref<ReportShareSummary[]>([])
+const shareLoading = ref(false)
+const shareError = ref('')
+const sharePageNo = ref(1)
+const sharePageSize = ref(10)
+const sharingReportId = ref<number | null>(null)
+let reportRequestSeq = 0
+let detailRequestSeq = 0
+let shareRequestSeq = 0
+let tableFrameObserver: ResizeObserver | null = null
 
-const summaryCards: SummaryCard[] = [
-  { label: '全部报告', value: '7', tone: 'default' },
-  { label: '成功', value: '3', tone: 'success' },
-  { label: '失败', value: '3', tone: 'danger' },
-  { label: '中断 / 执行中', value: '1', tone: 'warning' },
-]
-
-const reportRows: ReportRow[] = [
-  {
-    id: 'RPT-2026-0703-001',
-    name: '订单中心-主流程回归',
-    trigger: '手动',
-    type: '接口套件',
-    typeTone: 'blue',
-    status: 'success',
-    passRate: 100,
-    steps: { success: 48 },
-    duration: '2m 34s',
-    executor: '张程远',
-    env: '测试环境',
-  },
-  {
-    id: 'RPT-2026-0703-002',
-    name: '风控中心-黑名单拦截场景',
-    trigger: 'CI/CD',
-    type: '接口场景',
-    typeTone: 'blue',
-    status: 'failed',
-    passRate: 50,
-    steps: { success: 4, failed: 3, skipped: 1 },
-    duration: '48s',
-    executor: '李明',
-    env: '预发布',
-  },
-  {
-    id: 'RPT-2026-0703-003',
-    name: '用户中心-注册登录 UI 套件',
-    trigger: '定时',
-    type: 'Web UI 套件',
-    typeTone: 'purple',
-    status: 'failed',
-    passRate: 80,
-    steps: { success: 28, failed: 7 },
-    duration: '5m 12s',
-    executor: '王芳',
-    env: '测试环境',
-  },
-  {
-    id: 'RPT-2026-0703-004',
-    name: '获客中心-产品新增 UI 用例',
-    trigger: '手动',
-    type: 'Web UI 用例',
-    typeTone: 'cyan',
-    status: 'success',
-    passRate: 100,
-    steps: { success: 18 },
-    duration: '1m 05s',
-    executor: '张程远',
-    env: '测试环境',
-  },
-  {
-    id: 'RPT-2026-0702-001',
-    name: '获客中心-全量回归套件',
-    trigger: 'CI/CD',
-    type: '接口套件',
-    typeTone: 'blue',
-    status: 'failed',
-    passRate: 88,
-    steps: { success: 56, failed: 8 },
-    duration: '4m 18s',
-    executor: '陈伟',
-    env: '预发布',
-  },
-  {
-    id: 'RPT-2026-0702-002',
-    name: '风控统计-只读查询场景',
-    trigger: '手动',
-    type: '接口场景',
-    typeTone: 'blue',
-    status: 'success',
-    passRate: 100,
-    steps: { success: 6 },
-    duration: '12s',
-    executor: '李明',
-    env: '生产环境',
-  },
-  {
-    id: 'RPT-2026-0701-001',
-    name: '订单退款流程-异常分支',
-    trigger: '手动',
-    type: '接口场景',
-    typeTone: 'blue',
-    status: 'interrupted',
-    passRate: 25,
-    steps: { success: 2, failed: 2, skipped: 4 },
-    duration: '22s',
-    executor: '张程远',
-    env: '测试环境',
-  },
-]
-
-const reportSteps: ReportStep[] = [
-  { id: 1, title: 'POST /api/auth/login', method: 'POST', duration: '120ms', status: 'success' },
-  { id: 2, title: 'POST /api/risk/blacklist/add', method: 'POST', duration: '85ms', status: 'success' },
-  { id: 3, title: 'GET /api/risk/blacklist/query', method: 'GET', duration: '67ms', status: 'success' },
-  { id: 4, title: 'POST /api/orders/create（黑名单用户下单）', method: 'POST', duration: '210ms', status: 'failed' },
-  { id: 5, title: 'POST /api/risk/blacklist/remove', duration: '—', status: 'skipped' },
-  { id: 6, title: 'GET /api/risk/blacklist/query（验证移除）', duration: '—', status: 'skipped' },
-  { id: 7, title: 'DELETE /api/test/cleanup', method: 'DELETE', duration: '315ms', status: 'failed' },
-  { id: 8, title: 'GET /api/orders/list（验证无残留订单）', method: 'GET', duration: '74ms', status: 'failed' },
-]
-
-const reportAiAnalysis = {
-  summary: '风控中间件未在预发布环境正确拦截黑名单用户下单，接口返回 200 而非预期 403，表明黑名单校验逻辑未在该环境生效。',
-  basis: [
-    '步骤 2 成功将 userId=99999 写入黑名单，blacklistId=5501 表明入库成功',
-    '步骤 3 查询确认 inBlacklist=true，黑名单数据写入正确',
-    '步骤 4 下单请求接口返回 code=0 而非 403，风控拦截未被触发',
-    '响应体包含正常 orderId，表明订单已实际创建成功',
-  ],
-  suggestions: [
-    '检查预发布环境风控中间件是否已部署最新版本',
-    '对比测试环境与预发布环境 risk-middleware 配置差异',
-    '排查黑名单缓存同步（预发布可能使用独立 Redis 实例）',
-    '联系后端确认 /api/orders/create 在预发布的中间件链路是否完整',
-  ],
+function formatLogSource(value: string) {
+  const labels: Record<string, string> = {
+    MANUAL: '手动',
+    API: '接口',
+    API_LOCAL_RUNNER: '本地 Runner',
+    WEB: 'Web UI',
+    APP: 'App',
+    SYSTEM: '系统',
+  }
+  return labels[String(value || '').toUpperCase()] || '未知来源'
 }
 
-const selectedStep = computed(() => reportSteps.find((step) => step.id === selectedStepId.value) ?? null)
-const drawerStep = computed(() => reportSteps.find((step) => step.id === drawerStepId.value) ?? null)
-const failStepCount = computed(() => reportSteps.filter((step) => step.status === 'failed').length)
-const visibleReportSteps = computed(() => (failOnly.value ? reportSteps.filter((step) => step.status === 'failed') : reportSteps))
+function mapReportItem(item: ReportSummaryItem): ReportRow {
+  const result = String(item.result || '').toUpperCase()
+  return {
+    id: String(item.id),
+    reportId: item.id,
+    taskId: item.taskId,
+    name: item.reportName || '-',
+    trigger: formatLogSource(item.logSource),
+    type: '—',
+    typeTone: 'blue',
+    status: result === 'SUCCESS' ? 'success' : result === 'FAILED' ? 'failed' : 'interrupted',
+    passRate: null,
+    steps: null,
+    duration: '—',
+    executor: '—',
+    env: '—',
+    workspaceCode: item.workspaceCode || 'ALL',
+    workspaceName: item.workspaceName || '—',
+    logSource: item.logSource || 'MANUAL',
+    failureSummary: item.failureSummary || '—',
+  }
+}
+
+const reportRows = computed(() => reportItems.value.map(mapReportItem))
+const summaryCards = computed<SummaryCard[]>(() => {
+  return [
+    { label: '全部报告', value: String(reportStats.value.total), tone: 'default' },
+    { label: '成功', value: String(reportStats.value.success), tone: 'success' },
+    { label: '失败', value: String(reportStats.value.failed), tone: 'danger' },
+    {
+      label: '中断 / 执行中',
+      value: String(Math.max(0, reportStats.value.total - reportStats.value.success - reportStats.value.failed)),
+      tone: 'warning',
+    },
+  ]
+})
+
+const reportTableColumns: AppTableColumnDefinition[] = [
+  { key: 'id', label: '报告 ID', width: 190, required: true, defaultVisible: true },
+  { key: 'name', label: '报告名称 / 触发', width: 290, required: true, defaultVisible: true },
+  { key: 'type', label: '类型', width: 130, defaultVisible: true },
+  { key: 'status', label: '状态', width: 116, defaultVisible: true },
+  { key: 'passRate', label: '通过率', width: 175, defaultVisible: true },
+  { key: 'steps', label: '步骤统计', width: 160, defaultVisible: true },
+  { key: 'duration', label: '耗时', width: 87, defaultVisible: true },
+  { key: 'executor', label: '执行人', width: 87, defaultVisible: true },
+  { key: 'env', label: '环境', width: 72, defaultVisible: true },
+  { key: 'taskId', label: '任务 ID', width: 100, defaultVisible: false },
+  { key: 'workspaceName', label: '工作空间', width: 140, defaultVisible: false },
+  { key: 'workspaceCode', label: '工作空间编码', width: 140, defaultVisible: false },
+  { key: 'logSource', label: '原始日志来源', width: 120, defaultVisible: false },
+  { key: 'failureSummary', label: '失败摘要', width: 240, defaultVisible: false },
+]
+
+const reportColumnSettings = useTableColumnSettings({
+  columns: reportTableColumns,
+  storageKey: computed(() => `app-figma-table:reports:${currentUser.value?.id || 'anonymous'}:ALL`),
+  immediate: true,
+})
+
+const pagedReportRows = computed(() => reportRows.value)
+
+const reportOperationActionCount = 4
+const reportOperationColumnWidth = getAppFigmaActionColumnWidth(reportOperationActionCount)
+const reportTableColumnWidths = computed<Record<string, number>>(() => {
+  const columns = reportColumnSettings.visibleColumns.value
+  const baseWidth = columns.reduce((width, column) => width + (column.width || column.minWidth || 120), 0)
+  const availableWidth = Math.max(baseWidth, tableFrameWidth.value - reportOperationColumnWidth - 2)
+  let allocatedWidth = 0
+
+  return columns.reduce<Record<string, number>>((widths, column, index) => {
+    const columnBaseWidth = column.width || column.minWidth || 120
+    const width = index === columns.length - 1
+      ? availableWidth - allocatedWidth
+      : Math.round(availableWidth * columnBaseWidth / baseWidth)
+    widths[column.key] = width
+    allocatedWidth += width
+    return widths
+  }, {})
+})
+const reportTableContentWidth = computed(() => Object.values(reportTableColumnWidths.value).reduce(
+  (width, columnWidth) => width + columnWidth,
+  reportOperationColumnWidth,
+))
+const reportTableNeedsScroll = computed(() => Boolean(
+  tableFrameWidth.value && reportTableContentWidth.value > tableFrameWidth.value,
+))
+
+function getReportColumnWidth(column: AppTableColumnDefinition) {
+  return reportTableColumnWidths.value[column.key] || column.width || column.minWidth || 120
+}
 
 function statusLabel(status: ReportStatus) {
   if (status === 'success') return '成功'
@@ -203,120 +209,8 @@ function statusLabel(status: ReportStatus) {
   return '已中断'
 }
 
-function stepStatusLabel(status: StepStatus) {
-  if (status === 'success') return '执行通过'
-  if (status === 'failed') return '执行失败'
-  return '已跳过'
-}
-
-function stepAssertionCount(status: StepStatus) {
-  if (status === 'skipped') return 0
-  return 2
-}
-
-function stepAssertions(step: ReportStep): StepAssertion[] {
-  if (step.status === 'skipped') return []
-  if (step.status === 'failed') {
-    return [
-      { path: '$.code', op: '等于', expected: step.id === 4 ? '403' : '0', actual: step.id === 4 ? '0' : '500', pass: false },
-      { path: step.id === 4 ? '$.message' : '$.trace', op: step.id === 4 ? '包含' : '存在', expected: step.id === 4 ? 'blacklist' : '—', actual: step.id === 4 ? 'success' : 'NullPointerException', pass: false },
-    ]
-  }
-  return [
-    { path: '$.code', op: '等于', expected: '0', actual: '0', pass: true },
-    { path: '$.data.token', op: '存在', expected: '—', actual: 'eyJhbGci...', pass: true },
-  ]
-}
-
-function stepUrl(step: ReportStep) {
-  if (!step.method) return ''
-  const path = step.title.replace(`${step.method} `, '').split('（')[0]
-  return `https://staging-api.company.com${path}`
-}
-
-function stepRequestBody(step: ReportStep) {
-  if (step.status === 'skipped') return ''
-  if (step.id === 4) {
-    return `{
-  "userId": 10042,
-  "skuId": "SKU-RISK-001",
-  "amount": 1
-}`
-  }
-  if (step.id === 1) {
-    return `{
-  "username": "qatest001",
-  "password": "Test@1234"
-}`
-  }
-  return ''
-}
-
-function stepStatusCode(step: ReportStep) {
-  if (step.status === 'skipped') return '—'
-  return step.status === 'success' ? '200' : step.id === 7 ? '500' : '200'
-}
-
-function stepStatusCodeTone(step: ReportStep) {
-  const code = Number(stepStatusCode(step))
-  if (Number.isNaN(code)) return 'muted'
-  return code < 300 ? 'success' : 'failed'
-}
-
-function stepResponseDuration(step: ReportStep) {
-  const durationMap: Record<number, string> = {
-    1: '98ms',
-    2: '62ms',
-    3: '51ms',
-    4: '188ms',
-    7: '290ms',
-    8: '61ms',
-  }
-  return durationMap[step.id] ?? step.duration
-}
-
-function stepResponseBody(step: ReportStep) {
-  if (step.id === 7) {
-    return `{
-  "code": 500,
-  "message": "Internal Server Error",
-  "trace": "NullPointerException at com.company.cleanup.CleanupService:142"
-}`
-  }
-  if (step.status === 'failed') {
-    return `{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "orderId": "ORD-20260703-99001"
-  }
-}`
-  }
-  return `{
-  "code": 0,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "userId": 10042,
-    "role": "user"
-  }
-}`
-}
-
-function stepLog(step: ReportStep) {
-  if (step.status !== 'failed') return ''
-  if (step.id === 4) {
-    return `[2026-07-03 13:30:38.214] [ASSERT FAIL] Step 4: POST /api/orders/create
-断言失败: $.code 期望 403，实际 0
-断言失败: $.message 期望包含 "blacklist"，实际 "success"
-
-环境: 预发布 (https://staging-api.company.com)
-推断: 预发布环境风控中间件未正确拦截黑名单用户下单请求。`
-  }
-  return `[2026-07-03 13:31:02.451] [ASSERT FAIL] Step ${step.id}: ${step.title}
-断言失败: 请求返回异常。`
-}
-
 function passTone(row: ReportRow) {
+  if (row.passRate === null) return 'muted'
   if (row.status === 'success') return 'success'
   if (row.status === 'failed') return row.passRate >= 80 ? 'warning' : 'danger'
   return 'danger'
@@ -332,46 +226,322 @@ function reportEnvBadgeWidth(env: string) {
   return env === '预发布' ? '40.5px' : '50.5px'
 }
 
-function selectReport() {
+function formatReportColumnValue(item: ReportRow, key: string) {
+  switch (key) {
+    case 'taskId':
+      return item.taskId
+    case 'workspaceName':
+      return item.workspaceName
+    case 'workspaceCode':
+      return item.workspaceCode
+    case 'logSource':
+      return item.logSource
+    case 'failureSummary':
+      return item.failureSummary
+    default:
+      return '—'
+  }
+}
+
+function showUnsupportedCapability(message: string) {
+  ElMessage.info(message)
+}
+
+function reportStatusFromResult(result?: string | null): ReportStatus {
+  const normalized = String(result || '').toUpperCase()
+  if (normalized === 'SUCCESS') return 'success'
+  if (normalized === 'FAILED') return 'failed'
+  return 'interrupted'
+}
+
+const selectedReportStatus = computed(() => reportStatusFromResult(
+  selectedReportDetail.value?.result || selectedReportRow.value?.status,
+))
+const selectedReportName = computed(() => (
+  selectedReportDetail.value?.reportName || selectedReportRow.value?.name || '报告详情'
+))
+const selectedReportLog = computed(() => selectedReportDetail.value?.logText?.trim() || '')
+const selectedReportAttachments = computed(() => selectedReportDetail.value?.attachments || [])
+const pagedReportShares = computed(() => {
+  const start = (sharePageNo.value - 1) * sharePageSize.value
+  return reportShares.value.slice(start, start + sharePageSize.value) as ReportShareRow[]
+})
+const shareOperationColumnWidth = getAppFigmaActionColumnWidth(2)
+
+function formatDetailDate(value?: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function formatShareDate(value?: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function shareExpiryLabel(value?: string | null) {
+  return value ? formatShareDate(value) : '永久有效'
+}
+
+function formatAttachmentSize(value?: number | null) {
+  if (!Number.isFinite(value) || Number(value) < 0) return '—'
+  const bytes = Number(value)
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+async function loadSelectedReport() {
+  const row = selectedReportRow.value
+  if (!row) return
+  const requestSeq = ++detailRequestSeq
+  detailLoading.value = true
+  detailError.value = ''
+  selectedReportDetail.value = null
+  try {
+    const detail = await reportApi.getReport(row.workspaceCode || selectedWorkspaceCode.value || 'ALL', row.reportId)
+    if (requestSeq !== detailRequestSeq) return
+    selectedReportDetail.value = detail
+  } catch (error) {
+    if (requestSeq !== detailRequestSeq) return
+    detailError.value = getRequestErrorMessage(error)
+  } finally {
+    if (requestSeq === detailRequestSeq) detailLoading.value = false
+  }
+}
+
+function selectReport(item?: unknown) {
+  if (!item || typeof item !== 'object' || !('reportId' in item)) return
+  selectedReportRow.value = item as ReportRow
   pageMode.value = 'detail'
-  selectedStepId.value = null
-  drawerStepId.value = null
-  drawerVisible.value = false
-  failOnly.value = false
+  void loadSelectedReport()
 }
 
 function backToList() {
+  detailRequestSeq += 1
   pageMode.value = 'list'
-  selectedStepId.value = null
-  drawerStepId.value = null
-  drawerVisible.value = false
-  failOnly.value = false
+  selectedReportRow.value = null
+  selectedReportDetail.value = null
+  detailLoading.value = false
+  detailError.value = ''
+  if (route.query.reportId) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.reportId
+    void router.replace({ query: nextQuery })
+  }
 }
 
-function selectStep(step: ReportStep) {
-  selectedStepId.value = step.id
-  drawerVisible.value = false
+function resolveShareTarget(item?: unknown) {
+  if (item && typeof item === 'object' && 'reportId' in item) {
+    return item as ReportRow
+  }
+  return selectedReportRow.value
 }
 
-function openDrawer(tab: DrawerTab = 'request', step: ReportStep | null = selectedStep.value) {
-  if (!step) return
-  drawerStepId.value = step.id
-  activeDrawerTab.value = step.status === 'skipped' && tab === 'response' ? 'request' : tab
-  drawerVisible.value = true
+function absoluteShareUrl(shareUrl: string) {
+  return new URL(shareUrl, window.location.origin).toString()
 }
 
-function openStepDrawer(step: ReportStep, tab: DrawerTab = 'request') {
-  selectedStepId.value = step.id
-  openDrawer(tab, step)
+async function createReportShare(item?: unknown, openPage = true) {
+  const target = resolveShareTarget(item)
+  if (!target || sharingReportId.value !== null) return
+  sharingReportId.value = target.reportId
+  try {
+    const created = await reportApi.createReportShare(target.workspaceCode || selectedWorkspaceCode.value || 'ALL', target.reportId)
+    await loadReportShares()
+    if (openPage) {
+      await router.push({ name: 'report-shared-report', query: { token: created.token } })
+      return
+    }
+    await copyText(absoluteShareUrl(created.shareUrl))
+    ElMessage.success('分享链接已生成并复制，有效期 7 天')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    sharingReportId.value = null
+  }
 }
 
-function closeDrawer() {
-  drawerVisible.value = false
-  drawerStepId.value = null
+function openSharedReport(item?: unknown) {
+  void createReportShare(item, true)
 }
 
-function openSharedReport() {
-  void router.push({ name: 'report-shared-report' })
+function copySharedReportLink(item: ReportRow) {
+  void createReportShare(item, false)
+}
+
+async function loadReportShares() {
+  const requestSeq = ++shareRequestSeq
+  shareLoading.value = true
+  shareError.value = ''
+  try {
+    const items = await reportApi.getReportShares(selectedWorkspaceCode.value || 'ALL')
+    if (requestSeq !== shareRequestSeq) return
+    reportShares.value = items
+    const totalPages = Math.max(1, Math.ceil(items.length / sharePageSize.value))
+    if (sharePageNo.value > totalPages) sharePageNo.value = totalPages
+  } catch (error) {
+    if (requestSeq !== shareRequestSeq) return
+    reportShares.value = []
+    shareError.value = getRequestErrorMessage(error)
+  } finally {
+    if (requestSeq === shareRequestSeq) shareLoading.value = false
+  }
+}
+
+function shareState(item: ReportShareSummary) {
+  if (item.status !== 1) return { label: '已撤销', tone: 'interrupted' as const }
+  if (item.expiresAt && new Date(item.expiresAt).getTime() < Date.now()) {
+    return { label: '已过期', tone: 'failed' as const }
+  }
+  return { label: '分享中', tone: 'success' as const }
+}
+
+async function regenerateReportShare(item: ReportShareSummary) {
+  try {
+    const created = await reportApi.regenerateReportShare(item.workspaceCode, item.id)
+    await loadReportShares()
+    await router.push({ name: 'report-shared-report', query: { token: created.token } })
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function revokeReportShare(item: ReportShareSummary) {
+  try {
+    await confirmAction({
+      title: '撤销报告分享',
+      message: `撤销后，报告「${item.reportName}」的当前公开链接将立即失效。`,
+      confirmText: '确认撤销',
+      tone: 'warning',
+    })
+    await reportApi.revokeReportShare(item.workspaceCode, item.id)
+    ElMessage.success('报告分享已撤销')
+    await loadReportShares()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function openReportFromRoute() {
+  const rawReportId = Array.isArray(route.query.reportId) ? route.query.reportId[0] : route.query.reportId
+  const reportId = Number(rawReportId)
+  if (!Number.isInteger(reportId) || reportId <= 0) return
+  const workspaceCode = typeof route.query.workspace === 'string'
+    ? route.query.workspace
+    : selectedWorkspaceCode.value || 'ALL'
+  const requestSeq = ++detailRequestSeq
+  detailLoading.value = true
+  detailError.value = ''
+  pageMode.value = 'detail'
+  try {
+    const detail = await reportApi.getReport(workspaceCode, reportId)
+    if (requestSeq !== detailRequestSeq) return
+    selectedReportDetail.value = detail
+    selectedReportRow.value = mapReportItem(detail)
+  } catch (error) {
+    if (requestSeq !== detailRequestSeq) return
+    detailError.value = getRequestErrorMessage(error)
+  } finally {
+    if (requestSeq === detailRequestSeq) detailLoading.value = false
+  }
+}
+
+function handleReportTypeFilterChange(event: Event) {
+  if ((event.target as HTMLSelectElement).value === 'all') return
+  window.setTimeout(() => {
+    reportTypeFilter.value = 'all'
+  }, 0)
+  showUnsupportedCapability('通用报告接口尚未提供报告对象类型字段，暂不能按类型筛选')
+}
+
+async function deleteReport(item: ReportRow) {
+  try {
+    await confirmDelete({
+      title: '删除报告',
+      message: `确认删除报告「${item.name}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+      beforeConfirm: async () => {
+        try {
+          await reportApi.deleteReport(item.workspaceCode || selectedWorkspaceCode.value || 'ALL', item.reportId)
+        } catch (error) {
+          ElMessage.error(getRequestErrorMessage(error))
+          throw error
+        }
+      },
+    })
+    ElMessage.success('报告已删除')
+    await Promise.all([loadReports(), loadReportStats()])
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') throw error
+  }
+}
+
+async function loadReports() {
+  const requestSeq = ++reportRequestSeq
+  reportLoading.value = true
+  reportError.value = ''
+  try {
+    const statusMap: Record<string, string> = {
+      success: 'SUCCESS',
+      failed: 'FAILED',
+      interrupted: 'OTHER',
+    }
+    const page = await reportApi.getReports(selectedWorkspaceCode.value || 'ALL', {
+      keyword: reportKeyword.value.trim(),
+      result: statusMap[reportStatusFilter.value],
+      pageNo: reportPageNo.value,
+      pageSize: reportPageSize.value,
+    })
+    if (requestSeq !== reportRequestSeq) return
+    reportItems.value = page.items || []
+    reportTotal.value = page.total
+    reportPageNo.value = page.pageNo || reportPageNo.value
+    reportTotalPages.value = Number(page.totalPages || Math.ceil(page.total / Math.max(reportPageSize.value, 1)))
+  } catch (error) {
+    if (requestSeq !== reportRequestSeq) return
+    reportItems.value = []
+    reportTotal.value = 0
+    reportTotalPages.value = 0
+    reportError.value = getRequestErrorMessage(error)
+  } finally {
+    if (requestSeq === reportRequestSeq) reportLoading.value = false
+  }
+}
+
+async function loadReportStats() {
+  try {
+    const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+    const [all, success, failed] = await Promise.all([
+      reportApi.getReports(workspaceCode, { pageNo: 1, pageSize: 1 }),
+      reportApi.getReports(workspaceCode, { result: 'SUCCESS', pageNo: 1, pageSize: 1 }),
+      reportApi.getReports(workspaceCode, { result: 'FAILED', pageNo: 1, pageSize: 1 }),
+    ])
+    reportStats.value = { total: all.total, success: success.total, failed: failed.total }
+  } catch {
+    reportStats.value = { total: 0, success: 0, failed: 0 }
+  }
+}
+
+function reloadReportsFromFirstPage() {
+  if (reportPageNo.value === 1) {
+    void loadReports()
+    return
+  }
+  reportPageNo.value = 1
+}
+
+function setReportPage(value: number) {
+  reportPageNo.value = value
+}
+
+function setReportPageSize(value: number) {
+  reportPageSize.value = value
 }
 
 async function copyReportCodeBlock(key: string, text = '') {
@@ -404,6 +574,76 @@ async function copyText(text = '') {
     document.body.removeChild(textarea)
   }
 }
+
+function openReportColumnSettings() {
+  reportColumnSettings.open()
+}
+
+watch([reportKeyword, reportStatusFilter], reloadReportsFromFirstPage)
+
+watch(reportPageNo, (value, oldValue) => {
+  if (value !== oldValue) void loadReports()
+})
+
+watch(reportPageSize, (value, oldValue) => {
+  if (value !== oldValue) reloadReportsFromFirstPage()
+})
+
+watch(reportTotalPages, (value) => {
+  if (value > 0 && reportPageNo.value > value) reportPageNo.value = value
+})
+
+watch(activeTab, (value) => {
+  if (value === 'share') void loadReportShares()
+})
+
+watch(sharePageSize, () => {
+  sharePageNo.value = 1
+})
+
+watch(selectedWorkspaceCode, () => {
+  detailRequestSeq += 1
+  pageMode.value = 'list'
+  selectedReportRow.value = null
+  selectedReportDetail.value = null
+  detailLoading.value = false
+  detailError.value = ''
+  if (reportPageNo.value === 1) void loadReports()
+  else reportPageNo.value = 1
+  void loadReportStats()
+  shareRequestSeq += 1
+  reportShares.value = []
+  sharePageNo.value = 1
+  if (activeTab.value === 'share') void loadReportShares()
+  if (route.query.reportId) void openReportFromRoute()
+})
+
+watch(tableFrameRef, (element) => {
+  tableFrameObserver?.disconnect()
+  tableFrameObserver = null
+  if (!element) return
+
+  const syncWidth = () => {
+    tableFrameWidth.value = element.clientWidth
+  }
+  syncWidth()
+  tableFrameObserver = new ResizeObserver(syncWidth)
+  tableFrameObserver.observe(element)
+})
+
+onMounted(() => {
+  void Promise.all([loadReports(), loadReportStats()])
+  void openReportFromRoute()
+})
+
+onBeforeUnmount(() => {
+  reportRequestSeq += 1
+  detailRequestSeq += 1
+  shareRequestSeq += 1
+  tableFrameObserver?.disconnect()
+  copiedResetTimers.forEach(timer => window.clearTimeout(timer))
+  copiedResetTimers.clear()
+})
 </script>
 
 <template>
@@ -431,104 +671,232 @@ async function copyText(text = '') {
           <div class="report-filter-group">
             <label class="report-search-field">
               <img :src="figmaReportIcons.listSearch" alt="">
-              <input type="text" placeholder="搜索报告名称或 ID">
+              <input v-model="reportKeyword" type="text" placeholder="搜索报告名称或 ID">
             </label>
-            <button type="button" class="report-filter-select" aria-label="报告类型"></button>
-            <button type="button" class="report-filter-select" aria-label="报告状态"></button>
+            <select v-model="reportTypeFilter" class="report-filter-select" aria-label="报告类型" @change="handleReportTypeFilterChange">
+              <option value="all">全部类型</option>
+              <option value="api-scene">接口场景</option>
+              <option value="api-suite">接口套件</option>
+              <option value="webui-case">Web UI 用例</option>
+              <option value="webui-suite">Web UI 套件</option>
+            </select>
+            <select v-model="reportStatusFilter" class="report-filter-select" aria-label="报告状态">
+              <option value="all">全部状态</option>
+              <option value="success">成功</option>
+              <option value="failed">失败</option>
+              <option value="interrupted">已中断</option>
+            </select>
           </div>
           <div class="report-list-actions">
-            <button type="button" class="report-light-button">
+            <button type="button" class="report-light-button" @click="showUnsupportedCapability('通用报告接口尚未提供批量导出能力')">
               <img :src="figmaReportIcons.action.batchExport" alt="">
               <span>批量导出</span>
             </button>
-            <button type="button" class="report-primary-button">
+            <button type="button" class="report-primary-button" @click="showUnsupportedCapability('通用报告接口尚未提供从报告中心发起执行的能力')">
               <img :src="figmaReportIcons.action.runNow" alt="">
               <span>立即执行</span>
             </button>
           </div>
         </div>
 
-        <section class="report-table-panel" aria-label="报告列表">
-          <div class="report-table-canvas">
-            <div class="report-table__header">
-              <span class="is-id">报告 ID</span>
-              <span class="is-name">报告名称 / 触发</span>
-              <span class="is-type">类型</span>
-              <span class="is-status">状态</span>
-              <span class="is-pass">通过率</span>
-              <span class="is-steps">步骤统计</span>
-              <span class="is-duration">耗时</span>
-              <span class="is-executor">执行人</span>
-              <span class="is-env">环境</span>
-              <span class="is-start">开始时间</span>
-            </div>
-
-            <div
-              v-for="(row, index) in reportRows"
-              :key="row.id"
-              class="report-table__row"
-              :class="{ 'is-last': index === reportRows.length - 1 }"
-              :style="{ top: `${34.5 + index * 54}px`, height: index === reportRows.length - 1 ? '53.5px' : '54px' }"
-              @click="selectReport"
+        <div ref="tableFrameRef" class="report-table-frame" aria-label="报告列表">
+          <AppFigmaTable
+            class="report-table-panel"
+            :data="pagedReportRows"
+            :loading="reportLoading"
+            :error="reportError"
+            :page-no="reportPageNo"
+            :page-size="reportPageSize"
+            :total="reportTotal"
+            :page-sizes="[10, 20, 50, 100]"
+            show-page-size
+            show-jumper
+            :header-height="34.5"
+            :row-height="53"
+            :footer-height="43"
+            row-key="id"
+            empty-text="暂无报告"
+            @page-change="setReportPage"
+            @page-size-change="setReportPageSize"
+            @row-click="selectReport"
+            @retry="loadReports"
+          >
+            <el-table-column
+              v-for="column in reportColumnSettings.visibleColumns.value"
+              :key="column.key"
+              :label="column.label"
+              :width="getReportColumnWidth(column)"
+              :class-name="column.key === 'env' ? 'report-table-column--env' : ''"
+              :show-overflow-tooltip="column.key !== 'env'"
             >
-              <span class="report-id">{{ row.id }}</span>
-              <span class="report-name-cell">
-                <strong>{{ row.name }}</strong>
-                <small>{{ row.trigger }}</small>
-              </span>
-              <span
-                class="report-type-badge"
-                :class="`is-${row.typeTone}`"
-                :style="{ width: reportTypeBadgeWidth(row.type) }"
-              >
-                {{ row.type }}
-              </span>
-              <span class="report-status-cell" :class="`is-${row.status}`">
-                <i></i>
-                {{ statusLabel(row.status) }}
-              </span>
-              <span class="report-pass-cell" :class="`is-${passTone(row)}`">
-                <i><b :style="{ width: `${row.passRate}%` }"></b></i>
-                <strong>{{ row.passRate }}%</strong>
-              </span>
-              <span class="report-step-stat">
-                <em class="is-success">{{ row.steps.success }}✓</em>
-                <em v-if="row.steps.failed" class="is-danger">{{ row.steps.failed }}×</em>
-                <em v-if="row.steps.skipped" class="is-muted">{{ row.steps.skipped }}—</em>
-              </span>
-              <span class="report-muted-mono">{{ row.duration }}</span>
-              <span class="report-muted-text">{{ row.executor }}</span>
-              <span class="report-env-badge" :style="{ width: reportEnvBadgeWidth(row.env) }">{{ row.env }}</span>
-              <span class="report-row-actions">
-                <button type="button" aria-label="查看报告" @click.stop="selectReport">
-                  <img :src="figmaReportIcons.rowAction.view" alt="">
-                </button>
-                <button type="button" aria-label="分享报告" @click.stop="openSharedReport">
-                  <img :src="figmaReportIcons.rowAction.share" alt="">
-                </button>
-                <button type="button" aria-label="复制报告" @click.stop>
-                  <img :src="figmaReportIcons.rowAction.copy" alt="">
-                </button>
-                <button type="button" aria-label="删除报告" @click.stop>
-                  <img :src="figmaReportIcons.rowAction.delete" alt="">
-                </button>
-              </span>
-            </div>
-          </div>
+              <template #default="{ row }">
+                <span v-if="column.key === 'id'" class="report-id">{{ row.id }}</span>
+                <span v-else-if="column.key === 'name'" class="report-name-cell">
+                  <strong>{{ row.name }}</strong>
+                  <small>{{ row.trigger }}</small>
+                </span>
+                <span v-else-if="column.key === 'type' && row.type === '—'" class="report-muted-text">—</span>
+                <span
+                  v-else-if="column.key === 'type'"
+                  class="report-type-badge"
+                  :class="`is-${row.typeTone}`"
+                  :style="{ width: reportTypeBadgeWidth(row.type) }"
+                >
+                  {{ row.type }}
+                </span>
+                <span v-else-if="column.key === 'status'" class="report-status-cell" :class="`is-${row.status}`">
+                  <i></i>
+                  {{ statusLabel(row.status) }}
+                </span>
+                <span v-else-if="column.key === 'passRate' && row.passRate === null" class="report-muted-text">—</span>
+                <span v-else-if="column.key === 'passRate'" class="report-pass-cell" :class="`is-${passTone(row)}`">
+                  <i><b :style="{ width: `${row.passRate}%` }"></b></i>
+                  <strong>{{ row.passRate }}%</strong>
+                </span>
+                <span v-else-if="column.key === 'steps' && row.steps === null" class="report-muted-text">—</span>
+                <span v-else-if="column.key === 'steps' && row.steps" class="report-step-stat">
+                  <em class="is-success">{{ row.steps.success }}✓</em>
+                  <em v-if="row.steps.failed" class="is-danger">{{ row.steps.failed }}×</em>
+                  <em v-if="row.steps.skipped" class="is-muted">{{ row.steps.skipped }}—</em>
+                </span>
+                <span v-else-if="column.key === 'duration'" class="report-muted-mono">{{ row.duration }}</span>
+                <span v-else-if="column.key === 'executor'" class="report-muted-text">{{ row.executor }}</span>
+                <span v-else-if="column.key === 'env' && row.env === '—'" class="report-muted-text">—</span>
+                <span
+                  v-else-if="column.key === 'env'"
+                  class="report-env-badge"
+                  :style="{ width: reportEnvBadgeWidth(row.env) }"
+                >
+                  {{ row.env }}
+                </span>
+                <span v-else class="report-muted-text">{{ formatReportColumnValue(row, column.key) }}</span>
+              </template>
+            </el-table-column>
 
-          <footer class="report-table-footer">
-            <span>共 7 条</span>
-            <button type="button">1</button>
-          </footer>
-        </section>
+            <AppFigmaActionColumn
+              :action-count="reportOperationActionCount"
+              :width="reportOperationColumnWidth"
+              :scroll-shadow="reportTableNeedsScroll"
+            >
+              <template #settings>
+                <AppTableSettingsTrigger
+                  variant="figma"
+                  :size="13"
+                  label="字段展示"
+                  @click.stop="openReportColumnSettings"
+                />
+              </template>
+              <template #default="{ row }">
+                <button type="button" title="查看报告" aria-label="查看报告" @click.stop="selectReport(row)">
+                  <img class="report-action-icon" :src="figmaReportIcons.rowAction.view" alt="">
+                </button>
+                <button type="button" title="分享报告" aria-label="分享报告" @click.stop="openSharedReport(row)">
+                  <img class="report-action-icon" :src="figmaReportIcons.rowAction.share" alt="">
+                </button>
+                <button type="button" title="复制分享链接" aria-label="复制分享链接" @click.stop="copySharedReportLink(row)">
+                  <img class="report-action-icon" :src="figmaReportIcons.rowAction.copy" alt="">
+                </button>
+                <button type="button" data-danger="true" title="删除报告" aria-label="删除报告" @click.stop="deleteReport(row)">
+                  <img class="report-action-icon" :src="figmaReportIcons.rowAction.delete" alt="">
+                </button>
+              </template>
+            </AppFigmaActionColumn>
+          </AppFigmaTable>
+        </div>
       </div>
 
       <div v-else class="report-share-page">
-        <div class="report-share-empty">
-          <img :src="figmaReportIcons.emptyAi" alt="">
-          <span>暂无分享报告</span>
+        <div class="report-share-heading">
+          <div>
+            <strong>分享记录</strong>
+            <span>公开链接默认有效 7 天，重新生成后旧链接立即失效</span>
+          </div>
+          <button type="button" class="report-light-button" :disabled="shareLoading" @click="loadReportShares">
+            <img :src="figmaReportIcons.action.rerun" alt="">
+            <span>刷新</span>
+          </button>
         </div>
+
+        <AppFigmaTable
+          class="report-share-table"
+          :data="pagedReportShares"
+          :loading="shareLoading"
+          :error="shareError"
+          :page-no="sharePageNo"
+          :page-size="sharePageSize"
+          :total="reportShares.length"
+          :page-sizes="[10, 20, 50]"
+          show-page-size
+          show-jumper
+          :header-height="34.5"
+          :row-height="53"
+          :footer-height="43"
+          row-key="id"
+          empty-text="暂无分享记录"
+          @page-change="sharePageNo = $event"
+          @page-size-change="sharePageSize = $event"
+          @retry="loadReportShares"
+        >
+          <el-table-column label="报告名称 / ID" min-width="260" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span class="report-share-name">
+                <strong>{{ row.reportName }}</strong>
+                <small>#{{ row.reportId }} · {{ row.workspaceName }}</small>
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="分享状态" width="110">
+            <template #default="{ row }">
+              <span class="report-status-cell report-share-status" :class="`is-${shareState(row).tone}`">
+                <i></i>{{ shareState(row).label }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="有效期" width="170">
+            <template #default="{ row }"><span class="report-share-value">{{ shareExpiryLabel(row.expiresAt) }}</span></template>
+          </el-table-column>
+          <el-table-column label="创建人" width="120">
+            <template #default="{ row }"><span class="report-share-value">{{ row.createdBy || '—' }}</span></template>
+          </el-table-column>
+          <el-table-column label="访问次数" width="100" align="center" header-align="center">
+            <template #default="{ row }"><span class="report-share-count">{{ row.accessCount }}</span></template>
+          </el-table-column>
+          <el-table-column label="创建时间" width="170">
+            <template #default="{ row }"><span class="report-share-value">{{ formatShareDate(row.createdAt) }}</span></template>
+          </el-table-column>
+          <AppFigmaActionColumn :action-count="2" :width="shareOperationColumnWidth">
+            <template #default="{ row }">
+              <button type="button" title="重新生成并打开" aria-label="重新生成并打开" @click.stop="regenerateReportShare(row)">
+                <img class="report-action-icon" :src="figmaReportIcons.action.rerun" alt="">
+              </button>
+              <button
+                type="button"
+                data-danger="true"
+                title="撤销分享"
+                aria-label="撤销分享"
+                :disabled="row.status !== 1"
+                @click.stop="revokeReportShare(row)"
+              >
+                <img class="report-action-icon" :src="figmaReportIcons.rowAction.delete" alt="">
+              </button>
+            </template>
+          </AppFigmaActionColumn>
+        </AppFigmaTable>
       </div>
+
+      <AppTableColumnSettingsDrawer
+        :model-value="reportColumnSettings.drawerVisible.value"
+        title="字段展示"
+        visual-variant="figma"
+        :columns="reportColumnSettings.drawerColumns.value"
+        :dragging-key="reportColumnSettings.draggingKey.value"
+        @update:model-value="value => { if (!value) reportColumnSettings.cancel() }"
+        @toggle-column="reportColumnSettings.toggleColumn"
+        @drag-start="reportColumnSettings.dragStart"
+        @drag-end="reportColumnSettings.dragEnd"
+        @drop-column="reportColumnSettings.dropColumn"
+        @reset="reportColumnSettings.resetDraft"
+      />
     </template>
 
     <template v-else>
@@ -540,7 +908,7 @@ async function copyText(text = '') {
               <span>报告列表</span>
             </button>
             <img class="report-breadcrumb__separator" :src="figmaReportIcons.breadcrumbChevron" alt="">
-            <strong>风控中心-黑名单拦截场景</strong>
+            <strong>{{ selectedReportName }}</strong>
           </div>
 
           <div class="report-actions">
@@ -548,11 +916,11 @@ async function copyText(text = '') {
               <img :src="figmaReportIcons.action.share" alt="">
               <span>分享报告</span>
             </button>
-            <button type="button">
+            <button type="button" @click="showUnsupportedCapability('通用报告接口尚未提供报告导出能力')">
               <img :src="figmaReportIcons.action.export" alt="">
               <span>导出</span>
             </button>
-            <button type="button">
+            <button type="button" @click="showUnsupportedCapability('通用报告接口尚未提供重新执行能力')">
               <img :src="figmaReportIcons.action.rerun" alt="">
               <span>重新执行</span>
             </button>
@@ -560,42 +928,42 @@ async function copyText(text = '') {
         </div>
 
         <div class="report-detail-summary__metrics">
-          <span class="report-status-pill">
+          <span class="report-status-pill" :class="`is-${selectedReportStatus}`">
             <i></i>
-            失败
+            {{ statusLabel(selectedReportStatus) }}
           </span>
-          <div class="report-pass-rate">
-            <strong>50.0%</strong>
+          <div class="report-pass-rate is-unavailable">
+            <strong>—</strong>
             <span>通过率</span>
           </div>
           <i class="report-divider"></i>
           <div class="report-step-counts">
-            <span>总步骤 <strong>8</strong></span>
-            <span class="is-success">成功 <strong>4</strong></span>
-            <span class="is-danger">失败 <strong>3</strong></span>
-            <span class="is-muted">跳过 <strong>1</strong></span>
+            <span>总步骤 <strong>—</strong></span>
+            <span class="is-success">成功 <strong>—</strong></span>
+            <span class="is-danger">失败 <strong>—</strong></span>
+            <span class="is-muted">跳过 <strong>—</strong></span>
           </div>
           <i class="report-divider"></i>
           <dl class="report-meta-list">
             <div>
               <dt>耗时</dt>
-              <dd>48s</dd>
+              <dd>—</dd>
             </div>
             <div>
               <dt>执行环境</dt>
-              <dd>预发布</dd>
+              <dd>—</dd>
             </div>
             <div>
               <dt>执行人</dt>
-              <dd>李明</dd>
+              <dd>—</dd>
             </div>
             <div>
               <dt>触发方式</dt>
-              <dd>CI/CD</dd>
+              <dd>{{ formatLogSource(selectedReportDetail?.logSource || selectedReportRow?.logSource || '') }}</dd>
             </div>
             <div>
               <dt>开始</dt>
-              <dd>07-03 13:30</dd>
+              <dd>{{ formatDetailDate(selectedReportDetail?.createdAt) }}</dd>
             </div>
           </dl>
         </div>
@@ -604,361 +972,114 @@ async function copyText(text = '') {
       <div class="report-detail-body">
         <aside class="report-step-sidebar">
           <header>
-            <span>步骤 (8)</span>
-            <button type="button" :class="{ 'is-active': failOnly }" @click="failOnly = !failOnly">
+            <span>步骤 (—)</span>
+            <button type="button" disabled>
               <Filter :size="9" :stroke-width="2" />
-              {{ failOnly ? `失败 (${failStepCount})` : '全部' }}
+              全部
             </button>
           </header>
-
-          <div class="report-step-list">
-            <button
-              v-for="step in visibleReportSteps"
-              :key="step.id"
-              type="button"
-              class="report-step-item"
-              :class="[`is-${step.status}`, { 'is-selected': selectedStep?.id === step.id }]"
-              @click="selectStep(step)"
-            >
-              <span class="report-step-status">
-                <img :src="figmaReportIcons.status[step.status]" alt="">
-              </span>
-              <span class="report-step-copy">
-                <strong>{{ step.title }}</strong>
-                <span v-if="step.method" class="report-step-meta">
-                  <em :class="`is-${step.method.toLowerCase()}`">{{ step.method }}</em>
-                  <small>{{ step.duration }}</small>
-                </span>
-                <span v-else class="report-step-meta is-empty">
-                  <small>{{ step.duration }}</small>
-                </span>
-              </span>
-              <span class="report-step-open" role="button" tabindex="0" aria-label="展开步骤详情" @click.stop="openStepDrawer(step)">
-                <img :src="figmaReportIcons.openDetail" alt="">
-              </span>
-            </button>
+          <div class="report-step-list report-step-list--empty">
+            <span>暂无结构化步骤</span>
           </div>
         </aside>
 
         <main class="report-step-canvas">
-          <div v-if="selectedStep" class="report-step-selected-layout">
-            <article class="report-step-detail-card" :class="`is-${selectedStep.status}`">
-              <header>
-                <div class="report-step-title-block">
-                  <div class="report-step-card__meta">
-                    <span>步骤 {{ selectedStep.id }}</span>
-                    <i>
-                      <img :src="figmaReportIcons.status[selectedStep.status]" alt="">
-                    </i>
-                    <em>{{ stepStatusLabel(selectedStep.status) }}</em>
-                    <small>{{ selectedStep.duration }}</small>
-                  </div>
-                  <strong>{{ selectedStep.title }}</strong>
-                  <div v-if="stepUrl(selectedStep)" class="report-step-url-strip">
-                    <em :class="`is-${selectedStep.method?.toLowerCase()}`">{{ selectedStep.method }}</em>
-                    <code>{{ stepUrl(selectedStep) }}</code>
-                  </div>
-                </div>
-                <button type="button" class="report-expand-button" @click="openDrawer('request')">
-                  <img :src="figmaReportIcons.expandDetail" alt="">
-                  展开详情
-                </button>
-              </header>
-            </article>
-
-            <template v-if="selectedStep.status !== 'skipped'">
-              <article class="report-section-card">
-                <h3>断言结果 ({{ stepAssertionCount(selectedStep.status) }})</h3>
-                <div class="report-assertion-list" :class="`is-${selectedStep.status}`">
-                  <div v-for="assertion in stepAssertions(selectedStep)" :key="assertion.path" :class="{ 'is-failed': !assertion.pass }">
-                    <img :src="figmaReportIcons.status[assertion.pass ? 'success' : 'failed']" alt="">
-                    <code>{{ assertion.path }}</code>
-                    <span>{{ assertion.op }}</span>
-                    <em>{{ assertion.actual }}</em>
-                  </div>
-                </div>
-              </article>
-
-              <article class="report-section-card">
-                <h3>响应摘要</h3>
-                <div class="report-response-metrics">
-                  <div>
-                    <span>Status Code</span>
-                    <strong :class="`is-${stepStatusCodeTone(selectedStep)}`">{{ stepStatusCode(selectedStep) }}</strong>
-                  </div>
-                  <div>
-                    <span>响应耗时</span>
-                    <strong>{{ stepResponseDuration(selectedStep) }}</strong>
-                  </div>
-                </div>
-                <div class="report-code-block">
-                  <header>
-                    <span>json</span>
-                    <button
-                      type="button"
-                      :class="{ 'is-copied': copiedCodeBlockKey === `selected-${selectedStep.id}-response` }"
-                      @click="copyReportCodeBlock(`selected-${selectedStep.id}-response`, stepResponseBody(selectedStep))"
-                    >
-                      <Check v-if="copiedCodeBlockKey === `selected-${selectedStep.id}-response`" :size="9" :stroke-width="2" />
-                      <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
-                      {{ copiedCodeBlockKey === `selected-${selectedStep.id}-response` ? '已复制' : '复制' }}
-                    </button>
-                  </header>
-                  <pre>{{ stepResponseBody(selectedStep) }}</pre>
-                </div>
-              </article>
-
-              <article v-if="selectedStep.status === 'success'" class="report-step-pass-card">
-                <img :src="figmaReportIcons.status.success" alt="">
-                <strong>步骤执行通过</strong>
-                <span>点击「展开详情」查看完整请求和响应</span>
-              </article>
-              <article v-else class="report-section-card is-failed-note">
-                <h3>
-                  <img :src="figmaReportIcons.status.failed" alt="">
-                  错误日志
-                </h3>
-                <div class="report-code-block is-log">
-                  <header>
-                    <span>log</span>
-                    <button
-                      type="button"
-                      :class="{ 'is-copied': copiedCodeBlockKey === `selected-${selectedStep.id}-log` }"
-                      @click="copyReportCodeBlock(`selected-${selectedStep.id}-log`, stepLog(selectedStep))"
-                    >
-                      <Check v-if="copiedCodeBlockKey === `selected-${selectedStep.id}-log`" :size="9" :stroke-width="2" />
-                      <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
-                      {{ copiedCodeBlockKey === `selected-${selectedStep.id}-log` ? '已复制' : '复制' }}
-                    </button>
-                  </header>
-                  <pre>{{ stepLog(selectedStep) }}</pre>
-                </div>
-              </article>
-
-              <article v-if="selectedStep.status === 'failed'" class="report-ai-panel" :class="{ 'is-expanded': detailAiExpanded }">
-                <button type="button" class="report-ai-diagnosis" @click="detailAiExpanded = !detailAiExpanded">
-                  <Sparkles class="report-ai-panel__icon" :size="13" :stroke-width="2" />
-                  <strong>AI 失败诊断</strong>
-                  <span>{{ detailAiExpanded ? '收起' : '展开' }}</span>
-                  <ChevronDown class="report-ai-panel__chevron" :class="{ 'is-open': detailAiExpanded }" :size="13" :stroke-width="2" />
-                </button>
-                <div v-if="detailAiExpanded" class="report-ai-panel__body">
-                  <section>
-                    <h3>诊断结论</h3>
-                    <p class="report-ai-panel__summary">{{ reportAiAnalysis.summary }}</p>
-                  </section>
-                  <section>
-                    <h3>分析依据</h3>
-                    <div class="report-ai-panel__basis">
-                      <div v-for="(item, index) in reportAiAnalysis.basis" :key="item">
-                        <span>{{ index + 1 }}</span>
-                        <p>{{ item }}</p>
-                      </div>
-                    </div>
-                  </section>
-                  <section>
-                    <h3>排查建议</h3>
-                    <div class="report-ai-panel__suggestions">
-                      <div v-for="item in reportAiAnalysis.suggestions" :key="item">
-                        <span>→</span>
-                        <p>{{ item }}</p>
-                      </div>
-                    </div>
-                  </section>
-                </div>
-              </article>
-            </template>
-          </div>
-
-          <div v-else class="report-step-canvas-empty">
+          <div v-if="detailLoading" class="report-step-canvas-empty">
             <span class="report-step-canvas-empty__icon">
               <img :src="figmaReportIcons.emptyAi" alt="">
             </span>
-            <p>选择左侧步骤查看执行详情</p>
-            <button v-if="failStepCount > 0" type="button" @click="failOnly = true">仅查看失败步骤 ({{ failStepCount }})</button>
+            <p>正在加载报告详情...</p>
           </div>
-        </main>
-      </div>
 
-      <div v-if="drawerVisible && drawerStep" class="report-step-overlay">
-        <aside class="report-step-drawer" aria-label="步骤详情">
-          <i class="report-step-drawer__accent" :class="`is-${drawerStep.status}`"></i>
+          <div v-else-if="detailError" class="report-step-canvas-empty">
+            <span class="report-step-canvas-empty__icon">
+              <img :src="figmaReportIcons.emptyAi" alt="">
+            </span>
+            <p>{{ detailError }}</p>
+            <button type="button" @click="loadSelectedReport">重新加载</button>
+          </div>
 
-          <header class="report-step-drawer__header" :class="{ 'has-url': stepUrl(drawerStep) }">
-            <div class="report-step-drawer__title">
-              <div>
-                <span>步骤 {{ drawerStep.id }}</span>
-                <i>
-                  <img :src="figmaReportIcons.status[drawerStep.status]" alt="">
-                </i>
-                <em>{{ stepStatusLabel(drawerStep.status) }}</em>
-                <small>{{ drawerStep.duration }}</small>
-              </div>
-              <strong>{{ drawerStep.title }}</strong>
-              <code v-if="stepUrl(drawerStep)">{{ stepUrl(drawerStep) }}</code>
-            </div>
-            <button type="button" aria-label="关闭步骤详情" @click="closeDrawer">
-              <img :src="figmaReportIcons.drawerClose" alt="">
-            </button>
-          </header>
-
-          <nav class="report-step-drawer__tabs" aria-label="步骤详情 Tab">
-            <button type="button" :class="{ 'is-active': activeDrawerTab === 'request' }" @click="activeDrawerTab = 'request'">请求</button>
-            <button v-if="drawerStep.status !== 'skipped'" type="button" :class="{ 'is-active': activeDrawerTab === 'response' }" @click="activeDrawerTab = 'response'">响应</button>
-            <button type="button" :class="{ 'is-active': activeDrawerTab === 'assertion' }" @click="activeDrawerTab = 'assertion'">断言 ({{ stepAssertionCount(drawerStep.status) }})</button>
-            <button type="button" :class="{ 'is-active': activeDrawerTab === 'log' }" @click="activeDrawerTab = 'log'">日志</button>
-            <button type="button" :class="{ 'is-active': activeDrawerTab === 'ai' }" @click="activeDrawerTab = 'ai'">AI 分析</button>
-          </nav>
-
-          <div class="report-step-drawer__content">
-            <template v-if="activeDrawerTab === 'request'">
-              <div v-if="stepUrl(drawerStep)" class="report-drawer-section">
-                <p class="report-drawer-kicker">请求地址</p>
-                <div class="report-drawer-url-box">
-                  <em :class="`is-${drawerStep.method?.toLowerCase()}`">{{ drawerStep.method }}</em>
-                  <code>{{ stepUrl(drawerStep) }}</code>
+          <div v-else-if="selectedReportDetail" class="report-detail-real-content">
+            <article class="report-section-card report-real-info-card">
+              <h3>报告信息</h3>
+              <dl class="report-real-info-grid">
+                <div>
+                  <dt>报告 ID</dt>
+                  <dd>{{ selectedReportDetail.id }}</dd>
                 </div>
-                <template v-if="stepRequestBody(drawerStep)">
-                  <p class="report-drawer-kicker">Request Body</p>
-                  <div class="report-code-block is-request-body">
-                    <header>
-                      <span>json</span>
-                      <button
-                        type="button"
-                        :class="{ 'is-copied': copiedCodeBlockKey === `drawer-${drawerStep.id}-request` }"
-                        @click="copyReportCodeBlock(`drawer-${drawerStep.id}-request`, stepRequestBody(drawerStep))"
-                      >
-                        <Check v-if="copiedCodeBlockKey === `drawer-${drawerStep.id}-request`" :size="9" :stroke-width="2" />
-                        <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
-                        {{ copiedCodeBlockKey === `drawer-${drawerStep.id}-request` ? '已复制' : '复制' }}
-                      </button>
-                    </header>
-                    <pre>{{ stepRequestBody(drawerStep) }}</pre>
-                  </div>
-                </template>
-              </div>
-              <div v-else class="report-step-empty">
-                <span>该步骤无请求信息</span>
-              </div>
-            </template>
-            <template v-else-if="activeDrawerTab === 'response'">
-              <div class="report-drawer-section">
-                <div class="report-response-metrics">
-                  <div>
-                    <span>Status Code</span>
-                    <strong :class="`is-${stepStatusCodeTone(drawerStep)}`">{{ stepStatusCode(drawerStep) }}</strong>
-                  </div>
-                  <div>
-                    <span>响应耗时</span>
-                    <strong>{{ stepResponseDuration(drawerStep) }}</strong>
-                  </div>
+                <div>
+                  <dt>任务 ID</dt>
+                  <dd>{{ selectedReportDetail.taskId || '—' }}</dd>
                 </div>
-                <p class="report-drawer-kicker">Response Body</p>
-                <div class="report-code-block">
-                  <header>
-                    <span>json</span>
-                    <button
-                      type="button"
-                      :class="{ 'is-copied': copiedCodeBlockKey === `drawer-${drawerStep.id}-response` }"
-                      @click="copyReportCodeBlock(`drawer-${drawerStep.id}-response`, stepResponseBody(drawerStep))"
-                    >
-                      <Check v-if="copiedCodeBlockKey === `drawer-${drawerStep.id}-response`" :size="9" :stroke-width="2" />
-                      <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
-                      {{ copiedCodeBlockKey === `drawer-${drawerStep.id}-response` ? '已复制' : '复制' }}
-                    </button>
-                  </header>
-                  <pre>{{ stepResponseBody(drawerStep) }}</pre>
+                <div>
+                  <dt>任务名称</dt>
+                  <dd>{{ selectedReportDetail.taskName || '—' }}</dd>
                 </div>
-              </div>
-            </template>
-            <template v-else-if="activeDrawerTab === 'assertion'">
-              <div v-if="drawerStep.status !== 'skipped'" class="report-drawer-assertions">
-                <article v-for="assertion in stepAssertions(drawerStep)" :key="assertion.path" :class="{ 'is-failed': !assertion.pass }">
-                  <header>
-                    <code>{{ assertion.path }}</code>
-                    <span>{{ assertion.pass ? '通过' : '失败' }}</span>
-                  </header>
-                  <dl>
-                    <div>
-                      <dt>操作符</dt>
-                      <dd>{{ assertion.op }}</dd>
-                    </div>
-                    <div>
-                      <dt>期望值</dt>
-                      <dd>{{ assertion.expected }}</dd>
-                    </div>
-                    <div>
-                      <dt>实际值</dt>
-                      <dd>{{ assertion.actual }}</dd>
-                    </div>
-                  </dl>
-                </article>
-              </div>
-              <div v-else class="report-step-empty">
-                <span>该步骤无断言配置</span>
-              </div>
-            </template>
-            <template v-else-if="activeDrawerTab === 'log'">
-              <div v-if="stepLog(drawerStep)" class="report-code-block is-log">
+                <div>
+                  <dt>工作空间</dt>
+                  <dd>{{ selectedReportDetail.workspaceName || selectedReportDetail.workspaceCode || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>更新时间</dt>
+                  <dd>{{ formatDetailDate(selectedReportDetail.updatedAt) }}</dd>
+                </div>
+              </dl>
+            </article>
+
+            <article v-if="selectedReportDetail.failureSummary" class="report-section-card report-real-failure-card">
+              <h3>失败摘要</h3>
+              <p>{{ selectedReportDetail.failureSummary }}</p>
+            </article>
+
+            <article v-if="selectedReportLog" class="report-section-card report-real-log-card">
+              <h3>执行日志</h3>
+              <div class="report-code-block is-log">
                 <header>
                   <span>log</span>
                   <button
                     type="button"
-                    :class="{ 'is-copied': copiedCodeBlockKey === `drawer-${drawerStep.id}-log` }"
-                    @click="copyReportCodeBlock(`drawer-${drawerStep.id}-log`, stepLog(drawerStep))"
+                    :class="{ 'is-copied': copiedCodeBlockKey === 'detail-log' }"
+                    @click="copyReportCodeBlock('detail-log', selectedReportLog)"
                   >
-                    <Check v-if="copiedCodeBlockKey === `drawer-${drawerStep.id}-log`" :size="9" :stroke-width="2" />
+                    <Check v-if="copiedCodeBlockKey === 'detail-log'" :size="9" :stroke-width="2" />
                     <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
-                    {{ copiedCodeBlockKey === `drawer-${drawerStep.id}-log` ? '已复制' : '复制' }}
+                    {{ copiedCodeBlockKey === 'detail-log' ? '已复制' : '复制' }}
                   </button>
                 </header>
-                <pre>{{ stepLog(drawerStep) }}</pre>
+                <pre>{{ selectedReportLog }}</pre>
               </div>
-              <div v-else class="report-step-empty is-log-empty">
-                <img :src="figmaReportIcons.status.success" alt="">
-                <span>该步骤执行成功，无错误日志</span>
+            </article>
+
+            <article v-if="selectedReportAttachments.length" class="report-section-card report-real-attachments-card">
+              <h3>附件 ({{ selectedReportAttachments.length }})</h3>
+              <div class="report-real-attachment-list">
+                <a
+                  v-for="attachment in selectedReportAttachments"
+                  :key="attachment.id"
+                  :href="attachment.downloadUrl || undefined"
+                  :class="{ 'is-disabled': !attachment.downloadUrl }"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  @click="!attachment.downloadUrl && $event.preventDefault()"
+                >
+                  <span>{{ attachment.fileName }}</span>
+                  <small>{{ formatAttachmentSize(attachment.fileSize) }}</small>
+                </a>
               </div>
-            </template>
-            <template v-else>
-              <div v-if="drawerStep.status === 'failed'" class="report-ai-panel report-drawer-ai-panel" :class="{ 'is-expanded': drawerAiExpanded }">
-                <button type="button" class="report-ai-diagnosis" @click="drawerAiExpanded = !drawerAiExpanded">
-                  <Sparkles class="report-ai-panel__icon" :size="13" :stroke-width="2" />
-                  <strong>AI 失败诊断</strong>
-                  <span>{{ drawerAiExpanded ? '收起' : '展开' }}</span>
-                  <ChevronDown class="report-ai-panel__chevron" :class="{ 'is-open': drawerAiExpanded }" :size="13" :stroke-width="2" />
-                </button>
-                <div v-if="drawerAiExpanded" class="report-ai-panel__body">
-                  <section>
-                    <h3>诊断结论</h3>
-                    <p class="report-ai-panel__summary">{{ reportAiAnalysis.summary }}</p>
-                  </section>
-                  <section>
-                    <h3>分析依据</h3>
-                    <div class="report-ai-panel__basis">
-                      <div v-for="(item, index) in reportAiAnalysis.basis" :key="item">
-                        <span>{{ index + 1 }}</span>
-                        <p>{{ item }}</p>
-                      </div>
-                    </div>
-                  </section>
-                  <section>
-                    <h3>排查建议</h3>
-                    <div class="report-ai-panel__suggestions">
-                      <div v-for="item in reportAiAnalysis.suggestions" :key="item">
-                        <span>→</span>
-                        <p>{{ item }}</p>
-                      </div>
-                    </div>
-                  </section>
-                </div>
-              </div>
-              <div v-else class="report-step-empty">
+            </article>
+
+            <div
+              v-if="!selectedReportLog && !selectedReportDetail.failureSummary && !selectedReportAttachments.length"
+              class="report-step-canvas-empty report-detail-data-empty"
+            >
+              <span class="report-step-canvas-empty__icon">
                 <img :src="figmaReportIcons.emptyAi" alt="">
-                <span>仅在步骤失败时提供 AI 分析</span>
-              </div>
-            </template>
+              </span>
+              <p>暂无结构化步骤与执行日志</p>
+              <small>当前报告接口仅返回报告基础信息</small>
+            </div>
           </div>
-        </aside>
+        </main>
       </div>
     </template>
   </section>
@@ -1123,10 +1244,16 @@ async function copyText(text = '') {
 .report-filter-select {
   width: 120px;
   height: 28px;
-  padding: 0;
+  padding: 0 10px;
   border: 1px solid #e5e6eb;
   border-radius: 7px;
   background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  line-height: normal;
+  outline: none;
 }
 
 .report-filter-select + .report-filter-select {
@@ -1572,6 +1699,85 @@ async function copyText(text = '') {
   line-height: 18px;
 }
 
+.report-table-frame {
+  min-width: 0;
+  margin-top: 14px;
+}
+
+.report-table-panel {
+  --app-figma-table-border: 1px solid #e5e6eb;
+  --app-figma-table-radius: 11px;
+  --app-figma-table-background: #ffffff;
+  --app-figma-table-shadow: 0 1px 4px rgb(0 0 0 / 4%);
+  --app-figma-table-header-background: #fafafa;
+  --app-figma-table-header-color: #86909c;
+  --app-figma-table-header-font-size: 11px;
+  --app-figma-table-header-font-weight: 600;
+  --app-figma-table-header-letter-spacing: .275px;
+  --app-figma-table-header-line-height: 16.5px;
+  --app-figma-table-text-color: #86909c;
+  --app-figma-table-font-size: 13px;
+  --app-figma-table-line-height: 19.5px;
+  --app-figma-table-cell-padding: 14px;
+  --app-figma-table-row-hover-background: #fafbff;
+  height: auto;
+  margin-top: 0;
+}
+
+.report-table-panel :deep(.el-table__row > td.el-table__cell) {
+  cursor: pointer;
+}
+
+.report-table-panel :deep(.el-table__fixed-right-patch) {
+  background: #fafafa;
+}
+
+:global(td.report-table-column--env .cell) {
+  overflow: visible;
+  padding-right: 7px !important;
+  padding-left: 7px !important;
+  text-overflow: clip;
+}
+
+.report-table-panel .report-id,
+.report-table-panel .report-type-badge,
+.report-table-panel .report-status-cell,
+.report-table-panel .report-pass-cell,
+.report-table-panel .report-step-stat,
+.report-table-panel .report-muted-mono,
+.report-table-panel .report-muted-text,
+.report-table-panel .report-env-badge {
+  position: static;
+}
+
+.report-table-panel .report-name-cell {
+  position: relative;
+  left: auto;
+  display: block;
+  width: 100%;
+  height: 53px;
+}
+
+.report-table-panel .report-name-cell strong,
+.report-table-panel .report-name-cell small {
+  left: 0;
+}
+
+.report-table-panel .report-name-cell strong {
+  width: calc(100% - 4px);
+}
+
+.report-table-panel .report-pass-cell {
+  width: 100%;
+}
+
+.report-action-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+}
+
 .report-share-empty {
   display: flex;
   height: 100%;
@@ -1585,6 +1791,93 @@ async function copyText(text = '') {
 .report-share-empty img {
   width: 24px;
   height: 24px;
+}
+
+.report-share-page {
+  display: flex;
+  flex-direction: column;
+  gap: 10.5px;
+}
+
+.report-share-heading {
+  display: flex;
+  min-height: 35px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.report-share-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10.5px;
+}
+
+.report-share-heading strong {
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 21px;
+}
+
+.report-share-heading span {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.report-share-table {
+  flex: 0 0 auto;
+  --app-figma-table-cell-padding: 14px;
+  --app-figma-table-font-size: 12px;
+  --app-figma-table-line-height: 18px;
+}
+
+.report-share-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.report-share-name strong {
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-share-name small,
+.report-share-value {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.report-share-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-share-status.report-status-cell {
+  position: static;
+}
+
+.report-share-count {
+  color: #4e5969;
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.report-share-table :deep(button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.35;
 }
 
 .report-detail-summary {
@@ -1706,6 +1999,24 @@ async function copyText(text = '') {
   background: #f53f3f;
 }
 
+.report-status-pill.is-success {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.report-status-pill.is-success i {
+  background: #00b42a;
+}
+
+.report-status-pill.is-interrupted {
+  background: #fff7e8;
+  color: #ff7d00;
+}
+
+.report-status-pill.is-interrupted i {
+  background: #ff7d00;
+}
+
 .report-pass-rate {
   display: inline-flex;
   width: 102.515px;
@@ -1720,6 +2031,10 @@ async function copyText(text = '') {
   font-size: 22px;
   font-weight: 700;
   line-height: 33px;
+}
+
+.report-pass-rate.is-unavailable strong {
+  color: #86909c;
 }
 
 .report-pass-rate span {
@@ -1860,6 +2175,11 @@ async function copyText(text = '') {
   color: #f53f3f;
 }
 
+.report-step-sidebar header button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
 .report-step-sidebar header img {
   width: 9px;
   height: 9px;
@@ -1869,6 +2189,15 @@ async function copyText(text = '') {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+
+.report-step-list--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c9cdd4;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .report-step-item {
@@ -2094,6 +2423,119 @@ async function copyText(text = '') {
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
+}
+
+.report-detail-real-content {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden auto;
+}
+
+.report-real-info-grid {
+  display: grid;
+  grid-template-columns: 110px 110px minmax(240px, 1fr) 160px 130px;
+  gap: 17.5px;
+  margin: 10.5px 0 0;
+}
+
+.report-real-info-grid div {
+  min-width: 0;
+}
+
+.report-real-info-grid dt,
+.report-real-info-grid dd {
+  margin: 0;
+}
+
+.report-real-info-grid dt {
+  color: #86909c;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.report-real-info-grid dd {
+  overflow: hidden;
+  margin-top: 3.5px;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-real-failure-card {
+  border-color: rgb(245 63 63 / 25%);
+  background: #fffafa;
+}
+
+.report-real-failure-card h3 {
+  color: #f53f3f;
+}
+
+.report-real-failure-card p {
+  margin: 8px 0 0;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.report-real-log-card .report-code-block.is-log pre {
+  height: auto;
+  max-height: 300px;
+  min-height: 96px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.report-real-attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 10.5px;
+}
+
+.report-real-attachment-list a {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 10.5px;
+  border-radius: 7px;
+  background: #f7f8fa;
+  color: #165dff;
+  font-size: 12px;
+  line-height: 18px;
+  text-decoration: none;
+}
+
+.report-real-attachment-list a.is-disabled {
+  color: #86909c;
+  cursor: default;
+}
+
+.report-real-attachment-list small {
+  flex: 0 0 auto;
+  color: #86909c;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.report-detail-data-empty {
+  min-height: 260px;
+  flex: 1 1 auto;
+}
+
+.report-detail-data-empty small {
+  margin-top: 5.25px;
+  color: #c9cdd4;
+  font-size: 11px;
+  line-height: 16.5px;
 }
 
 .report-step-detail-card > header {

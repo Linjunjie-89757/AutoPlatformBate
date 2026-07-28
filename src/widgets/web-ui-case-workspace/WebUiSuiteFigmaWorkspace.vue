@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   ArrowDown,
   ArrowUp,
@@ -15,23 +15,54 @@ import {
   Trash2,
   X,
 } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
+
+import {
+  formatBrowserType,
+  formatDurationMs,
+  webUiAutomationApi,
+  type WebUiCaseItem,
+  type WebUiEnvironmentItem,
+  type WebUiRunBatchSummary,
+  type WebUiRunStatus,
+} from '@/entities/web-ui-automation'
+import {
+  isRunnerOnline,
+  isRunnerSelectable,
+  localRunnerApi,
+  runnerDisplayName,
+  runnerStatusText,
+  selectDefaultRunnerId,
+  type RunnerNodeSummary,
+} from '@/entities/local-runner'
+import { getRequestErrorMessage } from '@/shared/api/error'
 import WebUiModuleTabs from './WebUiModuleTabs.vue'
 
-type Priority = 'P0' | 'P1' | 'P2' | 'P3'
-type Result = 'pass' | 'fail' | null
+const props = withDefaults(defineProps<{
+  workspaceCode?: string
+  workspaceReady?: boolean
+}>(), {
+  workspaceCode: 'ALL',
+  workspaceReady: false,
+})
+
+type Priority = 'P0' | 'P1' | 'P2' | 'P3' | '—'
+type Result = 'pass' | 'fail' | 'running' | null
 type RunMode = 'serial' | 'parallel'
 type RunLocation = 'server' | 'runner'
 type SubTab = 'arrange' | 'records'
 
 type SuiteCase = {
   id: string
-  caseId: string
+  caseId: number
   name: string
   directory: string
   priority: Priority
   status: 'enabled' | 'disabled' | 'draft'
   enabled: boolean
   result: Result
+  browser: string
+  headless: boolean
 }
 
 type Suite = {
@@ -39,7 +70,7 @@ type Suite = {
   name: string
   priority: Priority
   cases: SuiteCase[]
-  environment: string
+  environmentId: number | null
   browser: string
   runMode: RunMode
   runLocation: RunLocation
@@ -52,107 +83,47 @@ type Suite = {
   lastResult: Result
 }
 
-type AvailableCase = Omit<SuiteCase, 'enabled'>
+type AvailableCase = Omit<SuiteCase, 'id' | 'enabled'> & { id: number }
+
+type RunRecord = {
+  id: number
+  time: string
+  environment: string
+  browser: string
+  pass: number
+  total: number
+  duration: string
+  operator: string
+  result: Result
+  source: WebUiRunBatchSummary
+}
 
 const priorityStyles: Record<Priority, { color: string; background: string }> = {
   P0: { color: '#f53f3f', background: '#ffeeee' },
   P1: { color: '#ff7d00', background: '#fff3e8' },
   P2: { color: '#165dff', background: '#e8f3ff' },
   P3: { color: '#86909c', background: '#f2f3f5' },
+  '—': { color: '#86909c', background: '#f2f3f5' },
 }
 
-const availableCases: AvailableCase[] = [
-  { id: 'uc-001', caseId: 'UC-001', name: '用户登录正常流程', directory: '电商平台/用户模块', priority: 'P0', status: 'enabled', result: 'pass' },
-  { id: 'uc-002', caseId: 'UC-002', name: '商品搜索与筛选', directory: '电商平台/商品模块', priority: 'P1', status: 'enabled', result: 'fail' },
-  { id: 'uc-003', caseId: 'UC-003', name: '购物车加购与结算', directory: '电商平台/购物车', priority: 'P0', status: 'enabled', result: 'pass' },
-  { id: 'uc-004', caseId: 'UC-004', name: '用户注册验证码校验', directory: '电商平台/用户模块', priority: 'P2', status: 'disabled', result: null },
-  { id: 'uc-005', caseId: 'UC-005', name: '商品详情页图片预览', directory: '电商平台/商品模块', priority: 'P2', status: 'draft', result: null },
-  { id: 'uc-006', caseId: 'UC-006', name: '订单状态流转核心路径', directory: '电商平台/订单模块', priority: 'P1', status: 'enabled', result: 'pass' },
-]
-
-const suites = ref<Suite[]>([
-  {
-    id: 'suite-1',
-    name: '用户中心-登录注册核心回归',
-    priority: 'P0',
-    environment: '测试环境',
-    browser: 'Chrome',
-    runMode: 'serial',
-    runLocation: 'server',
-    runnerId: 'runner-linux',
-    notify: true,
-    failurePolicy: '遇到失败继续执行',
-    screenshotPolicy: '仅失败时截图',
-    timeout: 60,
-    lastRun: '2026-07-07 23:01',
-    lastResult: 'pass',
-    cases: [
-      { ...availableCases[0], id: 'suite-1-case-1', enabled: true },
-      { ...availableCases[3], id: 'suite-1-case-2', enabled: true },
-    ],
-  },
-  {
-    id: 'suite-2',
-    name: '购物主链路 UI 回归',
-    priority: 'P1',
-    environment: '测试环境',
-    browser: 'Chrome',
-    runMode: 'serial',
-    runLocation: 'server',
-    runnerId: 'runner-linux',
-    notify: false,
-    failurePolicy: '遇到失败继续执行',
-    screenshotPolicy: '仅失败时截图',
-    timeout: 60,
-    lastRun: '2026-07-05 18:00',
-    lastResult: 'fail',
-    cases: [
-      { ...availableCases[1], id: 'suite-2-case-1', enabled: true },
-      { ...availableCases[2], id: 'suite-2-case-2', enabled: true },
-      { ...availableCases[5], id: 'suite-2-case-3', enabled: true },
-    ],
-  },
-  {
-    id: 'suite-3',
-    name: 'P0 冒烟套件',
-    priority: 'P0',
-    environment: '预发布环境',
-    browser: 'Chrome (无头)',
-    runMode: 'parallel',
-    runLocation: 'runner',
-    runnerId: 'runner-linux',
-    notify: true,
-    failurePolicy: '遇到失败继续执行',
-    screenshotPolicy: '仅失败时截图',
-    timeout: 60,
-    lastRun: '2026-07-06 08:00',
-    lastResult: 'pass',
-    cases: [
-      { ...availableCases[0], id: 'suite-3-case-1', enabled: true },
-      { ...availableCases[2], id: 'suite-3-case-2', enabled: true },
-    ],
-  },
-])
-
-const runners = [
-  { id: 'runner-linux', name: 'Runner-Linux-A', status: '在线' },
-  { id: 'runner-mac', name: 'Runner-Mac-B', status: '离线' },
-]
-
-const runRecords = [
-  { id: 'run-1', time: '2026-07-07 23:01', environment: '测试环境', browser: 'Chrome', pass: 2, total: 2, duration: '18.4s', operator: '自动调度', result: 'pass' as const },
-  { id: 'run-2', time: '2026-07-06 20:00', environment: '测试环境', browser: 'Chrome', pass: 1, total: 2, duration: '22.1s', operator: '张程远', result: 'fail' as const },
-  { id: 'run-3', time: '2026-07-05 14:00', environment: '测试环境', browser: 'Chrome', pass: 2, total: 2, duration: '17.8s', operator: '自动调度', result: 'pass' as const },
-]
+const availableCases = ref<AvailableCase[]>([])
+const environments = ref<WebUiEnvironmentItem[]>([])
+const runners = ref<RunnerNodeSummary[]>([])
+const suites = ref<Suite[]>([])
+const runRecords = ref<RunRecord[]>([])
 
 const suiteSearch = ref('')
-const selectedSuiteId = ref('suite-1')
+const selectedSuiteId = ref<string | null>(null)
 const subTab = ref<SubTab>('arrange')
 const editingName = ref(false)
 const addCaseVisible = ref(false)
-const selectedAvailableCaseIds = ref<string[]>([])
+const selectedAvailableCaseIds = ref<number[]>([])
+const loading = ref(false)
+const running = ref(false)
+let draftSequence = 0
+let workspaceRequestVersion = 0
 
-const selectedSuite = computed(() => suites.value.find(item => item.id === selectedSuiteId.value) || suites.value[0])
+const selectedSuite = computed(() => suites.value.find(item => item.id === selectedSuiteId.value) || null)
 const filteredSuites = computed(() => {
   const keyword = suiteSearch.value.trim().toLowerCase()
   return keyword ? suites.value.filter(item => item.name.toLowerCase().includes(keyword)) : suites.value
@@ -170,18 +141,18 @@ function updateSuiteCases(cases: SuiteCase[]) {
   updateSuite({ cases })
 }
 
-function createSuite() {
-  const id = `suite-${Date.now()}`
+function createSuite(focusName = true) {
+  const id = `draft-suite-${Date.now()}-${++draftSequence}`
   suites.value.push({
     id,
     name: '未命名套件',
     priority: 'P2',
     cases: [],
-    environment: '测试环境',
+    environmentId: environments.value.find(item => item.status !== 0)?.id ?? null,
     browser: 'Chrome',
     runMode: 'serial',
     runLocation: 'server',
-    runnerId: 'runner-linux',
+    runnerId: selectDefaultRunnerId(runners.value, null, 'WEB_CASE_RUN') || '',
     notify: false,
     failurePolicy: '遇到失败继续执行',
     screenshotPolicy: '仅失败时截图',
@@ -191,7 +162,7 @@ function createSuite() {
   })
   selectedSuiteId.value = id
   subTab.value = 'arrange'
-  editingName.value = true
+  editingName.value = focusName
 }
 
 function moveSuiteCase(index: number, direction: -1 | 1) {
@@ -210,21 +181,26 @@ function toggleSuiteCase(id: string) {
   updateSuiteCases((selectedSuite.value?.cases || []).map(item => item.id === id ? { ...item, enabled: !item.enabled } : item))
 }
 
-function openAddCaseDialog() {
+async function openAddCaseDialog() {
+  if (!availableCases.value.length) {
+    await loadCases(workspaceRequestVersion)
+  }
   selectedAvailableCaseIds.value = []
   addCaseVisible.value = true
 }
 
-function toggleAvailableCase(id: string) {
+function toggleAvailableCase(id: number) {
   selectedAvailableCaseIds.value = selectedAvailableCaseIds.value.includes(id)
     ? selectedAvailableCaseIds.value.filter(item => item !== id)
     : [...selectedAvailableCaseIds.value, id]
 }
 
 function addSelectedCases() {
-  const additions = availableCases
+  const suite = selectedSuite.value
+  if (!suite) return
+  const additions = availableCases.value
     .filter(item => selectedAvailableCaseIds.value.includes(item.id))
-    .map(item => ({ ...item, id: `${selectedSuite.value.id}-${item.id}-${Date.now()}`, enabled: true }))
+    .map(item => ({ ...item, id: `${suite.id}-${item.id}-${Date.now()}`, enabled: true }))
   updateSuiteCases([...(selectedSuite.value?.cases || []), ...additions])
   addCaseVisible.value = false
 }
@@ -234,7 +210,7 @@ function priorityStyle(priority: Priority) {
 }
 
 function resultText(result: Result) {
-  return result === 'pass' ? '通过' : result === 'fail' ? '失败' : '未运行'
+  return result === 'pass' ? '通过' : result === 'fail' ? '失败' : result === 'running' ? '运行中' : '未运行'
 }
 
 function statusText(status: SuiteCase['status']) {
@@ -244,6 +220,202 @@ function statusText(status: SuiteCase['status']) {
 function statusColor(status: SuiteCase['status']) {
   return status === 'enabled' ? '#00b42a' : status === 'disabled' ? '#c9cdd4' : '#ff7d00'
 }
+
+function mapCaseStatus(status: WebUiCaseItem['status']): SuiteCase['status'] {
+  if (status === 'ENABLED') return 'enabled'
+  if (status === 'DISABLED') return 'disabled'
+  return 'draft'
+}
+
+function mapRunResult(status?: WebUiRunStatus | string | null): Result {
+  if (status === 'SUCCESS') return 'pass'
+  if (status === 'RUNNING') return 'running'
+  if (status === 'FAILED' || status === 'CANCELED') return 'fail'
+  return null
+}
+
+function formatDateTime(value?: string | null) {
+  return value ? value.replace('T', ' ').slice(0, 16) : '—'
+}
+
+function mapAvailableCase(item: WebUiCaseItem): AvailableCase {
+  return {
+    id: item.id,
+    caseId: item.id,
+    name: item.name,
+    directory: item.moduleName || '未归属模块',
+    priority: '—',
+    status: mapCaseStatus(item.status),
+    result: mapRunResult(item.lastRunResult),
+    browser: formatBrowserType(item.browserType),
+    headless: item.headless,
+  }
+}
+
+function mapRunRecord(item: WebUiRunBatchSummary): RunRecord {
+  return {
+    id: item.id,
+    time: formatDateTime(item.startedAt || item.createdAt),
+    environment: item.environmentName || '用例默认环境',
+    browser: '浏览器由用例决定',
+    pass: item.successCases,
+    total: item.totalCases,
+    duration: formatDurationMs(item.durationMs).replace(' s', 's'),
+    operator: item.operatorName || item.source || '—',
+    result: mapRunResult(item.status),
+    source: item,
+  }
+}
+
+async function loadCases(requestVersion: number) {
+  try {
+    const response = await webUiAutomationApi.getCases(props.workspaceCode, { pageNo: 1, pageSize: 1000 })
+    if (requestVersion !== workspaceRequestVersion) return
+    availableCases.value = response.items.map(mapAvailableCase)
+  } catch (error) {
+    if (requestVersion !== workspaceRequestVersion) return
+    availableCases.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function loadEnvironments(requestVersion: number) {
+  try {
+    const response = await webUiAutomationApi.getEnvironments(props.workspaceCode)
+    if (requestVersion !== workspaceRequestVersion) return
+    environments.value = response.items
+  } catch (error) {
+    if (requestVersion !== workspaceRequestVersion) return
+    environments.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function loadRunners(requestVersion: number) {
+  try {
+    const response = await localRunnerApi.getRunnerNodes({ taskType: 'WEB_CASE_RUN', resourceCost: 1 })
+    if (requestVersion !== workspaceRequestVersion) return
+    runners.value = response
+  } catch (error) {
+    if (requestVersion !== workspaceRequestVersion) return
+    runners.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function loadRunRecords(requestVersion = workspaceRequestVersion) {
+  try {
+    const response = await webUiAutomationApi.getBatches(props.workspaceCode, { pageNo: 1, pageSize: 20 })
+    if (requestVersion !== workspaceRequestVersion) return
+    runRecords.value = response.items.map(mapRunRecord)
+    syncSelectedSuiteLastRun()
+  } catch (error) {
+    if (requestVersion !== workspaceRequestVersion) return
+    runRecords.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+function syncSelectedSuiteLastRun() {
+  const suite = selectedSuite.value
+  if (!suite) return
+  const latest = runRecords.value.find(item => item.source.batchName === suite.name)
+  if (!latest) return
+  updateSuite({ lastRun: latest.time, lastResult: latest.result })
+}
+
+async function reloadWorkspaceData() {
+  const requestVersion = ++workspaceRequestVersion
+  suites.value = []
+  selectedSuiteId.value = null
+  availableCases.value = []
+  environments.value = []
+  runners.value = []
+  runRecords.value = []
+  if (!props.workspaceReady) return
+
+  loading.value = true
+  await Promise.all([
+    loadCases(requestVersion),
+    loadEnvironments(requestVersion),
+    loadRunners(requestVersion),
+    loadRunRecords(requestVersion),
+  ])
+  if (requestVersion === workspaceRequestVersion) {
+    loading.value = false
+    createSuite(false)
+  }
+}
+
+function saveSuite() {
+  ElMessage.info('后台尚无 Web UI 套件 CRUD，当前编排是未保存草稿；已记录到遗留问题')
+}
+
+async function runSuite() {
+  const suite = selectedSuite.value
+  if (!suite || running.value) return
+  const enabledCases = suite.cases.filter(item => item.enabled)
+  if (!enabledCases.length) {
+    ElMessage.warning('请先添加并启用至少一个 Web UI 用例')
+    return
+  }
+  if (enabledCases.some(item => item.status !== 'enabled')) {
+    ElMessage.warning('批量运行只支持已启用用例，请先移除或停用草稿/已停用用例')
+    return
+  }
+  if (suite.runLocation === 'runner') {
+    ElMessage.info('当前批量运行接口不接收 Runner ID，无法按所选 Runner 执行；已记录到遗留问题')
+    return
+  }
+  if (suite.runMode === 'parallel') {
+    ElMessage.info('当前批量运行接口只按用例顺序执行，不支持并行模式；已记录到遗留问题')
+    return
+  }
+  if (suite.notify) {
+    ElMessage.info('当前批量运行接口没有本次运行通知开关，请关闭通知后运行')
+    return
+  }
+  if (suite.failurePolicy === '当前用例失败跳过') {
+    ElMessage.info('当前批量运行接口不支持“当前用例失败跳过”策略；已记录到遗留问题')
+    return
+  }
+
+  running.value = true
+  try {
+    const result = await webUiAutomationApi.runBatch(props.workspaceCode, {
+      batchName: suite.name.trim() || `Web UI 批量运行 ${new Date().toLocaleString()}`,
+      caseIds: enabledCases.map(item => item.caseId),
+      environmentId: suite.environmentId,
+      headless: suite.browser.includes('无头'),
+      stopOnFailure: suite.failurePolicy === '遇到失败立即中止',
+    })
+    updateSuite({
+      lastRun: formatDateTime(new Date().toISOString()),
+      lastResult: mapRunResult(result.status),
+    })
+    ElMessage.success(result.status === 'SUCCESS' ? '批量运行成功' : '批量运行完成，请查看运行结果')
+    await loadRunRecords()
+    subTab.value = 'records'
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    running.value = false
+  }
+}
+
+function openRunRecord(record: RunRecord) {
+  ElMessage.info(`批次 #${record.id} 已有真实详情数据，但当前 Figma 页面没有批次详情抽屉设计`)
+}
+
+function handleUnsupportedSetting(setting: string) {
+  ElMessage.info(`${setting}没有进入当前 Web UI 批量运行接口，本次草稿不会把该值伪装成已保存配置`)
+}
+
+watch(() => [props.workspaceCode, props.workspaceReady] as const, () => {
+  void reloadWorkspaceData()
+}, { immediate: true })
+
+watch(selectedSuiteId, syncSelectedSuiteLastRun)
 </script>
 
 <template>
@@ -257,7 +429,7 @@ function statusColor(status: SuiteCase['status']) {
             <Search aria-hidden="true" />
             <input v-model="suiteSearch" placeholder="搜索套件..." />
           </label>
-          <button type="button" aria-label="新建套件" @click="createSuite"><Plus /></button>
+          <button type="button" aria-label="新建套件" @click="createSuite()"><Plus /></button>
         </header>
 
         <div class="web-ui-suite-list__items">
@@ -281,7 +453,7 @@ function statusColor(status: SuiteCase['status']) {
         </div>
 
         <footer class="web-ui-suite-list__footer">
-          <button type="button" @click="createSuite"><Plus />新建套件</button>
+          <button type="button" @click="createSuite()"><Plus />新建套件</button>
         </footer>
       </aside>
 
@@ -310,13 +482,13 @@ function statusColor(status: SuiteCase['status']) {
           </div>
           <label class="web-ui-suite-toolbar-select">
             <span>环境</span>
-            <select v-model="selectedSuite.environment" aria-label="执行环境">
-              <option>测试环境</option><option>预发布环境</option><option>生产环境(只读)</option><option>本地联调</option>
+            <select v-model="selectedSuite.environmentId" aria-label="执行环境">
+              <option :value="null">用例默认环境</option><option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}</option>
             </select>
           </label>
           <label class="web-ui-suite-toolbar-select web-ui-suite-toolbar-select--browser">
             <Monitor aria-hidden="true" />
-            <select v-model="selectedSuite.browser" aria-label="浏览器">
+            <select v-model="selectedSuite.browser" aria-label="浏览器" @change="handleUnsupportedSetting('浏览器类型覆盖')">
               <option>Chrome</option><option>Firefox</option><option>Safari</option><option>Edge</option><option>Chrome (无头)</option>
             </select>
           </label>
@@ -330,8 +502,8 @@ function statusColor(status: SuiteCase['status']) {
               @click="updateSuite({ notify: !selectedSuite.notify })"
             ><i /></button>
           </label>
-          <button class="web-ui-suite-save" type="button"><Save />保存</button>
-          <button class="web-ui-suite-run" type="button"><Play />运行</button>
+          <button class="web-ui-suite-save" type="button" :disabled="loading || running" @click="saveSuite"><Save />保存</button>
+          <button class="web-ui-suite-run" type="button" :disabled="loading || running" @click="runSuite"><Play />{{ running ? '运行中' : '运行' }}</button>
         </header>
 
         <nav class="web-ui-suite-sub-tabs" role="tablist" aria-label="套件详情">
@@ -384,15 +556,15 @@ function statusColor(status: SuiteCase['status']) {
               </div>
             </section>
             <section v-if="selectedSuite.runLocation === 'runner'" class="web-ui-suite-runners">
-              <label v-for="runner in runners" :key="runner.id">
-                <input v-model="selectedSuite.runnerId" type="radio" name="web-ui-suite-runner" :value="runner.id" />
-                <i :class="{ 'is-online': runner.status === '在线' }" />
-                <span><b>{{ runner.name }}</b><small>{{ runner.status }}</small></span>
+              <label v-for="runner in runners" :key="runner.runnerId">
+                <input v-model="selectedSuite.runnerId" type="radio" name="web-ui-suite-runner" :value="runner.runnerId" :disabled="!isRunnerSelectable(runner, 'WEB_CASE_RUN')" />
+                <i :class="{ 'is-online': isRunnerOnline(runner) }" />
+                <span><b>{{ runnerDisplayName(runner) }}</b><small>{{ runnerStatusText(runner) }}</small></span>
               </label>
             </section>
             <label class="web-ui-suite-setting-field">失败策略<select v-model="selectedSuite.failurePolicy"><option>遇到失败继续执行</option><option>遇到失败立即中止</option><option>当前用例失败跳过</option></select></label>
-            <label class="web-ui-suite-setting-field">截图策略<select v-model="selectedSuite.screenshotPolicy"><option>仅失败时截图</option><option>每步都截图</option><option>不截图</option></select></label>
-            <label class="web-ui-suite-setting-field">超时 (s)<input v-model.number="selectedSuite.timeout" type="number" min="1" /></label>
+            <label class="web-ui-suite-setting-field">截图策略<select v-model="selectedSuite.screenshotPolicy" @change="handleUnsupportedSetting('截图策略')"><option>仅失败时截图</option><option>每步都截图</option><option>不截图</option></select></label>
+            <label class="web-ui-suite-setting-field">超时 (s)<input v-model.number="selectedSuite.timeout" type="number" min="1" @change="handleUnsupportedSetting('套件级超时')" /></label>
             <section v-if="selectedSuite.lastRun" class="web-ui-suite-last-run">
               <h3>上次运行</h3>
               <b :class="selectedSuite.lastResult">{{ resultText(selectedSuite.lastResult) }}</b>
@@ -402,8 +574,8 @@ function statusColor(status: SuiteCase['status']) {
         </div>
 
         <section v-else class="web-ui-suite-records">
-          <header><strong>最近运行记录</strong><button type="button"><RefreshCw />刷新</button></header>
-          <button v-for="record in runRecords" :key="record.id" type="button" class="web-ui-suite-record">
+          <header><strong>最近运行记录</strong><button type="button" @click="loadRunRecords()"><RefreshCw />刷新</button></header>
+          <button v-for="record in runRecords" :key="record.id" type="button" class="web-ui-suite-record" @click="openRunRecord(record)">
             <b :class="record.result">{{ resultText(record.result) }}</b>
             <span><strong>{{ record.browser }} · {{ record.environment }}</strong><small>{{ record.time }} · {{ record.operator }}</small></span>
             <em :class="record.result">{{ record.pass }}/{{ record.total }} 通过<small>{{ record.duration }}</small></em>

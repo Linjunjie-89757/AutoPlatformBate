@@ -59,11 +59,6 @@ interface ChannelTypeCard {
   disabled?: boolean
 }
 
-interface NotificationFigmaContentOption {
-  label: string
-  tone: 'primary' | 'danger' | 'purple'
-}
-
 const activeTab = ref<PanelTab>('channels')
 const eventTypes = ref<NotificationEventOption[]>([])
 
@@ -71,6 +66,7 @@ const channels = ref<NotificationChannelItem[]>([])
 const rules = ref<NotificationRuleItem[]>([])
 const records = ref<NotificationRecordItem[]>([])
 const recordsTotal = ref(0)
+const failedRecordsTotal = ref(0)
 const recordsPageNo = ref(1)
 const recordsPageSize = ref(20)
 
@@ -78,6 +74,7 @@ const channelsLoading = ref(false)
 const rulesLoading = ref(false)
 const recordsLoading = ref(false)
 const saving = ref(false)
+const testingChannelDraft = ref(false)
 const testingChannelId = ref<number | null>(null)
 const operatingId = ref<number | null>(null)
 const errorMessage = ref('')
@@ -134,7 +131,7 @@ const enabledChannels = computed(() => channels.value.filter(item => item.status
 const channelStats = computed(() => ({
   total: channels.value.length,
   enabled: channels.value.filter(item => item.status === 1).length,
-  failed: records.value.filter(item => item.sendStatus === 'FAILED').length,
+  failed: failedRecordsTotal.value,
   rules: rules.value.length,
 }))
 const filteredRecords = computed(() => {
@@ -269,8 +266,21 @@ async function loadRecords() {
   }
 }
 
+async function loadRecordStats() {
+  try {
+    const page = await configApi.getNotificationRecords(props.workspaceCode, {
+      sendStatus: 'FAILED',
+      pageNo: 1,
+      pageSize: 1,
+    })
+    failedRecordsTotal.value = Number(page.total || 0)
+  } catch {
+    failedRecordsTotal.value = 0
+  }
+}
+
 async function refreshAll() {
-  await Promise.all([loadChannels(), loadRules(), loadRecords()])
+  await Promise.all([loadChannels(), loadRules(), loadRecords(), loadRecordStats()])
 }
 
 function selectTab(tab: PanelTab) {
@@ -332,7 +342,7 @@ function getChannelLastSendMeta(channel: NotificationChannelItem) {
   }
   const record = getChannelLastRecord(channel)
   if (!record) {
-    return { label: '从未发送', time: '', color: '#C9CDD4', dot: '' }
+    return { label: '暂无近期记录', time: '', color: '#C9CDD4', dot: '' }
   }
   const success = record.sendStatus === 'SUCCESS'
   return {
@@ -350,97 +360,14 @@ function getRuleStatusMeta(rule: NotificationRuleItem) {
   return { label: '已停用', color: '#86909C', dot: '#C9CDD4' }
 }
 
-function readLooseText(source: unknown, keys: string[]) {
-  const record = source as Record<string, unknown>
-  for (const key of keys) {
-    const value = record?.[key]
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim()
-    }
-  }
-  return ''
-}
-
-function getRuleFigmaModule(rule: NotificationRuleItem, index: number) {
-  const directValue = readLooseText(rule, ['module', 'moduleName', 'moduleType', 'applyModule', 'applyModuleName'])
-  if (directValue) {
-    return directValue
-  }
-  const eventText = `${rule.eventType} ${rule.eventName}`
-  if (/WEB|UI|WEB_UI/i.test(eventText)) {
+function getRuleModule(rule: NotificationRuleItem) {
+  if (rule.eventType.startsWith('WEB_UI_')) {
     return 'Web UI 自动化'
   }
-  if (/BUG|DEFECT|缺陷/i.test(eventText)) {
-    return '缺陷管理'
+  if (rule.eventType.startsWith('API_SUITE_')) {
+    return '接口自动化'
   }
-  if (/TASK|任务/i.test(eventText)) {
-    return '任务中心'
-  }
-  if (/REPORT|报告|定时/i.test(eventText)) {
-    return '全部'
-  }
-  return ['接口自动化', '全部', '任务中心', '缺陷管理', 'Web UI 自动化'][index % 5]
-}
-
-function getRuleFigmaCondition(rule: NotificationRuleItem, index: number) {
-  const directValue = readLooseText(rule, ['conditionName', 'triggerConditionName'])
-  if (directValue) {
-    return directValue
-  }
-  const current = formatCondition(rule.triggerCondition)
-  if (current && current !== rule.triggerCondition) {
-    return current
-  }
-  const text = `${rule.triggerCondition} ${rule.eventName} ${rule.eventType}`
-  if (/P0|P1/i.test(text)) {
-    return '仅 P0/P1'
-  }
-  if (/3|连续/.test(text)) {
-    return '连续失败 3 次'
-  }
-  if (/REPORT|报告|ALL|全部/i.test(text)) {
-    return '全部通知'
-  }
-  if (/FAIL|失败/i.test(text)) {
-    return '仅失败'
-  }
-  return ['仅失败', '全部通知', '连续失败 3 次', '仅 P0/P1', '仅失败'][index % 5]
-}
-
-function getRuleFigmaContentOptions(rule: NotificationRuleItem, index: number): NotificationFigmaContentOption[] {
-  const record = rule as unknown as Record<string, unknown>
-  const options: NotificationFigmaContentOption[] = []
-  const hasExplicitFlags = ['includeReportLink', 'includeFailureSteps', 'includeAiSummary', 'inclReport', 'inclFailStep', 'inclAiSummary']
-    .some(key => typeof record[key] === 'boolean')
-
-  if (record.includeReportLink === true || record.inclReport === true) {
-    options.push({ label: '报告', tone: 'primary' })
-  }
-  if (record.includeFailureSteps === true || record.inclFailStep === true) {
-    options.push({ label: '步骤', tone: 'danger' })
-  }
-  if (record.includeAiSummary === true || record.inclAiSummary === true) {
-    options.push({ label: 'AI', tone: 'purple' })
-  }
-  if (hasExplicitFlags) {
-    return options
-  }
-
-  const eventText = `${rule.eventName} ${rule.eventType}`
-  if (/报告|REPORT/i.test(eventText)) {
-    return [{ label: '报告', tone: 'primary' }]
-  }
-  if (/缺陷|BUG|DEFECT/i.test(eventText)) {
-    return []
-  }
-  if (/失败|FAIL|P0|P1/i.test(eventText)) {
-    return [
-      { label: '报告', tone: 'primary' },
-      { label: '步骤', tone: 'danger' },
-      ...(index % 3 === 1 ? [] : [{ label: 'AI', tone: 'purple' } as NotificationFigmaContentOption]),
-    ]
-  }
-  return [{ label: '报告', tone: 'primary' }]
+  return '—'
 }
 
 function getRecordStatusMeta(record: NotificationRecordItem) {
@@ -458,16 +385,6 @@ function getRecordChannelIcon(record: NotificationRecordItem) {
 function getRecordChannelTone(record: NotificationRecordItem) {
   const channel = channels.value.find(item => item.id === record.channelId || item.channelName === record.channelName)
   return getChannelTypeTone(channel?.channelType || '')
-}
-
-function getRecordFigmaDuration(record: NotificationRecordItem, index: number) {
-  const loose = record as unknown as Record<string, unknown>
-  const raw = loose.durationMs ?? loose.elapsedMs ?? loose.duration
-  const value = typeof raw === 'number' ? raw : Number(raw)
-  if (Number.isFinite(value) && value > 0) {
-    return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${value}ms`
-  }
-  return ['312ms', '445ms', '30.0s', '289ms', '5.0s', '391ms'][index % 6]
 }
 
 function openHistoryDetail(record: NotificationRecordItem) {
@@ -607,16 +524,34 @@ async function toggleChannel(row: NotificationChannelItem) {
 }
 
 async function testChannelFromDrawer() {
-  if (!editingChannel.value) {
-    ElMessage.warning('请先保存渠道后再测试发送')
+  if (!channelForm.value.webhookUrl.trim()) {
+    ElMessage.warning('请先填写 Webhook 地址')
     return
   }
-  testingChannelId.value = editingChannel.value.id
+  if (!concreteWorkspaceSelected.value && !editingChannel.value) {
+    ElMessage.warning('请先在右上角切换到具体工作空间')
+    return
+  }
+  testingChannelDraft.value = true
+  testingChannelId.value = editingChannel.value?.id || null
   try {
-    const result = await configApi.testNotificationChannel(editingChannel.value.workspaceCode, {
-      channelId: editingChannel.value.id,
-      message: `通知渠道「${editingChannel.value.channelName}」测试消息`,
-    })
+    const workspaceCode = editingChannel.value?.workspaceCode || props.workspaceCode
+    const result = editingChannel.value
+      ? await configApi.testNotificationChannel(workspaceCode, {
+          channelId: editingChannel.value.id,
+          message: `通知渠道「${editingChannel.value.channelName}」测试消息`,
+        })
+      : await configApi.testNotificationChannel(workspaceCode, {
+          channelType: channelForm.value.channelType,
+          webhookUrl: channelForm.value.webhookUrl,
+          secretKey: channelForm.value.secretKey,
+          httpMethod: channelForm.value.httpMethod,
+          headersJson: channelForm.value.headersJson,
+          bodyTemplate: channelForm.value.bodyTemplate,
+          timeoutMs: channelForm.value.timeoutMs,
+          retryCount: channelForm.value.retryCount,
+          message: `通知渠道「${channelForm.value.channelName || '未命名渠道'}」测试消息`,
+        })
     channelTestResult.value = {
       success: result.success,
       message: result.message || (result.success ? '测试发送成功，消息已送达目标渠道' : '测试发送失败，请检查 Webhook 地址是否正确'),
@@ -626,6 +561,7 @@ async function testChannelFromDrawer() {
     channelTestResult.value = { success: false, message }
     ElMessage.error(message)
   } finally {
+    testingChannelDraft.value = false
     testingChannelId.value = null
   }
 }
@@ -765,9 +701,25 @@ function removeRule(row: NotificationRuleItem) {
   openDeleteRuleConfirm(row)
 }
 
-function duplicateRule(row: NotificationRuleItem) {
-  void row
-  ElMessage.info('通知规则复制接口暂未接入，已记录到迁移遗留问题')
+async function duplicateRule(row: NotificationRuleItem) {
+  operatingId.value = row.id
+  try {
+    await configApi.createNotificationRule(row.workspaceCode, {
+      workspaceCode: row.workspaceCode,
+      ruleName: `${row.ruleName} - 副本`,
+      eventType: row.eventType,
+      triggerCondition: row.triggerCondition,
+      channelIds: [...row.channelIds],
+      frequencyLimitSeconds: row.frequencyLimitSeconds,
+      status: 0,
+    })
+    ElMessage.success('通知规则副本已创建，默认处于停用状态')
+    await loadRules()
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    operatingId.value = null
+  }
 }
 
 function formatCondition(value: string) {
@@ -1057,7 +1009,7 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(rule, index) in rules" :key="rule.id">
+              <tr v-for="rule in rules" :key="rule.id">
                 <td>
                   <span class="notification-name-text" :title="rule.ruleName">{{ rule.ruleName }}</span>
                 </td>
@@ -1065,10 +1017,10 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
                   <span class="notification-event-pill" :title="rule.eventName">{{ rule.eventName }}</span>
                 </td>
                 <td>
-                  <span class="notification-muted-text">{{ getRuleFigmaModule(rule, index) }}</span>
+                  <span class="notification-muted-text">{{ getRuleModule(rule) }}</span>
                 </td>
                 <td>
-                  <span class="notification-muted-text">{{ getRuleFigmaCondition(rule, index) }}</span>
+                  <span class="notification-muted-text">{{ formatCondition(rule.triggerCondition) }}</span>
                 </td>
                 <td>
                   <span class="notification-channel-inline">
@@ -1077,15 +1029,7 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
                   </span>
                 </td>
                 <td>
-                  <span v-if="!getRuleFigmaContentOptions(rule, index).length" class="notification-muted-text">-</span>
-                  <span
-                    v-for="item in getRuleFigmaContentOptions(rule, index)"
-                    :key="item.label"
-                    class="notification-content-pill"
-                    :class="`is-${item.tone}`"
-                  >
-                    {{ item.label }}
-                  </span>
+                  <span class="notification-muted-text">—</span>
                 </td>
                 <td>
                   <span class="notification-status" :style="{ color: getRuleStatusMeta(rule).color }">
@@ -1101,7 +1045,13 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
                     <button type="button" class="notification-icon-button" aria-label="编辑规则" @click="openEditRuleDialog(rule)">
                       <img :src="figmaConfigNotificationIcons.action.edit" alt="">
                     </button>
-                    <button type="button" class="notification-icon-button" aria-label="复制规则" @click="duplicateRule(rule)">
+                    <button
+                      type="button"
+                      class="notification-icon-button"
+                      aria-label="复制规则"
+                      :disabled="operatingId === rule.id"
+                      @click="duplicateRule(rule)"
+                    >
                       <img :src="figmaConfigNotificationIcons.action.copy" alt="">
                     </button>
                     <button
@@ -1179,7 +1129,7 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(record, index) in filteredRecords" :key="record.id">
+                <tr v-for="record in filteredRecords" :key="record.id">
                   <td><code class="notification-time-code">{{ formatTime(record.sentAt || record.triggeredAt || record.createdAt) }}</code></td>
                   <td>
                     <span class="notification-history-channel">
@@ -1201,7 +1151,7 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
                     </div>
                   </td>
                   <td>
-                    <code class="notification-duration-code">{{ getRecordFigmaDuration(record, index) }}</code>
+                    <code class="notification-duration-code">—</code>
                   </td>
                   <td>
                     <div class="notification-row-actions">
@@ -1396,11 +1346,11 @@ watch([ruleKeyword, ruleEventFilter, ruleStatusFilter], () => {
           <button
             type="button"
             class="notification-channel-drawer__test"
-            :disabled="!editingChannel || testingChannelId === editingChannel?.id"
+            :disabled="testingChannelDraft || !channelForm.webhookUrl.trim()"
             @click="testChannelFromDrawer"
           >
             <img :src="figmaConfigNotificationIcons.action.send" alt="">
-            {{ testingChannelId === editingChannel?.id ? '发送中...' : '测试发送' }}
+            {{ testingChannelDraft ? '发送中...' : '测试发送' }}
           </button>
           <div>
             <button type="button" class="notification-rule-drawer__cancel" @click="channelDialogVisible = false">取消</button>

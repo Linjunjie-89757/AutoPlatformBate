@@ -27,7 +27,7 @@ class LocalRunnerReleaseControllerTests {
         authenticate();
         LocalRunnerReleaseService service = mock(LocalRunnerReleaseService.class);
         var release = new LocalRunnerReleaseInfoResponse(
-                "0.1.0",
+                "0.1.1",
                 "WINDOWS",
                 "X64",
                 "PORTABLE_ZIP",

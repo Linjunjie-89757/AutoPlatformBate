@@ -6,46 +6,30 @@ import { ElMessage } from 'element-plus'
 
 import { caseAiApi, type AiGenerationTaskItem } from '@/entities/case-ai'
 import { caseApi, type CaseDirectoryNode, type SaveCasePayload } from '@/entities/case'
+import { useSession } from '@/entities/session'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+import {
+  type AppTableColumnDefinition,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
 import { confirmDelete } from '@/shared/ui'
 import AiGenerationLiveLogDialog from '@/shared/ui/ai-live-log/AiGenerationLiveLogDialog.vue'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppCard from '@/shared/ui/app-card/AppCard.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 import { loadCaseAiRecordListContext, saveCaseAiRecordListContext } from './caseAiRecordContext'
 
 type TaskStatus = AiGenerationTaskItem['status']
-type ColumnKey =
-  | 'taskId'
-  | 'workspaceName'
-  | 'requirementTitle'
-  | 'outputMode'
-  | 'status'
-  | 'generatedCount'
-  | 'savedCaseCount'
-  | 'createdAt'
-  | 'createdByName'
-  | 'updatedAt'
-  | 'updatedByName'
-  | 'directoryName'
-
-interface ColumnDefinition {
-  key: ColumnKey
-  label: string
-  width?: number
-  minWidth?: number
-  required?: boolean
-  defaultVisible?: boolean
-}
-
-interface PersistedTableSettings {
-  columnVisibility?: Partial<Record<ColumnKey, boolean>>
-  columnOrder?: ColumnKey[]
-}
 
 interface DirectoryOption {
   value: number | null
@@ -61,27 +45,31 @@ interface PathPickerNode {
   children: PathPickerNode[]
 }
 
-const TABLE_SETTINGS_STORAGE_KEY = 'case-ai-record-table-settings-v2'
-const PAGE_SIZE_OPTIONS = [10, 20, 30, 40, 50]
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 const route = useRoute()
 const router = useRouter()
+const { currentUser } = useSession()
 const { selectedWorkspaceCode } = useWorkspaceContext()
 
-const tableColumns: ColumnDefinition[] = [
-  { key: 'taskId', label: '任务 ID', minWidth: 180, required: true, defaultVisible: true },
-  { key: 'workspaceName', label: '所属空间', minWidth: 140, defaultVisible: true },
-  { key: 'requirementTitle', label: '关联需求', minWidth: 300, required: true, defaultVisible: true },
-  { key: 'outputMode', label: '输出模式', width: 132, defaultVisible: true },
-  { key: 'status', label: '状态', minWidth: 110, defaultVisible: true },
-  { key: 'generatedCount', label: '生成用例数', width: 110, defaultVisible: true },
-  { key: 'savedCaseCount', label: '已采纳数', width: 98, defaultVisible: false },
-  { key: 'createdAt', label: '生成时间', minWidth: 168, defaultVisible: true },
-  { key: 'createdByName', label: '创建人', minWidth: 120, defaultVisible: false },
+const tableColumns: AppTableColumnDefinition[] = [
+  { key: 'taskId', label: '任务 ID', width: 253, required: true, defaultVisible: true },
+  { key: 'requirementTitle', label: '对应需求', width: 355, required: true, defaultVisible: true },
+  { key: 'status', label: '状态', width: 145, defaultVisible: true },
+  { key: 'generatedCount', label: '生成数量', width: 127, defaultVisible: true },
+  { key: 'reviewedCount', label: '已评审', width: 127, defaultVisible: true },
+  { key: 'savedCaseCount', label: '已采纳', width: 127, defaultVisible: true },
+  { key: 'model', label: '生成模型', width: 181, defaultVisible: true },
+  { key: 'createdAt', label: '生成时间', width: 235, defaultVisible: true },
+  { key: 'createdByName', label: '操作人', width: 127, defaultVisible: true },
+  { key: 'workspaceName', label: '所属空间', minWidth: 140, defaultVisible: false },
+  { key: 'outputMode', label: '输出模式', width: 132, defaultVisible: false },
   { key: 'updatedAt', label: '更新时间', minWidth: 168, defaultVisible: false },
   { key: 'updatedByName', label: '更新人', minWidth: 120, defaultVisible: false },
   { key: 'directoryName', label: '当前采纳路径', minWidth: 220, defaultVisible: false },
 ]
+
+const centeredColumnKeys = new Set(['generatedCount', 'reviewedCount', 'savedCaseCount'])
 
 const loading = ref(false)
 const hasLoaded = ref(false)
@@ -91,10 +79,8 @@ const keyword = ref('')
 const statusFilter = ref('')
 const pageNo = ref(1)
 const pageSize = ref(10)
-const settingsVisible = ref(false)
-const draggingColumnKey = ref<ColumnKey | null>(null)
-const columnVisibility = ref<Partial<Record<ColumnKey, boolean>>>({})
-const columnOrder = ref<ColumnKey[]>([])
+const tableFrameRef = ref<HTMLElement | null>(null)
+const tableFrameWidth = ref(0)
 
 const processDialogVisible = ref(false)
 const processLoading = ref(false)
@@ -117,6 +103,7 @@ const adoptForm = reactive({
 })
 
 let pollingTimer: number | null = null
+let tableFrameObserver: ResizeObserver | null = null
 
 const runningStatuses: TaskStatus[] = ['PENDING', 'GENERATING', 'REVIEWING']
 
@@ -124,6 +111,42 @@ const resolvedWorkspaceCode = computed(() => {
   const routeWorkspace = Array.isArray(route.query.workspace) ? route.query.workspace[0] : route.query.workspace
   return routeWorkspace || selectedWorkspaceCode.value || 'ALL'
 })
+
+const tableSettings = useTableColumnSettings({
+  columns: tableColumns,
+  storageKey: computed(() => `app-figma-table:case-ai-records:${currentUser.value?.id || 'anonymous'}:${resolvedWorkspaceCode.value}`),
+  immediate: true,
+})
+const visibleColumns = computed(() => tableSettings.visibleColumns.value)
+const operationActionCount = 3
+const operationColumnWidth = getAppFigmaActionColumnWidth(operationActionCount)
+const tableColumnWidths = computed<Record<string, number>>(() => {
+  const columns = visibleColumns.value
+  const baseWidth = columns.reduce((width, column) => width + (column.width || column.minWidth || 120), 0)
+  const availableWidth = Math.max(baseWidth, tableFrameWidth.value - operationColumnWidth - 2)
+  let allocatedWidth = 0
+
+  return columns.reduce<Record<string, number>>((widths, column, index) => {
+    const columnBaseWidth = column.width || column.minWidth || 120
+    const width = index === columns.length - 1
+      ? availableWidth - allocatedWidth
+      : Math.round(availableWidth * columnBaseWidth / baseWidth)
+    widths[column.key] = width
+    allocatedWidth += width
+    return widths
+  }, {})
+})
+const tableContentWidth = computed(() => Object.values(tableColumnWidths.value).reduce(
+  (width, columnWidth) => width + columnWidth,
+  operationColumnWidth,
+))
+const tableNeedsScroll = computed(() => Boolean(
+  tableFrameWidth.value && tableContentWidth.value > tableFrameWidth.value,
+))
+
+function getTableColumnWidth(column: AppTableColumnDefinition) {
+  return tableColumnWidths.value[column.key] || column.width || column.minWidth || 120
+}
 
 const filteredRecords = computed(() => {
   const nextKeyword = keyword.value.trim().toLowerCase()
@@ -149,22 +172,6 @@ const stats = computed(() => ({
   running: records.value.filter(item => runningStatuses.includes(item.status)).length,
   failed: records.value.filter(item => item.status === 'FAILED').length,
 }))
-
-const orderedColumns = computed(() => columnOrder.value
-  .map(key => tableColumns.find(column => column.key === key))
-  .filter((column): column is ColumnDefinition => Boolean(column)))
-
-const visibleColumns = computed(() => orderedColumns.value.filter(column => (
-  column.required || Boolean(columnVisibility.value[column.key])
-)))
-
-const drawerColumns = computed(() => orderedColumns.value.map(column => ({
-  key: column.key,
-  label: column.label,
-  required: Boolean(column.required),
-  visible: column.required ? true : Boolean(columnVisibility.value[column.key]),
-  draggable: !column.required,
-})))
 
 const adoptableCases = computed(() => {
   if (!adoptRecord.value) {
@@ -238,151 +245,15 @@ const selectedAdoptPathPickerLabel = computed(() => {
   return path && activeRecordWorkspaceName.value ? `${activeRecordWorkspaceName.value} / ${path}` : path
 })
 
-function getDefaultColumnOrder() {
-  const required = tableColumns.filter(column => column.required).map(column => column.key)
-  const optional = tableColumns.filter(column => !column.required).map(column => column.key)
-  return [...required, ...optional]
-}
-
-function normalizeColumnOrder(nextOrder?: ColumnKey[]) {
-  const requiredKeys = tableColumns.filter(column => column.required).map(column => column.key)
-  const optionalKeys = tableColumns.filter(column => !column.required).map(column => column.key)
-  const preferredOptionalOrder = (nextOrder ?? []).filter(key => optionalKeys.includes(key))
-  const remainingOptionalKeys = optionalKeys.filter(key => !preferredOptionalOrder.includes(key))
-  return [...requiredKeys, ...preferredOptionalOrder, ...remainingOptionalKeys]
-}
-
-function buildDefaultColumnVisibility() {
-  return tableColumns.reduce<Partial<Record<ColumnKey, boolean>>>((result, column) => {
-    result[column.key] = column.required ? true : Boolean(column.defaultVisible)
-    return result
-  }, {})
-}
-
-function persistTableSettings() {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const payload: PersistedTableSettings = {
-    columnVisibility: columnVisibility.value,
-    columnOrder: columnOrder.value,
-  }
-  window.localStorage.setItem(TABLE_SETTINGS_STORAGE_KEY, JSON.stringify(payload))
-}
-
-function loadTableSettings() {
-  const defaultOrder = getDefaultColumnOrder()
-  const defaultVisibility = buildDefaultColumnVisibility()
-
-  if (typeof window === 'undefined') {
-    columnOrder.value = defaultOrder
-    columnVisibility.value = defaultVisibility
-    return
-  }
-
-  const raw = window.localStorage.getItem(TABLE_SETTINGS_STORAGE_KEY)
-  if (!raw) {
-    columnOrder.value = defaultOrder
-    columnVisibility.value = defaultVisibility
-    return
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as PersistedTableSettings
-    columnOrder.value = normalizeColumnOrder(parsed.columnOrder)
-    columnVisibility.value = tableColumns.reduce<Partial<Record<ColumnKey, boolean>>>((result, column) => {
-      result[column.key] = column.required
-        ? true
-        : (parsed.columnVisibility?.[column.key] ?? Boolean(column.defaultVisible))
-      return result
-    }, {})
-  } catch {
-    columnOrder.value = defaultOrder
-    columnVisibility.value = defaultVisibility
-  }
-}
-
-function resetTableSettings() {
-  columnOrder.value = getDefaultColumnOrder()
-  columnVisibility.value = buildDefaultColumnVisibility()
-  persistTableSettings()
-}
-
-function isColumnKey(key: string): key is ColumnKey {
-  return tableColumns.some(column => column.key === key)
-}
-
-function toggleColumnVisibility(key: string, value: boolean | string | number) {
-  if (!isColumnKey(key)) {
-    return
-  }
-  const column = tableColumns.find(item => item.key === key)
-  if (!column || column.required) {
-    return
-  }
-  columnVisibility.value = {
-    ...columnVisibility.value,
-    [key]: Boolean(value),
-  }
-  persistTableSettings()
-}
-
-function handleDragStart(key: string) {
-  if (!isColumnKey(key)) {
-    return
-  }
-  const column = tableColumns.find(item => item.key === key)
-  if (!column || column.required) {
-    return
-  }
-  draggingColumnKey.value = key
-}
-
-function handleDragEnd() {
-  draggingColumnKey.value = null
-}
-
-function moveColumnToTarget(targetKey: string) {
-  if (!isColumnKey(targetKey)) {
-    return
-  }
-
-  const sourceKey = draggingColumnKey.value
-  if (!sourceKey || sourceKey === targetKey) {
-    return
-  }
-
-  const sourceColumn = tableColumns.find(item => item.key === sourceKey)
-  const targetColumn = tableColumns.find(item => item.key === targetKey)
-  if (!sourceColumn || !targetColumn || sourceColumn.required || targetColumn.required) {
-    return
-  }
-
-  const nextOrder = [...columnOrder.value]
-  const sourceIndex = nextOrder.indexOf(sourceKey)
-  const targetIndex = nextOrder.indexOf(targetKey)
-  if (sourceIndex < 0 || targetIndex < 0) {
-    return
-  }
-
-  const [moved] = nextOrder.splice(sourceIndex, 1)
-  nextOrder.splice(targetIndex, 0, moved)
-  columnOrder.value = normalizeColumnOrder(nextOrder)
-  draggingColumnKey.value = null
-  persistTableSettings()
-}
-
 function saveCurrentContext() {
+  const drawerColumns = tableSettings.drawerColumns.value
   saveCaseAiRecordListContext({
     workspaceCode: resolvedWorkspaceCode.value,
     statusFilter: statusFilter.value,
     pageNo: pageNo.value,
     pageSize: pageSize.value,
-    columnOrder: [...columnOrder.value],
-    columnVisibility: Object.fromEntries(
-      Object.entries(columnVisibility.value).map(([key, value]) => [key, Boolean(value)]),
-    ),
+    columnOrder: drawerColumns.map(column => column.key),
+    columnVisibility: Object.fromEntries(drawerColumns.map(column => [column.key, column.visible])),
   })
 }
 
@@ -395,19 +266,6 @@ function restoreListContext() {
   statusFilter.value = context.statusFilter || ''
   pageNo.value = context.pageNo > 0 ? context.pageNo : 1
   pageSize.value = PAGE_SIZE_OPTIONS.includes(context.pageSize) ? context.pageSize : 10
-  if (context.columnOrder.length) {
-    columnOrder.value = normalizeColumnOrder(context.columnOrder.filter(isColumnKey))
-  }
-  if (Object.keys(context.columnVisibility).length) {
-    columnVisibility.value = {
-      ...columnVisibility.value,
-      ...Object.fromEntries(
-        Object.entries(context.columnVisibility)
-          .filter(([key]) => isColumnKey(key))
-          .map(([key, value]) => [key as ColumnKey, Boolean(value)]),
-      ),
-    }
-  }
 }
 
 function formatFigmaDateTime(value?: string | null) {
@@ -420,6 +278,54 @@ function formatFigmaDateTime(value?: string | null) {
   }
   const pad = (num: number) => String(num).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function formatRecordColumnValue(record: AiGenerationTaskItem, key: string) {
+  switch (key) {
+    case 'taskId':
+      return record.taskId
+    case 'requirementTitle':
+      return record.requirementTitle || '-'
+    case 'status':
+      return getStatusLabel(record.status)
+    case 'generatedCount':
+      return record.generatedCount ?? '—'
+    case 'reviewedCount':
+      return getRecordReviewedCount(record)
+    case 'savedCaseCount':
+      return getRecordAdoptedCount(record)
+    case 'model':
+      return record.model || 'gpt-4o'
+    case 'createdAt':
+      return formatFigmaDateTime(record.createdAt)
+    case 'createdByName':
+      return record.createdByName || '-'
+    case 'workspaceName':
+      return record.workspaceName || record.workspaceCode || '-'
+    case 'outputMode':
+      return record.outputMode === 'STREAM' ? '实时流式输出' : '完整输出'
+    case 'updatedAt':
+      return formatFigmaDateTime(record.updatedAt)
+    case 'updatedByName':
+      return record.updatedByName || '-'
+    case 'directoryName':
+      return getDefaultDirectoryPath(record)
+    default:
+      return '-'
+  }
+}
+
+function handlePageChange(value: number) {
+  pageNo.value = value
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value
+  pageNo.value = 1
+}
+
+function openColumnSettings() {
+  tableSettings.open()
 }
 
 function getStatusLabel(status: TaskStatus) {
@@ -732,7 +638,7 @@ watch(filteredRecords, () => {
 })
 
 watch(
-  () => [resolvedWorkspaceCode.value, statusFilter.value, pageNo.value, pageSize.value, columnOrder.value.join(','), JSON.stringify(columnVisibility.value)],
+  () => [resolvedWorkspaceCode.value, statusFilter.value, pageNo.value, pageSize.value],
   () => {
     saveCurrentContext()
   },
@@ -745,13 +651,26 @@ watch(resolvedWorkspaceCode, () => {
 })
 
 onMounted(() => {
-  loadTableSettings()
   restoreListContext()
   void loadRecords()
 })
 
+watch(tableFrameRef, (element) => {
+  tableFrameObserver?.disconnect()
+  tableFrameObserver = null
+  if (!element) return
+
+  const syncWidth = () => {
+    tableFrameWidth.value = element.clientWidth
+  }
+  syncWidth()
+  tableFrameObserver = new ResizeObserver(syncWidth)
+  tableFrameObserver.observe(element)
+})
+
 onBeforeUnmount(() => {
   stopPolling()
+  tableFrameObserver?.disconnect()
 })
 </script>
 
@@ -814,69 +733,96 @@ onBeforeUnmount(() => {
         </AppEmptyState>
       </div>
 
-      <div v-else-if="records.length" class="case-ai-records-page__table-shell">
-        <div class="case-ai-records-page__figma-table">
-          <div class="case-ai-records-page__figma-header">
-            <span>任务 ID</span>
-            <span>对应需求</span>
-            <span>状态</span>
-            <span>生成数量</span>
-            <span>已评审</span>
-            <span>已采纳</span>
-            <span>生成模型</span>
-            <span>生成时间</span>
-            <span>操作人</span>
-            <span>操作</span>
-          </div>
-
-          <div
-            v-for="record in pagedRecords"
-            :key="record.taskId"
-            class="case-ai-records-page__figma-row"
+      <div v-else-if="records.length" ref="tableFrameRef" class="case-ai-records-page__table-shell">
+        <AppFigmaTable
+          class="case-ai-records-page__figma-table"
+          :data="pagedRecords"
+          :loading="loading"
+          :page-no="pageNo"
+          :page-size="pageSize"
+          :page-sizes="PAGE_SIZE_OPTIONS"
+          :total="total"
+          show-page-size
+          show-jumper
+          :header-height="51"
+          :row-height="46"
+          :footer-height="43"
+          row-key="taskId"
+          empty-text="当前筛选条件下暂无生成任务"
+          @page-change="handlePageChange"
+          @page-size-change="handlePageSizeChange"
+        >
+          <el-table-column
+            v-for="column in visibleColumns"
+            :key="column.key"
+            :label="column.label"
+            :width="getTableColumnWidth(column)"
+            :align="centeredColumnKeys.has(column.key) ? 'center' : 'left'"
+            :header-align="centeredColumnKeys.has(column.key) ? 'center' : 'left'"
           >
-            <span class="case-ai-records-page__task-id">{{ record.taskId }}</span>
-            <button
-              type="button"
-              class="case-ai-records-page__requirement-title"
-              :title="record.requirementTitle"
-              @click="openDetailPage(record)"
-            >
-              {{ record.requirementTitle }}
-            </button>
-            <span class="case-ai-records-page__status-pill" :class="getStatusClass(record.status)">
-              {{ getStatusLabel(record.status) }}
-            </span>
-            <span class="case-ai-records-page__number-cell">{{ record.generatedCount ?? '—' }}</span>
-            <span class="case-ai-records-page__number-cell">{{ getRecordReviewedCount(record) }}</span>
-            <span class="case-ai-records-page__number-cell is-adopted">{{ getRecordAdoptedCount(record) }}</span>
-            <span class="case-ai-records-page__model-cell">{{ record.model || 'gpt-4o' }}</span>
-            <span class="case-ai-records-page__time-cell">{{ formatFigmaDateTime(record.createdAt) }}</span>
-            <span class="case-ai-records-page__operator-cell">{{ record.createdByName || '-' }}</span>
-            <span class="case-ai-records-page__icon-actions">
-              <button type="button" class="case-ai-records-page__icon-action" aria-label="查看详情" @click="openDetailPage(record)">
-                <img :src="figmaCaseIcons.action.view" alt="">
+            <template #default="{ row: record }">
+              <span v-if="column.key === 'taskId'" class="case-ai-records-page__task-id">
+                {{ formatRecordColumnValue(record, column.key) }}
+              </span>
+              <button
+                v-else-if="column.key === 'requirementTitle'"
+                type="button"
+                class="case-ai-records-page__requirement-title"
+                :title="record.requirementTitle"
+                @click.stop="openDetailPage(record)"
+              >
+                {{ formatRecordColumnValue(record, column.key) }}
               </button>
-              <button type="button" class="case-ai-records-page__icon-action" aria-label="查看流程" @click="openProcessDialog(record)">
-                <img :src="figmaCaseIcons.action.run" alt="">
-              </button>
-              <button type="button" class="case-ai-records-page__icon-action" aria-label="删除" @click="deleteTask(record)">
-                <img :src="figmaCaseIcons.action.delete" alt="">
-              </button>
-            </span>
-          </div>
-        </div>
+              <span
+                v-else-if="column.key === 'status'"
+                class="case-ai-records-page__status-pill"
+                :class="getStatusClass(record.status)"
+              >
+                {{ formatRecordColumnValue(record, column.key) }}
+              </span>
+              <span
+                v-else-if="column.key === 'generatedCount' || column.key === 'reviewedCount' || column.key === 'savedCaseCount'"
+                class="case-ai-records-page__number-cell"
+                :class="{ 'is-adopted': column.key === 'savedCaseCount' }"
+              >
+                {{ formatRecordColumnValue(record, column.key) }}
+              </span>
+              <span v-else-if="column.key === 'model'" class="case-ai-records-page__model-cell">
+                {{ formatRecordColumnValue(record, column.key) }}
+              </span>
+              <span v-else-if="column.key === 'createdAt' || column.key === 'updatedAt'" class="case-ai-records-page__time-cell">
+                {{ formatRecordColumnValue(record, column.key) }}
+              </span>
+              <span v-else-if="column.key === 'createdByName'" class="case-ai-records-page__operator-cell">
+                {{ formatRecordColumnValue(record, column.key) }}
+              </span>
+              <span v-else class="case-ai-records-page__muted-text">
+                {{ formatRecordColumnValue(record, column.key) }}
+              </span>
+            </template>
+          </el-table-column>
 
-        <div class="case-ai-records-page__pagination">
-          <div class="case-ai-records-page__pagination-summary">共 {{ total }} 条</div>
-          <el-pagination
-            v-model:current-page="pageNo"
-            v-model:page-size="pageSize"
-            :pager-count="7"
-            size="small"
-            layout="prev, pager, next"
-            :total="total"
-          />
-        </div>
+          <AppFigmaActionColumn
+            :action-count="operationActionCount"
+            :width="operationColumnWidth"
+            :scroll-shadow="tableNeedsScroll"
+          >
+            <template #settings>
+              <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openColumnSettings" />
+            </template>
+            <template #default="{ row: record }">
+              <button type="button" aria-label="查看详情" title="查看详情" @click.stop="openDetailPage(record)">
+                <img class="case-ai-records-page__action-icon" :src="figmaCaseIcons.action.view" alt="">
+              </button>
+              <button type="button" aria-label="查看流程" title="查看流程" @click.stop="openProcessDialog(record)">
+                <img class="case-ai-records-page__action-icon" :src="figmaCaseIcons.action.run" alt="">
+              </button>
+              <button type="button" data-danger="true" aria-label="删除" title="删除" @click.stop="deleteTask(record)">
+                <img class="case-ai-records-page__action-icon" :src="figmaCaseIcons.action.delete" alt="">
+              </button>
+            </template>
+          </AppFigmaActionColumn>
+        </AppFigmaTable>
       </div>
 
       <div v-else class="case-ai-records-page__state">
@@ -901,14 +847,17 @@ onBeforeUnmount(() => {
     </div>
 
     <AppTableColumnSettingsDrawer
-      v-model="settingsVisible"
-      :columns="drawerColumns"
-      :dragging-key="draggingColumnKey"
-      @toggle-column="toggleColumnVisibility"
-      @drag-start="handleDragStart"
-      @drag-end="handleDragEnd"
-      @drop-column="moveColumnToTarget"
-      @reset="resetTableSettings"
+      :model-value="tableSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
+      :columns="tableSettings.drawerColumns.value"
+      :dragging-key="tableSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) tableSettings.cancel() }"
+      @toggle-column="tableSettings.toggleColumn"
+      @drag-start="tableSettings.dragStart"
+      @drag-end="tableSettings.dragEnd"
+      @drop-column="tableSettings.dropColumn"
+      @reset="tableSettings.resetDraft"
     />
 
     <AiGenerationLiveLogDialog
@@ -1193,10 +1142,37 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-records-page__figma-table {
+  --app-figma-table-border: 1px solid #e5e6eb;
+  --app-figma-table-radius: 0;
+  --app-figma-table-shadow: none;
+  --app-figma-table-background: #ffffff;
+  --app-figma-table-header-background: #fafafa;
+  --app-figma-table-header-color: #4e5969;
+  --app-figma-table-header-font-size: 11px;
+  --app-figma-table-header-font-weight: 600;
+  --app-figma-table-header-letter-spacing: 0;
+  --app-figma-table-header-line-height: 16.5px;
+  --app-figma-table-text-color: #1d2129;
+  --app-figma-table-font-size: 13px;
+  --app-figma-table-line-height: 19.5px;
+  --app-figma-table-cell-padding: 14px;
+  --app-figma-table-row-hover-background: #ffffff;
+  --app-figma-table-muted-color: #86909c;
+  --app-figma-table-primary-color: #165dff;
   width: 100%;
   border: 1px solid #e5e6eb;
   background: #fff;
   overflow: hidden;
+  font-family: var(--app-font-family);
+}
+
+.case-ai-records-page__figma-table :deep(.el-table__fixed-right-patch) {
+  background: #fafafa;
+}
+
+.case-ai-records-page__figma-table :deep(.app-figma-pagination .el-select__wrapper),
+.case-ai-records-page__figma-table :deep(.app-figma-pagination .el-input__wrapper) {
+  min-height: 24.5px;
 }
 
 .case-ai-records-page__figma-header,
@@ -1360,11 +1336,19 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-records-page__number-cell {
-  justify-self: center;
+  display: block;
+  width: 100%;
   color: #1d2129;
   font-size: 13px;
   line-height: 19.5px;
   text-align: center;
+}
+
+.case-ai-records-page__action-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
 }
 
 .case-ai-records-page__number-cell.is-adopted {

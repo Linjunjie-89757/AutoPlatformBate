@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import {
   aiProviderApi,
   type AiProviderConnectionItem,
+  type AiProviderModelItem,
   type AiProviderTestResult,
   type AiProviderType,
   type SaveAiProviderConnectionPayload,
@@ -21,11 +22,10 @@ import {
   capabilityVisuals,
   createStatusPayload,
   formatAiTime,
-  getFallbackCapabilities,
-  getFallbackUsages,
   getProviderType,
   getProviderVisual,
   providerPickerOrder,
+  type AiCapability,
 } from './model'
 
 const props = withDefaults(defineProps<{
@@ -49,86 +49,14 @@ const editMode = ref<'create' | 'edit'>('create')
 const selectedProviderType = ref<AiProviderType>('openai')
 const editingProvider = ref<AiProviderConnectionItem | null>(null)
 const modelProvider = ref<AiProviderConnectionItem | null>(null)
+const providerCapabilities = ref<Record<number, AiCapability[]>>({})
 const testResult = ref<AiProviderTestResult | null>(null)
 const testResultModelName = ref('')
-const testResultLatency = ref('679 ms')
-
-const figmaSampleProviders: AiProviderConnectionItem[] = [
-  {
-    id: -1,
-    workspaceCode: props.workspaceCode,
-    workspaceName: 'Figma',
-    providerType: 'openai',
-    connectionName: 'GPT-4o 生成连接',
-    protocolType: 'OPENAI_COMPATIBLE_CHAT',
-    baseUrl: 'https://api.openai.com/v1',
-    requestTimeoutSeconds: 30,
-    modelName: 'gpt-4o',
-    apiKeyMasked: 'sk-****',
-    apiKeyConfigured: true,
-    status: 1,
-    modelCount: 3,
-    lastVerifiedAt: '2026-07-07 09:30',
-    lastFetchModelsAt: null,
-  },
-  {
-    id: -2,
-    workspaceCode: props.workspaceCode,
-    workspaceName: 'Figma',
-    providerType: 'anthropic',
-    connectionName: 'Claude 3.5 评审连接',
-    protocolType: 'OPENAI_COMPATIBLE_CHAT',
-    baseUrl: 'https://api.anthropic.com',
-    requestTimeoutSeconds: 60,
-    modelName: 'claude-3-5-sonnet-20241022',
-    apiKeyMasked: 'sk-****',
-    apiKeyConfigured: true,
-    status: 1,
-    modelCount: 2,
-    lastVerifiedAt: '2026-07-07 08:45',
-    lastFetchModelsAt: null,
-  },
-  {
-    id: -3,
-    workspaceCode: props.workspaceCode,
-    workspaceName: 'Figma',
-    providerType: 'qwen',
-    connectionName: '通义千问-Max',
-    protocolType: 'OPENAI_COMPATIBLE_CHAT',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    requestTimeoutSeconds: 30,
-    modelName: 'qwen-max',
-    apiKeyMasked: null,
-    apiKeyConfigured: false,
-    status: 0,
-    modelCount: 1,
-    lastVerifiedAt: '2026-07-06 15:22',
-    lastFetchModelsAt: null,
-  },
-  {
-    id: -4,
-    workspaceCode: props.workspaceCode,
-    workspaceName: 'Figma',
-    providerType: 'deepseek',
-    connectionName: 'DeepSeek 本地部署',
-    protocolType: 'OPENAI_COMPATIBLE_CHAT',
-    baseUrl: 'http://10.0.1.50:8080/v1',
-    requestTimeoutSeconds: 120,
-    modelName: 'deepseek-chat',
-    apiKeyMasked: 'sk-****',
-    apiKeyConfigured: true,
-    status: 0,
-    modelCount: 1,
-    lastVerifiedAt: null,
-    lastFetchModelsAt: null,
-  },
-]
-
-const displayProviders = computed(() => providers.value.length ? providers.value : figmaSampleProviders)
+const testResultLatency = ref('-')
 
 const filteredProviders = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
-  return displayProviders.value.filter((provider) => {
+  return providers.value.filter((provider) => {
     if (keyword && !provider.connectionName.toLowerCase().includes(keyword)) return false
     if (providerFilter.value !== 'all' && getProviderType(provider) !== providerFilter.value) return false
     if (statusFilter.value === 'normal') return provider.status === 1
@@ -139,7 +67,7 @@ const filteredProviders = computed(() => {
 })
 
 const stats = computed(() => {
-  const items = displayProviders.value
+  const items = providers.value
   return [
     { label: '连接总数', value: items.length, color: '#1D2129', bg: '#F2F3F5' },
     { label: '正常连接', value: items.filter(item => item.status === 1).length, color: '#00B42A', bg: '#E8FFEA' },
@@ -149,34 +77,58 @@ const stats = computed(() => {
 })
 
 const warningText = computed(() => {
-  const missingKey = displayProviders.value.filter(item => !item.apiKeyConfigured).length
-  const errorCount = displayProviders.value.filter(item => item.status === 0 && !item.apiKeyConfigured).length
+  const missingKey = providers.value.filter(item => !item.apiKeyConfigured).length
+  const errorCount = providers.value.filter(item => item.status === 0 && !item.apiKeyConfigured).length
   if (!missingKey && !errorCount) return ''
   return `${missingKey} 个连接未配置 API Key ${errorCount} 个连接状态异常`
 })
 
-const usageBindingRows = computed(() => {
-  const activeProviders = displayProviders.value.filter(provider => provider.status === 1)
-  const firstProvider = activeProviders[0] || displayProviders.value[0]
-  const secondProvider = activeProviders[1] || firstProvider
-  const option = (provider: AiProviderConnectionItem | undefined) => {
-    if (!provider) return ''
-    return `${provider.connectionName} / ${provider.modelName || '-'}`
-  }
-  return [
-    { key: 'case-gen', label: '用例生成', primary: option(firstProvider), backup: '' },
-    { key: 'case-review', label: '用例评审', primary: option(secondProvider), backup: option(firstProvider) },
-    { key: 'fail-analysis', label: '失败分析', primary: option(secondProvider), backup: '' },
-    { key: 'element-id', label: '元素识别', primary: option(firstProvider), backup: '' },
-    { key: 'assert-suggest', label: '断言建议', primary: option(firstProvider), backup: option(secondProvider) },
-  ]
-})
+const usageBindingRows = [
+  { key: 'case-gen', label: '用例生成', primary: '', backup: '' },
+  { key: 'case-review', label: '用例评审', primary: '', backup: '' },
+  { key: 'fail-analysis', label: '失败分析', primary: '', backup: '' },
+  { key: 'element-id', label: '元素识别', primary: '', backup: '' },
+  { key: 'assert-suggest', label: '断言建议', primary: '', backup: '' },
+]
+
+function isSupportedCapability(value: unknown) {
+  if (value === true) return true
+  if (!value || typeof value !== 'object') return false
+  return (value as { supported?: unknown }).supported === true
+}
+
+function collectProviderCapabilities(models: AiProviderModelItem[]) {
+  const result = new Set<AiCapability>()
+  models.forEach((model) => {
+    if (!model.detectedCapabilities || typeof model.detectedCapabilities !== 'object') return
+    const capabilities = model.detectedCapabilities as Record<string, unknown>
+    if (isSupportedCapability(capabilities.textChat)) result.add('text')
+    if (isSupportedCapability(capabilities.imageInput)) result.add('vision')
+    if (isSupportedCapability(capabilities.longContext)) result.add('long-ctx')
+    if (isSupportedCapability(capabilities.structuredOutput)) result.add('json')
+  })
+  return Array.from(result)
+}
+
+async function loadProviderCapabilities(items: AiProviderConnectionItem[]) {
+  const entries = await Promise.all(items.map(async (provider) => {
+    try {
+      const models = await aiProviderApi.getProviderModels(props.workspaceCode, provider.id)
+      return [provider.id, collectProviderCapabilities(models)] as const
+    } catch {
+      return [provider.id, []] as const
+    }
+  }))
+  providerCapabilities.value = Object.fromEntries(entries)
+}
 
 async function loadProviders() {
   loading.value = true
   errorMessage.value = ''
   try {
-    providers.value = await aiProviderApi.getProviderConnections(props.workspaceCode)
+    const items = await aiProviderApi.getProviderConnections(props.workspaceCode)
+    providers.value = items
+    await loadProviderCapabilities(items)
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
@@ -202,10 +154,6 @@ function backToProviderPicker() {
 }
 
 function openEdit(provider: AiProviderConnectionItem) {
-  if (provider.id < 0) {
-    ElMessage.info('当前为 Figma 示例数据，暂不能编辑')
-    return
-  }
   editingProvider.value = provider
   selectedProviderType.value = getProviderType(provider)
   editMode.value = 'edit'
@@ -232,38 +180,84 @@ async function saveProvider(payload: SaveAiProviderConnectionPayload) {
 }
 
 async function testProvider(provider: AiProviderConnectionItem | null = editingProvider.value) {
-  if (!provider || provider.id < 0) {
-    testResult.value = {
-      success: true,
-      connectionId: provider?.id || 0,
-      connectionName: provider?.connectionName || 'GPT-4o 生成连接',
-      protocolType: provider?.protocolType || 'OPENAI_COMPATIBLE_CHAT',
-      message: 'API 正常响应，连接可用',
-      verifiedAt: '2026/7/9 17:24:13',
-    }
-    testResultModelName.value = provider?.modelName || 'gpt-4o'
-    testResultLatency.value = '679 ms'
-    return
-  }
+  if (!provider) return
   testingId.value = provider.id
+  const startedAt = performance.now()
   try {
     const result = await aiProviderApi.testProviderConnection(props.workspaceCode, provider.id)
     testResult.value = result
     testResultModelName.value = provider.modelName || '-'
-    testResultLatency.value = result.success ? '679 ms' : '-'
+    testResultLatency.value = `${Math.max(1, Math.round(performance.now() - startedAt))} ms`
     await loadProviders()
   } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
+    testResult.value = {
+      success: false,
+      connectionId: provider.id,
+      connectionName: provider.connectionName,
+      protocolType: provider.protocolType,
+      message: getRequestErrorMessage(error),
+      verifiedAt: new Date().toISOString(),
+    }
+    testResultModelName.value = provider.modelName || '-'
+    testResultLatency.value = `${Math.max(1, Math.round(performance.now() - startedAt))} ms`
+    await loadProviders()
+  } finally {
+    testingId.value = null
+  }
+}
+
+async function testProviderDraft(payload: SaveAiProviderConnectionPayload) {
+  if (editingProvider.value && !payload.apiKey) {
+    const changed = payload.baseUrl !== editingProvider.value.baseUrl
+      || payload.protocolType !== editingProvider.value.protocolType
+      || payload.modelName !== editingProvider.value.modelName
+    if (changed) {
+      ElMessage.warning('未填写新 API Key，当前只能测试已保存配置，未保存修改不会参与本次测试')
+    }
+    await testProvider(editingProvider.value)
+    return
+  }
+  if (!payload.apiKey) {
+    ElMessage.warning('请先填写 API Key，再测试当前配置')
+    return
+  }
+
+  testingId.value = editingProvider.value?.id ?? 0
+  const startedAt = performance.now()
+  try {
+    const result = await aiProviderApi.previewProviderModels(props.workspaceCode, {
+      protocolType: payload.protocolType,
+      baseUrl: payload.baseUrl,
+      requestTimeoutSeconds: payload.requestTimeoutSeconds,
+      apiKey: payload.apiKey,
+    })
+    testResult.value = {
+      success: true,
+      connectionId: editingProvider.value?.id ?? 0,
+      connectionName: payload.connectionName || '未保存连接',
+      protocolType: payload.protocolType,
+      message: result.message || `已从服务商获取 ${result.models.length} 个模型，当前配置可访问`,
+      verifiedAt: result.fetchedAt || new Date().toISOString(),
+    }
+    testResultModelName.value = payload.modelName || result.models[0]?.modelName || '-'
+    testResultLatency.value = `${Math.max(1, Math.round(performance.now() - startedAt))} ms`
+  } catch (error) {
+    testResult.value = {
+      success: false,
+      connectionId: editingProvider.value?.id ?? 0,
+      connectionName: payload.connectionName || '未保存连接',
+      protocolType: payload.protocolType,
+      message: getRequestErrorMessage(error),
+      verifiedAt: new Date().toISOString(),
+    }
+    testResultModelName.value = payload.modelName || '-'
+    testResultLatency.value = `${Math.max(1, Math.round(performance.now() - startedAt))} ms`
   } finally {
     testingId.value = null
   }
 }
 
 async function toggleProvider(provider: AiProviderConnectionItem) {
-  if (provider.id < 0) {
-    ElMessage.info('当前为 Figma 示例数据，暂不能启停')
-    return
-  }
   try {
     const nextStatus = provider.status === 1 ? 0 : 1
     await aiProviderApi.updateProviderStatus(props.workspaceCode, provider.id, createStatusPayload(provider, nextStatus))
@@ -275,10 +269,6 @@ async function toggleProvider(provider: AiProviderConnectionItem) {
 }
 
 async function deleteProvider(provider: AiProviderConnectionItem) {
-  if (provider.id < 0) {
-    ElMessage.info('当前为 Figma 示例数据，暂不能删除')
-    return
-  }
   try {
     await confirmDelete({
       title: '删除 AI 连接',
@@ -296,16 +286,11 @@ async function deleteProvider(provider: AiProviderConnectionItem) {
 }
 
 function openModels(provider: AiProviderConnectionItem) {
-  if (provider.id < 0) {
-    ElMessage.info('当前为 Figma 示例数据，模型管理暂不可用')
-    return
-  }
   modelProvider.value = provider
 }
 
-function getReviewModel(provider: AiProviderConnectionItem) {
-  if (getProviderType(provider) === 'openai') return 'gpt-4o-mini'
-  return provider.modelName || '-'
+function getReviewModel(_provider: AiProviderConnectionItem) {
+  return '—'
 }
 
 function getStatusMeta(provider: AiProviderConnectionItem) {
@@ -316,10 +301,12 @@ function getStatusMeta(provider: AiProviderConnectionItem) {
 
 function getLastTestMeta(provider: AiProviderConnectionItem) {
   if (!provider.lastVerifiedAt) return { main: '从未测试', sub: '', failed: false }
-  if (provider.status === 0 && !provider.apiKeyConfigured) {
-    return { main: '✗ 失败', sub: formatAiTime(provider.lastVerifiedAt), failed: true }
-  }
-  return { main: provider.id === -2 ? '✓ 891ms' : '✓ 342ms', sub: formatAiTime(provider.lastVerifiedAt), failed: false }
+  return { main: '✓ 成功', sub: formatAiTime(provider.lastVerifiedAt), failed: false }
+}
+
+async function handleModelProviderChanged(provider: AiProviderConnectionItem) {
+  await loadProviders()
+  modelProvider.value = providers.value.find(item => item.id === provider.id) || provider
 }
 
 watch(
@@ -438,7 +425,7 @@ onMounted(() => {
               <td>
                 <div class="config-ai-chips">
                   <span
-                    v-for="capability in getFallbackCapabilities(provider)"
+                    v-for="capability in providerCapabilities[provider.id]"
                     :key="capability"
                     :style="{
                       color: capabilityVisuals[capability].color,
@@ -447,13 +434,11 @@ onMounted(() => {
                   >
                     {{ capabilityVisuals[capability].label }}
                   </span>
+                  <span v-if="!providerCapabilities[provider.id]?.length" class="config-ai-muted">未探测</span>
                 </div>
               </td>
               <td>
-                <span v-if="getFallbackUsages(provider).length" class="config-ai-usage-badge">
-                  {{ getFallbackUsages(provider).length }} 个用途
-                </span>
-                <span v-else class="config-ai-muted">未绑定</span>
+                <span class="config-ai-muted">未绑定</span>
               </td>
               <td>
                 <span class="config-ai-status" :style="{ color: getStatusMeta(provider).color }">
@@ -486,6 +471,9 @@ onMounted(() => {
                   </button>
                 </div>
               </td>
+            </tr>
+            <tr v-if="!filteredProviders.length">
+              <td class="config-ai-table__empty" colspan="9">暂无 AI 连接</td>
             </tr>
           </tbody>
         </table>
@@ -558,17 +546,18 @@ onMounted(() => {
       :provider-type="selectedProviderType"
       :provider="editingProvider"
       :saving="saving"
-      :testing="testingId === editingProvider?.id"
+      :testing="testingId !== null"
       @close="editVisible = false"
       @back-to-picker="backToProviderPicker"
       @save="saveProvider"
-      @test="testProvider(editingProvider)"
+      @test="testProviderDraft"
     />
     <ConfigAiModelDrawer
       v-if="modelProvider"
       :workspace-code="workspaceCode"
       :provider="modelProvider"
       @close="modelProvider = null"
+      @changed="handleModelProviderChanged"
     />
     <ConfigAiTestResultDialog
       v-if="testResult"

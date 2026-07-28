@@ -6,12 +6,17 @@ import {
 } from '@/entities/config'
 
 export type ConfigParamDialogMode = 'create' | 'edit'
+export type ConfigVariableStage = 'COMMON' | 'DEV' | 'TEST' | 'STAGING' | 'PROD' | 'SANDBOX'
 
 export interface WebUiVariableItem {
   name: string
   value: string
   sensitive: boolean
   description: string
+  valueType?: 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'JSON' | 'SECRET'
+  scopeType?: 'ALL' | 'API' | 'WEB_UI' | 'APP'
+  stageType?: ConfigVariableStage
+  enabled?: boolean
 }
 
 export interface ConfigParamForm {
@@ -20,6 +25,7 @@ export interface ConfigParamForm {
   paramName: string
   value: string
   description: string
+  stageType: ConfigVariableStage
   sensitive: boolean
   variables: WebUiVariableItem[]
   status: ConfigStatus
@@ -32,6 +38,7 @@ export function createDefaultConfigParamForm(workspaceCode = 'ALL'): ConfigParam
     paramName: '',
     value: '',
     description: '',
+    stageType: 'COMMON',
     sensitive: false,
     variables: [createDefaultWebUiVariable()],
     status: 1,
@@ -48,40 +55,51 @@ export function createDefaultWebUiVariableSetForm(workspaceCode = 'ALL'): Config
 export function createConfigParamFormFromItem(item: ParamSetItem): ConfigParamForm {
   const content = parseParamContent(item.contentJson)
   const variables = parseWebUiVariables(item.contentJson)
+  const metadata = parseVariableSetMetadata(item.contentJson)
+  const variableCollectionDefined = hasVariableCollection(item.contentJson)
 
   return {
     workspaceCode: item.workspaceCode || 'ALL',
     paramType: item.paramType || 'GLOBAL',
     paramName: item.paramName,
     value: content.value,
-    description: content.description,
+    description: metadata.description || content.description,
+    stageType: metadata.stageType,
     sensitive: content.sensitive,
     variables: variables.length > 0
       ? variables
-      : content.value
+      : !variableCollectionDefined && content.value
         ? [{
+            ...createDefaultWebUiVariable(),
             name: item.paramName || '',
             value: content.value,
             sensitive: content.sensitive,
             description: content.description,
           }]
-        : [createDefaultWebUiVariable()],
+        : [],
     status: item.status,
   }
 }
 
 export function buildCreateParamPayload(form: ConfigParamForm): CreateParamPayload {
   const contentJson = isVariableSetParamType(form.paramType)
-    ? JSON.stringify(
-        form.variables
+    ? JSON.stringify({
+        description: form.description.trim(),
+        stageType: form.stageType,
+        systemBuiltIn: form.paramType === 'GLOBAL',
+        variables: form.variables
           .map(variable => ({
             name: variable.name.trim(),
             value: variable.value,
             sensitive: variable.sensitive,
             description: variable.description.trim(),
+            valueType: variable.sensitive ? 'SECRET' : (variable.valueType || 'TEXT'),
+            scopeType: variable.scopeType || 'ALL',
+            stageType: variable.stageType || 'COMMON',
+            enabled: variable.enabled !== false,
           }))
           .filter(variable => variable.name),
-      )
+      })
     : JSON.stringify({
         value: form.value.trim(),
         description: form.description.trim(),
@@ -106,10 +124,6 @@ export function validateConfigParamForm(form: ConfigParamForm) {
   }
   if (isVariableSetParamType(form.paramType)) {
     const activeVariables = form.variables.filter(variable => variable.name.trim() || variable.value.trim())
-    if (activeVariables.length === 0) {
-      return '请至少添加一个变量'
-    }
-
     const names = new Set<string>()
     for (const variable of activeVariables) {
       const name = variable.name.trim()
@@ -140,6 +154,10 @@ export function createDefaultWebUiVariable(): WebUiVariableItem {
     value: '',
     sensitive: false,
     description: '',
+    valueType: 'TEXT',
+    scopeType: 'ALL',
+    stageType: 'COMMON',
+    enabled: true,
   }
 }
 
@@ -168,10 +186,31 @@ export function parseWebUiVariables(contentJson: string): WebUiVariableItem[] {
           : typeof item.desc === 'string'
             ? item.desc
             : '',
+        valueType: normalizeVariableValueType(item.valueType, item.sensitive === true || item.isSecret === true),
+        scopeType: normalizeVariableScope(item.scopeType),
+        stageType: normalizeVariableStage(item.stageType),
+        enabled: item.enabled !== false,
       }))
       .filter(item => item.name.trim())
   } catch {
     return []
+  }
+}
+
+export function parseVariableSetMetadata(contentJson: string) {
+  const raw = contentJson?.trim()
+  if (!raw) return { description: '', stageType: 'COMMON' as ConfigVariableStage }
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!isRecord(parsed) || Array.isArray(parsed)) {
+      return { description: '', stageType: 'COMMON' as ConfigVariableStage }
+    }
+    return {
+      description: typeof parsed.description === 'string' ? parsed.description : '',
+      stageType: normalizeVariableStage(parsed.stageType),
+    }
+  } catch {
+    return { description: '', stageType: 'COMMON' as ConfigVariableStage }
   }
 }
 
@@ -181,4 +220,36 @@ export function isVariableSetParamType(paramType: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function hasVariableCollection(contentJson: string) {
+  const raw = contentJson?.trim()
+  if (!raw) return false
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) || (isRecord(parsed) && Array.isArray(parsed.variables))
+  } catch {
+    return false
+  }
+}
+
+function normalizeVariableValueType(value: unknown, sensitive: boolean): NonNullable<WebUiVariableItem['valueType']> {
+  if (sensitive) return 'SECRET'
+  const normalized = typeof value === 'string' ? value.toUpperCase() : ''
+  if (normalized === 'NUMBER' || normalized === 'BOOLEAN' || normalized === 'JSON') return normalized
+  return 'TEXT'
+}
+
+function normalizeVariableScope(value: unknown): NonNullable<WebUiVariableItem['scopeType']> {
+  const normalized = typeof value === 'string' ? value.toUpperCase() : ''
+  if (normalized === 'API' || normalized === 'WEB_UI' || normalized === 'APP') return normalized
+  return 'ALL'
+}
+
+function normalizeVariableStage(value: unknown): ConfigVariableStage {
+  const normalized = typeof value === 'string' ? value.toUpperCase() : ''
+  if (normalized === 'DEV' || normalized === 'TEST' || normalized === 'STAGING' || normalized === 'PROD' || normalized === 'SANDBOX') {
+    return normalized
+  }
+  return 'COMMON'
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, type Component } from 'vue'
+import { computed, reactive, ref, watch, type Component } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   AlertTriangle,
   Building2,
@@ -23,6 +24,35 @@ import {
   X,
 } from '@lucide/vue'
 
+import { useSession } from '@/entities/session'
+import {
+  auditLogApi,
+  type OperationAuditCategory,
+  type OperationAuditLogItem,
+  type OperationAuditResult,
+} from '@/entities/audit-log'
+import { userApi, type UserItem } from '@/entities/user'
+import {
+  useWorkspaceContext,
+  workspaceApi,
+  type WorkspaceItem,
+  type WorkspaceMemberItem,
+} from '@/entities/workspace'
+import { getRequestErrorMessage } from '@/shared/api/error'
+import {
+  type AppTableColumnDefinition,
+  useLocalPagedTable,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
+import { confirmDelete } from '@/shared/ui'
+import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
+
 type SettingsPage = 'home' | 'workspace' | 'users' | 'roles' | 'perms' | 'audit'
 type UserStatus = 'active' | 'disabled'
 type PermState = Record<string, Record<string, boolean>>
@@ -38,8 +68,15 @@ interface NavSection {
   items: NavItem[]
 }
 
-interface SettingsUser {
+interface SettingsUser extends Record<string, unknown> {
   id: string
+  userId: number
+  memberId: number | null
+  username: string
+  email: string
+  platformRoleCode: string
+  workspaceRoleCode: string
+  workspaceCodes: string[]
   name: string
   account: string
   role: string
@@ -50,15 +87,16 @@ interface SettingsUser {
 
 interface SettingsRole {
   id: string
+  roleCode: 'ADMIN' | 'MEMBER'
   name: string
   desc: string
-  members: number
-  permCount: number
+  members: number | null
+  permCount: number | null
   updatedAt: string
   isSystem: boolean
 }
 
-interface AuditRecord {
+interface AuditRecord extends Record<string, unknown> {
   id: string
   time: string
   operator: string
@@ -66,6 +104,12 @@ interface AuditRecord {
   target: string
   ip: string
   result: 'success' | 'failed'
+  category: string
+  categoryCode: OperationAuditCategory
+  workspace: string
+  method: string
+  statusCode: string
+  duration: string
 }
 
 interface PermissionModule {
@@ -90,9 +134,14 @@ const palette = {
 }
 
 const activePage = ref<SettingsPage>('home')
+const { currentUser } = useSession()
+const { selectedWorkspaceCode } = useWorkspaceContext()
 const workspaceForm = reactive({
-  name: 'X-MAN',
+  name: '',
   description: '',
+  workspaceType: null as string | null,
+  ownerUserId: null as number | null,
+  status: null as number | null,
   environment: '测试环境',
   retentionDays: 90,
   notifyEnabled: true,
@@ -105,11 +154,17 @@ const statusFilter = ref('all')
 const inviteDialogVisible = ref(false)
 const editingUser = ref<SettingsUser | null>(null)
 const confirmToggleUser = ref<SettingsUser | null>(null)
-const roleDialogVisible = ref(false)
-const deletingRole = ref<SettingsRole | null>(null)
 const permissionRoleId = ref('R2')
-const permissionSaved = ref(false)
 const workspaceSaved = ref(false)
+const currentWorkspace = ref<WorkspaceItem | null>(null)
+const workspaceLoading = ref(false)
+const workspaceSaving = ref(false)
+const workspaceError = ref('')
+let workspaceRequestSeq = 0
+const usersLoading = ref(false)
+const usersError = ref('')
+const usersSaving = ref(false)
+let usersRequestSeq = 0
 
 const inviteForm = reactive({
   account: '',
@@ -120,34 +175,109 @@ const inviteForm = reactive({
   active: true,
 })
 
-const roleForm = reactive({
-  name: '',
-  desc: '',
+const users = ref<SettingsUser[]>([])
+
+const userTableColumns: AppTableColumnDefinition[] = [
+  { key: 'member', label: '成员', minWidth: 150, required: true, defaultVisible: true },
+  { key: 'account', label: '账号', minWidth: 250, defaultVisible: true },
+  { key: 'role', label: '角色', minWidth: 140, defaultVisible: true },
+  { key: 'status', label: '状态', minWidth: 108, defaultVisible: true },
+  { key: 'lastLogin', label: '最近登录', minWidth: 207, defaultVisible: true },
+]
+const userColumnSettings = useTableColumnSettings({
+  columns: userTableColumns,
+  storageKey: computed(() => [
+    'app-figma-table:system-users',
+    currentUser.value?.id || 'anonymous',
+    selectedWorkspaceCode.value || 'ALL',
+  ].join(':')),
+  immediate: true,
+})
+const visibleUserColumns = computed(() => userColumnSettings.visibleColumns.value)
+const userOperationActionCount = 3
+const userOperationColumnWidth = getAppFigmaActionColumnWidth(userOperationActionCount)
+
+const roles = computed<SettingsRole[]>(() => {
+  const memberCount = (roleCode: 'ADMIN' | 'MEMBER') => {
+    if (usersError.value) return null
+    return users.value.filter(user => user.workspaceRoleCode === roleCode).length
+  }
+
+  return [
+    {
+      id: 'R1',
+      roleCode: 'ADMIN',
+      name: '测试负责人',
+      desc: '后台固定工作空间管理员角色，负责成员和工作空间管理',
+      members: memberCount('ADMIN'),
+      permCount: null,
+      updatedAt: '—',
+      isSystem: true,
+    },
+    {
+      id: 'R2',
+      roleCode: 'MEMBER',
+      name: '测试工程师',
+      desc: '后台固定工作空间成员角色，使用平台统一成员权限',
+      members: memberCount('MEMBER'),
+      permCount: null,
+      updatedAt: '—',
+      isSystem: true,
+    },
+  ]
 })
 
-const users = ref<SettingsUser[]>([
-  { id: 'U1', name: '张程远', account: 'zhangcy@company.com', role: '测试负责人', status: 'active', lastLogin: '2026-07-07 09:31', avatar: '张' },
-  { id: 'U2', name: '李明', account: 'liming@company.com', role: '测试工程师', status: 'active', lastLogin: '2026-07-07 08:45', avatar: '李' },
-  { id: 'U3', name: '王芳', account: 'wangfang@company.com', role: '测试工程师', status: 'active', lastLogin: '2026-07-06 17:20', avatar: '王' },
-  { id: 'U4', name: '陈伟', account: 'chenwei@company.com', role: '开发人员', status: 'active', lastLogin: '2026-07-05 14:10', avatar: '陈' },
-  { id: 'U5', name: '赵云', account: 'zhaoyun@company.com', role: '只读访客', status: 'disabled', lastLogin: '2026-06-20 11:00', avatar: '赵' },
-])
-
-const roles = ref<SettingsRole[]>([
-  { id: 'R1', name: '测试负责人', desc: '负责测试团队管理、权限配置和报告审核', members: 2, permCount: 34, updatedAt: '2026-07-01', isSystem: false },
-  { id: 'R2', name: '测试工程师', desc: '负责编写用例、自动化脚本开发和执行', members: 8, permCount: 22, updatedAt: '2026-06-28', isSystem: false },
-  { id: 'R3', name: '开发人员', desc: '只读查看用例和缺陷，协助联调', members: 5, permCount: 8, updatedAt: '2026-06-20', isSystem: false },
-  { id: 'R4', name: '只读访客', desc: '仅可查看报告和用例，不可操作', members: 3, permCount: 4, updatedAt: '2026-06-15', isSystem: true },
-])
-
-const auditRecords: AuditRecord[] = [
-  { id: 'A1', time: '2026-07-07 10:15:32', operator: '张程远', action: '修改角色权限', target: '测试工程师', ip: '10.0.1.101', result: 'success' },
-  { id: 'A2', time: '2026-07-07 09:31:08', operator: '张程远', action: '邀请成员', target: 'zhounl@company.com', ip: '10.0.1.101', result: 'success' },
-  { id: 'A3', time: '2026-07-06 17:45:22', operator: '李明', action: '修改工作区设置', target: '数据保留策略', ip: '10.0.1.102', result: 'success' },
-  { id: 'A4', time: '2026-07-06 16:30:11', operator: '陈伟', action: '登录系统', target: '—', ip: '10.0.2.205', result: 'success' },
-  { id: 'A5', time: '2026-07-05 14:20:45', operator: '系统', action: '自动禁用账号', target: '赵云 (30天未登录)', ip: '—', result: 'success' },
-  { id: 'A6', time: '2026-07-04 11:05:33', operator: '张程远', action: '删除角色', target: '临时访问者', ip: '10.0.1.101', result: 'success' },
+const auditKeyword = ref('')
+const auditTypeFilter = ref('all')
+const auditResultFilter = ref('all')
+const pagedAuditRecords = ref<AuditRecord[]>([])
+const auditTotal = ref(0)
+const auditPageNo = ref(1)
+const auditPageSize = ref(10)
+const auditLoading = ref(false)
+const auditError = ref('')
+let auditRequestSeq = 0
+let auditSearchTimer: number | undefined
+const auditTableColumns: AppTableColumnDefinition[] = [
+  { key: 'time', label: '时间', width: 280, required: true, defaultVisible: true },
+  { key: 'operator', label: '操作人', width: 150, defaultVisible: true },
+  { key: 'action', label: '操作类型', width: 220, required: true, defaultVisible: true },
+  { key: 'target', label: '操作对象', minWidth: 240, defaultVisible: true },
+  { key: 'ip', label: '来源 IP', width: 200, defaultVisible: true },
+  { key: 'result', label: '结果', width: 100, defaultVisible: true },
+  { key: 'category', label: '业务分类', width: 130, defaultVisible: false },
+  { key: 'workspace', label: '工作空间', width: 140, defaultVisible: false },
+  { key: 'method', label: '请求方法', width: 100, defaultVisible: false },
+  { key: 'statusCode', label: '状态码', width: 100, defaultVisible: false },
+  { key: 'duration', label: '耗时', width: 100, defaultVisible: false },
 ]
+const auditColumnSettings = useTableColumnSettings({
+  columns: auditTableColumns,
+  storageKey: computed(() => [
+    'app-figma-table:system-audit',
+    currentUser.value?.id || 'anonymous',
+    selectedWorkspaceCode.value || 'ALL',
+  ].join(':')),
+  immediate: true,
+})
+const visibleAuditColumns = computed(() => auditColumnSettings.visibleColumns.value)
+
+watch(auditKeyword, () => {
+  auditPageNo.value = 1
+  window.clearTimeout(auditSearchTimer)
+  auditSearchTimer = window.setTimeout(() => {
+    if (activePage.value === 'audit') void loadAuditRecords()
+  }, 250)
+})
+
+watch([auditTypeFilter, auditResultFilter], () => {
+  auditPageNo.value = 1
+  if (activePage.value === 'audit') void loadAuditRecords()
+})
+
+watch(activePage, (page) => {
+  if (page === 'audit') void loadAuditRecords()
+})
 
 const permissionModules: PermissionModule[] = [
   { id: 'cases', label: '用例中心', perms: ['查看', '新建', '编辑', '删除', '导出'] },
@@ -161,37 +291,6 @@ const permissionModules: PermissionModule[] = [
 
 const riskyPermissions = ['删除', '权限管理', '配置']
 const expandedModules = reactive<Record<string, boolean>>(Object.fromEntries(permissionModules.map(item => [item.id, true])))
-
-const rolePresets: Record<string, Record<string, string[]>> = {
-  R1: {
-    cases: ['查看', '新建', '编辑', '删除', '导出'],
-    api: ['查看', '新建', '编辑', '删除', '执行', '导出'],
-    webui: ['查看', '新建', '编辑', '删除', '执行'],
-    bugs: ['查看', '新建', '编辑', '删除', '审核'],
-    config: ['查看', '配置'],
-    reports: ['查看', '导出', '分享'],
-    tasks: ['查看', '新建', '编辑', '删除', '执行'],
-  },
-  R2: {
-    cases: ['查看', '新建', '编辑', '导出'],
-    api: ['查看', '新建', '编辑', '执行'],
-    webui: ['查看', '新建', '编辑', '执行'],
-    bugs: ['查看', '新建', '编辑'],
-    config: ['查看'],
-    reports: ['查看', '导出'],
-    tasks: ['查看', '新建', '执行'],
-  },
-  R3: {
-    cases: ['查看'],
-    api: ['查看'],
-    bugs: ['查看', '新建'],
-    reports: ['查看'],
-  },
-  R4: {
-    cases: ['查看'],
-    reports: ['查看'],
-  },
-}
 
 const permissionState = ref<PermState>(makePermissionState(permissionRoleId.value))
 
@@ -230,12 +329,135 @@ const roleIconMap: Record<string, Component> = {
   只读访客: Eye,
 }
 
-const quickCards = [
-  { key: 'users' as SettingsPage, label: '用户管理', desc: '管理平台成员和访问权限', badge: '5 名成员', icon: Users, color: palette.primary, bg: '#E8F3FF' },
-  { key: 'roles' as SettingsPage, label: '角色管理', desc: '定义角色和分配职责', badge: '4 个角色', icon: Crown, color: palette.purple, bg: '#F5E8FF' },
-  { key: 'workspace' as SettingsPage, label: '工作区配置', desc: '工作区基础信息和策略', badge: 'X-MAN', icon: Building2, color: palette.success, bg: '#E8FFEA' },
+const workspaceRoleCodeByLabel: Record<string, 'ADMIN' | 'MEMBER'> = {
+  测试负责人: 'ADMIN',
+  测试工程师: 'MEMBER',
+}
+
+const quickCards = computed(() => [
+  { key: 'users' as SettingsPage, label: '用户管理', desc: '管理平台成员和访问权限', badge: `${users.value.length} 名成员`, icon: Users, color: palette.primary, bg: '#E8F3FF' },
+  { key: 'roles' as SettingsPage, label: '角色管理', desc: '定义角色和分配职责', badge: `${roles.value.length} 个角色`, icon: Crown, color: palette.purple, bg: '#F5E8FF' },
+  { key: 'workspace' as SettingsPage, label: '工作区配置', desc: '工作区基础信息和策略', badge: currentWorkspace.value?.workspaceName || (selectedWorkspaceCode.value === 'ALL' ? '全部工作空间' : selectedWorkspaceCode.value), icon: Building2, color: palette.success, bg: '#E8FFEA' },
   { key: 'perms' as SettingsPage, label: '权限配置', desc: '精细化权限树管理', badge: '8 个模块', icon: Key, color: palette.warning, bg: '#FFF3E8' },
-]
+])
+
+function mapSettingsUser(user: UserItem, member?: WorkspaceMemberItem): SettingsUser {
+  const platformRoleCode = String(user.roleCode || 'MEMBER').toUpperCase()
+  const workspaceRoleCode = String(member?.roleCode || (platformRoleCode === 'ADMIN' ? 'ADMIN' : 'MEMBER')).toUpperCase()
+  const name = user.displayName || user.username
+  return {
+    id: String(user.id),
+    userId: user.id,
+    memberId: member?.id ?? (platformRoleCode === 'ADMIN' ? -user.id : null),
+    username: user.username,
+    email: user.email,
+    platformRoleCode,
+    workspaceRoleCode,
+    workspaceCodes: [...(user.workspaceCodes || [])],
+    name,
+    account: user.email || user.username,
+    role: workspaceRoleCode === 'ADMIN' ? '测试负责人' : '测试工程师',
+    status: Number(user.status) === 1 ? 'active' : 'disabled',
+    lastLogin: '—',
+    avatar: name.slice(0, 1) || user.username.slice(0, 1) || '用',
+  }
+}
+
+async function loadUsers() {
+  const requestSeq = ++usersRequestSeq
+  const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+  usersLoading.value = true
+  usersError.value = ''
+  try {
+    const [allUsers, members] = await Promise.all([
+      userApi.getUsers(),
+      workspaceCode === 'ALL' ? Promise.resolve([]) : workspaceApi.getWorkspaceMembers(workspaceCode),
+    ])
+    if (requestSeq !== usersRequestSeq) return
+    const membersByUserId = new Map(members.map(item => [item.userId, item]))
+    const visibleUsers = workspaceCode === 'ALL'
+      ? allUsers
+      : allUsers.filter(item => (item.workspaceCodes || []).includes(workspaceCode))
+    users.value = visibleUsers.map(item => mapSettingsUser(item, membersByUserId.get(item.id)))
+  } catch (error) {
+    if (requestSeq !== usersRequestSeq) return
+    users.value = []
+    usersError.value = getRequestErrorMessage(error)
+  } finally {
+    if (requestSeq === usersRequestSeq) usersLoading.value = false
+  }
+}
+
+function resolveWorkspaceRoleCode(roleLabel: string) {
+  return workspaceRoleCodeByLabel[roleLabel] || null
+}
+
+function currentConcreteWorkspaceCode() {
+  const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+  if (workspaceCode === 'ALL') {
+    ElMessage.warning('请先从顶部工作空间选择器切换到具体工作空间')
+    return ''
+  }
+  return workspaceCode
+}
+
+function clearWorkspaceForm() {
+  currentWorkspace.value = null
+  workspaceForm.name = ''
+  workspaceForm.description = ''
+  workspaceForm.workspaceType = null
+  workspaceForm.ownerUserId = null
+  workspaceForm.status = null
+  workspaceSaved.value = false
+}
+
+function applyWorkspace(workspace: WorkspaceItem) {
+  currentWorkspace.value = workspace
+  workspaceForm.name = workspace.workspaceName || ''
+  workspaceForm.description = workspace.description || ''
+  workspaceForm.workspaceType = workspace.workspaceType ?? null
+  workspaceForm.ownerUserId = workspace.ownerUserId ?? null
+  const numericStatus = Number(workspace.status)
+  workspaceForm.status = Number.isFinite(numericStatus) ? numericStatus : null
+  workspaceSaved.value = false
+}
+
+async function loadWorkspace() {
+  const requestSeq = ++workspaceRequestSeq
+  const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+  workspaceLoading.value = true
+  workspaceError.value = ''
+  clearWorkspaceForm()
+
+  if (workspaceCode === 'ALL') {
+    workspaceLoading.value = false
+    return
+  }
+
+  try {
+    const workspaces = await workspaceApi.getWorkspaces()
+    if (requestSeq !== workspaceRequestSeq) return
+    const workspace = workspaces.find(item => item.workspaceCode === workspaceCode)
+    if (!workspace) throw new Error('当前工作空间不存在或无权访问')
+    applyWorkspace(workspace)
+  } catch (error) {
+    if (requestSeq !== workspaceRequestSeq) return
+    workspaceError.value = getRequestErrorMessage(error)
+    ElMessage.error(workspaceError.value)
+  } finally {
+    if (requestSeq === workspaceRequestSeq) workspaceLoading.value = false
+  }
+}
+
+function notifyUnsupportedWorkspaceSetting(setting: string) {
+  ElMessage.warning(`当前后台尚未提供${setting}的工作区配置字段，暂不能修改`)
+}
+
+function preventUnsupportedWorkspaceSelect(event: KeyboardEvent, setting: string) {
+  if (!['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) return
+  event.preventDefault()
+  notifyUnsupportedWorkspaceSetting(setting)
+}
 
 const filteredUsers = computed(() => users.value.filter((item) => {
   const keyword = userKeyword.value.trim()
@@ -244,6 +466,28 @@ const filteredUsers = computed(() => users.value.filter((item) => {
   if (statusFilter.value !== 'all' && item.status !== statusFilter.value) return false
   return true
 }))
+const {
+  items: pagedUsers,
+  total: userTotal,
+  pageNo: userPageNo,
+  pageSize: userPageSize,
+  setPage: setUserPage,
+  setPageSize: setUserPageSize,
+  resetPage: resetUserPage,
+} = useLocalPagedTable(filteredUsers, { initialPageSize: 10 })
+
+watch([userKeyword, roleFilter, statusFilter], resetUserPage)
+watch(selectedWorkspaceCode, () => {
+  resetUserPage()
+  inviteDialogVisible.value = false
+  editingUser.value = null
+  confirmToggleUser.value = null
+  auditPageNo.value = 1
+  window.clearTimeout(auditSearchTimer)
+  void loadWorkspace()
+  void loadUsers()
+  if (activePage.value === 'audit') void loadAuditRecords()
+}, { immediate: true })
 
 const selectedRole = computed(() => roles.value.find(item => item.id === permissionRoleId.value) || roles.value[0])
 
@@ -261,18 +505,116 @@ const hasRiskyPermission = computed(() => permissionModules.some(moduleItem => m
 })))
 
 function makePermissionState(roleId: string) {
-  const preset = rolePresets[roleId] || {}
-  return Object.fromEntries(permissionModules.map((moduleItem) => {
-    const selected = new Set(preset[moduleItem.id] || [])
-    return [moduleItem.id, Object.fromEntries(moduleItem.perms.map(perm => [perm, selected.has(perm)]))]
-  })) as PermState
+  void roleId
+  return Object.fromEntries(permissionModules.map((moduleItem) => [
+    moduleItem.id,
+    Object.fromEntries(moduleItem.perms.map(perm => [perm, false])),
+  ])) as PermState
+}
+
+function getAuditCategoryLabel(category: OperationAuditCategory) {
+  switch (category) {
+    case 'AUTH': return '登录认证'
+    case 'WORKSPACE': return '工作区与成员'
+    case 'TEST_ASSET': return '测试资产'
+    case 'EXECUTION': return '执行与报告'
+    case 'CONFIG': return '平台配置'
+    default: return '其他'
+  }
+}
+
+function formatAuditTime(value: string) {
+  if (!value) return '—'
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+function mapAuditRecord(item: OperationAuditLogItem): AuditRecord {
+  return {
+    id: String(item.id),
+    time: formatAuditTime(item.createdAt),
+    operator: item.operatorDisplayName || item.operatorUsername || '匿名用户',
+    action: item.actionName,
+    target: item.target || '—',
+    ip: item.sourceIp || '—',
+    result: item.result === 'SUCCESS' ? 'success' : 'failed',
+    category: getAuditCategoryLabel(item.category),
+    categoryCode: item.category,
+    workspace: item.workspaceCode || '全局',
+    method: item.requestMethod || '—',
+    statusCode: String(item.statusCode ?? '—'),
+    duration: Number.isFinite(item.durationMs) ? `${item.durationMs} ms` : '—',
+  }
+}
+
+async function loadAuditRecords() {
+  const requestSeq = ++auditRequestSeq
+  auditLoading.value = true
+  auditError.value = ''
+  try {
+    const page = await auditLogApi.getOperationLogs({
+      workspaceCode: selectedWorkspaceCode.value || 'ALL',
+      keyword: auditKeyword.value.trim() || undefined,
+      category: auditTypeFilter.value === 'all'
+        ? undefined
+        : auditTypeFilter.value as OperationAuditCategory,
+      result: auditResultFilter.value === 'all'
+        ? undefined
+        : auditResultFilter.value as OperationAuditResult,
+      pageNo: auditPageNo.value,
+      pageSize: auditPageSize.value,
+    })
+    if (requestSeq !== auditRequestSeq) return
+    pagedAuditRecords.value = page.items.map(mapAuditRecord)
+    auditTotal.value = page.total
+    auditPageNo.value = page.pageNo
+    auditPageSize.value = page.pageSize
+  } catch (error) {
+    if (requestSeq !== auditRequestSeq) return
+    pagedAuditRecords.value = []
+    auditTotal.value = 0
+    auditError.value = getRequestErrorMessage(error)
+  } finally {
+    if (requestSeq === auditRequestSeq) auditLoading.value = false
+  }
+}
+
+function setAuditPage(pageNo: number) {
+  auditPageNo.value = pageNo
+  void loadAuditRecords()
+}
+
+function setAuditPageSize(pageSize: number) {
+  auditPageSize.value = pageSize
+  auditPageNo.value = 1
+  void loadAuditRecords()
+}
+
+function getAuditColumnValue(record: AuditRecord, key: string) {
+  switch (key) {
+    case 'time': return record.time
+    case 'operator': return record.operator
+    case 'action': return record.action
+    case 'target': return record.target
+    case 'ip': return record.ip
+    case 'result': return record.result === 'success' ? '成功' : '失败'
+    case 'category': return record.category
+    case 'workspace': return record.workspace
+    case 'method': return record.method
+    case 'statusCode': return record.statusCode
+    case 'duration': return record.duration
+    default: return '—'
+  }
+}
+
+function getUserTableRowClass({ row }: { row: SettingsUser }) {
+  return row.status === 'disabled' ? 'is-muted' : ''
 }
 
 function resetInviteForm(user?: SettingsUser) {
   inviteForm.account = user?.account || ''
   inviteForm.name = user?.name || ''
   inviteForm.role = user?.role || '测试工程师'
-  inviteForm.workspace = 'X-MAN'
+  inviteForm.workspace = selectedWorkspaceCode.value || 'ALL'
   inviteForm.note = ''
   inviteForm.active = user?.status !== 'disabled'
 }
@@ -289,56 +631,157 @@ function openEditUserDialog(user: SettingsUser) {
   inviteDialogVisible.value = true
 }
 
-function submitInviteDialog() {
-  if (editingUser.value) {
-    editingUser.value.name = inviteForm.name || editingUser.value.name
-    editingUser.value.account = inviteForm.account || editingUser.value.account
-    editingUser.value.role = inviteForm.role
-    editingUser.value.status = inviteForm.active ? 'active' : 'disabled'
+async function submitInviteDialog() {
+  if (usersSaving.value) return
+  const account = inviteForm.account.trim()
+  const displayName = inviteForm.name.trim()
+  const workspaceRoleCode = resolveWorkspaceRoleCode(inviteForm.role)
+  if (!account) {
+    ElMessage.warning('请输入账号或邮箱')
+    return
   }
-  inviteDialogVisible.value = false
+  if (!workspaceRoleCode) {
+    ElMessage.warning('后台暂不支持“开发人员”和“只读访客”工作空间角色')
+    return
+  }
+
+  usersSaving.value = true
+  try {
+    if (editingUser.value) {
+      const target = editingUser.value
+      const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+      if (target.memberId != null && target.memberId < 0 && workspaceCode !== 'ALL' && workspaceRoleCode !== 'ADMIN') {
+        ElMessage.warning('平台管理员默认拥有全部工作空间，不能在单个工作空间内降级角色')
+        return
+      }
+      await userApi.updateUser(target.userId, {
+        email: account,
+        displayName: displayName || target.name,
+        roleCode: workspaceCode === 'ALL' ? workspaceRoleCode : target.platformRoleCode,
+        status: inviteForm.active ? 1 : 0,
+        workspaceCodes: target.workspaceCodes,
+      })
+      if (workspaceCode !== 'ALL' && target.memberId != null && target.memberId > 0 && workspaceRoleCode !== target.workspaceRoleCode) {
+        await workspaceApi.updateWorkspaceMember(workspaceCode, target.memberId, { roleCode: workspaceRoleCode })
+      }
+      ElMessage.success('成员信息已保存')
+    } else {
+      const workspaceCode = currentConcreteWorkspaceCode()
+      if (!workspaceCode) return
+      const allUsers = await userApi.getUsers()
+      const normalizedAccount = account.toLowerCase()
+      let target = allUsers.find(item => item.username.toLowerCase() === normalizedAccount || item.email.toLowerCase() === normalizedAccount)
+      if (target?.workspaceCodes?.includes(workspaceCode)) {
+        ElMessage.info('该用户已经是当前工作空间成员')
+        return
+      }
+      if (!target) {
+        if (!account.includes('@')) {
+          ElMessage.warning('创建新账号时请输入邮箱；已有账号可直接输入用户名')
+          return
+        }
+        if (!displayName) {
+          ElMessage.warning('创建新账号时请输入姓名')
+          return
+        }
+        target = await userApi.createUser({
+          username: account,
+          email: account,
+          displayName,
+          roleCode: 'MEMBER',
+          workspaceCodes: [workspaceCode],
+        })
+      } else {
+        target = await userApi.updateUser(target.id, {
+          email: target.email,
+          displayName: displayName || target.displayName || target.username,
+          roleCode: target.roleCode,
+          status: inviteForm.active ? 1 : 0,
+          workspaceCodes: [...new Set([...(target.workspaceCodes || []), workspaceCode])],
+        })
+      }
+      if (!inviteForm.active && Number(target.status) !== 0) {
+        target = await userApi.updateUser(target.id, {
+          email: target.email,
+          displayName: target.displayName,
+          roleCode: target.roleCode,
+          status: 0,
+          workspaceCodes: target.workspaceCodes,
+        })
+      }
+      if (workspaceRoleCode === 'ADMIN') {
+        const members = await workspaceApi.getWorkspaceMembers(workspaceCode)
+        const member = members.find(item => item.userId === target.id)
+        if (!member || member.id < 0) throw new Error('成员已创建，但工作空间角色无法调整')
+        await workspaceApi.updateWorkspaceMember(workspaceCode, member.id, { roleCode: 'ADMIN' })
+      }
+      ElMessage.success('成员已添加；当前后台未提供邀请邮件发送能力')
+    }
+    inviteDialogVisible.value = false
+    await loadUsers()
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    usersSaving.value = false
+  }
 }
 
-function removeUser(user: SettingsUser) {
-  users.value = users.value.filter(item => item.id !== user.id)
+async function removeUser(user: SettingsUser) {
+  const workspaceCode = currentConcreteWorkspaceCode()
+  if (!workspaceCode) return
+  if (user.memberId == null) {
+    ElMessage.error('当前成员缺少工作空间成员 ID，无法安全移除')
+    return
+  }
+  try {
+    await confirmDelete({
+      title: '移除成员',
+      message: `确认将「${user.name}」移出当前工作空间吗？`,
+      confirmText: '确认移除',
+      beforeConfirm: async () => {
+        await workspaceApi.deleteWorkspaceMember(workspaceCode, user.memberId as number)
+      },
+    })
+    ElMessage.success('成员已移出当前工作空间')
+    await loadUsers()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(getRequestErrorMessage(error))
+  }
 }
 
-function confirmToggleUserStatus() {
-  if (!confirmToggleUser.value) return
-  const targetId = confirmToggleUser.value.id
-  users.value = users.value.map(user => user.id === targetId
-    ? { ...user, status: user.status === 'active' ? 'disabled' : 'active' }
-    : user)
-  confirmToggleUser.value = null
+async function confirmToggleUserStatus() {
+  const target = confirmToggleUser.value
+  if (!target || usersSaving.value) return
+  usersSaving.value = true
+  try {
+    await userApi.updateUser(target.userId, {
+      email: target.email,
+      displayName: target.name,
+      roleCode: target.platformRoleCode,
+      status: target.status === 'active' ? 0 : 1,
+      workspaceCodes: target.workspaceCodes,
+    })
+    ElMessage.success(target.status === 'active' ? '账号已禁用' : '账号已启用')
+    confirmToggleUser.value = null
+    await loadUsers()
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    usersSaving.value = false
+  }
 }
 
 function openRoleDialog() {
-  roleForm.name = ''
-  roleForm.desc = ''
-  roleDialogVisible.value = true
+  ElMessage.warning('当前后台仅支持固定的 ADMIN/MEMBER 工作空间角色，尚未提供自定义角色新增接口')
 }
 
-function createRole() {
-  if (!roleForm.name.trim()) return
-  roles.value = [
-    ...roles.value,
-    {
-      id: `R${Date.now()}`,
-      name: roleForm.name.trim(),
-      desc: roleForm.desc.trim() || '自定义角色',
-      members: 0,
-      permCount: 0,
-      updatedAt: '2026-07-07',
-      isSystem: false,
-    },
-  ]
-  roleDialogVisible.value = false
+function editRole() {
+  ElMessage.warning('当前后台角色为系统固定角色，尚未提供角色编辑接口')
 }
 
 function applyPermissionRole(roleId: string) {
   permissionRoleId.value = roleId
   permissionState.value = makePermissionState(roleId)
-  permissionSaved.value = false
 }
 
 function gotoPermission(role: SettingsRole) {
@@ -347,11 +790,11 @@ function gotoPermission(role: SettingsRole) {
 }
 
 function clearPermissions() {
-  permissionState.value = Object.fromEntries(permissionModules.map(item => [item.id, Object.fromEntries(item.perms.map(perm => [perm, false]))])) as PermState
+  notifyPermissionBackendGap()
 }
 
 function selectAllPermissions() {
-  permissionState.value = Object.fromEntries(permissionModules.map(item => [item.id, Object.fromEntries(item.perms.map(perm => [perm, true]))])) as PermState
+  notifyPermissionBackendGap()
 }
 
 function moduleSelectedCount(moduleItem: PermissionModule) {
@@ -368,35 +811,56 @@ function isModulePartiallySelected(moduleItem: PermissionModule) {
 }
 
 function toggleModule(moduleItem: PermissionModule) {
-  const next = !isModuleFullySelected(moduleItem)
-  permissionState.value = {
-    ...permissionState.value,
-    [moduleItem.id]: Object.fromEntries(moduleItem.perms.map(perm => [perm, next])),
-  }
+  void moduleItem
+  notifyPermissionBackendGap()
 }
 
 function togglePermission(moduleId: string, perm: string) {
-  permissionState.value = {
-    ...permissionState.value,
-    [moduleId]: {
-      ...permissionState.value[moduleId],
-      [perm]: !permissionState.value[moduleId]?.[perm],
-    },
+  void moduleId
+  void perm
+  notifyPermissionBackendGap()
+}
+
+async function saveWorkspace() {
+  if (workspaceSaving.value || workspaceLoading.value) return
+  const workspaceCode = currentConcreteWorkspaceCode()
+  if (!workspaceCode) return
+  if (workspaceError.value || !currentWorkspace.value) {
+    ElMessage.error(workspaceError.value || '工作空间信息尚未加载完成')
+    return
+  }
+  const workspaceName = workspaceForm.name.trim()
+  if (!workspaceName) {
+    ElMessage.warning('请输入工作区名称')
+    return
+  }
+
+  workspaceSaving.value = true
+  workspaceSaved.value = false
+  try {
+    const workspace = await workspaceApi.updateWorkspace(workspaceCode, {
+      workspaceName,
+      description: workspaceForm.description.trim() || null,
+      workspaceType: workspaceForm.workspaceType,
+      ownerUserId: workspaceForm.ownerUserId,
+      status: workspaceForm.status,
+    })
+    applyWorkspace(workspace)
+    workspaceSaved.value = true
+    ElMessage.success('工作区基本信息已保存')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    workspaceSaving.value = false
   }
 }
 
-function saveWorkspace() {
-  workspaceSaved.value = true
-  window.setTimeout(() => {
-    workspaceSaved.value = false
-  }, 2200)
+function savePermissions() {
+  notifyPermissionBackendGap()
 }
 
-function savePermissions() {
-  permissionSaved.value = true
-  window.setTimeout(() => {
-    permissionSaved.value = false
-  }, 2200)
+function notifyPermissionBackendGap() {
+  ElMessage.warning('当前后台没有细粒度角色权限模型和保存接口，无法修改或保存权限配置')
 }
 </script>
 
@@ -430,7 +894,7 @@ function savePermissions() {
           </div>
           <div class="settings-workspace-banner__stats">
             <span><strong>5</strong><small>成员</small></span>
-            <span><strong>4</strong><small>角色</small></span>
+            <span><strong>{{ roles.length }}</strong><small>角色</small></span>
             <span><strong>8</strong><small>模块</small></span>
             <i />
             <span class="settings-workspace-banner__health">
@@ -500,16 +964,20 @@ function savePermissions() {
         <div class="settings-form-card">
           <label class="settings-field">
             <span>工作区名称 <em>*</em></span>
-            <input v-model="workspaceForm.name" type="text">
+            <input v-model="workspaceForm.name" type="text" @input="workspaceSaved = false">
           </label>
           <label class="settings-field">
             <span>工作区描述</span>
-            <textarea v-model="workspaceForm.description" rows="3" />
+            <textarea v-model="workspaceForm.description" rows="3" @input="workspaceSaved = false" />
           </label>
           <div class="settings-form-grid">
             <label class="settings-field">
               <span>默认执行环境</span>
-              <select v-model="workspaceForm.environment">
+              <select
+                v-model="workspaceForm.environment"
+                @mousedown.prevent="notifyUnsupportedWorkspaceSetting('默认执行环境')"
+                @keydown="preventUnsupportedWorkspaceSelect($event, '默认执行环境')"
+              >
                 <option>测试环境</option>
                 <option>预发布</option>
                 <option>生产环境</option>
@@ -518,7 +986,12 @@ function savePermissions() {
             <label class="settings-field is-short">
               <span>数据保留天数</span>
               <span class="settings-inline-input">
-                <input v-model.number="workspaceForm.retentionDays" type="number">
+                <input
+                  v-model.number="workspaceForm.retentionDays"
+                  readonly
+                  type="number"
+                  @click="notifyUnsupportedWorkspaceSetting('数据保留天数')"
+                >
                 <small>天</small>
               </span>
             </label>
@@ -534,7 +1007,7 @@ function savePermissions() {
               class="settings-switch"
               :class="{ 'is-on': workspaceForm.notifyEnabled }"
               type="button"
-              @click="workspaceForm.notifyEnabled = !workspaceForm.notifyEnabled"
+              @click="notifyUnsupportedWorkspaceSetting('企业微信通知')"
             >
               <span />
             </button>
@@ -548,7 +1021,7 @@ function savePermissions() {
               class="settings-switch"
               :class="{ 'is-on': workspaceForm.aiEnabled }"
               type="button"
-              @click="workspaceForm.aiEnabled = !workspaceForm.aiEnabled"
+              @click="notifyUnsupportedWorkspaceSetting('AI 能力')"
             >
               <span />
             </button>
@@ -556,9 +1029,9 @@ function savePermissions() {
           <div class="settings-card-footer">
             <button class="settings-primary-button" type="button" @click="saveWorkspace">
               <Save />
-              保存设置
+              {{ workspaceSaving ? '保存中...' : '保存设置' }}
             </button>
-            <span v-if="workspaceSaved" class="settings-saved"><CheckCircle />已保存</span>
+            <span v-if="workspaceSaved" class="settings-saved"><CheckCircle />基本信息已保存</span>
           </div>
         </div>
       </section>
@@ -591,53 +1064,94 @@ function savePermissions() {
           </select>
         </div>
 
-        <div class="settings-table-card">
-          <div class="settings-user-table settings-table-head">
-            <span>成员</span>
-            <span>账号</span>
-            <span>角色</span>
-            <span>状态</span>
-            <span>最近登录</span>
-            <span>操作</span>
-          </div>
-          <div
-            v-for="user in filteredUsers"
-            :key="user.id"
-            class="settings-user-table settings-table-row"
-            :class="{ 'is-muted': user.status === 'disabled' }"
+        <AppFigmaTable
+          class="settings-user-figma-table"
+          :data="pagedUsers"
+          :loading="usersLoading"
+          :error="usersError"
+          :page-no="userPageNo"
+          :page-size="userPageSize"
+          :total="userTotal"
+          :page-sizes="[10, 20, 50, 100]"
+          :show-page-size="true"
+          :show-jumper="true"
+          :header-height="34.5"
+          :row-height="52"
+          :footer-height="43"
+          :row-class-name="getUserTableRowClass"
+          row-key="id"
+          empty-text="当前筛选条件下暂无成员"
+          @page-change="setUserPage"
+          @page-size-change="setUserPageSize"
+          @retry="loadUsers"
+        >
+          <el-table-column
+            v-for="column in visibleUserColumns"
+            :key="column.key"
+            :label="column.label"
+            :width="column.width"
+            :min-width="column.minWidth"
           >
-            <span class="settings-user-cell">
-              <i>{{ user.avatar }}</i>
-              <strong>{{ user.name }}</strong>
-            </span>
-            <span class="settings-mono">{{ user.account }}</span>
-            <span>
+            <template #default="{ row: user }">
+              <span v-if="column.key === 'member'" class="settings-user-cell">
+                <i>{{ user.avatar }}</i>
+                <strong>{{ user.name }}</strong>
+              </span>
+              <span v-else-if="column.key === 'account'" class="settings-mono">
+                {{ user.account }}
+              </span>
               <em
+                v-else-if="column.key === 'role'"
                 class="settings-role-tag"
                 :style="{ color: roleColorMap[user.role], background: roleBgMap[user.role] }"
               >
                 {{ user.role }}
               </em>
-            </span>
-            <span class="settings-status-cell">
-              <i :class="{ 'is-disabled': user.status === 'disabled' }" />
-              {{ user.status === 'active' ? '已启用' : '已禁用' }}
-            </span>
-            <span class="settings-mono">{{ user.lastLogin }}</span>
-            <span class="settings-row-actions">
-              <button type="button" title="编辑" @click="openEditUserDialog(user)"><Edit2 /></button>
+              <span v-else-if="column.key === 'status'" class="settings-status-cell">
+                <i :class="{ 'is-disabled': user.status === 'disabled' }" />
+                {{ user.status === 'active' ? '已启用' : '已禁用' }}
+              </span>
+              <span v-else-if="column.key === 'lastLogin'" class="settings-mono">
+                {{ user.lastLogin }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <AppFigmaActionColumn
+            :action-count="userOperationActionCount"
+            :width="userOperationColumnWidth"
+          >
+            <template #settings>
+              <AppTableSettingsTrigger
+                variant="figma"
+                :size="13"
+                label="字段展示"
+                @click.stop="userColumnSettings.open"
+              />
+            </template>
+            <template #default="{ row: user }">
+              <button type="button" title="编辑" aria-label="编辑" :disabled="usersSaving" @click.stop="openEditUserDialog(user)">
+                <Edit2 />
+              </button>
               <button
                 type="button"
                 :title="user.status === 'active' ? '禁用账号' : '启用账号'"
-                @click="confirmToggleUser = user"
+                :aria-label="user.status === 'active' ? '禁用账号' : '启用账号'"
+                :disabled="usersSaving"
+                @click.stop="confirmToggleUser = user"
               >
                 <Power />
               </button>
-              <button type="button" title="移除" @click="removeUser(user)"><Trash2 /></button>
-            </span>
-          </div>
-          <footer>共 {{ filteredUsers.length }} / {{ users.length }} 名成员</footer>
-        </div>
+              <button type="button" data-danger="true" title="移除" aria-label="移除" :disabled="usersSaving" @click.stop="removeUser(user)">
+                <Trash2 />
+              </button>
+            </template>
+          </AppFigmaActionColumn>
+
+          <template #pagination-leading="{ total }">
+            <span>共 {{ total }} / {{ users.length }} 名成员</span>
+          </template>
+        </AppFigmaTable>
       </section>
 
       <section v-else-if="activePage === 'roles'" class="settings-list-page">
@@ -668,14 +1182,14 @@ function savePermissions() {
               </span>
               <span class="settings-row-actions">
                 <button type="button" title="授权配置" @click="gotoPermission(role)"><Key /></button>
-                <button type="button" title="编辑"><Edit2 /></button>
-                <button v-if="!role.isSystem" type="button" title="删除" @click="deletingRole = role"><Trash2 /></button>
+                <button type="button" title="编辑" @click="editRole"><Edit2 /></button>
+                <button v-if="!role.isSystem" type="button" title="删除"><Trash2 /></button>
               </span>
             </header>
             <footer>
-              <span><strong>{{ role.members }}</strong><small>成员</small></span>
+              <span><strong>{{ role.members ?? '—' }}</strong><small>成员</small></span>
               <i />
-              <span><strong>{{ role.permCount }}</strong><small>权限项</small></span>
+              <span><strong>{{ role.permCount ?? '—' }}</strong><small>权限项</small></span>
               <i />
               <span><em>{{ role.updatedAt }}</em><small>最近更新</small></span>
               <button
@@ -706,7 +1220,6 @@ function savePermissions() {
               <Save />
               保存授权
             </button>
-            <span v-if="permissionSaved" class="settings-saved"><CheckCircle />已保存</span>
           </span>
         </header>
 
@@ -774,42 +1287,114 @@ function savePermissions() {
       <section v-else-if="activePage === 'audit'" class="settings-list-page">
         <header class="settings-page-head">
           <h2>操作日志</h2>
-          <p>记录平台关键操作和安全事件，保留 90 天</p>
+          <p>记录平台关键操作和安全事件</p>
         </header>
         <div class="settings-filter-row">
           <label class="settings-search">
             <Search />
-            <input placeholder="搜索操作或操作人" type="text">
+            <input v-model="auditKeyword" placeholder="搜索操作或操作人" type="text">
           </label>
-          <select>
-            <option>全部操作类型</option>
-            <option>权限变更</option>
-            <option>成员管理</option>
-            <option>配置修改</option>
-            <option>登录记录</option>
+          <select v-model="auditTypeFilter">
+            <option value="all">全部操作类型</option>
+            <option value="AUTH">登录认证</option>
+            <option value="WORKSPACE">工作区与成员</option>
+            <option value="TEST_ASSET">测试资产</option>
+            <option value="EXECUTION">执行与报告</option>
+            <option value="CONFIG">平台配置</option>
+            <option value="OTHER">其他</option>
           </select>
+          <select v-model="auditResultFilter">
+            <option value="all">全部结果</option>
+            <option value="SUCCESS">成功</option>
+            <option value="FAILED">失败</option>
+          </select>
+          <span class="settings-audit-filter-actions">
+            <AppTableSettingsTrigger
+              variant="figma"
+              :size="13"
+              label="字段展示"
+              @click="auditColumnSettings.open"
+            />
+          </span>
         </div>
-        <div class="settings-table-card">
-          <div class="settings-audit-table settings-table-head">
-            <span>时间</span>
-            <span>操作人</span>
-            <span>操作类型</span>
-            <span>操作对象</span>
-            <span>来源 IP</span>
-            <span>结果</span>
-          </div>
-          <div v-for="record in auditRecords" :key="record.id" class="settings-audit-table settings-table-row">
-            <span class="settings-mono">{{ record.time }}</span>
-            <span>{{ record.operator }}</span>
-            <span>{{ record.action }}</span>
-            <span>{{ record.target }}</span>
-            <span class="settings-mono">{{ record.ip }}</span>
-            <span class="settings-status-cell"><i />{{ record.result === 'success' ? '成功' : '失败' }}</span>
-          </div>
-          <footer>共 {{ auditRecords.length }} 条记录 · 数据保留 90 天</footer>
-        </div>
+        <AppFigmaTable
+          class="settings-audit-figma-table"
+          :data="pagedAuditRecords"
+          :loading="auditLoading"
+          :error="auditError"
+          :page-no="auditPageNo"
+          :page-size="auditPageSize"
+          :total="auditTotal"
+          :page-sizes="[10, 20, 50, 100]"
+          :show-page-size="true"
+          :show-jumper="true"
+          :header-height="34.5"
+          :row-height="46"
+          :footer-height="43"
+          row-key="id"
+          empty-text="当前筛选条件下暂无操作日志"
+          @page-change="setAuditPage"
+          @page-size-change="setAuditPageSize"
+          @retry="loadAuditRecords"
+        >
+          <el-table-column
+            v-for="column in visibleAuditColumns"
+            :key="column.key"
+            :label="column.label"
+            :width="column.width"
+            :min-width="column.minWidth"
+          >
+            <template #default="{ row: record }">
+              <span
+                v-if="column.key === 'time' || column.key === 'ip'"
+                class="settings-mono"
+              >
+                {{ getAuditColumnValue(record, column.key) }}
+              </span>
+              <span v-else-if="column.key === 'result'" class="settings-status-cell">
+                <i :class="{ 'is-failed': record.result === 'failed' }" />
+                {{ getAuditColumnValue(record, column.key) }}
+              </span>
+              <span v-else :title="getAuditColumnValue(record, column.key)">
+                {{ getAuditColumnValue(record, column.key) }}
+              </span>
+            </template>
+          </el-table-column>
+
+          <template #pagination-leading="{ total, totalPages }">
+            <span>共 {{ total }} 条 / {{ totalPages }} 页</span>
+          </template>
+        </AppFigmaTable>
       </section>
     </main>
+
+    <AppTableColumnSettingsDrawer
+      :model-value="userColumnSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
+      :columns="userColumnSettings.drawerColumns.value"
+      :dragging-key="userColumnSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) userColumnSettings.cancel() }"
+      @toggle-column="userColumnSettings.toggleColumn"
+      @drag-start="userColumnSettings.dragStart"
+      @drag-end="userColumnSettings.dragEnd"
+      @drop-column="userColumnSettings.dropColumn"
+      @reset="userColumnSettings.resetDraft"
+    />
+
+    <AppTableColumnSettingsDrawer
+      :model-value="auditColumnSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
+      :columns="auditColumnSettings.drawerColumns.value"
+      :dragging-key="auditColumnSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) auditColumnSettings.cancel() }"
+      @toggle-column="auditColumnSettings.toggleColumn"
+      @drag-start="auditColumnSettings.dragStart"
+      @drag-end="auditColumnSettings.dragEnd"
+      @drop-column="auditColumnSettings.dropColumn"
+      @reset="auditColumnSettings.resetDraft"
+    />
 
     <div v-if="inviteDialogVisible" class="settings-modal-backdrop" @click="inviteDialogVisible = false" />
     <section v-if="inviteDialogVisible" class="settings-modal">
@@ -841,7 +1426,7 @@ function savePermissions() {
             </label>
             <label class="settings-field">
               <span>所属工作区</span>
-              <input v-model="inviteForm.workspace" type="text">
+              <input v-model="inviteForm.workspace" type="text" readonly>
             </label>
           </div>
           <label class="settings-field">
@@ -862,7 +1447,7 @@ function savePermissions() {
         </div>
         <footer>
           <button type="button" @click="inviteDialogVisible = false">取消</button>
-          <button class="is-primary" type="button" @click="submitInviteDialog">{{ editingUser ? '保存修改' : '发送邀请' }}</button>
+          <button class="is-primary" type="button" :disabled="usersSaving" @click="submitInviteDialog">{{ usersSaving ? '处理中...' : editingUser ? '保存修改' : '发送邀请' }}</button>
         </footer>
       </div>
     </section>
@@ -890,6 +1475,7 @@ function savePermissions() {
             class="settings-confirm-toggle-button"
             type="button"
             :class="{ 'is-enable': confirmToggleUser.status === 'disabled' }"
+            :disabled="usersSaving"
             @click="confirmToggleUserStatus"
           >
             {{ confirmToggleUser.status === 'active' ? '确认禁用' : '确认启用' }}
@@ -898,45 +1484,6 @@ function savePermissions() {
       </div>
     </section>
 
-    <div v-if="roleDialogVisible" class="settings-modal-backdrop" @click="roleDialogVisible = false" />
-    <section v-if="roleDialogVisible" class="settings-modal">
-      <div class="settings-modal__panel is-role-modal">
-        <header>
-          <strong>新建角色</strong>
-          <button type="button" @click="roleDialogVisible = false"><X /></button>
-        </header>
-        <div class="settings-modal__body">
-          <label class="settings-field">
-            <span>角色名称 <em>*</em></span>
-            <input v-model="roleForm.name" placeholder="例：高级测试工程师" type="text">
-          </label>
-          <label class="settings-field">
-            <span>角色描述</span>
-            <textarea v-model="roleForm.desc" placeholder="描述该角色的职责范围" rows="3" />
-          </label>
-          <div class="settings-info-box">创建后可在「权限配置」中为该角色分配具体权限。</div>
-        </div>
-        <footer>
-          <button type="button" @click="roleDialogVisible = false">取消</button>
-          <button class="is-primary" type="button" :disabled="!roleForm.name.trim()" @click="createRole">创建角色</button>
-        </footer>
-      </div>
-    </section>
-
-    <div v-if="deletingRole" class="settings-modal-backdrop" @click="deletingRole = null" />
-    <section v-if="deletingRole" class="settings-modal">
-      <div class="settings-delete-modal">
-        <span class="settings-delete-modal__icon"><Trash2 /></span>
-        <span>
-          <strong>删除角色</strong>
-          <small>「{{ deletingRole.name }}」下有 {{ deletingRole.members }} 名成员，删除后成员将失去该角色的所有权限。此操作不可撤销。</small>
-        </span>
-        <footer>
-          <button type="button" @click="deletingRole = null">取消</button>
-          <button type="button" @click="deletingRole = null">确认删除</button>
-        </footer>
-      </div>
-    </section>
   </section>
 </template>
 
@@ -1536,6 +2083,50 @@ function savePermissions() {
   margin-bottom: 14px;
 }
 
+.settings-audit-filter-actions {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-audit-figma-table {
+  --app-figma-table-radius: 16px;
+  --app-figma-table-text-color: #4e5969;
+  --app-figma-table-font-size: 12px;
+  --app-figma-table-header-letter-spacing: 0.275px;
+}
+
+.settings-user-figma-table {
+  --app-figma-table-radius: 16px;
+  --app-figma-table-text-color: #4e5969;
+  --app-figma-table-font-size: 12px;
+  --app-figma-table-header-letter-spacing: 0.275px;
+}
+
+.settings-user-figma-table :deep(.el-table__body-wrapper) {
+  overflow-x: auto;
+}
+
+.settings-user-figma-table :deep(.el-table__row.is-muted .settings-user-cell i) {
+  background: #c9cdd4;
+}
+
+.settings-user-figma-table :deep(.el-table__row.is-muted .settings-user-cell strong) {
+  color: #86909c;
+}
+
+.settings-audit-figma-table :deep(.el-table__body-wrapper) {
+  overflow-x: auto;
+}
+
+.settings-audit-figma-table :deep(.cell > span) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-filter-row select {
   width: 112px;
   padding: 0 10px;
@@ -1654,6 +2245,10 @@ function savePermissions() {
 
 .settings-status-cell i.is-disabled {
   background: #c9cdd4;
+}
+
+.settings-status-cell i.is-failed {
+  background: #f53f3f;
 }
 
 .settings-row-actions {

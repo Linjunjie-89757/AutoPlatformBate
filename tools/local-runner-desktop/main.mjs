@@ -2,9 +2,11 @@ import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, shell } from 'ele
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { hostname } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hostname } from 'node:os';
+
+import { RUNNER_VERSION } from '../web-ui-runner/runnerConfig.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PRODUCT_NAME = 'Auto Platform Local Runner';
@@ -231,6 +233,7 @@ async function getState() {
   const config = desktopConfig || await readDesktopConfig();
   return {
     productName: PRODUCT_NAME,
+    version: RUNNER_VERSION,
     config,
     process: {
       running: isRunnerRunning(),
@@ -246,9 +249,10 @@ async function getState() {
       runnerDataDir: appPaths.runnerData(),
     },
     capabilities: [
-      { key: 'WEB_UI', label: 'Web UI 自动化', enabled: true },
       { key: 'API', label: '接口自动化', enabled: true },
-      { key: 'APP', label: 'APP 自动化', enabled: false },
+      { key: 'WEB_UI', label: 'Web UI 自动化', enabled: true },
+      { key: 'RECORDING', label: '浏览器录制', enabled: true },
+      { key: 'FILE_UPLOAD', label: '文件上传', enabled: true },
     ],
   };
 }

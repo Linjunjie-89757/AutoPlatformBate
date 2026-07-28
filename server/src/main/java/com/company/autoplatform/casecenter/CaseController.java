@@ -6,6 +6,7 @@ import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import jakarta.validation.Valid;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -31,10 +32,16 @@ import java.util.List;
 public class CaseController {
     private final CaseService caseService;
     private final CaseReviewDomainService caseReviewDomainService;
+    private final CaseImportDomainService caseImportDomainService;
 
-    public CaseController(CaseService caseService, CaseReviewDomainService caseReviewDomainService) {
+    public CaseController(
+            CaseService caseService,
+            CaseReviewDomainService caseReviewDomainService,
+            CaseImportDomainService caseImportDomainService
+    ) {
         this.caseService = caseService;
         this.caseReviewDomainService = caseReviewDomainService;
+        this.caseImportDomainService = caseImportDomainService;
     }
 
     @GetMapping
@@ -88,6 +95,32 @@ public class CaseController {
             @Valid @RequestBody CreateCaseRequest request
     ) {
         return ApiResponse.ok(caseService.createCase(workspaceCode, request), "用例创建成功");
+    }
+
+    @GetMapping("/import/template")
+    public ResponseEntity<Resource> downloadImportTemplate() {
+        CaseImportTemplate template = caseImportDomainService.buildTemplate();
+        ByteArrayResource resource = new ByteArrayResource(template.content());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(template.contentType()))
+                .contentLength(template.content().length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(template.fileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .body(resource);
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<CaseImportResult> importCases(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(value = "directoryId", required = false) Long directoryId,
+            @RequestParam(value = "duplicateStrategy", defaultValue = "SKIP") String duplicateStrategy,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ApiResponse.ok(
+                caseImportDomainService.importCases(workspaceCode, directoryId, duplicateStrategy, file),
+                "用例导入完成");
     }
 
     @PostMapping("/directories")

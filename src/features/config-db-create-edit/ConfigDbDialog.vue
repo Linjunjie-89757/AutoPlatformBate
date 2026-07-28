@@ -98,7 +98,11 @@ watch(
     <div class="config-db-dialog">
       <div class="config-db-dialog__field">
         <span>目标空间</span>
-        <el-input v-model="form.workspaceCode" placeholder="ALL" />
+        <el-input
+          v-model="form.workspaceCode"
+          placeholder="ALL"
+          :disabled="mode === 'edit' || defaultWorkspaceCode !== 'ALL'"
+        />
       </div>
 
       <div class="config-db-dialog__field">

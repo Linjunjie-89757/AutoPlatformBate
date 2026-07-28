@@ -26,6 +26,7 @@ public class SettingsParamSetDomainService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String GLOBAL_PARAM_TYPE = "GLOBAL";
+    private static final String GLOBAL_PARAM_NAME = "全局变量";
 
     private final ParamSetMapper paramSetMapper;
     private final ParamSetChangeHistoryMapper changeHistoryMapper;
@@ -85,8 +86,8 @@ public class SettingsParamSetDomainService {
         ensureSingleGlobalParamSet(workspace.getId(), null, request.paramType());
         ParamSetEntity entity = new ParamSetEntity();
         entity.setWorkspaceId(workspace.getId());
-        entity.setParamType(request.paramType());
-        entity.setParamName(request.paramName());
+        entity.setParamType(normalizeParamType(request.paramType()));
+        entity.setParamName(isGlobalParamType(request.paramType()) ? GLOBAL_PARAM_NAME : request.paramName());
         entity.setContentJson(request.contentJson());
         entity.setStatus(1);
         entity.setCreatedAt(LocalDateTime.now());
@@ -105,11 +106,12 @@ public class SettingsParamSetDomainService {
         if (!entity.getWorkspaceId().equals(workspace.getId())) {
             throw new BadRequestException("不允许修改参数集归属空间");
         }
+        assertGlobalParamMutationAllowed(entity, request.paramType());
         ensureSingleGlobalParamSet(workspace.getId(), entity.getId(), request.paramType());
         Map<String, Object> before = snapshot(entity);
         String changedFields = changedFields(entity, request);
-        entity.setParamType(request.paramType());
-        entity.setParamName(request.paramName());
+        entity.setParamType(normalizeParamType(request.paramType()));
+        entity.setParamName(isGlobalParamType(entity.getParamType()) ? GLOBAL_PARAM_NAME : request.paramName());
         entity.setContentJson(request.contentJson());
         entity.setUpdatedAt(LocalDateTime.now());
         paramSetMapper.updateById(entity);
@@ -122,6 +124,9 @@ public class SettingsParamSetDomainService {
         ParamSetEntity entity = requireParam(id);
         validateReadable(entity.getWorkspaceId(), workspaceCode, "当前空间上下文不可修改该参数集");
         workspaceService.requireWritableWorkspace(workspaceService.requireWorkspaceById(entity.getWorkspaceId()).getWorkspaceCode());
+        if (isGlobalParamType(entity.getParamType()) && request.status() != null && request.status() == 0) {
+            throw new BadRequestException("系统全局变量不可停用");
+        }
         Map<String, Object> before = snapshot(entity);
         entity.setStatus(normalizeStatus(request.status()));
         entity.setUpdatedAt(LocalDateTime.now());
@@ -154,10 +159,13 @@ public class SettingsParamSetDomainService {
         }
         Map<String, Object> before = snapshot(entity);
         String changedFields = changedFields(entity, version);
-        entity.setParamType(version.getParamType());
-        entity.setParamName(version.getParamName());
+        if (isGlobalParamType(entity.getParamType()) && !isGlobalParamType(version.getParamType())) {
+            throw new BadRequestException("系统全局变量不能回滚到普通变量集版本");
+        }
+        entity.setParamType(normalizeParamType(version.getParamType()));
+        entity.setParamName(isGlobalParamType(entity.getParamType()) ? GLOBAL_PARAM_NAME : version.getParamName());
         entity.setContentJson(version.getContentJson());
-        entity.setStatus(version.getStatus());
+        entity.setStatus(isGlobalParamType(entity.getParamType()) ? 1 : version.getStatus());
         entity.setUpdatedAt(LocalDateTime.now());
         paramSetMapper.updateById(entity);
         recordChange(entity, "ROLLBACK", before, snapshot(entity), changedFields);
@@ -182,6 +190,9 @@ public class SettingsParamSetDomainService {
         ParamSetEntity entity = requireParam(id);
         validateReadable(entity.getWorkspaceId(), workspaceCode, "当前空间上下文不可删除该参数集");
         workspaceService.requireWritableWorkspace(workspaceService.requireWorkspaceById(entity.getWorkspaceId()).getWorkspaceCode());
+        if (isGlobalParamType(entity.getParamType())) {
+            throw new BadRequestException("系统全局变量不可删除");
+        }
         referenceDomainService.assertParamNotReferenced(id, entity.getWorkspaceId());
         paramSetMapper.deleteById(id);
     }
@@ -200,7 +211,7 @@ public class SettingsParamSetDomainService {
     }
 
     private void ensureSingleGlobalParamSet(Long workspaceId, Long currentId, String paramType) {
-        if (!GLOBAL_PARAM_TYPE.equalsIgnoreCase(blankToNull(paramType))) {
+        if (!isGlobalParamType(paramType)) {
             return;
         }
         LambdaQueryWrapper<ParamSetEntity> query = new LambdaQueryWrapper<ParamSetEntity>()
@@ -212,6 +223,27 @@ public class SettingsParamSetDomainService {
         if (paramSetMapper.selectCount(query) > 0) {
             throw new BadRequestException("当前空间已存在全局公共变量集");
         }
+    }
+
+    private void assertGlobalParamMutationAllowed(ParamSetEntity entity, String requestedParamType) {
+        if (isGlobalParamType(entity.getParamType()) && !isGlobalParamType(requestedParamType)) {
+            throw new BadRequestException("系统全局变量不可转换为普通变量集");
+        }
+        if (!isGlobalParamType(entity.getParamType()) && isGlobalParamType(requestedParamType)) {
+            throw new BadRequestException("普通变量集不可转换为系统全局变量");
+        }
+    }
+
+    private boolean isGlobalParamType(String paramType) {
+        return GLOBAL_PARAM_TYPE.equalsIgnoreCase(blankToNull(paramType));
+    }
+
+    private String normalizeParamType(String paramType) {
+        String normalized = blankToNull(paramType);
+        if (normalized == null) {
+            throw new BadRequestException("变量集类型不能为空");
+        }
+        return normalized.toUpperCase(Locale.ROOT);
     }
 
     private void validateReadable(Long workspaceId, String workspaceCode, String message) {

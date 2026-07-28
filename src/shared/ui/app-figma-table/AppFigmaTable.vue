@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends Record<string, unknown>">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import AppFigmaPagination from './AppFigmaPagination.vue'
 
@@ -51,6 +51,8 @@ const emit = defineEmits<{
   retry: []
 }>()
 
+const tableRef = ref<{ clearSelection?: () => void } | null>(null)
+
 const rootStyle = computed(() => ({
   '--app-figma-table-header-height': `${props.headerHeight}px`,
   '--app-figma-table-row-height': `${props.rowHeight}px`,
@@ -61,11 +63,18 @@ function formatError(value: unknown) {
   if (value instanceof Error) return value.message
   return typeof value === 'string' ? value : '列表加载失败'
 }
+
+function clearSelection() {
+  tableRef.value?.clearSelection?.()
+}
+
+defineExpose({ clearSelection })
 </script>
 
 <template>
   <section class="app-figma-table" :style="rootStyle">
     <el-table
+      ref="tableRef"
       v-bind="$attrs"
       v-loading="loading"
       class="app-figma-table__element"
@@ -101,7 +110,11 @@ function formatError(value: unknown) {
       :jumper-threshold="jumperThreshold"
       @page-change="emit('pageChange', $event)"
       @page-size-change="emit('pageSizeChange', $event)"
-    />
+    >
+      <template v-if="$slots['pagination-leading']" #leading="scope">
+        <slot name="pagination-leading" v-bind="scope" />
+      </template>
+    </AppFigmaPagination>
   </section>
 </template>
 

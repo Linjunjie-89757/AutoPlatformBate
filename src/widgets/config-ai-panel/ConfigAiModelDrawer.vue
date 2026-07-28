@@ -10,43 +10,26 @@ import {
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaConfigAiIcons } from '@/shared/assets/figma-icons'
 
-import { getModelType, getProviderType, modelTypeVisuals, providerVisuals } from './model'
+import { createStatusPayload, getModelType, modelTypeVisuals } from './model'
 
 const props = defineProps<{
   workspaceCode: string
   provider: AiProviderConnectionItem
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   close: []
+  changed: [provider: AiProviderConnectionItem]
 }>()
 
 const loading = ref(false)
+const syncing = ref(false)
+const probingModelName = ref('')
+const changingDefaultModelName = ref('')
 const errorMessage = ref('')
 const models = ref<AiProviderModelItem[]>([])
 
 const title = computed(() => `模型管理 — ${props.provider.connectionName}`)
-const figmaFallbackModels = computed<AiProviderModelItem[]>(() => {
-  const providerType = getProviderType(props.provider)
-  const visual = providerVisuals[providerType] || providerVisuals.custom
-  const names = visual.models.length ? visual.models : [props.provider.modelName || 'custom-model']
-  return names.slice(0, 3).map((modelName, index) => ({
-    id: -100 - index,
-    connectionId: props.provider.id,
-    modelName,
-    displayName: index === 0
-      ? modelName.replace(/(^|-)([a-z])/g, value => value.toUpperCase()).replace(/-/g, ' ')
-      : modelName,
-    detectedCapabilities: {
-      vision: index !== 1,
-      json: true,
-    },
-    selectable: index !== 2,
-    rawMetadataJson: '{"context_length":128000}',
-    lastProbedAt: null,
-  }))
-})
-const displayModels = computed(() => models.value.length ? models.value : figmaFallbackModels.value)
 
 async function loadModels() {
   loading.value = true
@@ -60,22 +43,78 @@ async function loadModels() {
   }
 }
 
-function unsupported() {
-  ElMessage.info('模型管理接口暂未接入')
+async function syncModels() {
+  syncing.value = true
+  try {
+    const result = await aiProviderApi.syncProviderModels(props.workspaceCode, props.provider.id)
+    models.value = result.models
+    if (result.message) {
+      ElMessage.info(result.message)
+    } else {
+      ElMessage.success(`已同步 ${result.models.length} 个模型`)
+    }
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    syncing.value = false
+  }
+}
+
+async function probeModel(model: AiProviderModelItem) {
+  probingModelName.value = model.modelName
+  try {
+    const result = await aiProviderApi.probeProviderModel(props.workspaceCode, props.provider.id, {
+      modelName: model.modelName,
+    })
+    const index = models.value.findIndex(item => item.modelName === result.modelName)
+    if (index >= 0) models.value[index] = result
+    ElMessage.success(`模型 ${model.modelName} 探测完成`)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    probingModelName.value = ''
+  }
+}
+
+async function setDefaultModel(model: AiProviderModelItem) {
+  if (model.modelName === props.provider.modelName) return
+  changingDefaultModelName.value = model.modelName
+  try {
+    const provider = await aiProviderApi.updateProviderConnection(
+      props.workspaceCode,
+      props.provider.id,
+      {
+        ...createStatusPayload(props.provider, props.provider.status),
+        modelName: model.modelName,
+      },
+    )
+    ElMessage.success(`默认模型已切换为 ${model.modelName}`)
+    emit('changed', provider)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    changingDefaultModelName.value = ''
+  }
+}
+
+function unsupported(action: string) {
+  ElMessage.info(`后台暂不支持${action}`)
 }
 
 function maxContextText(model: AiProviderModelItem) {
   const raw = model.rawMetadataJson || ''
   const matched = raw.match(/"?(?:max_context|maxContext|context_length|contextLength)"?\s*:\s*(\d+)/i)
-  if (!matched) return '128K'
+  if (!matched) return '—'
   const value = Number(matched[1])
   return value >= 1000 ? `${Math.round(value / 1000)}K` : String(value)
 }
 
 function supportText(model: AiProviderModelItem, key: 'image' | 'json') {
-  const value = JSON.stringify(model.detectedCapabilities || model.rawMetadataJson || '').toLowerCase()
-  if (key === 'image') return value.includes('vision') || value.includes('image')
-  return value.includes('json') || value.includes('function')
+  if (!model.detectedCapabilities || typeof model.detectedCapabilities !== 'object') return false
+  const capabilities = model.detectedCapabilities as Record<string, unknown>
+  const value = capabilities[key === 'image' ? 'imageInput' : 'structuredOutput']
+  if (value === true) return true
+  return Boolean(value && typeof value === 'object' && (value as { supported?: unknown }).supported === true)
 }
 
 watch(
@@ -100,9 +139,9 @@ onMounted(() => {
             <p>管理该连接下的可用模型列表</p>
           </div>
           <div class="config-ai-model__head-actions">
-            <button class="config-ai-model__add" type="button" @click="unsupported">
+            <button class="config-ai-model__add" type="button" :disabled="syncing" @click="syncModels">
               <img :src="figmaConfigAiIcons.plus" alt="">
-              添加模型
+              {{ syncing ? '同步中' : '添加模型' }}
             </button>
             <button class="config-ai-model__icon-btn" type="button" aria-label="关闭" @click="$emit('close')">
               <img :src="figmaConfigAiIcons.drawer.close" alt="">
@@ -132,21 +171,21 @@ onMounted(() => {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(model, index) in displayModels" :key="model.id">
+                <tr v-for="model in models" :key="model.id">
                   <td>
                     <span class="config-ai-model-table__name">{{ model.displayName || model.modelName }}</span>
-                    <span v-if="index === 0" class="config-ai-model-table__default-badge">默认</span>
+                    <span v-if="model.modelName === provider.modelName" class="config-ai-model-table__default-badge">默认</span>
                   </td>
                   <td class="is-mono">{{ model.modelName }}</td>
                   <td>
                     <span
                       class="config-ai-model-table__chip"
                       :style="{
-                        color: modelTypeVisuals[getModelType(model, index)].color,
-                        backgroundColor: `${modelTypeVisuals[getModelType(model, index)].color}18`,
+                        color: modelTypeVisuals[getModelType(model)].color,
+                        backgroundColor: `${modelTypeVisuals[getModelType(model)].color}18`,
                       }"
                     >
-                      {{ modelTypeVisuals[getModelType(model, index)].label }}
+                      {{ modelTypeVisuals[getModelType(model)].label }}
                     </span>
                   </td>
                   <td>{{ maxContextText(model) }}</td>
@@ -159,7 +198,13 @@ onMounted(() => {
                     <span v-else>—</span>
                   </td>
                   <td>
-                    <button class="config-ai-toggle" :class="{ 'is-on': index === 0 }" type="button" @click="unsupported">
+                    <button
+                      class="config-ai-toggle"
+                      :class="{ 'is-on': model.modelName === provider.modelName }"
+                      type="button"
+                      :disabled="changingDefaultModelName === model.modelName || !model.selectable"
+                      @click="setDefaultModel(model)"
+                    >
                       <span />
                     </button>
                   </td>
@@ -171,19 +216,24 @@ onMounted(() => {
                   </td>
                   <td>
                     <div class="config-ai-model-table__actions">
-                      <button type="button" title="测试" @click="unsupported">
+                      <button
+                        type="button"
+                        title="测试"
+                        :disabled="probingModelName === model.modelName"
+                        @click="probeModel(model)"
+                      >
                         <img :src="figmaConfigAiIcons.action.test" alt="">
                       </button>
-                      <button type="button" title="启停" @click="unsupported">
+                      <button type="button" title="启停" @click="unsupported('模型启停')">
                         <img :src="figmaConfigAiIcons.action.power" alt="">
                       </button>
-                      <button type="button" title="删除" @click="unsupported">
+                      <button type="button" title="删除" @click="unsupported('模型删除')">
                         <img :src="figmaConfigAiIcons.action.delete" alt="">
                       </button>
                     </div>
                   </td>
                 </tr>
-                <tr v-if="!displayModels.length">
+                <tr v-if="!models.length">
                   <td class="config-ai-model-table__empty" colspan="9">暂无模型数据</td>
                 </tr>
               </tbody>

@@ -258,9 +258,6 @@ export function createFormState(
 ): AiConnectionFormState {
   const visual = providerVisuals[providerType]
   const modelName = provider?.modelName || visual.models[0] || ''
-  const reviewModelName = providerType === 'openai'
-    ? 'gpt-4o-mini'
-    : modelName
 
   return {
     providerType,
@@ -268,12 +265,12 @@ export function createFormState(
     baseUrl: provider?.baseUrl || visual.baseUrl,
     apiKey: '',
     modelName,
-    reviewModelName,
+    reviewModelName: '',
     requestTimeoutSeconds: provider?.requestTimeoutSeconds || 30,
-    maxRetry: 3,
+    maxRetry: 0,
     status: provider?.status ?? 1,
-    capabilities: getFallbackCapabilities(provider || { providerType } as AiProviderConnectionItem),
-    usages: getFallbackUsages(provider || { providerType } as AiProviderConnectionItem),
+    capabilities: [],
+    usages: [],
   }
 }
 
@@ -321,10 +318,10 @@ export function formatAiTime(value: string | null | undefined) {
   return value.replace('T', ' ').slice(0, 16)
 }
 
-export function getModelType(model: AiProviderModelItem, index: number): AiModelType {
+export function getModelType(model: AiProviderModelItem): AiModelType {
   const name = `${model.modelName} ${model.displayName || ''}`.toLowerCase()
   if (name.includes('embedding')) return 'embedding'
   if (name.includes('vision') || name.includes('vl')) return 'vision'
-  if (index === 1) return 'review'
+  if (name.includes('review') || name.includes('judge')) return 'review'
   return 'generate'
 }

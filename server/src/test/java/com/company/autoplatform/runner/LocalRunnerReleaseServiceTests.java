@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LocalRunnerReleaseServiceTests {
 
-    private static final String FILE_NAME = "Auto-Platform-Local-Runner-v0.1.0-windows-x64.zip";
+    private static final String FILE_NAME = "Auto-Platform-Local-Runner-v0.1.1-windows-x64.zip";
 
     @TempDir
     Path releaseRoot;
@@ -21,13 +21,13 @@ class LocalRunnerReleaseServiceTests {
     void reportsUnavailableReleaseWithoutPretendingDownloadExists() {
         LocalRunnerReleaseService service = new LocalRunnerReleaseService(
                 releaseRoot.toString(),
-                "0.1.0",
+                "0.1.1",
                 FILE_NAME
         );
 
         var release = service.latestWindowsX64();
 
-        assertThat(release.version()).isEqualTo("0.1.0");
+        assertThat(release.version()).isEqualTo("0.1.1");
         assertThat(release.platform()).isEqualTo("WINDOWS");
         assertThat(release.architecture()).isEqualTo("X64");
         assertThat(release.packageType()).isEqualTo("PORTABLE_ZIP");
@@ -49,7 +49,7 @@ class LocalRunnerReleaseServiceTests {
         Files.write(releaseRoot.resolve(FILE_NAME), content);
         LocalRunnerReleaseService service = new LocalRunnerReleaseService(
                 releaseRoot.toString(),
-                "0.1.0",
+                "0.1.1",
                 FILE_NAME
         );
 

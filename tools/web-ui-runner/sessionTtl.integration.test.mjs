@@ -3,6 +3,8 @@ import { once } from 'node:events';
 import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 
+import { RUNNER_VERSION } from './runnerConfig.mjs';
+
 const TEST_PORT = 39218;
 const BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
 const RELEASE_TEST_PORT = 39219;
@@ -51,7 +53,7 @@ test('expires active page session and blocks capture after TTL', async () => {
     const health = await getJson(BASE_URL, '/health');
     assert.equal(health.success, true);
     assert.equal(health.session, null);
-    assert.equal(health.runner.version, '0.1.0');
+    assert.equal(health.runner.version, RUNNER_VERSION);
     assert.ok(health.capabilities.some(item => item.key === 'STATIC_COLLECT'));
     assert.ok(health.capabilities.some(item => item.key === 'LOCAL_VALIDATE'));
     assert.equal(health.diagnostics.sessionTtlMinutes, 0.01);

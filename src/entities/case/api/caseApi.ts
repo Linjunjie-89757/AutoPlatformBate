@@ -9,6 +9,8 @@ import type {
   CaseDirectoryNode,
   CaseExecutionAttachment,
   CaseExecutionHistoryItem,
+  CaseImportDuplicateStrategy,
+  CaseImportResult,
   CaseDirectoryWorkspace,
   CreateCaseDirectoryPayload,
   CaseListQuery,
@@ -232,6 +234,36 @@ export const caseApi = {
       },
     )
 
+    return unwrapApiResponse(response)
+  },
+
+  async downloadCaseImportTemplate() {
+    const response = await request.get<Blob>('/cases/import/template', {
+      responseType: 'blob',
+    })
+    return response.data
+  },
+
+  async importCases(
+    workspaceCode: string,
+    payload: {
+      file: File
+      directoryId?: number | null
+      duplicateStrategy: CaseImportDuplicateStrategy
+    },
+  ) {
+    const formData = new FormData()
+    formData.append('file', payload.file)
+    formData.append('duplicateStrategy', payload.duplicateStrategy)
+    if (payload.directoryId != null) {
+      formData.append('directoryId', String(payload.directoryId))
+    }
+    const response = await httpPost<ApiResponse<CaseImportResult>, FormData>('/cases/import', formData, {
+      headers: {
+        ...workspaceHeaders(workspaceCode),
+        'Content-Type': 'multipart/form-data',
+      },
+    })
     return unwrapApiResponse(response)
   },
 

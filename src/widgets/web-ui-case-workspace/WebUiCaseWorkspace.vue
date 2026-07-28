@@ -46,6 +46,7 @@ import {
   type WebUiCaseItem,
   type WebUiCaseListQuery,
   type WebUiCaseStatus,
+  type WebUiBrowserType,
   type WebUiCaseTemplateDetail,
   type WebUiCaseTemplateItem,
   type WebUiCiTokenCreated,
@@ -178,6 +179,8 @@ const basicInfoCaseId = ref<number | null>(null)
 const basicInfoCaseDetail = ref<WebUiCaseDetail | null>(null)
 const loadingBasicInfoCase = ref(false)
 const savingBasicInfoCase = ref(false)
+const batchDeletingCases = ref(false)
+const recordingDraftCreating = ref(false)
 const deletingCaseId = ref<number | null>(null)
 const runningCaseId = ref<number | null>(null)
 const runDetailVisible = ref(false)
@@ -235,18 +238,6 @@ const recordingConfigValid = computed(() => Boolean(recordingConfig.name.trim() 
 
 let visualRecordingTimer: ReturnType<typeof window.setTimeout> | null = null
 let caseTableFrameObserver: ResizeObserver | null = null
-
-const webUiRecordingMockSteps: WebUiRecordingStep[] = [
-  { id: 'r1', order: 1, enabled: true, type: 'navigate', description: '打开登录页面', value: 'https://test.example.com/login' },
-  { id: 'r2', order: 2, enabled: true, type: 'click', description: '点击「用户名输入框」', element: '用户名输入框' },
-  { id: 'r3', order: 3, enabled: true, type: 'input', description: '输入用户名', element: '用户名输入框', value: 'qatest001' },
-  { id: 'r4', order: 4, enabled: true, type: 'click', description: '点击「密码输入框」', element: '密码输入框' },
-  { id: 'r5', order: 5, enabled: true, type: 'input', description: '输入密码', element: '密码输入框', value: '********' },
-  { id: 'r6', order: 6, enabled: true, type: 'click', description: '点击「登录按钮」', element: '登录按钮' },
-  { id: 'r7', order: 7, enabled: true, type: 'wait', description: '等待页面跳转完成', value: '3000' },
-  { id: 'r8', order: 8, enabled: true, type: 'screenshot', description: '截图 - 登录后首页状态' },
-  { id: 'r9', order: 9, enabled: true, type: 'assert', description: 'AI 建议：断言欢迎文字可见', element: '欢迎提示文字', value: '包含：欢迎' },
-]
 
 const runForm = reactive({
   environmentId: null as number | null,
@@ -984,8 +975,47 @@ function applyFigmaCaseFilters() {
   searchCases()
 }
 
-function handleFigmaBatchDelete() {
-  ElMessage.info('Web UI 用例批量删除接口暂未接入')
+async function handleFigmaBatchDelete() {
+  if (!selectedCases.value.length || batchDeletingCases.value) {
+    return
+  }
+
+  const targets = [...selectedCases.value]
+  try {
+    await confirmDelete({
+      title: '批量删除 Web UI 用例',
+      message: `确认删除已选择的 ${targets.length} 条用例吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+    })
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    throw error
+  }
+
+  batchDeletingCases.value = true
+  try {
+    const results = await Promise.allSettled(
+      targets.map(item => webUiAutomationApi.deleteCase(props.workspaceCode, item.id)),
+    )
+    const succeeded = results.filter(result => result.status === 'fulfilled').length
+    const failed = results.length - succeeded
+
+    if (succeeded > 0 && succeeded >= cases.value.length && pageNo.value > 1) {
+      pageNo.value -= 1
+    }
+    selectedCases.value = []
+    await Promise.all([loadCases(), loadCaseStats()])
+
+    if (failed > 0) {
+      ElMessage.warning(`已删除 ${succeeded} 条，${failed} 条删除失败，请稍后重试`)
+    } else {
+      ElMessage.success(`已删除 ${succeeded} 条 Web UI 用例`)
+    }
+  } finally {
+    batchDeletingCases.value = false
+  }
 }
 
 function getCaseTags(row: WebUiCaseItem) {
@@ -1017,24 +1047,61 @@ function openRecordCasePlaceholder() {
   recordConfigVisible.value = true
 }
 
-function startVisualRecording() {
+function resolveRecordingBrowserType(): WebUiBrowserType {
+  if (recordingConfig.browser.startsWith('Firefox')) return 'FIREFOX'
+  if (recordingConfig.browser.startsWith('Safari')) return 'WEBKIT'
+  return 'CHROMIUM'
+}
+
+async function startVisualRecording() {
   if (!recordingConfig.name.trim() || !recordingConfig.startUrl.trim()) {
     ElMessage.warning('请输入用例名称和起始 URL')
     return
   }
-  clearVisualRecordingTimer()
-  recordedSteps.value = webUiRecordingMockSteps.map((step, index) => ({
-    ...step,
-    order: index + 1,
-    value: step.type === 'navigate' ? recordingConfig.startUrl : step.value,
-  }))
-  recordingConfirmCaseName.value = recordingConfig.name.trim()
-  selectedRecordedStepId.value = recordedSteps.value[0]?.id || ''
-  recordingVisibleCount.value = 1
-  recordPhase.value = 'recording'
-  recordFlowMode.value = 'recording'
-  recordConfigVisible.value = false
-  scheduleVisualRecordingStep()
+
+  recordingDraftCreating.value = true
+  try {
+    const startUrl = recordingConfig.startUrl.trim()
+    const created = await webUiAutomationApi.createCase(props.workspaceCode, {
+      workspaceCode: props.workspaceCode,
+      name: recordingConfig.name.trim(),
+      moduleName: recordingConfig.directory.trim() || null,
+      description: null,
+      baseUrl: startUrl,
+      browserType: resolveRecordingBrowserType(),
+      headless: false,
+      defaultTimeoutMs: 10000,
+      status: 'ENABLED',
+      steps: [{
+        id: null,
+        name: '打开起始页面',
+        type: 'OPEN',
+        elementId: null,
+        locatorType: null,
+        locatorValue: null,
+        framePath: null,
+        shadowPath: null,
+        inputValue: startUrl,
+        timeoutMs: null,
+        continueOnFailure: false,
+        screenshotPolicy: 'NONE',
+        enabled: true,
+        sortOrder: 1,
+      }],
+    })
+    recordConfigVisible.value = false
+    await router.push({
+      path: `/automation/web/cases/${created.id}`,
+      query: {
+        workspace: props.workspaceCode,
+        startRecording: '1',
+      },
+    })
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    recordingDraftCreating.value = false
+  }
 }
 
 function scheduleVisualRecordingStep() {
@@ -2127,7 +2194,7 @@ watch(
                   <VideoPlay :size="13" />
                   批量运行
                 </button>
-                <button type="button" class="is-danger" @click="handleFigmaBatchDelete">
+                <button type="button" class="is-danger" :disabled="batchDeletingCases" @click="handleFigmaBatchDelete">
                   <Delete :size="13" />
                   删除
                 </button>
@@ -3195,7 +3262,7 @@ watch(
           </div>
           <footer>
             <button type="button" class="web-ui-record-config__cancel" @click="recordConfigVisible = false">取消</button>
-            <button type="button" class="web-ui-record-config__start" :disabled="!recordingConfigValid" @click="startVisualRecording"><i />开始录制</button>
+            <button type="button" class="web-ui-record-config__start" :disabled="!recordingConfigValid || recordingDraftCreating" @click="startVisualRecording"><i />开始录制</button>
           </footer>
         </main>
       </section>

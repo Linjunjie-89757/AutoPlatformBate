@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 
-export const RUNNER_VERSION = '0.1.0';
+export const RUNNER_VERSION = '0.1.1';
 export const RUNNER_PRODUCT_NAME = 'Auto Platform Local Runner';
 export const DEFAULT_RUNNER_HOST = '127.0.0.1';
 export const DEFAULT_RUNNER_PORT = 39118;

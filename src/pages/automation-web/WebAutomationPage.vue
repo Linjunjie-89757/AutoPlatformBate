@@ -234,13 +234,18 @@ watch(
       <WebUiElementFigmaLibrary
         v-else-if="activeSection === 'elements'"
         :workspace-code="workspaceCode"
+        :workspace-ready="workspaceReady"
+        :environments="environments"
       />
       <WebUiSuiteFigmaWorkspace
         v-else-if="activeSection === 'suites'"
+        :workspace-code="workspaceCode"
+        :workspace-ready="workspaceReady"
       />
       <WebUiRunRecordsFigmaPage
         v-else-if="activeSection === 'runs'"
         :workspace-code="workspaceCode"
+        :workspace-ready="workspaceReady"
       />
       <WebUiElementCollectTaskWorkspace
         v-else-if="activeSection === 'collectTask'"

@@ -80,6 +80,56 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void updatingUserKeepsWorkspaceRoleAndDisabledMemberVisible() throws Exception {
+        String workspaceCode = "user_member_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(workspaceCode)))
+                .andExpect(status().isOk());
+        String username = "workspace_role_" + System.nanoTime();
+        MvcResult createResult = mockMvc.perform(post("/api/users")
+                        .contentType("application/json")
+                        .content(createUserRequest(username, username + "@demo.local", "Workspace Role", "MEMBER", workspaceCode)))
+                .andExpect(status().isOk())
+                .andReturn();
+        long userId = data(createResult).path("id").asLong();
+
+        MvcResult membersResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", workspaceCode))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode member = java.util.stream.StreamSupport.stream(data(membersResult).spliterator(), false)
+                .filter(item -> item.path("userId").asLong() == userId)
+                .findFirst()
+                .orElseThrow();
+
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", workspaceCode, member.path("id").asLong())
+                        .contentType("application/json")
+                        .content("{\"roleCode\":\"ADMIN\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/users/{userId}", userId)
+                        .contentType("application/json")
+                        .content(updateUserRequest(username + "@demo.local", "Workspace Role", "MEMBER", 0, workspaceCode)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(0));
+
+        MvcResult updatedMembersResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", workspaceCode))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode updatedMember = java.util.stream.StreamSupport.stream(data(updatedMembersResult).spliterator(), false)
+                .filter(item -> item.path("userId").asLong() == userId)
+                .findFirst()
+                .orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(updatedMember.path("roleCode").asText()).isEqualTo("ADMIN");
+        org.assertj.core.api.Assertions.assertThat(updatedMember.path("status").asInt()).isZero();
+
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", workspaceCode, member.path("id").asLong()))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", workspaceCode))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void batchCreateAndResetPasswordKeepBehavior() throws Exception {
         String okUsername = "batch_ok_" + System.nanoTime();
         String duplicateUsername = "batch_dup_" + System.nanoTime();

@@ -80,7 +80,6 @@ public class UserWorkspaceGrantSupport {
                 entity.setUpdatedAt(LocalDateTime.now());
                 workspaceMemberMapper.insert(entity);
             } else {
-                existing.setRoleCode("MEMBER");
                 existing.setStatus(1);
                 existing.setUpdatedAt(LocalDateTime.now());
                 workspaceMemberMapper.updateById(existing);

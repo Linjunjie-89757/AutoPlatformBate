@@ -103,6 +103,23 @@ export interface BatchUpdateCasesPayload {
   executionStatus?: string
 }
 
+export type CaseImportDuplicateStrategy = 'SKIP' | 'ALLOW'
+
+export interface CaseImportRowIssue {
+  rowNumber: number
+  title: string
+  type: 'SKIPPED' | 'FAILED'
+  message: string
+}
+
+export interface CaseImportResult {
+  totalRows: number
+  createdCount: number
+  skippedCount: number
+  failedCount: number
+  issues: CaseImportRowIssue[]
+}
+
 export type BatchUpdateCasesResult = PageResponse<CaseSummaryItem>
 
 export interface BatchMoveCasesPayload {

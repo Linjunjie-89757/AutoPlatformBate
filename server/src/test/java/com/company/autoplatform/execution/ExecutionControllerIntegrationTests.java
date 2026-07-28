@@ -165,6 +165,20 @@ class ExecutionControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.items[*].id").value(hasItem(reportId)));
 
+        mockMvc.perform(get("/api/reports")
+                        .header(WorkspaceScope.HEADER, RISK_OPS)
+                        .param("keyword", unique)
+                        .param("result", "success")
+                        .param("pageNo", "1")
+                        .param("pageSize", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(1))
+                .andExpect(jsonPath("$.data.totalPages").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(reportId));
+
         String contentBody = """
                 {
                   "failureSummary": "failed reason",
@@ -291,6 +305,71 @@ class ExecutionControllerIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, RISK_OPS))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.attachments.length()").value(0));
+    }
+
+    @Test
+    void reportShareCreateListRegenerateAndRevokeKeepsPublicReadOnlyFlow() throws Exception {
+        String unique = uniquePrefix("report-share");
+        TaskSummaryResponse task = createTask(RISK_OPS, unique + "-task", "API", "FAILED");
+        Integer reportId = createReport("""
+                {
+                  "workspaceCode": "%s",
+                  "taskId": %d,
+                  "reportName": "%s-report",
+                  "result": "FAILED",
+                  "logSource": "API_LOCAL_RUNNER",
+                  "failureSummary": "shared failure"
+                }
+                """.formatted(RISK_OPS, task.id(), unique), RISK_OPS);
+
+        String createdResponse = mockMvc.perform(post("/api/reports/{id}/shares", reportId)
+                        .header(WorkspaceScope.HEADER, RISK_OPS)
+                        .contentType("application/json")
+                        .content("{\"expiresInDays\":7}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.reportId").value(reportId))
+                .andExpect(jsonPath("$.data.token", startsWith("report_share_")))
+                .andExpect(jsonPath("$.data.shareUrl", startsWith("/share/report?token=report_share_")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long shareId = objectMapper.readTree(createdResponse).path("data").path("id").asLong();
+        String firstToken = objectMapper.readTree(createdResponse).path("data").path("token").asText();
+
+        mockMvc.perform(get("/api/report-shares")
+                        .header(WorkspaceScope.HEADER, RISK_OPS)
+                        .param("reportId", reportId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(shareId))
+                .andExpect(jsonPath("$.data[0].reportName").value(unique + "-report"));
+
+        mockMvc.perform(get("/api/public/reports/{token}", firstToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.report.id").value(reportId))
+                .andExpect(jsonPath("$.data.report.failureSummary").value("shared failure"));
+
+        String regeneratedResponse = mockMvc.perform(post("/api/report-shares/{shareId}/regenerate", shareId)
+                        .header(WorkspaceScope.HEADER, RISK_OPS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token", startsWith("report_share_")))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String secondToken = objectMapper.readTree(regeneratedResponse).path("data").path("token").asText();
+
+        mockMvc.perform(get("/api/public/reports/{token}", firstToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/public/reports/{token}", secondToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(delete("/api/report-shares/{shareId}", shareId)
+                        .header(WorkspaceScope.HEADER, RISK_OPS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(0));
+        mockMvc.perform(get("/api/public/reports/{token}", secondToken))
+                .andExpect(status().isNotFound());
     }
 
     private TaskSummaryResponse createTask(String workspaceCode, String taskName, String engineType, String status) {

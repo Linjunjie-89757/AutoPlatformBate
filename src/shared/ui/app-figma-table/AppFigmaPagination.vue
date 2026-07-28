@@ -37,7 +37,9 @@ const paginationLayout = computed(() => [
 
 <template>
   <footer class="app-figma-pagination">
-    <span>共 {{ total }} 条<template v-if="showTotalPages"> / {{ totalPages }} 页</template></span>
+    <slot name="leading" :total="total" :total-pages="totalPages">
+      <span>共 {{ total }} 条<template v-if="showTotalPages"> / {{ totalPages }} 页</template></span>
+    </slot>
     <el-config-provider :locale="zhCn">
       <el-pagination
         background

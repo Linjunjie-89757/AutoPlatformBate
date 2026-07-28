@@ -71,6 +71,23 @@ export interface AiProviderSyncModelsResult {
   message: string | null
 }
 
+export interface PreviewAiProviderModelsPayload {
+  protocolType: string
+  baseUrl: string
+  requestTimeoutSeconds?: number | null
+  apiKey: string
+}
+
+export interface PreviewAiProviderModelsResult {
+  models: AiProviderModelItem[]
+  fetchedAt: string | null
+  message: string | null
+}
+
+export interface ProbeAiProviderModelPayload {
+  modelName: string
+}
+
 export interface UpdateAiProviderStatusPayload extends SaveAiProviderConnectionPayload {
   status: AiProviderStatus
 }

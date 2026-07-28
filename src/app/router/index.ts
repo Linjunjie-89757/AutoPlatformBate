@@ -395,8 +395,9 @@ export const router = createRouter({
 
 router.beforeEach(async (to) => {
   const isPublicRoute = to.meta.public === true
+  const shouldCheckSession = !isPublicRoute || to.name === 'login'
 
-  if (!sessionState.sessionChecked.value) {
+  if (shouldCheckSession && !sessionState.sessionChecked.value) {
     await loadCurrentUser()
   }
 

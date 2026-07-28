@@ -5,6 +5,9 @@ import type {
   AiProviderModelItem,
   AiProviderSyncModelsResult,
   AiProviderTestResult,
+  PreviewAiProviderModelsPayload,
+  PreviewAiProviderModelsResult,
+  ProbeAiProviderModelPayload,
   SaveAiProviderConnectionPayload,
   UpdateAiProviderStatusPayload,
 } from '../model/types'
@@ -67,6 +70,18 @@ export const aiProviderApi = {
     return unwrapApiResponse(response)
   },
 
+  async previewProviderModels(workspaceCode: string, payload: PreviewAiProviderModelsPayload) {
+    const response = await httpPost<ApiResponse<PreviewAiProviderModelsResult>, PreviewAiProviderModelsPayload>(
+      '/cases/ai/providers/preview-models',
+      payload,
+      {
+        headers: workspaceHeaders(workspaceCode),
+      },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
   async syncProviderModels(workspaceCode: string, id: number) {
     const response = await httpPost<ApiResponse<AiProviderSyncModelsResult>, undefined>(
       `/cases/ai/providers/${id}/fetch-models`,
@@ -91,6 +106,18 @@ export const aiProviderApi = {
     const response = await httpGet<ApiResponse<AiProviderModelItem[]>>(`/cases/ai/providers/${id}/models`, {
       headers: workspaceHeaders(workspaceCode),
     })
+
+    return unwrapApiResponse(response)
+  },
+
+  async probeProviderModel(workspaceCode: string, id: number, payload: ProbeAiProviderModelPayload) {
+    const response = await httpPost<ApiResponse<AiProviderModelItem>, ProbeAiProviderModelPayload>(
+      `/cases/ai/providers/${id}/models/probe`,
+      payload,
+      {
+        headers: workspaceHeaders(workspaceCode),
+      },
+    )
 
     return unwrapApiResponse(response)
   },

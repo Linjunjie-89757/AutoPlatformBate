@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS tb_sys_operation_audit_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_code VARCHAR(64),
+    operator_user_id BIGINT,
+    operator_username VARCHAR(64),
+    operator_display_name VARCHAR(128),
+    category VARCHAR(32) NOT NULL,
+    action_code VARCHAR(64) NOT NULL,
+    action_name VARCHAR(128) NOT NULL,
+    target VARCHAR(512) NOT NULL,
+    request_method VARCHAR(16) NOT NULL,
+    source_ip VARCHAR(64),
+    result VARCHAR(16) NOT NULL,
+    status_code INT NOT NULL,
+    duration_ms BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_operation_audit_workspace_time (workspace_code, created_at),
+    INDEX idx_operation_audit_operator_time (operator_user_id, created_at),
+    INDEX idx_operation_audit_category_result (category, result, created_at)
+);

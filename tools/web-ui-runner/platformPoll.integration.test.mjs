@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
+import { RUNNER_PRODUCT_NAME } from './runnerConfig.mjs';
+
 test('polls platform validation command and submits local validation results', async () => {
   const runnerPort = await findAvailablePort();
   let platformPort = await findAvailablePort();
@@ -154,7 +156,7 @@ test('reports productized runtime configuration from health endpoint', async () 
     const health = await getJson(runnerBaseUrl, '/health');
 
     assert.equal(health.runner.name, 'Productized Runner');
-    assert.equal(health.runner.productName, 'Web UI Local Runner');
+    assert.equal(health.runner.productName, RUNNER_PRODUCT_NAME);
     assert.equal(health.runner.installId, 'productized-install');
     assert.equal(health.runner.port, runnerPort);
     assert.equal(health.diagnostics.sessionTtlMinutes, 25);

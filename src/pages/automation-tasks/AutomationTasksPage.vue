@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Plus, Search } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import {
   automationTaskApi,
+  type AutomationTaskDetail,
   type AutomationTaskSummaryItem,
+  type SaveAutomationTaskPayload,
 } from '@/entities/automation-task'
 import { useSession } from '@/entities/session'
+import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaTaskIcons } from '@/shared/assets/figma-icons'
 import {
@@ -18,12 +23,15 @@ import {
   getAppFigmaActionColumnWidth,
 } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
+import { confirmDelete } from '@/shared/ui'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
 type TaskResultTone = 'success' | 'danger' | 'running' | 'muted'
 type TaskDetailTab = 'info' | 'history' | 'ai'
 type TaskEditorTrigger = 'manual' | 'cron'
+
+const router = useRouter()
 
 interface TaskCenterFilter {
   keyword: string
@@ -41,7 +49,7 @@ interface TaskCenterRow extends Record<string, unknown> {
   type: string
   typeTone: 'api' | 'web'
   environment: string
-  scheduleMode: '定时' | '手动'
+  scheduleMode: '定时' | '手动' | '未配置'
   scheduleTime: string
   enabled: boolean
   result: string
@@ -53,153 +61,12 @@ interface TaskCenterRow extends Record<string, unknown> {
   backendStatus: string
 }
 
-const figmaRows: TaskCenterRow[] = [
-  {
-    id: 'figma-task-1',
-    taskId: 'figma-task-1',
-    name: '订单接口回归-全量',
-    description: '覆盖订单中心所有接口场景，执行前自动同步环境变量。',
-    type: '接口套件',
-    typeTone: 'api',
-    environment: '测试环境',
-    scheduleMode: '定时',
-    scheduleTime: '每天 02:00',
-    enabled: true,
-    result: '通过',
-    resultTone: 'success',
-    lastRunAt: '2026-07-07 02:00',
-    duration: '4m 32s',
-    creator: '张程远',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'SUCCESS',
-  },
-  {
-    id: 'figma-task-2',
-    taskId: 'figma-task-2',
-    name: '风控中心-黑名单场景验证',
-    type: '接口场景',
-    typeTone: 'api',
-    environment: '预发布',
-    scheduleMode: '定时',
-    scheduleTime: '每周一 01:00',
-    enabled: true,
-    result: '失败',
-    resultTone: 'danger',
-    lastRunAt: '2026-07-07 01:00',
-    duration: '1m 18s',
-    creator: '李明',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'FAILED',
-  },
-  {
-    id: 'figma-task-3',
-    taskId: 'figma-task-3',
-    name: '用户中心-登录注册 Web UI 回归',
-    type: 'Web UI 套件',
-    typeTone: 'web',
-    environment: '测试环境',
-    scheduleMode: '定时',
-    scheduleTime: '每周五 23:00',
-    enabled: true,
-    result: '通过',
-    resultTone: 'success',
-    lastRunAt: '2026-07-04 23:01',
-    duration: '8m 55s',
-    creator: '王芳',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'SUCCESS',
-  },
-  {
-    id: 'figma-task-4',
-    taskId: 'figma-task-4',
-    name: '获客中心-产品管理 UI 用例',
-    type: 'Web UI 用例',
-    typeTone: 'web',
-    environment: '测试环境',
-    scheduleMode: '手动',
-    scheduleTime: '-',
-    enabled: false,
-    result: '失败',
-    resultTone: 'danger',
-    lastRunAt: '2026-07-05 14:30',
-    duration: '3m 02s',
-    creator: '陈伟',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'FAILED',
-  },
-  {
-    id: 'figma-task-5',
-    taskId: 'figma-task-5',
-    name: '支付回调接口-烟雾测试',
-    type: '接口场景',
-    typeTone: 'api',
-    environment: '生产环境',
-    scheduleMode: '定时',
-    scheduleTime: '每 30 分钟',
-    enabled: true,
-    result: '执行中',
-    resultTone: 'running',
-    lastRunAt: '2026-07-07 10:30',
-    duration: '—',
-    creator: '张程远',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'RUNNING',
-  },
-  {
-    id: 'figma-task-6',
-    taskId: 'figma-task-6',
-    name: '订单退款-全流程场景',
-    type: '接口场景',
-    typeTone: 'api',
-    environment: '预发布',
-    scheduleMode: '定时',
-    scheduleTime: '每天 03:00',
-    enabled: false,
-    result: '从未执行',
-    resultTone: 'muted',
-    lastRunAt: '—',
-    duration: '—',
-    creator: '李明',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'READY',
-  },
-  {
-    id: 'figma-task-7',
-    taskId: 'figma-task-7',
-    name: '系统并发压测套件',
-    type: '接口套件',
-    typeTone: 'api',
-    environment: '测试环境',
-    scheduleMode: '手动',
-    scheduleTime: '-',
-    enabled: true,
-    result: '失败',
-    resultTone: 'danger',
-    lastRunAt: '2026-07-06 16:00',
-    duration: '12m 40s',
-    creator: '陈伟',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'FAILED',
-  },
-  {
-    id: 'figma-task-8',
-    taskId: 'figma-task-8',
-    name: '获客中心-页面管理 Web UI',
-    type: 'Web UI 用例',
-    typeTone: 'web',
-    environment: '测试环境',
-    scheduleMode: '定时',
-    scheduleTime: '每周一、四 00:00',
-    enabled: true,
-    result: '通过',
-    resultTone: 'success',
-    lastRunAt: '2026-07-07 00:00',
-    duration: '5m 17s',
-    creator: '王芳',
-    workspaceCode: 'X-MAN',
-    backendStatus: 'SUCCESS',
-  },
-]
+interface TaskEditorForm {
+  name: string
+  description: string
+  engineType: 'API' | 'WEB'
+  workspaceCode: string
+}
 
 const filter = ref<TaskCenterFilter>({
   keyword: '',
@@ -212,14 +79,17 @@ const apiTasks = ref<AutomationTaskSummaryItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 const total = ref(0)
+const taskTotal = ref(0)
 const pageNo = ref(1)
 const pageSize = ref(10)
 const totalPages = ref(0)
-const useFigmaFallback = ref(true)
+const statusTotals = ref({ running: 0, failed: 0 })
 const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
 const { currentUser } = useSession()
+const { selectedWorkspaceCode } = useWorkspaceContext()
 let loadRequestSeq = 0
+let detailRequestSeq = 0
 let tableFrameObserver: ResizeObserver | null = null
 
 function resolveTaskType(item: AutomationTaskSummaryItem): Pick<TaskCenterRow, 'type' | 'typeTone'> {
@@ -246,83 +116,62 @@ function resolveResult(item: AutomationTaskSummaryItem): Pick<TaskCenterRow, 're
   return resultMap[String(item.status || '')] || { result: '从未执行', resultTone: 'muted' }
 }
 
-function mapTaskItem(item: AutomationTaskSummaryItem, index: number): TaskCenterRow {
-  const fallback = figmaRows[index % figmaRows.length]
+function mapTaskItem(item: AutomationTaskSummaryItem): TaskCenterRow {
   const type = resolveTaskType(item)
   const result = resolveResult(item)
 
   return {
     id: String(item.id),
     taskId: String(item.id),
-    name: item.taskName || fallback.name,
-    description: index === 0 ? fallback.description : undefined,
+    name: item.taskName || '-',
+    description: item.summary || undefined,
     type: type.type,
     typeTone: type.typeTone,
-    environment: item.workspaceName || fallback.environment,
-    scheduleMode: fallback.scheduleMode,
-    scheduleTime: fallback.scheduleTime,
-    enabled: item.status !== 'CANCELED',
+    environment: '—',
+    scheduleMode: '未配置',
+    scheduleTime: '-',
+    enabled: false,
     result: result.result,
     resultTone: result.resultTone,
-    lastRunAt: fallback.lastRunAt,
-    duration: fallback.duration,
-    creator: fallback.creator,
+    lastRunAt: '—',
+    duration: '—',
+    creator: '—',
     workspaceCode: item.workspaceCode || '-',
     backendStatus: String(item.status || '-'),
   }
 }
 
-const baseRows = computed(() => {
-  return useFigmaFallback.value ? figmaRows : apiTasks.value.map(mapTaskItem)
-})
-
-const filteredRows = computed(() => {
-  const keyword = filter.value.keyword.trim().toLowerCase()
-
-  return baseRows.value.filter((item) => {
-    const matchesKeyword = !keyword || item.name.toLowerCase().includes(keyword)
-    const matchesType = !filter.value.type || item.type === filter.value.type
-    const matchesStatus = !filter.value.status || (filter.value.status === 'enabled' ? item.enabled : !item.enabled)
-    const matchesResult = !filter.value.result || item.result === filter.value.result
-    const matchesEnvironment = !filter.value.environment || item.environment === filter.value.environment
-
-    return matchesKeyword && matchesType && matchesStatus && matchesResult && matchesEnvironment
-  })
-})
+const baseRows = computed(() => apiTasks.value.map(mapTaskItem))
 
 const summaryCards = computed(() => [
   {
     label: '任务总数',
-    value: baseRows.value.length,
+    value: taskTotal.value,
     icon: figmaTaskIcons.stat.total,
     tone: 'default',
   },
   {
     label: '已启用',
-    value: baseRows.value.filter((item) => item.enabled).length,
+    value: '—',
     icon: figmaTaskIcons.stat.enabled,
     tone: 'success',
   },
   {
     label: '执行中',
-    value: baseRows.value.filter((item) => item.resultTone === 'running').length,
+    value: statusTotals.value.running,
     icon: figmaTaskIcons.stat.running,
     tone: 'primary',
   },
   {
     label: '最近失败',
-    value: baseRows.value.filter((item) => item.resultTone === 'danger').length,
+    value: statusTotals.value.failed,
     icon: figmaTaskIcons.stat.failed,
     tone: 'danger',
   },
 ])
 
-const pagedRows = computed(() => {
-  if (!useFigmaFallback.value) return filteredRows.value
-  const start = (pageNo.value - 1) * pageSize.value
-  return filteredRows.value.slice(start, start + pageSize.value)
-})
-const tableTotal = computed(() => useFigmaFallback.value ? filteredRows.value.length : total.value)
+const pagedRows = computed(() => baseRows.value)
+const tableTotal = computed(() => total.value)
 const taskTableColumns: AppTableColumnDefinition[] = [
   { key: 'name', label: '任务名称', minWidth: 320.75, required: true, defaultVisible: true },
   { key: 'type', label: '类型', minWidth: 131.22, defaultVisible: true },
@@ -353,10 +202,19 @@ const taskTableNeedsScroll = computed(() => Boolean(
   tableFrameWidth.value && taskTableContentWidth.value > tableFrameWidth.value,
 ))
 const selectedTask = ref<TaskCenterRow | null>(null)
+const selectedTaskDetail = ref<AutomationTaskDetail | null>(null)
+const detailLoading = ref(false)
 const detailTab = ref<TaskDetailTab>('info')
 const editingTask = ref<TaskCenterRow | null>(null)
 const isCreatingTask = ref(false)
+const savingTask = ref(false)
 const taskEditorTrigger = ref<TaskEditorTrigger>('manual')
+const taskEditorForm = ref<TaskEditorForm>({
+  name: '',
+  description: '',
+  engineType: 'API',
+  workspaceCode: '',
+})
 
 const detailTabs: Array<{ key: TaskDetailTab; label: string }> = [
   { key: 'info', label: '基本信息' },
@@ -364,7 +222,7 @@ const detailTabs: Array<{ key: TaskDetailTab; label: string }> = [
   { key: 'ai', label: 'AI 分析' },
 ]
 
-const activeDetailTask = computed(() => selectedTask.value || figmaRows[0])
+const activeDetailTask = computed(() => selectedTask.value || blankEditTask)
 const blankEditTask: TaskCenterRow = {
   id: 'new-task',
   taskId: 'new-task',
@@ -372,36 +230,36 @@ const blankEditTask: TaskCenterRow = {
   description: '',
   type: '接口套件',
   typeTone: 'api',
-  environment: '测试环境',
-  scheduleMode: '手动',
+  environment: '—',
+  scheduleMode: '未配置',
   scheduleTime: '-',
-  enabled: true,
+  enabled: false,
   result: '从未执行',
   resultTone: 'muted',
   lastRunAt: '—',
   duration: '—',
-  creator: '张程远',
-  workspaceCode: 'X-MAN',
+  creator: '—',
+  workspaceCode: '',
   backendStatus: 'READY',
 }
 const showTaskEditor = computed(() => isCreatingTask.value || Boolean(editingTask.value))
-const activeEditTask = computed(() => (isCreatingTask.value ? blankEditTask : editingTask.value || activeDetailTask.value))
 const taskEditorTitle = computed(() => (isCreatingTask.value ? '新建任务' : '编辑任务'))
 const taskEditorSubtitle = computed(() => (isCreatingTask.value ? '配置自动化任务和调度策略' : '修改任务配置和调度策略'))
 const taskEditorSaveText = computed(() => (isCreatingTask.value ? '创建任务' : '保存修改'))
 
 const detailInfoRows = computed(() => {
   const task = activeDetailTask.value
+  const detail = selectedTaskDetail.value
 
   return [
     { label: '任务名称', value: task.name, strong: true },
-    { label: '任务描述', value: task.description || '覆盖订单中心所有接口场景，执行前自动同步环境变量。' },
+    { label: '任务描述', value: detail?.summary || task.description || '—' },
     { label: '任务类型', value: task.type, badge: true },
-    { label: '执行环境', value: task.environment },
-    { label: '调度方式', value: task.scheduleTime === '-' ? '手动' : task.scheduleTime, schedule: true, code: task.scheduleTime === '-' ? '' : '0 2 * * *' },
-    { label: '下次执行', value: task.scheduleTime === '-' ? '—' : '2026-07-08 02:00' },
-    { label: '创建人', value: task.creator },
-    { label: '创建时间', value: '2026-05-01' },
+    { label: '执行环境', value: '—' },
+    { label: '调度方式', value: '未配置', schedule: true, code: '' },
+    { label: '下次执行', value: '—' },
+    { label: '创建人', value: '—' },
+    { label: '创建时间', value: formatDateTime(detail?.createdAt) },
   ]
 })
 
@@ -412,81 +270,104 @@ const recentRunCards = computed(() => [
 ])
 
 const failurePolicies = [
-  { label: '失败时继续执行', value: '继续执行剩余步骤' },
-  { label: '失败时发送通知', value: '是 · QA 团队机器人' },
-  { label: '日志保留', value: '保留全部日志' },
+  { label: '失败时继续执行', value: '—' },
+  { label: '失败时发送通知', value: '—' },
+  { label: '日志保留', value: '—' },
 ]
 
-const historyRows = [
-  { trigger: '定时', tone: 'success', time: '2026-07-07 02:00', duration: '4m 32s', total: '48', passed: '48', failed: '0' },
-  { trigger: '定时', tone: 'success', time: '2026-07-06 02:00', duration: '4m 18s', total: '48', passed: '47', failed: '1' },
-  { trigger: '定时', tone: 'danger', time: '2026-07-05 02:00', duration: '3m 55s', total: '48', passed: '41', failed: '7' },
-  { trigger: '定时', tone: 'success', time: '2026-07-04 02:00', duration: '4m 44s', total: '48', passed: '48', failed: '0' },
-  { trigger: '手动', tone: 'success', time: '2026-07-03 02:00', duration: '4m 22s', total: '48', passed: '46', failed: '2' },
-  { trigger: '定时', tone: 'danger', time: '2026-07-02 02:00', duration: '2m 31s', total: '48', passed: '35', failed: '13' },
-  { trigger: '定时', tone: 'success', time: '2026-07-01 02:00', duration: '4m 55s', total: '48', passed: '48', failed: '0' },
-  { trigger: '定时', tone: 'success', time: '2026-06-30 02:00', duration: '4m 29s', total: '48', passed: '48', failed: '0' },
-  { trigger: '定时', tone: 'success', time: '2026-06-29 02:00', duration: '4m 37s', total: '48', passed: '47', failed: '1' },
-  { trigger: '定时', tone: 'success', time: '2026-06-28 02:00', duration: '4m 41s', total: '48', passed: '48', failed: '0' },
-]
+const historyRows = computed(() => (selectedTaskDetail.value?.reports || []).slice().reverse().slice(0, 10).map(report => ({
+  id: report.id,
+  trigger: formatLogSource(report.logSource),
+  tone: String(report.result).toUpperCase() === 'SUCCESS' ? 'success' : 'danger',
+  time: '—',
+  duration: '—',
+  total: '—',
+  passed: '—',
+  failed: '—',
+})))
 
-const historyBars = [
-  { label: '6/29', pass: 1, fail: 0 },
-  { label: '6/30', pass: 0.98, fail: 0.02 },
-  { label: '7/1', pass: 1, fail: 0 },
-  { label: '7/2', pass: 0.73, fail: 0.27 },
-  { label: '7/3', pass: 0.96, fail: 0.04 },
-  { label: '7/4', pass: 1, fail: 0 },
-  { label: '7/5', pass: 0.85, fail: 0.15 },
-  { label: '7/6', pass: 0.98, fail: 0.02 },
-  { label: '7/7', pass: 1, fail: 0 },
-]
+const historyBars = computed(() => historyRows.value.slice().reverse().map((item, index) => ({
+  label: `#${index + 1}`,
+  pass: item.tone === 'success' ? 1 : 0,
+  fail: item.tone === 'danger' ? 1 : 0,
+})))
 
-const aiFailureItems = [
-  {
-    code: 'POST /api/v1/orders/refund',
-    count: '2/2 次',
-    description: '接口超时 30s，疑似测试环境连接不稳定',
-  },
-  {
-    code: "断言 $.data.status === 'refunded'",
-    count: '1/2 次',
-    description: '状态流转延迟，建议增加重试等待断言',
-  },
-]
+const aiFailureItems: Array<{ code: string; count: string; description: string }> = []
+const aiSuggestions: Array<{ icon: string; title: string; description: string }> = []
 
-const aiSuggestions = [
-  {
-    icon: figmaTaskIcons.panel.suggest,
-    title: '建议改为夜间 03:00 执行',
-    description: '分析发现凌晨 02:00 测试环境负载较高（与备份任务重叠），建议错峰到 03:00。',
-  },
-  {
-    icon: figmaTaskIcons.panel.suggestAlt,
-    title: '建议拆分高失败率场景',
-    description: '「退款接口」失败率 67%，建议拆离为独立任务并调低频率，避免影响整体通过率。',
-  },
-]
+function formatDateTime(value?: string | null) {
+  if (!value) return '—'
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+function formatLogSource(value?: string | null) {
+  const sourceMap: Record<string, string> = {
+    MANUAL: '手动',
+    API: '接口',
+    API_LOCAL_RUNNER: '本地 Runner',
+    WEB: 'Web UI',
+    APP: 'App',
+    SYSTEM: '系统',
+  }
+  return sourceMap[String(value || '').toUpperCase()] || '未知'
+}
+
+function engineTypeFromRow(item: TaskCenterRow): 'API' | 'WEB' {
+  return item.typeTone === 'web' ? 'WEB' : 'API'
+}
+
+async function loadTaskDetail(item: TaskCenterRow) {
+  const taskId = Number(item.taskId)
+  if (!Number.isFinite(taskId)) return
+  const requestSeq = ++detailRequestSeq
+  detailLoading.value = true
+  try {
+    const detail = await automationTaskApi.getTask(item.workspaceCode || selectedWorkspaceCode.value || 'ALL', taskId)
+    if (requestSeq !== detailRequestSeq || selectedTask.value?.taskId !== String(taskId)) return
+    selectedTaskDetail.value = detail
+    selectedTask.value = mapTaskItem(detail)
+  } catch (error) {
+    if (requestSeq === detailRequestSeq) ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    if (requestSeq === detailRequestSeq) detailLoading.value = false
+  }
+}
 
 function openTaskDetail(item: TaskCenterRow, tab: TaskDetailTab = 'info') {
   selectedTask.value = item
+  selectedTaskDetail.value = null
   detailTab.value = tab
+  void loadTaskDetail(item)
 }
 
 function closeTaskDetail() {
   selectedTask.value = null
+  selectedTaskDetail.value = null
+  detailRequestSeq += 1
   detailTab.value = 'info'
 }
 
 function openTaskEditor(item: TaskCenterRow = activeDetailTask.value) {
   isCreatingTask.value = false
   editingTask.value = item
+  taskEditorForm.value = {
+    name: item.name === '—' ? '' : item.name,
+    description: item.description || selectedTaskDetail.value?.summary || '',
+    engineType: engineTypeFromRow(item),
+    workspaceCode: item.workspaceCode,
+  }
   taskEditorTrigger.value = item.scheduleTime === '-' ? 'manual' : 'cron'
 }
 
 function openTaskCreator() {
   isCreatingTask.value = true
   editingTask.value = null
+  taskEditorForm.value = {
+    name: '',
+    description: '',
+    engineType: 'API',
+    workspaceCode: selectedWorkspaceCode.value === 'ALL' ? '' : selectedWorkspaceCode.value,
+  }
   taskEditorTrigger.value = 'manual'
 }
 
@@ -496,10 +377,132 @@ function closeTaskEditor() {
   taskEditorTrigger.value = 'manual'
 }
 
+function showUnsupportedCapability(message: string) {
+  ElMessage.info(message)
+}
+
+function handleTaskTypeFilterChange() {
+  if (filter.value.type === '接口场景' || filter.value.type === 'Web UI 用例') {
+    filter.value.type = ''
+    ElMessage.info('任务接口仅提供执行引擎，暂不能区分套件、场景和单用例')
+  }
+}
+
+function handleUnsupportedFilter(field: 'status' | 'environment') {
+  if (!filter.value[field]) return
+  filter.value[field] = ''
+  ElMessage.info(field === 'status'
+    ? '任务接口暂无启用状态字段，暂不能按启用状态筛选'
+    : '任务接口暂无运行环境字段，暂不能按环境筛选')
+}
+
+async function saveTask() {
+  const taskName = taskEditorForm.value.name.trim()
+  if (!taskName) {
+    ElMessage.warning('请输入任务名称')
+    return
+  }
+
+  const workspaceCode = taskEditorForm.value.workspaceCode
+    || editingTask.value?.workspaceCode
+    || (selectedWorkspaceCode.value === 'ALL' ? '' : selectedWorkspaceCode.value)
+  if (!workspaceCode || workspaceCode === 'ALL') {
+    ElMessage.warning('请先从顶部工作空间选择器切换到具体工作空间')
+    return
+  }
+
+  const currentStatus = String(editingTask.value?.backendStatus || 'READY').toUpperCase()
+  const payload: SaveAutomationTaskPayload = {
+    workspaceCode,
+    taskName,
+    engineType: taskEditorForm.value.engineType,
+    status: ['READY', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELED'].includes(currentStatus) ? currentStatus : 'READY',
+    summary: taskEditorForm.value.description.trim() || null,
+  }
+
+  savingTask.value = true
+  try {
+    if (isCreatingTask.value) {
+      await automationTaskApi.createTask(workspaceCode, payload)
+      ElMessage.success('任务基础信息已创建')
+    } else {
+      const taskId = Number(editingTask.value?.taskId)
+      if (!Number.isFinite(taskId)) throw new Error('任务 ID 无效')
+      await automationTaskApi.updateTask(workspaceCode, taskId, payload)
+      ElMessage.success('任务基础信息已保存')
+    }
+    closeTaskEditor()
+    await Promise.all([loadTasks(), loadTaskStats()])
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    savingTask.value = false
+  }
+}
+
+async function deleteTask(item: TaskCenterRow) {
+  const taskId = Number(item.taskId)
+  if (!Number.isFinite(taskId)) {
+    ElMessage.error('任务 ID 无效')
+    return
+  }
+
+  try {
+    await confirmDelete({
+      title: '删除任务',
+      message: `确认删除任务「${item.name}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+      beforeConfirm: async () => {
+        try {
+          await automationTaskApi.deleteTask(item.workspaceCode || selectedWorkspaceCode.value || 'ALL', taskId)
+        } catch (error) {
+          ElMessage.error(getRequestErrorMessage(error))
+          throw error
+        }
+      },
+    })
+    if (selectedTask.value?.taskId === item.taskId) closeTaskDetail()
+    ElMessage.success('任务已删除')
+    await Promise.all([loadTasks(), loadTaskStats()])
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') throw error
+  }
+}
+
+function runTask() {
+  showUnsupportedCapability('当前任务接口只能修改状态，尚未提供真实执行或 Runner 调度接口')
+}
+
+function toggleTaskEnabled() {
+  showUnsupportedCapability('当前任务模型没有启用状态字段，暂不能保存启停设置')
+}
+
+function openTaskReport(reportId?: number) {
+  const targetReportId = reportId || historyRows.value[0]?.id
+  if (!targetReportId) {
+    ElMessage.info('当前任务暂无关联报告')
+    return
+  }
+  void router.push({
+    name: 'reports',
+    query: {
+      reportId: String(targetReportId),
+      workspace: selectedTaskDetail.value?.workspaceCode || activeDetailTask.value.workspaceCode,
+    },
+  })
+}
+
+function openTaskReportList() {
+  void router.push({
+    name: 'reports',
+    query: {
+      workspace: selectedTaskDetail.value?.workspaceCode || activeDetailTask.value.workspaceCode,
+    },
+  })
+}
+
 function normalizePageNo() {
-  const pages = useFigmaFallback.value
-    ? Math.max(1, Math.ceil(tableTotal.value / Math.max(pageSize.value, 1)))
-    : totalPages.value
+  const pages = totalPages.value
   if (pages > 0 && pageNo.value > pages) {
     pageNo.value = pages
   }
@@ -547,32 +550,56 @@ async function loadTasks() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const page = await automationTaskApi.getTasks('ALL', {
+    const resultStatusMap: Record<string, string> = {
+      通过: 'SUCCESS',
+      失败: 'FAILED',
+      执行中: 'RUNNING',
+      从未执行: 'READY',
+    }
+    const engineTypeMap: Record<string, string> = {
+      接口套件: 'API',
+      'Web UI 套件': 'WEB',
+    }
+    const page = await automationTaskApi.getTasks(selectedWorkspaceCode.value || 'ALL', {
       pageNo: pageNo.value,
       pageSize: pageSize.value,
       keyword: filter.value.keyword,
+      status: resultStatusMap[filter.value.result],
+      engineType: engineTypeMap[filter.value.type],
     })
     if (requestSeq === loadRequestSeq) {
       apiTasks.value = Array.isArray(page.items) ? page.items : []
-      useFigmaFallback.value = page.total === 0 && apiTasks.value.length === 0
-      total.value = useFigmaFallback.value ? figmaRows.length : page.total
+      total.value = page.total
       pageNo.value = page.pageNo || pageNo.value
-      totalPages.value = useFigmaFallback.value
-        ? Math.ceil(figmaRows.length / Math.max(pageSize.value, 1))
-        : Number(page.totalPages || Math.ceil(page.total / Math.max(pageSize.value, 1)))
+      totalPages.value = Number(page.totalPages || Math.ceil(page.total / Math.max(pageSize.value, 1)))
     }
   } catch (error) {
     if (requestSeq === loadRequestSeq) {
       errorMessage.value = getRequestErrorMessage(error)
       apiTasks.value = []
-      useFigmaFallback.value = true
-      total.value = figmaRows.length
-      totalPages.value = Math.ceil(figmaRows.length / Math.max(pageSize.value, 1))
+      total.value = 0
+      totalPages.value = 0
     }
   } finally {
     if (requestSeq === loadRequestSeq) {
       loading.value = false
     }
+  }
+}
+
+async function loadTaskStats() {
+  try {
+    const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+    const [all, running, failed] = await Promise.all([
+      automationTaskApi.getTasks(workspaceCode, { pageNo: 1, pageSize: 1 }),
+      automationTaskApi.getTasks(workspaceCode, { status: 'RUNNING', pageNo: 1, pageSize: 1 }),
+      automationTaskApi.getTasks(workspaceCode, { status: 'FAILED', pageNo: 1, pageSize: 1 }),
+    ])
+    taskTotal.value = all.total
+    statusTotals.value = { running: running.total, failed: failed.total }
+  } catch {
+    taskTotal.value = 0
+    statusTotals.value = { running: 0, failed: 0 }
   }
 }
 
@@ -588,6 +615,14 @@ watch(pageNo, (value, oldValue) => {
 
 watch(pageSize, (value, oldValue) => {
   if (value !== oldValue) reloadFromFirstPage()
+})
+
+watch(selectedWorkspaceCode, () => {
+  closeTaskDetail()
+  closeTaskEditor()
+  if (pageNo.value === 1) void loadTasks()
+  else pageNo.value = 1
+  void loadTaskStats()
 })
 
 watch([totalPages, tableTotal], normalizePageNo)
@@ -606,7 +641,7 @@ watch(tableFrameRef, (element) => {
 })
 
 onMounted(() => {
-  void loadTasks()
+  void Promise.all([loadTasks(), loadTaskStats()])
 })
 
 onBeforeUnmount(() => {
@@ -645,14 +680,14 @@ onBeforeUnmount(() => {
               <Search class="task-search-field__icon" />
               <input v-model="filter.keyword" type="search" placeholder="搜索任务名称">
             </label>
-            <select v-model="filter.type" class="task-filter-select" aria-label="任务类型">
+            <select v-model="filter.type" class="task-filter-select" aria-label="任务类型" @change="handleTaskTypeFilterChange">
               <option value="">全部类型</option>
               <option value="接口套件">接口套件</option>
               <option value="接口场景">接口场景</option>
               <option value="Web UI 套件">Web UI 套件</option>
               <option value="Web UI 用例">Web UI 用例</option>
             </select>
-            <select v-model="filter.status" class="task-filter-select" aria-label="任务状态">
+            <select v-model="filter.status" class="task-filter-select" aria-label="任务状态" @change="handleUnsupportedFilter('status')">
               <option value="">全部状态</option>
               <option value="enabled">已启用</option>
               <option value="disabled">未启用</option>
@@ -664,7 +699,7 @@ onBeforeUnmount(() => {
               <option value="执行中">执行中</option>
               <option value="从未执行">从未执行</option>
             </select>
-            <select v-model="filter.environment" class="task-filter-select" aria-label="运行环境">
+            <select v-model="filter.environment" class="task-filter-select" aria-label="运行环境" @change="handleUnsupportedFilter('environment')">
               <option value="">全部环境</option>
               <option value="测试环境">测试环境</option>
               <option value="预发布">预发布</option>
@@ -677,7 +712,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="errorMessage" class="task-sr-only">
-            任务接口暂不可用，当前按 Figma 示例数据展示：{{ errorMessage }}
+            任务接口加载失败：{{ errorMessage }}
           </div>
 
           <div ref="tableFrameRef" class="task-table-frame" :aria-busy="loading">
@@ -737,7 +772,7 @@ onBeforeUnmount(() => {
                     :class="{ 'is-on': item.enabled }"
                     :aria-pressed="item.enabled"
                     aria-label="切换任务启用状态"
-                    @click.stop
+                    @click.stop="toggleTaskEnabled"
                   />
 
                   <mark v-else-if="column.key === 'result'" class="task-result-badge" :class="`is-${item.resultTone}`">
@@ -766,7 +801,7 @@ onBeforeUnmount(() => {
                   />
                 </template>
                 <template #default="{ row: item }">
-                  <button type="button" aria-label="立即执行" title="立即执行" @click.stop>
+                  <button type="button" aria-label="立即执行" title="立即执行" @click.stop="runTask">
                     <img class="task-action-icon" :src="figmaTaskIcons.action.run" alt="">
                   </button>
                   <button type="button" aria-label="查看" title="查看" @click.stop="openTaskDetail(item)">
@@ -775,7 +810,7 @@ onBeforeUnmount(() => {
                   <button type="button" aria-label="编辑" title="编辑" @click.stop="openTaskEditor(item)">
                     <img class="task-action-icon" :src="figmaTaskIcons.action.edit" alt="">
                   </button>
-                  <button type="button" data-danger="true" aria-label="删除" title="删除" @click.stop>
+                  <button type="button" data-danger="true" aria-label="删除" title="删除" @click.stop="deleteTask(item)">
                     <img class="task-action-icon" :src="figmaTaskIcons.action.delete" alt="">
                   </button>
                 </template>
@@ -799,18 +834,18 @@ onBeforeUnmount(() => {
         @reset="tableSettings.resetDraft"
       />
 
-      <aside v-if="selectedTask" class="task-detail-panel" aria-label="任务详情">
+      <aside v-if="selectedTask" class="task-detail-panel" aria-label="任务详情" :aria-busy="detailLoading">
         <header class="task-detail-header">
           <div class="task-detail-title">
             <strong>{{ activeDetailTask.name }}</strong>
             <span>
               <mark class="task-type-badge" :class="`is-${activeDetailTask.typeTone}`">{{ activeDetailTask.type }}</mark>
               <i class="task-status-dot" />
-              <em>{{ activeDetailTask.enabled ? '已启用' : '未启用' }}</em>
+              <em>状态未配置</em>
             </span>
           </div>
           <div class="task-detail-actions">
-            <button type="button" class="task-detail-run">
+            <button type="button" class="task-detail-run" @click="runTask">
               <img :src="figmaTaskIcons.action.runHeader" alt="">
               立即执行
             </button>
@@ -867,7 +902,7 @@ onBeforeUnmount(() => {
                   <strong v-else>{{ item.value }}</strong>
                 </article>
               </div>
-              <button type="button" class="task-link-button">
+              <button type="button" class="task-link-button" @click="openTaskReport()">
                 <img :src="figmaTaskIcons.action.report" alt="">
                 查看完整报告
               </button>
@@ -887,7 +922,7 @@ onBeforeUnmount(() => {
           <div v-else-if="detailTab === 'history'" class="task-detail-history">
             <div class="task-detail-section-title">
               <h3>最近 10 次执行记录</h3>
-              <button type="button" class="task-link-button">
+              <button type="button" class="task-link-button" @click="openTaskReportList">
                 <img :src="figmaTaskIcons.action.history" alt="">
                 查看全部历史
               </button>
@@ -912,7 +947,7 @@ onBeforeUnmount(() => {
                 <span>结果（总/过/败）</span>
                 <span>操作</span>
               </div>
-              <div v-for="item in historyRows" :key="`${item.time}-${item.duration}`" class="task-history-table__row">
+              <div v-for="item in historyRows" :key="item.id" class="task-history-table__row">
                 <mark :class="`is-${item.tone}`">
                   <i />
                   {{ item.trigger }}
@@ -926,7 +961,7 @@ onBeforeUnmount(() => {
                   <em>/</em>
                   <i>{{ item.failed }}</i>
                 </span>
-                <button type="button">
+                <button type="button" @click="openTaskReport(item.id)">
                   <img :src="figmaTaskIcons.action.reportRow" alt="">
                   报告
                 </button>
@@ -941,18 +976,18 @@ onBeforeUnmount(() => {
                   <img :src="figmaTaskIcons.panel.stability" alt="">
                   AI 稳定性分析
                 </span>
-                <em>基于最近 10 次执行</em>
+                <em>等待分析接口</em>
               </div>
               <div class="task-ai-score-row">
                 <div class="task-ai-score">
-                  <strong>80<span>%</span></strong>
+                  <strong>—</strong>
                   <em>近期通过率</em>
                 </div>
                 <div class="task-ai-progress">
-                  <i><b /></i>
+                  <i><b style="width: 0" /></i>
                   <span>
-                    <em>8 / 10 次通过</em>
-                    <em>均耗时 4m 23s</em>
+                    <em>—</em>
+                    <em>—</em>
                   </span>
                 </div>
               </div>
@@ -965,7 +1000,7 @@ onBeforeUnmount(() => {
                   高频失败步骤
                 </span>
               </div>
-              <p>基于 <strong>2 次失败记录</strong>（2026-07-02、2026-07-05）分析：</p>
+              <p>暂无真实分析数据</p>
               <article v-for="item in aiFailureItems" :key="item.code">
                 <header>
                   <code>{{ item.code }}</code>
@@ -1017,15 +1052,18 @@ onBeforeUnmount(() => {
           <div class="task-edit-section__content is-basic">
             <label class="task-edit-field is-full">
               <span>任务名称 <em>*</em></span>
-              <input :value="activeEditTask.name" type="text" readonly>
+              <input v-model="taskEditorForm.name" type="text" maxlength="120">
             </label>
             <label class="task-edit-field is-full">
               <span>任务描述</span>
-              <textarea placeholder="可选，描述任务用途和范围" readonly></textarea>
+              <textarea v-model="taskEditorForm.description" placeholder="可选，描述任务用途和范围" maxlength="500"></textarea>
             </label>
             <label class="task-edit-field">
               <span>任务类型 <em>*</em></span>
-              <i class="task-edit-select" />
+              <select v-model="taskEditorForm.engineType" class="task-edit-select">
+                <option value="API">接口套件</option>
+                <option value="WEB">Web UI 套件</option>
+              </select>
             </label>
             <label class="task-edit-field">
               <span>执行环境 <em>*</em></span>
@@ -1148,13 +1186,13 @@ onBeforeUnmount(() => {
       </div>
 
       <footer class="task-edit-drawer__footer">
-        <button type="button" class="task-edit-test-button">
+        <button type="button" class="task-edit-test-button" @click="runTask">
           <img :src="figmaTaskIcons.editDrawer.testRun" alt="">
           <span>测试执行</span>
         </button>
         <span>
           <button type="button" class="task-edit-cancel-button" @click="closeTaskEditor">取消</button>
-          <button type="button" class="task-edit-save-button" @click="closeTaskEditor">
+          <button type="button" class="task-edit-save-button" :disabled="savingTask" :aria-busy="savingTask" @click="saveTask">
             <img :src="figmaTaskIcons.editDrawer.save" alt="">
             <span>{{ taskEditorSaveText }}</span>
           </button>

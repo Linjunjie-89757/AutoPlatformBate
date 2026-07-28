@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Eye, Play, Search, Trash2 } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
 
 import { useSession } from '@/entities/session'
 import {
+  formatBrowserType,
+  formatDurationMs,
+  formatExecutionLocation,
+  webUiAutomationApi,
+  type WebUiRunStatus,
+  type WebUiRunSummary,
+} from '@/entities/web-ui-automation'
+import { getRequestErrorMessage } from '@/shared/api/error'
+import {
   type AppTableColumnDefinition,
-  useLocalPagedTable,
   useTableColumnSettings,
 } from '@/shared/lib/table'
 import {
@@ -19,14 +28,17 @@ import WebUiModuleTabs from './WebUiModuleTabs.vue'
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
+  workspaceReady?: boolean
 }>(), {
   workspaceCode: 'ALL',
+  workspaceReady: false,
 })
 
 type RunStatus = 'pass' | 'fail' | 'running' | 'canceled'
 
 type RunRecord = {
-  id: string
+  id: number
+  caseId: number | null
   status: RunStatus
   caseName: string
   environment: string
@@ -44,64 +56,26 @@ type RunRecord = {
   baseUrl?: string
 }
 
-const primaryRuns: RunRecord[] = [
-  { id: 'run-001', status: 'pass', caseName: '用户登录正常流程', environment: '测试环境', browser: 'Chrome 126', startedAt: '2026-07-05 14:30:05', duration: '8.3s', passedSteps: 9, failedSteps: 0, operatorName: '张程远', source: '手动执行', finishedAt: '2026-07-05 14:30:13', headless: true, runner: '服务端执行', baseUrl: 'https://test.example.com' },
-  { id: 'run-002', status: 'fail', caseName: '商品搜索与筛选', environment: '测试环境', browser: 'Chrome 126', startedAt: '2026-07-05 11:20:33', duration: '12.7s', passedSteps: 3, failedSteps: 1, operatorName: '李明', source: '手动执行', finishedAt: '2026-07-05 11:20:46', failureSummary: '商品筛选结果未在预期时间内出现', headless: true, runner: '服务端执行', baseUrl: 'https://test.example.com' },
-  { id: 'run-003', status: 'pass', caseName: '购物车加购与结算', environment: '测试环境', browser: 'Chrome 126', startedAt: '2026-07-04 16:45:12', duration: '15.2s', passedSteps: null, failedSteps: null, operatorName: '王芳', source: '批量执行', finishedAt: '2026-07-04 16:45:27', headless: true, runner: 'Runner-上海-01', baseUrl: 'https://test.example.com' },
-  { id: 'run-004', status: 'running', caseName: '订单状态流转核心路径', environment: '预发布环境', browser: 'Chrome 126', startedAt: '2026-07-05 15:00:00', duration: '—', passedSteps: null, failedSteps: null, operatorName: '张程远', source: '手动执行', headless: false, runner: 'Runner-上海-01', baseUrl: 'https://staging.example.com' },
-]
-
-const demoCaseNames = ['用户权限校验', '商品库存同步', '订单支付回调', '优惠券领取流程', '会员等级更新', '退款审核流程']
-const demoOperators = ['张程远', '李明', '王芳', '陈晓', '赵云']
-const demoStatuses: RunStatus[] = ['pass', 'pass', 'fail', 'pass', 'running']
-
-function buildDemoRuns(total: number) {
-  return Array.from({ length: total }, (_, index): RunRecord => {
-    if (index < primaryRuns.length) return primaryRuns[index]
-
-    const sequence = index + 1
-    const runStatus = demoStatuses[index % demoStatuses.length]
-    const day = String(1 + index % 20).padStart(2, '0')
-    const hour = String(8 + index % 10).padStart(2, '0')
-    const minute = String(index * 7 % 60).padStart(2, '0')
-    const second = String(index * 11 % 60).padStart(2, '0')
-    const startedAt = `2026-07-${day} ${hour}:${minute}:${second}`
-    const durationSeconds = 5 + index % 24 + (index % 10) / 10
-    const passedSteps = runStatus === 'running' ? null : 4 + index % 12
-    const failedSteps = runStatus === 'fail' ? 1 + index % 2 : 0
-
-    return {
-      id: `run-${String(sequence).padStart(3, '0')}`,
-      status: runStatus,
-      caseName: `${demoCaseNames[index % demoCaseNames.length]} #${String(sequence).padStart(3, '0')}`,
-      environment: index % 4 === 0 ? '预发布环境' : '测试环境',
-      browser: index % 3 === 0 ? 'Firefox 127' : 'Chrome 126',
-      startedAt,
-      duration: runStatus === 'running' ? '—' : `${durationSeconds.toFixed(1)}s`,
-      passedSteps,
-      failedSteps,
-      operatorName: demoOperators[index % demoOperators.length],
-      source: index % 3 === 0 ? '批量执行' : '手动执行',
-      finishedAt: runStatus === 'running' ? undefined : startedAt,
-      failureSummary: runStatus === 'fail' ? '页面响应结果与预期不一致' : undefined,
-      headless: index % 4 !== 0,
-      runner: index % 3 === 0 ? 'Runner-上海-01' : '服务端执行',
-      baseUrl: index % 4 === 0 ? 'https://staging.example.com' : 'https://test.example.com',
-    }
-  })
-}
-
-const runs = ref<RunRecord[]>(buildDemoRuns(136))
+const runs = ref<RunRecord[]>([])
 
 const keyword = ref('')
 const status = ref<'all' | RunStatus>('all')
 const environment = ref('all')
 const browser = ref('all')
-const selectedRunId = ref<string | null>(null)
+const selectedRunId = ref<number | null>(null)
+const pageNo = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const loading = ref(false)
+const listError = ref<unknown>(null)
+const statTotals = ref({ all: 0, passed: 0, failed: 0, running: 0 })
 const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
 const { currentUser } = useSession()
 let tableFrameObserver: ResizeObserver | null = null
+let keywordTimer: ReturnType<typeof window.setTimeout> | null = null
+let listRequestVersion = 0
+let statsRequestVersion = 0
 
 const tableColumns: AppTableColumnDefinition[] = [
   { key: 'status', label: '状态', defaultVisible: true, required: true },
@@ -127,31 +101,11 @@ const columnSettings = useTableColumnSettings({
 })
 
 const stats = computed(() => [
-  { label: '全部执行', value: runs.value.length, color: '#1d2129' },
-  { label: '通过', value: runs.value.filter(item => item.status === 'pass').length, color: '#00b42a' },
-  { label: '失败', value: runs.value.filter(item => item.status === 'fail').length, color: '#f53f3f' },
-  { label: '运行中', value: runs.value.filter(item => item.status === 'running').length, color: '#0fc6c2' },
+  { label: '全部执行', value: statTotals.value.all, color: '#1d2129' },
+  { label: '通过', value: statTotals.value.passed, color: '#00b42a' },
+  { label: '失败', value: statTotals.value.failed, color: '#f53f3f' },
+  { label: '运行中', value: statTotals.value.running, color: '#0fc6c2' },
 ])
-
-const filteredRuns = computed(() => {
-  const term = keyword.value.trim().toLowerCase()
-  return runs.value.filter((item) => {
-    if (term && !item.caseName.toLowerCase().includes(term)) return false
-    if (status.value !== 'all' && item.status !== status.value) return false
-    if (environment.value !== 'all' && item.environment !== environment.value) return false
-    return browser.value === 'all' || item.browser.startsWith(browser.value)
-  })
-})
-
-const {
-  items: pagedRuns,
-  total: filteredTotal,
-  pageNo,
-  pageSize,
-  setPage,
-  setPageSize,
-  resetPage,
-} = useLocalPagedTable(filteredRuns, { initialPageSize: 10 })
 
 const defaultColumnWeights: Record<string, number> = {
   status: 0.08,
@@ -194,8 +148,147 @@ function statusLabel(value: RunStatus) {
   return '运行中'
 }
 
-function viewRun(item: RunRecord) {
+function mapRunStatus(value: WebUiRunStatus): RunStatus {
+  if (value === 'SUCCESS') return 'pass'
+  if (value === 'FAILED') return 'fail'
+  if (value === 'CANCELED') return 'canceled'
+  return 'running'
+}
+
+function formatDateTime(value?: string | null) {
+  return value ? value.replace('T', ' ').slice(0, 19) : '—'
+}
+
+function mapRunRecord(item: WebUiRunSummary): RunRecord {
+  return {
+    id: item.id,
+    caseId: item.caseId,
+    status: mapRunStatus(item.status),
+    caseName: item.caseName || `用例 #${item.caseId || '-'}`,
+    environment: item.environmentName || '用例默认环境',
+    browser: formatBrowserType(item.browserType),
+    startedAt: formatDateTime(item.startedAt || item.createdAt),
+    duration: formatDurationMs(item.durationMs).replace(' s', 's'),
+    passedSteps: item.status === 'RUNNING' && item.totalSteps === 0 ? null : item.passedSteps,
+    failedSteps: item.status === 'RUNNING' && item.totalSteps === 0 ? null : item.failedSteps,
+    operatorName: item.operatorName || '—',
+    source: item.batchId ? '批量执行' : formatExecutionLocation(item.executionLocation),
+    finishedAt: formatDateTime(item.finishedAt),
+    failureSummary: item.failureSummary || '—',
+    headless: item.headless,
+    runner: item.localRunnerRunId || formatExecutionLocation(item.executionLocation),
+    baseUrl: item.baseUrl || '—',
+  }
+}
+
+const apiStatusMap: Record<Exclude<RunStatus, 'canceled'> | 'canceled', WebUiRunStatus> = {
+  pass: 'SUCCESS',
+  fail: 'FAILED',
+  running: 'RUNNING',
+  canceled: 'CANCELED',
+}
+
+async function loadRuns() {
+  if (!props.workspaceReady) return
+
+  const requestVersion = ++listRequestVersion
+  loading.value = true
+  listError.value = null
+  try {
+    const response = await webUiAutomationApi.getRuns(props.workspaceCode, {
+      keyword: keyword.value.trim() || undefined,
+      status: status.value === 'all' ? '' : apiStatusMap[status.value],
+      pageNo: pageNo.value,
+      pageSize: pageSize.value,
+    })
+    if (requestVersion !== listRequestVersion) return
+    runs.value = response.items.map(mapRunRecord)
+    total.value = response.total
+  } catch (error) {
+    if (requestVersion !== listRequestVersion) return
+    runs.value = []
+    total.value = 0
+    listError.value = error
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    if (requestVersion === listRequestVersion) loading.value = false
+  }
+}
+
+async function loadStats() {
+  if (!props.workspaceReady) return
+
+  const requestVersion = ++statsRequestVersion
+  try {
+    const [all, passed, failed, running] = await Promise.all([
+      webUiAutomationApi.getRuns(props.workspaceCode, { pageNo: 1, pageSize: 1 }),
+      webUiAutomationApi.getRuns(props.workspaceCode, { status: 'SUCCESS', pageNo: 1, pageSize: 1 }),
+      webUiAutomationApi.getRuns(props.workspaceCode, { status: 'FAILED', pageNo: 1, pageSize: 1 }),
+      webUiAutomationApi.getRuns(props.workspaceCode, { status: 'RUNNING', pageNo: 1, pageSize: 1 }),
+    ])
+    if (requestVersion !== statsRequestVersion) return
+    statTotals.value = {
+      all: all.total,
+      passed: passed.total,
+      failed: failed.total,
+      running: running.total,
+    }
+  } catch (error) {
+    if (requestVersion !== statsRequestVersion) return
+    statTotals.value = { all: 0, passed: 0, failed: 0, running: 0 }
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function reloadWorkspaceData() {
+  listRequestVersion += 1
+  statsRequestVersion += 1
+  selectedRunId.value = null
+  pageNo.value = 1
+  if (!props.workspaceReady) {
+    runs.value = []
+    total.value = 0
+    statTotals.value = { all: 0, passed: 0, failed: 0, running: 0 }
+    return
+  }
+  await Promise.all([loadRuns(), loadStats()])
+}
+
+function setPage(value: number) {
+  pageNo.value = value
+  void loadRuns()
+}
+
+function setPageSize(value: number) {
+  pageSize.value = value
+  pageNo.value = 1
+  void loadRuns()
+}
+
+function resetPageAndLoad() {
+  pageNo.value = 1
+  void loadRuns()
+}
+
+function selectRun(item: RunRecord) {
   selectedRunId.value = item.id
+}
+
+function viewRun(item: RunRecord) {
+  selectRun(item)
+  ElMessage.info('后台已有执行详情数据，但当前 Figma 页面没有详情抽屉设计；为避免接回旧项目视觉，本轮暂不打开旧抽屉')
+}
+
+function showUnsupportedAction(action: string) {
+  ElMessage.info(`${action}尚缺少完整后台契约或 Figma 交互设计，已记录到遗留问题`)
+}
+
+function resetUnsupportedFilter(filter: 'environment' | 'browser') {
+  const selected = filter === 'environment' ? environment.value : browser.value
+  if (selected === 'all') return
+  ElMessage.info(`${filter === 'environment' ? '执行环境' : '浏览器'}尚未进入执行记录服务端筛选契约，已保留 Figma 入口但不执行当前页伪筛选`)
+  if (filter === 'environment') environment.value = 'all'
+  else browser.value = 'all'
 }
 
 function openColumnSettings() {
@@ -208,10 +301,20 @@ function isDefaultFilter(value: string) {
 
 function formatColumnValue(item: RunRecord, key: string) {
   if (key === 'headless') return item.headless === undefined ? '—' : item.headless ? '是' : '否'
-  return item[key as keyof RunRecord] || '—'
+  const value = item[key as keyof RunRecord]
+  return value === undefined || value === null || value === '' ? '—' : String(value)
 }
 
-watch([keyword, status, environment, browser], resetPage)
+watch(() => [props.workspaceCode, props.workspaceReady] as const, () => {
+  void reloadWorkspaceData()
+}, { immediate: true })
+
+watch(keyword, () => {
+  if (keywordTimer) window.clearTimeout(keywordTimer)
+  keywordTimer = window.setTimeout(resetPageAndLoad, 300)
+})
+
+watch(status, resetPageAndLoad)
 
 watch(tableFrameRef, element => {
   tableFrameObserver?.disconnect()
@@ -228,6 +331,7 @@ watch(tableFrameRef, element => {
 
 onBeforeUnmount(() => {
   tableFrameObserver?.disconnect()
+  if (keywordTimer) window.clearTimeout(keywordTimer)
 })
 </script>
 
@@ -242,24 +346,26 @@ onBeforeUnmount(() => {
         <span>{{ item.label }}</span>
       </div>
       <div class="web-ui-runs-page__spacer" />
-      <button class="web-ui-runs-batch" type="button"><Play />批量执行</button>
+      <button class="web-ui-runs-batch" type="button" @click="showUnsupportedAction('批量执行')"><Play />批量执行</button>
     </header>
 
     <div class="web-ui-runs-page__filters">
       <label class="web-ui-runs-search"><Search /><input v-model="keyword" placeholder="搜索用例名称" /></label>
       <select v-model="status" :class="{ 'is-default': isDefaultFilter(status) }" aria-label="执行状态"><option value="all">全部状态</option><option value="pass">通过</option><option value="fail">失败</option><option value="running">运行中</option></select>
-      <select v-model="environment" :class="{ 'is-default': isDefaultFilter(environment) }" aria-label="执行环境"><option value="all">全部环境</option><option>测试环境</option><option>预发布环境</option></select>
-      <select v-model="browser" :class="{ 'is-default': isDefaultFilter(browser) }" aria-label="浏览器"><option value="all">全部浏览器</option><option>Chrome</option><option>Firefox</option></select>
+      <select v-model="environment" :class="{ 'is-default': isDefaultFilter(environment) }" aria-label="执行环境" @change="resetUnsupportedFilter('environment')"><option value="all">全部环境</option><option>测试环境</option><option>预发布环境</option></select>
+      <select v-model="browser" :class="{ 'is-default': isDefaultFilter(browser) }" aria-label="浏览器" @change="resetUnsupportedFilter('browser')"><option value="all">全部浏览器</option><option>Chrome</option><option>Firefox</option></select>
     </div>
 
     <main class="web-ui-runs-page__content">
       <div ref="tableFrameRef" class="web-ui-runs-table-frame">
         <AppFigmaTable
           class="web-ui-runs-table"
-          :data="pagedRuns"
+          :data="runs"
+          :loading="loading"
+          :error="listError"
           :page-no="pageNo"
           :page-size="pageSize"
-          :total="filteredTotal"
+          :total="total"
           show-page-size
           show-jumper
           :header-height="34.5"
@@ -270,7 +376,8 @@ onBeforeUnmount(() => {
           empty-text="暂无匹配的执行记录"
           @page-change="setPage"
           @page-size-change="setPageSize"
-          @row-click="viewRun"
+          @row-click="selectRun"
+          @retry="loadRuns"
         >
           <el-table-column
             v-for="column in columnSettings.visibleColumns.value"
@@ -300,8 +407,8 @@ onBeforeUnmount(() => {
             </template>
             <template #default="{ row: item }">
               <button type="button" title="查看详情" aria-label="查看详情" @click.stop="viewRun(item)"><Eye /></button>
-              <button type="button" title="重跑" aria-label="重跑" @click.stop><Play /></button>
-              <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop><Trash2 /></button>
+              <button type="button" title="重跑" aria-label="重跑" @click.stop="showUnsupportedAction('重跑')"><Play /></button>
+              <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="showUnsupportedAction('删除执行记录')"><Trash2 /></button>
             </template>
           </AppFigmaActionColumn>
         </AppFigmaTable>

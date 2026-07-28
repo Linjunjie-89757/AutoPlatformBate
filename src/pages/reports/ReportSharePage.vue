@@ -1,40 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { Check, ChevronDown, Sparkles } from '@lucide/vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { Check } from '@lucide/vue'
+import { useRoute, useRouter } from 'vue-router'
 
+import { reportApi, type ReportAttachmentItem, type SharedReport } from '@/entities/report'
+import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaGlobalNavIcons, figmaReportIcons } from '@/shared/assets/figma-icons'
-
-type SharedStepStatus = 'pass' | 'fail' | 'skip'
-type SharedMethod = 'GET' | 'POST' | 'DELETE'
-
-interface SharedAssertion {
-  path: string
-  op: string
-  expected: string
-  actual: string
-  pass: boolean
-  message?: string
-}
-
-interface SharedStep {
-  id: string
-  seq: number
-  name: string
-  status: SharedStepStatus
-  duration: string
-  method?: SharedMethod
-  url?: string
-  statusCode?: number
-  assertions?: SharedAssertion[]
-  errorLog?: string
-  responseBody?: string
-  aiAnalysis?: {
-    summary: string
-    basis: string[]
-    suggestions: string[]
-  }
-}
 
 interface ShareNavItem {
   key: string
@@ -43,11 +14,14 @@ interface ShareNavItem {
   separated?: boolean
 }
 
+const route = useRoute()
 const router = useRouter()
-const expandedStepId = ref('s4')
-const aiExpanded = ref(false)
+const sharedReport = ref<SharedReport | null>(null)
+const loading = ref(false)
+const error = ref('')
 const shareLinkCopied = ref(false)
 const copiedCodeBlockKey = ref('')
+let requestSeq = 0
 let shareLinkResetTimer: ReturnType<typeof window.setTimeout> | null = null
 const copiedResetTimers = new Map<string, ReturnType<typeof window.setTimeout>>()
 
@@ -64,184 +38,81 @@ const navItems: ShareNavItem[] = [
   { key: 'setting', icon: figmaGlobalNavIcons.setting },
 ]
 
-const report = {
-  name: '风控中心-黑名单拦截场景',
-  type: '接口场景',
-  trigger: 'CI/CD 触发',
-  status: '失败',
-  passRate: 50,
-  totalSteps: 8,
-  passSteps: 4,
-  failSteps: 3,
-  skipSteps: 1,
-  env: '预发布',
-  executor: '李明',
-  duration: '48s',
-  startAt: '2026-07-03 13:30:05',
-  endAt: '2026-07-03 13:30:53',
-}
-
-const steps: SharedStep[] = [
-  {
-    id: 's1',
-    seq: 1,
-    name: 'POST /api/auth/login',
-    status: 'pass',
-    duration: '120ms',
-    method: 'POST',
-    url: 'https://staging-api.company.com/api/auth/login',
-    statusCode: 200,
-    assertions: [
-      {
-        path: '$.code',
-        op: '等于',
-        expected: '0',
-        actual: '0',
-        pass: true,
-      },
-      {
-        path: '$.data.token',
-        op: '存在',
-        expected: 'eyJhbGci...',
-        actual: 'eyJhbGci...',
-        pass: true,
-      },
-    ],
-    responseBody: `{
-  "code": 0,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "userId": 10042,
-    "role": "user"
-  }
-}`,
-  },
-  {
-    id: 's2',
-    seq: 2,
-    name: 'POST /api/risk/blacklist/add',
-    status: 'pass',
-    duration: '85ms',
-    method: 'POST',
-    url: 'https://staging-api.company.com/api/risk/blacklist/add',
-    statusCode: 200,
-  },
-  {
-    id: 's3',
-    seq: 3,
-    name: 'GET /api/risk/blacklist/query',
-    status: 'pass',
-    duration: '67ms',
-    method: 'GET',
-    url: 'https://staging-api.company.com/api/risk/blacklist/query?userId=99999',
-    statusCode: 200,
-  },
-  {
-    id: 's4',
-    seq: 4,
-    name: 'POST /api/orders/create（黑名单用户下单）',
-    status: 'fail',
-    duration: '210ms',
-    method: 'POST',
-    url: 'https://staging-api.company.com/api/orders/create',
-    statusCode: 200,
-    assertions: [
-      {
-        path: '$.code',
-        op: '等于',
-        expected: '403',
-        actual: '0',
-        pass: false,
-        message: '期望返回 403 被拦截，实际返回 0（下单成功）',
-      },
-      {
-        path: '$.message',
-        op: '包含',
-        expected: 'blacklist',
-        actual: 'success',
-        pass: false,
-        message: '响应消息不含 blacklist 关键字',
-      },
-    ],
-    errorLog: `[2026-07-03 13:30:38.214] [ASSERT FAIL] Step 4: POST /api/orders/create
-断言失败: $.code 期望 403，实际 0
-断言失败: $.message 期望包含 "blacklist"，实际 "success"
-
-环境: 预发布 (https://staging-api.company.com)
-推断: 预发布环境风控中间件未正确拦截黑名单用户下单请求。`,
-    responseBody: `{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "orderId": "ORD-20260703-99001"
-  }
-}`,
-    aiAnalysis: {
-      summary: '风控中间件未在预发布环境正确拦截黑名单用户下单，接口返回 200 而非预期 403，表明黑名单校验逻辑未在该环境生效。',
-      basis: [
-        '步骤 2 成功将 userId=99999 写入黑名单，blacklistId=5501 表明入库成功',
-        '步骤 3 查询确认 inBlacklist=true，黑名单数据写入正确',
-        '步骤 4 下单请求接口返回 code=0 而非 403，风控拦截未被触发',
-        '响应体包含正常 orderId，表明订单已实际创建成功',
-      ],
-      suggestions: [
-        '检查预发布环境风控中间件是否已部署最新版本',
-        '对比测试环境与预发布环境 risk-middleware 配置差异',
-        '排查黑名单缓存同步（预发布可能使用独立 Redis 实例）',
-        '联系后端确认 /api/orders/create 在预发布的中间件链路是否完整',
-      ],
-    },
-  },
-  { id: 's5', seq: 5, name: 'POST /api/risk/blacklist/remove', status: 'skip', duration: '—' },
-  { id: 's6', seq: 6, name: 'GET /api/risk/blacklist/query（验证移除）', status: 'skip', duration: '—' },
-  {
-    id: 's7',
-    seq: 7,
-    name: 'DELETE /api/test/cleanup',
-    status: 'fail',
-    duration: '315ms',
-    method: 'DELETE',
-    url: 'https://staging-api.company.com/api/test/cleanup',
-    statusCode: 500,
-  },
-  {
-    id: 's8',
-    seq: 8,
-    name: 'GET /api/orders/list（验证无残留订单）',
-    status: 'fail',
-    duration: '74ms',
-    method: 'GET',
-    url: 'https://staging-api.company.com/api/orders/list?userId=99999',
-    statusCode: 200,
-  },
+const report = computed(() => sharedReport.value?.report || null)
+const reportStatus = computed(() => {
+  const result = String(report.value?.result || '').toUpperCase()
+  if (result === 'SUCCESS') return { label: '成功', tone: 'success' }
+  if (result === 'FAILED') return { label: '失败', tone: 'danger' }
+  return { label: '已中断', tone: 'warning' }
+})
+const summaryStats = [
+  { label: '总步骤', value: '—', tone: 'default' },
+  { label: '成功', value: '—', tone: 'success' },
+  { label: '失败', value: '—', tone: 'danger' },
+  { label: '跳过', value: '—', tone: 'muted' },
 ]
+const token = computed(() => {
+  const value = Array.isArray(route.query.token) ? route.query.token[0] : route.query.token
+  return typeof value === 'string' ? value.trim() : ''
+})
+const reportSource = computed(() => {
+  const labels: Record<string, string> = {
+    MANUAL: '手动执行',
+    API: '接口自动化',
+    API_LOCAL_RUNNER: '本地 Runner',
+    WEB: 'Web UI 自动化',
+    APP: 'App 自动化',
+    SYSTEM: '系统任务',
+  }
+  return labels[String(report.value?.logSource || '').toUpperCase()] || '未知来源'
+})
 
-const summaryStats = computed(() => [
-  { label: '总步骤', value: report.totalSteps, tone: 'default' },
-  { label: '成功', value: report.passSteps, tone: 'success' },
-  { label: '失败', value: report.failSteps, tone: 'danger' },
-  { label: '跳过', value: report.skipSteps, tone: 'muted' },
-])
-
-function toggleStep(stepId: string) {
-  expandedStepId.value = expandedStepId.value === stepId ? '' : stepId
+function formatDate(value?: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
-function stepIcon(step: SharedStep) {
-  if (step.status === 'pass') return figmaReportIcons.status.success
-  if (step.status === 'fail') return figmaReportIcons.status.failed
-  return figmaReportIcons.status.skipped
+function formatAttachmentSize(value?: number | null) {
+  if (!Number.isFinite(value) || Number(value) < 0) return '—'
+  const bytes = Number(value)
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-function statusCodeTone(code?: number) {
-  if (!code) return 'muted'
-  if (code < 300) return 'success'
-  if (code < 500) return 'warning'
-  return 'danger'
+function attachmentUrl(item: ReportAttachmentItem) {
+  return item.downloadUrl || '#'
 }
 
-function methodTone(method?: SharedMethod) {
-  return method?.toLowerCase() ?? 'empty'
+async function loadSharedReport() {
+  const currentToken = token.value
+  const currentRequest = ++requestSeq
+  sharedReport.value = null
+  error.value = ''
+  if (!currentToken) {
+    error.value = '分享链接缺少有效 token'
+    return
+  }
+
+  loading.value = true
+  try {
+    const result = await reportApi.getSharedReport(currentToken)
+    if (currentRequest !== requestSeq) return
+    sharedReport.value = result
+  } catch (reason) {
+    if (currentRequest !== requestSeq) return
+    const status = reason && typeof reason === 'object' && 'status' in reason
+      ? Number((reason as { status?: number }).status)
+      : 0
+    error.value = status === 404
+      ? '分享链接无效、已过期或已撤销'
+      : getRequestErrorMessage(reason) || '分享报告加载失败'
+  } finally {
+    if (currentRequest === requestSeq) loading.value = false
+  }
 }
 
 async function copyCurrentUrl() {
@@ -288,8 +159,34 @@ async function copyText(text = '') {
 }
 
 function enterBackend() {
-  void router.push('/reports')
+  const current = report.value
+  if (!current) {
+    void router.push('/reports')
+    return
+  }
+  void router.push({
+    path: '/reports',
+    query: {
+      workspace: current.workspaceCode,
+      reportId: String(current.id),
+    },
+  })
 }
+
+function exportPdf() {
+  window.print()
+}
+
+watch(token, () => {
+  void loadSharedReport()
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  requestSeq += 1
+  if (shareLinkResetTimer) window.clearTimeout(shareLinkResetTimer)
+  copiedResetTimers.forEach(timer => window.clearTimeout(timer))
+  copiedResetTimers.clear()
+})
 </script>
 
 <template>
@@ -308,23 +205,16 @@ function enterBackend() {
         </template>
       </div>
 
-      <div class="report-share-avatar">张</div>
+      <div class="report-share-avatar">访</div>
     </aside>
 
     <main class="report-share-app">
       <header class="report-share-topbar">
         <strong>报告中心</strong>
         <div class="report-share-topbar__right">
-          <button type="button" class="report-share-search">
-            <img :src="figmaReportIcons.quickSearch" alt="">
-            <span>快速查找</span>
-            <kbd>⌘K</kbd>
-          </button>
-          <i></i>
           <span class="report-share-user">
-            <em>张</em>
-            <span>张程远</span>
-            <img :src="figmaReportIcons.userChevron" alt="">
+            <em>访</em>
+            <span>访客</span>
           </span>
         </div>
       </header>
@@ -345,7 +235,7 @@ function enterBackend() {
                 <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
                 <span>{{ shareLinkCopied ? '已复制' : '复制链接' }}</span>
               </button>
-              <button type="button">
+              <button type="button" :disabled="!report" @click="exportPdf">
                 <img :src="figmaReportIcons.sharePage.export" alt="">
                 <span>导出 PDF</span>
               </button>
@@ -357,195 +247,98 @@ function enterBackend() {
         </header>
 
         <div class="report-share-content">
-          <section class="report-share-summary">
-            <div class="report-share-summary__head">
-              <div class="report-share-title-block">
-                <div class="report-share-report-meta">
-                  <span>{{ report.type }}</span>
-                  <em>{{ report.trigger }}</em>
+          <div v-if="loading" class="report-share-state" aria-live="polite">
+            <span class="report-share-state__spinner"></span>
+            <strong>正在加载分享报告</strong>
+          </div>
+          <div v-else-if="error" class="report-share-state is-error" role="alert">
+            <img :src="figmaReportIcons.emptyAi" alt="">
+            <strong>报告暂时无法查看</strong>
+            <span>{{ error }}</span>
+            <button v-if="token" type="button" @click="loadSharedReport">重新加载</button>
+          </div>
+
+          <template v-else-if="report">
+            <section class="report-share-summary">
+              <div class="report-share-summary__head">
+                <div class="report-share-title-block">
+                  <div class="report-share-report-meta">
+                    <span>{{ reportSource }}</span>
+                    <em>报告 #{{ report.id }}</em>
+                  </div>
+                  <h1>{{ report.reportName }}</h1>
+                  <div class="report-share-result-line">
+                    <span class="report-share-status" :class="`is-${reportStatus.tone}`">
+                      <i></i>{{ reportStatus.label }}
+                    </span>
+                    <strong>—</strong>
+                    <small>通过率</small>
+                  </div>
                 </div>
-                <h1>{{ report.name }}</h1>
-                <div class="report-share-result-line">
-                  <span class="report-share-status">
-                    <i></i>
-                    {{ report.status }}
-                  </span>
-                  <strong>{{ report.passRate.toFixed(1) }}%</strong>
-                  <small>通过率</small>
+
+                <div class="report-share-stat-list">
+                  <article v-for="item in summaryStats" :key="item.label" :class="`is-${item.tone}`">
+                    <strong>{{ item.value }}</strong>
+                    <span>{{ item.label }}</span>
+                  </article>
                 </div>
               </div>
 
-              <div class="report-share-stat-list">
-                <article v-for="item in summaryStats" :key="item.label" :class="`is-${item.tone}`">
-                  <strong>{{ item.value }}</strong>
-                  <span>{{ item.label }}</span>
-                </article>
-              </div>
-            </div>
+              <dl class="report-share-summary__meta">
+                <div><dt>工作空间</dt><dd>{{ report.workspaceName || '—' }}</dd></div>
+                <div><dt>任务</dt><dd>{{ report.taskName || '—' }}</dd></div>
+                <div><dt>执行人</dt><dd>—</dd></div>
+                <div><dt>生成时间</dt><dd>{{ formatDate(report.createdAt) }}</dd></div>
+                <div><dt>更新时间</dt><dd>{{ formatDate(report.updatedAt) }}</dd></div>
+              </dl>
+            </section>
 
-            <dl class="report-share-summary__meta">
-              <div>
-                <dt>执行环境</dt>
-                <dd>{{ report.env }}</dd>
-              </div>
-              <div>
-                <dt>执行人</dt>
-                <dd>{{ report.executor }}</dd>
-              </div>
-              <div>
-                <dt>总耗时</dt>
-                <dd>{{ report.duration }}</dd>
-              </div>
-              <div>
-                <dt>开始时间</dt>
-                <dd>{{ report.startAt }}</dd>
-              </div>
-              <div>
-                <dt>结束时间</dt>
-                <dd>{{ report.endAt }}</dd>
-              </div>
-            </dl>
-          </section>
+            <section v-if="report.failureSummary" class="report-share-evidence is-failure">
+              <header><strong>失败摘要</strong></header>
+              <p>{{ report.failureSummary }}</p>
+            </section>
 
-          <section class="report-share-steps">
-            <header>
-              <strong>步骤执行详情</strong>
-              <span>{{ steps.length }} 个步骤 · 点击步骤查看证据</span>
-            </header>
+            <section class="report-share-steps">
+              <header>
+                <strong>步骤执行详情</strong>
+                <span>结构化步骤暂未提供</span>
+              </header>
+              <div class="report-share-empty-block">暂无结构化步骤</div>
+            </section>
 
-            <div class="report-share-step-list">
-              <article
-                v-for="step in steps"
-                :key="step.id"
-                class="report-share-step"
-                :class="[
-                  `is-${step.status}`,
-                  {
-                    'is-open': expandedStepId === step.id,
-                    'is-compact': !step.url && !step.method,
-                  },
-                ]"
-              >
-                <button type="button" class="report-share-step__row" @click="toggleStep(step.id)">
-                  <span class="report-share-step__dot">
-                    <img :src="stepIcon(step)" alt="">
-                  </span>
-                  <span class="report-share-step__seq">{{ step.seq }}</span>
-                  <span class="report-share-step__main">
-                    <strong>{{ step.name }}</strong>
-                    <code v-if="step.url">{{ step.url }}</code>
-                  </span>
-                  <em v-if="step.method" class="report-share-method" :class="`is-${methodTone(step.method)}`">{{ step.method }}</em>
-                  <em
-                    v-if="step.statusCode"
-                    class="report-share-code"
-                    :class="`is-${statusCodeTone(step.statusCode)}`"
-                  >
-                    {{ step.statusCode }}
-                  </em>
-                  <span class="report-share-step__duration">{{ step.duration }}</span>
-                  <span class="report-share-step__chevron">
-                    <img :src="figmaReportIcons.userChevron" alt="">
-                  </span>
-                </button>
-
-                <div
-                  v-if="expandedStepId === step.id"
-                  class="report-share-step__detail"
-                  :class="[
-                    `is-${step.status}-detail`,
-                    { 'is-ai-expanded': Boolean(step.aiAnalysis && aiExpanded) },
-                  ]"
+            <section v-if="report.logText" class="report-share-evidence">
+              <header>
+                <strong>执行日志</strong>
+                <button
+                  type="button"
+                  :class="{ 'is-copied': copiedCodeBlockKey === 'report-log' }"
+                  @click="copyCodeBlock('report-log', report.logText || '')"
                 >
-                  <div v-if="step.assertions?.length" class="report-share-detail-block">
-                    <h3>断言结果</h3>
-                    <div class="report-share-assertions">
-                      <div v-for="assertion in step.assertions" :key="assertion.path" :class="{ 'is-failed': !assertion.pass }">
-                        <span>{{ assertion.pass ? '✓' : '×' }}</span>
-                        <code>{{ assertion.path }}</code>
-                        <em>{{ assertion.op }}</em>
-                        <code>{{ assertion.actual }}</code>
-                        <p v-if="assertion.message">{{ assertion.message }}</p>
-                      </div>
-                    </div>
-                  </div>
+                  <Check v-if="copiedCodeBlockKey === 'report-log'" :size="10" :stroke-width="2" />
+                  <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
+                  {{ copiedCodeBlockKey === 'report-log' ? '已复制' : '复制' }}
+                </button>
+              </header>
+              <pre>{{ report.logText }}</pre>
+            </section>
 
-                  <div v-if="step.errorLog" class="report-share-detail-block">
-                    <h3>错误日志</h3>
-                    <div class="report-share-codeblock">
-                      <div>
-                        <span>log</span>
-                        <button
-                          type="button"
-                          :class="{ 'is-copied': copiedCodeBlockKey === `${step.id}-log` }"
-                          @click="copyCodeBlock(`${step.id}-log`, step.errorLog)"
-                        >
-                          <Check v-if="copiedCodeBlockKey === `${step.id}-log`" :size="9" :stroke-width="2" />
-                          <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
-                          {{ copiedCodeBlockKey === `${step.id}-log` ? '已复制' : '复制' }}
-                        </button>
-                      </div>
-                      <pre>{{ step.errorLog }}</pre>
-                    </div>
-                  </div>
+            <section v-if="report.attachments.length" class="report-share-evidence">
+              <header><strong>执行附件</strong><span>{{ report.attachments.length }} 个文件</span></header>
+              <div class="report-share-attachments">
+                <a
+                  v-for="attachment in report.attachments"
+                  :key="attachment.id"
+                  :href="attachmentUrl(attachment)"
+                  download
+                >
+                  <span><strong>{{ attachment.fileName }}</strong><small>{{ formatAttachmentSize(attachment.fileSize) }}</small></span>
+                  <em>下载</em>
+                </a>
+              </div>
+            </section>
 
-                  <div v-if="step.responseBody" class="report-share-detail-block">
-                    <h3>Response Body</h3>
-                    <div class="report-share-codeblock">
-                      <div>
-                        <span>json</span>
-                        <button
-                          type="button"
-                          :class="{ 'is-copied': copiedCodeBlockKey === `${step.id}-response` }"
-                          @click="copyCodeBlock(`${step.id}-response`, step.responseBody)"
-                        >
-                          <Check v-if="copiedCodeBlockKey === `${step.id}-response`" :size="9" :stroke-width="2" />
-                          <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
-                          {{ copiedCodeBlockKey === `${step.id}-response` ? '已复制' : '复制' }}
-                        </button>
-                      </div>
-                      <pre>{{ step.responseBody }}</pre>
-                    </div>
-                  </div>
-
-                  <div v-if="step.aiAnalysis" class="report-share-ai" :class="{ 'is-expanded': aiExpanded }">
-                    <button type="button" @click="aiExpanded = !aiExpanded">
-                      <Sparkles class="report-ai-panel__icon" :size="13" :stroke-width="2" />
-                      <strong>AI 失败诊断</strong>
-                      <em>{{ aiExpanded ? '收起' : '展开' }}</em>
-                      <ChevronDown class="report-ai-panel__chevron" :class="{ 'is-open': aiExpanded }" :size="13" :stroke-width="2" />
-                    </button>
-                    <div v-if="aiExpanded" class="report-ai-panel__body">
-                      <section>
-                        <h3>诊断结论</h3>
-                        <p class="report-ai-panel__summary">{{ step.aiAnalysis.summary }}</p>
-                      </section>
-                      <section>
-                        <h3>分析依据</h3>
-                        <div class="report-ai-panel__basis">
-                          <div v-for="(item, index) in step.aiAnalysis.basis" :key="item">
-                            <span>{{ index + 1 }}</span>
-                            <p>{{ item }}</p>
-                          </div>
-                        </div>
-                      </section>
-                      <section>
-                        <h3>排查建议</h3>
-                        <div class="report-ai-panel__suggestions">
-                          <div v-for="item in step.aiAnalysis.suggestions" :key="item">
-                            <span>→</span>
-                            <p>{{ item }}</p>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <footer class="report-share-footer">由 AutoTest 平台生成 · {{ report.startAt }}</footer>
+            <footer class="report-share-footer">由 AutoTest 平台生成 · {{ formatDate(report.createdAt) }}</footer>
+          </template>
         </div>
       </div>
     </main>
@@ -833,6 +626,11 @@ function enterBackend() {
   filter: brightness(1.1);
 }
 
+.report-share-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .report-share-content {
   width: 860px;
   max-width: 100%;
@@ -931,6 +729,24 @@ function enterBackend() {
   background: #f53f3f;
 }
 
+.report-share-status.is-success {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.report-share-status.is-success i {
+  background: #00b42a;
+}
+
+.report-share-status.is-warning {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.report-share-status.is-warning i {
+  background: #ff7d00;
+}
+
 .report-share-result-line strong {
   color: #f53f3f;
   font-family: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -1025,6 +841,187 @@ function enterBackend() {
 .report-share-steps {
   margin-top: 14px;
   border-radius: 14px;
+}
+
+.report-share-state {
+  display: flex;
+  min-height: 360px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #86909c;
+}
+
+.report-share-state strong {
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.report-share-state span {
+  font-size: 12px;
+}
+
+.report-share-state img {
+  width: 36px;
+  height: 36px;
+}
+
+.report-share-state button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #165dff;
+  border-radius: 7px;
+  background: #165dff;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.report-share-state__spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #e5e6eb;
+  border-top-color: #165dff;
+  border-radius: 999px;
+  animation: report-share-spin 0.8s linear infinite;
+}
+
+.report-share-empty-block {
+  display: flex;
+  min-height: 104px;
+  align-items: center;
+  justify-content: center;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.report-share-evidence {
+  overflow: hidden;
+  margin-top: 14px;
+  border: 1px solid #e5e6eb;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.report-share-evidence > header {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 17.5px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.report-share-evidence > header strong {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.report-share-evidence > header span {
+  color: #86909c;
+  font-size: 11px;
+}
+
+.report-share-evidence > header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.report-share-evidence > header button.is-copied {
+  color: #00b42a;
+}
+
+.report-share-evidence > header button img {
+  width: 10px;
+  height: 10px;
+}
+
+.report-share-evidence > p {
+  margin: 0;
+  padding: 14px 17.5px;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+}
+
+.report-share-evidence.is-failure > p {
+  color: #f53f3f;
+}
+
+.report-share-evidence > pre {
+  max-height: 360px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px 17.5px;
+  background: #13181f;
+  color: #9db5cc;
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+}
+
+.report-share-attachments {
+  display: grid;
+}
+
+.report-share-attachments a {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 17.5px;
+  border-bottom: 1px solid #e5e6eb;
+  color: inherit;
+  text-decoration: none;
+}
+
+.report-share-attachments a:last-child {
+  border-bottom: 0;
+}
+
+.report-share-attachments a > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.report-share-attachments strong {
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-share-attachments small {
+  color: #86909c;
+  font-size: 10px;
+}
+
+.report-share-attachments em {
+  color: #165dff;
+  font-size: 11px;
+  font-style: normal;
+}
+
+@keyframes report-share-spin {
+  to { transform: rotate(360deg); }
 }
 
 .report-share-steps > header {
@@ -1551,6 +1548,26 @@ function enterBackend() {
 
   .report-share-stat-list article {
     flex: 1 1 0;
+  }
+}
+
+@media print {
+  .report-share-nav,
+  .report-share-topbar,
+  .report-share-toolbar {
+    display: none;
+  }
+
+  .report-share-shell,
+  .report-share-page {
+    height: auto;
+    overflow: visible;
+    background: #ffffff;
+  }
+
+  .report-share-content {
+    width: 100%;
+    padding: 0;
   }
 }
 </style>

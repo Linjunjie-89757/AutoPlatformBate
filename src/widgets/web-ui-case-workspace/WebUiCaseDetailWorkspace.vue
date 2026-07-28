@@ -36,6 +36,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import { configApi, type ParamSetItem } from '@/entities/config'
 import {
   buildRecordedCollectCandidateFingerprint,
   findMatchingWebUiElementForRecordedStep,
@@ -54,12 +55,16 @@ import {
   type WebUiBrowserType,
   type WebUiCaseDetail,
   type WebUiElementItem,
+  type WebUiEnvironmentItem,
   type WebUiCaseStatus,
   type WebUiCaseStepItem,
   type LocalRunnerTaskDetailResponse,
   type WebUiLocatorContextPathItem,
   type WebUiLocatorType,
   type WebUiRunDetail,
+  type WebUiRunRequest,
+  type WebUiRunResponse,
+  type WebUiRunSummary,
   type WebUiScreenshotPolicy,
   type WebUiStepType,
 } from '@/entities/web-ui-automation'
@@ -140,6 +145,16 @@ type RecordingRepairAction =
   | 'REPLAY_RUN'
   | 'REPLAY_REPORT'
 type WebUiCaseDetailTab = 'steps' | 'info' | 'settings'
+type FigmaStepSuggestionKey = 'rename' | 'assert' | 'duplicate'
+
+interface FigmaStepSuggestion {
+  key: FigmaStepSuggestionKey
+  tone: 'purple' | 'cyan' | 'warning'
+  tag: string
+  target: string
+  message: string
+  reason: string
+}
 
 interface EditableStep {
   id?: number | null
@@ -230,12 +245,17 @@ const errorMessage = ref('')
 const selectedStepIndex = ref(0)
 const selectedStepIndexes = ref<number[]>([])
 const detailActiveTab = ref<WebUiCaseDetailTab>('steps')
-// These three controls are part of the Figma editor shell. The current case API
-// does not expose matching case-level fields, so they remain local until that contract exists.
+// Retry count and case-level screenshot policy are not exposed by the case API yet.
 const caseRetryCount = ref(2)
 const caseScreenshotPolicy = ref<WebUiScreenshotPolicy>('ON_FAILURE')
-const caseVariableSet = ref('默认变量集')
-const quickRunEnvironment = ref('测试环境')
+const caseVariableSetId = ref(0)
+const quickRunEnvironmentId = ref(0)
+const runEnvironments = ref<WebUiEnvironmentItem[]>([])
+const runVariableSets = ref<ParamSetItem[]>([])
+const loadingRunOptions = ref(false)
+const latestRunSummary = ref<WebUiRunSummary | null>(null)
+const latestRunResult = ref<WebUiRunResponse | null>(null)
+const latestRunCompletedAt = ref<string | null>(null)
 const legacyDetailToolsVisible = ref(false)
 const figmaAiSuggestionsVisible = ref(true)
 const figmaAiSuggestionsExpanded = ref(false)
@@ -264,7 +284,9 @@ let recordingDraftPersistTimer: ReturnType<typeof window.setTimeout> | null = nu
 let uploadRepairFocusTimer: ReturnType<typeof window.setTimeout> | null = null
 let recordingReplayRepairFocusTimer: ReturnType<typeof window.setTimeout> | null = null
 let elementPickerRequestSeq = 0
+let runOptionsRequestSeq = 0
 let suppressRecordingDraftPersist = false
+let autoRecordingLaunchKey = ''
 
 const caseId = computed(() => {
   const raw = Array.isArray(route.params.caseId) ? route.params.caseId[0] : route.params.caseId
@@ -284,68 +306,196 @@ function getRouteQueryNumber(name: string) {
 
 const selectedStep = computed(() => form.value.steps[selectedStepIndex.value] || null)
 const figmaEditorRunStatus = computed(() => {
-  const status = String(localRunnerRunDetail.value?.summary.status || localRunnerTask.value?.status || '').toUpperCase()
+  const status = String(
+    localRunnerRunDetail.value?.summary.status
+    || localRunnerTask.value?.status
+    || latestRunResult.value?.status
+    || latestRunSummary.value?.status
+    || '',
+  ).toUpperCase()
   if (status === 'SUCCESS' || status === 'PASSED' || status === 'PASS') return { label: '通过', tone: 'success' }
   if (status === 'FAILED' || status === 'FAIL') return { label: '失败', tone: 'danger' }
   if (status === 'RUNNING' || status === 'PENDING') return { label: '运行中', tone: 'running' }
   return { label: '待运行', tone: 'pending' }
 })
+const enabledRunEnvironments = computed(() => runEnvironments.value.filter(item => item.status !== 0))
+const enabledRunVariableSets = computed(() => runVariableSets.value.filter(item => item.status !== 0))
+const figmaRecentRunTime = computed(() => (
+  localRunnerTask.value?.lastReportedAt
+  || localRunnerTask.value?.startedAt
+  || latestRunCompletedAt.value
+  || latestRunSummary.value?.finishedAt
+  || latestRunSummary.value?.startedAt
+  || latestRunSummary.value?.createdAt
+))
 
 const webUiModuleTabs = [
   { key: 'cases', label: '用例管理', path: '/automation/web/cases' },
   { key: 'elements', label: '元素库', path: '/automation/web/elements' },
-  { key: 'suites', label: '执行套件', path: '' },
+  { key: 'suites', label: '执行套件', path: '/automation/web/suites' },
   { key: 'runs', label: '执行记录', path: '/automation/web/runs' },
   { key: 'environments', label: '环境配置', path: '/automation/web/environments' },
 ] as const
 
 function navigateWebUiModuleTab(tab: typeof webUiModuleTabs[number]) {
-  if (!tab.path) {
-    ElMessage.info('执行套件页面需要按 Figma 补齐后接入')
-    return
-  }
   void router.push({ path: tab.path, query: { workspace: props.workspaceCode } })
 }
-const figmaStepSuggestions = computed(() => {
-  const firstInputIndex = form.value.steps.findIndex(step => String(step.type).includes('INPUT'))
-  const firstClickIndex = form.value.steps.findIndex(step => step.type === 'CLICK')
+function findRenameSuggestionStepIndex() {
+  return form.value.steps.findIndex((step) => {
+    if (step.type !== 'FILL') return false
+    const name = step.name.trim()
+    return !name || /^步骤\s*\d+$/i.test(name) || name === '输入'
+  })
+}
+
+function isSameStepTarget(left: EditableStep, right: EditableStep) {
+  if (left.elementId && right.elementId) return left.elementId === right.elementId
+  return Boolean(
+    left.locatorType
+    && left.locatorType === right.locatorType
+    && left.locatorValue.trim()
+    && left.locatorValue.trim() === right.locatorValue.trim(),
+  )
+}
+
+function findDuplicateFocusClickIndex() {
+  return form.value.steps.findIndex((step, index) => {
+    const next = form.value.steps[index + 1]
+    return step.type === 'CLICK'
+      && Boolean(next)
+      && ['FILL', 'CLEAR', 'SELECT', 'FILE_UPLOAD'].includes(next.type)
+      && isSameStepTarget(step, next)
+  })
+}
+
+function getFigmaSuggestionStorageKey() {
+  return caseId.value ? `web-ui-case-ai-suggestions:${props.workspaceCode}:${caseId.value}` : ''
+}
+
+function readHandledFigmaAiSuggestionKeys() {
+  const key = getFigmaSuggestionStorageKey()
+  if (!key || typeof window === 'undefined') return []
+  try {
+    const value = JSON.parse(window.localStorage.getItem(key) || '[]')
+    return Array.isArray(value)
+      ? value.filter((item): item is FigmaStepSuggestionKey => ['rename', 'assert', 'duplicate'].includes(item))
+      : []
+  } catch {
+    return []
+  }
+}
+
+function markFigmaAiSuggestionHandled(key: FigmaStepSuggestionKey) {
+  if (!handledFigmaAiSuggestionKeys.value.includes(key)) {
+    handledFigmaAiSuggestionKeys.value = [...handledFigmaAiSuggestionKeys.value, key]
+  }
+  const storageKey = getFigmaSuggestionStorageKey()
+  if (storageKey && typeof window !== 'undefined') {
+    window.localStorage.setItem(storageKey, JSON.stringify(handledFigmaAiSuggestionKeys.value))
+  }
+}
+
+const figmaStepSuggestions = computed<FigmaStepSuggestion[]>(() => {
+  const firstInputIndex = findRenameSuggestionStepIndex()
+  const duplicateClickIndex = findDuplicateFocusClickIndex()
   const firstAssertionIndex = form.value.steps.findIndex(step => step.type.startsWith('ASSERT'))
-  return [
-    {
+  const suggestions: FigmaStepSuggestion[] = []
+
+  if (firstInputIndex >= 0) {
+    suggestions.push({
       key: 'rename',
       tone: 'purple',
       tag: '优化名称',
-      target: firstInputIndex >= 0 ? `步骤 ${firstInputIndex + 1}` : '步骤名称',
+      target: `步骤 ${firstInputIndex + 1}`,
       message: '建议使用业务语义补全步骤名称，便于维护和排查。',
       reason: '元素定位信息已提供明确的业务含义。',
-    },
-    {
+    })
+  }
+  if (firstAssertionIndex < 0 && form.value.steps.length > 0) {
+    suggestions.push({
       key: 'assert',
       tone: 'cyan',
       tag: '推荐断言',
-      target: firstAssertionIndex >= 0 ? `步骤 ${firstAssertionIndex + 1}` : '流程末尾',
-      message: firstAssertionIndex >= 0 ? '建议复核断言目标是否覆盖本次流程结果。' : '建议在关键操作后补充结果断言。',
+      target: '流程末尾',
+      message: '建议在关键操作后补充结果断言。',
       reason: '关键操作后的结果需要通过断言明确验证。',
-    },
-    {
+    })
+  }
+  if (duplicateClickIndex >= 0) {
+    suggestions.push({
       key: 'duplicate',
       tone: 'warning',
       tag: '冗余步骤',
-      target: firstClickIndex >= 0 ? `步骤 ${firstClickIndex + 1}` : '步骤列表',
-      message: '可检查仅用于聚焦的点击步骤是否能够合并。',
+      target: `步骤 ${duplicateClickIndex + 1}`,
+      message: '该聚焦点击与后续输入使用相同元素，可以合并。',
       reason: '输入操作通常可以直接定位元素，无需额外聚焦。',
-    },
-  ]
+    })
+  }
+  return suggestions
 })
 const visibleFigmaStepSuggestions = computed(() => figmaStepSuggestions.value
   .filter(suggestion => !handledFigmaAiSuggestionKeys.value.includes(suggestion.key)))
 
-function handleFigmaAiSuggestion(key: string) {
-  handledFigmaAiSuggestionKeys.value = [...handledFigmaAiSuggestionKeys.value, key]
+async function adoptFigmaAiSuggestion(key: FigmaStepSuggestionKey) {
+  if (saving.value) return
+
+  let rollback = () => undefined
+  if (key === 'rename') {
+    const index = findRenameSuggestionStepIndex()
+    const step = form.value.steps[index]
+    if (!step) return
+    const previousName = step.name
+    const targetName = step.elementName?.trim() || step.locatorValue.trim() || '表单内容'
+    step.name = `输入${targetName}`
+    selectedStepIndex.value = index
+    rollback = () => { step.name = previousName }
+  } else if (key === 'assert') {
+    const sourceIndex = Math.max(0, form.value.steps.length - 1)
+    const draft = buildRecordingAssertionDraft({
+      steps: form.value.steps,
+      selectedIndex: sourceIndex,
+      assertionType: 'ASSERT_VISIBLE',
+    }) || buildRecordingAssertionDraft({
+      steps: form.value.steps,
+      selectedIndex: sourceIndex,
+      assertionType: 'ASSERT_URL',
+      expectedValue: getDefaultUrlAssertionValue(),
+    })
+    if (!draft) return
+    form.value.steps.splice(draft.insertIndex, 0, draft.step)
+    selectedStepIndex.value = draft.insertIndex
+    reorderSteps()
+    rollback = () => {
+      const index = form.value.steps.indexOf(draft.step)
+      if (index >= 0) form.value.steps.splice(index, 1)
+      reorderSteps()
+    }
+  } else {
+    const index = findDuplicateFocusClickIndex()
+    if (index < 0) return
+    const [removed] = form.value.steps.splice(index, 1)
+    selectedStepIndex.value = Math.max(0, Math.min(index, form.value.steps.length - 1))
+    reorderSteps()
+    rollback = () => {
+      form.value.steps.splice(index, 0, removed)
+      reorderSteps()
+    }
+  }
+
+  const saved = await saveCase({ successMessage: '已采纳并保存 AI 步骤建议' })
+  if (!saved) {
+    rollback()
+    return
+  }
+  markFigmaAiSuggestionHandled(key)
+}
+
+function ignoreFigmaAiSuggestion(key: FigmaStepSuggestionKey) {
+  markFigmaAiSuggestionHandled(key)
 }
 
 function ignoreAllFigmaAiSuggestions() {
-  handledFigmaAiSuggestionKeys.value = figmaStepSuggestions.value.map(suggestion => suggestion.key)
+  figmaStepSuggestions.value.forEach(suggestion => markFigmaAiSuggestionHandled(suggestion.key))
   figmaAiSuggestionsVisible.value = false
 }
 
@@ -770,6 +920,8 @@ function fillForm(item: WebUiCaseDetail, options: { restoreRecordingDraft?: bool
     status: item.status || 'ENABLED',
     steps: Array.isArray(item.steps) ? item.steps.map(toEditableStep) : [],
   }
+  handledFigmaAiSuggestionKeys.value = readHandledFigmaAiSuggestionKeys()
+  figmaAiSuggestionsVisible.value = true
   selectInitialStep()
   suppressRecordingDraftPersist = false
   if (options.restoreRecordingDraft !== false) {
@@ -911,6 +1063,63 @@ function selectInitialStep() {
   selectedStepIndex.value = form.value.steps.length ? Math.min(selectedStepIndex.value, form.value.steps.length - 1) : 0
 }
 
+async function loadRunContext() {
+  if (!props.workspaceReady || !caseId.value) {
+    return
+  }
+
+  const requestId = ++runOptionsRequestSeq
+  const workspaceCode = props.workspaceCode
+  const targetCaseId = caseId.value
+  loadingRunOptions.value = true
+  const [environmentResult, variableSetResult, runResult] = await Promise.allSettled([
+    webUiAutomationApi.getEnvironments(workspaceCode),
+    configApi.getSettingsParams(workspaceCode, {
+      paramType: 'WEB_UI_VARIABLE_SET',
+      status: 1,
+    }),
+    webUiAutomationApi.getRuns(workspaceCode, {
+      caseId: targetCaseId,
+      pageNo: 1,
+      pageSize: 1,
+    }),
+  ])
+
+  if (
+    requestId !== runOptionsRequestSeq
+    || props.workspaceCode !== workspaceCode
+    || caseId.value !== targetCaseId
+  ) {
+    return
+  }
+
+  if (environmentResult.status === 'fulfilled') {
+    runEnvironments.value = environmentResult.value.items || []
+    const availableEnvironments = runEnvironments.value.filter(item => item.status !== 0)
+    if (!availableEnvironments.some(item => item.id === quickRunEnvironmentId.value)) {
+      quickRunEnvironmentId.value = availableEnvironments.find(item => item.baseUrl === form.value.baseUrl)?.id
+        ?? availableEnvironments[0]?.id
+        ?? 0
+    }
+  }
+  if (variableSetResult.status === 'fulfilled') {
+    runVariableSets.value = variableSetResult.value.items || []
+    if (!runVariableSets.value.some(item => item.id === caseVariableSetId.value && item.status !== 0)) {
+      caseVariableSetId.value = 0
+    }
+  }
+  if (runResult.status === 'fulfilled') {
+    latestRunSummary.value = runResult.value.items?.[0] || null
+  }
+
+  const failedCount = [environmentResult, variableSetResult, runResult]
+    .filter(result => result.status === 'rejected').length
+  if (failedCount > 0) {
+    ElMessage.warning('部分运行配置加载失败，未加载的选项将使用用例默认配置')
+  }
+  loadingRunOptions.value = false
+}
+
 async function loadDetail() {
   if (!props.workspaceReady || !caseId.value) {
     return
@@ -921,7 +1130,9 @@ async function loadDetail() {
   try {
     const caseDetail = await webUiAutomationApi.getCaseDetail(props.workspaceCode, caseId.value)
     fillForm(caseDetail)
+    void loadRunContext()
     await maybeAutoRematchRecordedElements()
+    await maybeStartRecordingFromRoute()
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
@@ -1270,6 +1481,31 @@ function notifyRecordingReplayTaskTerminal(task: LocalRunnerTaskDetailResponse) 
   }
 }
 
+function buildSingleStepPayload(index: number): SaveWebUiCasePayload {
+  const payload = buildPayload()
+  const step = payload.steps[index]
+  if (!step) {
+    throw new Error('Step not found')
+  }
+  return { ...payload, steps: [{ ...step, sortOrder: 1 }] }
+}
+
+function buildRunRequest(
+  extra: Omit<Partial<WebUiRunRequest>, 'headless'> = {},
+): WebUiRunRequest & { headless: boolean } {
+  return {
+    environmentId: quickRunEnvironmentId.value || null,
+    headless: form.value.headless,
+    variableSetId: caseVariableSetId.value || null,
+    ...extra,
+  }
+}
+
+function recordCompletedRun(result: WebUiRunResponse) {
+  latestRunResult.value = result
+  latestRunCompletedAt.value = new Date().toISOString()
+}
+
 function focusRecordingReplayTerminalFailure() {
   if (!recordingReplayDiagnostics.value?.failedStepSortOrder) {
     return
@@ -1525,6 +1761,74 @@ async function saveCaseAndRunRecordingReplay() {
   })
 }
 
+function validateStepBeforeDebug(index: number) {
+  if (!form.value.name.trim()) {
+    ElMessage.warning('请先填写用例名称')
+    return false
+  }
+  const step = form.value.steps[index]
+  if (!step) {
+    ElMessage.warning('请先选择需要调试的步骤')
+    return false
+  }
+  if (!step.enabled) {
+    ElMessage.warning(`第 ${index + 1} 步已禁用，请先启用后再调试`)
+    return false
+  }
+  if (requiresLocator(step.type) && (!step.locatorType || !step.locatorValue.trim())) {
+    ElMessage.warning(`第 ${index + 1} 步缺少元素定位配置`)
+    return false
+  }
+  if (requiresInput(step.type) && !step.inputValue.trim()) {
+    ElMessage.warning(`第 ${index + 1} 步缺少输入内容`)
+    return false
+  }
+  return true
+}
+
+async function debugSelectedStep() {
+  const index = selectedStepIndex.value
+  if (running.value || !validateStepBeforeDebug(index)) {
+    return
+  }
+
+  running.value = true
+  try {
+    const result = await webUiAutomationApi.debugRunCase(props.workspaceCode, {
+      ...buildSingleStepPayload(index),
+      caseId: caseId.value,
+      ...buildRunRequest(),
+    })
+    recordCompletedRun(result)
+    ElMessage.success(result.status === 'SUCCESS' ? '单步调试成功' : '单步调试完成，请查看执行记录')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    running.value = false
+  }
+}
+
+async function debugCurrentDraft() {
+  if (running.value || !caseId.value || !validateBeforeSave()) {
+    return
+  }
+
+  running.value = true
+  try {
+    const result = await webUiAutomationApi.debugRunCase(props.workspaceCode, {
+      ...buildPayload(),
+      caseId: caseId.value,
+      ...buildRunRequest(),
+    })
+    recordCompletedRun(result)
+    ElMessage.success(result.status === 'SUCCESS' ? '调试运行成功' : '调试运行完成，请查看执行记录')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    running.value = false
+  }
+}
+
 async function ensureLocalRunnerUploadArtifactsSaved() {
   if (!hasUnsavedWebUiFileUploadArtifactChanges(form.value.steps, savedFileUploadSteps.value)) {
     return ensureLocalRunnerUploadReplayReady()
@@ -1584,8 +1888,7 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
         intervalMs: 1000,
       })
       const response = await webUiAutomationApi.createLocalRunnerRun(props.workspaceCode, caseId.value, {
-        headless: form.value.headless,
-        artifactRefs,
+        ...buildRunRequest({ artifactRefs }),
       })
       localRunnerFormalRunId.value = response.run.runId
       localRunnerTask.value = response.runnerTask
@@ -1603,9 +1906,13 @@ async function runCase(localRunner: boolean, options: { localSuccessMessage?: st
       return
     }
 
-    const result = await webUiAutomationApi.runCase(props.workspaceCode, caseId.value, {})
-    void result
-    ElMessage.success('调试运行完成')
+    const result = await webUiAutomationApi.runCase(
+      props.workspaceCode,
+      caseId.value,
+      buildRunRequest(),
+    )
+    recordCompletedRun(result)
+    ElMessage.success(result.status === 'SUCCESS' ? '用例运行成功' : '用例运行完成，请查看执行记录')
   } catch (error) {
     if (localRunner) {
       loadingRef.value = false
@@ -1844,13 +2151,44 @@ async function openRecordingPage() {
     lastRecordingPageUrl.value = result.page?.url || result.session?.currentUrl || url
     if (result.page?.isProbablyLoginPage) {
       ElMessage.warning('本地浏览器已打开，当前页面疑似登录页')
-      return
+    } else {
+      ElMessage.success('本地浏览器已打开目标页')
     }
-    ElMessage.success('本地浏览器已打开目标页')
+    return true
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
+    return false
   } finally {
     recordingOpening.value = false
+  }
+}
+
+async function maybeStartRecordingFromRoute() {
+  if (getRouteQueryString('startRecording') !== '1' || !caseId.value) {
+    return
+  }
+  const launchKey = `${props.workspaceCode}:${caseId.value}`
+  const sessionKey = `web-ui-case-auto-recording:${launchKey}`
+  if (
+    autoRecordingLaunchKey === launchKey
+    || (typeof window !== 'undefined' && window.sessionStorage.getItem(sessionKey) === '1')
+  ) {
+    return
+  }
+  autoRecordingLaunchKey = launchKey
+  if (typeof window !== 'undefined') {
+    window.sessionStorage.setItem(sessionKey, '1')
+  }
+  detailActiveTab.value = 'steps'
+
+  const query = { ...route.query }
+  delete query.startRecording
+  await router.replace({ path: route.path, query, hash: route.hash })
+  await nextTick()
+
+  const opened = await openRecordingPage()
+  if (opened) {
+    await startRecordingSteps()
   }
 }
 
@@ -3169,20 +3507,20 @@ watch(elementPickerLocatorType, () => {
 
     <aside v-if="!loading && !errorMessage" class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--fixed" aria-label="快速运行">
       <p>快速运行</p>
-      <el-select v-model="quickRunEnvironment" aria-label="执行环境">
-        <el-option label="测试环境" value="测试环境" />
-        <el-option label="预发布环境" value="预发布环境" />
+      <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
+        <el-option label="使用用例配置" :value="0" />
+        <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
       <el-select v-model="form.browserType" aria-label="浏览器">
         <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || localRunning" @click="runCase(false)"><Play />运行此用例</button>
+      <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || running || localRunning" @click="runCase(false)"><Play />运行此用例</button>
       <span class="web-ui-case-detail__quick-run-divider" />
       <div class="web-ui-case-detail__quick-run-stats">
         <div><span>步骤数</span><strong>{{ form.steps.length }}</strong></div>
         <div><span>已启用</span><strong>{{ enabledStepCount }}</strong></div>
         <div><span>最近结果</span><strong :class="`is-${figmaEditorRunStatus.tone}`">{{ figmaEditorRunStatus.label }}</strong></div>
-        <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt) }}</strong></div>
+        <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(figmaRecentRunTime) }}</strong></div>
       </div>
     </aside>
 
@@ -3210,10 +3548,10 @@ watch(elementPickerLocatorType, () => {
         </button>
         <button type="button" class="web-ui-case-detail__editor-button" :disabled="recordingOpening || recordingCapturing || recordingInProgress" @click="startRecordingSteps"><CirclePlus />追加录制</button>
         <span class="web-ui-case-detail__divider" />
-        <button type="button" class="web-ui-case-detail__editor-button" :disabled="!selectedStep" @click="selectedStepIndex = Math.min(selectedStepIndex + 1, form.steps.length - 1)"><SkipForward />单步调试</button>
+        <button type="button" class="web-ui-case-detail__editor-button" :disabled="!selectedStep || saving || running || localRunning" @click="debugSelectedStep"><SkipForward />单步调试</button>
         <button type="button" class="web-ui-case-detail__editor-button" :disabled="saving || running" @click="runCase(true)"><Play />整体回放</button>
         <span class="web-ui-case-detail__divider" />
-        <button type="button" class="web-ui-case-detail__editor-button is-primary" :disabled="saving || localRunning" @click="runCase(false)"><Play />调试运行</button>
+        <button type="button" class="web-ui-case-detail__editor-button is-primary" :disabled="saving || running || localRunning" @click="debugCurrentDraft"><Play />调试运行</button>
         <button type="button" class="web-ui-case-detail__editor-button" :disabled="loading || running || localRunning" @click="() => saveCase()"><Save />保存</button>
       </div>
     </div>
@@ -3404,8 +3742,8 @@ watch(elementPickerLocatorType, () => {
                   <small>理由：{{ suggestion.reason }}</small>
                 </div>
                 <span class="web-ui-case-detail__ai-suggestion-actions">
-                  <button type="button" class="is-adopt" @click="handleFigmaAiSuggestion(suggestion.key)">采纳</button>
-                  <button type="button" class="is-ignore" @click="handleFigmaAiSuggestion(suggestion.key)">忽略</button>
+                  <button type="button" class="is-adopt" :disabled="saving" @click="adoptFigmaAiSuggestion(suggestion.key)">采纳</button>
+                  <button type="button" class="is-ignore" :disabled="saving" @click="ignoreFigmaAiSuggestion(suggestion.key)">忽略</button>
                 </span>
               </article>
             </div>
@@ -3470,20 +3808,20 @@ watch(elementPickerLocatorType, () => {
 
         <aside class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--legacy" aria-label="快速运行">
           <p>快速运行</p>
-          <el-select v-model="quickRunEnvironment" aria-label="执行环境">
-            <el-option label="测试环境" value="测试环境" />
-            <el-option label="预发布环境" value="预发布环境" />
+          <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
+            <el-option label="使用用例配置" :value="0" />
+            <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
           <el-select v-model="form.browserType" aria-label="浏览器">
             <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
-          <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || localRunning" @click="runCase(false)"><Play />运行此用例</button>
+          <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || running || localRunning" @click="runCase(false)"><Play />运行此用例</button>
           <span class="web-ui-case-detail__quick-run-divider" />
           <div class="web-ui-case-detail__quick-run-stats">
             <div><span>步骤数</span><strong>{{ form.steps.length }}</strong></div>
             <div><span>已启用</span><strong>{{ enabledStepCount }}</strong></div>
             <div><span>最近结果</span><strong :class="`is-${figmaEditorRunStatus.tone}`">{{ figmaEditorRunStatus.label }}</strong></div>
-            <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt) }}</strong></div>
+            <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(figmaRecentRunTime) }}</strong></div>
           </div>
         </aside>
       </div>
@@ -4083,9 +4421,9 @@ watch(elementPickerLocatorType, () => {
           <div class="web-ui-case-detail__form-card">
             <label>
               <span>执行环境</span>
-              <el-select v-model="quickRunEnvironment">
-                <el-option label="测试环境" value="测试环境" />
-                <el-option label="预发布环境" value="预发布环境" />
+              <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions">
+                <el-option label="使用用例配置" :value="0" />
+                <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </label>
             <label>
@@ -4110,9 +4448,9 @@ watch(elementPickerLocatorType, () => {
             </label>
             <label>
               <span>变量集</span>
-              <el-select v-model="caseVariableSet">
-                <el-option label="默认变量集" value="默认变量集" />
-                <el-option label="测试数据集 A" value="测试数据集 A" />
+              <el-select v-model="caseVariableSetId" :loading="loadingRunOptions">
+                <el-option label="默认变量集" :value="0" />
+                <el-option v-for="item in enabledRunVariableSets" :key="item.id" :label="item.paramName" :value="item.id" />
               </el-select>
             </label>
           </div>
@@ -4120,20 +4458,20 @@ watch(elementPickerLocatorType, () => {
 
         <aside class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--legacy" aria-label="快速运行">
           <p>快速运行</p>
-          <el-select v-model="quickRunEnvironment" aria-label="执行环境">
-            <el-option label="测试环境" value="测试环境" />
-            <el-option label="预发布环境" value="预发布环境" />
+          <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
+            <el-option label="使用用例配置" :value="0" />
+            <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
           <el-select v-model="form.browserType" aria-label="浏览器">
             <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
-          <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || localRunning" @click="runCase(false)"><Play />运行此用例</button>
+          <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || running || localRunning" @click="runCase(false)"><Play />运行此用例</button>
           <span class="web-ui-case-detail__quick-run-divider" />
           <div class="web-ui-case-detail__quick-run-stats">
             <div><span>步骤数</span><strong>{{ form.steps.length }}</strong></div>
             <div><span>已启用</span><strong>{{ enabledStepCount }}</strong></div>
             <div><span>最近结果</span><strong :class="`is-${figmaEditorRunStatus.tone}`">{{ figmaEditorRunStatus.label }}</strong></div>
-            <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(localRunnerTask?.lastReportedAt || localRunnerTask?.startedAt) }}</strong></div>
+            <div><span>最近运行</span><strong>{{ formatFigmaQuickRunTime(figmaRecentRunTime) }}</strong></div>
           </div>
         </aside>
       </div>

@@ -1,6 +1,7 @@
 package com.company.autoplatform.execution;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.JsonUtils;
 import com.company.autoplatform.common.NotFoundException;
@@ -21,6 +22,7 @@ public class ExecutionReportDomainService {
     private static final Set<String> REPORT_RESULTS = Set.of("SUCCESS", "FAILED");
     private static final Set<String> REPORT_LOG_SOURCES = Set.of("MANUAL", "API", "API_LOCAL_RUNNER", "WEB", "APP", "SYSTEM");
     private static final String DEFAULT_LOG_SOURCE = "MANUAL";
+    private static final long DEFAULT_REPORT_PAGE_SIZE = 20;
 
     private final ExecutionTaskDomainService taskDomainService;
     private final ReportMapper reportMapper;
@@ -42,7 +44,14 @@ public class ExecutionReportDomainService {
         this.reportAttachmentStorageService = reportAttachmentStorageService;
     }
 
-    public PageResponse<ReportSummaryResponse> listReports(String workspaceCode) {
+    public PageResponse<ReportSummaryResponse> listReports(
+            String workspaceCode,
+            String keyword,
+            String result,
+            String logSource,
+            Long pageNo,
+            Long pageSize
+    ) {
         String normalized = WorkspaceScope.normalize(workspaceCode);
         LambdaQueryWrapper<ReportEntity> query = new LambdaQueryWrapper<>();
         if (!WorkspaceScope.isAll(normalized)) {
@@ -55,10 +64,52 @@ public class ExecutionReportDomainService {
             }
             query.in(ReportEntity::getWorkspaceId, workspaceIds);
         }
-        var items = reportMapper.selectList(query.orderByAsc(ReportEntity::getId)).stream()
+
+        String trimmedKeyword = blankToNull(keyword);
+        if (trimmedKeyword != null) {
+            if (trimmedKeyword.matches("\\d+")) {
+                Long reportId = Long.valueOf(trimmedKeyword);
+                query.and(wrapper -> wrapper
+                        .like(ReportEntity::getReportName, trimmedKeyword)
+                        .or()
+                        .eq(ReportEntity::getId, reportId));
+            } else {
+                query.like(ReportEntity::getReportName, trimmedKeyword);
+            }
+        }
+        String normalizedResult = blankToNull(result);
+        if (normalizedResult != null) {
+            if ("OTHER".equalsIgnoreCase(normalizedResult)) {
+                query.and(wrapper -> wrapper
+                        .notIn(ReportEntity::getResult, REPORT_RESULTS)
+                        .or()
+                        .isNull(ReportEntity::getResult));
+            } else {
+                query.eq(ReportEntity::getResult, normalizeReportResult(normalizedResult));
+            }
+        }
+        String normalizedLogSource = blankToNull(logSource);
+        if (normalizedLogSource != null) {
+            query.eq(ReportEntity::getLogSource, normalizeLogSource(normalizedLogSource));
+        }
+
+        if (pageNo == null && pageSize == null) {
+            var allItems = reportMapper.selectList(query.orderByDesc(ReportEntity::getId)).stream()
+                    .map(this::toReportSummary)
+                    .toList();
+            return new PageResponse<>(allItems, allItems.size());
+        }
+
+        long safePageNo = pageNo == null || pageNo <= 0 ? 1 : pageNo;
+        long safePageSize = pageSize == null || pageSize <= 0 ? DEFAULT_REPORT_PAGE_SIZE : pageSize;
+        Page<ReportEntity> page = reportMapper.selectPage(
+                new Page<>(safePageNo, safePageSize),
+                query.orderByDesc(ReportEntity::getId)
+        );
+        var items = page.getRecords().stream()
                 .map(this::toReportSummary)
                 .toList();
-        return new PageResponse<>(items, items.size());
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public ReportDetailResponse getReport(Long id, String workspaceCode) {
@@ -175,7 +226,7 @@ public class ExecutionReportDomainService {
         );
     }
 
-    private ReportDetailResponse toReportDetail(ReportEntity item) {
+    ReportDetailResponse toReportDetail(ReportEntity item) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(item.getWorkspaceId());
         TaskEntity task = taskDomainService.requireTask(item.getTaskId());
         List<ReportAttachmentResponse> attachments = reportAttachmentMapper.selectList(new LambdaQueryWrapper<ReportAttachmentEntity>()

@@ -36,8 +36,10 @@ const dialogVisible = ref(false)
 const dialogMode = ref<ConfigDbDialogMode>('create')
 const editingDbConnection = ref<DbConnectionItem | null>(null)
 const testingDbConnectionId = ref<number | null>(null)
+const dbConnectionTestResults = ref<Record<number, 'success' | 'failure'>>({})
 const deletingDbConnectionId = ref<number | null>(null)
 const filterKeyword = ref('')
+let loadRequestId = 0
 
 const filteredDbConnections = computed(() => {
   return dbConnections.value
@@ -46,22 +48,32 @@ const filteredDbConnections = computed(() => {
 const dbConnectionQuery = computed(() => ({
   keyword: filterKeyword.value.trim(),
 }))
+const emptyDescription = computed(() => (
+  filterKeyword.value.trim()
+    ? '当前筛选条件下没有数据库连接配置。'
+    : '当前空间还没有数据库连接配置。'
+))
 
 const debouncedLoadDbConnections = debounce(() => {
   void loadDbConnections()
 }, 300)
 
 async function loadDbConnections() {
+  const requestId = ++loadRequestId
   loading.value = true
   errorMessage.value = ''
   try {
     const page = await configApi.getSettingsDbConnections(props.workspaceCode, dbConnectionQuery.value)
+    if (requestId !== loadRequestId) return
     dbConnections.value = Array.isArray(page.items) ? page.items : []
     dbConnectionTotal.value = Number.isFinite(page.total) ? page.total : dbConnections.value.length
   } catch (error) {
+    if (requestId !== loadRequestId) return
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
-    loading.value = false
+    if (requestId === loadRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -101,13 +113,16 @@ async function testConnection(dbConnection: DbConnectionItem) {
   try {
     const result = await testConfigDbConnection(dbConnection, props.workspaceCode)
     if (result?.success === false) {
+      dbConnectionTestResults.value[dbConnection.id] = 'failure'
       ElMessage.error(result.message || '数据库连接测试失败')
       return
     }
 
+    dbConnectionTestResults.value[dbConnection.id] = 'success'
     const suffix = result?.elapsedMs ? `，耗时 ${result.elapsedMs}ms` : ''
     ElMessage.success(result?.message || `数据库连接测试成功${suffix}`)
   } catch (error) {
+    dbConnectionTestResults.value[dbConnection.id] = 'failure'
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
     testingDbConnectionId.value = null
@@ -198,10 +213,13 @@ function getDbLastTestMeta(dbConnection: DbConnectionItem) {
   if (testingDbConnectionId.value === dbConnection.id) {
     return { label: '测试中', color: '#4E5969', dot: '#165DFF' }
   }
-  if (dbConnection.status === 1) {
+  if (dbConnectionTestResults.value[dbConnection.id] === 'success') {
     return { label: '连接成功', color: '#4E5969', dot: '#00B42A' }
   }
-  return { label: '连接失败', color: '#F53F3F', dot: '#F53F3F' }
+  if (dbConnectionTestResults.value[dbConnection.id] === 'failure') {
+    return { label: '连接失败', color: '#F53F3F', dot: '#F53F3F' }
+  }
+  return { label: '未测试', color: '#86909C', dot: '#C9CDD4' }
 }
 
 onMounted(() => {
@@ -209,6 +227,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  loadRequestId += 1
   debouncedLoadDbConnections.cancel()
 })
 
@@ -216,6 +235,7 @@ watch(
   () => props.workspaceCode,
   () => {
     debouncedLoadDbConnections.cancel()
+    dbConnectionTestResults.value = {}
     void loadDbConnections()
   },
 )
@@ -374,7 +394,7 @@ watch(filterKeyword, () => {
     <AppEmptyState
       v-else
       title="暂无数据库连接"
-      :description="dbConnections.length ? '当前筛选条件下没有数据库连接配置。' : '当前空间还没有数据库连接配置。'"
+      :description="emptyDescription"
     >
       <template #actions>
         <button type="button" class="config-db-primary-button" @click="openCreateDialog">

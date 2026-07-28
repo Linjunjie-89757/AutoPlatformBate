@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import {
   DefectPriorityBadge,
@@ -30,6 +31,7 @@ type DefectCaseRow = {
   caseNo?: string | null
   title?: string | null
   workspaceName?: string | null
+  workspaceCode?: string | null
   caseType?: string | null
 }
 const props = withDefaults(
@@ -59,6 +61,7 @@ const emit = defineEmits<{
   'navigate-next': []
 }>()
 
+const router = useRouter()
 const detail = ref<DefectDetail | null>(null)
 const comments = ref<DefectComment[]>([])
 const loading = ref(false)
@@ -151,7 +154,14 @@ function openCase(caseItem: DefectCaseRow) {
     return
   }
 
-  ElMessage.info('用例详情页尚未接入，后续会按用例中心路由统一处理。')
+  const workspaceCode = caseItem.workspaceCode || detail.value?.workspaceCode || props.workspaceCode
+  void router.push({
+    name: 'cases-manage',
+    query: {
+      workspace: workspaceCode,
+      caseId: String(caseItem.id),
+    },
+  })
 }
 
 function openCaseAssociateDialog() {
@@ -262,6 +272,7 @@ function getCaseRows(value: DefectDetail | null): DefectCaseRow[] {
       caseNo: item.caseNo,
       title: item.title,
       workspaceName: item.workspaceName,
+      workspaceCode: item.workspaceCode,
       caseType: '功能用例',
     }))
   }
@@ -278,6 +289,7 @@ function getCaseRows(value: DefectDetail | null): DefectCaseRow[] {
       caseNo: typeof caseSummary.caseNo === 'string' ? caseSummary.caseNo : null,
       title: typeof caseSummary.title === 'string' ? caseSummary.title : null,
       workspaceName: typeof caseSummary.workspaceName === 'string' ? caseSummary.workspaceName : value.workspaceName,
+      workspaceCode: value.workspaceCode,
       caseType: typeof caseSummary.caseType === 'string' ? caseSummary.caseType : null,
     }]
   }
@@ -288,6 +300,7 @@ function getCaseRows(value: DefectDetail | null): DefectCaseRow[] {
       caseNo: `#${value.relatedCaseId}`,
       title: null,
       workspaceName: value.workspaceName,
+      workspaceCode: value.workspaceCode,
       caseType: null,
     }]
   }

@@ -221,6 +221,19 @@ export interface NotificationSendResult {
   responseBody: string | null
 }
 
+export interface TestNotificationChannelPayload {
+  channelId?: number
+  channelType?: string
+  webhookUrl?: string
+  secretKey?: string | null
+  httpMethod?: string | null
+  headersJson?: string | null
+  bodyTemplate?: string | null
+  timeoutMs?: number | null
+  retryCount?: number | null
+  message?: string
+}
+
 export interface MockApplicationItem {
   id: number
   workspaceCode: string

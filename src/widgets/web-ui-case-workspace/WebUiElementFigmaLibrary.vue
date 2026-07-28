@@ -12,12 +12,22 @@ import {
   Sparkles,
   Trash2,
 } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
+import { aiProviderApi, type AiProviderConnectionItem } from '@/entities/ai-provider'
 import { useSession } from '@/entities/session'
 import {
+  webUiAutomationApi,
+  type WebUiElementCollectCandidate,
+  type WebUiElementItem,
+  type WebUiElementPageItem,
+  type WebUiEnvironmentItem,
+} from '@/entities/web-ui-automation'
+import { getRequestErrorMessage } from '@/shared/api/error'
+import {
   type AppTableColumnDefinition,
-  useLocalPagedTable,
   useTableColumnSettings,
 } from '@/shared/lib/table'
+import { confirmDelete } from '@/shared/ui'
 import {
   AppFigmaActionColumn,
   getAppFigmaActionColumnWidth,
@@ -29,20 +39,24 @@ import WebUiModuleTabs from './WebUiModuleTabs.vue'
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
+  workspaceReady?: boolean
+  environments?: WebUiEnvironmentItem[]
 }>(), {
   workspaceCode: 'ALL',
+  workspaceReady: false,
+  environments: () => [],
 })
 
-type PageId = 'root' | 'login' | 'home' | 'product' | 'cart'
+type PageId = 'root' | number
 type CaptureStatus = 'list' | 'config' | 'scanning' | 'result'
 type AdoptStatus = 'pending' | 'adopted' | 'ignored'
 
 type ElementRow = {
-  id: string
+  id: number
   name: string
   description: string
   page: string
-  pageId: PageId
+  pageId: number | null
   group: string
   locatorType: string
   locatorValue: string
@@ -60,48 +74,15 @@ type Candidate = {
   confidence: number
   page: string
   status: AdoptStatus
+  source: WebUiElementCollectCandidate
 }
 
-const pages: Array<{ id: PageId; label: string }> = [
-  { id: 'root', label: '全部元素' },
-  { id: 'login', label: '登录页' },
-  { id: 'home', label: '首页' },
-  { id: 'product', label: '商品详情页' },
-  { id: 'cart', label: '购物车页面' },
-]
-
-const rows = ref<ElementRow[]>([
-  { id: 'el-1', name: '用户名输入框', description: '主登录表单的用户名输入字段', page: '登录页', pageId: 'login', group: '登录表单', locatorType: 'id', locatorValue: '#username-input', refCount: 14, verified: 'pass' },
-  { id: 'el-2', name: '密码输入框', description: '主登录表单的密码输入字段', page: '登录页', pageId: 'login', group: '登录表单', locatorType: 'id', locatorValue: '#password-input', refCount: 12, verified: 'pass' },
-  { id: 'el-3', name: '登录按钮', description: '提交登录表单的主操作按钮', page: '登录页', pageId: 'login', group: '登录表单', locatorType: 'css', locatorValue: '.btn-login', refCount: 18, verified: 'pass' },
-  { id: 'el-4', name: '欢迎提示文字', description: '登录成功后显示的用户欢迎语', page: '首页', pageId: 'home', group: '顶部栏', locatorType: 'xpath', locatorValue: "//span[@class='welcome-text']", refCount: 8, verified: 'pass' },
-  { id: 'el-5', name: '搜索输入框', description: '全站主搜索输入框', page: '首页', pageId: 'home', group: '搜索栏', locatorType: 'role', locatorValue: 'searchbox', refCount: 22, verified: 'fail' },
-  { id: 'el-6', name: '加入购物车按钮', description: '商品详情页加购操作按钮', page: '商品详情页', pageId: 'product', group: '商品操作', locatorType: 'text', locatorValue: '加入购物车', refCount: 9, verified: 'pass' },
-  { id: 'el-7', name: '购物车数量徽章', description: '导航栏上的购物车商品数量提示', page: '首页', pageId: 'home', group: '导航栏', locatorType: 'css', locatorValue: '.cart-badge', refCount: 6, verified: null },
+const pages = ref<Array<{ id: PageId; label: string; source: WebUiElementPageItem | null }>>([
+  { id: 'root', label: '全部元素', source: null },
 ])
 
-const initialCandidates: Candidate[] = [
-  { id: 'ai-1', name: '登录按钮', type: 'button', purpose: '触发用户登录操作，提交表单数据', locatorType: 'role', locatorValue: "button[name='登录']", confidence: 97, page: '登录页', status: 'pending' },
-  { id: 'ai-2', name: '用户名输入框', type: 'input', purpose: '接收用户输入的账号或手机号', locatorType: 'id', locatorValue: '#username', confidence: 95, page: '登录页', status: 'pending' },
-  { id: 'ai-3', name: '密码输入框', type: 'input', purpose: '接收用户输入的登录密码', locatorType: 'id', locatorValue: '#password', confidence: 95, page: '登录页', status: 'pending' },
-  { id: 'ai-4', name: '忘记密码链接', type: 'link', purpose: '跳转到密码重置流程的入口链接', locatorType: 'text', locatorValue: '忘记密码', confidence: 88, page: '登录页', status: 'pending' },
-  { id: 'ai-5', name: '第三方登录-微信', type: 'button', purpose: '使用微信账号授权登录', locatorType: 'css', locatorValue: '.login-wechat-btn', confidence: 82, page: '登录页', status: 'pending' },
-  { id: 'ai-6', name: '登录错误提示', type: 'text', purpose: '显示登录失败或参数错误信息', locatorType: 'css', locatorValue: '.error-msg', confidence: 91, page: '登录页', status: 'pending' },
-  { id: 'ai-7', name: '搜索输入框', type: 'input', purpose: '商品关键词搜索入口', locatorType: 'placeholder', locatorValue: '请输入商品名称、品牌', confidence: 96, page: '商品列表页', status: 'pending' },
-  { id: 'ai-8', name: '搜索提交按钮', type: 'button', purpose: '触发商品搜索请求', locatorType: 'css', locatorValue: '.search-submit-btn', confidence: 93, page: '商品列表页', status: 'pending' },
-  { id: 'ai-9', name: '加入购物车按钮', type: 'button', purpose: '将选中商品加入购物车', locatorType: 'xpath', locatorValue: "//button[contains(@class,'add-cart')]", confidence: 89, page: '商品列表页', status: 'pending' },
-  { id: 'ai-10', name: '价格区间-最低价', type: 'input', purpose: '商品价格筛选区间最低值', locatorType: 'css', locatorValue: 'input.price-min', confidence: 85, page: '商品列表页', status: 'pending' },
-  { id: 'ai-11', name: '价格区间-最高价', type: 'input', purpose: '商品价格筛选区间最高值', locatorType: 'css', locatorValue: 'input.price-max', confidence: 85, page: '商品列表页', status: 'pending' },
-  { id: 'ai-12', name: '分类筛选-下拉框', type: 'select', purpose: '按商品分类筛选列表结果', locatorType: 'role', locatorValue: "combobox[name='商品分类']", confidence: 79, page: '商品列表页', status: 'pending' },
-  { id: 'ai-13', name: '结算按钮', type: 'button', purpose: '跳转到订单确认页完成结算', locatorType: 'role', locatorValue: "button[name='去结算']", confidence: 98, page: '购物车页', status: 'pending' },
-  { id: 'ai-14', name: '全选复选框', type: 'checkbox', purpose: '一键选中购物车内所有商品', locatorType: 'css', locatorValue: 'input.select-all-checkbox', confidence: 94, page: '购物车页', status: 'pending' },
-  { id: 'ai-15', name: '商品数量+号', type: 'button', purpose: '增加购物车内对应商品数量', locatorType: 'xpath', locatorValue: "//button[@data-action='quantity-increase']", confidence: 90, page: '购物车页', status: 'pending' },
-  { id: 'ai-16', name: '删除商品按钮', type: 'button', purpose: '从购物车中移除选中商品', locatorType: 'css', locatorValue: '.cart-delete-btn', confidence: 87, page: '购物车页', status: 'pending' },
-  { id: 'ai-17', name: '收货地址-下拉', type: 'select', purpose: '选择已保存收货地址', locatorType: 'role', locatorValue: "combobox[name='收货地址']", confidence: 92, page: '订单确认页', status: 'pending' },
-  { id: 'ai-18', name: '支付方式-微信', type: 'radio', purpose: '选择微信支付方式', locatorType: 'css', locatorValue: "input[value='wechat']", confidence: 96, page: '订单确认页', status: 'pending' },
-  { id: 'ai-19', name: '提交订单按钮', type: 'button', purpose: '最终提交订单并发起支付', locatorType: 'role', locatorValue: "button[name='提交订单']", confidence: 99, page: '订单确认页', status: 'pending' },
-  { id: 'ai-20', name: '优惠券输入框', type: 'input', purpose: '手动输入优惠码兑换折扣', locatorType: 'placeholder', locatorValue: '输入优惠码', confidence: 83, page: '订单确认页', status: 'pending' },
-]
+const rows = ref<ElementRow[]>([])
+const aiProviders = ref<AiProviderConnectionItem[]>([])
 
 const state = ref<CaptureStatus>('list')
 const selectedPage = ref<PageId>('root')
@@ -109,7 +90,7 @@ const pageKeyword = ref('')
 const keyword = ref('')
 const locatorFilter = ref('')
 const verifyFilter = ref('')
-const captureUrl = ref('https://test.example.com/login')
+const captureUrl = ref('')
 const captureScope = ref('全页可操作元素')
 const includeIframe = ref(false)
 const waitForIdle = ref(2000)
@@ -121,27 +102,28 @@ const candidateType = ref('')
 const candidateConfidence = ref('')
 const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
+const pageNo = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
+const rootTotal = ref(0)
+const loading = ref(false)
+const savingCandidates = ref(false)
+const validatingId = ref<number | null>(null)
 const { currentUser } = useSession()
 
 let tableFrameObserver: ResizeObserver | null = null
-
 let captureTimer: ReturnType<typeof window.setInterval> | null = null
+let keywordTimer: ReturnType<typeof window.setTimeout> | null = null
+let listRequestVersion = 0
 
-const pageCounts = computed(() => pages.reduce<Record<PageId, number>>((result, page) => {
-  result[page.id] = page.id === 'root' ? rows.value.length : rows.value.filter(row => row.pageId === page.id).length
+const pageCounts = computed(() => pages.value.reduce<Record<string, number>>((result, page) => {
+  result[String(page.id)] = page.id === 'root' ? rootTotal.value : Number(page.source?.elementCount || 0)
   return result
-}, { root: 0, login: 0, home: 0, product: 0, cart: 0 }))
+}, { root: rootTotal.value }))
 
-const visiblePages = computed(() => pages.filter(page => page.label.includes(pageKeyword.value.trim())))
-const visibleRows = computed(() => rows.value.filter((row) => {
-  if (selectedPage.value !== 'root' && row.pageId !== selectedPage.value) return false
-  if (keyword.value && !`${row.name} ${row.locatorValue}`.toLowerCase().includes(keyword.value.toLowerCase())) return false
-  if (locatorFilter.value && row.locatorType !== locatorFilter.value) return false
-  if (verifyFilter.value === 'pass' && row.verified !== 'pass') return false
-  if (verifyFilter.value === 'fail' && row.verified !== 'fail') return false
-  if (verifyFilter.value === 'unverified' && row.verified !== null) return false
-  return true
-}))
+const visiblePages = computed(() => pages.value.filter(page => page.label.includes(pageKeyword.value.trim())))
+const enabledEnvironments = computed(() => props.environments.filter(item => item.status !== 0))
+const selectedAiProvider = computed(() => aiProviders.value.find(item => item.status !== 0 && Boolean(item.modelName)) || null)
 
 const tableColumns: AppTableColumnDefinition[] = [
   { key: 'name', label: '元素名称', defaultVisible: true, required: true },
@@ -158,16 +140,6 @@ const columnSettings = useTableColumnSettings({
   storageKey: computed(() => `app-figma-table:web-ui-elements:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
   immediate: true,
 })
-
-const {
-  items: pagedRows,
-  total: filteredTotal,
-  pageNo,
-  pageSize,
-  setPage,
-  setPageSize,
-  resetPage,
-} = useLocalPagedTable(visibleRows, { initialPageSize: 10 })
 
 const columnWeights: Record<string, number> = {
   name: 18,
@@ -206,7 +178,128 @@ function openColumnSettings() {
   columnSettings.open()
 }
 
-watch([selectedPage, pageKeyword, keyword, locatorFilter, verifyFilter], resetPage)
+function mapElementRow(item: WebUiElementItem): ElementRow {
+  return {
+    id: item.id,
+    name: item.elementName,
+    description: item.description || '暂无描述',
+    page: item.pageName || '未归属页面',
+    pageId: item.pageId,
+    group: item.groupName || '未分组',
+    locatorType: item.locatorType,
+    locatorValue: item.locatorValue,
+    refCount: Number(item.usageCount || 0),
+    verified: item.lastValidateResult === 'PASSED'
+      ? 'pass'
+      : item.lastValidateResult === 'FAILED'
+        ? 'fail'
+        : null,
+  }
+}
+
+async function loadPages() {
+  const response = await webUiAutomationApi.getElementPages(props.workspaceCode)
+  rootTotal.value = response.items.reduce((sum, item) => sum + Number(item.elementCount || 0), 0)
+  pages.value = [
+    { id: 'root', label: '全部元素', source: null },
+    ...response.items.map(item => ({ id: item.id, label: item.pageName, source: item })),
+  ]
+  if (selectedPage.value !== 'root' && !response.items.some(item => item.id === selectedPage.value)) {
+    selectedPage.value = 'root'
+  }
+}
+
+async function loadAiProviders() {
+  aiProviders.value = await aiProviderApi.getProviderConnections(props.workspaceCode)
+}
+
+async function loadElements() {
+  if (!props.workspaceReady) return
+
+  const requestVersion = ++listRequestVersion
+  loading.value = true
+  try {
+    const response = await webUiAutomationApi.getElements(props.workspaceCode, {
+      keyword: keyword.value.trim() || undefined,
+      pageId: selectedPage.value === 'root' ? undefined : selectedPage.value,
+      pageNo: pageNo.value,
+      pageSize: pageSize.value,
+    })
+    if (requestVersion !== listRequestVersion) return
+    rows.value = response.items.map(mapElementRow)
+    total.value = response.total
+    if (selectedPage.value === 'root') rootTotal.value = response.total
+  } catch (error) {
+    if (requestVersion !== listRequestVersion) return
+    rows.value = []
+    total.value = 0
+    if (selectedPage.value === 'root') rootTotal.value = 0
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    if (requestVersion === listRequestVersion) loading.value = false
+  }
+}
+
+async function reloadWorkspaceData() {
+  if (!props.workspaceReady) {
+    pages.value = [{ id: 'root', label: '全部元素', source: null }]
+    rows.value = []
+    total.value = 0
+    rootTotal.value = 0
+    aiProviders.value = []
+    return
+  }
+
+  pageNo.value = 1
+  selectedPage.value = 'root'
+  const [pagesResult, providersResult] = await Promise.allSettled([loadPages(), loadAiProviders()])
+  if (pagesResult.status === 'rejected') ElMessage.error(getRequestErrorMessage(pagesResult.reason))
+  if (providersResult.status === 'rejected') aiProviders.value = []
+  await loadElements()
+}
+
+function setPage(value: number) {
+  pageNo.value = value
+  void loadElements()
+}
+
+function setPageSize(value: number) {
+  pageSize.value = value
+  pageNo.value = 1
+  void loadElements()
+}
+
+function resetPageAndLoad() {
+  pageNo.value = 1
+  void loadElements()
+}
+
+watch(() => [props.workspaceCode, props.workspaceReady] as const, () => {
+  void reloadWorkspaceData()
+}, { immediate: true })
+
+watch(selectedPage, resetPageAndLoad)
+
+watch(keyword, () => {
+  if (keywordTimer) window.clearTimeout(keywordTimer)
+  keywordTimer = window.setTimeout(resetPageAndLoad, 300)
+})
+
+watch(verifyFilter, (value) => {
+  if (!value) return
+  ElMessage.info('验证状态尚未进入元素列表服务端筛选契约，已保留 Figma 入口但不执行当前页伪筛选')
+  window.setTimeout(() => {
+    verifyFilter.value = ''
+  }, 0)
+})
+
+watch(locatorFilter, (value) => {
+  if (!value) return
+  ElMessage.info('定位方式尚未进入元素列表服务端查询契约，已保留 Figma 入口但不执行当前页伪筛选')
+  window.setTimeout(() => {
+    locatorFilter.value = ''
+  }, 0)
+})
 
 watch(tableFrameRef, (element) => {
   tableFrameObserver?.disconnect()
@@ -223,6 +316,9 @@ watch(tableFrameRef, (element) => {
 
 onBeforeUnmount(() => {
   tableFrameObserver?.disconnect()
+  if (captureTimer) window.clearInterval(captureTimer)
+  if (keywordTimer) window.clearTimeout(keywordTimer)
+  listRequestVersion += 1
 })
 
 const candidateTypes = computed(() => [...new Set(candidates.value.map(item => item.type))])
@@ -244,7 +340,30 @@ const lowCount = computed(() => candidates.value.filter(item => item.confidence 
 
 const scanSteps = ['连接目标页面', '解析 DOM 树', 'AI 识别元素', '生成定位策略', '完成']
 
+function getSelectedPage() {
+  return pages.value.find(page => page.id === selectedPage.value)?.source || null
+}
+
+function resolveCaptureUrl(page: WebUiElementPageItem) {
+  const pagePath = page.pagePath?.trim() || ''
+  if (/^https?:\/\//i.test(pagePath)) return pagePath
+
+  const baseUrl = enabledEnvironments.value[0]?.baseUrl?.trim() || ''
+  if (!baseUrl) return pagePath
+  try {
+    return new URL(pagePath || '/', baseUrl).toString()
+  } catch {
+    return pagePath || baseUrl
+  }
+}
+
 function openCapture() {
+  const page = getSelectedPage()
+  if (!page) {
+    ElMessage.warning('请先在左侧选择候选元素要归属的页面')
+    return
+  }
+  captureUrl.value = resolveCaptureUrl(page)
   state.value = 'config'
   scanStep.value = 0
   candidates.value = []
@@ -256,32 +375,256 @@ function backToLibrary() {
   state.value = 'list'
 }
 
-function startCapture() {
+function mapCandidate(item: WebUiElementCollectCandidate, index: number, pageName: string): Candidate {
+  return {
+    id: `${item.locatorType}-${index}-${item.locatorValue}`,
+    name: item.elementName,
+    type: item.elementType || item.tagName || 'element',
+    purpose: item.businessMeaning || item.reason || item.maintenanceSuggestion || 'AI 识别候选元素',
+    locatorType: item.locatorType,
+    locatorValue: item.locatorValue,
+    confidence: Math.max(0, Math.min(100, Number(item.confidence || 0))),
+    page: pageName,
+    status: 'pending',
+    source: item,
+  }
+}
+
+async function startCapture() {
+  const page = getSelectedPage()
+  if (!page) {
+    ElMessage.warning('请返回元素库并选择候选元素要归属的页面')
+    return
+  }
+  if (!captureUrl.value.trim()) {
+    ElMessage.warning('请输入目标页面地址')
+    return
+  }
+  if (!selectedAiProvider.value?.modelName) {
+    ElMessage.warning('当前工作区没有已启用且已配置模型的 AI 连接')
+    return
+  }
+
   if (captureTimer) window.clearInterval(captureTimer)
   candidates.value = []
   scanStep.value = 0
   state.value = 'scanning'
   captureTimer = window.setInterval(() => {
-    if (scanStep.value >= scanSteps.length - 1) {
-      if (captureTimer) window.clearInterval(captureTimer)
-      captureTimer = null
-      candidates.value = initialCandidates.map(item => ({ ...item, status: 'pending' }))
-      state.value = 'result'
-      return
+    scanStep.value = Math.min(scanStep.value + 1, scanSteps.length - 2)
+  }, 700)
+
+  try {
+    const environment = enabledEnvironments.value[0]
+    const scopeMap = {
+      '全页可操作元素': 'ALL',
+      '仅表单元素': 'FORM',
+      '按钮与链接': 'BUTTON',
+    } as const
+    const result = await webUiAutomationApi.collectElements(page.workspaceCode || props.workspaceCode, {
+      pageUrl: captureUrl.value.trim(),
+      environmentId: environment?.id ?? null,
+      moduleId: page.moduleId,
+      pageId: page.id,
+      pageName: page.pageName,
+      groupStrategy: 'AI',
+      scope: scopeMap[captureScope.value as keyof typeof scopeMap] || 'ALL',
+      browserType: environment?.browserType || 'CHROMIUM',
+      headless: environment?.headless ?? true,
+      timeoutMs: environment?.defaultTimeoutMs || 10000,
+      providerConnectionId: selectedAiProvider.value.id,
+      modelName: selectedAiProvider.value.modelName,
+    })
+    const limit = Math.max(1, Math.min(120, Number(maxElements.value || 50)))
+    candidates.value = result.candidates.slice(0, limit).map((item, index) => mapCandidate(item, index, page.pageName))
+    scanStep.value = scanSteps.length - 1
+    state.value = 'result'
+    if (!candidates.value.length) {
+      ElMessage.warning(result.message || '未识别到候选元素')
+    } else if (result.aiEnhanced) {
+      ElMessage.success(result.message || `已生成 ${candidates.value.length} 个候选元素`)
+    } else {
+      ElMessage.warning(result.fallbackReason || result.message || '本次采集未完成 AI 增强')
     }
-    scanStep.value += 1
-  }, 800)
+  } catch (error) {
+    state.value = 'config'
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    if (captureTimer) window.clearInterval(captureTimer)
+    captureTimer = null
+  }
 }
 
 function setCandidateStatus(id: string, status: AdoptStatus) {
   const candidate = candidates.value.find(item => item.id === id)
-  if (candidate) candidate.status = status
+  if (!candidate) return
+  if (status === 'adopted' && candidate.source.saveBlockedReason) {
+    ElMessage.warning(candidate.source.saveBlockedReason)
+    return
+  }
+  candidate.status = status
 }
 
 function adoptAll() {
   candidates.value.forEach((candidate) => {
-    if (candidate.status === 'pending') candidate.status = 'adopted'
+    if (candidate.status === 'pending' && !candidate.source.saveBlockedReason) candidate.status = 'adopted'
   })
+}
+
+function showPendingDesign(action: string) {
+  ElMessage.info(`${action}已有后台能力，但当前 Figma 页面缺少对应弹窗或抽屉设计，已记录到遗留问题`)
+}
+
+async function validateRow(row: ElementRow) {
+  if (validatingId.value !== null) return
+  const environment = enabledEnvironments.value[0]
+  if (!environment?.baseUrl) {
+    ElMessage.warning('请先配置并启用 Web UI 测试环境')
+    return
+  }
+
+  validatingId.value = row.id
+  try {
+    const result = await webUiAutomationApi.validateElement(props.workspaceCode, row.id, {
+      baseUrl: environment.baseUrl,
+      browserType: environment.browserType,
+      headless: environment.headless,
+      timeoutMs: environment.defaultTimeoutMs,
+    })
+    ElMessage[result.matched ? 'success' : 'warning'](
+      result.matched ? `验证通过，匹配 ${result.matchCount} 个元素` : result.errorMessage || '未匹配到元素',
+    )
+    await Promise.all([loadElements(), loadPages()])
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    validatingId.value = null
+  }
+}
+
+async function deleteRow(row: ElementRow) {
+  try {
+    await confirmDelete({
+      title: '删除元素',
+      message: `确认删除元素「${row.name}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+    })
+    await webUiAutomationApi.deleteElement(props.workspaceCode, row.id)
+    ElMessage.success('元素已删除')
+    if (rows.value.length === 1 && pageNo.value > 1) pageNo.value -= 1
+    await Promise.all([loadElements(), loadPages()])
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function loadAllElementsForPage(pageId: number) {
+  const first = await webUiAutomationApi.getElements(props.workspaceCode, { pageId, pageNo: 1, pageSize: 200 })
+  const result = [...first.items]
+  const actualPageSize = Math.max(1, Number(first.pageSize || 200))
+  const pageCount = Math.ceil(first.total / actualPageSize)
+  for (let current = 2; current <= pageCount; current += 1) {
+    const next = await webUiAutomationApi.getElements(props.workspaceCode, { pageId, pageNo: current, pageSize: actualPageSize })
+    result.push(...next.items)
+  }
+  return result
+}
+
+function isDuplicateCandidate(existing: WebUiElementItem[], pageId: number, groupName: string, candidate: Candidate) {
+  return existing.some(item => item.pageId === pageId && (
+    (item.locatorType === candidate.source.locatorType && item.locatorValue === candidate.source.locatorValue)
+    || ((item.groupName || '') === groupName && item.elementName === candidate.source.elementName)
+  ))
+}
+
+function buildCandidateDescription(candidate: Candidate) {
+  return [
+    candidate.source.businessMeaning,
+    candidate.source.reason,
+    candidate.source.maintenanceSuggestion,
+    candidate.source.stabilityNote,
+  ].filter(Boolean).join('；') || 'AI 采集入库'
+}
+
+async function confirmCandidates() {
+  if (savingCandidates.value) return
+  const page = getSelectedPage()
+  const adopted = candidates.value.filter(item => item.status === 'adopted' && !item.source.saveBlockedReason)
+  if (!page || !adopted.length) {
+    ElMessage.warning(page ? '请至少采纳一个可入库候选元素' : '未找到候选元素所属页面')
+    return
+  }
+
+  savingCandidates.value = true
+  try {
+    const [groupPage, existing] = await Promise.all([
+      webUiAutomationApi.getElementGroups(page.workspaceCode, page.id),
+      loadAllElementsForPage(page.id),
+    ])
+    const groupMap = new Map(groupPage.items.map(item => [item.groupName, item]))
+    let savedCount = 0
+    let skippedCount = 0
+    let failedCount = 0
+
+    for (const candidate of adopted) {
+      const groupName = candidate.source.groupName.trim() || 'AI 采集'
+      if (isDuplicateCandidate(existing, page.id, groupName, candidate)) {
+        skippedCount += 1
+        continue
+      }
+      try {
+        let group = groupMap.get(groupName)
+        if (!group) {
+          group = await webUiAutomationApi.createElementGroup(page.workspaceCode, {
+            workspaceCode: page.workspaceCode,
+            pageId: page.id,
+            groupName,
+            description: 'AI 采集创建',
+            sortOrder: groupMap.size + 1,
+            status: 'ENABLED',
+          })
+          groupMap.set(groupName, group)
+        }
+        const created = await webUiAutomationApi.createElement(page.workspaceCode, {
+          workspaceCode: page.workspaceCode,
+          pageId: page.id,
+          groupId: group.id,
+          pageName: page.pageName,
+          groupName: group.groupName,
+          elementName: candidate.source.elementName.trim(),
+          locatorType: candidate.source.locatorType,
+          locatorValue: candidate.source.locatorValue.trim(),
+          framePath: candidate.source.framePath || [],
+          shadowPath: candidate.source.shadowPath || [],
+          description: buildCandidateDescription(candidate),
+          status: 'ENABLED',
+          collectSource: candidate.source.candidateSource || 'AI_COLLECT',
+          collectConfidence: candidate.source.confidence,
+          collectValidationStatus: candidate.source.validationStatus,
+          collectMatchCount: candidate.source.matchCount,
+          collectValidationMessage: candidate.source.validationMessage,
+          collectScreenshotBase64: candidate.source.screenshotBase64,
+        })
+        existing.push(created)
+        savedCount += 1
+      } catch {
+        failedCount += 1
+      }
+    }
+
+    if (failedCount) {
+      ElMessage.warning(`已入库 ${savedCount} 个，跳过重复 ${skippedCount} 个，失败 ${failedCount} 个`)
+    } else if (skippedCount) {
+      ElMessage.warning(`已入库 ${savedCount} 个，跳过重复 ${skippedCount} 个`)
+    } else {
+      ElMessage.success(`已入库 ${savedCount} 个元素`)
+    }
+    backToLibrary()
+    await Promise.all([loadElements(), loadPages()])
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    savingCandidates.value = false
+  }
 }
 
 function confidenceClass(confidence: number) {
@@ -321,16 +664,17 @@ function confidenceClass(confidence: number) {
           <select v-model="locatorFilter"><option value="">全部定位方式</option><option>id</option><option>css</option><option>xpath</option><option>text</option><option>role</option></select>
           <select v-model="verifyFilter"><option value="">全部验证状态</option><option value="pass">验证通过</option><option value="fail">验证失败</option><option value="unverified">未验证</option></select>
           <span class="figma-elements__fill" />
-          <button class="figma-elements__ghost" type="button"><Plus />手动添加</button>
+          <button class="figma-elements__ghost" type="button" @click="showPendingDesign('手动添加元素')"><Plus />手动添加</button>
           <button class="figma-elements__primary" type="button" @click="openCapture"><Sparkles />AI 采集</button>
         </div>
         <div ref="tableFrameRef" class="figma-elements__table-frame">
           <AppFigmaTable
             class="figma-elements__data-table"
-            :data="pagedRows"
+            :data="rows"
+            :loading="loading"
             :page-no="pageNo"
             :page-size="pageSize"
-            :total="filteredTotal"
+            :total="total"
             show-page-size
             show-jumper
             :header-height="36"
@@ -376,11 +720,11 @@ function confidenceClass(confidence: number) {
               <template #settings>
                 <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openColumnSettings" />
               </template>
-              <template #default>
-                <button type="button" title="验证" aria-label="验证" @click.stop><CircleCheck /></button>
-                <button type="button" title="查看" aria-label="查看" @click.stop><Eye /></button>
-                <button type="button" title="编辑" aria-label="编辑" @click.stop><Pencil /></button>
-                <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop><Trash2 /></button>
+              <template #default="{ row }">
+                <button type="button" title="验证" aria-label="验证" @click.stop="validateRow(row)"><CircleCheck /></button>
+                <button type="button" title="查看" aria-label="查看" @click.stop="showPendingDesign('查看元素详情')"><Eye /></button>
+                <button type="button" title="编辑" aria-label="编辑" @click.stop="showPendingDesign('编辑元素')"><Pencil /></button>
+                <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="deleteRow(row)"><Trash2 /></button>
               </template>
             </AppFigmaActionColumn>
           </AppFigmaTable>
@@ -394,7 +738,7 @@ function confidenceClass(confidence: number) {
         <span><Sparkles /></span><h1>AI 元素采集</h1>
         <em v-if="state === 'result'">采集完成 · {{ candidates.length }} 个候选元素</em>
         <div class="figma-elements__fill" />
-        <button v-if="state === 'result' && adoptedCount" class="figma-elements__confirm" type="button" @click="backToLibrary"><Check />确认入库 ({{ adoptedCount }})</button>
+        <button v-if="state === 'result' && adoptedCount" class="figma-elements__confirm" type="button" @click="confirmCandidates"><Check />确认入库 ({{ adoptedCount }})</button>
       </header>
       <div class="figma-elements__capture">
         <aside class="figma-elements__capture-side">
@@ -409,7 +753,7 @@ function confidenceClass(confidence: number) {
         <main v-else-if="state === 'scanning'" class="figma-elements__capture-empty is-scanning"><span><Sparkles /></span><h2>AI 正在分析页面结构...</h2><p>{{ scanSteps[scanStep] }}</p></main>
         <main v-else class="figma-elements__result">
           <div class="figma-elements__result-filter"><div><button :class="{ 'is-active': candidateStatus === 'all' }" type="button" @click="candidateStatus = 'all'">全部 {{ candidates.length }}</button><button :class="{ 'is-active': candidateStatus === 'pending' }" type="button" @click="candidateStatus = 'pending'">待确认 {{ pendingCount }}</button><button :class="{ 'is-active': candidateStatus === 'adopted' }" type="button" @click="candidateStatus = 'adopted'">已采纳 {{ adoptedCount }}</button><button :class="{ 'is-active': candidateStatus === 'ignored' }" type="button" @click="candidateStatus = 'ignored'">已忽略 {{ ignoredCount }}</button></div><select v-model="candidateType"><option value="">全部类型</option><option v-for="item in candidateTypes" :key="item">{{ item }}</option></select><select v-model="candidateConfidence"><option value="">全部置信度</option><option value="high">高 (≥90%)</option><option value="medium">中 (80-89%)</option><option value="low">低 (&lt;80%)</option></select><span class="figma-elements__fill" /><p>共 <b>{{ filteredCandidates.length }}</b> 项</p><button type="button" @click="adoptAll">全部采纳</button></div>
-          <div class="figma-elements__candidate-scroll"><section v-for="page in candidatePages" :key="page"><header><Monitor /><b>{{ page }}</b><em>{{ filteredCandidates.filter(item => item.page === page).length }} 个元素</em></header><article v-for="candidate in filteredCandidates.filter(item => item.page === page)" :key="candidate.id" :class="{ 'is-adopted': candidate.status === 'adopted', 'is-ignored': candidate.status === 'ignored' }"><div class="figma-elements__confidence-wrap"><div class="figma-elements__confidence" :class="confidenceClass(candidate.confidence)"><b>{{ candidate.confidence }}%</b></div><small>置信度</small></div><div><h3>{{ candidate.name }} <em>{{ candidate.type }}</em><i v-if="candidate.status === 'adopted'">已采纳</i></h3><p>{{ candidate.purpose }}</p><code>{{ candidate.locatorType }}</code><span>{{ candidate.locatorValue }}</span></div><aside v-if="candidate.status === 'pending'"><button class="is-adopt" type="button" @click="setCandidateStatus(candidate.id, 'adopted')">采纳</button><button type="button">编辑</button><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'ignored')">忽略</button></aside><aside v-else-if="candidate.status === 'adopted'"><strong><CircleCheck />已采纳</strong><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'pending')">撤销</button></aside><aside v-else><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'pending')">恢复</button></aside></article></section></div>
+          <div class="figma-elements__candidate-scroll"><section v-for="page in candidatePages" :key="page"><header><Monitor /><b>{{ page }}</b><em>{{ filteredCandidates.filter(item => item.page === page).length }} 个元素</em></header><article v-for="candidate in filteredCandidates.filter(item => item.page === page)" :key="candidate.id" :class="{ 'is-adopted': candidate.status === 'adopted', 'is-ignored': candidate.status === 'ignored' }"><div class="figma-elements__confidence-wrap"><div class="figma-elements__confidence" :class="confidenceClass(candidate.confidence)"><b>{{ candidate.confidence }}%</b></div><small>置信度</small></div><div><h3>{{ candidate.name }} <em>{{ candidate.type }}</em><i v-if="candidate.status === 'adopted'">已采纳</i></h3><p>{{ candidate.purpose }}</p><code>{{ candidate.locatorType }}</code><span>{{ candidate.locatorValue }}</span></div><aside v-if="candidate.status === 'pending'"><button class="is-adopt" type="button" @click="setCandidateStatus(candidate.id, 'adopted')">采纳</button><button type="button" @click="showPendingDesign('编辑 AI 候选元素')">编辑</button><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'ignored')">忽略</button></aside><aside v-else-if="candidate.status === 'adopted'"><strong><CircleCheck />已采纳</strong><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'pending')">撤销</button></aside><aside v-else><button class="is-text" type="button" @click="setCandidateStatus(candidate.id, 'pending')">恢复</button></aside></article></section></div>
         </main>
       </div>
     </template>

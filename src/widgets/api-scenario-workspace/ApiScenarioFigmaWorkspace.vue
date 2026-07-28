@@ -5,17 +5,45 @@ import {
   Link2, MoreHorizontal, Play, Plus, Repeat, Save, Search, Settings, Shield, Terminal, Trash2,
   Upload, X,
 } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
+import {
+  apiAutomationApi,
+  type ApiAutomationEnvironmentItem,
+  type ApiAutomationVariableSetItem,
+  type ApiScenarioDetail,
+  type ApiScenarioItem,
+  type ApiScenarioModuleItem,
+  type ApiScenarioStep,
+  type ApiScenarioTestDatasetDetail,
+  type ApiScenarioTestDatasetSavePayload,
+  type SaveApiScenarioPayload,
+} from '@/entities/api-automation'
+import {
+  isRunnerSelectable,
+  localRunnerApi,
+  runnerOptionLabel,
+  runnerUnselectableReason,
+  selectDefaultRunnerId,
+  type RunnerNodeSummary,
+} from '@/entities/local-runner'
 import { useSession } from '@/entities/session'
+import { getRequestErrorMessage } from '@/shared/api/error'
 import {
   type AppTableColumnDefinition,
-  useLocalPagedTable,
   useTableColumnSettings,
 } from '@/shared/lib/table'
 import { AppFigmaActionColumn } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
+import { confirmDelete } from '@/shared/ui'
+
+import {
+  createEmptyRequestConfig,
+  normalizeScenarioRequestConfig,
+} from './lib/apiScenarioStepRequestUtils'
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
@@ -36,34 +64,45 @@ type ScenarioStep = {
   method?: string
   enabled: boolean
   children?: ScenarioStep[]
+  source?: ApiScenarioStep
 }
 
 type Scenario = {
   id: number
+  persistedId: number | null
+  workspaceCode: string
   name: string
   priority: ScenarioPriority
-  status: '进行中'
+  status: '进行中' | '未激活'
+  rawStatus: string
   result: ScenarioResult
   module: string
+  moduleId: number | null
   tags: string[]
   steps: ScenarioStep[]
+  stepCount: number
   environment: string
+  environmentId: number | null
   testData: string
   iterations: number
   threads: number
   runLocation: 'server' | 'runner'
   runner: string
   variableSet: string
+  variableSetId: number | null
   lastRun?: string
   lastResult?: ScenarioResult
+  description: string
+  source?: ApiScenarioDetail | ApiScenarioItem
 }
 
 type Dataset = {
-  id: string
+  id: string | number
   name: string
   enabled: boolean
   columns: string[]
   rows: string[][]
+  source?: ApiScenarioTestDatasetDetail
 }
 
 const stepTypeConfig: Record<StepType, { label: string; description: string; color: string; background: string; icon: unknown }> = {
@@ -80,25 +119,31 @@ const stepTypeConfig: Record<StepType, { label: string; description: string; col
 }
 const stepTypeEntries = Object.entries(stepTypeConfig) as Array<[StepType, (typeof stepTypeConfig)[StepType]]>
 
-const stepTemplate = (): ScenarioStep[] => [
-  { id: 'step-1', type: 'ref-scene', label: '登录', detail: '登录场景', enabled: true },
-  { id: 'step-2', type: 'script', label: '生成本次测试数据', detail: '初始化变量', enabled: true },
-  { id: 'step-3', type: 'custom', method: 'POST', label: '新增产品', detail: '/api/products', enabled: true },
-  { id: 'step-4', type: 'custom', method: 'GET', label: '查询新增产品并提取ID', detail: '/api/products', enabled: true },
-  { id: 'step-5', type: 'custom', method: 'PUT', label: '编辑产品', detail: '/api/products/{id}', enabled: true },
-  { id: 'step-6', type: 'custom', method: 'GET', label: '查询验证产品已编辑', detail: '/api/products/{id}', enabled: true },
-  { id: 'step-7', type: 'custom', method: 'POST', label: '停用产品', detail: '/api/products/{id}/disable', enabled: true },
-  { id: 'step-8', type: 'custom', method: 'GET', label: '查询验证产品已停用', detail: '/api/products/{id}', enabled: true },
-  { id: 'step-9', type: 'custom', method: 'DELETE', label: '删除产品', detail: '/api/products/{id}', enabled: true },
-  { id: 'step-10', type: 'custom', method: 'GET', label: '查询验证产品已删除', detail: '/api/products/{id}', enabled: true },
-]
-
-function makeScenario(id: number, name: string, result: ScenarioResult, priority: ScenarioPriority, module: string, tags: string[], stepCount: number): Scenario {
+function makeScenario(id: number, name: string): Scenario {
   return {
-    id, name, priority, status: '进行中', result, module, tags,
-    steps: stepTemplate().slice(0, stepCount), environment: '测试环境', testData: '不使用测试数据', iterations: 1,
-    threads: 1, runLocation: 'server', runner: 'Runner-上海-01', variableSet: '请选择变量集',
-    lastRun: result === 'idle' ? undefined : '2026-07-14 09:30', lastResult: result === 'idle' ? undefined : result,
+    id,
+    persistedId: null,
+    workspaceCode: props.workspaceCode,
+    name,
+    priority: 'P2',
+    status: '进行中',
+    rawStatus: 'ENABLED',
+    result: 'idle',
+    module: '',
+    moduleId: null,
+    tags: [],
+    steps: [],
+    stepCount: 0,
+    environment: '',
+    environmentId: null,
+    testData: '不使用测试数据',
+    iterations: 1,
+    threads: 1,
+    runLocation: 'server',
+    runner: '',
+    variableSet: '',
+    variableSetId: null,
+    description: '',
   }
 }
 
@@ -108,8 +153,8 @@ const statusFilter = ref('全部')
 const activeEditorTab = ref<EditorTab>('steps')
 const activeScenarioId = ref<number | null>(null)
 // The Figma list state keeps the first scene tab open while "全部场景" is active.
-const openScenarioIds = ref<number[]>([1])
-const selectedDataset = ref('register')
+const openScenarioIds = ref<number[]>([])
+const selectedDataset = ref<string | number | null>(null)
 const showAddStep = ref(false)
 const showImportSteps = ref(false)
 const configuringStep = ref<ScenarioStep | null>(null)
@@ -120,53 +165,237 @@ const sceneSettings = ref({ continueOnFailure: false, timeout: 30000, retryCount
 const sceneTableFrameRef = ref<HTMLElement | null>(null)
 const sceneTableFrameWidth = ref(0)
 const { currentUser } = useSession()
+const router = useRouter()
 let sceneTableFrameObserver: ResizeObserver | null = null
+let scenarioFilterTimer: ReturnType<typeof window.setTimeout> | null = null
 
-const scenarios = ref<Scenario[]>([
-  makeScenario(1, '产品管理-新增编辑删除闭环', 'pass', 'P1', '获客中心', ['获客中心', 'CRUD闭环', 'Codex生成'], 10),
-  makeScenario(2, '用户注册登录完整流程', 'fail', 'P0', '用户中心', ['用户中心', '核心链路'], 6),
-  makeScenario(3, '订单全链路压测场景', 'pass', 'P0', '订单中心', ['订单', '压测', '主链路'], 5),
-  makeScenario(4, '权限校验场景', 'idle', 'P2', '权限中心', ['权限', '安全'], 4),
-])
-
-const datasets = ref<Dataset[]>([
-  {
-    id: 'register', name: '注册测试数据集', enabled: true,
-    columns: ['描述(caseDesc)', '用户名', '密码', '手机号', '期望状态'],
-    rows: [
-      ['正常注册', 'user_001', 'Aa123456', '13800001001', 'success'],
-      ['重复手机号', 'user_002', 'Aa123456', '13800001001', 'fail'],
-      ['弱密码', 'user_003', '123456', '13800001003', 'fail'],
-      ['正常注册2', 'user_004', 'Aa123456', '13800001004', 'success'],
-      ['特殊字符', 'user_005', 'Aa!@#456', '13800001005', 'success'],
-    ],
-  },
-  {
-    id: 'import', name: '批量导入数据', enabled: false,
-    columns: ['批次', '用户编号', '期望状态'],
-    rows: Array.from({ length: 20 }, (_, index) => [`第 ${index + 1} 批`, `batch_${String(index + 1).padStart(3, '0')}`, 'success']),
-  },
-])
+const scenarios = ref<Scenario[]>([])
+const datasets = ref<Dataset[]>([])
+const scenarioModules = ref<ApiScenarioModuleItem[]>([])
+const environments = ref<ApiAutomationEnvironmentItem[]>([])
+const variableSets = ref<ApiAutomationVariableSetItem[]>([])
+const scenarioLoading = ref(false)
+const scenarioDetailLoading = ref(false)
+const scenarioSaving = ref(false)
+const scenarioRunning = ref(false)
+const scenarioCopyingId = ref<number | null>(null)
+const scenarioTotal = ref(0)
+const scenarioPageNo = ref(1)
+const scenarioPageSize = ref(10)
+const stepDebugLoading = ref(false)
+const stepDebugText = ref('配置完成后可发送请求并查看响应结果。')
+const scenarioRunnerNodes = ref<RunnerNodeSummary[]>([])
+const csvDatasetInput = ref<HTMLInputElement | null>(null)
+const jsonDatasetInput = ref<HTMLInputElement | null>(null)
+const API_SCENARIO_RUNNER_TASK_TYPE = 'API_SCENARIO_RUN'
 
 const activeScenario = computed(() => scenarios.value.find(item => item.id === activeScenarioId.value) || null)
 const activeDataset = computed(() => datasets.value.find(item => item.id === selectedDataset.value) || datasets.value[0])
-const isNewScenario = computed(() => activeScenario.value?.name.startsWith('新建场景') ?? false)
+const isNewScenario = computed(() => activeScenario.value?.persistedId == null)
+const activeScenarioAuthor = computed(() => currentUser.value?.displayName || currentUser.value?.username || '当前用户')
+const activeScenarioUpdatedAt = computed(() => formatDateTime(activeScenario.value?.source?.updatedAt) || '尚未保存')
 // Compatibility aliases keep the inactive legacy markup type-safe while its visual state is replaced below.
 const editingScenario = activeScenario
 const datasetColumns = computed(() => activeDataset.value?.columns || [])
 const datasetRows = computed(() => activeDataset.value?.rows || [])
-const filteredScenarios = computed(() => {
-  const term = keyword.value.trim()
-  return scenarios.value.filter(item => {
-    if (term && !item.name.includes(term)) return false
-    if (moduleFilter.value !== '全部' && item.module !== moduleFilter.value) return false
-    if (statusFilter.value !== '全部') {
-      const isActive = item.status === '进行中'
-      if ((statusFilter.value === '进行中' && !isActive) || (statusFilter.value === '未激活' && isActive)) return false
-    }
-    return true
-  })
+const filteredScenarios = computed(() => scenarios.value)
+const pagedScenarios = computed(() => scenarios.value)
+const filteredScenarioTotal = computed(() => scenarioTotal.value)
+const flatScenarioModules = computed(() => {
+  const result: ApiScenarioModuleItem[] = []
+  const visit = (items: ApiScenarioModuleItem[]) => {
+    items.forEach((item) => {
+      result.push(item)
+      visit(item.children || [])
+    })
+  }
+  visit(scenarioModules.value)
+  return result
 })
+
+function normalizePriority(value?: string | null): ScenarioPriority {
+  return value === 'P0' || value === 'P1' || value === 'P2' ? value : 'P2'
+}
+
+function normalizeResult(value?: string | null): ScenarioResult {
+  const normalized = String(value || '').toUpperCase()
+  if (normalized === 'SUCCESS' || normalized === 'PASSED' || normalized === 'PASS') return 'pass'
+  if (normalized === 'FAILED' || normalized === 'FAIL' || normalized === 'ERROR') return 'fail'
+  return 'idle'
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return undefined
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.replace('T', ' ').slice(0, 19)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function apiStepType(step: ApiScenarioStep): StepType {
+  const mapping: Record<string, StepType> = {
+    API: 'ref-api',
+    API_CASE: 'ref-case',
+    CUSTOM_REQUEST: 'custom',
+    API_SCENARIO: 'ref-scene',
+    IF_CONTROLLER: 'condition',
+    LOOP_CONTROLLER: 'loop',
+    ONCE_ONLY_CONTROLLER: 'once',
+    CONSTANT_TIMER: 'wait',
+    SCRIPT: 'script',
+  }
+  return mapping[step.stepType || ''] || 'custom'
+}
+
+function apiStepDetail(step: ApiScenarioStep) {
+  if (step.stepType === 'CUSTOM_REQUEST') return step.requestConfig?.path || ''
+  if (step.stepType === 'SCRIPT') return step.script || ''
+  if (step.stepType === 'CONSTANT_TIMER') return String(step.delayMs ?? 0)
+  if (step.resourceId) return `资源 #${step.resourceId}`
+  if (step.conditionExpression) return step.conditionExpression
+  return ''
+}
+
+function mapApiStep(step: ApiScenarioStep, index: number): ScenarioStep {
+  return {
+    id: step.id || `step-${index}-${Date.now()}`,
+    type: apiStepType(step),
+    label: step.stepName || stepTypeConfig[apiStepType(step)].label,
+    detail: apiStepDetail(step),
+    method: step.requestConfig?.method || undefined,
+    enabled: step.enabled !== false,
+    children: Array.isArray(step.children) ? step.children.map(mapApiStep) : undefined,
+    source: step,
+  }
+}
+
+function mapScenario(item: ApiScenarioItem | ApiScenarioDetail): Scenario {
+  const detail = 'steps' in item ? item as ApiScenarioDetail : null
+  const environment = environments.value.find(option => option.id === item.defaultEnvironmentId)
+  const variableSet = variableSets.value.find(option => option.id === item.variableSetId)
+  const result = normalizeResult(item.lastRunResult)
+  return {
+    id: item.id,
+    persistedId: item.id,
+    workspaceCode: item.workspaceCode,
+    name: item.name,
+    priority: normalizePriority(item.priority),
+    status: item.status === 'DISABLED' ? '未激活' : '进行中',
+    rawStatus: item.status || 'ENABLED',
+    result,
+    module: item.moduleName || item.directoryName || '',
+    moduleId: item.moduleId,
+    tags: Array.isArray(item.tags) ? [...item.tags] : [],
+    steps: detail?.steps?.map(mapApiStep) || [],
+    stepCount: detail?.steps?.length ?? item.stepCount ?? 0,
+    environment: environment?.name || '',
+    environmentId: item.defaultEnvironmentId,
+    testData: item.dataFileNameSnapshot || '不使用测试数据',
+    iterations: 1,
+    threads: 1,
+    runLocation: item.runOn === 'LOCAL' ? 'runner' : 'server',
+    runner: selectDefaultRunnerId(scenarioRunnerNodes.value, null, API_SCENARIO_RUNNER_TASK_TYPE) || '',
+    variableSet: variableSet?.name || '',
+    variableSetId: item.variableSetId,
+    lastRun: formatDateTime(item.lastRunAt),
+    lastResult: result === 'idle' ? undefined : result,
+    description: item.description || '',
+    source: item,
+  }
+}
+
+function mapDataset(item: ApiScenarioTestDatasetDetail): Dataset {
+  const columns = item.columns.map(column => column.name)
+  return {
+    id: item.id,
+    name: item.datasetName,
+    enabled: item.enabled,
+    columns,
+    rows: item.rows.map(row => columns.map(column => row.values[column] ?? '')),
+    source: item,
+  }
+}
+
+function scenarioStepType(type: StepType): ApiScenarioStep['stepType'] {
+  const mapping: Record<StepType, ApiScenarioStep['stepType']> = {
+    import: 'API',
+    custom: 'CUSTOM_REQUEST',
+    'ref-api': 'API',
+    'ref-case': 'API_CASE',
+    'ref-scene': 'API_SCENARIO',
+    loop: 'LOOP_CONTROLLER',
+    condition: 'IF_CONTROLLER',
+    once: 'ONCE_ONLY_CONTROLLER',
+    script: 'SCRIPT',
+    wait: 'CONSTANT_TIMER',
+  }
+  return mapping[type]
+}
+
+function serializeStep(step: ScenarioStep): ApiScenarioStep {
+  const source = step.source ? structuredClone(step.source) : {
+    stepName: step.label,
+    resourceType: null,
+    resourceId: null,
+  }
+  const stepType = scenarioStepType(step.type)
+  const next: ApiScenarioStep = {
+    ...source,
+    id: step.source?.id,
+    stepName: step.label.trim() || stepTypeConfig[step.type].label,
+    stepType,
+    enabled: step.enabled,
+    resourceType: stepType === 'API' ? 'DEFINITION' : stepType === 'API_CASE' ? 'CASE' : source.resourceType || null,
+    resourceId: source.resourceId ?? null,
+    assertions: Array.isArray(source.assertions) ? source.assertions : [],
+    preProcessors: Array.isArray(source.preProcessors) ? source.preProcessors : [],
+    postProcessors: Array.isArray(source.postProcessors) ? source.postProcessors : [],
+    children: Array.isArray(step.children) ? step.children.map(serializeStep) : source.children,
+  }
+  if (stepType === 'CUSTOM_REQUEST') {
+    const requestConfig = normalizeScenarioRequestConfig(source.requestConfig || createEmptyRequestConfig())
+    requestConfig.method = String(step.method || requestConfig.method || 'GET').toUpperCase()
+    requestConfig.path = step.detail.trim()
+    next.requestConfig = requestConfig
+    next.resourceType = null
+    next.resourceId = null
+  }
+  if (stepType === 'SCRIPT') next.script = step.detail
+  if (stepType === 'CONSTANT_TIMER') next.delayMs = Math.max(0, Number(step.detail) || 0)
+  return next
+}
+
+function buildScenarioPayload(item: Scenario): SaveApiScenarioPayload {
+  const source = item.source && 'steps' in item.source ? item.source as ApiScenarioDetail : null
+  const selectedEnvironment = environments.value.find(option => option.name === item.environment)
+  const selectedVariableSet = variableSets.value.find(option => option.name === item.variableSet)
+  return {
+    workspaceCode: item.workspaceCode,
+    name: item.name.trim(),
+    directoryName: source?.directoryName || null,
+    moduleId: item.moduleId,
+    priority: item.priority,
+    status: item.rawStatus || 'ENABLED',
+    description: item.description || null,
+    tags: [...item.tags],
+    defaultEnvironmentId: selectedEnvironment?.id ?? item.environmentId,
+    variableSetId: selectedVariableSet?.id ?? item.variableSetId,
+    runOn: item.runLocation === 'runner' ? 'LOCAL' : 'SERVER',
+    continueOnFailure: sceneSettings.value.continueOnFailure,
+    globalTimeoutMs: Math.max(1, Number(sceneSettings.value.timeout) || 30000),
+    stepFailureRetryCount: Math.max(0, Number(sceneSettings.value.retryCount) || 0),
+    defaultStepWaitMs: Math.max(0, Number(sceneSettings.value.waitTime) || 0),
+    dataDrivenEnabled: datasets.value.some(dataset => dataset.enabled),
+    dataFileId: source?.dataFileId ?? null,
+    dataFileNameSnapshot: source?.dataFileNameSnapshot || null,
+    caseDescColumn: source?.caseDescColumn || 'caseDesc',
+    dataFailureStrategy: source?.dataFailureStrategy || 'STOP_ON_ROW_FAILURE',
+    relatedCaseId: source?.relatedCaseId ?? null,
+    scenarioVariables: source?.scenarioVariables || [],
+    scenarioAssertions: source?.scenarioAssertions || [],
+    steps: item.steps.map(serializeStep),
+  }
+}
 
 const scenarioTableColumns: AppTableColumnDefinition[] = [
   { key: 'id', label: 'ID', defaultVisible: true, required: true },
@@ -191,16 +420,6 @@ const scenarioColumnSettings = useTableColumnSettings({
   storageKey: computed(() => `app-figma-table:api-scenarios:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
   immediate: true,
 })
-
-const {
-  items: pagedScenarios,
-  total: filteredScenarioTotal,
-  pageNo: scenarioPageNo,
-  pageSize: scenarioPageSize,
-  setPage: setScenarioPage,
-  setPageSize: setScenarioPageSize,
-  resetPage: resetScenarioPage,
-} = useLocalPagedTable(filteredScenarios, { initialPageSize: 10 })
 
 const scenarioDefaultColumnWeights: Record<string, number> = {
   id: 0.0657,
@@ -243,7 +462,99 @@ function scenarioRowClassName({ row }: { row: Scenario }) {
   return row.id % 2 === 0 ? 'is-alt' : ''
 }
 
-watch([keyword, moduleFilter, statusFilter], resetScenarioPage)
+function currentScenarioStatusFilter() {
+  if (statusFilter.value === '进行中') return 'ENABLED'
+  if (statusFilter.value === '未激活') return 'DISABLED'
+  return undefined
+}
+
+function currentScenarioModuleId() {
+  if (moduleFilter.value === '全部') return undefined
+  return flatScenarioModules.value.find(item => item.name === moduleFilter.value)?.id
+}
+
+async function loadScenarioList() {
+  scenarioLoading.value = true
+  try {
+    const page = await apiAutomationApi.getScenarios(props.workspaceCode, {
+      keyword: keyword.value.trim() || undefined,
+      moduleId: currentScenarioModuleId(),
+      status: currentScenarioStatusFilter(),
+      pageNo: scenarioPageNo.value,
+      pageSize: scenarioPageSize.value,
+    })
+    scenarios.value = page.items.map(mapScenario)
+    scenarioTotal.value = page.total
+    scenarioPageNo.value = page.pageNo
+    scenarioPageSize.value = page.pageSize
+  } catch (error) {
+    scenarios.value = []
+    scenarioTotal.value = 0
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    scenarioLoading.value = false
+  }
+}
+
+async function loadScenarioReferenceData() {
+  try {
+    const [modules, environmentPage, variableSetPage, runnerNodes] = await Promise.all([
+      apiAutomationApi.getScenarioModules(props.workspaceCode),
+      apiAutomationApi.getEnvironments(props.workspaceCode),
+      apiAutomationApi.getVariableSets(props.workspaceCode),
+      localRunnerApi.getRunnerNodes({ taskType: API_SCENARIO_RUNNER_TASK_TYPE, resourceCost: 1 }),
+    ])
+    scenarioModules.value = modules
+    environments.value = environmentPage.items
+    variableSets.value = variableSetPage.items
+    scenarioRunnerNodes.value = runnerNodes
+  } catch (error) {
+    scenarioModules.value = []
+    environments.value = []
+    variableSets.value = []
+    scenarioRunnerNodes.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function initializeScenarioPage() {
+  await loadScenarioReferenceData()
+  await loadScenarioList()
+}
+
+function setScenarioPage(value: number) {
+  scenarioPageNo.value = value
+  void loadScenarioList()
+}
+
+function setScenarioPageSize(value: number) {
+  scenarioPageSize.value = value
+  scenarioPageNo.value = 1
+  void loadScenarioList()
+}
+
+function scheduleScenarioFilterReload() {
+  if (scenarioFilterTimer) window.clearTimeout(scenarioFilterTimer)
+  scenarioFilterTimer = window.setTimeout(() => {
+    scenarioFilterTimer = null
+    scenarioPageNo.value = 1
+    void loadScenarioList()
+  }, 250)
+}
+
+watch([keyword, moduleFilter, statusFilter], scheduleScenarioFilterReload)
+
+watch(
+  () => props.workspaceCode,
+  () => {
+    activeScenarioId.value = null
+    openScenarioIds.value = []
+    datasets.value = []
+    scenarioPageNo.value = 1
+    void initializeScenarioPage()
+  },
+  { immediate: true },
+)
 
 watch(sceneTableFrameRef, element => {
   sceneTableFrameObserver?.disconnect()
@@ -260,36 +571,388 @@ watch(sceneTableFrameRef, element => {
 
 onBeforeUnmount(() => {
   sceneTableFrameObserver?.disconnect()
+  if (scenarioFilterTimer) window.clearTimeout(scenarioFilterTimer)
 })
 
-function openEditor(item: Scenario) {
+async function loadScenarioDatasets(item: Scenario) {
+  if (!item.persistedId) {
+    datasets.value = []
+    selectedDataset.value = null
+    return
+  }
+  try {
+    const summaries = await apiAutomationApi.getScenarioTestDatasets(item.workspaceCode, item.persistedId)
+    const details = await Promise.all(summaries.map(summary => (
+      apiAutomationApi.getScenarioTestDataset(item.workspaceCode, item.persistedId as number, summary.id)
+    )))
+    datasets.value = details.map(mapDataset)
+    selectedDataset.value = datasets.value[0]?.id ?? null
+  } catch (error) {
+    datasets.value = []
+    selectedDataset.value = null
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function openEditor(item: Scenario) {
   if (!openScenarioIds.value.includes(item.id)) openScenarioIds.value.push(item.id)
   activeScenarioId.value = item.id
   activeEditorTab.value = 'steps'
+  if (!item.persistedId) return
+  if (item.source && 'steps' in item.source) {
+    sceneSettings.value = {
+      continueOnFailure: item.source.continueOnFailure,
+      timeout: item.source.globalTimeoutMs,
+      retryCount: item.source.stepFailureRetryCount,
+      waitTime: item.source.defaultStepWaitMs,
+    }
+    await loadScenarioDatasets(item)
+    return
+  }
+  scenarioDetailLoading.value = true
+  try {
+    const detail = await apiAutomationApi.getScenarioDetail(item.workspaceCode, item.persistedId)
+    const mapped = mapScenario(detail)
+    const index = scenarios.value.findIndex(candidate => candidate.id === item.id)
+    if (index >= 0) scenarios.value[index] = mapped
+    activeScenarioId.value = mapped.id
+    sceneSettings.value = {
+      continueOnFailure: detail.continueOnFailure,
+      timeout: detail.globalTimeoutMs,
+      retryCount: detail.stepFailureRetryCount,
+      waitTime: detail.defaultStepWaitMs,
+    }
+    await loadScenarioDatasets(mapped)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    scenarioDetailLoading.value = false
+  }
 }
 
 function closeEditor(id: number) {
   const next = openScenarioIds.value.filter(item => item !== id)
   openScenarioIds.value = next
-  if (activeScenarioId.value === id) activeScenarioId.value = next.at(-1) || null
+  if (activeScenarioId.value !== id) return
+  const nextId = next.at(-1)
+  const nextScenario = scenarios.value.find(item => item.id === nextId)
+  if (nextScenario) void openEditor(nextScenario)
+  else activeScenarioId.value = null
+}
+
+function activateScenarioTab(id: number) {
+  const item = scenarios.value.find(candidate => candidate.id === id)
+  if (item) void openEditor(item)
 }
 
 function createScenario() {
-  const draft = makeScenario(Date.now(), `新建场景 ${scenarios.value.length + 1}`, 'idle', 'P2', '获客中心', [], 0)
-  draft.testData = ''
-  draft.variableSet = ''
+  const draft = makeScenario(-Date.now(), `新建场景 ${scenarioTotal.value + 1}`)
+  const defaultModule = flatScenarioModules.value[0]
+  const defaultEnvironment = environments.value.find(item => item.status !== 0)
+  draft.moduleId = defaultModule?.id ?? null
+  draft.module = defaultModule?.name || ''
+  draft.environmentId = defaultEnvironment?.id ?? null
+  draft.environment = defaultEnvironment?.name || ''
   scenarios.value.push(draft)
+  datasets.value = []
+  selectedDataset.value = null
+  sceneSettings.value = { continueOnFailure: false, timeout: 30000, retryCount: 0, waitTime: 0 }
   openEditor(draft)
 }
 
-function removeScenario(item: Scenario) {
-  scenarios.value = scenarios.value.filter(candidate => candidate.id !== item.id)
-  closeEditor(item.id)
+async function removeScenario(item: Scenario) {
+  if (!item.persistedId) {
+    scenarios.value = scenarios.value.filter(candidate => candidate.id !== item.id)
+    closeEditor(item.id)
+    return
+  }
+  try {
+    await confirmDelete({
+      title: '删除接口场景',
+      message: `确认删除场景「${item.name}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+    })
+  } catch {
+    return
+  }
+  try {
+    await apiAutomationApi.deleteScenario(item.workspaceCode, item.persistedId)
+    ElMessage.success('场景已删除')
+    closeEditor(item.id)
+    await loadScenarioList()
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  }
 }
 
 function updateActiveScenario(patch: Partial<Scenario>) {
   if (!activeScenario.value) return
   Object.assign(activeScenario.value, patch)
+}
+
+function syncActiveScenarioModule() {
+  if (!activeScenario.value) return
+  activeScenario.value.module = flatScenarioModules.value.find(item => item.id === activeScenario.value?.moduleId)?.name || ''
+}
+
+function syncActiveScenarioEnvironment() {
+  if (!activeScenario.value) return
+  activeScenario.value.environment = environments.value.find(item => item.id === activeScenario.value?.environmentId)?.name || ''
+}
+
+function syncActiveScenarioVariableSet() {
+  if (!activeScenario.value) return
+  activeScenario.value.variableSet = variableSets.value.find(item => item.id === activeScenario.value?.variableSetId)?.name || ''
+}
+
+function hasInvalidScenarioStep(steps: ScenarioStep[]): boolean {
+  return steps.some((step) => {
+    if (!step.label.trim()) return true
+    if (step.type === 'custom' && !step.detail.trim()) return true
+    if (step.type === 'script' && !step.detail.trim()) return true
+    if (['ref-api', 'ref-case', 'ref-scene', 'import'].includes(step.type) && !step.source?.resourceId) return true
+    return Array.isArray(step.children) && hasInvalidScenarioStep(step.children)
+  })
+}
+
+function validateScenarioBeforeSave(item: Scenario) {
+  if (!item.workspaceCode || item.workspaceCode === 'ALL') {
+    ElMessage.warning('请先切换到具体工作空间后再保存场景')
+    return false
+  }
+  if (!item.name.trim() || !item.steps.length) {
+    ElMessage.warning('请补全场景名称并至少添加一个步骤')
+    return false
+  }
+  if (!item.moduleId) {
+    ElMessage.warning('请选择所属模块')
+    return false
+  }
+  if (hasInvalidScenarioStep(item.steps)) {
+    ElMessage.warning('请补全步骤引用、请求 URL 或脚本内容')
+    return false
+  }
+  return true
+}
+
+function buildDatasetPayload(dataset: Dataset): ApiScenarioTestDatasetSavePayload {
+  const columns = dataset.columns.map(column => column.trim()).filter(Boolean)
+  return {
+    datasetName: dataset.name.trim() || '未命名数据集',
+    enabled: dataset.enabled,
+    sourceType: dataset.source?.sourceType || 'MANUAL',
+    sourceFileId: dataset.source?.sourceFileId ?? null,
+    caseDescColumn: dataset.source?.caseDescColumn || columns[0] || null,
+    columns: columns.map(name => ({ name })),
+    rows: dataset.rows.map((row, rowIndex) => ({
+      rowIndex: rowIndex + 1,
+      values: Object.fromEntries(columns.map((column, columnIndex) => [column, row[columnIndex] ?? ''])),
+    })),
+  }
+}
+
+async function saveScenarioDatasets(item: Scenario) {
+  if (!item.persistedId) return
+  const savedDatasets = await Promise.all(datasets.value.map((dataset) => {
+    const payload = buildDatasetPayload(dataset)
+    if (dataset.source?.id) {
+      return apiAutomationApi.updateScenarioTestDataset(item.workspaceCode, item.persistedId as number, dataset.source.id, payload)
+    }
+    return apiAutomationApi.createScenarioTestDataset(item.workspaceCode, item.persistedId as number, payload)
+  }))
+  datasets.value = savedDatasets.map(mapDataset)
+  selectedDataset.value = datasets.value[0]?.id ?? null
+}
+
+async function saveScenario(): Promise<Scenario | null> {
+  const item = activeScenario.value
+  if (!item || !validateScenarioBeforeSave(item)) return null
+  scenarioSaving.value = true
+  const originalId = item.id
+  try {
+    const payload = buildScenarioPayload(item)
+    const saved = item.persistedId
+      ? await apiAutomationApi.updateScenario(item.workspaceCode, item.persistedId, payload)
+      : await apiAutomationApi.createScenario(item.workspaceCode, payload)
+    const mapped = mapScenario(saved)
+    mapped.iterations = item.iterations
+    mapped.threads = item.threads
+    mapped.runner = item.runner
+    const index = scenarios.value.findIndex(candidate => candidate.id === originalId)
+    if (index >= 0) scenarios.value[index] = mapped
+    openScenarioIds.value = openScenarioIds.value.map(id => id === originalId ? mapped.id : id)
+    activeScenarioId.value = mapped.id
+    if (!item.persistedId) scenarioTotal.value += 1
+    try {
+      await saveScenarioDatasets(mapped)
+    } catch (error) {
+      ElMessage.error(`场景已保存，但测试数据保存失败：${getRequestErrorMessage(error)}`)
+      return mapped
+    }
+    ElMessage.success(item.persistedId ? '场景已更新' : '场景已创建')
+    return mapped
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+    return null
+  } finally {
+    scenarioSaving.value = false
+  }
+}
+
+async function runScenario(item: Scenario, saveBeforeRun = false) {
+  let target = item
+  if (saveBeforeRun) {
+    const saved = await saveScenario()
+    if (!saved) return
+    target = saved
+  }
+  if (!target.persistedId) {
+    ElMessage.warning('请先保存场景')
+    return
+  }
+  if (!target.workspaceCode || target.workspaceCode === 'ALL') {
+    ElMessage.warning('请先切换到具体工作空间后再执行场景')
+    return
+  }
+  const selectedDatasetItem = datasets.value.find(dataset => dataset.name === target.testData)
+  const selectedRunner = scenarioRunnerNodes.value.find(runner => runner.runnerId === target.runner)
+  if (target.runLocation === 'runner') {
+    if (!selectedRunner || !isRunnerSelectable(selectedRunner, API_SCENARIO_RUNNER_TASK_TYPE)) {
+      ElMessage.warning(`当前本地 Runner 不可用：${selectedRunner ? runnerUnselectableReason(selectedRunner, API_SCENARIO_RUNNER_TASK_TYPE) : '请选择在线 Runner'}`)
+      return
+    }
+  }
+  scenarioRunning.value = true
+  try {
+    const response = await apiAutomationApi.runScenario(target.workspaceCode, target.persistedId, {
+      environmentId: target.environmentId,
+      variableSetId: target.variableSetId,
+      runOn: target.runLocation === 'runner' ? 'LOCAL' : 'SERVER',
+      testDatasetEnabled: Boolean(selectedDatasetItem?.source?.id),
+      testDatasetId: selectedDatasetItem?.source?.id ?? null,
+      loopCount: Math.max(1, Number(target.iterations) || 1),
+      threadCount: Math.max(1, Number(target.threads) || 1),
+      runnerId: target.runLocation === 'runner' ? target.runner : null,
+    })
+    target.result = normalizeResult(response.result)
+    target.lastResult = target.result === 'idle' ? undefined : target.result
+    target.lastRun = formatDateTime(new Date().toISOString())
+    ElMessage.success(response.result === 'PENDING' ? '已创建本地执行任务' : response.result === 'SUCCESS' ? '场景执行成功' : '场景执行完成，请查看运行结果')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    scenarioRunning.value = false
+  }
+}
+
+async function runScenarioFromList(item: Scenario) {
+  await runScenario(item)
+  await loadScenarioList()
+}
+
+async function copyScenario(item: Scenario) {
+  if (!item.persistedId) return
+  if (!item.workspaceCode || item.workspaceCode === 'ALL') {
+    ElMessage.warning('请先切换到具体工作空间后再复制场景')
+    return
+  }
+  scenarioCopyingId.value = item.id
+  try {
+    const detail = await apiAutomationApi.getScenarioDetail(item.workspaceCode, item.persistedId)
+    const payload: SaveApiScenarioPayload = {
+      workspaceCode: detail.workspaceCode,
+      name: `${detail.name}（副本）`,
+      directoryName: detail.directoryName,
+      moduleId: detail.moduleId,
+      priority: detail.priority,
+      status: detail.status,
+      description: detail.description,
+      tags: [...detail.tags],
+      defaultEnvironmentId: detail.defaultEnvironmentId,
+      variableSetId: detail.variableSetId,
+      runOn: detail.runOn || 'SERVER',
+      continueOnFailure: detail.continueOnFailure,
+      globalTimeoutMs: detail.globalTimeoutMs,
+      stepFailureRetryCount: detail.stepFailureRetryCount,
+      defaultStepWaitMs: detail.defaultStepWaitMs,
+      dataDrivenEnabled: false,
+      dataFileId: null,
+      dataFileNameSnapshot: null,
+      caseDescColumn: detail.caseDescColumn || 'caseDesc',
+      dataFailureStrategy: detail.dataFailureStrategy || 'STOP_ON_ROW_FAILURE',
+      relatedCaseId: detail.relatedCaseId,
+      scenarioVariables: structuredClone(detail.scenarioVariables || []),
+      scenarioAssertions: structuredClone(detail.scenarioAssertions || []),
+      steps: structuredClone(detail.steps || []),
+    }
+    await apiAutomationApi.createScenario(item.workspaceCode, payload)
+    ElMessage.success('场景已复制')
+    scenarioPageNo.value = 1
+    await loadScenarioList()
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    scenarioCopyingId.value = null
+  }
+}
+
+function openEnvironmentSettings() {
+  void router.push({ name: 'automation-api-settings' })
+}
+
+async function debugScenarioStep() {
+  const scenario = activeScenario.value
+  const step = configuringStep.value
+  if (!scenario || !step) return
+  if (!scenario.workspaceCode || scenario.workspaceCode === 'ALL') {
+    ElMessage.warning('请先切换到具体工作空间后再发送请求')
+    return
+  }
+  stepDebugLoading.value = true
+  stepDebugText.value = '正在发送请求...'
+  try {
+    const payload = { environmentId: scenario.environmentId, variableSetId: scenario.variableSetId }
+    let response
+    if (step.type === 'custom') {
+      const requestConfig = normalizeScenarioRequestConfig(step.source?.requestConfig || createEmptyRequestConfig())
+      requestConfig.method = String(step.method || requestConfig.method || 'GET').toUpperCase()
+      requestConfig.path = step.detail.trim()
+      if (!requestConfig.path) {
+        ElMessage.warning('请输入请求 URL 或接口路径')
+        return
+      }
+      response = await apiAutomationApi.debugRunDefinitionDraft(scenario.workspaceCode, {
+        workspaceCode: scenario.workspaceCode,
+        name: step.label.trim() || '自定义请求',
+        description: '',
+        tags: [],
+        requestConfig,
+        assertions: step.source?.assertions || [],
+        extractors: [],
+        preProcessors: step.source?.preProcessors || [],
+        postProcessors: step.source?.postProcessors || [],
+        ...payload,
+      })
+    } else if (step.type === 'ref-api' && step.source?.resourceId) {
+      response = await apiAutomationApi.debugRunDefinition(scenario.workspaceCode, step.source.resourceId, payload)
+    } else if (step.type === 'ref-case' && step.source?.resourceId) {
+      response = await apiAutomationApi.runCase(scenario.workspaceCode, step.source.resourceId, payload)
+    } else if (step.type === 'ref-scene' && step.source?.resourceId) {
+      response = await apiAutomationApi.runScenario(scenario.workspaceCode, step.source.resourceId, payload)
+    } else {
+      ElMessage.info('该步骤需要随场景整体运行，暂不支持单步发送')
+      stepDebugText.value = '该步骤需要随场景整体运行。'
+      return
+    }
+    const firstStep = response.stepResults?.[0]
+    stepDebugText.value = response.failureSummary || (firstStep
+      ? `${firstStep.success ? '请求成功' : '请求失败'}${firstStep.response?.statusCode ? ` · HTTP ${firstStep.response.statusCode}` : ''} · ${firstStep.durationMs} ms`
+      : response.result === 'SUCCESS' ? '请求成功' : '请求已完成')
+  } catch (error) {
+    stepDebugText.value = getRequestErrorMessage(error)
+  } finally {
+    stepDebugLoading.value = false
+  }
 }
 
 function startSceneNameEdit() {
@@ -330,19 +993,126 @@ function addStep(type: StepType = 'custom') {
 }
 
 function importSteps() {
-  const scenario = activeScenario.value
-  if (!scenario) return
-  scenario.steps.push(
-    { id: `import-${Date.now()}-1`, type: 'import', method: 'POST', label: '导入的接口步骤', detail: '/resource/import', enabled: true },
-    { id: `import-${Date.now()}-2`, type: 'script', label: '导入的脚本步骤', detail: '校验导入结果', enabled: true },
-  )
   showImportSteps.value = false
+  ElMessage.info('当前 Figma 弹窗缺少资源选择控件，未执行导入')
+}
+
+function openStepConfiguration(step: ScenarioStep) {
+  configuringStep.value = step
+  stepDebugText.value = '配置完成后可发送请求并查看响应结果。'
+}
+
+function notifyPendingStepEditor(label: string) {
+  ElMessage.info(`${label} 的后端字段已存在，当前 Figma 抽屉尚未提供对应编辑区`)
+}
+
+async function saveStepConfiguration() {
+  const step = configuringStep.value
+  if (!step) return
+  if (step.type === 'custom' && !step.detail.trim()) {
+    ElMessage.warning('请输入请求 URL 或接口路径')
+    return
+  }
+  if (step.type === 'script' && !step.detail.trim()) {
+    ElMessage.warning('请输入脚本内容')
+    return
+  }
+  const saved = await saveScenario()
+  if (saved) configuringStep.value = null
 }
 
 function addDataset() {
   const id = `dataset-${Date.now()}`
   datasets.value.push({ id, name: '未命名数据集', enabled: false, columns: ['变量名'], rows: [['变量值']] })
   selectedDataset.value = id
+}
+
+function selectCsvDatasetFile() {
+  csvDatasetInput.value?.click()
+}
+
+async function importDatasetCsv(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !activeScenario.value) return
+  let scenario = activeScenario.value
+  if (!scenario.persistedId) {
+    const saved = await saveScenario()
+    if (!saved) return
+    scenario = saved
+  }
+  try {
+    const imported = await apiAutomationApi.importScenarioTestDatasetCsv(
+      scenario.workspaceCode,
+      scenario.persistedId as number,
+      file,
+      file.name.replace(/\.csv$/i, ''),
+    )
+    await loadScenarioDatasets(scenario)
+    selectedDataset.value = imported.id
+    ElMessage.success('CSV 数据已导入')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+function selectJsonDatasetFile() {
+  jsonDatasetInput.value?.click()
+}
+
+async function importDatasetJson(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  try {
+    const parsed = JSON.parse(await file.text()) as unknown
+    const source = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null
+    if (!source) throw new Error('JSON 文件结构无效')
+    const sourceRows = Array.isArray(source) ? source : Array.isArray(source.rows) ? source.rows : []
+    const declaredColumns = !Array.isArray(source) && Array.isArray(source.columns)
+      ? source.columns.map(column => typeof column === 'string' ? column : String((column as { name?: unknown }).name || '')).filter(Boolean)
+      : []
+    const inferredColumns = sourceRows[0] && !Array.isArray(sourceRows[0]) && typeof sourceRows[0] === 'object'
+      ? Object.keys(sourceRows[0] as Record<string, unknown>)
+      : []
+    const columns = declaredColumns.length ? declaredColumns : inferredColumns
+    if (!columns.length) throw new Error('JSON 中缺少可识别的字段列')
+    const rows = sourceRows.map(row => Array.isArray(row)
+      ? columns.map((_, index) => String(row[index] ?? ''))
+      : columns.map(column => String((row as Record<string, unknown>)[column] ?? '')))
+    const id = `dataset-${Date.now()}`
+    datasets.value.push({
+      id,
+      name: file.name.replace(/\.json$/i, '') || 'JSON 数据集',
+      enabled: true,
+      columns,
+      rows,
+    })
+    selectedDataset.value = id
+    ElMessage.success('JSON 数据已导入，保存场景后生效')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : 'JSON 文件解析失败')
+  }
+}
+
+function escapeCsvCell(value: string) {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+}
+
+function exportDatasetCsv() {
+  const dataset = activeDataset.value
+  if (!dataset) return
+  const content = [dataset.columns, ...dataset.rows]
+    .map(row => row.map(value => escapeCsvCell(String(value ?? ''))).join(','))
+    .join('\r\n')
+  const url = URL.createObjectURL(new Blob([`\uFEFF${content}`], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${dataset.name || '测试数据'}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 function addDatasetColumn() {
@@ -436,7 +1206,7 @@ function addChildStep(parent: ScenarioStep) {
       <header class="figma-api-scenarios__scene-tabbar">
         <button class="is-active" type="button">全部场景</button><i />
         <div class="figma-api-scenarios__scene-tab-strip">
-          <button v-for="id in openScenarioIds" :key="id" type="button" :title="scenarios.find(item => item.id === id)?.name" @click="activeScenarioId = id">
+          <button v-for="id in openScenarioIds" :key="id" type="button" :title="scenarios.find(item => item.id === id)?.name" @click="activateScenarioTab(id)">
             <span>{{ scenarios.find(item => item.id === id)?.name || '未命名场景' }}</span>
           </button>
         </div>
@@ -446,7 +1216,7 @@ function addChildStep(parent: ScenarioStep) {
       <section class="figma-api-scenarios__scene-list" aria-label="接口场景列表">
         <div class="figma-api-scenarios__scene-filters">
           <label class="figma-api-scenarios__scene-search"><Search /><input v-model="keyword" placeholder="搜索场景名称" /></label>
-          <select v-model="moduleFilter" aria-label="所属模块筛选"><option>全部</option><option>获客中心</option><option>用户中心</option><option>订单中心</option><option>权限中心</option><option>结算中心</option></select>
+          <select v-model="moduleFilter" aria-label="所属模块筛选"><option>全部</option><option v-for="module in flatScenarioModules" :key="module.id" :value="module.name">{{ module.name }}</option></select>
           <select v-model="statusFilter" aria-label="场景状态筛选"><option>全部</option><option>进行中</option><option>未激活</option></select>
           <span /><button class="figma-api-scenarios__primary" type="button" @click="createScenario()"><Plus />新建场景</button>
         </div>
@@ -454,6 +1224,7 @@ function addChildStep(parent: ScenarioStep) {
           <AppFigmaTable
             class="figma-api-scenarios__scene-data-table"
             :data="pagedScenarios"
+            :loading="scenarioLoading"
             :page-no="scenarioPageNo"
             :page-size="scenarioPageSize"
             :total="filteredScenarioTotal"
@@ -479,7 +1250,7 @@ function addChildStep(parent: ScenarioStep) {
                 <div v-else-if="column.key === 'name'" class="figma-api-scenarios__scene-name"><button type="button" @click.stop="openEditor(item)">{{ item.name }}</button><div><em v-for="tag in item.tags" :key="tag">{{ tag }}</em></div></div>
                 <b v-else-if="column.key === 'priority'" class="figma-api-scenarios__scene-priority" :class="`is-${item.priority.toLowerCase()}`">{{ item.priority }}</b>
                 <span v-else-if="column.key === 'module'" class="figma-api-scenarios__scene-module">{{ item.module }}</span>
-                <span v-else-if="column.key === 'steps'" class="figma-api-scenarios__scene-step-count">{{ item.steps.length }} 个</span>
+                <span v-else-if="column.key === 'steps'" class="figma-api-scenarios__scene-step-count">{{ item.stepCount }} 个</span>
                 <span v-else-if="column.key === 'result'" class="figma-api-scenarios__scene-result" :class="`is-${item.result}`"><i v-if="item.result !== 'idle'" />{{ resultLabel(item.result) }}</span>
                 <span v-else class="figma-api-scenarios__scene-extra">{{ formatScenarioColumn(item, column.key) }}</span>
               </template>
@@ -497,8 +1268,8 @@ function addChildStep(parent: ScenarioStep) {
               </template>
               <template #default="{ row: item }">
                 <button type="button" title="编辑" aria-label="编辑" @click.stop="openEditor(item)"><Edit2 /></button>
-                <button type="button" title="执行" aria-label="执行" @click.stop><Play /></button>
-                <button type="button" title="复制" aria-label="复制" @click.stop><Copy /></button>
+                <button type="button" title="执行" aria-label="执行" :disabled="scenarioRunning" @click.stop="runScenarioFromList(item)"><Play /></button>
+                <button type="button" title="复制" aria-label="复制" :disabled="scenarioCopyingId === item.id" @click.stop="copyScenario(item)"><Copy /></button>
                 <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="removeScenario(item)"><Trash2 /></button>
               </template>
             </AppFigmaActionColumn>
@@ -512,13 +1283,13 @@ function addChildStep(parent: ScenarioStep) {
         <button :class="{ 'is-active': activeScenarioId === null }" type="button" @click="activeScenarioId = null">全部场景</button>
         <i />
         <div class="figma-api-scenarios__editor-open-tabs">
-          <button v-for="id in openScenarioIds" :key="id" :class="{ 'is-active': id === activeScenarioId }" type="button" @click="activeScenarioId = id">
+          <button v-for="id in openScenarioIds" :key="id" :class="{ 'is-active': id === activeScenarioId }" type="button" @click="activateScenarioTab(id)">
             <span>{{ scenarios.find(item => item.id === id)?.name }}</span><X @click.stop="closeEditor(id)" />
           </button>
         </div>
         <button class="figma-api-scenarios__tool-icon" type="button" title="新建场景" @click="createScenario()"><Plus /></button>
         <button class="figma-api-scenarios__tool-icon" type="button" title="更多场景" @click="showMoreTabs = !showMoreTabs"><MoreHorizontal /></button>
-        <div v-if="showMoreTabs" class="figma-api-scenarios__tab-menu"><button v-for="id in openScenarioIds" :key="id" type="button" @click="activeScenarioId = id; showMoreTabs = false">{{ scenarios.find(item => item.id === id)?.name }}</button></div>
+        <div v-if="showMoreTabs" class="figma-api-scenarios__tab-menu"><button v-for="id in openScenarioIds" :key="id" type="button" @click="activateScenarioTab(id); showMoreTabs = false">{{ scenarios.find(item => item.id === id)?.name }}</button></div>
       </header>
       <div class="figma-api-scenarios__editor-body">
         <section class="figma-api-scenarios__editor-main">
@@ -549,7 +1320,7 @@ function addChildStep(parent: ScenarioStep) {
                 <input v-if="isEditingSceneName" ref="sceneNameInput" :value="activeScenario.name" @blur="isEditingSceneName = false" @input="updateActiveScenario({ name: ($event.target as HTMLInputElement).value })" @keydown.enter="isEditingSceneName = false" />
                 <button v-else class="figma-api-scenarios__scene-name-button" type="button" @click="startSceneNameEdit"><span>{{ activeScenario.name }}</span><Edit2 /></button>
               </div>
-              <p v-if="!isNewScenario">由 Codex 根据获客中心低风险新增编辑删除接口生成的可重复闭环场景。</p><small>X-MAN · 更新于 2026-07-14 · {{ activeScenario.module }}</small>
+              <p v-if="!isNewScenario">{{ activeScenario.description || '暂无场景描述' }}</p><small>{{ activeScenarioAuthor }} · 更新于 {{ activeScenarioUpdatedAt }} · {{ activeScenario.module || '未分配模块' }}</small>
             </div>
             <div class="figma-api-scenarios__steps-toolbar"><p>共 <b>{{ activeScenario.steps.length }}</b> 个步骤</p><div><button type="button" @click="showImportSteps = true"><Upload />导入步骤</button><button type="button" @click="showAddStep = true"><Plus />添加步骤</button></div></div>
             <div v-if="activeScenario.steps.length" class="figma-api-scenarios__step-list">
@@ -564,7 +1335,7 @@ function addChildStep(parent: ScenarioStep) {
                     <p><strong>{{ step.label }}</strong></p>
                     <small v-if="step.method && step.detail" class="figma-api-scenarios__step-path">{{ step.detail }}</small>
                     <em v-if="isControllerStep(step.type)" :style="{ color: stepTypeConfig[step.type].color, background: stepTypeConfig[step.type].background }">{{ step.children?.length || 0 }} 子步骤</em>
-                    <div class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="configuringStep = step"><ChevronRight /></button><button type="button" title="上移" :disabled="index === 0" @click="reorderStep(index, -1)"><ArrowUp /></button><button type="button" title="下移" :disabled="index === activeScenario.steps.length - 1" @click="reorderStep(index, 1)"><ArrowDown /></button><button type="button" title="复制" @click="duplicateStep(index)"><Copy /></button><button type="button" title="删除" @click="activeScenario.steps.splice(index, 1)"><Trash2 /></button></div>
+                    <div class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="openStepConfiguration(step)"><ChevronRight /></button><button type="button" title="上移" :disabled="index === 0" @click="reorderStep(index, -1)"><ArrowUp /></button><button type="button" title="下移" :disabled="index === activeScenario.steps.length - 1" @click="reorderStep(index, 1)"><ArrowDown /></button><button type="button" title="复制" @click="duplicateStep(index)"><Copy /></button><button type="button" title="删除" @click="activeScenario.steps.splice(index, 1)"><Trash2 /></button></div>
                   </div>
                   <button v-if="isControllerStep(step.type)" class="figma-api-scenarios__add-child" type="button" :style="{ color: stepTypeConfig[step.type].color }" @click="addChildStep(step)"><Plus />添加子步骤</button>
                 </article>
@@ -576,7 +1347,7 @@ function addChildStep(parent: ScenarioStep) {
                     <b class="figma-api-scenarios__step-type" :style="{ color: stepTypeConfig[child.type].color, background: stepTypeConfig[child.type].background }">{{ stepTypeLabel(child.type) }}</b>
                     <b v-if="child.method" class="figma-api-scenarios__method" :class="`is-${child.method.toLowerCase()}`">{{ child.method }}</b>
                     <p><strong>{{ child.label }}</strong></p><small class="figma-api-scenarios__step-path">{{ child.detail }}</small>
-                    <div class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="configuringStep = child"><ChevronRight /></button><button type="button" title="删除" @click="step.children?.splice(childIndex, 1)"><Trash2 /></button></div>
+                    <div class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="openStepConfiguration(child)"><ChevronRight /></button><button type="button" title="删除" @click="step.children?.splice(childIndex, 1)"><Trash2 /></button></div>
                   </article>
                 </template>
               </div>
@@ -586,7 +1357,7 @@ function addChildStep(parent: ScenarioStep) {
             </div>
           <div v-else-if="activeEditorTab === 'test-data'" class="figma-api-scenarios__test-data">
             <aside class="figma-api-scenarios__dataset-list"><div class="figma-api-scenarios__dataset-list-head"><b>数据集列表</b><button type="button" @click="addDataset()"><Plus /></button></div><div v-for="dataset in datasets" :key="dataset.id" :class="{ 'is-active': selectedDataset === dataset.id }" class="figma-api-scenarios__dataset-item"><button type="button" @click="selectedDataset = dataset.id"><i :class="{ 'is-on': dataset.enabled }" @click.stop="dataset.enabled = !dataset.enabled"><span /></i><span><b>{{ dataset.name }}</b><small>{{ dataset.rows.length }} 行数据</small></span></button><button class="figma-api-scenarios__dataset-more" type="button" title="操作" @click.stop><MoreHorizontal /></button></div></aside>
-            <section class="figma-api-scenarios__dataset-editor"><header><b>{{ activeDataset.name }}</b><div><button type="button"><Upload />导入 CSV</button><button type="button"><Database />导入 JSON</button><i /><button type="button"><Database />导出 CSV</button><button type="button" @click="addDatasetColumn()">添加变量列</button><button class="is-primary" type="button" @click="addDatasetRow()"><Plus />添加数据行</button></div></header><div class="figma-api-scenarios__dataset-table-scroll"><table><colgroup><col class="figma-api-scenarios__dataset-index-column" /><col v-for="column in activeDataset.columns" :key="column" class="figma-api-scenarios__dataset-value-column" /><col class="figma-api-scenarios__dataset-action-column" /></colgroup><thead><tr><th>#</th><th v-for="(column, columnIndex) in activeDataset.columns" :key="`${activeDataset.id}-${columnIndex}`">{{ column }} <button type="button" title="删除列" @click="removeDatasetColumn(columnIndex)"><Trash2 /></button></th><th /></tr></thead><tbody><tr v-for="(row, rowIndex) in activeDataset.rows" :key="`${activeDataset.id}-${rowIndex}`"><td>{{ rowIndex + 1 }}</td><td v-for="(_, columnIndex) in activeDataset.columns" :key="columnIndex"><input v-model="row[columnIndex]" /></td><td><button type="button" title="删除行" @click="removeDatasetRow(rowIndex)"><Trash2 /></button></td></tr></tbody></table></div></section>
+            <section class="figma-api-scenarios__dataset-editor"><header><b>{{ activeDataset?.name || '请选择或新建数据集' }}</b><div><button type="button" @click="selectCsvDatasetFile"><Upload />导入 CSV</button><button type="button" @click="selectJsonDatasetFile"><Database />导入 JSON</button><i /><button type="button" :disabled="!activeDataset" @click="exportDatasetCsv"><Database />导出 CSV</button><button type="button" :disabled="!activeDataset" @click="addDatasetColumn()">添加变量列</button><button class="is-primary" type="button" :disabled="!activeDataset" @click="addDatasetRow()"><Plus />添加数据行</button></div></header><div class="figma-api-scenarios__dataset-table-scroll"><table v-if="activeDataset"><colgroup><col class="figma-api-scenarios__dataset-index-column" /><col v-for="column in datasetColumns" :key="column" class="figma-api-scenarios__dataset-value-column" /><col class="figma-api-scenarios__dataset-action-column" /></colgroup><thead><tr><th>#</th><th v-for="(column, columnIndex) in datasetColumns" :key="`${activeDataset.id}-${columnIndex}`">{{ column }} <button type="button" title="删除列" @click="removeDatasetColumn(columnIndex)"><Trash2 /></button></th><th /></tr></thead><tbody><tr v-for="(row, rowIndex) in datasetRows" :key="`${activeDataset.id}-${rowIndex}`"><td>{{ rowIndex + 1 }}</td><td v-for="(_, columnIndex) in datasetColumns" :key="columnIndex"><input v-model="row[columnIndex]" /></td><td><button type="button" title="删除行" @click="removeDatasetRow(rowIndex)"><Trash2 /></button></td></tr></tbody></table></div></section>
           </div>
           <div v-else class="figma-api-scenarios__settings">
             <div class="figma-api-scenarios__settings-panel">
@@ -607,21 +1378,23 @@ function addChildStep(parent: ScenarioStep) {
           <label>标签<button type="button">+ 添加</button></label>
         </aside>
         <aside class="figma-api-scenarios__run-config" :class="{ 'is-new': isNewScenario }">
-          <div class="figma-api-scenarios__run-actions"><div><select v-model="activeScenario.environment"><option>测试环境</option><option>预发布环境</option></select><button type="button" title="环境设置"><Settings /></button></div><button type="button"><Play />运行</button><button type="button"><Save />保存</button></div>
+          <div class="figma-api-scenarios__run-actions"><div><select v-model.number="activeScenario.environmentId" @change="syncActiveScenarioEnvironment"><option :value="null">请选择环境</option><option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}</option></select><button type="button" title="环境设置" @click="openEnvironmentSettings"><Settings /></button></div><button type="button" :disabled="scenarioRunning || scenarioSaving" @click="runScenario(activeScenario, true)"><Play />运行</button><button type="button" :disabled="scenarioSaving || scenarioRunning" @click="saveScenario"><Save />保存</button></div>
           <div class="figma-api-scenarios__run-fields">
-          <label><em>*</em> 所属模块<select v-model="activeScenario.module"><option value="">请选择所属模块</option><option>获客中心</option><option>订单中心</option></select></label>
+          <label><em>*</em> 所属模块<select v-model.number="activeScenario.moduleId" @change="syncActiveScenarioModule"><option :value="null">请选择所属模块</option><option v-for="module in flatScenarioModules" :key="module.id" :value="module.id">{{ module.name }}</option></select></label>
           <label>测试数据<select v-model="activeScenario.testData"><option value="">请选择测试数据</option><option>不使用测试数据</option><option v-for="dataset in datasets" :key="dataset.id">{{ dataset.name }}</option></select></label>
           <div class="figma-api-scenarios__numbers"><label>循环次数<input v-model.number="activeScenario.iterations" type="number" min="1" /></label><label>线程数<input v-model.number="activeScenario.threads" type="number" min="1" /></label></div>
           <label>运行于<select v-model="activeScenario.runLocation"><option value="server">服务端执行</option><option value="runner">本地执行器</option></select></label>
-          <label v-if="activeScenario.runLocation === 'runner'">选择 Runner<select v-model="activeScenario.runner"><option>Runner-上海-01</option><option>Runner-北京-02</option></select></label>
-          <label>变量集<select v-model="activeScenario.variableSet"><option value="">请选择变量集</option><option>公共变量集</option><option>测试变量集</option></select></label>
+          <label v-if="activeScenario.runLocation === 'runner'">选择 Runner<select v-model="activeScenario.runner"><option value="">请选择 Runner</option><option v-for="runner in scenarioRunnerNodes" :key="runner.runnerId" :value="runner.runnerId" :disabled="!isRunnerSelectable(runner, API_SCENARIO_RUNNER_TASK_TYPE)">{{ runnerOptionLabel(runner, API_SCENARIO_RUNNER_TASK_TYPE) }}</option></select></label>
+          <label>变量集<select v-model.number="activeScenario.variableSetId" @change="syncActiveScenarioVariableSet"><option :value="null">请选择变量集</option><option v-for="variableSet in variableSets" :key="variableSet.id" :value="variableSet.id">{{ variableSet.name }}</option></select></label>
           <label>标签<div class="figma-api-scenarios__tag-list"><span v-for="tag in activeScenario.tags" :key="tag">{{ tag }}<X @click="activeScenario.tags = activeScenario.tags.filter(item => item !== tag)" /></span><button type="button" @click="activeScenario.tags.push('新标签')">+ 添加</button></div></label>
           </div>
           <section v-if="activeScenario.lastRun" class="figma-api-scenarios__last-run"><p>上次运行</p><strong :class="`is-${activeScenario.lastResult}`"><i />{{ activeScenario.lastResult === 'pass' ? '通过' : '失败' }}</strong><small>{{ activeScenario.lastRun }}</small></section>
         </aside>
       </div>
       <div v-if="showAddStep || showImportSteps" class="figma-api-scenarios__overlay" @click.self="showAddStep = false; showImportSteps = false"><section class="figma-api-scenarios__dialog" :class="{ 'is-import': showImportSteps }"><header><b>{{ showImportSteps ? '导入步骤' : '选择步骤类型' }}</b><button type="button" @click="showAddStep = false; showImportSteps = false"><X /></button></header><p v-if="showImportSteps">选择资源后会将对应接口和脚本步骤追加到当前场景。</p><div v-else class="figma-api-scenarios__step-type-grid"><button v-for="[type, config] in stepTypeEntries" :key="type" type="button" @click="addStep(type)"><span :style="{ color: config.color, background: config.background }"><component :is="config.icon" /></span><b>{{ config.label }}</b><small>{{ config.description }}</small></button></div><footer v-if="showImportSteps"><button type="button" @click="showAddStep = false; showImportSteps = false">取消</button><button type="button" @click="importSteps()">确认导入</button></footer></section></div>
-      <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer"><header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header><nav><button class="is-active" type="button">基础信息</button><button v-if="configuringStep.type === 'custom'" type="button">Params</button><button v-if="configuringStep.type === 'custom'" type="button">Headers</button><button v-if="configuringStep.type === 'custom'" type="button">Body</button><button v-if="configuringStep.type === 'custom'" type="button">Auth</button><button type="button">前置处理</button><button type="button">后置处理</button><button type="button">断言</button><button type="button">设置</button></nav><div class="figma-api-scenarios__drawer-content"><label>步骤名称<input v-model="configuringStep.label" /></label><div v-if="configuringStep.type === 'custom'" class="figma-api-scenarios__request-line"><label>请求方式<select v-model="configuringStep.method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select></label><label>请求路径<input v-model="configuringStep.detail" /></label></div><label v-else>步骤内容<input v-model="configuringStep.detail" /></label><section class="figma-api-scenarios__debug-response"><header><span>调试响应</span><button type="button"><Play />发送</button></header><p>配置完成后可发送请求并查看响应结果。</p></section></div><footer><button type="button" @click="configuringStep = null">关闭</button><button type="button" @click="configuringStep = null">保存配置</button></footer></aside>
+      <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer"><header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header><nav><button class="is-active" type="button">基础信息</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Params')">Params</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Headers')">Headers</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Body')">Body</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Auth')">Auth</button><button type="button" @click="notifyPendingStepEditor('前置处理')">前置处理</button><button type="button" @click="notifyPendingStepEditor('后置处理')">后置处理</button><button type="button" @click="notifyPendingStepEditor('断言')">断言</button><button type="button" @click="notifyPendingStepEditor('设置')">设置</button></nav><div class="figma-api-scenarios__drawer-content"><label>步骤名称<input v-model="configuringStep.label" /></label><div v-if="configuringStep.type === 'custom'" class="figma-api-scenarios__request-line"><label>请求方式<select v-model="configuringStep.method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select></label><label>请求路径<input v-model="configuringStep.detail" /></label></div><label v-else>步骤内容<input v-model="configuringStep.detail" /></label><section class="figma-api-scenarios__debug-response"><header><span>调试响应</span><button type="button" :disabled="stepDebugLoading" @click="debugScenarioStep"><Play />发送</button></header><p>{{ stepDebugText }}</p></section></div><footer><button type="button" @click="configuringStep = null">关闭</button><button type="button" :disabled="scenarioSaving" @click="saveStepConfiguration">保存配置</button></footer></aside>
+      <input ref="csvDatasetInput" type="file" accept=".csv,text/csv" hidden @change="importDatasetCsv" />
+      <input ref="jsonDatasetInput" type="file" accept=".json,application/json" hidden @change="importDatasetJson" />
     </main>
 
     <AppTableColumnSettingsDrawer

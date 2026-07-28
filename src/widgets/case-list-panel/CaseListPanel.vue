@@ -27,6 +27,7 @@ import {
   type DefectSeverity,
   type SaveDefectPayload,
 } from '@/entities/defect'
+import { useSession } from '@/entities/session'
 import { CaseBatchUpdateDialog, batchUpdateCases } from '@/features/case-batch-update'
 import { CaseCreateEditDrawer } from '@/features/case-create-edit'
 import type { CaseDialogMode } from '@/features/case-create-edit/model'
@@ -34,20 +35,25 @@ import { deleteCase } from '@/features/case-delete'
 import { CaseReviewDialog, reviewCase } from '@/features/case-review'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+import {
+  type AppTableColumnDefinition,
+  useTableColumnSettings,
+} from '@/shared/lib/table'
+import {
+  AppFigmaActionColumn,
+  getAppFigmaActionColumnWidth,
+} from '@/shared/ui/app-figma-action-column'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
+import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
+import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 import AppTagInput from '@/shared/ui/app-tag-input/AppTagInput.vue'
 import AppUserSelect from '@/shared/ui/app-user-select/AppUserSelect.vue'
 import { confirmDelete } from '@/shared/ui'
 import { CaseDetailDrawer } from '@/widgets/case-detail-drawer'
-import {
-  useCaseTableSettings,
-  type CaseTableColumnDefinition,
-  type CaseTableColumnKey,
-} from './useCaseTableSettings'
 
 const props = withDefaults(
   defineProps<{
@@ -74,6 +80,7 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const router = useRouter()
+const { currentUser } = useSession()
 const cases = ref<CaseSummaryItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
@@ -113,10 +120,14 @@ const defectForm = reactive({
 const runningCaseId = ref<number | null>(null)
 const deletingCaseId = ref<number | null>(null)
 const togglingCaseId = ref<number | null>(null)
+const caseTableRef = ref<{ clearSelection: () => void } | null>(null)
+const tableFrameRef = ref<HTMLElement | null>(null)
+const tableFrameWidth = ref(0)
 let filterReloadTimer: number | undefined
 let loadRequestSeq = 0
+let tableFrameObserver: ResizeObserver | null = null
 
-const tableColumnDefinitions = computed<CaseTableColumnDefinition[]>(() => [
+const tableColumnDefinitions = computed<AppTableColumnDefinition[]>(() => [
   { key: 'caseNo', label: '用例 ID', width: 121.797, required: true, defaultVisible: true },
   { key: 'title', label: '用例标题', width: 341.031, required: true, defaultVisible: true },
   { key: 'directoryName', label: '所属目录', width: 158.328, defaultVisible: true },
@@ -135,32 +146,45 @@ const tableColumnDefinitions = computed<CaseTableColumnDefinition[]>(() => [
   { key: 'updatedByName', label: '更新人', width: 130, defaultVisible: false },
   { key: 'updatedAt', label: '更新时间', width: 176, defaultVisible: false },
 ])
-const tableSettings = useCaseTableSettings({
-  storageKey: 'case-list-table-settings-figma-v2',
+const tableSettings = useTableColumnSettings({
+  storageKey: computed(() => `app-figma-table:cases:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
   columns: tableColumnDefinitions,
+  immediate: true,
 })
 const visibleColumns = computed(() => tableSettings.visibleColumns.value)
-function resolveCaseTableColumnWidth(column: CaseTableColumnDefinition) {
-  const width = typeof column.width === 'number' ? column.width : 0
-  const minWidth = typeof column.minWidth === 'number' ? column.minWidth : 0
-  return Math.max(width, minWidth) || 120
-}
+const selectionColumnWidth = 42.625
+const operationActionCount = 4
+const operationColumnWidth = getAppFigmaActionColumnWidth(operationActionCount)
+const tableColumnWidths = computed<Record<string, number>>(() => {
+  const columns = visibleColumns.value
+  const baseWidth = columns.reduce((width, column) => width + (column.width || column.minWidth || 120), 0)
+  const availableWidth = Math.max(
+    baseWidth,
+    tableFrameWidth.value - selectionColumnWidth - operationColumnWidth - 2,
+  )
+  let allocatedWidth = 0
 
-function formatCaseTableGridTrack(width: number) {
-  return `${width}px`
-}
-
-const dataGridMinWidth = computed(() => {
-  const columnWidth = visibleColumns.value.reduce((total, column) => {
-    return total + resolveCaseTableColumnWidth(column)
-  }, 42.625)
-
-  return `${columnWidth}px`
+  return columns.reduce<Record<string, number>>((widths, column, index) => {
+    const columnBaseWidth = column.width || column.minWidth || 120
+    const width = index === columns.length - 1
+      ? availableWidth - allocatedWidth
+      : Math.round(availableWidth * columnBaseWidth / baseWidth)
+    widths[column.key] = width
+    allocatedWidth += width
+    return widths
+  }, {})
 })
-const dataGridTemplateColumns = computed(() => [
-  formatCaseTableGridTrack(42.625),
-  ...visibleColumns.value.map(column => formatCaseTableGridTrack(resolveCaseTableColumnWidth(column))),
-].join(' '))
+const tableContentWidth = computed(() => Object.values(tableColumnWidths.value).reduce(
+  (width, columnWidth) => width + columnWidth,
+  selectionColumnWidth + operationColumnWidth,
+))
+const tableNeedsScroll = computed(() => Boolean(
+  tableFrameWidth.value && tableContentWidth.value > tableFrameWidth.value,
+))
+
+function getCaseColumnWidth(column: AppTableColumnDefinition) {
+  return tableColumnWidths.value[column.key] || column.width || column.minWidth || 120
+}
 
 const defaultDialogWorkspaceCode = computed(() => {
   if (props.workspaceCode !== 'ALL') {
@@ -184,14 +208,6 @@ const editingCaseIndex = computed(() => {
 
 const canNavigatePrevCase = computed(() => dialogMode.value === 'edit' && editingCaseIndex.value > 0)
 const canNavigateNextCase = computed(() => dialogMode.value === 'edit' && editingCaseIndex.value >= 0 && editingCaseIndex.value < cases.value.length - 1)
-
-const allCurrentPageSelected = computed(() => {
-  return cases.value.length > 0 && cases.value.every((item) => selectedCaseIds.value.includes(item.id))
-})
-
-const currentPageSelectionIndeterminate = computed(() => {
-  return selectedCases.value.length > 0 && !allCurrentPageSelected.value
-})
 
 const selectedWorkspaceCodes = computed(() => [...new Set(selectedCases.value.map((item) => item.workspaceCode))])
 const batchMoveWorkspaceCode = computed(() => (selectedWorkspaceCodes.value.length === 1 ? selectedWorkspaceCodes.value[0] : ''))
@@ -225,7 +241,7 @@ const batchMoveDirectoryOptions = computed<DirectoryOption[]>(() => {
   ]
 })
 
-function formatColumnValue(row: CaseSummaryItem, key: CaseTableColumnKey) {
+function formatColumnValue(row: CaseSummaryItem, key: string) {
   switch (key) {
     case 'caseNo':
       return row.caseNo || '-'
@@ -300,27 +316,13 @@ function applyPage(page: PageResponse<CaseSummaryItem>) {
   emit('loaded', cases.value)
 }
 
-function isCaseSelected(id: number) {
-  return selectedCaseIds.value.includes(id)
-}
-
-function toggleCaseSelected(id: number, selected: boolean) {
-  if (selected) {
-    if (!selectedCaseIds.value.includes(id)) {
-      selectedCaseIds.value = [...selectedCaseIds.value, id]
-    }
-    return
-  }
-
-  selectedCaseIds.value = selectedCaseIds.value.filter((item) => item !== id)
-}
-
-function toggleCurrentPageSelection(selected: boolean) {
-  selectedCaseIds.value = selected ? cases.value.map((item) => item.id) : []
+function handleCaseSelectionChange(rows: CaseSummaryItem[]) {
+  selectedCaseIds.value = rows.map(row => row.id)
 }
 
 function clearSelection() {
   selectedCaseIds.value = []
+  caseTableRef.value?.clearSelection()
 }
 
 function openBatchDialog() {
@@ -396,6 +398,15 @@ function openCreateDialog() {
 
 function openDetailDrawer(item: CaseSummaryItem) {
   detailCaseId.value = item.id
+  detailDrawerVisible.value = true
+}
+
+function openDetailById(caseId: number) {
+  if (!Number.isFinite(caseId) || caseId <= 0) {
+    return
+  }
+
+  detailCaseId.value = caseId
   detailDrawerVisible.value = true
 }
 
@@ -682,6 +693,16 @@ function handlePageChange(value: number) {
   void loadCases()
 }
 
+function handlePageSizeChange(value: number) {
+  pageSize.value = value
+  pageNo.value = 1
+  void loadCases()
+}
+
+function openColumnSettings() {
+  tableSettings.open()
+}
+
 watch(
   () => [props.workspaceCode, props.directoryId],
   () => {
@@ -703,17 +724,31 @@ watch(
 )
 
 onMounted(() => {
-  tableSettings.load()
   void loadCases()
+})
+
+watch(tableFrameRef, (element) => {
+  tableFrameObserver?.disconnect()
+  tableFrameObserver = null
+  if (!element) return
+
+  const syncWidth = () => {
+    tableFrameWidth.value = element.clientWidth
+  }
+  syncWidth()
+  tableFrameObserver = new ResizeObserver(syncWidth)
+  tableFrameObserver.observe(element)
 })
 
 onBeforeUnmount(() => {
   window.clearTimeout(filterReloadTimer)
+  tableFrameObserver?.disconnect()
 })
 
 defineExpose({
   reload: loadCases,
   openCreateDialog,
+  openDetailById,
 })
 </script>
 
@@ -747,157 +782,143 @@ defineExpose({
         <AppButton size="small" :icon="RefreshRight" @click="loadCases">重试</AppButton>
       </div>
 
-      <div v-if="cases.length" v-loading="loading" class="case-list-panel__table-shell">
-        <div class="case-list-panel__table-data">
-          <div class="case-list-panel__table-scroll">
-            <div
-              class="case-list-panel__grid case-list-panel__grid--header"
-              :style="{ gridTemplateColumns: dataGridTemplateColumns, minWidth: dataGridMinWidth }"
-            >
-              <div class="case-list-panel__cell case-list-panel__cell--selection">
-                <el-checkbox
-                  :model-value="allCurrentPageSelected"
-                  :indeterminate="currentPageSelectionIndeterminate"
-                  aria-label="选择当前页用例"
-                  @change="toggleCurrentPageSelection(Boolean($event))"
-                />
-              </div>
-              <div
-                v-for="column in visibleColumns"
-                :key="`header-${column.key}`"
-                :class="['case-list-panel__cell', `case-list-panel__cell--${column.key}`]"
-              >
-                {{ column.label }}
-              </div>
-            </div>
+      <div v-if="cases.length" ref="tableFrameRef" class="case-list-panel__table-frame">
+        <AppFigmaTable
+          ref="caseTableRef"
+          class="case-list-panel__table"
+          :data="cases"
+          :loading="loading"
+          :page-no="pageNo"
+          :page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          show-page-size
+          show-jumper
+          :header-height="51"
+          :row-height="46"
+          :footer-height="43"
+          row-key="id"
+          empty-text="当前筛选条件下暂无用例"
+          @selection-change="handleCaseSelectionChange"
+          @page-change="handlePageChange"
+          @page-size-change="handlePageSizeChange"
+        >
+          <el-table-column type="selection" :width="selectionColumnWidth" />
 
-            <div
-              v-for="item in cases"
-              :key="item.id"
-              class="case-list-panel__grid case-list-panel__grid--row"
-              :style="{ gridTemplateColumns: dataGridTemplateColumns, minWidth: dataGridMinWidth }"
-            >
-              <div class="case-list-panel__cell case-list-panel__cell--selection">
-                <el-checkbox
-                  :model-value="isCaseSelected(item.id)"
-                  :aria-label="`选择用例 ${item.caseNo}`"
-                  @change="toggleCaseSelected(item.id, Boolean($event))"
-                />
-              </div>
-              <div
-                v-for="column in visibleColumns"
-                :key="`${item.id}-${column.key}`"
-                :class="['case-list-panel__cell', `case-list-panel__cell--${column.key}`]"
-              >
-                <button
-                  v-if="column.key === 'caseNo'"
-                  type="button"
-                  class="case-list-panel__code"
-                  :title="`查看 ${item.caseNo}`"
-                  @click="openDetailDrawer(item)"
-                >
-                  {{ formatColumnValue(item, column.key) }}
-                </button>
-                <el-tooltip
-                  v-else-if="column.key === 'title'"
-                  :content="formatColumnValue(item, column.key)"
-                  placement="top"
-                >
-                  <span class="case-list-panel__title-wrap">
-                    <span class="case-list-panel__title">{{ formatColumnValue(item, column.key) }}</span>
-                    <span v-if="isAiGeneratedCase(item)" class="case-list-panel__ai-mark">AI</span>
-                  </span>
-                </el-tooltip>
-                <span
-                  v-else-if="column.key === 'priority'"
-                  class="case-list-panel__priority"
-                  :class="`is-${String(item.priority || 'p2').toLowerCase()}`"
-                >
-                  {{ item.priority || 'P2' }}
-                </span>
-                <span
-                  v-else-if="column.key === 'reviewStatus'"
-                  class="case-list-panel__status"
-                  :class="`is-${getReviewStatusVisual(item.reviewStatus).tone}`"
-                >
-                  {{ getReviewStatusVisual(item.reviewStatus).label }}
-                </span>
-                <span
-                  v-else-if="column.key === 'executionStatus'"
-                  class="case-list-panel__execution"
-                  :class="`is-${getExecutionStatusVisual(item.executionStatus).tone}`"
-                >
-                  <span class="case-list-panel__execution-dot" />
-                  {{ getExecutionStatusVisual(item.executionStatus).label }}
-                </span>
-                <span
-                  v-else-if="column.key === 'sourceType'"
-                  class="case-list-panel__source"
-                  :class="`is-${getCaseSourceVisual(item.sourceType).tone}`"
-                >
-                  {{ getCaseSourceVisual(item.sourceType).label }}
-                </span>
-                <span v-else-if="column.key === 'defectCount'" class="case-list-panel__defect-count">
-                  {{ formatColumnValue(item, column.key) }}
-                </span>
-                <span v-else class="case-list-panel__cell-text">{{ formatColumnValue(item, column.key) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="case-list-panel__table-actions-fixed">
-          <div class="case-list-panel__actions-header">
-            <span>操作</span>
-          </div>
-
-          <div
-            v-for="item in cases"
-            :key="`action-${item.id}`"
-            class="case-list-panel__actions-row"
+          <el-table-column
+            v-for="column in visibleColumns"
+            :key="column.key"
+            :label="column.label"
+            :width="getCaseColumnWidth(column)"
           >
-            <div class="case-list-panel__row-actions">
+            <template #default="{ row: item }">
               <button
+                v-if="column.key === 'caseNo'"
                 type="button"
-                class="case-list-panel__icon-action"
-                title="查看详情"
-                aria-label="查看详情"
-                @click="openDetailDrawer(item)"
+                class="case-list-panel__code"
+                :title="`查看 ${item.caseNo}`"
+                @click.stop="openDetailDrawer(item)"
               >
-                <img :src="figmaCaseIcons.action.view" alt="" />
+                {{ formatColumnValue(item, column.key) }}
+              </button>
+              <el-tooltip
+                v-else-if="column.key === 'title'"
+                :content="formatColumnValue(item, column.key)"
+                placement="top"
+              >
+                <span class="case-list-panel__title-wrap">
+                  <span class="case-list-panel__title">{{ formatColumnValue(item, column.key) }}</span>
+                  <span v-if="isAiGeneratedCase(item)" class="case-list-panel__ai-mark">AI</span>
+                </span>
+              </el-tooltip>
+              <span
+                v-else-if="column.key === 'priority'"
+                class="case-list-panel__priority"
+                :class="`is-${String(item.priority || 'p2').toLowerCase()}`"
+              >
+                {{ item.priority || 'P2' }}
+              </span>
+              <span
+                v-else-if="column.key === 'reviewStatus'"
+                class="case-list-panel__status"
+                :class="`is-${getReviewStatusVisual(item.reviewStatus).tone}`"
+              >
+                {{ getReviewStatusVisual(item.reviewStatus).label }}
+              </span>
+              <span
+                v-else-if="column.key === 'executionStatus'"
+                class="case-list-panel__execution"
+                :class="`is-${getExecutionStatusVisual(item.executionStatus).tone}`"
+              >
+                <span class="case-list-panel__execution-dot" />
+                {{ getExecutionStatusVisual(item.executionStatus).label }}
+              </span>
+              <span
+                v-else-if="column.key === 'sourceType'"
+                class="case-list-panel__source"
+                :class="`is-${getCaseSourceVisual(item.sourceType).tone}`"
+              >
+                {{ getCaseSourceVisual(item.sourceType).label }}
+              </span>
+              <span v-else-if="column.key === 'defectCount'" class="case-list-panel__defect-count">
+                {{ formatColumnValue(item, column.key) }}
+              </span>
+              <span v-else class="case-list-panel__cell-text">{{ formatColumnValue(item, column.key) }}</span>
+            </template>
+          </el-table-column>
+
+          <AppFigmaActionColumn
+            :action-count="operationActionCount"
+            :width="operationColumnWidth"
+            :scroll-shadow="tableNeedsScroll"
+          >
+            <template #settings>
+              <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openColumnSettings" />
+            </template>
+            <template #default="{ row: item }">
+              <button type="button" title="查看详情" aria-label="查看详情" @click.stop="openDetailDrawer(item)">
+                <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.view" alt="" />
+              </button>
+              <button type="button" title="编辑用例" aria-label="编辑用例" @click.stop="openEditDialog(item)">
+                <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.edit" alt="" />
               </button>
               <button
                 type="button"
-                class="case-list-panel__icon-action"
-                title="编辑用例"
-                aria-label="编辑用例"
-                @click="openEditDialog(item)"
-              >
-                <img :src="figmaCaseIcons.action.edit" alt="" />
-              </button>
-              <button
-                type="button"
-                class="case-list-panel__icon-action is-primary"
                 title="执行用例"
                 aria-label="执行用例"
                 :disabled="runningCaseId === item.id"
-                @click="openExecutionPage(item)"
+                @click.stop="openExecutionPage(item)"
               >
-                <img :src="figmaCaseIcons.action.run" alt="" />
+                <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.run" alt="" />
               </button>
               <button
                 type="button"
-                class="case-list-panel__icon-action"
+                data-danger="true"
                 title="删除用例"
                 aria-label="删除用例"
                 :disabled="deletingCaseId === item.id || runningCaseId === item.id || togglingCaseId === item.id || reviewingCaseId === item.id"
-                @click="handleDeleteCase(item)"
+                @click.stop="handleDeleteCase(item)"
               >
-                <img :src="figmaCaseIcons.action.delete" alt="" />
+                <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.delete" alt="" />
               </button>
+            </template>
+          </AppFigmaActionColumn>
+
+          <template #pagination-leading="{ total: itemTotal, totalPages: itemTotalPages }">
+            <div v-if="selectedCaseIds.length" class="case-list-panel__batch-bar">
+              <span>已选 {{ selectedCaseIds.length }} 条</span>
+              <div class="case-list-panel__batch-actions">
+                <AppButton size="small" @click="openBatchMoveDialog">移动到</AppButton>
+                <AppButton size="small" @click="openBatchDialog">批量编辑</AppButton>
+                <AppButton size="small" type="danger" :loading="deletingCaseId === -1" @click="handleBatchDeleteCases">
+                  批量删除
+                </AppButton>
+                <AppButton size="small" @click="clearSelection">取消</AppButton>
+              </div>
             </div>
-          </div>
-        </div>
+            <span v-else>共 {{ itemTotal }} 条 / {{ itemTotalPages }} 页</span>
+          </template>
+        </AppFigmaTable>
       </div>
 
       <AppEmptyState
@@ -906,32 +927,6 @@ defineExpose({
         :description="cases.length ? '当前筛选条件下没有用例。' : '当前目录下没有用例。'"
       />
 
-      <footer class="case-list-panel__footer">
-        <div class="case-list-panel__footer-left">
-          <div v-if="selectedCaseIds.length" class="case-list-panel__batch-bar">
-            <span>已选 {{ selectedCaseIds.length }} 条</span>
-            <div class="case-list-panel__batch-actions">
-              <AppButton size="small" @click="openBatchMoveDialog">移动到</AppButton>
-              <AppButton size="small" @click="openBatchDialog">批量编辑</AppButton>
-              <AppButton size="small" type="danger" :loading="deletingCaseId === -1" @click="handleBatchDeleteCases">
-                批量删除
-              </AppButton>
-              <AppButton size="small" @click="clearSelection">取消</AppButton>
-            </div>
-          </div>
-        </div>
-        <div class="case-list-panel__pagination">
-          <span>共 {{ total }} 条</span>
-          <el-pagination
-            background
-            layout="pager"
-            :current-page="pageNo"
-            :page-size="pageSize"
-            :total="total"
-            @current-change="handlePageChange"
-          />
-        </div>
-      </footer>
     </div>
 
     <CaseCreateEditDrawer
@@ -1099,14 +1094,17 @@ defineExpose({
     />
 
     <AppTableColumnSettingsDrawer
-      v-model="tableSettings.settingsVisible.value"
+      :model-value="tableSettings.drawerVisible.value"
+      title="字段展示"
+      visual-variant="figma"
       :columns="tableSettings.drawerColumns.value"
-      :dragging-key="tableSettings.draggingColumnKey.value"
-      @toggle-column="tableSettings.toggleColumnVisibility"
-      @drag-start="tableSettings.handleDragStart"
-      @drag-end="tableSettings.handleDragEnd"
-      @drop-column="tableSettings.moveColumnToTarget"
-      @reset="tableSettings.reset"
+      :dragging-key="tableSettings.draggingKey.value"
+      @update:model-value="value => { if (!value) tableSettings.cancel() }"
+      @toggle-column="tableSettings.toggleColumn"
+      @drag-start="tableSettings.dragStart"
+      @drag-end="tableSettings.dragEnd"
+      @drop-column="tableSettings.dropColumn"
+      @reset="tableSettings.resetDraft"
     />
   </section>
 </template>
@@ -1177,6 +1175,51 @@ defineExpose({
   min-height: 32px;
   color: var(--app-text-secondary);
   font-size: var(--app-font-size-sm);
+}
+
+.case-list-panel__table-frame {
+  width: 100%;
+  min-width: 0;
+}
+
+.case-list-panel__table {
+  --app-figma-table-border: 0;
+  --app-figma-table-radius: 0;
+  --app-figma-table-shadow: none;
+  --app-figma-table-background: #ffffff;
+  --app-figma-table-header-background: #fafafa;
+  --app-figma-table-header-color: #86909c;
+  --app-figma-table-header-font-size: 11px;
+  --app-figma-table-header-font-weight: 600;
+  --app-figma-table-header-letter-spacing: .275px;
+  --app-figma-table-header-line-height: 16.5px;
+  --app-figma-table-text-color: #4e5969;
+  --app-figma-table-font-size: 13px;
+  --app-figma-table-line-height: 19.5px;
+  --app-figma-table-cell-padding: 14px;
+  --app-figma-table-row-hover-background: #f7faff;
+  --app-figma-table-muted-color: #86909c;
+  --app-figma-table-primary-color: #165dff;
+  font-family: var(--app-font-family);
+}
+
+.case-list-panel__table :deep(.el-table__header-wrapper th.el-table__cell) {
+  text-transform: uppercase;
+}
+
+.case-list-panel__table :deep(td.el-table__cell) {
+  border-bottom-color: #f0f1f2;
+}
+
+.case-list-panel__table :deep(.el-table__fixed-right-patch) {
+  background: #fafafa;
+}
+
+.case-list-panel__action-icon {
+  display: block;
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
 }
 
 .case-list-panel__batch-bar span {

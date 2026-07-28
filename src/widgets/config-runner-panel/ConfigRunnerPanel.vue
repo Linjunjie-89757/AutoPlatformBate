@@ -36,7 +36,6 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import { confirmDelete } from '@/shared/ui'
 import { figmaConfigRunnerIcons } from '@/shared/assets/figma-icons'
 
 const runners = ref<RunnerNodeSummary[]>([])
@@ -136,8 +135,8 @@ const runnerCapabilityMetaMap: Record<string, RunnerCapabilityMeta> = {
 const runnerEditorCapabilityOptions = ['API_CASE_RUN', 'WEB_CASE_RUN', 'RECORDING', 'SCREENSHOT', 'FILE_UPLOAD']
 const runnerDetailTabs: RunnerDetailTabOption[] = [
   { key: 'info', label: '基本信息' },
-  { key: 'tasks', label: '任务记录' },
-  { key: 'logs', label: '异常日志' },
+  { key: 'tasks', label: '当前任务' },
+  { key: 'logs', label: '健康告警' },
 ]
 
 const runnerBrowserMetaMap: Record<string, RunnerBrowserMeta> = {
@@ -152,7 +151,12 @@ const stats = computed<RunnerStatCard[]>(() => {
   const offlineCount = runners.value.filter(item => item.offline).length
   const activeTaskCount = runners.value.reduce((total, item) => total + activeTasksOf(item).length, 0)
   const busyCount = runners.value.filter(item => !item.offline && activeTasksOf(item).length > 0).length
-  const todayRunCount = runners.value.reduce((total, item) => total + getRunnerTodayRuns(item), 0)
+  const todayRunValues = runners.value
+    .map(getRunnerTodayRuns)
+    .filter((value): value is number => value != null)
+  const todayRunCount = todayRunValues.length
+    ? todayRunValues.reduce((total, value) => total + value, 0)
+    : '—'
 
   return [
     { label: '节点总数', value: runners.value.length, color: '#4E5969', bg: '#F2F3F5' },
@@ -320,28 +324,19 @@ function openFirstRunnerTask(row: RunnerNodeSummary) {
 }
 
 function notifyUnsupportedRunnerAction(action: string) {
-  ElMessage.info(`${action}接口暂未接入，已记录到迁移遗留问题`)
+  ElMessage.warning(`${action}尚无后台管理接口，本次不会修改 Runner 节点`)
 }
 
 function openRunnerEditor(mode: 'create' | 'edit', row?: RunnerNodeSummary) {
-  runnerEditorMode.value = mode
-  runnerEditorTarget.value = row || null
-  runnerEditorVisible.value = true
+  if (mode === 'create') {
+    openRunnerGuide()
+    return
+  }
+  notifyUnsupportedRunnerAction(`编辑「${row ? formatRunnerName(row) : 'Runner'}」`)
 }
 
-async function openRunnerDelete(row: RunnerNodeSummary) {
-  try {
-    await confirmDelete({
-      title: '删除节点',
-      message: `确认删除「${formatRunnerName(row)}」？删除后任务调度将不再使用该节点，已执行的历史记录不受影响。`,
-      confirmText: '确认删除',
-      beforeConfirm: () => {
-        notifyUnsupportedRunnerAction('删除 Runner 节点')
-      },
-    })
-  } catch {
-    // 用户取消或关闭弹窗时不需要提示。
-  }
+function openRunnerDelete(row: RunnerNodeSummary) {
+  notifyUnsupportedRunnerAction(`删除「${formatRunnerName(row)}」`)
 }
 
 function isRunnerEditorCapabilitySelected(capability: string) {
@@ -392,6 +387,18 @@ function numberFromRecord(record: Record<string, unknown>, key: string) {
     return Number.isFinite(parsed) ? parsed : 0
   }
   return 0
+}
+
+function optionalNumberFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record?.[key]
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 function textFromRecord(record: Record<string, unknown>, key: string) {
@@ -476,7 +483,16 @@ function getRunnerHost(item: RunnerNodeSummary) {
 }
 
 function getRunnerPort(item: RunnerNodeSummary) {
-  return textFromRecord(item.resource, 'port') || textFromRecord(item.session, 'port') || '9000'
+  return textFromRecord(item.resource, 'port') || textFromRecord(item.session, 'port') || '-'
+}
+
+function getRunnerAddress(item: RunnerNodeSummary) {
+  const host = getRunnerHost(item)
+  const port = getRunnerPort(item)
+  if (host === '-') {
+    return '-'
+  }
+  return port === '-' ? host : `${host}:${port}`
 }
 
 function getRunnerEnv(item: RunnerNodeSummary) {
@@ -520,11 +536,11 @@ function getRunnerStatusMeta(item: RunnerNodeSummary): RunnerStatusMeta {
 }
 
 function getRunnerNote(item: RunnerNodeSummary) {
-  if (item.offline) {
-    return normalizeUnselectableReason(item.unselectableReason) || '版本过旧，建议升级'
-  }
-  const note = textFromRecord(item.resource, 'note') || textFromRecord(item.session, 'note')
-  return note || (activeTasksOf(item).length ? '主力执行节点' : '')
+  return textFromRecord(item.resource, 'note') || textFromRecord(item.session, 'note')
+}
+
+function getRunnerSecondaryText(item: RunnerNodeSummary) {
+  return normalizeUnselectableReason(item.unselectableReason) || getRunnerNote(item) || item.runnerId
 }
 
 function normalizeUnselectableReason(reason?: string | null) {
@@ -659,37 +675,62 @@ function getCurrentTaskRunId(item: RunnerNodeSummary) {
 }
 
 function resourcePercent(item: RunnerNodeSummary, key: string) {
-  const value = numberFromRecord(item.resource, key)
-  return Math.max(0, Math.min(100, value))
+  const value = optionalNumberFromRecord(item.resource, key)
+  return value == null ? null : Math.max(0, Math.min(100, value))
 }
 
 function getRunnerCpu(item: RunnerNodeSummary) {
-  return resourcePercent(item, 'cpu') || resourcePercent(item, 'cpuUsage') || resourcePercent(item, 'cpuPercent')
+  return resourcePercent(item, 'cpu')
+    ?? resourcePercent(item, 'cpuUsage')
+    ?? resourcePercent(item, 'cpuPercent')
 }
 
 function getRunnerMemory(item: RunnerNodeSummary) {
-  return resourcePercent(item, 'memory') || resourcePercent(item, 'memoryUsage') || resourcePercent(item, 'memoryPercent')
+  return resourcePercent(item, 'memory')
+    ?? resourcePercent(item, 'memoryUsage')
+    ?? resourcePercent(item, 'memoryPercent')
 }
 
 function getRunnerDisk(item: RunnerNodeSummary) {
-  return resourcePercent(item, 'disk') || resourcePercent(item, 'diskUsage') || resourcePercent(item, 'diskPercent')
+  return resourcePercent(item, 'disk')
+    ?? resourcePercent(item, 'diskUsage')
+    ?? resourcePercent(item, 'diskPercent')
+}
+
+function formatResourcePercent(value: number | null) {
+  return value == null ? '—' : `${value}%`
+}
+
+function resourceBarWidth(value: number | null) {
+  return `${value ?? 0}%`
 }
 
 function getRunnerTodayRuns(item: RunnerNodeSummary) {
-  return numberFromRecord(item.resource, 'todayRuns') || numberFromRecord(item.session, 'todayRuns')
+  return optionalNumberFromRecord(item.resource, 'todayRuns')
+    ?? optionalNumberFromRecord(item.session, 'todayRuns')
 }
 
 function getRunnerTodayPassed(item: RunnerNodeSummary) {
-  return numberFromRecord(item.resource, 'todayPassed') || numberFromRecord(item.session, 'todayPassed')
+  return optionalNumberFromRecord(item.resource, 'todayPassed')
+    ?? optionalNumberFromRecord(item.session, 'todayPassed')
 }
 
 function getRunnerTodayFailed(item: RunnerNodeSummary) {
-  return numberFromRecord(item.resource, 'todayFailed') || numberFromRecord(item.session, 'todayFailed')
+  return optionalNumberFromRecord(item.resource, 'todayFailed')
+    ?? optionalNumberFromRecord(item.session, 'todayFailed')
+}
+
+function formatOptionalCount(value: number | null) {
+  return value == null ? '—' : value
+}
+
+function hasRunnerTodayFailures(item: RunnerNodeSummary) {
+  return (getRunnerTodayFailed(item) ?? 0) > 0
 }
 
 function getRunnerInfoRows(item: RunnerNodeSummary): RunnerInfoRow[] {
   const rows: RunnerInfoRow[] = [
-    { label: '节点地址', value: `${getRunnerHost(item)}:${getRunnerPort(item)}` },
+    { label: '节点地址', value: getRunnerAddress(item) },
     { label: '所属环境', value: getRunnerEnv(item) },
     { label: '版本', value: `v${item.runnerVersion || '-'}` },
     { label: '最后心跳', value: item.lastHeartbeatAt || formatHeartbeat(item.secondsSinceHeartbeat) },
@@ -702,7 +743,10 @@ function getRunnerInfoRows(item: RunnerNodeSummary): RunnerInfoRow[] {
   return rows
 }
 
-function getResourceColor(value: number, warn = 70, danger = 85) {
+function getResourceColor(value: number | null, warn = 70, danger = 85) {
+  if (value == null) {
+    return '#C9CDD4'
+  }
   if (value >= danger) {
     return '#F53F3F'
   }
@@ -738,7 +782,8 @@ function getRunnerTaskDurationText(task: RunnerActiveTaskSummary) {
 }
 
 function getRunnerTaskOperatorText(task: RunnerActiveTaskSummary) {
-  return task.assignedAt ? '调度系统' : '自动调度'
+  void task
+  return '—'
 }
 
 function getRunnerExceptionLogs(item: RunnerNodeSummary): RunnerExceptionLogItem[] {
@@ -751,23 +796,27 @@ function getRunnerExceptionLogs(item: RunnerNodeSummary): RunnerExceptionLogItem
       message: reason || 'Runner 节点离线，无法继续分配执行任务',
     })
   }
-  if (getRunnerCpu(item) >= 85 || getRunnerMemory(item) >= 85) {
+  if (hasHighResourceUsage(item)) {
     logs.push({
       time: item.lastHeartbeatAt || '最近上报',
       level: 'warn',
-      message: '节点资源占用过高，建议检查运行环境或重启节点',
+      message: '节点资源占用过高，建议检查 Runner 运行环境',
     })
   }
   return logs.slice(0, 50)
 }
 
 function hasRunnerWarning(item: RunnerNodeSummary) {
-  return item.offline || getRunnerCpu(item) >= 85 || getRunnerMemory(item) >= 85
+  return item.offline || hasHighResourceUsage(item)
+}
+
+function hasHighResourceUsage(item: RunnerNodeSummary) {
+  return (getRunnerCpu(item) ?? 0) >= 85 || (getRunnerMemory(item) ?? 0) >= 85
 }
 
 function warningSummaryText() {
   const offline = runners.value.filter(item => item.offline).length
-  const resourceHigh = runners.value.filter(item => getRunnerCpu(item) >= 85 || getRunnerMemory(item) >= 85).length
+  const resourceHigh = runners.value.filter(hasHighResourceUsage).length
   return [
     offline ? `${offline} 个节点离线` : '',
     resourceHigh ? `${resourceHigh} 个节点资源占用过高` : '',
@@ -967,7 +1016,7 @@ onBeforeUnmount(() => {
                   </span>
                   <div>
                     <strong>{{ formatRunnerName(item) }}</strong>
-                    <span>{{ getRunnerNote(item) || item.runnerId }}</span>
+                    <span>{{ getRunnerSecondaryText(item) }}</span>
                   </div>
                 </div>
               </td>
@@ -1017,12 +1066,12 @@ onBeforeUnmount(() => {
               <td>
                 <div v-if="!item.offline" class="config-runner-resource-mini">
                   <span>
-                    <i><b :style="{ width: `${getRunnerCpu(item)}%`, backgroundColor: getResourceColor(getRunnerCpu(item)) }" /></i>
-                    <em :style="{ color: getResourceColor(getRunnerCpu(item)) }">{{ getRunnerCpu(item) }}%</em>
+                    <i><b :style="{ width: resourceBarWidth(getRunnerCpu(item)), backgroundColor: getResourceColor(getRunnerCpu(item)) }" /></i>
+                    <em :style="{ color: getResourceColor(getRunnerCpu(item)) }">{{ formatResourcePercent(getRunnerCpu(item)) }}</em>
                   </span>
                   <span>
-                    <i><b :style="{ width: `${getRunnerMemory(item)}%`, backgroundColor: getResourceColor(getRunnerMemory(item), 75, 90) }" /></i>
-                    <em :style="{ color: getResourceColor(getRunnerMemory(item), 75, 90) }">{{ getRunnerMemory(item) }}%</em>
+                    <i><b :style="{ width: resourceBarWidth(getRunnerMemory(item)), backgroundColor: getResourceColor(getRunnerMemory(item), 75, 90) }" /></i>
+                    <em :style="{ color: getResourceColor(getRunnerMemory(item), 75, 90) }">{{ formatResourcePercent(getRunnerMemory(item)) }}</em>
                   </span>
                 </div>
                 <span v-else class="config-runner-muted">-</span>
@@ -1089,12 +1138,12 @@ onBeforeUnmount(() => {
               <b :style="{ color: getRunnerStatusMeta(selectedRunner).color, backgroundColor: getRunnerStatusMeta(selectedRunner).bg }">
                 {{ getRunnerStatusMeta(selectedRunner).label }}
               </b>
-              <em v-if="getRunnerCpu(selectedRunner) >= 85 || getRunnerMemory(selectedRunner) >= 85">
+              <em v-if="hasHighResourceUsage(selectedRunner)">
                 <AlertTriangle :size="9" :stroke-width="1.8" />
                 资源告警
               </em>
             </div>
-            <p>{{ getRunnerHost(selectedRunner) }}:{{ getRunnerPort(selectedRunner) }} · v{{ selectedRunner.runnerVersion || '-' }} · {{ getRunnerEnv(selectedRunner) }}</p>
+            <p>{{ getRunnerAddress(selectedRunner) }} · v{{ selectedRunner.runnerVersion || '-' }} · {{ getRunnerEnv(selectedRunner) }}</p>
           </div>
           <div class="config-runner-node-drawer__actions">
             <button type="button" class="config-runner-secondary-button is-small" @click="notifyUnsupportedRunnerAction('重启 Runner 节点')">
@@ -1140,31 +1189,31 @@ onBeforeUnmount(() => {
             <h4>资源占用</h4>
             <div class="config-runner-resource-bars">
               <div>
-                <p><span>CPU</span><em :style="{ color: getResourceColor(getRunnerCpu(selectedRunner)) }">{{ getRunnerCpu(selectedRunner) }}%</em></p>
-                <i><b :style="{ width: `${getRunnerCpu(selectedRunner)}%`, backgroundColor: getResourceColor(getRunnerCpu(selectedRunner)) }" /></i>
+                <p><span>CPU</span><em :style="{ color: getResourceColor(getRunnerCpu(selectedRunner)) }">{{ formatResourcePercent(getRunnerCpu(selectedRunner)) }}</em></p>
+                <i><b :style="{ width: resourceBarWidth(getRunnerCpu(selectedRunner)), backgroundColor: getResourceColor(getRunnerCpu(selectedRunner)) }" /></i>
               </div>
               <div>
-                <p><span>内存</span><em :style="{ color: getResourceColor(getRunnerMemory(selectedRunner), 75, 90) }">{{ getRunnerMemory(selectedRunner) }}%</em></p>
-                <i><b :style="{ width: `${getRunnerMemory(selectedRunner)}%`, backgroundColor: getResourceColor(getRunnerMemory(selectedRunner), 75, 90) }" /></i>
+                <p><span>内存</span><em :style="{ color: getResourceColor(getRunnerMemory(selectedRunner), 75, 90) }">{{ formatResourcePercent(getRunnerMemory(selectedRunner)) }}</em></p>
+                <i><b :style="{ width: resourceBarWidth(getRunnerMemory(selectedRunner)), backgroundColor: getResourceColor(getRunnerMemory(selectedRunner), 75, 90) }" /></i>
               </div>
               <div>
-                <p><span>磁盘</span><em :style="{ color: getResourceColor(getRunnerDisk(selectedRunner)) }">{{ getRunnerDisk(selectedRunner) }}%</em></p>
-                <i><b :style="{ width: `${getRunnerDisk(selectedRunner)}%`, backgroundColor: getResourceColor(getRunnerDisk(selectedRunner)) }" /></i>
+                <p><span>磁盘</span><em :style="{ color: getResourceColor(getRunnerDisk(selectedRunner)) }">{{ formatResourcePercent(getRunnerDisk(selectedRunner)) }}</em></p>
+                <i><b :style="{ width: resourceBarWidth(getRunnerDisk(selectedRunner)), backgroundColor: getResourceColor(getRunnerDisk(selectedRunner)) }" /></i>
               </div>
             </div>
           </section>
 
           <div class="config-runner-node-stats">
             <article>
-              <strong>{{ getRunnerTodayRuns(selectedRunner) }}</strong>
+              <strong>{{ formatOptionalCount(getRunnerTodayRuns(selectedRunner)) }}</strong>
               <span>今日执行</span>
             </article>
             <article class="is-success">
-              <strong>{{ getRunnerTodayPassed(selectedRunner) }}</strong>
+              <strong>{{ formatOptionalCount(getRunnerTodayPassed(selectedRunner)) }}</strong>
               <span>通过</span>
             </article>
-            <article :class="{ 'is-danger': getRunnerTodayFailed(selectedRunner) > 0 }">
-              <strong>{{ getRunnerTodayFailed(selectedRunner) }}</strong>
+            <article :class="{ 'is-danger': hasRunnerTodayFailures(selectedRunner) }">
+              <strong>{{ formatOptionalCount(getRunnerTodayFailed(selectedRunner)) }}</strong>
               <span>失败</span>
             </article>
           </div>
@@ -1206,7 +1255,7 @@ onBeforeUnmount(() => {
 
         <div v-else-if="runnerDetailTab === 'tasks'" class="config-runner-node-drawer__body">
           <section class="config-runner-node-task-panel">
-            <p>最近 10 条任务执行记录</p>
+            <p>当前活动任务（最多展示 10 条）</p>
             <div v-if="runnerTaskRows(selectedRunner).length" class="config-runner-node-task-table">
               <table>
                 <thead>
@@ -1250,14 +1299,14 @@ onBeforeUnmount(() => {
               </table>
             </div>
             <div v-else class="config-runner-node-empty">
-              <span>暂无任务记录</span>
+              <span>当前没有活动任务</span>
             </div>
           </section>
         </div>
 
         <div v-else class="config-runner-node-drawer__body">
           <section class="config-runner-node-log-panel">
-            <p>最近异常日志（最多展示 50 条）</p>
+            <p>根据节点心跳和资源上报生成的健康告警</p>
             <div v-if="getRunnerExceptionLogs(selectedRunner).length" class="config-runner-node-log-list">
               <article
                 v-for="(log, index) in getRunnerExceptionLogs(selectedRunner)"
@@ -1272,7 +1321,7 @@ onBeforeUnmount(() => {
               </article>
             </div>
             <div v-else class="config-runner-node-empty">
-              <span>暂无异常日志</span>
+              <span>暂无节点健康告警</span>
             </div>
           </section>
         </div>

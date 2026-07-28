@@ -123,8 +123,14 @@ export function buildCreateDbConnectionPayload(
 }
 
 export function validateConfigDbForm(form: ConfigDbForm) {
+  if (!form.workspaceCode.trim() || form.workspaceCode.trim().toUpperCase() === 'ALL') {
+    return '请填写具体目标空间编码'
+  }
   if (!form.connectionName.trim()) {
     return '请输入连接名称'
+  }
+  if (form.dbType !== 'MYSQL') {
+    return '当前后台仅支持 MySQL，其他数据库类型待接入'
   }
   if (!form.host.trim()) {
     return '请输入主机地址'

@@ -30,9 +30,11 @@ import java.util.List;
 public class ExecutionController {
 
     private final ExecutionService executionService;
+    private final ReportShareDomainService reportShareDomainService;
 
-    public ExecutionController(ExecutionService executionService) {
+    public ExecutionController(ExecutionService executionService, ReportShareDomainService reportShareDomainService) {
         this.executionService = executionService;
+        this.reportShareDomainService = reportShareDomainService;
     }
 
     @GetMapping("/tasks")
@@ -92,9 +94,14 @@ public class ExecutionController {
 
     @GetMapping("/reports")
     public ApiResponse<PageResponse<ReportSummaryResponse>> listReports(
-            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "result", required = false) String result,
+            @RequestParam(value = "logSource", required = false) String logSource,
+            @RequestParam(value = "pageNo", required = false) Long pageNo,
+            @RequestParam(value = "pageSize", required = false) Long pageSize
     ) {
-        return ApiResponse.ok(executionService.listReports(workspaceCode));
+        return ApiResponse.ok(executionService.listReports(workspaceCode, keyword, result, logSource, pageNo, pageSize));
     }
 
     @GetMapping("/reports/{id}")
@@ -103,6 +110,39 @@ public class ExecutionController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
     ) {
         return ApiResponse.ok(executionService.getReport(id, workspaceCode));
+    }
+
+    @GetMapping("/report-shares")
+    public ApiResponse<List<ReportShareSummaryResponse>> listReportShares(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(value = "reportId", required = false) Long reportId
+    ) {
+        return ApiResponse.ok(reportShareDomainService.listShares(workspaceCode, reportId));
+    }
+
+    @PostMapping("/reports/{id}/shares")
+    public ApiResponse<ReportShareCreatedResponse> createReportShare(
+            @PathVariable Long id,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestBody(required = false) CreateReportShareRequest request
+    ) {
+        return ApiResponse.ok(reportShareDomainService.createShare(id, workspaceCode, request), "报告分享链接已生成");
+    }
+
+    @DeleteMapping("/report-shares/{shareId}")
+    public ApiResponse<ReportShareSummaryResponse> revokeReportShare(
+            @PathVariable Long shareId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(reportShareDomainService.revokeShare(shareId, workspaceCode), "报告分享已撤销");
+    }
+
+    @PostMapping("/report-shares/{shareId}/regenerate")
+    public ApiResponse<ReportShareCreatedResponse> regenerateReportShare(
+            @PathVariable Long shareId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(reportShareDomainService.regenerateShare(shareId, workspaceCode), "报告分享链接已重新生成");
     }
 
     @PostMapping("/reports")

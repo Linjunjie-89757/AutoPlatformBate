@@ -159,8 +159,8 @@ public class WorkspaceMemberDomainService {
     }
 
     private WorkspaceMemberItem toMemberItem(WorkspaceMemberEntity entity) {
-        UserEntity user = userService.findActiveUser(entity.getUserId());
-        if (user == null || userService.isSuperAdmin(user.getId())) {
+        UserEntity user = userService.requireAnyUser(entity.getUserId());
+        if (userService.isSuperAdmin(user.getId())) {
             return null;
         }
         return new WorkspaceMemberItem(
@@ -170,7 +170,7 @@ public class WorkspaceMemberDomainService {
                 user.getEmail(),
                 user.getDisplayName(),
                 userService.isPlatformAdmin(user.getId()) ? ROLE_ADMIN : normalizeMemberRole(entity.getRoleCode()),
-                entity.getStatus()
+                user.getStatus()
         );
     }
 }

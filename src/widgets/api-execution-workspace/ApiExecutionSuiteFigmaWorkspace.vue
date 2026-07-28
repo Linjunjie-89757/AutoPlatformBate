@@ -24,16 +24,46 @@ import {
 } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 
+import {
+  apiAutomationApi,
+  type ApiAutomationEnvironmentItem,
+  type ApiAutomationVariableSetItem,
+  type ApiDefinitionCaseItem,
+  type ApiScenarioItem,
+  type ApiRunStepResult,
+} from '@/entities/api-automation'
+import {
+  apiExecutionSuiteApi,
+  type ApiExecutionSuiteArrangeItem,
+  type ApiExecutionSuiteDetail,
+  type ApiExecutionSuiteItem,
+  type ApiExecutionSuiteModuleItem,
+  type ApiExecutionSuiteRunHistoryDetail,
+  type ApiExecutionSuiteRunHistoryItem,
+  type ApiExecutionSuiteRunItemSnapshot,
+  type SaveApiExecutionSuitePayload,
+} from '@/entities/api-execution-suite'
+import {
+  isRunnerOnline,
+  isRunnerSelectable,
+  localRunnerApi,
+  runnerDisplayName,
+  runnerStatusText,
+  runnerUnselectableReason,
+  selectDefaultRunnerId,
+  type RunnerNodeSummary,
+} from '@/entities/local-runner'
 import { useSession } from '@/entities/session'
+import { getRequestErrorMessage } from '@/shared/api/error'
 import {
   type AppTableColumnDefinition,
-  useLocalPagedTable,
   useTableColumnSettings,
 } from '@/shared/lib/table'
 import { AppFigmaActionColumn } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
+import { confirmDelete } from '@/shared/ui'
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
@@ -47,6 +77,8 @@ type SuiteItemType = 'api' | 'scene'
 
 interface SuiteItem {
   id: string
+  arrangeId: number | null
+  itemId: number
   type: SuiteItemType
   name: string
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
@@ -55,25 +87,33 @@ interface SuiteItem {
   module?: string
   steps?: number
   status?: 'pass' | 'fail' | 'running'
+  source?: ApiExecutionSuiteArrangeItem | ApiDefinitionCaseItem | ApiScenarioItem
 }
 
 interface Suite {
   id: string
+  persistedId: number | null
+  workspaceCode: string
   name: string
   module: string
+  moduleId: number | null
   priority: Priority
   desc: string
   items: SuiteItem[]
   env: string
+  environmentId: number | null
+  variableSetId: number | null
   runMode: 'serial' | 'parallel'
   runLocation: 'server' | 'runner'
   notify: boolean
+  runner: string
   lastRun: string | null
   lastResult: SuiteResult
+  source?: ApiExecutionSuiteItem | ApiExecutionSuiteDetail
 }
 
 interface RunRecord {
-  id: string
+  id: number
   startTime: string
   env: string
   pass: number
@@ -82,91 +122,29 @@ interface RunRecord {
   duration: string
   operator: string
   status: 'pass' | 'fail' | 'running'
+  source: ApiExecutionSuiteRunHistoryItem
 }
 
-const moduleOptions = ['全部', '获客中心', '用户中心', '订单中心', '权限中心', '结算中心']
-const environmentOptions = ['测试环境', '预发布环境', '生产环境(只读)', '本地联调']
-
-const suites = ref<Suite[]>([
-  {
-    id: 'su1',
-    name: '核心业务回归套件',
-    module: '全部',
-    priority: 'P0',
-    desc: '每次发版前必跑，覆盖用户、产品、订单核心链路',
-    env: '测试环境',
-    runMode: 'serial',
-    runLocation: 'server',
-    notify: true,
-    lastRun: '2026-07-14 08:00',
-    lastResult: 'pass',
-    items: [
-      { id: 'i1', type: 'api', name: '用户注册', method: 'POST', path: '/auth/register' },
-      { id: 'i2', type: 'api', name: '用户登录', method: 'POST', path: '/auth/login' },
-      { id: 'i3', type: 'scene', name: '产品管理-新增编辑删除闭环', desc: '10个步骤' },
-      { id: 'i4', type: 'scene', name: '订单全链路压测场景', desc: '5个步骤，循环嵌套' },
-      { id: 'i5', type: 'api', name: '获取订单列表', method: 'GET', path: '/orders' },
-    ],
-  },
-  {
-    id: 'su2',
-    name: '权限安全回归套件',
-    module: '权限中心',
-    priority: 'P1',
-    desc: '验证各角色权限边界，安全合规必跑',
-    env: '测试环境',
-    runMode: 'parallel',
-    runLocation: 'runner',
-    notify: false,
-    lastRun: '2026-07-13 20:00',
-    lastResult: 'fail',
-    items: [
-      { id: 'i6', type: 'scene', name: '权限校验场景', desc: '4个步骤' },
-      { id: 'i7', type: 'api', name: '查询用户权限', method: 'GET', path: '/permissions' },
-    ],
-  },
-  {
-    id: 'su3',
-    name: 'P0 接口冒烟套件',
-    module: '全部',
-    priority: 'P0',
-    desc: '上线前快速冒烟，核心接口可用性验证',
-    env: '预发布环境',
-    runMode: 'parallel',
-    runLocation: 'server',
-    notify: true,
-    lastRun: '2026-07-14 07:30',
-    lastResult: 'pass',
-    items: [
-      { id: 'i8', type: 'api', name: '健康检查', method: 'GET', path: '/health' },
-      { id: 'i9', type: 'api', name: '获取配置', method: 'GET', path: '/config' },
-      { id: 'i10', type: 'api', name: '用户登录', method: 'POST', path: '/auth/login' },
-    ],
-  },
-])
-
-const caseCandidates: SuiteItem[] = [
-  { id: 'c001', type: 'api', name: '查询商品列表', method: 'GET', path: '/products', desc: '商品接口' },
-  { id: 'c002', type: 'api', name: '新增商品', method: 'POST', path: '/products', desc: '商品接口' },
-  { id: 'c003', type: 'api', name: '获取用户信息', method: 'GET', path: '/users/{id}', desc: '用户接口' },
-  { id: 'c004', type: 'api', name: '更新用户信息', method: 'PUT', path: '/users/{id}', desc: '用户接口' },
-  { id: 'c005', type: 'api', name: '删除订单', method: 'DELETE', path: '/orders/{id}', desc: '订单接口' },
-  { id: 'c006', type: 'api', name: '创建订单', method: 'POST', path: '/orders', desc: '订单接口' },
-]
-
-const sceneCandidates: SuiteItem[] = [
-  { id: 's1', type: 'scene', name: '产品管理-新增编辑删除闭环', desc: '获客中心 · 10 个步骤', module: '获客中心', steps: 10, status: 'pass' },
-  { id: 's2', type: 'scene', name: '用户注册登录完整流程', desc: '用户中心 · 6 个步骤', module: '用户中心', steps: 6, status: 'pass' },
-  { id: 's3', type: 'scene', name: '订单全链路压测场景', desc: '订单中心 · 5 个步骤', module: '订单中心', steps: 5, status: 'pass' },
-  { id: 's4', type: 'scene', name: '权限校验场景', desc: '权限中心 · 4 个步骤', module: '权限中心', steps: 4 },
-]
-
-const runRecords: RunRecord[] = [
-  { id: 'r1', startTime: '2026-07-14 08:00:12', env: '测试环境', pass: 18, total: 20, fail: 2, duration: '2m 34s', operator: '张程远', status: 'fail' },
-  { id: 'r2', startTime: '2026-07-13 20:01:05', env: '测试环境', pass: 20, total: 20, fail: 0, duration: '2m 01s', operator: '自动调度', status: 'pass' },
-  { id: 'r3', startTime: '2026-07-13 12:00:00', env: '测试环境', pass: 19, total: 20, fail: 1, duration: '2m 18s', operator: '李雷', status: 'fail' },
-  { id: 'r4', startTime: '2026-07-12 08:00:10', env: '预发布环境', pass: 20, total: 20, fail: 0, duration: '1m 58s', operator: '自动调度', status: 'pass' },
-]
+const suites = ref<Suite[]>([])
+const pagedSuites = ref<Suite[]>([])
+const caseCandidates = ref<SuiteItem[]>([])
+const sceneCandidates = ref<SuiteItem[]>([])
+const runRecords = ref<RunRecord[]>([])
+const suiteModules = ref<ApiExecutionSuiteModuleItem[]>([])
+const environments = ref<ApiAutomationEnvironmentItem[]>([])
+const variableSets = ref<ApiAutomationVariableSetItem[]>([])
+const runnerNodes = ref<RunnerNodeSummary[]>([])
+const selectedRunHistoryDetail = ref<ApiExecutionSuiteRunHistoryDetail | null>(null)
+const suiteLoading = ref(false)
+const suiteDetailLoading = ref(false)
+const suiteSaving = ref(false)
+const suiteRunning = ref(false)
+const pickerLoading = ref(false)
+const runHistoryLoading = ref(false)
+const suiteTotal = ref(0)
+const suitePageNo = ref(1)
+const suitePageSize = ref(10)
+const API_SUITE_RUNNER_TASK_TYPE = 'API_SUITE_RUN'
 
 const keyword = ref('')
 const moduleFilter = ref('全部')
@@ -184,16 +162,138 @@ const suiteTableFrameRef = ref<HTMLElement | null>(null)
 const suiteTableFrameWidth = ref(0)
 const { currentUser } = useSession()
 let suiteTableFrameObserver: ResizeObserver | null = null
+let suiteFilterTimer: ReturnType<typeof window.setTimeout> | null = null
 
 const activeSuite = computed(() => suites.value.find(item => item.id === activeTab.value) || null)
-const visibleSuites = computed(() => {
-  const search = keyword.value.trim().toLowerCase()
-  return suites.value.filter((suite) => {
-    const matchesKeyword = !search || suite.name.toLowerCase().includes(search) || suite.desc.toLowerCase().includes(search)
-    const matchesModule = moduleFilter.value === '全部' || suite.module === moduleFilter.value
-    return matchesKeyword && matchesModule
+const filteredSuiteTotal = computed(() => suiteTotal.value)
+const flatSuiteModules = computed(() => {
+  const result: ApiExecutionSuiteModuleItem[] = []
+  const visit = (items: ApiExecutionSuiteModuleItem[]) => items.forEach((item) => {
+    result.push(item)
+    visit(item.children || [])
   })
+  visit(suiteModules.value)
+  return result
 })
+const moduleOptions = computed(() => ['全部', ...flatSuiteModules.value.map(item => item.name)])
+const selectedVariableSetName = computed(() => variableSets.value.find(item => item.id === selectedRunRecord.value?.source.variableSetId)?.name || '未使用变量集')
+
+function normalizePriority(value?: string | null): Priority {
+  return value === 'P0' || value === 'P1' || value === 'P2' || value === 'P3' ? value : 'P1'
+}
+
+function normalizeResult(value?: string | null): SuiteResult {
+  const result = String(value || '').toUpperCase()
+  if (result === 'SUCCESS' || result === 'PASSED' || result === 'PASS') return 'pass'
+  if (result === 'FAILED' || result === 'FAIL' || result === 'ERROR') return 'fail'
+  return null
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.replace('T', ' ').slice(0, 19)
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+function formatDuration(value?: number | null) {
+  const duration = Math.max(0, Number(value || 0))
+  if (duration < 1000) return `${duration}ms`
+  const seconds = Math.floor(duration / 1000)
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+}
+
+function mapCaseCandidate(item: ApiDefinitionCaseItem): SuiteItem {
+  const method = String(item.method || 'GET').toUpperCase()
+  return {
+    id: `api-${item.id}`,
+    arrangeId: null,
+    itemId: item.id,
+    type: 'api',
+    name: item.name,
+    method: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(method) ? method as SuiteItem['method'] : 'GET',
+    path: item.path,
+    desc: item.definitionName,
+    status: normalizeResult(item.lastRunResult) || undefined,
+    source: item,
+  }
+}
+
+function mapSceneCandidate(item: ApiScenarioItem): SuiteItem {
+  return {
+    id: `scene-${item.id}`,
+    arrangeId: null,
+    itemId: item.id,
+    type: 'scene',
+    name: item.name,
+    desc: `${item.moduleName || '未分配模块'} · ${item.stepCount} 个步骤`,
+    module: item.moduleName || '',
+    steps: item.stepCount,
+    status: normalizeResult(item.lastRunResult) || undefined,
+    source: item,
+  }
+}
+
+function mapArrangeItem(item: ApiExecutionSuiteArrangeItem): SuiteItem {
+  const id = `${item.itemType === 'SCENARIO' ? 'scene' : 'api'}-${item.itemId}`
+  const candidate = [...caseCandidates.value, ...sceneCandidates.value].find(row => row.id === id)
+  return {
+    ...(candidate || {
+      id,
+      arrangeId: item.id,
+      itemId: item.itemId,
+      type: item.itemType === 'SCENARIO' ? 'scene' as const : 'api' as const,
+      name: item.itemName,
+      desc: item.description || undefined,
+    }),
+    arrangeId: item.id,
+    source: item,
+  }
+}
+
+function mapSuite(item: ApiExecutionSuiteItem | ApiExecutionSuiteDetail, arrangeItems: ApiExecutionSuiteArrangeItem[] = []): Suite {
+  const environment = environments.value.find(option => option.id === item.environmentId)
+  return {
+    id: `suite-${item.id}`,
+    persistedId: item.id,
+    workspaceCode: item.workspaceCode,
+    name: item.name,
+    module: item.moduleName || '',
+    moduleId: item.moduleId,
+    priority: normalizePriority(item.priority),
+    desc: item.description || '',
+    items: arrangeItems.map(mapArrangeItem),
+    env: environment?.name || '',
+    environmentId: item.environmentId,
+    variableSetId: item.variableSetId,
+    runMode: String(item.runMode).toUpperCase() === 'PARALLEL' ? 'parallel' : 'serial',
+    runLocation: String(item.runOn).toUpperCase() === 'LOCAL' ? 'runner' : 'server',
+    notify: item.notifyEnabled,
+    runner: selectDefaultRunnerId(runnerNodes.value, null, API_SUITE_RUNNER_TASK_TYPE) || '',
+    lastRun: formatDateTime(item.lastRunAt),
+    lastResult: normalizeResult(item.lastRunResult),
+    source: item,
+  }
+}
+
+function mapRunRecord(item: ApiExecutionSuiteRunHistoryItem): RunRecord {
+  const environment = environments.value.find(option => option.id === item.environmentId)
+  const result = String(item.result || '').toUpperCase()
+  return {
+    id: item.id,
+    startTime: formatDateTime(item.createdAt) || '-',
+    env: environment?.name || '-',
+    pass: item.successCount,
+    total: item.totalCount,
+    fail: item.failedCount,
+    duration: formatDuration(item.durationMs),
+    operator: item.operatorName || '系统执行',
+    status: result === 'SUCCESS' ? 'pass' : result === 'PENDING' || result === 'RUNNING' ? 'running' : 'fail',
+    source: item,
+  }
+}
 
 const suiteTableColumns: AppTableColumnDefinition[] = [
   { key: 'name', label: '套件名称', defaultVisible: true, required: true },
@@ -214,16 +314,6 @@ const suiteColumnSettings = useTableColumnSettings({
   storageKey: computed(() => `app-figma-table:api-execution-suites:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
   immediate: true,
 })
-
-const {
-  items: pagedSuites,
-  total: filteredSuiteTotal,
-  pageNo: suitePageNo,
-  pageSize: suitePageSize,
-  setPage: setSuitePage,
-  setPageSize: setSuitePageSize,
-  resetPage: resetSuitePage,
-} = useLocalPagedTable(visibleSuites, { initialPageSize: 10 })
 
 const suiteDefaultColumnWeights: Record<string, number> = {
   name: 0.347,
@@ -272,7 +362,123 @@ function suiteRowClassName({ rowIndex }: { rowIndex: number }) {
   return rowIndex % 2 === 1 ? 'is-alt' : ''
 }
 
-watch([keyword, moduleFilter], resetSuitePage)
+function currentSuiteModuleId() {
+  if (moduleFilter.value === '全部') return undefined
+  return flatSuiteModules.value.find(item => item.name === moduleFilter.value)?.id
+}
+
+async function loadSuiteReferenceData() {
+  try {
+    const [modules, environmentPage, variableSetPage, runners] = await Promise.all([
+      apiExecutionSuiteApi.getSuiteModules(props.workspaceCode),
+      apiAutomationApi.getEnvironments(props.workspaceCode),
+      apiAutomationApi.getVariableSets(props.workspaceCode),
+      localRunnerApi.getRunnerNodes({ taskType: API_SUITE_RUNNER_TASK_TYPE, resourceCost: 1 }),
+    ])
+    suiteModules.value = modules
+    environments.value = environmentPage.items
+    variableSets.value = variableSetPage.items
+    runnerNodes.value = runners
+  } catch (error) {
+    suiteModules.value = []
+    environments.value = []
+    variableSets.value = []
+    runnerNodes.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function loadSuiteList() {
+  suiteLoading.value = true
+  try {
+    const page = await apiExecutionSuiteApi.getSuites(props.workspaceCode, {
+      keyword: keyword.value.trim() || undefined,
+      moduleId: currentSuiteModuleId(),
+      pageNo: suitePageNo.value,
+      pageSize: suitePageSize.value,
+    })
+    const mapped = await Promise.all(page.items.map(async (item) => {
+      try {
+        const arrangeItems = await apiExecutionSuiteApi.getSuiteItems(item.workspaceCode, item.id)
+        return mapSuite(item, arrangeItems)
+      } catch {
+        return mapSuite(item)
+      }
+    }))
+    pagedSuites.value = mapped
+    const retained = suites.value.filter(item => openedIds.value.includes(item.id) || !item.persistedId)
+    const retainedIds = new Set(retained.map(item => item.id))
+    suites.value = [...mapped.filter(item => !retainedIds.has(item.id)), ...retained]
+    suiteTotal.value = page.total
+    suitePageNo.value = page.pageNo
+    suitePageSize.value = page.pageSize
+  } catch (error) {
+    pagedSuites.value = []
+    suites.value = suites.value.filter(item => openedIds.value.includes(item.id) || !item.persistedId)
+    suiteTotal.value = 0
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    suiteLoading.value = false
+  }
+}
+
+async function loadSuiteResources() {
+  pickerLoading.value = true
+  try {
+    const [casePage, scenarioPage] = await Promise.all([
+      apiAutomationApi.getCases(props.workspaceCode, { pageNo: 1, pageSize: 1000 }),
+      apiAutomationApi.getScenarios(props.workspaceCode, { pageNo: 1, pageSize: 1000 }),
+    ])
+    caseCandidates.value = casePage.items.map(mapCaseCandidate)
+    sceneCandidates.value = scenarioPage.items.map(mapSceneCandidate)
+  } catch (error) {
+    caseCandidates.value = []
+    sceneCandidates.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    pickerLoading.value = false
+  }
+}
+
+async function initializeSuitePage() {
+  await loadSuiteReferenceData()
+  await loadSuiteList()
+}
+
+function setSuitePage(value: number) {
+  suitePageNo.value = value
+  void loadSuiteList()
+}
+
+function setSuitePageSize(value: number) {
+  suitePageSize.value = value
+  suitePageNo.value = 1
+  void loadSuiteList()
+}
+
+function scheduleSuiteReload() {
+  if (suiteFilterTimer) window.clearTimeout(suiteFilterTimer)
+  suiteFilterTimer = window.setTimeout(() => {
+    suiteFilterTimer = null
+    suitePageNo.value = 1
+    void loadSuiteList()
+  }, 250)
+}
+
+watch(
+  () => props.workspaceCode,
+  () => {
+    activeTab.value = 'list'
+    openedIds.value = []
+    suitePageNo.value = 1
+    caseCandidates.value = []
+    sceneCandidates.value = []
+    void initializeSuitePage()
+  },
+  { immediate: true },
+)
+
+watch([keyword, moduleFilter], scheduleSuiteReload)
 
 watch(suiteTableFrameRef, element => {
   suiteTableFrameObserver?.disconnect()
@@ -289,9 +495,10 @@ watch(suiteTableFrameRef, element => {
 
 onBeforeUnmount(() => {
   suiteTableFrameObserver?.disconnect()
+  if (suiteFilterTimer) window.clearTimeout(suiteFilterTimer)
 })
 const pickerRows = computed(() => {
-  const rows = pickerType.value === 'scene' ? sceneCandidates : caseCandidates
+  const rows = pickerType.value === 'scene' ? sceneCandidates.value : caseCandidates.value
   const search = pickerKeyword.value.trim().toLowerCase()
   return rows.filter(item => !search || item.name.toLowerCase().includes(search))
 })
@@ -300,32 +507,71 @@ const selectablePickerIds = computed(() => pickerRows.value.filter(item => !acti
 const pickerAllSelected = computed(() => selectablePickerIds.value.length > 0 && selectablePickerIds.value.every(id => selectedPickerIds.value.includes(id)))
 const pickerPartiallySelected = computed(() => !pickerAllSelected.value && selectablePickerIds.value.some(id => selectedPickerIds.value.includes(id)))
 
-function openSuite(id: string) {
+async function loadSuiteArrangeItems(suite: Suite) {
+  if (!suite.persistedId) {
+    suite.items = []
+    return
+  }
+  const items = await apiExecutionSuiteApi.getSuiteItems(suite.workspaceCode, suite.persistedId)
+  suite.items = items.map(mapArrangeItem)
+}
+
+async function openSuite(id: string) {
   if (!openedIds.value.includes(id)) openedIds.value.push(id)
   activeTab.value = id
   editorTab.value = 'arrange'
   selectedRunRecord.value = null
+  selectedRunHistoryDetail.value = null
+  const suite = suites.value.find(item => item.id === id)
+  if (!suite?.persistedId) return
+  suiteDetailLoading.value = true
+  try {
+    const [detail, arrangeItems] = await Promise.all([
+      apiExecutionSuiteApi.getSuiteDetail(suite.workspaceCode, suite.persistedId),
+      apiExecutionSuiteApi.getSuiteItems(suite.workspaceCode, suite.persistedId),
+      loadSuiteResources(),
+    ])
+    const mapped = mapSuite(detail, arrangeItems)
+    const index = suites.value.findIndex(item => item.id === id)
+    if (index >= 0) suites.value[index] = mapped
+    activeTab.value = mapped.id
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    suiteDetailLoading.value = false
+  }
 }
 
 function closeSuite(id: string) {
   const index = openedIds.value.indexOf(id)
   openedIds.value = openedIds.value.filter(item => item !== id)
-  if (activeTab.value === id) activeTab.value = openedIds.value[index] || openedIds.value[index - 1] || 'list'
+  if (activeTab.value !== id) return
+  const nextId = openedIds.value[index] || openedIds.value[index - 1]
+  if (nextId) void openSuite(nextId)
+  else activeTab.value = 'list'
 }
 
 function createSuite() {
-  const id = `new-${Date.now()}`
+  const id = `draft-${Date.now()}`
+  const defaultModule = flatSuiteModules.value[0]
+  const defaultEnvironment = environments.value.find(item => item.status !== 0)
   suites.value.push({
     id,
+    persistedId: null,
+    workspaceCode: props.workspaceCode,
     name: '未命名套件',
-    module: '全部',
+    module: defaultModule?.name || '',
+    moduleId: defaultModule?.id ?? null,
     priority: 'P2',
     desc: '',
     items: [],
-    env: '测试环境',
+    env: defaultEnvironment?.name || '',
+    environmentId: defaultEnvironment?.id ?? null,
+    variableSetId: defaultEnvironment?.defaultVariableSetId ?? null,
     runMode: 'serial',
     runLocation: 'server',
     notify: false,
+    runner: selectDefaultRunnerId(runnerNodes.value, null, API_SUITE_RUNNER_TASK_TYPE) || '',
     lastRun: null,
     lastResult: null,
   })
@@ -345,25 +591,56 @@ function finishNameEdit() {
   editingName.value = false
 }
 
-function moveItem(index: number, direction: -1 | 1) {
+async function moveItem(index: number, direction: -1 | 1) {
   if (!activeSuite.value) return
   const target = index + direction
   if (target < 0 || target >= activeSuite.value.items.length) return
-  const items = activeSuite.value.items
-  const current = items[index]
-  items[index] = items[target]
-  items[target] = current
+  const suite = activeSuite.value
+  const items = [...suite.items]
+  ;[items[index], items[target]] = [items[target], items[index]]
+  suite.items = items
+  if (!suite.persistedId || items.some(item => !item.arrangeId)) return
+  try {
+    const reordered = await apiExecutionSuiteApi.reorderSuiteItems(suite.workspaceCode, suite.persistedId, {
+      items: items.map((item, itemIndex) => ({ id: item.arrangeId as number, sortOrder: itemIndex + 1, enabled: true })),
+    })
+    suite.items = reordered.map(mapArrangeItem)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+    await loadSuiteArrangeItems(suite)
+  }
 }
 
-function removeItem(id: string) {
-  if (!activeSuite.value) return
-  activeSuite.value.items = activeSuite.value.items.filter(item => item.id !== id)
+async function removeItem(item: SuiteItem) {
+  const suite = activeSuite.value
+  if (!suite) return
+  if (!suite.persistedId || !item.arrangeId) {
+    suite.items = suite.items.filter(candidate => candidate.id !== item.id)
+    return
+  }
+  try {
+    await confirmDelete({ title: '删除编排项', message: `确认从套件中移除「${item.name}」吗？`, confirmText: '确认删除' })
+  } catch {
+    return
+  }
+  try {
+    await apiExecutionSuiteApi.deleteSuiteItem(suite.workspaceCode, suite.persistedId, item.arrangeId)
+    suite.items = suite.items.filter(candidate => candidate.arrangeId !== item.arrangeId)
+    ElMessage.success('编排项已移除')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  }
 }
 
-function openPicker(type: SuiteItemType) {
+async function openPicker(type: SuiteItemType) {
+  if (!activeSuite.value?.persistedId) {
+    ElMessage.warning('请先保存套件后再添加编排内容')
+    return
+  }
   pickerType.value = type
   pickerKeyword.value = ''
   selectedPickerIds.value = []
+  await loadSuiteResources()
 }
 
 function togglePickerItem(id: string) {
@@ -381,30 +658,254 @@ function toggleAllPickerItems(event: Event) {
     : selectedPickerIds.value.filter(id => !visibleIds.has(id))
 }
 
-function addPickerItems() {
-  if (!activeSuite.value || !pickerType.value) return
-  const source = pickerType.value === 'scene' ? sceneCandidates : caseCandidates
-  activeSuite.value.items.push(...source.filter(item => selectedPickerIds.value.includes(item.id)).map(item => ({ ...item })))
-  pickerType.value = null
+async function addPickerItems() {
+  const suite = activeSuite.value
+  if (!suite?.persistedId || !pickerType.value) return
+  const source = pickerType.value === 'scene' ? sceneCandidates.value : caseCandidates.value
+  const selected = source.filter(item => selectedPickerIds.value.includes(item.id) && !activeItemIds.value.has(item.id))
+  if (!selected.length) return
+  pickerLoading.value = true
+  try {
+    for (const item of selected) {
+      await apiExecutionSuiteApi.addSuiteItem(suite.workspaceCode, suite.persistedId, {
+        itemType: item.type === 'scene' ? 'SCENARIO' : 'API_CASE',
+        itemId: item.itemId,
+        enabled: true,
+      })
+    }
+    await loadSuiteArrangeItems(suite)
+    pickerType.value = null
+    ElMessage.success(`已添加 ${selected.length} 个编排项`)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    pickerLoading.value = false
+  }
 }
 
-function runSuite() {
-  ElMessage.success('套件已开始运行')
+function syncSuiteModule() {
+  const suite = activeSuite.value
+  if (suite) suite.module = flatSuiteModules.value.find(item => item.id === suite.moduleId)?.name || ''
 }
 
-function saveSuite() {
-  ElMessage.success('套件已保存')
+function syncSuiteEnvironment() {
+  const suite = activeSuite.value
+  if (suite) suite.env = environments.value.find(item => item.id === suite.environmentId)?.name || ''
 }
 
-function deleteSuite(id: string) {
-  suites.value = suites.value.filter(item => item.id !== id)
-  closeSuite(id)
+function buildSuitePayload(suite: Suite): SaveApiExecutionSuitePayload {
+  const source = suite.source
+  return {
+    workspaceCode: suite.workspaceCode,
+    moduleId: suite.moduleId,
+    name: suite.name.trim(),
+    priority: suite.priority,
+    status: source?.status || 'ACTIVE',
+    description: suite.desc.trim() || null,
+    environmentId: suite.environmentId,
+    variableSetId: suite.variableSetId,
+    runMode: suite.runMode.toUpperCase(),
+    runOn: suite.runLocation === 'runner' ? 'LOCAL' : 'SERVER',
+    notifyEnabled: suite.notify,
+    continueOnFailure: source?.continueOnFailure || false,
+    globalTimeoutMs: source?.globalTimeoutMs || 300000,
+    stepFailureRetryCount: source?.stepFailureRetryCount || 0,
+    defaultStepWaitMs: source?.defaultStepWaitMs || 0,
+    scheduleEnabled: source?.scheduleEnabled || false,
+    cronExpression: source?.cronExpression || null,
+    branchName: source?.branchName || null,
+    triggerSource: source?.triggerSource || null,
+    branchNote: source?.branchNote || null,
+    dataDrivenEnabled: source?.dataDrivenEnabled || false,
+    dataFileId: source?.dataFileId ?? null,
+    caseDescColumn: source?.caseDescColumn || null,
+    dataFailureStrategy: source?.dataFailureStrategy || 'STOP_ON_ROW_FAILURE',
+  }
+}
+
+function validateSuite(suite: Suite) {
+  if (!suite.workspaceCode || suite.workspaceCode === 'ALL') {
+    ElMessage.warning('请选择具体工作空间后再保存套件')
+    return false
+  }
+  if (!suite.name.trim()) {
+    ElMessage.warning('请输入套件名称')
+    return false
+  }
+  if (!suite.moduleId) {
+    ElMessage.warning('请选择所属模块')
+    return false
+  }
+  return true
+}
+
+async function saveSuite(): Promise<Suite | null> {
+  const suite = activeSuite.value
+  if (!suite || !validateSuite(suite)) return null
+  suiteSaving.value = true
+  const originalId = suite.id
+  try {
+    const detail = suite.persistedId
+      ? await apiExecutionSuiteApi.updateSuite(suite.workspaceCode, suite.persistedId, buildSuitePayload(suite))
+      : await apiExecutionSuiteApi.createSuite(suite.workspaceCode, buildSuitePayload(suite))
+    const mapped = mapSuite(detail, suite.items.map(item => item.source).filter((item): item is ApiExecutionSuiteArrangeItem => Boolean(item && 'suiteId' in item)))
+    mapped.items = suite.items
+    mapped.runner = suite.runner
+    const index = suites.value.findIndex(item => item.id === originalId)
+    if (index >= 0) suites.value[index] = mapped
+    openedIds.value = openedIds.value.map(id => id === originalId ? mapped.id : id)
+    activeTab.value = mapped.id
+    if (!suite.persistedId) suiteTotal.value += 1
+    ElMessage.success(suite.persistedId ? '套件已保存' : '套件已创建')
+    await loadSuiteList()
+    return mapped
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+    return null
+  } finally {
+    suiteSaving.value = false
+  }
+}
+
+async function executeSuite(suite: Suite, saveBeforeRun = false) {
+  let target = suite
+  if (saveBeforeRun) {
+    const saved = await saveSuite()
+    if (!saved) return
+    target = saved
+  }
+  if (!target.persistedId) {
+    ElMessage.warning('请先保存套件后再运行')
+    return
+  }
+  const selectedRunner = runnerNodes.value.find(item => item.runnerId === target.runner)
+  if (target.runLocation === 'runner' && (!selectedRunner || !isRunnerSelectable(selectedRunner, API_SUITE_RUNNER_TASK_TYPE))) {
+    ElMessage.warning(`当前本地 Runner 不可用：${selectedRunner ? runnerUnselectableReason(selectedRunner, API_SUITE_RUNNER_TASK_TYPE) : '请选择在线 Runner'}`)
+    return
+  }
+  suiteRunning.value = true
+  try {
+    const response = await apiExecutionSuiteApi.runSuite(target.workspaceCode, target.persistedId, {
+      workspaceCode: target.workspaceCode,
+      environmentId: target.environmentId,
+      variableSetId: target.variableSetId,
+      branchName: target.source?.branchName || null,
+      triggerSource: 'MANUAL',
+      runOn: target.runLocation === 'runner' ? 'LOCAL' : 'SERVER',
+      runnerId: target.runLocation === 'runner' ? target.runner : null,
+    })
+    target.lastResult = normalizeResult(response.result)
+    target.lastRun = formatDateTime(new Date().toISOString())
+    ElMessage.success(response.result === 'PENDING' ? '本地套件任务已创建' : '套件运行已触发')
+    if (activeSuite.value?.id === target.id) {
+      editorTab.value = 'results'
+      await loadRunRecords()
+    }
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    suiteRunning.value = false
+  }
+}
+
+async function runSuite() {
+  if (activeSuite.value) await executeSuite(activeSuite.value, true)
+}
+
+async function runSuiteFromList(suite: Suite) {
+  await executeSuite(suite)
+  await loadSuiteList()
+}
+
+async function deleteSuite(suite: Suite) {
+  if (!suite.persistedId) {
+    suites.value = suites.value.filter(item => item.id !== suite.id)
+    closeSuite(suite.id)
+    return
+  }
+  try {
+    await confirmDelete({ title: '删除执行套件', message: `确认删除套件「${suite.name}」吗？删除后不可恢复。`, confirmText: '确认删除' })
+  } catch {
+    return
+  }
+  try {
+    await apiExecutionSuiteApi.deleteSuite(suite.workspaceCode, suite.persistedId)
+    closeSuite(suite.id)
+    ElMessage.success('套件已删除')
+    await loadSuiteList()
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function loadRunRecords() {
+  const suite = activeSuite.value
+  if (!suite?.persistedId) {
+    runRecords.value = []
+    return
+  }
+  runHistoryLoading.value = true
+  try {
+    const page = await apiExecutionSuiteApi.getSuiteRunHistory(suite.workspaceCode, suite.persistedId, { pageNo: 1, pageSize: 100 })
+    runRecords.value = page.items.map(mapRunRecord)
+  } catch (error) {
+    runRecords.value = []
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    runHistoryLoading.value = false
+  }
+}
+
+async function openResults() {
+  editorTab.value = 'results'
+  selectedRunRecord.value = null
+  selectedRunHistoryDetail.value = null
+  await loadRunRecords()
+}
+
+async function openRunRecord(record: RunRecord) {
+  const suite = activeSuite.value
+  if (!suite) return
+  selectedRunRecord.value = record
+  selectedRunHistoryDetail.value = null
+  runHistoryLoading.value = true
+  try {
+    selectedRunHistoryDetail.value = await apiExecutionSuiteApi.getSuiteRunHistoryDetail(suite.workspaceCode, record.id)
+    expandedResultItems.value = selectedRunHistoryDetail.value.itemSnapshots
+      .filter(item => normalizeResult(item.result) === 'fail')
+      .map(item => String(item.suiteItemId ?? item.itemId ?? item.itemName))
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    runHistoryLoading.value = false
+  }
 }
 
 function toggleResultItem(id: string) {
   expandedResultItems.value = expandedResultItems.value.includes(id)
     ? expandedResultItems.value.filter(item => item !== id)
     : [...expandedResultItems.value, id]
+}
+
+function resultItemKey(item: ApiExecutionSuiteRunItemSnapshot) {
+  return String(item.suiteItemId ?? item.itemId ?? item.itemName)
+}
+
+function resultItemStatus(item: ApiExecutionSuiteRunItemSnapshot) {
+  const normalized = normalizeResult(item.result)
+  if (normalized) return normalized
+  return String(item.result || '').toUpperCase() === 'RUNNING' ? 'running' : 'fail'
+}
+
+function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResult[] {
+  const detail = selectedRunHistoryDetail.value
+  if (!detail) return []
+  if (item.suiteItemId != null) return detail.stepResults.filter(step => step.suiteItemId === item.suiteItemId)
+  if (item.sortOrder != null) {
+    const ordered = detail.stepResults.filter(step => step.suiteItemOrder === item.sortOrder)
+    if (ordered.length) return ordered
+  }
+  return detail.stepResults.filter(step => step.definitionId === item.itemId)
 }
 </script>
 
@@ -445,6 +946,7 @@ function toggleResultItem(id: string) {
         <AppFigmaTable
           class="figma-suite__data-table"
           :data="pagedSuites"
+          :loading="suiteLoading"
           :page-no="suitePageNo"
           :page-size="suitePageSize"
           :total="filteredSuiteTotal"
@@ -489,19 +991,19 @@ function toggleResultItem(id: string) {
             </template>
             <template #default="{ row: suite }">
               <button title="编辑" aria-label="编辑" type="button" @click.stop="openSuite(suite.id)"><Edit2 /></button>
-              <button title="运行" aria-label="运行" type="button" @click.stop="runSuite"><Play /></button>
-              <button title="删除" aria-label="删除" data-danger="true" type="button" @click.stop="deleteSuite(suite.id)"><Trash2 /></button>
+              <button title="运行" aria-label="运行" type="button" @click.stop="runSuiteFromList(suite)"><Play /></button>
+              <button title="删除" aria-label="删除" data-danger="true" type="button" @click.stop="deleteSuite(suite)"><Trash2 /></button>
             </template>
           </AppFigmaActionColumn>
         </AppFigmaTable>
       </div>
     </div>
 
-    <div v-else-if="activeSuite" class="figma-suite__editor">
+    <div v-else-if="activeSuite" v-loading="suiteDetailLoading" class="figma-suite__editor">
       <main class="figma-suite__editor-main">
         <nav class="figma-suite__subtabs">
           <button :class="{ 'is-active': editorTab === 'arrange' }" type="button" @click="editorTab = 'arrange'; selectedRunRecord = null">编排 ({{ activeSuite.items.length }})</button>
-          <button :class="{ 'is-active': editorTab === 'results' }" type="button" @click="editorTab = 'results'">运行结果</button>
+          <button :class="{ 'is-active': editorTab === 'results' }" type="button" @click="openResults">运行结果</button>
         </nav>
 
         <template v-if="editorTab === 'arrange'">
@@ -533,44 +1035,69 @@ function toggleResultItem(id: string) {
                 <b v-if="item.method" class="figma-suite__method" :class="`is-${item.method.toLowerCase()}`">{{ item.method }}</b>
                 <p>{{ item.name }}</p>
                 <code v-if="item.path">{{ item.path }}</code><small v-else>{{ item.desc }}</small>
-                <div><button title="上移" :disabled="index === 0" type="button" @click="moveItem(index, -1)"><ArrowUp /></button><button title="下移" :disabled="index === activeSuite.items.length - 1" type="button" @click="moveItem(index, 1)"><ArrowDown /></button><button title="移除" type="button" @click="removeItem(item.id)"><Trash2 /></button></div>
+                <div><button title="上移" :disabled="index === 0" type="button" @click="moveItem(index, -1)"><ArrowUp /></button><button title="下移" :disabled="index === activeSuite.items.length - 1" type="button" @click="moveItem(index, 1)"><ArrowDown /></button><button title="移除" type="button" @click="removeItem(item)"><Trash2 /></button></div>
               </article>
             </template>
             <div v-else class="figma-suite__arrange-empty"><FileText /><p>还没有编排项，添加接口用例或场景开始</p><div><button type="button" @click="openPicker('api')"><FileText />添加用例</button><button type="button" @click="openPicker('scene')"><Layers />添加场景</button></div></div>
           </section>
         </template>
 
-        <section v-else-if="!selectedRunRecord" class="figma-suite__results">
-          <header><strong>运行记录</strong><button type="button"><RefreshCw />刷新</button></header>
+        <section v-else-if="!selectedRunRecord" v-loading="runHistoryLoading" class="figma-suite__results">
+          <header><strong>运行记录</strong><button type="button" @click="loadRunRecords"><RefreshCw />刷新</button></header>
           <table>
             <colgroup>
               <col style="width:390.578125px" /><col style="width:224.046875px" /><col style="width:204.796875px" /><col style="width:132.390625px" />
               <col style="width:172.125px" /><col style="width:193.5px" /><col style="width:159.125px" /><col style="width:132.4375px" />
             </colgroup>
             <thead><tr><th>开始时间</th><th>环境</th><th>通过/总数</th><th>失败</th><th>耗时</th><th>执行人</th><th>状态</th><th>操作</th></tr></thead>
-            <tbody><tr v-for="record in runRecords" :key="record.id"><td class="is-mono">{{ record.startTime }}</td><td>{{ record.env }}</td><td><strong class="is-pass">{{ record.pass }}</strong><span class="figma-suite__result-total"> / {{ record.total }}</span></td><td><strong :class="record.fail ? 'is-fail' : 'is-zero'">{{ record.fail }}</strong></td><td class="is-mono">{{ record.duration }}</td><td>{{ record.operator }}</td><td><span class="figma-suite__status" :class="`is-${record.status}`"><i />{{ record.status === 'pass' ? '通过' : record.status === 'fail' ? '失败' : '运行中' }}</span></td><td><button title="查看详情" type="button" @click="selectedRunRecord = record"><Eye /></button></td></tr></tbody>
+            <tbody><tr v-for="record in runRecords" :key="record.id"><td class="is-mono">{{ record.startTime }}</td><td>{{ record.env }}</td><td><strong class="is-pass">{{ record.pass }}</strong><span class="figma-suite__result-total"> / {{ record.total }}</span></td><td><strong :class="record.fail ? 'is-fail' : 'is-zero'">{{ record.fail }}</strong></td><td class="is-mono">{{ record.duration }}</td><td>{{ record.operator }}</td><td><span class="figma-suite__status" :class="`is-${record.status}`"><i />{{ record.status === 'pass' ? '通过' : record.status === 'fail' ? '失败' : '运行中' }}</span></td><td><button title="查看详情" type="button" @click="openRunRecord(record)"><Eye /></button></td></tr></tbody>
           </table>
         </section>
 
-        <section v-else class="figma-suite__result-detail">
+        <section v-else v-loading="runHistoryLoading" class="figma-suite__result-detail">
           <button type="button" @click="selectedRunRecord = null"><ArrowLeft />返回运行结果列表</button>
-          <div class="figma-suite__summary"><article><small>通过</small><strong class="is-pass">{{ selectedRunRecord.pass }}</strong></article><article><small>失败</small><strong class="is-fail">{{ selectedRunRecord.fail }}</strong></article><article><small>跳过</small><strong>0</strong></article><article><small>耗时</small><strong class="is-primary">{{ selectedRunRecord.duration }}</strong></article></div>
-          <p class="figma-suite__result-meta"><span><b>环境：</b>{{ selectedRunRecord.env }}</span><span><b>变量集：</b>公共变量集</span><span><b>失败后继续：</b>是</span><span><b>重试次数：</b>0</span></p>
+          <div class="figma-suite__summary"><article><small>通过</small><strong class="is-pass">{{ selectedRunRecord.pass }}</strong></article><article><small>失败</small><strong class="is-fail">{{ selectedRunRecord.fail }}</strong></article><article><small>跳过</small><strong>{{ selectedRunRecord.source.skippedCount }}</strong></article><article><small>耗时</small><strong class="is-primary">{{ selectedRunRecord.duration }}</strong></article></div>
+          <p class="figma-suite__result-meta"><span><b>环境：</b>{{ selectedRunRecord.env }}</span><span><b>变量集：</b>{{ selectedVariableSetName }}</span><span><b>失败后继续：</b>{{ selectedRunRecord.source.continueOnFailure ? '是' : '否' }}</span><span><b>重试次数：</b>{{ selectedRunRecord.source.stepFailureRetryCount }}</span></p>
           <div class="figma-suite__result-items">
-            <article><header><CheckCircle2 /><b>接口用例</b><strong>用户注册</strong><span>3 步骤 · 1.2s</span><ChevronDown /></header></article>
-            <article><header role="button" tabindex="0" @click="toggleResultItem('failure-scene')"><XCircle /><b>场景</b><strong>产品管理-新增编辑删除闭环</strong><span>10 步骤 · 8.4s</span><AlertCircle /><component :is="expandedResultItems.includes('failure-scene') ? ChevronUp : ChevronDown" /></header><div v-if="expandedResultItems.includes('failure-scene')"><p><AlertCircle />步骤 4 断言失败：期望 200 实际 404</p><div v-for="index in 4" :key="index"><component :is="index === 4 ? XCircle : CheckCircle2" /><span>步骤 {{ index }} · {{ ['发送验证码', '注册账户', '登录获取Token', '查询用户(失败)'][index - 1] }}</span><code>{{ index === 4 ? 404 : 200 }}</code><small>{{ [120, 340, 280, 150][index - 1] }}ms</small><button title="查看详情" type="button"><Eye /></button></div></div></article>
-            <article><header><CheckCircle2 /><b>接口用例</b><strong>创建订单</strong><span>2 步骤 · 0.8s</span><ChevronDown /></header></article>
+            <article
+              v-for="item in selectedRunHistoryDetail?.itemSnapshots || []"
+              :key="resultItemKey(item)"
+              :class="{ 'is-failed': resultItemStatus(item) === 'fail' }"
+            >
+              <header
+                :role="resultItemStatus(item) === 'fail' ? 'button' : undefined"
+                :tabindex="resultItemStatus(item) === 'fail' ? 0 : undefined"
+                @click="resultItemStatus(item) === 'fail' && toggleResultItem(resultItemKey(item))"
+              >
+                <component :is="resultItemStatus(item) === 'pass' ? CheckCircle2 : XCircle" />
+                <b>{{ item.itemType === 'SCENARIO' ? '场景' : '接口用例' }}</b>
+                <strong>{{ item.itemName || '-' }}</strong>
+                <span>{{ item.stepCount }} 步骤 · {{ formatDuration(item.durationMs) }}</span>
+                <AlertCircle v-if="resultItemStatus(item) === 'fail'" />
+                <component :is="expandedResultItems.includes(resultItemKey(item)) ? ChevronUp : ChevronDown" />
+              </header>
+              <div v-if="expandedResultItems.includes(resultItemKey(item))">
+                <p v-if="item.failureSummary"><AlertCircle />{{ item.failureSummary }}</p>
+                <div v-for="step in resultItemSteps(item)" :key="step.id ?? `${step.stepOrder}-${step.stepName}`" :class="{ 'is-failed': !step.success }">
+                  <component :is="step.success ? CheckCircle2 : XCircle" />
+                  <span>步骤 {{ step.stepOrder }} · {{ step.stepName }}</span>
+                  <code>{{ step.response?.statusCode ?? '-' }}</code>
+                  <small>{{ formatDuration(step.durationMs) }}</small>
+                  <button title="查看详情" type="button"><Eye /></button>
+                </div>
+              </div>
+            </article>
           </div>
         </section>
       </main>
 
       <aside class="figma-suite__config">
-        <header><label class="figma-suite__select-shell"><select v-model="activeSuite.env"><option v-for="item in environmentOptions" :key="item">{{ item }}</option></select><ChevronDown aria-hidden="true" /></label><div><button type="button" @click="runSuite"><Play />运行</button><button type="button" @click="saveSuite"><Save />保存</button></div></header>
+        <header><label class="figma-suite__select-shell"><select v-model.number="activeSuite.environmentId" @change="syncSuiteEnvironment"><option :value="null">请选择执行环境</option><option v-for="item in environments" :key="item.id" :value="item.id">{{ item.name }}</option></select><ChevronDown aria-hidden="true" /></label><div><button :disabled="suiteRunning || suiteSaving" type="button" @click="runSuite"><Play />运行</button><button :disabled="suiteSaving || suiteRunning" type="button" @click="saveSuite"><Save />保存</button></div></header>
         <div class="figma-suite__config-body">
-          <div class="figma-suite__config-field is-module"><span><em>*</em> 所属模块</span><label class="figma-suite__select-shell"><select v-model="activeSuite.module"><option v-for="item in moduleOptions" :key="item">{{ item }}</option></select><ChevronDown aria-hidden="true" /></label></div>
+          <div class="figma-suite__config-field is-module"><span><em>*</em> 所属模块</span><label class="figma-suite__select-shell"><select v-model.number="activeSuite.moduleId" @change="syncSuiteModule"><option :value="null">请选择所属模块</option><option v-for="item in flatSuiteModules" :key="item.id" :value="item.id">{{ item.name }}</option></select><ChevronDown aria-hidden="true" /></label></div>
           <fieldset><legend>运行模式</legend><div class="figma-suite__radio-row"><label><input v-model="activeSuite.runMode" class="figma-suite__radio-input" type="radio" value="serial" />串行</label><label><input v-model="activeSuite.runMode" class="figma-suite__radio-input" type="radio" value="parallel" />并行</label></div></fieldset>
           <div class="figma-suite__config-field is-location"><span>运行于</span><label class="figma-suite__select-shell"><select v-model="activeSuite.runLocation"><option value="server">服务端执行</option><option value="runner">本地执行器</option></select><ChevronDown aria-hidden="true" /></label></div>
-          <section v-if="activeSuite.runLocation === 'runner'" class="figma-suite__runners"><label><i class="is-online" /><span><b>Runner-主机A</b><small>runner-001 · 在线</small></span><input checked name="runner" type="radio" /></label><label><i /><span><b>Runner-主机B</b><small>runner-002 · 离线</small></span><input disabled name="runner" type="radio" /></label></section>
+          <section v-if="activeSuite.runLocation === 'runner'" class="figma-suite__runners"><label v-for="runner in runnerNodes" :key="runner.runnerId" :title="runnerUnselectableReason(runner, API_SUITE_RUNNER_TASK_TYPE)"><i :class="{ 'is-online': isRunnerOnline(runner) }" /><span><b>{{ runnerDisplayName(runner) }}</b><small>{{ runner.runnerId }} · {{ runnerStatusText(runner) }}</small></span><input v-model="activeSuite.runner" :value="runner.runnerId" :disabled="!isRunnerSelectable(runner, API_SUITE_RUNNER_TASK_TYPE)" name="runner" type="radio" /></label></section>
           <div class="figma-suite__notify"><span>运行通知</span><button :class="{ 'is-on': activeSuite.notify }" type="button" @click="activeSuite.notify = !activeSuite.notify"><i /></button></div>
           <section v-if="activeSuite.lastRun" class="figma-suite__last-run"><p>上次运行结果</p><span class="figma-suite__status" :class="`is-${activeSuite.lastResult}`"><i />{{ activeSuite.lastResult === 'pass' ? '通过' : '失败' }}</span><small>{{ activeSuite.lastRun }}</small></section>
         </div>
@@ -595,7 +1122,7 @@ function toggleResultItem(id: string) {
       <section class="figma-suite__dialog" :class="{ 'is-scene': pickerType === 'scene' }">
         <header><strong>{{ pickerType === 'scene' ? '添加场景' : '添加接口用例' }}</strong><button title="关闭" type="button" @click="pickerType = null"><X /></button></header>
         <div class="figma-suite__dialog-tools"><select><option>X-MAN</option></select><select v-if="pickerType === 'api'"><option>HTTP</option></select><label><Search /><input v-model="pickerKeyword" :placeholder="pickerType === 'scene' ? '搜索场景名称' : '搜索用例名称'" /></label></div>
-        <div class="figma-suite__dialog-table">
+        <div v-loading="pickerLoading" class="figma-suite__dialog-table">
           <table :class="pickerType === 'scene' ? 'is-scene-picker' : 'is-api-picker'">
             <colgroup v-if="pickerType === 'api'">
               <col style="width:41px" /><col style="width:68.78125px" /><col style="width:138.1875px" /><col style="width:83px" /><col style="width:149.75px" /><col style="width:99.609375px" /><col style="width:99.671875px" />
@@ -701,7 +1228,7 @@ button { cursor:pointer; }
 .figma-suite__last-run > .figma-suite__status { box-sizing:border-box; width:100%; height:21.5px; padding-top:3.5px; }
 .figma-suite__last-run > small { display:block; box-sizing:border-box; width:100%; height:16.75px; margin:0; padding-top:1.75px; color:#c9cdd4; font-size:10px; line-height:15px; }
 .figma-suite__results,.figma-suite__result-detail { min-height:0; flex:1; overflow:auto; padding:20px; }.figma-suite__results > header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }.figma-suite__results > header strong { display:block; height:20px; font-size:13px; font-weight:600; line-height:19.5px; }.figma-suite__results > header button,.figma-suite__result-detail > button { display:inline-flex; height:28px; align-items:center; gap:6px; padding:0 12px; border:1px solid #e5e6eb; border-radius:8px; background:#fff; color:#4e5969; font-size:12px; }.figma-suite__results > header svg,.figma-suite__result-detail > button svg { width:12px; height:12px; }.figma-suite__results table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:12px; }.figma-suite__results th { height:37px; padding:0 16px; border-bottom:1px solid #e5e6eb; background:#f4f6fa; color:#86909c; font-weight:500; text-align:left; }.figma-suite__results td { height:43px; padding:0 16px; border-bottom:1px solid #e5e6eb; color:#4e5969; }.figma-suite__results tbody tr:nth-child(even) { background:#fafbfe; }.is-pass { color:#00b42a!important; }.is-fail { color:#f53f3f!important; }.is-zero { color:#c9cdd4!important; }.is-primary { color:#165dff!important; }
-.figma-suite__summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:16px 0 20px; }.figma-suite__summary article { padding:14px 16px; border:1px solid #e5e6eb; border-radius:10px; background:#fff; }.figma-suite__summary small,.figma-suite__summary strong { display:block; }.figma-suite__summary small { color:#86909c; font-size:11px; }.figma-suite__summary strong { margin-top:4px; color:#86909c; font-size:22px; font-weight:700; }.figma-suite__result-meta { display:flex; gap:16px; margin:0 0 16px; color:#86909c; font-size:12px; }.figma-suite__result-meta b { font-weight:600; }.figma-suite__result-items { display:grid; gap:8px; }.figma-suite__result-items article { overflow:hidden; border:1px solid #e5e6eb; border-radius:10px; }.figma-suite__result-items header { display:flex; height:42px; align-items:center; gap:10px; padding:0 14px; background:#fff; }.figma-suite__result-items header > svg:first-child { width:16px; height:16px; color:#00b42a; }.figma-suite__result-items article:nth-child(2) header > svg:first-child { color:#f53f3f; }.figma-suite__result-items header b { padding:2px 6px; border-radius:4px; background:#e8f3ff; color:#165dff; font-size:10px; }.figma-suite__result-items article:nth-child(2) header b { background:#e8ffea; color:#00b42a; }.figma-suite__result-items header strong { flex:1; font-size:13px; font-weight:500; }.figma-suite__result-items header span { color:#86909c; font-size:11px; }.figma-suite__result-items header svg { width:14px; height:14px; color:#86909c; }.figma-suite__result-items article:nth-child(2) > div { border-top:1px solid #e5e6eb; background:#f4f6fa; }.figma-suite__result-items article:nth-child(2) > div > p { display:flex; align-items:flex-start; gap:8px; margin:0; padding:9px 14px; border-bottom:1px solid #e5e6eb; color:#f53f3f; font-size:12px; }.figma-suite__result-items article:nth-child(2) > div > p svg { width:13px; height:13px; }.figma-suite__result-items article:nth-child(2) > div > div { display:grid; height:32px; grid-template-columns:18px minmax(0,1fr) 40px 48px 24px; align-items:center; gap:8px; padding:0 24px; border-bottom:1px solid #e5e6eb; color:#4e5969; font-size:11px; }.figma-suite__result-items article:nth-child(2) > div > div > svg { width:12px; height:12px; color:#00b42a; }.figma-suite__result-items article:nth-child(2) > div > div:last-child > svg { color:#f53f3f; }.figma-suite__result-items code,.figma-suite__result-items small { color:#86909c; font-size:10px; }.figma-suite__result-items article:nth-child(2) > div > div button { display:inline-flex; width:22px; height:22px; align-items:center; justify-content:center; padding:0; border:0; background:transparent; color:#86909c; }.figma-suite__result-items article:nth-child(2) > div > div button svg { width:12px; height:12px; }
+.figma-suite__summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:16px 0 20px; }.figma-suite__summary article { padding:14px 16px; border:1px solid #e5e6eb; border-radius:10px; background:#fff; }.figma-suite__summary small,.figma-suite__summary strong { display:block; }.figma-suite__summary small { color:#86909c; font-size:11px; }.figma-suite__summary strong { margin-top:4px; color:#86909c; font-size:22px; font-weight:700; }.figma-suite__result-meta { display:flex; gap:16px; margin:0 0 16px; color:#86909c; font-size:12px; }.figma-suite__result-meta b { font-weight:600; }.figma-suite__result-items { display:grid; gap:8px; }.figma-suite__result-items article { overflow:hidden; border:1px solid #e5e6eb; border-radius:10px; }.figma-suite__result-items header { display:flex; height:42px; align-items:center; gap:10px; padding:0 14px; background:#fff; }.figma-suite__result-items header > svg:first-child { width:16px; height:16px; color:#00b42a; }.figma-suite__result-items article.is-failed header > svg:first-child { color:#f53f3f; }.figma-suite__result-items header b { padding:2px 6px; border-radius:4px; background:#e8f3ff; color:#165dff; font-size:10px; }.figma-suite__result-items article.is-failed header b { background:#e8ffea; color:#00b42a; }.figma-suite__result-items header strong { flex:1; font-size:13px; font-weight:500; }.figma-suite__result-items header span { color:#86909c; font-size:11px; }.figma-suite__result-items header svg { width:14px; height:14px; color:#86909c; }.figma-suite__result-items article.is-failed > div { border-top:1px solid #e5e6eb; background:#f4f6fa; }.figma-suite__result-items article.is-failed > div > p { display:flex; align-items:flex-start; gap:8px; margin:0; padding:9px 14px; border-bottom:1px solid #e5e6eb; color:#f53f3f; font-size:12px; }.figma-suite__result-items article.is-failed > div > p svg { width:13px; height:13px; }.figma-suite__result-items article.is-failed > div > div { display:grid; height:32px; grid-template-columns:18px minmax(0,1fr) 40px 48px 24px; align-items:center; gap:8px; padding:0 24px; border-bottom:1px solid #e5e6eb; color:#4e5969; font-size:11px; }.figma-suite__result-items article.is-failed > div > div > svg { width:12px; height:12px; color:#00b42a; }.figma-suite__result-items article.is-failed > div > div.is-failed > svg { color:#f53f3f; }.figma-suite__result-items code,.figma-suite__result-items small { color:#86909c; font-size:10px; }.figma-suite__result-items article.is-failed > div > div button { display:inline-flex; width:22px; height:22px; align-items:center; justify-content:center; padding:0; border:0; background:transparent; color:#86909c; }.figma-suite__result-items article.is-failed > div > div button svg { width:12px; height:12px; }
 .figma-suite__overlay { position:fixed; z-index:2000; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.36); }
 .figma-suite__dialog { display:flex; box-sizing:border-box; width:680px; height:533.5px; max-height:82vh; flex-direction:column; overflow:hidden; border-radius:14px; background:#fff; box-shadow:0 25px 50px -12px rgba(0,0,0,.25); }
 .figma-suite__dialog.is-scene { height:493.5px; }

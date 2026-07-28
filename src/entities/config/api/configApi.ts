@@ -29,6 +29,7 @@ import type {
   ParamSetChangeHistoryItem,
   ParamSetItem,
   ParamSetVersionItem,
+  TestNotificationChannelPayload,
   UpdateDbConnectionStatusPayload,
 } from '../model/types'
 
@@ -386,8 +387,8 @@ export const configApi = {
     return unwrapApiResponse(response)
   },
 
-  async testNotificationChannel(workspaceCode: string, payload: { channelId?: number, message?: string }) {
-    const response = await httpPost<ApiResponse<NotificationSendResult>, { channelId?: number, message?: string }>(
+  async testNotificationChannel(workspaceCode: string, payload: TestNotificationChannelPayload) {
+    const response = await httpPost<ApiResponse<NotificationSendResult>, TestNotificationChannelPayload>(
       '/settings/notifications/channels/test',
       payload,
       { headers: workspaceHeaders(workspaceCode) },

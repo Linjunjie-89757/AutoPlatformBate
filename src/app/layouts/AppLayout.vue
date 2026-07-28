@@ -32,7 +32,7 @@ const configCenterCrumbTitle = computed(() => {
   const labels: Record<string, string> = {
     dbConnection: '数据库配置',
     env: '环境配置',
-    param: '参数配置',
+    param: '变量配置',
     notification: '通知配置',
     runner: 'Runner 配置',
     ai: 'AI 连接配置',

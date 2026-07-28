@@ -3,104 +3,152 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Auto Platform Local Runner</title>
+    <title>AutoTest Local Runner</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <section class="hero">
-        <div>
-          <p class="eyebrow">Local Runner</p>
-          <h1>本地执行器</h1>
-          <p class="subtle">连接平台任务队列，在本机执行 Web UI 和接口自动化任务。</p>
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <img src="../../../src/assets/brand/autotest-figma-mark.svg" alt="" />
+        </span>
+        <div class="brand-copy">
+          <strong>AutoTest Local Runner</strong>
+          <span id="versionText">v-</span>
         </div>
-        <div class="status-pill" id="processStatus">检测中</div>
-      </section>
+      </div>
 
-      <section class="grid">
-        <article class="panel span-2">
-          <div class="panel-title">
-            <div>
-              <h2>运行状态</h2>
-              <p>本地服务、浏览器依赖和平台轮询状态</p>
-            </div>
-            <div class="actions">
-              <button class="secondary" id="openLogsBtn">日志</button>
-              <button class="secondary" id="stopBtn">停止</button>
-              <button class="primary" id="startBtn">启动</button>
-            </div>
-          </div>
-          <div class="status-grid">
-            <div class="metric">
-              <span>Runner 服务</span>
-              <strong id="healthText">-</strong>
-            </div>
-            <div class="metric">
-              <span>平台轮询</span>
-              <strong id="pollText">-</strong>
-            </div>
-            <div class="metric">
-              <span>端口</span>
-              <strong id="portText">-</strong>
-            </div>
-            <div class="metric">
-              <span>进程</span>
-              <strong id="pidText">-</strong>
-            </div>
-          </div>
-        </article>
+      <div class="overall-status" id="overallStatus" data-tone="neutral">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="overallStatusText">正在检测</span>
+      </div>
+    </header>
 
-        <article class="panel">
-          <div class="panel-title compact">
-            <div>
-              <h2>平台连接</h2>
-              <p>保存服务端地址后连接任务队列</p>
+    <main class="workspace">
+      <section class="runner-console" aria-label="Local Runner 控制台">
+        <div class="connection-row">
+          <div class="connection-copy">
+            <span class="section-label">平台连接</span>
+            <div class="connection-title-row">
+              <h1 id="connectionTitle">正在读取 Runner 状态</h1>
+              <span class="connection-badge" id="connectionBadge" data-tone="neutral">检测中</span>
             </div>
+            <p id="connectionMeta">请稍候</p>
           </div>
-          <label>
-            <span>服务端地址</span>
-            <input id="apiBaseUrlInput" placeholder="http://127.0.0.1:8080" />
-          </label>
-          <label>
-            <span>Runner 名称</span>
-            <input id="runnerNameInput" placeholder="本机 Local Runner" />
-          </label>
-          <label>
-            <span>本地端口</span>
-            <input id="portInput" type="number" min="1" max="65535" />
-          </label>
-          <label class="check-row">
-            <input id="autoStartInput" type="checkbox" />
-            <span>启动桌面应用时自动启动 Runner</span>
-          </label>
-          <div class="actions">
-            <button class="secondary" id="saveBtn">保存配置</button>
-            <button class="primary" id="connectBtn">连接平台</button>
-            <button class="secondary" id="disconnectBtn">断开</button>
-          </div>
-        </article>
 
-        <article class="panel">
-          <div class="panel-title compact">
+          <div class="primary-actions">
+            <button class="button button-secondary" id="processBtn" type="button">启动服务</button>
+            <button class="button button-primary" id="connectionBtn" type="button">连接平台</button>
+          </div>
+        </div>
+
+        <div class="notice" id="notice" role="status" hidden></div>
+
+        <section class="task-section" id="taskSection" data-active="false">
+          <div class="section-heading">
             <div>
-              <h2>能力模块</h2>
-              <p>APP 自动化已在桌面壳中预留</p>
+              <span class="section-label">当前任务</span>
+              <h2 id="taskTitle">等待平台任务</h2>
             </div>
+            <span class="task-state" id="taskState">空闲</span>
+          </div>
+
+          <div class="task-body">
+            <span class="task-indicator" aria-hidden="true"></span>
+            <div>
+              <strong id="taskTypeText">Runner 已就绪</strong>
+              <p id="taskMetaText">连接平台后，任务会自动在本机领取并执行。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="capability-section">
+          <div class="section-heading capability-heading">
+            <div>
+              <span class="section-label">本机能力</span>
+              <h2>可执行模块</h2>
+            </div>
+            <span class="capability-count" id="capabilityCount">0 项</span>
           </div>
           <div class="capability-list" id="capabilityList"></div>
-        </article>
+        </section>
 
-        <article class="panel span-2">
-          <div class="panel-title compact">
-            <div>
-              <h2>最近日志</h2>
-              <p id="logPathText">-</p>
+        <details class="disclosure" id="settingsDetails" open>
+          <summary>
+            <span>
+              <strong>配置与诊断</strong>
+              <small id="settingsSummary">连接参数和本地运行状态</small>
+            </span>
+            <span class="chevron" aria-hidden="true"></span>
+          </summary>
+
+          <div class="disclosure-content">
+            <div class="config-grid">
+              <label>
+                <span>平台地址</span>
+                <input id="apiBaseUrlInput" placeholder="http://127.0.0.1:8080" />
+              </label>
+              <label>
+                <span>Runner 名称</span>
+                <input id="runnerNameInput" placeholder="本机 Local Runner" />
+              </label>
+              <label>
+                <span>本地端口</span>
+                <input id="portInput" type="number" min="1" max="65535" />
+              </label>
+              <label class="switch-row">
+                <span>
+                  <strong>自动启动 Runner</strong>
+                  <small>打开桌面应用后自动启动本地服务</small>
+                </span>
+                <input id="autoStartInput" type="checkbox" />
+              </label>
+            </div>
+
+            <div class="diagnostic-grid" aria-label="运行诊断">
+              <div>
+                <span>本地服务</span>
+                <strong id="healthText">-</strong>
+              </div>
+              <div>
+                <span>任务轮询</span>
+                <strong id="pollText">-</strong>
+              </div>
+              <div>
+                <span>进程 PID</span>
+                <strong id="pidText">-</strong>
+              </div>
+              <div>
+                <span>最近同步</span>
+                <strong id="lastSyncText">-</strong>
+              </div>
+            </div>
+
+            <div class="form-footer">
+              <span id="configHint">修改配置后需要重新连接平台。</span>
+              <button class="button button-secondary" id="saveBtn" type="button">保存配置</button>
             </div>
           </div>
-          <pre class="logs" id="logs"></pre>
-        </article>
+        </details>
+
+        <details class="disclosure logs-disclosure" id="logsDetails">
+          <summary>
+            <span>
+              <strong>最近日志</strong>
+              <small id="logPathText">暂无日志目录</small>
+            </span>
+            <span class="summary-actions">
+              <button class="text-button" id="openLogsBtn" type="button">打开日志目录</button>
+              <span class="chevron" aria-hidden="true"></span>
+            </span>
+          </summary>
+          <div class="disclosure-content logs-content">
+            <pre class="logs" id="logs">暂无日志</pre>
+          </div>
+        </details>
       </section>
     </main>
+
     <script src="./renderer.js"></script>
   </body>
 </html>

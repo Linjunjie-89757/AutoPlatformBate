@@ -25,8 +25,8 @@ public class LocalRunnerReleaseService {
 
     public LocalRunnerReleaseService(
             @Value("${app.local-runner.release-root:../release/local-runner}") String releaseRoot,
-            @Value("${app.local-runner.release-version:0.1.0}") String version,
-            @Value("${app.local-runner.windows-x64-file:Auto-Platform-Local-Runner-v0.1.0-windows-x64.zip}")
+            @Value("${app.local-runner.release-version:0.1.1}") String version,
+            @Value("${app.local-runner.windows-x64-file:Auto-Platform-Local-Runner-v0.1.1-windows-x64.zip}")
             String windowsX64FileName
     ) {
         this.releaseRoot = Path.of(releaseRoot).toAbsolutePath().normalize();

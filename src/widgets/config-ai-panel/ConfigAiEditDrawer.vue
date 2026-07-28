@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import type { AiProviderConnectionItem, AiProviderType } from '@/entities/ai-provider'
 import { figmaConfigAiIcons } from '@/shared/assets/figma-icons'
 
@@ -28,7 +29,7 @@ const emit = defineEmits<{
   close: []
   backToPicker: []
   save: [payload: ReturnType<typeof buildSavePayload>]
-  test: []
+  test: [payload: ReturnType<typeof buildSavePayload>]
 }>()
 
 const form = reactive<AiConnectionFormState>(createFormState(props.workspaceCode, props.providerType, props.provider))
@@ -45,22 +46,12 @@ watch(
   },
 )
 
-function toggleCapability(key: AiCapability) {
-  const index = form.capabilities.indexOf(key)
-  if (index >= 0) {
-    form.capabilities.splice(index, 1)
-  } else {
-    form.capabilities.push(key)
-  }
+function toggleCapability(_key: AiCapability) {
+  ElMessage.info('后台暂不支持连接能力配置持久化')
 }
 
-function toggleUsage(key: AiUsage) {
-  const index = form.usages.indexOf(key)
-  if (index >= 0) {
-    form.usages.splice(index, 1)
-  } else {
-    form.usages.push(key)
-  }
+function toggleUsage(_key: AiUsage) {
+  ElMessage.info('后台暂不支持 AI 调用用途绑定')
 }
 
 function resetBaseUrl() {
@@ -68,7 +59,14 @@ function resetBaseUrl() {
 }
 
 function submit() {
+  if (form.reviewModelName.trim() || form.maxRetry > 0) {
+    ElMessage.warning('默认评审模型和最大重试次数暂无后台字段，本次不会保存这两项')
+  }
   emit('save', buildSavePayload(props.workspaceCode, form, props.mode === 'create' || Boolean(form.apiKey.trim())))
+}
+
+function testConnection() {
+  emit('test', buildSavePayload(props.workspaceCode, form, Boolean(form.apiKey.trim())))
 }
 </script>
 
@@ -223,7 +221,7 @@ function submit() {
         </div>
 
         <footer class="config-ai-edit__foot">
-          <button class="config-ai-edit__test" type="button" :disabled="testing" @click="$emit('test')">
+          <button class="config-ai-edit__test" type="button" :disabled="testing" @click="testConnection">
             <img :src="figmaConfigAiIcons.drawer.test" alt="">
             {{ testing ? '测试中' : '测试连接' }}
           </button>
