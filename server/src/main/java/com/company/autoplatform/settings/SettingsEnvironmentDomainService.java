@@ -71,7 +71,7 @@ public class SettingsEnvironmentDomainService {
         entity.setWorkspaceId(workspace.getId());
         entity.setEnvType(normalizeEnvType(request.envType()));
         entity.setEnvName(request.envName());
-        entity.setBaseUrl(request.baseUrl());
+        entity.setBaseUrl(normalizeBaseUrl(request.baseUrl()));
         entity.setConfigJson(request.configJson());
         entity.setStatus(1);
         entity.setCreatedAt(LocalDateTime.now());
@@ -90,7 +90,7 @@ public class SettingsEnvironmentDomainService {
         }
         entity.setEnvType(normalizeEnvType(request.envType()));
         entity.setEnvName(request.envName());
-        entity.setBaseUrl(request.baseUrl());
+        entity.setBaseUrl(normalizeBaseUrl(request.baseUrl()));
         entity.setConfigJson(request.configJson());
         entity.setUpdatedAt(LocalDateTime.now());
         envConfigMapper.updateById(entity);
@@ -162,6 +162,10 @@ public class SettingsEnvironmentDomainService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalizeBaseUrl(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String normalizeEnvType(String value) {

@@ -6,7 +6,7 @@ public record CreateEnvConfigRequest(
         String workspaceCode,
         String envType,
         @NotBlank(message = "环境名称不能为空") String envName,
-        @NotBlank(message = "基础地址不能为空") String baseUrl,
+        String baseUrl,
         String configJson
 ) {
 }

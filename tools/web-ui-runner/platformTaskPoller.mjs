@@ -1521,6 +1521,12 @@ async function normalizeApiRequest(task, request, context) {
       headers[name] = renderAnyTemplate(String(header.value ?? ''), context);
     }
   }
+  const environment = normalizeObject(task.environmentSnapshot);
+  const mockBaseUrl = optionalString(environment.mockBaseUrl);
+  const mockExecutionToken = optionalString(environment.mockExecutionToken);
+  if (mockBaseUrl && mockExecutionToken && isMockRequestUrl(url, mockBaseUrl)) {
+    headers['X-Mock-Execution-Token'] = mockExecutionToken;
+  }
   const normalizedBody = await normalizeApiRequestBody(task, request.body, context, headers);
   return {
     method,
@@ -1528,6 +1534,10 @@ async function normalizeApiRequest(task, request, context) {
     headers,
     body: ['GET', 'HEAD'].includes(method) ? undefined : normalizedBody,
   };
+}
+
+function isMockRequestUrl(url, mockBaseUrl) {
+  return Boolean(url && mockBaseUrl && String(url).toLowerCase().startsWith(String(mockBaseUrl).toLowerCase()));
 }
 
 async function normalizeApiRequestBody(task, body, context, headers) {

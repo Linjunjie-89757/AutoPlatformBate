@@ -349,6 +349,28 @@ export interface CreateMockBusinessScenarioPayload {
   }>
 }
 
+export interface MockReleaseItem {
+  id: number
+  workspaceCode: string
+  workspaceName: string
+  appId: number
+  appName: string
+  versionNo: number
+  releaseName: string
+  active: boolean
+  createdAt: string | null
+}
+
+export interface CreateMockReleasePayload {
+  releaseName?: string | null
+}
+
+export interface MockExecutionSelection {
+  enabled: boolean
+  appId: number | null
+  releaseId: number | null
+}
+
 export interface MockCallLogItem {
   id: number
   workspaceCode: string
@@ -361,6 +383,8 @@ export interface MockCallLogItem {
   scenarioName: string | null
   businessScenarioId: number | null
   businessScenarioName: string | null
+  releaseId: number | null
+  releaseVersion: number | null
   httpMethod: string
   requestPath: string
   requestHeadersJson: string | null

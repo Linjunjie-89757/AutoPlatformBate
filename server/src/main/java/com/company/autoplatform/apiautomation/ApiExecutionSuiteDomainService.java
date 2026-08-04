@@ -8,6 +8,10 @@ import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.auth.CurrentUserPrincipal;
 import com.company.autoplatform.notification.NotificationDomainService;
 import com.company.autoplatform.notification.NotificationModels;
+import com.company.autoplatform.settings.MockApplicationEntity;
+import com.company.autoplatform.settings.MockApplicationMapper;
+import com.company.autoplatform.settings.MockReleaseEntity;
+import com.company.autoplatform.settings.MockReleaseMapper;
 import com.company.autoplatform.runner.LocalRunnerModels.CreateRunnerTaskCommand;
 import com.company.autoplatform.runner.LocalRunnerModels.RunnerTaskDetailResponse;
 import com.company.autoplatform.runner.LocalRunnerService;
@@ -15,6 +19,7 @@ import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 
@@ -51,6 +56,43 @@ public class ApiExecutionSuiteDomainService {
     private final LocalRunnerService localRunnerService;
     private final NotificationDomainService notificationDomainService;
     private final ApiReportShareDomainService reportShareDomainService;
+    private final MockApplicationMapper mockApplicationMapper;
+    private final MockReleaseMapper mockReleaseMapper;
+
+    @Autowired
+    public ApiExecutionSuiteDomainService(
+            ApiExecutionSuiteModuleMapper suiteModuleMapper,
+            ApiExecutionSuiteMapper suiteMapper,
+            ApiExecutionSuiteItemMapper suiteItemMapper,
+            ApiExecutionSuiteRunHistoryMapper suiteRunHistoryMapper,
+            ApiDefinitionCaseMapper caseMapper,
+            ApiScenarioMapper scenarioMapper,
+            ApiDataFileDomainService dataFileDomainService,
+            ObjectProvider<ApiExecutionDomainService> executionDomainServiceProvider,
+            WorkspaceService workspaceService,
+            ApiWorkspaceScopeSupport workspaceScopeSupport,
+            LocalRunnerService localRunnerService,
+            NotificationDomainService notificationDomainService,
+            ApiReportShareDomainService reportShareDomainService,
+            MockApplicationMapper mockApplicationMapper,
+            MockReleaseMapper mockReleaseMapper
+    ) {
+        this.suiteModuleMapper = suiteModuleMapper;
+        this.suiteMapper = suiteMapper;
+        this.suiteItemMapper = suiteItemMapper;
+        this.suiteRunHistoryMapper = suiteRunHistoryMapper;
+        this.caseMapper = caseMapper;
+        this.scenarioMapper = scenarioMapper;
+        this.dataFileDomainService = dataFileDomainService;
+        this.executionDomainServiceProvider = executionDomainServiceProvider;
+        this.workspaceService = workspaceService;
+        this.workspaceScopeSupport = workspaceScopeSupport;
+        this.localRunnerService = localRunnerService;
+        this.notificationDomainService = notificationDomainService;
+        this.reportShareDomainService = reportShareDomainService;
+        this.mockApplicationMapper = mockApplicationMapper;
+        this.mockReleaseMapper = mockReleaseMapper;
+    }
 
     public ApiExecutionSuiteDomainService(
             ApiExecutionSuiteModuleMapper suiteModuleMapper,
@@ -67,19 +109,9 @@ public class ApiExecutionSuiteDomainService {
             NotificationDomainService notificationDomainService,
             ApiReportShareDomainService reportShareDomainService
     ) {
-        this.suiteModuleMapper = suiteModuleMapper;
-        this.suiteMapper = suiteMapper;
-        this.suiteItemMapper = suiteItemMapper;
-        this.suiteRunHistoryMapper = suiteRunHistoryMapper;
-        this.caseMapper = caseMapper;
-        this.scenarioMapper = scenarioMapper;
-        this.dataFileDomainService = dataFileDomainService;
-        this.executionDomainServiceProvider = executionDomainServiceProvider;
-        this.workspaceService = workspaceService;
-        this.workspaceScopeSupport = workspaceScopeSupport;
-        this.localRunnerService = localRunnerService;
-        this.notificationDomainService = notificationDomainService;
-        this.reportShareDomainService = reportShareDomainService;
+        this(suiteModuleMapper, suiteMapper, suiteItemMapper, suiteRunHistoryMapper, caseMapper, scenarioMapper,
+                dataFileDomainService, executionDomainServiceProvider, workspaceService, workspaceScopeSupport,
+                localRunnerService, notificationDomainService, reportShareDomainService, null, null);
     }
 
     public List<ApiExecutionSuiteModuleItem> listSuiteModules(String workspaceCode) {
@@ -313,6 +345,16 @@ public class ApiExecutionSuiteDomainService {
             throw new BadRequestException("Execution suite has no enabled items to run");
         }
 
+        boolean mockEnabled = request != null && request.mockEnabled() != null
+                ? Boolean.TRUE.equals(request.mockEnabled())
+                : suite.getMockApplicationId() != null;
+        Long mockApplicationId = mockEnabled
+                ? request != null && request.mockApplicationId() != null ? request.mockApplicationId() : suite.getMockApplicationId()
+                : null;
+        Long mockReleaseId = mockEnabled
+                ? request != null && request.mockReleaseId() != null ? request.mockReleaseId() : suite.getMockReleaseId()
+                : null;
+
         ApiRunRequest effectiveRequest = new ApiRunRequest(
                 workspace.getWorkspaceCode(),
                 request == null || request.environmentId() == null ? suite.getEnvironmentId() : request.environmentId(),
@@ -324,11 +366,12 @@ public class ApiExecutionSuiteDomainService {
                 null,
                 null,
                 null,
-                request == null ? null : request.mockEnabled(),
-                request == null ? null : request.mockApplicationId(),
+                mockEnabled,
+                mockApplicationId,
                 request == null ? null : request.mockBusinessScenarioId(),
                 request == null ? null : request.rowVariables(),
-                request == null ? null : request.runnerId()
+                request == null ? null : request.runnerId(),
+                mockReleaseId
         );
         SuiteExecutionPolicy policy = SuiteExecutionPolicy.of(
                 Boolean.TRUE.equals(suite.getContinueOnFailure()),
@@ -349,7 +392,8 @@ public class ApiExecutionSuiteDomainService {
                 effectiveRequest.environmentId(),
                 effectiveRequest.variableSetId(),
                 effectiveRequest.mockApplicationId(),
-                effectiveRequest.mockEnabled()
+                effectiveRequest.mockEnabled(),
+                effectiveRequest.mockReleaseId()
         );
         ApiExecutionSuiteRunHistoryEntity history = persistSuiteRunHistory(suite, effectiveRequest, aggregate.success(), aggregate.failureSummary(), aggregate.stepResults(), aggregate.itemSnapshots(), aggregate.dataIterations(), aggregate.reportId(), contextSnapshotJson);
         ApiRunResponse response = new ApiRunResponse(
@@ -406,7 +450,8 @@ public class ApiExecutionSuiteDomainService {
                     effectiveRequest.mockApplicationId(),
                     effectiveRequest.mockBusinessScenarioId(),
                     row.values(),
-                    effectiveRequest.runnerId()
+                    effectiveRequest.runnerId(),
+                    effectiveRequest.mockReleaseId()
             );
             SuiteRunAggregate rowRun = runSuiteOnce(enabledItems, workspace.getWorkspaceCode(), rowRequest, policy, row);
             if (taskId == null) {
@@ -506,6 +551,12 @@ public class ApiExecutionSuiteDomainService {
         values.put("defaultServiceKey", environment == null ? null : environment.defaultServiceKey());
         values.put("services", environment == null ? List.of() : environment.services());
         values.put("contextSnapshotJson", contextSnapshotJson);
+        values.put("mockApplicationId", environment == null ? null : environment.mockApplicationId());
+        values.put("mockApplicationCode", environment == null ? null : environment.mockApplicationCode());
+        values.put("mockBaseUrl", environment == null ? null : environment.mockBaseUrl());
+        values.put("mockReleaseId", environment == null ? null : environment.mockReleaseId());
+        values.put("mockReleaseVersion", environment == null ? null : environment.mockReleaseVersion());
+        values.put("mockExecutionToken", environment == null ? null : environment.mockExecutionToken());
         return values;
     }
 
@@ -713,6 +764,8 @@ public class ApiExecutionSuiteDomainService {
         entity.setDescription(blankToNull(request.description()));
         entity.setEnvironmentId(request.environmentId());
         entity.setVariableSetId(request.variableSetId());
+        entity.setMockApplicationId(request.mockApplicationId());
+        entity.setMockReleaseId(resolveMockReleaseId(workspace.getId(), request.mockApplicationId(), request.mockReleaseId()));
         entity.setRunMode(normalizeRunMode(request.runMode()));
         entity.setRunOn(normalizeRunOn(request.runOn()));
         entity.setNotifyEnabled(request.notifyEnabled() == null || request.notifyEnabled());
@@ -741,6 +794,32 @@ public class ApiExecutionSuiteDomainService {
             entity.setCaseDescColumn(null);
             entity.setDataFailureStrategy("STOP_ON_ROW_FAILURE");
         }
+    }
+
+    private Long resolveMockReleaseId(Long workspaceId, Long mockApplicationId, Long mockReleaseId) {
+        if (mockApplicationId == null) {
+            if (mockReleaseId != null) {
+                throw new BadRequestException("Mock release requires a Mock application");
+            }
+            return null;
+        }
+        MockApplicationEntity application = mockApplicationMapper.selectOne(new LambdaQueryWrapper<MockApplicationEntity>()
+                .eq(MockApplicationEntity::getId, mockApplicationId)
+                .eq(MockApplicationEntity::getWorkspaceId, workspaceId));
+        if (application == null) {
+            throw new BadRequestException("Mock application must belong to the execution suite workspace");
+        }
+        if (mockReleaseId == null) {
+            return null;
+        }
+        MockReleaseEntity release = mockReleaseMapper.selectOne(new LambdaQueryWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getId, mockReleaseId)
+                .eq(MockReleaseEntity::getAppId, mockApplicationId)
+                .eq(MockReleaseEntity::getWorkspaceId, workspaceId));
+        if (release == null) {
+            throw new BadRequestException("Mock release must belong to the selected Mock application and workspace");
+        }
+        return release.getId();
     }
 
     private String normalizeDataFailureStrategy(String strategy) {
@@ -782,6 +861,8 @@ public class ApiExecutionSuiteDomainService {
                 entity.getDescription(),
                 entity.getEnvironmentId(),
                 entity.getVariableSetId(),
+                entity.getMockApplicationId(),
+                entity.getMockReleaseId(),
                 entity.getRunMode(),
                 entity.getRunOn(),
                 entity.getNotifyEnabled(),
@@ -820,6 +901,8 @@ public class ApiExecutionSuiteDomainService {
                 entity.getDescription(),
                 entity.getEnvironmentId(),
                 entity.getVariableSetId(),
+                entity.getMockApplicationId(),
+                entity.getMockReleaseId(),
                 entity.getRunMode(),
                 entity.getRunOn(),
                 entity.getNotifyEnabled(),

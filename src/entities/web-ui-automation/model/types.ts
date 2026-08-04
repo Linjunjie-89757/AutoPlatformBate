@@ -750,6 +750,7 @@ export interface WebUiRunRequest {
   variableSetId?: number | null
   mockEnabled?: boolean | null
   mockApplicationId?: number | null
+  mockReleaseId?: number | null
   runtimeVariables?: Record<string, string> | null
   runnerId?: string | null
   artifactRefs?: Record<string, unknown>[] | null
@@ -812,6 +813,14 @@ export interface WebUiExecutionContextSnapshot {
   } | null
   variableSetId: number | null
   variableSetName: string | null
+  mock?: {
+    id?: number | null
+    appName?: string | null
+    appCode?: string | null
+    baseUrl?: string | null
+    releaseId?: number | null
+    releaseVersion?: number | null
+  } | null
   variables: Record<string, string>
   executionLocation?: string | null
   localRunnerRunId?: string | null
@@ -853,6 +862,9 @@ export interface WebUiBatchRunRequest {
   headless?: boolean | null
   stopOnFailure?: boolean | null
   variableSetId?: number | null
+  mockEnabled?: boolean | null
+  mockApplicationId?: number | null
+  mockReleaseId?: number | null
   runtimeVariables?: Record<string, string> | null
 }
 

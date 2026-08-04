@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 
-import { workspaceApi, type WorkspaceItem } from '@/entities/workspace'
-import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 
@@ -39,31 +37,7 @@ const stageOptions: Array<{ value: ConfigVariableStage; label: string }> = [
 ]
 
 const form = reactive<ConfigParamForm>(createDefaultConfigParamForm(props.defaultWorkspaceCode))
-const workspaces = ref<WorkspaceItem[]>([])
-const loadingWorkspaces = ref(false)
 const errorMessage = ref('')
-const workspaceOptions = computed(() => workspaces.value
-  .filter(item => item.workspaceCode && item.workspaceCode !== 'ALL' && !item.allScope)
-  .map(item => ({ label: item.workspaceName || item.workspaceCode, value: item.workspaceCode })))
-
-function ensureWorkspace() {
-  if (!workspaceOptions.value.length) return
-  if (form.workspaceCode === 'ALL' || !workspaceOptions.value.some(item => item.value === form.workspaceCode)) {
-    form.workspaceCode = workspaceOptions.value[0].value
-  }
-}
-
-async function loadWorkspaces() {
-  loadingWorkspaces.value = true
-  try {
-    workspaces.value = await workspaceApi.getSwitchableWorkspaces()
-    ensureWorkspace()
-  } catch (error) {
-    errorMessage.value = getRequestErrorMessage(error)
-  } finally {
-    loadingWorkspaces.value = false
-  }
-}
 
 function submit() {
   const error = validateConfigParamForm(form)
@@ -79,14 +53,12 @@ watch(() => props.modelValue, (visible) => {
   Object.assign(form, createDefaultConfigParamForm(props.defaultWorkspaceCode))
   form.variables = []
   errorMessage.value = ''
-  void loadWorkspaces()
 })
 </script>
 
 <template>
   <AppDialog :model-value="modelValue" title="新建变量集" width="560px" dialog-class="variable-set-create-dialog" @update:model-value="emit('update:modelValue', $event)">
     <div class="variable-set-create">
-      <label><span>目标空间</span><el-select v-model="form.workspaceCode" filterable :loading="loadingWorkspaces" placeholder="请选择目标空间"><el-option v-for="item in workspaceOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></label>
       <label><span>变量集名称</span><el-input v-model="form.paramName" maxlength="64" show-word-limit placeholder="例如：订单业务测试数据" /></label>
       <div><span>适用范围</span><div class="variable-set-create__options"><button v-for="item in scopeOptions" :key="item.value" type="button" :class="{ 'is-active': form.paramType === item.value }" @click="form.paramType = item.value">{{ item.label }}</button></div></div>
       <div><span>部署阶段</span><div class="variable-set-create__options"><button v-for="item in stageOptions" :key="item.value" type="button" :class="{ 'is-active': form.stageType === item.value }" @click="form.stageType = item.value">{{ item.label }}</button></div></div>

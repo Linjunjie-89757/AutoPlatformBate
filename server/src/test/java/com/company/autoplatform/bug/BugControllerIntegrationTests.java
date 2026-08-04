@@ -61,6 +61,10 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(bugId))
                 .andExpect(jsonPath("$.data.title").value(unique + "-manual"))
+                .andExpect(jsonPath("$.data.reproductionSteps").value("1. Open the page\n2. Submit the form"))
+                .andExpect(jsonPath("$.data.expectedResult").value("The request succeeds"))
+                .andExpect(jsonPath("$.data.actualResult").value("The request fails"))
+                .andExpect(jsonPath("$.data.moduleName").value("接口自动化"))
                 .andExpect(jsonPath("$.data.priority").value("P1"))
                 .andExpect(jsonPath("$.data.severity").value("HIGH"))
                 .andExpect(jsonPath("$.data.status").value("ASSIGNED"))
@@ -80,6 +84,21 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.comments.length()").value(0))
                 .andExpect(jsonPath("$.data.activities[*].type", hasItem("CREATED")))
                 .andExpect(jsonPath("$.data.activities[*].type", hasItem("ASSIGNED")));
+    }
+
+    @Test
+    void manualCreateAcceptsSelectedSourceType() throws Exception {
+        String title = uniquePrefix("selected-source");
+
+        mockMvc.perform(post("/api/bugs")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(bugRequest(title, "P1", "MEDIUM", null, null, null, "AI_DETECTION")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.title").value(title))
+                .andExpect(jsonPath("$.data.sourceType").value("AI_DETECTION"))
+                .andExpect(jsonPath("$.data.sourceContext.sourceType").value("AI_DETECTION"));
     }
 
     @Test
@@ -386,13 +405,30 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     private String bugRequest(String title, String priority, String severity, Long caseId, Long reportId, Long taskId) {
+        return bugRequest(title, priority, severity, caseId, reportId, taskId, null);
+    }
+
+    private String bugRequest(
+            String title,
+            String priority,
+            String severity,
+            Long caseId,
+            Long reportId,
+            Long taskId,
+            String sourceType
+    ) {
         return """
                 {
                   "workspaceCode": "%s",
                   "title": "%s",
                   "description": "Created by bug integration regression",
+                  "reproductionSteps": "1. Open the page\\n2. Submit the form",
+                  "expectedResult": "The request succeeds",
+                  "actualResult": "The request fails",
+                  "moduleName": "接口自动化",
                   "priority": "%s",
                   "severity": "%s",
+                  "sourceType": %s,
                   "assigneeId": %d,
                   "relatedCaseId": %s,
                   "relatedReportId": %s,
@@ -404,6 +440,7 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 title,
                 priority,
                 severity,
+                sourceType == null ? "null" : "\"" + sourceType + "\"",
                 ASSIGNEE_ID,
                 jsonNumberOrNull(caseId),
                 jsonNumberOrNull(reportId),

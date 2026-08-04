@@ -36,7 +36,9 @@ export interface ConfigEnvForm {
   defaultVariableSetId: number | null
   variableSetIds: number[]
   localVariables: ConfigEnvLocalVariableForm[]
+  mockEnabled: boolean
   mockApplicationId: number | null
+  mockReleaseId: number | null
   appPlatform: 'ANDROID' | 'IOS'
   appPackage: string
   appActivity: string
@@ -80,7 +82,9 @@ interface WebUiEnvConfig {
   defaultVariableSetId?: number | null
   variableSetIds?: unknown
   localVariables?: unknown
+  mockEnabled?: boolean
   mockApplicationId?: number | null
+  mockReleaseId?: number | null
   appProfile?: Record<string, unknown>
 }
 
@@ -104,7 +108,9 @@ export function createDefaultConfigEnvForm(workspaceCode = 'ALL'): ConfigEnvForm
     defaultVariableSetId: null,
     variableSetIds: [],
     localVariables: [],
+    mockEnabled: false,
     mockApplicationId: null,
+    mockReleaseId: null,
     appPlatform: 'ANDROID',
     appPackage: '',
     appActivity: '',
@@ -151,7 +157,9 @@ export function createConfigEnvFormFromItem(item: EnvConfigItem): ConfigEnvForm 
     defaultVariableSetId,
     variableSetIds,
     localVariables: normalizeLocalVariables(envConfig.localVariables),
+    mockEnabled: envConfig.mockEnabled === true || typeof envConfig.mockApplicationId === 'number',
     mockApplicationId: typeof envConfig.mockApplicationId === 'number' ? envConfig.mockApplicationId : null,
+    mockReleaseId: typeof envConfig.mockReleaseId === 'number' ? envConfig.mockReleaseId : null,
     appPlatform: normalizeAppPlatform(appProfile.platform),
     appPackage: normalizeString(appProfile.packageName),
     appActivity: normalizeString(appProfile.activity),
@@ -179,12 +187,14 @@ export function buildCreateEnvPayload(form: ConfigEnvForm): CreateEnvPayload {
     defaultServiceKey,
     services,
     sites: form.automationType === 'WEB_UI' ? services : undefined,
-    browserType: form.browserType,
-    headless: form.headless,
-    viewport: {
-      width: clampNumber(form.viewportWidth, 320, 7680, 1440),
-      height: clampNumber(form.viewportHeight, 240, 4320, 900),
-    },
+    browserType: form.automationType === 'WEB_UI' ? form.browserType : undefined,
+    headless: form.automationType === 'WEB_UI' ? form.headless : undefined,
+    viewport: form.automationType === 'WEB_UI'
+      ? {
+          width: clampNumber(form.viewportWidth, 320, 7680, 1440),
+          height: clampNumber(form.viewportHeight, 240, 4320, 900),
+        }
+      : undefined,
     timeoutMs: clampNumber(form.defaultTimeoutMs, 1000, 60000, 10000),
     ignoreSsl: form.ignoreHttpsErrors,
     defaultVariableSetId: form.variableSetIds[0] ?? null,
@@ -197,7 +207,9 @@ export function buildCreateEnvPayload(form: ConfigEnvForm): CreateEnvPayload {
         description: variable.description.trim(),
       }))
       .filter(variable => variable.name),
-    mockApplicationId: form.mockApplicationId,
+    mockEnabled: form.mockEnabled,
+    mockApplicationId: form.mockEnabled ? form.mockApplicationId : null,
+    mockReleaseId: form.mockEnabled ? form.mockReleaseId : null,
     appProfile: form.automationType === 'APP'
       ? {
           platform: form.appPlatform,
@@ -296,7 +308,7 @@ function normalizeEnvGroup(value: unknown) {
 
 function normalizeAutomationType(value: unknown, config: WebUiEnvConfig, legacyEnvType?: string): ConfigAutomationType {
   const normalized = normalizeString(value).toUpperCase()
-  if (normalized === 'WEB_UI' || normalized === 'APP') return normalized
+  if (normalized === 'API' || normalized === 'WEB_UI' || normalized === 'APP') return normalized
   const normalizedLegacyType = normalizeString(legacyEnvType).toUpperCase()
   if (normalizedLegacyType === 'APP') return 'APP'
   if (normalizedLegacyType === 'WEB' || normalizedLegacyType === 'WEB_UI') return 'WEB_UI'

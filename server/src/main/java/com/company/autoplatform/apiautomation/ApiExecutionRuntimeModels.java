@@ -59,6 +59,9 @@ final class ApiExecutionRuntimeModels {
             String mockBaseUrl,
             Long mockBusinessScenarioId,
             String mockBusinessScenarioName,
+            Long mockReleaseId,
+            Integer mockReleaseVersion,
+            String mockExecutionToken,
             String defaultServiceKey,
             List<EnvironmentServiceEndpoint> services
     ) {
@@ -79,7 +82,7 @@ final class ApiExecutionRuntimeModels {
         ) {
             this(environmentId, baseUrl, headers, authConfig, timeoutMs, variables, defaultVariableSetId,
                     mockApplicationId, mockApplicationName, mockApplicationCode, mockBaseUrl, null, null,
-                    defaultServiceKey, services);
+                    null, null, null, defaultServiceKey, services);
         }
     }
 
@@ -121,7 +124,9 @@ final class ApiExecutionRuntimeModels {
             String appCode,
             String baseUrl,
             Long businessScenarioId,
-            String businessScenarioName
+            String businessScenarioName,
+            Long releaseId,
+            Integer releaseVersion
     ) {
     }
 

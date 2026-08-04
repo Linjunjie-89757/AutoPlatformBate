@@ -543,6 +543,8 @@ public final class ApiAutomationModels {
             String description,
             Long environmentId,
             Long variableSetId,
+            Long mockApplicationId,
+            Long mockReleaseId,
             String runMode,
             String runOn,
             Boolean notifyEnabled,
@@ -574,6 +576,8 @@ public final class ApiAutomationModels {
             String description,
             Long environmentId,
             Long variableSetId,
+            Long mockApplicationId,
+            Long mockReleaseId,
             String runMode,
             String runOn,
             Boolean notifyEnabled,
@@ -608,8 +612,10 @@ public final class ApiAutomationModels {
             String status,
             String description,
             Long environmentId,
-            Long variableSetId,
-            String runMode,
+                Long variableSetId,
+                Long mockApplicationId,
+                Long mockReleaseId,
+                String runMode,
             String runOn,
             Boolean notifyEnabled,
             Boolean continueOnFailure,
@@ -1102,10 +1108,33 @@ public final class ApiAutomationModels {
             Long mockApplicationId,
             Long mockBusinessScenarioId,
             Map<String, String> rowVariables,
-            String runnerId
+            String runnerId,
+            Long mockReleaseId
     ) {
         public ApiRunRequest(String workspaceCode, Long environmentId, Long variableSetId, String branchName, String triggerSource) {
-            this(workspaceCode, environmentId, variableSetId, branchName, triggerSource, null, null, null, null, null, null, null, null, null, null);
+            this(workspaceCode, environmentId, variableSetId, branchName, triggerSource, null, null, null, null, null, null, null, null, null, null, null);
+        }
+
+        public ApiRunRequest(
+                String workspaceCode,
+                Long environmentId,
+                Long variableSetId,
+                String branchName,
+                String triggerSource,
+                String runOn,
+                Boolean testDatasetEnabled,
+                Long testDatasetId,
+                Integer loopCount,
+                Integer threadCount,
+                Boolean mockEnabled,
+                Long mockApplicationId,
+                Long mockBusinessScenarioId,
+                Map<String, String> rowVariables,
+                String runnerId
+        ) {
+            this(workspaceCode, environmentId, variableSetId, branchName, triggerSource, runOn, testDatasetEnabled,
+                    testDatasetId, loopCount, threadCount, mockEnabled, mockApplicationId, mockBusinessScenarioId,
+                    rowVariables, runnerId, null);
         }
     }
 

@@ -100,7 +100,21 @@ class ApiExecutionSuiteCrudIntegrationTests extends IntegrationTestSupport {
                                   "moduleId":%d,
                                   "name":"%s-invalid-cron",
                                   "scheduleEnabled":true,
-                                  "cronExpression":"not-a-cron"
+                                "cronExpression":"not-a-cron"
+                                }
+                                """.formatted(moduleId, unique)))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(put("/api/automation/api/execution-suites/{id}", suiteId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "workspaceCode":"risk-ops",
+                                  "moduleId":%d,
+                                  "name":"%s-invalid-mock",
+                                  "mockApplicationId":999999,
+                                  "mockReleaseId":1
                                 }
                                 """.formatted(moduleId, unique)))
                 .andExpect(status().isBadRequest());

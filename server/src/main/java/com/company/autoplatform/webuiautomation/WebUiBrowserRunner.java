@@ -1,6 +1,7 @@
 package com.company.autoplatform.webuiautomation;
 
 import java.util.List;
+import java.util.Map;
 
 public interface WebUiBrowserRunner {
 
@@ -11,6 +12,7 @@ public interface WebUiBrowserRunner {
             boolean headless,
             String baseUrl,
             int defaultTimeoutMs,
+            Map<String, String> extraHttpHeaders,
             List<WebUiCaseStepEntity> steps
     ) {
     }

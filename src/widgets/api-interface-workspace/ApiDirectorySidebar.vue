@@ -16,6 +16,7 @@ defineProps<{
   searchResultLimit: number
   visibleDirectoryTree: DirectoryNode[]
   expandedKeys: string[]
+  directoryInitialized: boolean
   selectedDirectoryKey: string
   directoryTreeRenderKey: string
 }>()
@@ -86,9 +87,23 @@ defineExpose({
       仅展示前 {{ searchResultLimit }} 条，请继续输入更精确关键词
     </div>
 
-    <div v-loading="moduleLoading || definitionLoading" class="api-directory-body app-soft-scrollbar">
+    <div
+      class="api-directory-body app-soft-scrollbar"
+      :aria-busy="!directoryInitialized && (moduleLoading || definitionLoading)"
+    >
       <div v-if="moduleErrorMessage || definitionErrorMessage" class="api-directory-error">
         {{ moduleErrorMessage || definitionErrorMessage }}
+      </div>
+      <div
+        v-else-if="!directoryInitialized"
+        class="api-directory-skeleton"
+        role="status"
+        aria-label="正在加载请求目录"
+      >
+        <div v-for="index in 9" :key="index" class="api-directory-skeleton__row">
+          <span class="api-directory-skeleton__icon"></span>
+          <span class="api-directory-skeleton__line"></span>
+        </div>
       </div>
       <ApiDirectoryTree
         ref="directoryTreeRef"
@@ -291,6 +306,50 @@ defineExpose({
   overflow: auto;
   padding: 3.5px 0 8px;
   background: #ffffff;
+}
+
+.api-directory-skeleton {
+  padding: 3.5px 10.5px 8px;
+}
+
+.api-directory-skeleton__row {
+  display: flex;
+  box-sizing: border-box;
+  height: 30px;
+  align-items: center;
+  gap: 7px;
+}
+
+.api-directory-skeleton__row:not(:first-child) {
+  padding-left: 18px;
+}
+
+.api-directory-skeleton__row:nth-child(4),
+.api-directory-skeleton__row:nth-child(7) {
+  padding-left: 36px;
+}
+
+.api-directory-skeleton__icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  border-radius: 3px;
+  background: #eef1f6;
+}
+
+.api-directory-skeleton__line {
+  width: 68%;
+  height: 11px;
+  border-radius: 3px;
+  background: #f0f2f6;
+}
+
+.api-directory-skeleton__row:nth-child(3n) .api-directory-skeleton__line {
+  width: 52%;
+}
+
+.api-directory-skeleton__row:nth-child(3n + 2) .api-directory-skeleton__line {
+  width: 76%;
 }
 
 .api-directory-error {

@@ -10,6 +10,7 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import { ConfigAiPanel } from '@/widgets/config-ai-panel'
 import ConfigDbPanel from '@/widgets/config-db-panel/ConfigDbPanel.vue'
 import ConfigEnvironmentWorkspace from '@/widgets/config-env-panel/ConfigEnvironmentWorkspace.vue'
+import ConfigMockPanel from '@/widgets/config-mock-panel/ConfigMockPanel.vue'
 import ConfigNotificationPanel from '@/widgets/config-notification-panel/ConfigNotificationPanel.vue'
 import ConfigVariableWorkspace from '@/widgets/config-param-panel/ConfigVariableWorkspace.vue'
 import ConfigRunnerPanel from '@/widgets/config-runner-panel/ConfigRunnerPanel.vue'
@@ -59,6 +60,7 @@ const configTabs: ConfigTabItem[] = [
   { key: 'dbConnection', label: '数据库配置' },
   { key: 'env', label: '环境配置' },
   { key: 'param', label: '变量配置' },
+  { key: 'mock', label: 'Mock 服务' },
   { key: 'notification', label: '通知配置' },
   { key: 'runner', label: 'Runner 配置' },
   { key: 'ai', label: 'AI 连接配置' },
@@ -397,6 +399,7 @@ watch(
         <ConfigDbPanel v-if="activeTab === 'dbConnection'" :workspace-code="workspaceCode" />
         <ConfigEnvironmentWorkspace v-else-if="activeTab === 'env'" :workspace-code="workspaceCode" />
         <ConfigVariableWorkspace v-else-if="activeTab === 'param'" :workspace-code="workspaceCode" />
+        <ConfigMockPanel v-else-if="activeTab === 'mock'" :workspace-code="workspaceCode" />
         <ConfigNotificationPanel v-else-if="activeTab === 'notification'" :workspace-code="workspaceCode" />
         <ConfigRunnerPanel v-else-if="activeTab === 'runner'" />
         <ConfigAiPanel v-else-if="activeTab === 'ai'" :workspace-code="workspaceCode" />

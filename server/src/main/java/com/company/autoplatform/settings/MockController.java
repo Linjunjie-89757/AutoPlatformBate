@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 import static com.company.autoplatform.settings.MockModels.*;
 
 @RestController
@@ -69,6 +71,32 @@ public class MockController {
     ) {
         mockDomainService.deleteApplication(id, workspaceCode);
         return ApiResponse.ok(null, "Mock 应用删除成功");
+    }
+
+    @GetMapping("/api/settings/mock/applications/{id}/releases")
+    public ApiResponse<List<MockReleaseItem>> listReleases(
+            @PathVariable Long id,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(mockDomainService.listReleases(id, workspaceCode));
+    }
+
+    @PostMapping("/api/settings/mock/applications/{id}/releases")
+    public ApiResponse<MockReleaseItem> publishRelease(
+            @PathVariable Long id,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestBody(required = false) MockReleaseRequest request
+    ) {
+        return ApiResponse.ok(mockDomainService.publishRelease(id, workspaceCode, request), "Mock 配置发布成功");
+    }
+
+    @PostMapping("/api/settings/mock/applications/{id}/releases/{releaseId}/activate")
+    public ApiResponse<MockReleaseItem> activateRelease(
+            @PathVariable Long id,
+            @PathVariable Long releaseId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(mockDomainService.activateRelease(id, releaseId, workspaceCode), "Mock 发布版本已启用");
     }
 
     @GetMapping("/api/settings/mock/endpoints")

@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 
-import { workspaceApi, type WorkspaceItem } from '@/entities/workspace'
-import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 
@@ -43,37 +41,11 @@ const stageOptions: Array<{ value: ConfigEnvironmentStage; label: string }> = [
 ]
 
 const form = reactive<ConfigEnvForm>(createDefaultConfigEnvForm(props.defaultWorkspaceCode))
-const workspaces = ref<WorkspaceItem[]>([])
-const loadingWorkspaces = ref(false)
 const errorMessage = ref('')
-
-const workspaceOptions = computed(() => workspaces.value
-  .filter(item => item.workspaceCode && item.workspaceCode !== 'ALL' && !item.allScope)
-  .map(item => ({ label: item.workspaceName || item.workspaceCode, value: item.workspaceCode })))
 
 function resetForm() {
   Object.assign(form, createDefaultConfigEnvForm(props.defaultWorkspaceCode))
   errorMessage.value = ''
-  ensureWorkspace()
-}
-
-function ensureWorkspace() {
-  if (!workspaceOptions.value.length) return
-  if (form.workspaceCode === 'ALL' || !workspaceOptions.value.some(item => item.value === form.workspaceCode)) {
-    form.workspaceCode = workspaceOptions.value[0].value
-  }
-}
-
-async function loadWorkspaces() {
-  loadingWorkspaces.value = true
-  try {
-    workspaces.value = await workspaceApi.getSwitchableWorkspaces()
-    ensureWorkspace()
-  } catch (error) {
-    errorMessage.value = getRequestErrorMessage(error)
-  } finally {
-    loadingWorkspaces.value = false
-  }
 }
 
 function submit() {
@@ -89,7 +61,6 @@ function submit() {
 watch(() => props.modelValue, (visible) => {
   if (!visible) return
   resetForm()
-  void loadWorkspaces()
 })
 </script>
 
@@ -102,13 +73,6 @@ watch(() => props.modelValue, (visible) => {
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="config-env-create">
-      <label class="config-env-create__field">
-        <span>目标空间</span>
-        <el-select v-model="form.workspaceCode" filterable :loading="loadingWorkspaces" placeholder="请选择目标空间">
-          <el-option v-for="item in workspaceOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-      </label>
-
       <label class="config-env-create__field">
         <span>环境名称</span>
         <el-input v-model="form.envName" maxlength="64" show-word-limit placeholder="例如：订单中心测试环境" />

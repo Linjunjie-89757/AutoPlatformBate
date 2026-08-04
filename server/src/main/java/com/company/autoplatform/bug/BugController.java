@@ -53,7 +53,8 @@ public class BugController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
             @Valid @RequestBody CreateBugRequest request
     ) {
-        return ApiResponse.ok(bugService.createBug(workspaceCode, request, BugSourceType.MANUAL), "缺陷创建成功");
+        BugSourceType sourceType = request.sourceType() == null ? BugSourceType.MANUAL : request.sourceType();
+        return ApiResponse.ok(bugService.createBug(workspaceCode, request, sourceType), "缺陷创建成功");
     }
 
     @GetMapping("/bugs/{id}")

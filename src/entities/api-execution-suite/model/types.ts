@@ -36,6 +36,8 @@ export interface ApiExecutionSuiteItem {
   description: string | null
   environmentId: number | null
   variableSetId: number | null
+  mockApplicationId?: number | null
+  mockReleaseId?: number | null
   runMode: string
   runOn: string
   notifyEnabled: boolean
@@ -71,6 +73,8 @@ export interface SaveApiExecutionSuitePayload {
   description?: string | null
   environmentId?: number | null
   variableSetId?: number | null
+  mockApplicationId?: number | null
+  mockReleaseId?: number | null
   runMode?: string
   runOn?: string
   notifyEnabled?: boolean

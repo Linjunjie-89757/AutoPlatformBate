@@ -37,6 +37,12 @@ public class ApiExecutionSuiteEntity extends BaseEntity {
     @TableField("variable_set_id")
     private Long variableSetId;
 
+    @TableField("mock_application_id")
+    private Long mockApplicationId;
+
+    @TableField("mock_release_id")
+    private Long mockReleaseId;
+
     @TableField("run_mode")
     private String runMode;
 

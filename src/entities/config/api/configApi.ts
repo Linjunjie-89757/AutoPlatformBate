@@ -7,6 +7,7 @@ import type {
   CreateMockBusinessScenarioPayload,
   CreateMockEndpointPayload,
   CreateMockScenarioPayload,
+  CreateMockReleasePayload,
   CreateDbConnectionPayload,
   CreateEnvPayload,
   CreateNotificationChannelPayload,
@@ -21,6 +22,7 @@ import type {
   MockCallLogItem,
   MockEndpointItem,
   MockScenarioItem,
+  MockReleaseItem,
   NotificationChannelItem,
   NotificationEventOption,
   NotificationRecordItem,
@@ -486,6 +488,34 @@ export const configApi = {
     const response = await httpDelete<ApiResponse<void>>(`/settings/mock/applications/${id}`, {
       headers: workspaceHeaders(workspaceCode),
     })
+
+    return unwrapApiResponse(response)
+  },
+
+  async getMockReleases(workspaceCode: string, appId: number) {
+    const response = await httpGet<ApiResponse<MockReleaseItem[]>>(`/settings/mock/applications/${appId}/releases`, {
+      headers: workspaceHeaders(workspaceCode),
+    })
+
+    return unwrapApiResponse(response)
+  },
+
+  async publishMockRelease(workspaceCode: string, appId: number, payload?: CreateMockReleasePayload) {
+    const response = await httpPost<ApiResponse<MockReleaseItem>, CreateMockReleasePayload>(
+      `/settings/mock/applications/${appId}/releases`,
+      payload || {},
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async activateMockRelease(workspaceCode: string, appId: number, releaseId: number) {
+    const response = await httpPost<ApiResponse<MockReleaseItem>, Record<string, never>>(
+      `/settings/mock/applications/${appId}/releases/${releaseId}/activate`,
+      {},
+      { headers: workspaceHeaders(workspaceCode) },
+    )
 
     return unwrapApiResponse(response)
   },

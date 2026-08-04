@@ -31,7 +31,13 @@ import ConfigParamChangeHistoryDrawer from '@/widgets/config-param-change-histor
 import ConfigParamVersionDrawer from '@/widgets/config-param-version-drawer/ConfigParamVersionDrawer.vue'
 import ConfigReferenceDrawer from '@/widgets/config-reference-drawer/ConfigReferenceDrawer.vue'
 
-const props = withDefaults(defineProps<{ workspaceCode?: string }>(), { workspaceCode: 'ALL' })
+const props = withDefaults(defineProps<{
+  workspaceCode?: string
+  mode?: 'all' | 'global'
+}>(), {
+  workspaceCode: 'ALL',
+  mode: 'all',
+})
 
 const params = ref<ParamSetItem[]>([])
 const workspaces = ref<WorkspaceItem[]>([])
@@ -141,7 +147,9 @@ const filteredNormalParams = computed(() => {
     return !query || `${item.paramName} ${parseVariableSetMetadata(item.contentJson).description}`.toLowerCase().includes(query)
   })
 })
-const displayedParams = computed(() => [...globalParams.value, ...filteredNormalParams.value])
+const displayedParams = computed(() => props.mode === 'global'
+  ? globalParams.value
+  : [...globalParams.value, ...filteredNormalParams.value])
 const detailIsGlobal = computed(() => Boolean(detailParam.value && isGlobalParam(detailParam.value)))
 const detailVariableRows = computed(() => {
   const query = detailKeyword.value.trim().toLowerCase()
@@ -374,13 +382,13 @@ watch(() => props.workspaceCode, () => {
 </script>
 
 <template>
-  <section class="variable-page">
+  <section class="variable-page" :class="{ 'is-global-mode': mode === 'global' }">
     <header class="variable-page__header">
-      <div><h2>变量配置</h2><p>统一管理自动生效的全局变量和环境可绑定的业务变量集。</p></div>
-      <div><AppButton :icon="RefreshRight" :loading="loading" @click="loadParams()">刷新</AppButton><AppButton type="primary" :icon="Plus" @click="createVisible = true">新建变量集</AppButton></div>
+      <div><h2>{{ mode === 'global' ? '全局变量' : '变量配置' }}</h2><p>{{ mode === 'global' ? '当前工作区内自动生效，环境变量和本次执行变量可覆盖同名值。' : '统一管理自动生效的全局变量和环境可绑定的业务变量集。' }}</p></div>
+      <div><AppButton :icon="RefreshRight" :loading="loading" @click="loadParams()">刷新</AppButton><AppButton v-if="mode === 'all'" type="primary" :icon="Plus" @click="createVisible = true">新建变量集</AppButton></div>
     </header>
 
-    <div class="variable-page__toolbar">
+    <div v-if="mode === 'all'" class="variable-page__toolbar">
       <el-input v-model="keyword" clearable placeholder="搜索变量集名称或说明" :prefix-icon="Search" />
       <el-select v-model="scopeFilter"><el-option v-for="item in scopeOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select>
       <el-select v-model="stageFilter"><el-option v-for="item in stageOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select>
@@ -395,18 +403,18 @@ watch(() => props.workspaceCode, () => {
         <thead><tr><th>变量集</th><th>变量数</th><th>适用范围</th><th>部署阶段</th><th>说明</th><th>状态</th><th>操作</th></tr></thead>
         <tbody>
           <tr v-for="item in displayedParams" :key="item.id" :class="{ 'is-global': isGlobalParam(item) }">
-            <td><div class="variable-table__name"><span v-if="isGlobalParam(item)" class="variable-table__lock"><el-icon><Lock /></el-icon></span><span><strong>{{ isGlobalParam(item) ? '全局变量' : item.paramName }}</strong><small>{{ isGlobalParam(item) ? (workspaceCode === 'ALL' ? '系统内置 · 按工作区管理' : `系统内置 · ${item.workspaceName || item.workspaceCode}`) : (item.workspaceName || item.workspaceCode) }}</small></span></div></td>
+            <td><div class="variable-table__name"><span v-if="isGlobalParam(item)" class="variable-table__lock"><el-icon><Lock /></el-icon></span><span><strong>{{ isGlobalParam(item) ? '全局变量' : item.paramName }}</strong><small>{{ isGlobalParam(item) ? (workspaceCode === 'ALL' ? '工作区级 · 按工作区管理' : `工作区级 · ${item.workspaceName || item.workspaceCode}`) : (item.workspaceName || item.workspaceCode) }}</small></span></div></td>
             <td><b>{{ variableCount(item) }}</b></td><td><span class="variable-table__tag">{{ scopeLabel(item) }}</span></td><td><span class="variable-table__tag">{{ stageLabel(item) }}</span></td><td><span class="variable-table__description">{{ description(item) }}</span></td><td><span :class="['variable-table__status', { 'is-enabled': item.status === 1 }]">{{ item.status === 1 ? '启用' : '停用' }}</span></td>
             <td><button type="button" class="variable-table__action" @click="openDetail(item)">{{ isGlobalParam(item) ? '配置' : '编辑' }}</button><button v-if="item.id > 0" type="button" class="variable-table__action" @click="openReferences(item)"><el-icon><Connection /></el-icon>引用</button><el-dropdown v-if="!isGlobalParam(item)" trigger="click" @command="(command: string) => { if (command === 'history') openHistory(item); if (command === 'versions') openVersions(item); if (command === 'delete') removeParam(item) }"><button type="button" class="variable-table__more"><el-icon><MoreFilled /></el-icon></button><template #dropdown><el-dropdown-menu><el-dropdown-item command="history">变更历史</el-dropdown-item><el-dropdown-item command="versions">版本管理</el-dropdown-item><el-dropdown-item command="delete" class="is-danger">删除变量集</el-dropdown-item></el-dropdown-menu></template></el-dropdown></td>
           </tr>
         </tbody>
       </table>
-      <AppEmptyState v-else title="暂无变量集" description="当前筛选条件下没有普通变量集，全局变量仍会固定保留。" />
+      <AppEmptyState v-else :title="mode === 'global' ? '暂无全局变量' : '暂无变量集'" :description="mode === 'global' ? '当前工作区还没有配置全局变量。' : '当前筛选条件下没有普通变量集，全局变量仍会固定保留。'" />
     </div>
 
     <el-drawer :model-value="!!detailParam" :title="detailIsGlobal ? `全局变量 · ${detailParam?.workspaceName || detailParam?.workspaceCode}` : '变量集详情'" size="min(1120px, 94vw)" class="variable-detail-drawer" @update:model-value="(value: boolean) => { if (!value) closeDetail() }">
       <div v-if="detailParam" class="variable-detail">
-        <div v-if="detailIsGlobal" class="variable-detail__system-note"><el-icon><Lock /></el-icon><div><strong>系统内置全局变量 · {{ detailParam.workspaceName || detailParam.workspaceCode }}</strong><span>变量集本身不可删除、重命名或停用；符合范围和阶段的变量会自动应用到环境。</span></div></div>
+        <div v-if="detailIsGlobal" class="variable-detail__system-note"><el-icon><Lock /></el-icon><div><strong>工作区全局变量 · {{ detailParam.workspaceName || detailParam.workspaceCode }}</strong><span>全局变量集不可删除、重命名或停用；符合范围和阶段的变量会自动应用到环境。</span></div></div>
         <div class="variable-detail__meta" :class="{ 'has-workspace': detailIsGlobal && workspaceCode === 'ALL' }">
           <label v-if="detailIsGlobal && workspaceCode === 'ALL'"><span>目标空间</span><el-select v-model="globalWorkspaceCode" @change="switchGlobalWorkspace"><el-option v-for="item in globalWorkspaceOptions" :key="item.workspaceCode" :label="item.workspaceName" :value="item.workspaceCode" /></el-select></label>
           <label><span>变量集名称</span><el-input v-model="detailForm.paramName" :disabled="detailIsGlobal" /></label>
@@ -449,6 +457,10 @@ watch(() => props.workspaceCode, () => {
 .variable-page__error { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #fecaca; border-radius: 6px; background: var(--app-danger-soft); color: var(--app-danger); font-size: 12px; }
 .variable-table { overflow-x: auto; min-height: 240px; border: 1px solid var(--app-border); border-radius: 7px; background: #fff; }
 .variable-table table { width: 100%; min-width: 1100px; border-collapse: collapse; table-layout: fixed; }
+.variable-page.is-global-mode .variable-table table { min-width: 880px; }
+.variable-page.is-global-mode .variable-table col.is-scope { width: 105px; }
+.variable-page.is-global-mode .variable-table col.is-stage { width: 100px; }
+.variable-page.is-global-mode .variable-table col.is-actions { width: 130px; }
 .variable-table col.is-name { width: 220px; }.variable-table col.is-count { width: 88px; }.variable-table col.is-scope { width: 130px; }.variable-table col.is-stage { width: 110px; }.variable-table col.is-status { width: 90px; }.variable-table col.is-actions { width: 160px; }
 .variable-table thead { background: #f7f8fa; }
 .variable-table th { height: 38px; padding: 0 16px; color: var(--app-text-muted); font-size: 11px; font-weight: 500; text-align: left; }

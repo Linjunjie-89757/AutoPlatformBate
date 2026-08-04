@@ -476,6 +476,7 @@ const {
   directoryKeyword,
   selectedDirectoryKey,
   expandedKeys,
+  directoryInitialized,
   directoryTree,
   visibleDirectoryTree,
   directorySearchMatchedCount,
@@ -718,6 +719,7 @@ useApiDefinitionWorkspaceLifecycle({
         :search-result-limit="DIRECTORY_SEARCH_RESULT_LIMIT"
         :visible-directory-tree="visibleDirectoryTree"
         :expanded-keys="expandedKeys"
+        :directory-initialized="directoryInitialized"
         :selected-directory-key="selectedDirectoryKey"
         :directory-tree-render-key="directoryTreeRenderKey"
         @create-request="openNewRequestTab(undefined, { directoryName: null })"
@@ -746,36 +748,34 @@ useApiDefinitionWorkspaceLifecycle({
           @menu="handleEditorTabMenu"
         />
 
+        <ApiAiCaseModule
+          :ref="setAiCaseModuleRef"
+          :state="activeAiCaseGenerationState"
+          :workspace-code="props.workspaceCode"
+          :can-open-drawer="Boolean(activeEditor?.definitionId || activeAiCaseGenerationState?.definitionId)"
+          :generation-status="aiCaseGenerationStatus"
+          :saving-id="aiCaseSavingId"
+          :request-method-class="requestMethodClass"
+          :case-type-label="aiGeneratedCaseTypeLabel"
+          :case-group-label="aiGeneratedCaseGroupLabel"
+          @submit="submitAiCaseGeneration"
+          @stop-generation="stopAiCaseGeneration"
+          @run-selected="runSelectedAiGeneratedCases"
+          @accept-selected="batchAcceptAiGeneratedCases"
+          @discard-selected="batchDiscardAiGeneratedCases"
+          @open-detail="openAiGeneratedCaseDetail"
+          @run-case="runAiGeneratedCase"
+          @save-case="saveAiGeneratedCase"
+          @discard-case="discardAiGeneratedCase"
+        />
+
         <div v-if="!activeEditor" class="api-editor-empty">
           <span>请选择左侧请求，或新建一个请求</span>
           <button type="button" @click="openNewRequestTab(undefined, { directoryName: null })">新建请求</button>
         </div>
 
-        <template v-else-if="isAiCaseGenerationTabActive">
-          <ApiAiCaseModule
-            :ref="setAiCaseModuleRef"
-            :state="activeAiCaseGenerationState"
-            :workspace-code="props.workspaceCode"
-            :can-open-drawer="Boolean(activeEditor?.definitionId || activeAiCaseGenerationState?.definitionId)"
-            :generation-status="aiCaseGenerationStatus"
-            :saving-id="aiCaseSavingId"
-            :request-method-class="requestMethodClass"
-            :case-type-label="aiGeneratedCaseTypeLabel"
-            :case-group-label="aiGeneratedCaseGroupLabel"
-            @submit="submitAiCaseGeneration"
-            @stop-generation="stopAiCaseGeneration"
-            @run-selected="runSelectedAiGeneratedCases"
-            @accept-selected="batchAcceptAiGeneratedCases"
-            @discard-selected="batchDiscardAiGeneratedCases"
-            @open-detail="openAiGeneratedCaseDetail"
-            @run-case="runAiGeneratedCase"
-            @save-case="saveAiGeneratedCase"
-            @discard-case="discardAiGeneratedCase"
-          />
-        </template>
-
         <ApiRequestEditorMain
-          v-else
+          v-else-if="!isAiCaseGenerationTabActive"
           v-model:selected-environment-id="selectedEnvironmentId"
           v-model:active-body-raw-text="activeBodyRawText"
           v-model:body-json-view-mode="bodyJsonViewMode"

@@ -183,6 +183,12 @@ function syncEditorHeight() {
   editor.layout()
 }
 
+function resolveEditorFontFamily() {
+  return window.getComputedStyle(document.documentElement)
+    .getPropertyValue('--app-font-family-mono')
+    .trim() || 'monospace'
+}
+
 function createEditor() {
   if (!containerRef.value) {
     return
@@ -195,6 +201,7 @@ function createEditor() {
     theme: props.themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME,
     readOnly: props.readOnly,
     automaticLayout: true,
+    fontFamily: resolveEditorFontFamily(),
     minimap: { enabled: false },
     contextmenu: !props.readOnly,
     lineNumbers: props.lineNumbers,

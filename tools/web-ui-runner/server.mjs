@@ -53,6 +53,7 @@ let overlayScriptContext;
 let pageTrackingContext;
 let trackedNavigationPages = new WeakSet();
 let activePagePromotedAtMs = 0;
+let taskMockRouteHandler;
 
 const port = runtimeConfig.port;
 const allowedOrigins = parseAllowedOrigins(process.env.WEB_UI_RUNNER_ORIGINS);
@@ -64,14 +65,21 @@ const runnerTaskPoller = createRunnerTaskPoller({
   webElementValidateExecutor: async ({ locators }) => validateCurrentPageLocators({
     locators,
   }),
-  webCaseRunExecutor: async ({ task, environmentSnapshot, variableSnapshot, caseSnapshot, steps, onStepResult }) => executeCurrentPageCase({
-    task,
-    environmentSnapshot,
-    variableSnapshot,
-    caseSnapshot,
-    steps,
-    onStepResult,
-  }),
+  webCaseRunExecutor: async ({ task, environmentSnapshot, variableSnapshot, caseSnapshot, steps, onStepResult }) => {
+    await applyTaskMockHeaders(environmentSnapshot);
+    try {
+      return await executeCurrentPageCase({
+        task,
+        environmentSnapshot,
+        variableSnapshot,
+        caseSnapshot,
+        steps,
+        onStepResult,
+      });
+    } finally {
+      await clearTaskMockHeaders();
+    }
+  },
 });
 
 await ensureRunnerRuntimeDirectories(runtimeConfig);
@@ -402,6 +410,44 @@ async function openCollectPage(payload) {
     session: buildSessionView(),
     page: await getPageInfo(page),
   };
+}
+
+async function applyTaskMockHeaders(environmentSnapshot) {
+  await clearTaskMockHeaders();
+  if (!context || typeof context.route !== 'function') {
+    return;
+  }
+  const snapshot = normalizePlainObject(environmentSnapshot);
+  const token = optionalString(snapshot.mockExecutionToken);
+  const mockBaseUrl = optionalString(snapshot.mockBaseUrl);
+  if (!token || !mockBaseUrl) {
+    return;
+  }
+  taskMockRouteHandler = async route => {
+    const request = route.request();
+    if (!isMockRequestUrl(request.url(), mockBaseUrl)) {
+      await route.continue();
+      return;
+    }
+    await route.continue({
+      headers: {
+        ...request.headers(),
+        'x-mock-execution-token': token,
+      },
+    });
+  };
+  await context.route('**/*', taskMockRouteHandler);
+}
+
+async function clearTaskMockHeaders() {
+  if (context && taskMockRouteHandler && typeof context.unroute === 'function') {
+    await context.unroute('**/*', taskMockRouteHandler);
+  }
+  taskMockRouteHandler = undefined;
+}
+
+function isMockRequestUrl(url, mockBaseUrl) {
+  return Boolean(url && mockBaseUrl && String(url).toLowerCase().startsWith(String(mockBaseUrl).toLowerCase()));
 }
 
 async function captureCurrentPage(payload) {

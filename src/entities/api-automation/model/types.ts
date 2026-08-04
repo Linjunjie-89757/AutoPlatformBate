@@ -547,6 +547,7 @@ export interface ApiRunPayload {
   mockEnabled?: boolean | null
   mockApplicationId?: number | null
   mockBusinessScenarioId?: number | null
+  mockReleaseId?: number | null
   rowVariables?: Record<string, string> | null
   runnerId?: string | null
 }
@@ -645,6 +646,8 @@ export interface ApiRuntimeContextSnapshot {
     baseUrl?: string | null
     businessScenarioId?: number | null
     businessScenarioName?: string | null
+    releaseId?: number | null
+    releaseVersion?: number | null
   } | null
   variables?: Record<string, string>
 }

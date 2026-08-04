@@ -132,6 +132,10 @@ public class BugDomainService {
         entity.setBugNo(generateBugNo());
         entity.setTitle(request.title());
         entity.setDescription(request.description());
+        entity.setReproductionSteps(request.reproductionSteps());
+        entity.setExpectedResult(request.expectedResult());
+        entity.setActualResult(request.actualResult());
+        entity.setModuleName(request.moduleName());
         entity.setPriority(request.priority().name());
         entity.setSeverity(request.severity().name());
         entity.setStatus(BugStatus.ASSIGNED.name());
@@ -169,8 +173,13 @@ public class BugDomainService {
         }
         entity.setTitle(request.title());
         entity.setDescription(request.description());
+        entity.setReproductionSteps(request.reproductionSteps());
+        entity.setExpectedResult(request.expectedResult());
+        entity.setActualResult(request.actualResult());
+        entity.setModuleName(request.moduleName());
         entity.setPriority(request.priority().name());
         entity.setSeverity(request.severity().name());
+        entity.setSourceType(request.sourceType() == null ? entity.getSourceType() : request.sourceType().name());
         entity.setAssigneeId(request.assigneeId());
         entity.setRelatedCaseId(request.relatedCaseId());
         entity.setTagsJson(JsonUtils.toJson(request.tags()));
@@ -181,8 +190,13 @@ public class BugDomainService {
                         .eq(BugEntity::getId, entity.getId())
                         .set(BugEntity::getTitle, entity.getTitle())
                         .set(BugEntity::getDescription, entity.getDescription())
+                        .set(BugEntity::getReproductionSteps, entity.getReproductionSteps())
+                        .set(BugEntity::getExpectedResult, entity.getExpectedResult())
+                        .set(BugEntity::getActualResult, entity.getActualResult())
+                        .set(BugEntity::getModuleName, entity.getModuleName())
                         .set(BugEntity::getPriority, entity.getPriority())
                         .set(BugEntity::getSeverity, entity.getSeverity())
+                        .set(BugEntity::getSourceType, entity.getSourceType())
                         .set(BugEntity::getAssigneeId, entity.getAssigneeId())
                         .set(BugEntity::getRelatedCaseId, entity.getRelatedCaseId())
                         .set(BugEntity::getTagsJson, entity.getTagsJson())

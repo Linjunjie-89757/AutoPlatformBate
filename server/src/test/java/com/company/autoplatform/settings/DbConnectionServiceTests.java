@@ -237,6 +237,33 @@ class DbConnectionServiceTests extends IntegrationTestSupport {
     }
 
     @Test
+    void envCreateAllowsBaseUrlToBeConfiguredAfterCreation() {
+        String unique = "settings-env-empty-base-url-" + System.nanoTime();
+
+        EnvConfigItem created = settingsService.createEnv(WORKSPACE_CODE, new CreateEnvConfigRequest(
+                null,
+                "TEST",
+                unique + "-env",
+                " ",
+                "{\"scopeType\":\"API\"}"
+        ));
+
+        assertThat(created.baseUrl()).isEmpty();
+
+        EnvConfigItem updated = settingsService.updateEnv(created.id(), WORKSPACE_CODE, new CreateEnvConfigRequest(
+                null,
+                "TEST",
+                unique + "-env",
+                " https://api.example.com ",
+                created.configJson()
+        ));
+
+        assertThat(updated.baseUrl()).isEqualTo("https://api.example.com");
+
+        settingsService.deleteEnv(created.id(), WORKSPACE_CODE);
+    }
+
+    @Test
     void paramSetChangesAreRecordedForCreateUpdateAndStatus() {
         String unique = "settings-param-history-" + System.nanoTime();
 

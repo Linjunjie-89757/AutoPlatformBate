@@ -21,6 +21,18 @@ public class BugEntity extends BaseEntity {
 
     private String description;
 
+    @TableField("reproduction_steps")
+    private String reproductionSteps;
+
+    @TableField("expected_result")
+    private String expectedResult;
+
+    @TableField("actual_result")
+    private String actualResult;
+
+    @TableField("module_name")
+    private String moduleName;
+
     private String priority;
 
     private String severity;

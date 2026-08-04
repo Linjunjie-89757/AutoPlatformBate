@@ -137,6 +137,89 @@ public final class MockModels {
     ) {
     }
 
+    public record MockReleaseRequest(
+            String workspaceCode,
+            String releaseName
+    ) {
+    }
+
+    public record MockReleaseItem(
+            Long id,
+            String workspaceCode,
+            String workspaceName,
+            Long appId,
+            String appName,
+            Integer versionNo,
+            String releaseName,
+            Boolean active,
+            LocalDateTime createdAt
+    ) {
+    }
+
+    public record MockReleaseSnapshot(
+            MockReleaseApplicationSnapshot application,
+            List<MockReleaseEndpointSnapshot> endpoints,
+            List<MockReleaseScenarioSnapshot> scenarios,
+            List<MockReleaseBusinessScenarioSnapshot> businessScenarios
+    ) {
+    }
+
+    public record MockReleaseApplicationSnapshot(
+            Long id,
+            String appName,
+            String appCode,
+            String description,
+            Integer status
+    ) {
+    }
+
+    public record MockReleaseEndpointSnapshot(
+            Long id,
+            Long appId,
+            String endpointName,
+            String httpMethod,
+            String pathPattern,
+            String description,
+            Integer status
+    ) {
+    }
+
+    public record MockReleaseScenarioSnapshot(
+            Long id,
+            Long appId,
+            Long endpointId,
+            String scenarioName,
+            Integer priority,
+            String matchJson,
+            Integer responseStatus,
+            String responseHeadersJson,
+            String responseBody,
+            Integer responseDelayMs,
+            String variablesJson,
+            Integer status
+    ) {
+    }
+
+    public record MockReleaseBusinessScenarioSnapshot(
+            Long id,
+            Long appId,
+            String scenarioName,
+            String description,
+            String variablesJson,
+            Integer status,
+            List<MockReleaseBusinessScenarioStepSnapshot> items
+    ) {
+    }
+
+    public record MockReleaseBusinessScenarioStepSnapshot(
+            Long id,
+            Long endpointId,
+            Long scenarioId,
+            Integer sortOrder,
+            Integer status
+    ) {
+    }
+
     public record MockCallLogItem(
             Long id,
             String workspaceCode,
@@ -149,6 +232,8 @@ public final class MockModels {
             String scenarioName,
             Long businessScenarioId,
             String businessScenarioName,
+            Long releaseId,
+            Integer releaseVersion,
             String httpMethod,
             String requestPath,
             String requestHeadersJson,

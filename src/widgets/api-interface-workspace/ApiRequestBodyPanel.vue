@@ -622,10 +622,6 @@ async function formatRawBody() {
   background: #ffffff;
 }
 
-.api-body-code-panel__editor :deep(.monaco-editor .view-line) {
-  font-family: var(--app-font-mono, "JetBrains Mono", Consolas, Monaco, monospace);
-}
-
 .api-param-row:last-of-type {
   border-bottom: 0;
 }

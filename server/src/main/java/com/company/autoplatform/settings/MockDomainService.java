@@ -16,6 +16,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -45,8 +46,11 @@ public class MockDomainService {
     private final MockBusinessScenarioMapper businessScenarioMapper;
     private final MockBusinessScenarioItemMapper businessScenarioItemMapper;
     private final MockCallLogMapper callLogMapper;
+    private final MockReleaseMapper releaseMapper;
+    private final MockExecutionCredentialService executionCredentialService;
     private final WorkspaceService workspaceService;
     private final ConfigReferenceDomainService referenceDomainService;
+    private final boolean requireExecutionToken;
 
     public MockDomainService(
             MockApplicationMapper applicationMapper,
@@ -55,8 +59,11 @@ public class MockDomainService {
             MockBusinessScenarioMapper businessScenarioMapper,
             MockBusinessScenarioItemMapper businessScenarioItemMapper,
             MockCallLogMapper callLogMapper,
+            MockReleaseMapper releaseMapper,
+            MockExecutionCredentialService executionCredentialService,
             WorkspaceService workspaceService,
-            ConfigReferenceDomainService referenceDomainService
+            ConfigReferenceDomainService referenceDomainService,
+            @org.springframework.beans.factory.annotation.Value("${autoplatform.mock.require-execution-token:false}") boolean requireExecutionToken
     ) {
         this.applicationMapper = applicationMapper;
         this.endpointMapper = endpointMapper;
@@ -64,8 +71,11 @@ public class MockDomainService {
         this.businessScenarioMapper = businessScenarioMapper;
         this.businessScenarioItemMapper = businessScenarioItemMapper;
         this.callLogMapper = callLogMapper;
+        this.releaseMapper = releaseMapper;
+        this.executionCredentialService = executionCredentialService;
         this.workspaceService = workspaceService;
         this.referenceDomainService = referenceDomainService;
+        this.requireExecutionToken = requireExecutionToken;
     }
 
     public PageResponse<MockApplicationItem> listApplications(String workspaceCode, String keyword, Integer status) {
@@ -128,6 +138,7 @@ public class MockDomainService {
         }
         businessScenarioMapper.delete(new LambdaQueryWrapper<MockBusinessScenarioEntity>().eq(MockBusinessScenarioEntity::getAppId, id));
         callLogMapper.delete(new LambdaQueryWrapper<MockCallLogEntity>().eq(MockCallLogEntity::getAppId, id));
+        releaseMapper.delete(new LambdaQueryWrapper<MockReleaseEntity>().eq(MockReleaseEntity::getAppId, id));
         applicationMapper.deleteById(id);
     }
 
@@ -319,6 +330,108 @@ public class MockDomainService {
         return referenceDomainService.mockApplicationReferences(id, workspaceCode);
     }
 
+    public List<MockReleaseItem> listReleases(Long appId, String workspaceCode) {
+        MockApplicationEntity application = requireApplication(appId);
+        validateReadable(application.getWorkspaceId(), workspaceCode, "当前空间上下文不可查看该 Mock 发布版本");
+        return releaseMapper.selectList(new LambdaQueryWrapper<MockReleaseEntity>()
+                        .eq(MockReleaseEntity::getAppId, appId)
+                        .eq(MockReleaseEntity::getWorkspaceId, application.getWorkspaceId())
+                        .orderByDesc(MockReleaseEntity::getVersionNo))
+                .stream()
+                .map(this::toReleaseItem)
+                .toList();
+    }
+
+    @Transactional
+    public MockReleaseItem publishRelease(Long appId, String headerWorkspaceCode, MockReleaseRequest request) {
+        MockApplicationEntity application = requireApplication(appId);
+        validateReadable(application.getWorkspaceId(), headerWorkspaceCode, "当前空间上下文不可发布该 Mock 应用");
+        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(application.getWorkspaceId());
+        workspaceService.requireWritableWorkspace(workspace.getWorkspaceCode());
+
+        List<MockEndpointEntity> endpoints = endpointMapper.selectList(new LambdaQueryWrapper<MockEndpointEntity>()
+                .eq(MockEndpointEntity::getAppId, appId));
+        if (endpoints.isEmpty()) {
+            throw new BadRequestException("Mock 应用至少需要一个接口才能发布");
+        }
+        List<Long> endpointIds = endpoints.stream().map(MockEndpointEntity::getId).toList();
+        List<MockScenarioEntity> scenarios = scenarioMapper.selectList(new LambdaQueryWrapper<MockScenarioEntity>()
+                .in(MockScenarioEntity::getEndpointId, endpointIds));
+        if (scenarios.isEmpty()) {
+            throw new BadRequestException("Mock 应用至少需要一个场景才能发布");
+        }
+        List<MockBusinessScenarioEntity> businessScenarios = businessScenarioMapper.selectList(new LambdaQueryWrapper<MockBusinessScenarioEntity>()
+                .eq(MockBusinessScenarioEntity::getAppId, appId));
+        List<Long> businessScenarioIds = businessScenarios.stream().map(MockBusinessScenarioEntity::getId).toList();
+        List<MockBusinessScenarioItemEntity> businessScenarioItems = businessScenarioIds.isEmpty()
+                ? List.of()
+                : businessScenarioItemMapper.selectList(new LambdaQueryWrapper<MockBusinessScenarioItemEntity>()
+                        .in(MockBusinessScenarioItemEntity::getBusinessScenarioId, businessScenarioIds));
+
+        MockReleaseSnapshot snapshot = new MockReleaseSnapshot(
+                new MockReleaseApplicationSnapshot(application.getId(), application.getAppName(), application.getAppCode(), application.getDescription(), application.getStatus()),
+                endpoints.stream().map(item -> new MockReleaseEndpointSnapshot(item.getId(), item.getAppId(), item.getEndpointName(), item.getHttpMethod(), item.getPathPattern(), item.getDescription(), item.getStatus())).toList(),
+                scenarios.stream().map(item -> new MockReleaseScenarioSnapshot(item.getId(), item.getAppId(), item.getEndpointId(), item.getScenarioName(), item.getPriority(), item.getMatchJson(), item.getResponseStatus(), item.getResponseHeadersJson(), item.getResponseBody(), item.getResponseDelayMs(), item.getVariablesJson(), item.getStatus())).toList(),
+                businessScenarios.stream().map(item -> new MockReleaseBusinessScenarioSnapshot(
+                        item.getId(), item.getAppId(), item.getScenarioName(), item.getDescription(), item.getVariablesJson(), item.getStatus(),
+                        businessScenarioItems.stream()
+                                .filter(step -> step.getBusinessScenarioId().equals(item.getId()))
+                                .map(step -> new MockReleaseBusinessScenarioStepSnapshot(step.getId(), step.getEndpointId(), step.getScenarioId(), step.getSortOrder(), step.getStatus()))
+                                .toList()
+                )).toList()
+        );
+
+        String snapshotJson;
+        try {
+            snapshotJson = OBJECT_MAPPER.writeValueAsString(snapshot);
+        } catch (JsonProcessingException exception) {
+            throw new BadRequestException("Mock 发布快照生成失败");
+        }
+
+        Integer latestVersion = releaseMapper.selectList(new LambdaQueryWrapper<MockReleaseEntity>()
+                        .eq(MockReleaseEntity::getAppId, appId)
+                        .orderByDesc(MockReleaseEntity::getVersionNo)
+                        .last("LIMIT 1"))
+                .stream()
+                .findFirst()
+                .map(MockReleaseEntity::getVersionNo)
+                .orElse(0);
+        releaseMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getAppId, appId)
+                .set(MockReleaseEntity::getActive, 0));
+
+        MockReleaseEntity release = new MockReleaseEntity();
+        release.setWorkspaceId(application.getWorkspaceId());
+        release.setAppId(appId);
+        release.setVersionNo(latestVersion + 1);
+        String releaseName = request == null ? null : request.releaseName();
+        release.setReleaseName(blankToNull(releaseName) == null ? "v" + release.getVersionNo() : releaseName.trim());
+        release.setSnapshotJson(snapshotJson);
+        release.setActive(1);
+        release.setCreatedAt(LocalDateTime.now());
+        release.setUpdatedAt(LocalDateTime.now());
+        releaseMapper.insert(release);
+        return toReleaseItem(release);
+    }
+
+    @Transactional
+    public MockReleaseItem activateRelease(Long appId, Long releaseId, String workspaceCode) {
+        MockApplicationEntity application = requireApplication(appId);
+        validateReadable(application.getWorkspaceId(), workspaceCode, "当前空间上下文不可启用该 Mock 发布版本");
+        workspaceService.requireWritableWorkspace(workspaceService.requireWorkspaceById(application.getWorkspaceId()).getWorkspaceCode());
+        MockReleaseEntity release = releaseMapper.selectById(releaseId);
+        if (release == null || !appId.equals(release.getAppId()) || !application.getWorkspaceId().equals(release.getWorkspaceId())) {
+            throw new NotFoundException("Mock 发布版本不存在");
+        }
+        releaseMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getAppId, appId)
+                .set(MockReleaseEntity::getActive, 0));
+        release.setActive(1);
+        release.setUpdatedAt(LocalDateTime.now());
+        releaseMapper.updateById(release);
+        return toReleaseItem(release);
+    }
+
     public ResponseEntity<String> invoke(String appCode, String mockPath, HttpServletRequest request, String body) {
         String method = request.getMethod().toUpperCase(Locale.ROOT);
         MockApplicationEntity application = applicationMapper.selectOne(new LambdaQueryWrapper<MockApplicationEntity>()
@@ -329,31 +442,77 @@ public class MockDomainService {
             return notMatched(null, null, null, method, mockPath, request, body, "APP_NOT_FOUND");
         }
 
-        List<MockEndpointEntity> endpoints = endpointMapper.selectList(new LambdaQueryWrapper<MockEndpointEntity>()
-                .eq(MockEndpointEntity::getAppId, application.getId())
-                .eq(MockEndpointEntity::getStatus, 1));
+        String workspaceCode = workspaceService.requireWorkspaceById(application.getWorkspaceId()).getWorkspaceCode();
+        String requestedWorkspaceCode = request.getHeader(WorkspaceScope.HEADER);
+        if (requestedWorkspaceCode != null
+                && !requestedWorkspaceCode.isBlank()
+                && !WorkspaceScope.ALL.equalsIgnoreCase(requestedWorkspaceCode.trim())
+                && !workspaceCode.equals(requestedWorkspaceCode.trim())) {
+            return notAuthorized(application, method, mockPath, request, body, "WORKSPACE_MISMATCH");
+        }
+
+        MockReleaseEntity release = null;
+        String executionToken = request.getHeader(MockExecutionCredentialService.HEADER);
+        if (executionToken != null && !executionToken.isBlank()) {
+            var credential = executionCredentialService.validate(executionToken, workspaceCode, appCode);
+            if (credential.isEmpty()) {
+                return notAuthorized(application, method, mockPath, request, body, "INVALID_EXECUTION_TOKEN");
+            }
+            release = credential.get().releaseId() == null
+                    ? readActiveReleaseEntity(application)
+                    : releaseMapper.selectOne(new LambdaQueryWrapper<MockReleaseEntity>()
+                            .eq(MockReleaseEntity::getId, credential.get().releaseId())
+                            .eq(MockReleaseEntity::getAppId, application.getId())
+                            .eq(MockReleaseEntity::getWorkspaceId, application.getWorkspaceId())
+                            .last("LIMIT 1"));
+            if (release == null) {
+                return notAuthorized(application, method, mockPath, request, body, "RELEASE_NOT_FOUND");
+            }
+        } else {
+            release = readActiveReleaseEntity(application);
+            if (requireExecutionToken && release != null) {
+                return notAuthorized(application, method, mockPath, request, body, "EXECUTION_TOKEN_REQUIRED");
+            }
+        }
+        MockReleaseSnapshot releaseSnapshot = readReleaseSnapshot(release);
+        List<MockEndpointEntity> endpoints = releaseSnapshot == null
+                ? endpointMapper.selectList(new LambdaQueryWrapper<MockEndpointEntity>()
+                        .eq(MockEndpointEntity::getAppId, application.getId())
+                        .eq(MockEndpointEntity::getStatus, 1))
+                : releaseSnapshot.endpoints().stream()
+                        .filter(item -> item.status() == null || item.status() == 1)
+                        .map(this::toEndpointEntity)
+                        .toList();
         MockEndpointEntity endpoint = endpoints.stream()
                 .filter(item -> methodMatches(item.getHttpMethod(), method))
                 .filter(item -> pathMatches(item.getPathPattern(), mockPath))
                 .findFirst()
                 .orElse(null);
         if (endpoint == null) {
-            return notMatched(application, null, null, method, mockPath, request, body, "ENDPOINT_NOT_FOUND");
+            return notMatched(application, null, null, method, mockPath, request, body, "ENDPOINT_NOT_FOUND", release);
         }
 
-        List<Long> scopedScenarioIds = resolveBusinessScenarioIds(application, endpoint, request);
-        List<MockScenarioEntity> scenarios = scenarioMapper.selectList(new LambdaQueryWrapper<MockScenarioEntity>()
-                .eq(MockScenarioEntity::getEndpointId, endpoint.getId())
-                .eq(MockScenarioEntity::getStatus, 1)
-                .in(scopedScenarioIds != null, MockScenarioEntity::getId, scopedScenarioIds == null || scopedScenarioIds.isEmpty() ? List.of(-1L) : scopedScenarioIds)
-                .orderByAsc(MockScenarioEntity::getPriority)
-                .orderByDesc(MockScenarioEntity::getUpdatedAt));
+        List<Long> scopedScenarioIds = resolveBusinessScenarioIds(application, endpoint, request, releaseSnapshot);
+        List<MockScenarioEntity> scenarios = releaseSnapshot == null
+                ? scenarioMapper.selectList(new LambdaQueryWrapper<MockScenarioEntity>()
+                        .eq(MockScenarioEntity::getEndpointId, endpoint.getId())
+                        .eq(MockScenarioEntity::getStatus, 1)
+                        .in(scopedScenarioIds != null, MockScenarioEntity::getId, scopedScenarioIds == null || scopedScenarioIds.isEmpty() ? List.of(-1L) : scopedScenarioIds)
+                        .orderByAsc(MockScenarioEntity::getPriority)
+                        .orderByDesc(MockScenarioEntity::getUpdatedAt))
+                : releaseSnapshot.scenarios().stream()
+                        .filter(item -> item.endpointId().equals(endpoint.getId()))
+                        .filter(item -> item.status() == null || item.status() == 1)
+                        .filter(item -> scopedScenarioIds == null || scopedScenarioIds.contains(item.id()))
+                        .sorted(java.util.Comparator.comparing(item -> Optional.ofNullable(item.priority()).orElse(100)))
+                        .map(this::toScenarioEntity)
+                        .toList();
         MockScenarioEntity scenario = scenarios.stream()
                 .filter(item -> matchScenario(item.getMatchJson(), request, body))
                 .findFirst()
                 .orElse(null);
         if (scenario == null) {
-            return notMatched(application, endpoint, null, method, mockPath, request, body, "SCENARIO_NOT_FOUND");
+            return notMatched(application, endpoint, null, method, mockPath, request, body, "SCENARIO_NOT_FOUND", release);
         }
 
         if (scenario.getResponseDelayMs() != null && scenario.getResponseDelayMs() > 0) {
@@ -366,13 +525,13 @@ public class MockDomainService {
         Map<String, String> responseHeaders = readStringMap(scenario.getResponseHeadersJson());
         Map<String, String> templateVariables = buildTemplateVariables(scenario, request, body);
         String responseBody = renderTemplate(Optional.ofNullable(scenario.getResponseBody()).orElse(""), templateVariables);
-        saveLog(application, endpoint, scenario, method, mockPath, request, body, scenario.getResponseStatus(), responseHeaders, responseBody, true, "MATCHED");
+        saveLog(application, endpoint, scenario, method, mockPath, request, body, scenario.getResponseStatus(), responseHeaders, responseBody, true, "MATCHED", release);
         HttpHeaders headers = new HttpHeaders();
         responseHeaders.forEach(headers::add);
         return new ResponseEntity<>(responseBody, headers, HttpStatus.valueOf(safeResponseStatus(scenario.getResponseStatus())));
     }
 
-    private List<Long> resolveBusinessScenarioIds(MockApplicationEntity application, MockEndpointEntity endpoint, HttpServletRequest request) {
+    private List<Long> resolveBusinessScenarioIds(MockApplicationEntity application, MockEndpointEntity endpoint, HttpServletRequest request, MockReleaseSnapshot releaseSnapshot) {
         String headerValue = request.getHeader("X-Mock-Business-Scenario-Id");
         if (headerValue == null || headerValue.isBlank()) {
             return null;
@@ -383,29 +542,108 @@ public class MockDomainService {
         } catch (NumberFormatException exception) {
             return List.of(-1L);
         }
-        MockBusinessScenarioEntity businessScenario = businessScenarioMapper.selectById(businessScenarioId);
-        if (businessScenario == null
-                || !application.getWorkspaceId().equals(businessScenario.getWorkspaceId())
-                || !application.getId().equals(businessScenario.getAppId())
-                || businessScenario.getStatus() == null
-                || businessScenario.getStatus() == 0) {
-            return List.of(-1L);
+        List<Long> scenarioIds;
+        if (releaseSnapshot != null) {
+            MockReleaseBusinessScenarioSnapshot businessScenario = releaseSnapshot.businessScenarios().stream()
+                    .filter(item -> item.id().equals(businessScenarioId))
+                    .filter(item -> item.appId().equals(application.getId()))
+                    .filter(item -> item.status() == null || item.status() == 1)
+                    .findFirst()
+                    .orElse(null);
+            if (businessScenario == null) {
+                return List.of(-1L);
+            }
+            scenarioIds = businessScenario.items().stream()
+                    .filter(item -> item.endpointId().equals(endpoint.getId()))
+                    .filter(item -> item.status() == null || item.status() == 1)
+                    .sorted(java.util.Comparator.comparing(item -> Optional.ofNullable(item.sortOrder()).orElse(0)))
+                    .map(MockReleaseBusinessScenarioStepSnapshot::scenarioId)
+                    .toList();
+        } else {
+            MockBusinessScenarioEntity businessScenario = businessScenarioMapper.selectById(businessScenarioId);
+            if (businessScenario == null
+                    || !application.getWorkspaceId().equals(businessScenario.getWorkspaceId())
+                    || !application.getId().equals(businessScenario.getAppId())
+                    || businessScenario.getStatus() == null
+                    || businessScenario.getStatus() == 0) {
+                return List.of(-1L);
+            }
+            scenarioIds = businessScenarioItemMapper.selectList(new LambdaQueryWrapper<MockBusinessScenarioItemEntity>()
+                            .eq(MockBusinessScenarioItemEntity::getBusinessScenarioId, businessScenarioId)
+                            .eq(MockBusinessScenarioItemEntity::getEndpointId, endpoint.getId())
+                            .eq(MockBusinessScenarioItemEntity::getStatus, 1)
+                            .orderByAsc(MockBusinessScenarioItemEntity::getSortOrder)
+                            .orderByAsc(MockBusinessScenarioItemEntity::getId))
+                    .stream()
+                    .map(MockBusinessScenarioItemEntity::getScenarioId)
+                    .toList();
         }
-        List<Long> scenarioIds = businessScenarioItemMapper.selectList(new LambdaQueryWrapper<MockBusinessScenarioItemEntity>()
-                        .eq(MockBusinessScenarioItemEntity::getBusinessScenarioId, businessScenarioId)
-                        .eq(MockBusinessScenarioItemEntity::getEndpointId, endpoint.getId())
-                        .eq(MockBusinessScenarioItemEntity::getStatus, 1)
-                        .orderByAsc(MockBusinessScenarioItemEntity::getSortOrder)
-                        .orderByAsc(MockBusinessScenarioItemEntity::getId))
-                .stream()
-                .map(MockBusinessScenarioItemEntity::getScenarioId)
-                .toList();
         return scenarioIds.isEmpty() ? List.of(-1L) : scenarioIds;
     }
 
+    private MockReleaseEntity readActiveReleaseEntity(MockApplicationEntity application) {
+        return releaseMapper.selectOne(new LambdaQueryWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getAppId, application.getId())
+                .eq(MockReleaseEntity::getWorkspaceId, application.getWorkspaceId())
+                .eq(MockReleaseEntity::getActive, 1)
+                .orderByDesc(MockReleaseEntity::getVersionNo)
+                .last("LIMIT 1"));
+    }
+
+    private MockReleaseSnapshot readReleaseSnapshot(MockReleaseEntity release) {
+        if (release == null) {
+            return null;
+        }
+        try {
+            return OBJECT_MAPPER.readValue(release.getSnapshotJson(), MockReleaseSnapshot.class);
+        } catch (JsonProcessingException exception) {
+            throw new BadRequestException("当前 Mock 发布版本快照无效");
+        }
+    }
+
+    private ResponseEntity<String> notAuthorized(MockApplicationEntity application, String method, String path, HttpServletRequest request, String body, String status) {
+        String responseBody = "{\"success\":false,\"message\":\"Mock execution is not authorized\"}";
+        saveLog(application, null, null, method, path, request, body, 401, Map.of("Content-Type", "application/json;charset=UTF-8"), responseBody, false, status, null);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(responseBody);
+    }
+
+    private MockEndpointEntity toEndpointEntity(MockReleaseEndpointSnapshot snapshot) {
+        MockEndpointEntity entity = new MockEndpointEntity();
+        entity.setId(snapshot.id());
+        entity.setWorkspaceId(null);
+        entity.setAppId(snapshot.appId());
+        entity.setEndpointName(snapshot.endpointName());
+        entity.setHttpMethod(snapshot.httpMethod());
+        entity.setPathPattern(snapshot.pathPattern());
+        entity.setDescription(snapshot.description());
+        entity.setStatus(snapshot.status());
+        return entity;
+    }
+
+    private MockScenarioEntity toScenarioEntity(MockReleaseScenarioSnapshot snapshot) {
+        MockScenarioEntity entity = new MockScenarioEntity();
+        entity.setId(snapshot.id());
+        entity.setAppId(snapshot.appId());
+        entity.setEndpointId(snapshot.endpointId());
+        entity.setScenarioName(snapshot.scenarioName());
+        entity.setPriority(snapshot.priority());
+        entity.setMatchJson(snapshot.matchJson());
+        entity.setResponseStatus(snapshot.responseStatus());
+        entity.setResponseHeadersJson(snapshot.responseHeadersJson());
+        entity.setResponseBody(snapshot.responseBody());
+        entity.setResponseDelayMs(snapshot.responseDelayMs());
+        entity.setVariablesJson(snapshot.variablesJson());
+        entity.setStatus(snapshot.status());
+        return entity;
+    }
+
     private ResponseEntity<String> notMatched(MockApplicationEntity application, MockEndpointEntity endpoint, MockScenarioEntity scenario, String method, String path, HttpServletRequest request, String body, String status) {
+        return notMatched(application, endpoint, scenario, method, path, request, body, status, null);
+    }
+
+    private ResponseEntity<String> notMatched(MockApplicationEntity application, MockEndpointEntity endpoint, MockScenarioEntity scenario, String method, String path, HttpServletRequest request, String body, String status, MockReleaseEntity release) {
         String responseBody = "{\"success\":false,\"message\":\"Mock not matched\"}";
-        saveLog(application, endpoint, scenario, method, path, request, body, 404, Map.of("Content-Type", "application/json;charset=UTF-8"), responseBody, false, status);
+        saveLog(application, endpoint, scenario, method, path, request, body, 404, Map.of("Content-Type", "application/json;charset=UTF-8"), responseBody, false, status, release);
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(responseBody);
     }
 
@@ -509,12 +747,18 @@ public class MockDomainService {
     }
 
     private void saveLog(MockApplicationEntity application, MockEndpointEntity endpoint, MockScenarioEntity scenario, String method, String path, HttpServletRequest request, String body, Integer responseStatus, Map<String, String> responseHeaders, String responseBody, boolean matched, String status) {
+        saveLog(application, endpoint, scenario, method, path, request, body, responseStatus, responseHeaders, responseBody, matched, status, null);
+    }
+
+    private void saveLog(MockApplicationEntity application, MockEndpointEntity endpoint, MockScenarioEntity scenario, String method, String path, HttpServletRequest request, String body, Integer responseStatus, Map<String, String> responseHeaders, String responseBody, boolean matched, String status, MockReleaseEntity release) {
         MockCallLogEntity log = new MockCallLogEntity();
         log.setWorkspaceId(application == null ? 0L : application.getWorkspaceId());
         log.setAppId(application == null ? null : application.getId());
         log.setEndpointId(endpoint == null ? null : endpoint.getId());
         log.setScenarioId(scenario == null ? null : scenario.getId());
         log.setBusinessScenarioId(readBusinessScenarioId(request));
+        log.setReleaseId(release == null ? null : release.getId());
+        log.setReleaseVersion(release == null ? null : release.getVersionNo());
         log.setHttpMethod(method);
         log.setRequestPath(path);
         log.setRequestHeadersJson(toJson(readHeaders(request)));
@@ -867,10 +1111,18 @@ public class MockDomainService {
                 application == null ? null : application.getAppName(), entity.getEndpointId(),
                 endpoint == null ? null : endpoint.getEndpointName(), entity.getScenarioId(),
                 scenario == null ? null : scenario.getScenarioName(), entity.getBusinessScenarioId(),
-                businessScenario == null ? null : businessScenario.getScenarioName(), entity.getHttpMethod(), entity.getRequestPath(),
+                businessScenario == null ? null : businessScenario.getScenarioName(), entity.getReleaseId(), entity.getReleaseVersion(), entity.getHttpMethod(), entity.getRequestPath(),
                 entity.getRequestHeadersJson(), entity.getRequestBody(), entity.getResponseStatus(),
                 entity.getResponseHeadersJson(), entity.getResponseBody(),
                 entity.getMatched() != null && entity.getMatched() == 1, entity.getStatus(), entity.getCreatedAt());
+    }
+
+    private MockReleaseItem toReleaseItem(MockReleaseEntity entity) {
+        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        MockApplicationEntity application = applicationMapper.selectById(entity.getAppId());
+        return new MockReleaseItem(entity.getId(), workspace.getWorkspaceCode(), workspace.getWorkspaceName(),
+                entity.getAppId(), application == null ? "-" : application.getAppName(), entity.getVersionNo(),
+                entity.getReleaseName(), entity.getActive() != null && entity.getActive() == 1, entity.getCreatedAt());
     }
 
     private void ensureAppCodeUnique(Long workspaceId, String appCode, Long excludeId) {

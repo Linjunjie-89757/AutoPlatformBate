@@ -26,6 +26,12 @@ public class MockCallLogEntity extends BaseEntity {
     @TableField("business_scenario_id")
     private Long businessScenarioId;
 
+    @TableField("release_id")
+    private Long releaseId;
+
+    @TableField("release_version")
+    private Integer releaseVersion;
+
     @TableField("http_method")
     private String httpMethod;
 

@@ -10,6 +10,8 @@ export type DefectSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
 export type DefectPriority = 'P0' | 'P1' | 'P2' | 'P3'
 
+export type DefectSourceType = 'MANUAL' | 'CASE' | 'REPORT' | 'AI_DETECTION' | 'CODE_REVIEW'
+
 export interface DefectSummaryItem {
   id: number
   bugNo: string
@@ -45,7 +47,11 @@ export interface DefectCaseSummary {
 
 export interface DefectDetail extends DefectSummaryItem {
   description: string
-  sourceType: string | null
+  reproductionSteps: string
+  expectedResult: string
+  actualResult: string
+  moduleName: string
+  sourceType: DefectSourceType | string | null
   assigneeId: number | null
   reporterId: number | null
   relatedReportId: number | null
@@ -85,8 +91,13 @@ export interface SaveDefectPayload {
   workspaceCode?: string
   title: string
   description: string
+  reproductionSteps: string
+  expectedResult: string
+  actualResult: string
+  moduleName: string
   priority: string
   severity: string
+  sourceType?: DefectSourceType | string
   assigneeId: number | null
   relatedCaseId: number | null
   tags: string[]

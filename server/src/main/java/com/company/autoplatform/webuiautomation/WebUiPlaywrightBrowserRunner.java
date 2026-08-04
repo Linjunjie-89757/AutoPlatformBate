@@ -33,7 +33,8 @@ public class WebUiPlaywrightBrowserRunner implements WebUiBrowserRunner {
         try (Playwright playwright = Playwright.create();
              Browser browser = browserType(playwright, context.browserType())
                      .launch(new BrowserType.LaunchOptions().setHeadless(context.headless()));
-             BrowserContext browserContext = browser.newContext()) {
+             BrowserContext browserContext = browser.newContext(new Browser.NewContextOptions()
+                     .setExtraHTTPHeaders(context.extraHttpHeaders()))) {
             browserContext.setDefaultTimeout(context.defaultTimeoutMs());
             Page page = browserContext.newPage();
             for (WebUiCaseStepEntity step : context.steps()) {

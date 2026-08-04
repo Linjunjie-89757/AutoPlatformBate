@@ -13,10 +13,14 @@ import com.company.autoplatform.settings.MockApplicationEntity;
 import com.company.autoplatform.settings.MockApplicationMapper;
 import com.company.autoplatform.settings.MockBusinessScenarioEntity;
 import com.company.autoplatform.settings.MockBusinessScenarioMapper;
+import com.company.autoplatform.settings.MockReleaseEntity;
+import com.company.autoplatform.settings.MockReleaseMapper;
+import com.company.autoplatform.settings.MockExecutionCredentialService;
 import com.company.autoplatform.settings.ParamSetEntity;
 import com.company.autoplatform.settings.ParamSetMapper;
 import com.company.autoplatform.settings.ParamSetVersionEntity;
 import com.company.autoplatform.settings.ParamSetVersionMapper;
+import com.company.autoplatform.workspace.WorkspaceService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -77,9 +81,12 @@ public class ApiExecutionEngineSupport {
     private final ParamSetVersionMapper paramSetVersionMapper;
     private final MockApplicationMapper mockApplicationMapper;
     private final MockBusinessScenarioMapper mockBusinessScenarioMapper;
+    private final MockReleaseMapper mockReleaseMapper;
+    private final MockExecutionCredentialService executionCredentialService;
     private final TaskMapper taskMapper;
     private final ReportMapper reportMapper;
     private final ApiWorkspaceScopeSupport workspaceScopeSupport;
+    private final WorkspaceService workspaceService;
     private final ApiAssertionEvaluator assertionEvaluator;
     private final ApiAssertionSupport assertionSupport;
     private final ApiRequestExecutionSupport requestExecutionSupport;
@@ -99,6 +106,8 @@ public class ApiExecutionEngineSupport {
             ParamSetVersionMapper paramSetVersionMapper,
             MockApplicationMapper mockApplicationMapper,
             MockBusinessScenarioMapper mockBusinessScenarioMapper,
+            MockReleaseMapper mockReleaseMapper,
+            MockExecutionCredentialService executionCredentialService,
             TaskMapper taskMapper,
             ReportMapper reportMapper,
             ApiWorkspaceScopeSupport workspaceScopeSupport,
@@ -110,6 +119,7 @@ public class ApiExecutionEngineSupport {
             ApiRunResultPersistenceSupport runResultPersistenceSupport,
             ApiRunFinalizerSupport runFinalizerSupport,
             ApiVariableResolver variableResolver,
+            WorkspaceService workspaceService,
             @Value("${autoplatform.mock.public-base-url:http://localhost:${server.port:8080}/api/mock}") String mockPublicBaseUrl
     ) {
         this.definitionMapper = definitionMapper;
@@ -120,6 +130,8 @@ public class ApiExecutionEngineSupport {
         this.paramSetVersionMapper = paramSetVersionMapper;
         this.mockApplicationMapper = mockApplicationMapper;
         this.mockBusinessScenarioMapper = mockBusinessScenarioMapper;
+        this.mockReleaseMapper = mockReleaseMapper;
+        this.executionCredentialService = executionCredentialService;
         this.taskMapper = taskMapper;
         this.reportMapper = reportMapper;
         this.workspaceScopeSupport = workspaceScopeSupport;
@@ -131,10 +143,11 @@ public class ApiExecutionEngineSupport {
         this.runResultPersistenceSupport = runResultPersistenceSupport;
         this.runFinalizerSupport = runFinalizerSupport;
         this.variableResolver = variableResolver;
+        this.workspaceService = workspaceService;
         this.mockPublicBaseUrl = trimTrailingSlash(mockPublicBaseUrl);
     }
     ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId) {
-        return buildExecutionContext(workspaceId, environmentId, variableSetId, null, null, null, null);
+        return buildExecutionContext(workspaceId, environmentId, variableSetId, (Long) null, null, null);
     }
 
     ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Long mockApplicationId, Boolean mockEnabled) {
@@ -142,8 +155,12 @@ public class ApiExecutionEngineSupport {
     }
 
     ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId) {
+        return buildExecutionContext(workspaceId, environmentId, variableSetId, mockApplicationId, mockEnabled, mockBusinessScenarioId, null);
+    }
+
+    ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId) {
         ResolvedEnvironment environment = resolveEnvironment(workspaceId, environmentId);
-        environment = resolveMockEnvironment(workspaceId, environment, mockApplicationId, mockEnabled, mockBusinessScenarioId);
+        environment = resolveMockEnvironment(workspaceId, environment, mockApplicationId, mockEnabled, mockBusinessScenarioId, mockReleaseId);
         Map<String, String> variables = new LinkedHashMap<>();
         List<RuntimeVariableSetSnapshot> variableSetSnapshots = new ArrayList<>();
         applyVariableSets(variables, listGlobalVariableSets(workspaceId), variableSetSnapshots);
@@ -180,7 +197,11 @@ public class ApiExecutionEngineSupport {
     }
 
     ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Map<String, String> rowVariables, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId) {
-        ExecutionContext context = buildExecutionContext(workspaceId, environmentId, variableSetId, mockApplicationId, mockEnabled, mockBusinessScenarioId);
+        return buildExecutionContext(workspaceId, environmentId, variableSetId, rowVariables, mockApplicationId, mockEnabled, mockBusinessScenarioId, null);
+    }
+
+    ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Map<String, String> rowVariables, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId) {
+        ExecutionContext context = buildExecutionContext(workspaceId, environmentId, variableSetId, mockApplicationId, mockEnabled, mockBusinessScenarioId, mockReleaseId);
         if (rowVariables != null) {
             rowVariables.forEach((key, value) -> {
                 if (key != null && !key.isBlank()) {
@@ -194,7 +215,7 @@ public class ApiExecutionEngineSupport {
 
     private ResolvedEnvironment resolveEnvironment(Long workspaceId, Long environmentId) {
         if (environmentId == null) {
-            return new ResolvedEnvironment(null, "", List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, null, null, null, null, null, List.of());
+            return new ResolvedEnvironment(null, "", List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, null, null, null, null, null, null, null, null, List.of());
         }
         EnvConfigEntity environment = requireEnvironment(environmentId);
         if (!environment.getWorkspaceId().equals(workspaceId)) {
@@ -223,12 +244,15 @@ public class ApiExecutionEngineSupport {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 defaultServiceKey,
                 services
         );
     }
 
-    private ResolvedEnvironment resolveMockEnvironment(Long workspaceId, ResolvedEnvironment environment, Long requestMockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId) {
+    private ResolvedEnvironment resolveMockEnvironment(Long workspaceId, ResolvedEnvironment environment, Long requestMockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId) {
         if (Boolean.FALSE.equals(mockEnabled)) {
             return copyEnvironmentWithMock(environment, null, null, null, null, null, null);
         }
@@ -244,6 +268,7 @@ public class ApiExecutionEngineSupport {
             throw new BadRequestException("Mock application is disabled");
         }
         MockBusinessScenarioEntity businessScenario = resolveMockBusinessScenario(workspaceId, application.getId(), mockBusinessScenarioId);
+        MockReleaseEntity release = resolveMockRelease(application.getId(), workspaceId, mockReleaseId);
         String baseUrl = mockPublicBaseUrl + "/" + application.getAppCode();
         return copyEnvironmentWithMock(
                 environment,
@@ -252,7 +277,13 @@ public class ApiExecutionEngineSupport {
                 application.getAppCode(),
                 baseUrl,
                 businessScenario == null ? null : businessScenario.getId(),
-                businessScenario == null ? null : businessScenario.getScenarioName()
+                businessScenario == null ? null : businessScenario.getScenarioName(),
+                release == null ? null : release.getId(),
+                release == null ? null : release.getVersionNo(),
+                release == null ? null : executionCredentialService.issue(
+                        workspaceService.requireWorkspaceById(workspaceId).getWorkspaceCode(),
+                        application.getAppCode(),
+                        release.getId())
         );
     }
 
@@ -273,9 +304,14 @@ public class ApiExecutionEngineSupport {
     }
 
     private ResolvedEnvironment copyEnvironmentWithMock(ResolvedEnvironment environment, Long mockApplicationId, String mockApplicationName, String mockApplicationCode, String mockBaseUrl, Long mockBusinessScenarioId, String mockBusinessScenarioName) {
+        return copyEnvironmentWithMock(environment, mockApplicationId, mockApplicationName, mockApplicationCode, mockBaseUrl,
+                mockBusinessScenarioId, mockBusinessScenarioName, null, null, null);
+    }
+
+    private ResolvedEnvironment copyEnvironmentWithMock(ResolvedEnvironment environment, Long mockApplicationId, String mockApplicationName, String mockApplicationCode, String mockBaseUrl, Long mockBusinessScenarioId, String mockBusinessScenarioName, Long mockReleaseId, Integer mockReleaseVersion, String mockExecutionToken) {
         return new ResolvedEnvironment(
                 environment.environmentId(),
-                environment.baseUrl(),
+                mockBaseUrl == null ? environment.baseUrl() : mockBaseUrl,
                 environment.headers(),
                 environment.authConfig(),
                 environment.timeoutMs(),
@@ -287,6 +323,9 @@ public class ApiExecutionEngineSupport {
                 mockBaseUrl,
                 mockBusinessScenarioId,
                 mockBusinessScenarioName,
+                mockReleaseId,
+                mockReleaseVersion,
+                mockExecutionToken,
                 environment.defaultServiceKey(),
                 environment.services()
         );
@@ -383,10 +422,39 @@ public class ApiExecutionEngineSupport {
                         environment.mockApplicationCode(),
                         environment.mockBaseUrl(),
                         environment.mockBusinessScenarioId(),
-                        environment.mockBusinessScenarioName()
+                        environment.mockBusinessScenarioName(),
+                        environment.mockReleaseId(),
+                        environment.mockReleaseVersion()
                 ),
                 maskRuntimeVariables(variables)
         ), "Failed to serialize API execution context snapshot");
+    }
+
+    private MockReleaseEntity activeMockRelease(Long mockApplicationId, Long workspaceId) {
+        if (mockApplicationId == null) {
+            return null;
+        }
+        LambdaQueryWrapper<MockReleaseEntity> query = new LambdaQueryWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getAppId, mockApplicationId)
+                .eq(MockReleaseEntity::getActive, 1);
+        if (workspaceId != null) {
+            query.eq(MockReleaseEntity::getWorkspaceId, workspaceId);
+        }
+        return mockReleaseMapper.selectOne(query.orderByDesc(MockReleaseEntity::getVersionNo).last("LIMIT 1"));
+    }
+
+    private MockReleaseEntity resolveMockRelease(Long mockApplicationId, Long workspaceId, Long requestedReleaseId) {
+        if (requestedReleaseId == null) {
+            return activeMockRelease(mockApplicationId, workspaceId);
+        }
+        MockReleaseEntity release = mockReleaseMapper.selectOne(new LambdaQueryWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getId, requestedReleaseId)
+                .eq(MockReleaseEntity::getAppId, mockApplicationId)
+                .eq(workspaceId != null, MockReleaseEntity::getWorkspaceId, workspaceId));
+        if (release == null) {
+            throw new BadRequestException("Mock release must belong to the selected Mock application and workspace");
+        }
+        return release;
     }
 
     private List<ParamSetEntity> listGlobalVariableSets(Long workspaceId) {

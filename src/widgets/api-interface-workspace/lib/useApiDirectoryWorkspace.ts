@@ -32,12 +32,20 @@ export interface ImportModuleOption {
   workspaceCode: string
 }
 
+interface DirectoryTreeNodeExpose {
+  key?: string | number
+  expanded?: boolean
+  data?: DirectoryNode
+  expand?: () => void
+  collapse?: () => void
+}
+
 interface DirectoryTreeExpose {
-  getNode: (key: string) => { expanded?: boolean; expand?: () => void; collapse?: () => void } | null
+  getNode: (key: string) => DirectoryTreeNodeExpose | null
   setCurrentKey?: (key: string) => void
   store?: {
-    value?: { _getAllNodes?: () => Array<{ key?: string | number; expanded?: boolean; data?: DirectoryNode }> }
-    _getAllNodes?: () => Array<{ key?: string | number; expanded?: boolean; data?: DirectoryNode }>
+    value?: { _getAllNodes?: () => DirectoryTreeNodeExpose[] }
+    _getAllNodes?: () => DirectoryTreeNodeExpose[]
   }
 }
 
@@ -152,6 +160,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
   const debouncedDirectoryKeyword = ref('')
   const selectedDirectoryKey = ref('definition-root')
   const expandedKeys = ref<string[]>(['definition-root'])
+  const directoryInitialized = ref(false)
   const directoryExpandedRestored = ref(false)
   const restoringDirectoryExpanded = ref(false)
   const directoryExpandedKeysBeforeSearch = ref<string[] | null>(null)
@@ -159,6 +168,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
   let directorySearchTimer = 0
   let directorySearchRequestSeq = 0
   let workspaceDataRequestSeq = 0
+  let initializedWorkspaceCode = ''
   const moduleChildrenRequests = new Map<string, Promise<ApiDefinitionModuleItem[]>>()
   const definitionRequestSeqByKey = new Map<string, number>()
 
@@ -405,9 +415,26 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     const expanded = new Set(expandedKeys.value)
     allNodes.forEach((treeNode) => {
       if (treeNode.data?.type === 'module' || treeNode.data?.type === 'workspace' || treeNode.data?.type === 'root') {
-        treeNode.expanded = expanded.has(String(treeNode.key))
+        const shouldExpand = expanded.has(String(treeNode.key))
+        if (Boolean(treeNode.expanded) === shouldExpand) return
+        if (shouldExpand) {
+          treeNode.expand?.()
+        } else {
+          treeNode.collapse?.()
+        }
       }
     })
+  }
+
+  async function syncDirectoryNodeExpandedState(nodeKey: string, expanded: boolean) {
+    await nextTick()
+    const treeNode = options.directoryTreeRef.value?.getNode(nodeKey)
+    if (!treeNode || Boolean(treeNode.expanded) === expanded) return
+    if (expanded) {
+      treeNode.expand?.()
+    } else {
+      treeNode.collapse?.()
+    }
   }
 
   async function collapseDirectoryTree() {
@@ -422,17 +449,13 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     if (expandOptions.force) {
       expandedKeys.value = Array.from(new Set([...expandedKeys.value, node.key]))
     }
-    await syncDirectoryTreeExpandedState()
-    const treeNode = options.directoryTreeRef.value?.getNode(node.key)
-    if (!treeNode) return
-    treeNode.expanded = true
-    treeNode.expand?.()
+    await syncDirectoryNodeExpandedState(node.key, true)
   }
 
   function setDirectoryNodeExpanded(node: DirectoryNode, expanded: boolean) {
     if (expanded) {
       expandedKeys.value = Array.from(new Set([...expandedKeys.value, node.key]))
-      void syncDirectoryTreeExpandedState()
+      void syncDirectoryNodeExpandedState(node.key, true)
       if (node.type === 'module' && node.hasModuleChildren && !node.moduleChildrenLoaded) {
         void loadDefinitionModuleChildren(node)
       }
@@ -442,7 +465,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       return
     }
     expandedKeys.value = expandedKeys.value.filter(key => key !== node.key)
-    void syncDirectoryTreeExpandedState()
+    void syncDirectoryNodeExpandedState(node.key, false)
   }
 
   async function loadDefinitionModuleChildren(node: DirectoryNode) {
@@ -536,7 +559,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       if (definitionRequestSeqByKey.get(key) === definitionRequestSeq) {
         node.loading = false
         markDefinitionModuleLoading(key, false)
-        void syncDirectoryTreeExpandedState()
+        void keepDirectoryNodeExpanded(node)
       }
     }
   }
@@ -694,12 +717,22 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     const openDefaultTab = loadOptions?.openDefaultTab ?? true
     const requestSeq = ++workspaceDataRequestSeq
     const requestedWorkspaceCode = options.workspaceCode.value
+    const initialWorkspaceLoad = initializedWorkspaceCode !== requestedWorkspaceCode
 
     loading.value = true
     moduleLoading.value = true
     definitionLoading.value = true
     moduleErrorMessage.value = ''
     definitionErrorMessage.value = ''
+    if (initialWorkspaceLoad) {
+      directoryInitialized.value = false
+      directoryExpandedRestored.value = false
+    }
+
+    const routeDefinitionId = options.getRouteDefinitionId()
+    if (openDefaultTab && !routeDefinitionId && !options.hasAnyEditor()) {
+      options.openNewRequestTab(null)
+    }
 
     try {
       const storedExpandedKeys = directoryKeyword.value.trim() ? [] : readStoredExpandedKeys()
@@ -732,9 +765,14 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       directoryExpandedRestored.value = false
       const availableKeys = new Set(collectExpandableDirectoryKeys(directoryTree.value))
       const restoredKeys = storedExpandedKeys.filter(key => availableKeys.has(key))
+      const defaultWorkspaceKeys = (directoryTree.value[0]?.children || [])
+        .filter(node => node.type === 'workspace' && node.children.length > 0)
+        .map(node => node.key)
       expandedKeys.value = directoryKeyword.value.trim()
         ? collectExpandableDirectoryKeys(directoryTree.value)
-        : restoredKeys
+        : restoredKeys.length > 0
+          ? restoredKeys
+          : defaultWorkspaceKeys
       directoryExpandedRestored.value = true
       restoringDirectoryExpanded.value = restoredKeys.length > 0 && !directoryKeyword.value.trim()
       if (restoringDirectoryExpanded.value) {
@@ -742,6 +780,9 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
           restoringDirectoryExpanded.value = false
         }, 0)
       }
+      initializedWorkspaceCode = requestedWorkspaceCode
+      directoryInitialized.value = true
+      await syncDirectoryTreeExpandedState()
       options.restoreRunOptions()
       options.onLoaded({ definitions: definitions.value, modules: modules.value })
       const restoredKeySet = new Set(restoredKeys)
@@ -760,6 +801,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
       const message = getRequestErrorMessage(error)
       moduleErrorMessage.value = message
       definitionErrorMessage.value = message
+      directoryInitialized.value = true
     } finally {
       if (requestSeq === workspaceDataRequestSeq) {
         loading.value = false
@@ -1015,6 +1057,7 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     directoryKeyword,
     selectedDirectoryKey,
     expandedKeys,
+    directoryInitialized,
     restoringDirectoryExpanded,
     directoryTree,
     visibleDirectoryTree,

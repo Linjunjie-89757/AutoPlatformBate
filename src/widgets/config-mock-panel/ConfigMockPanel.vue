@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Connection, CopyDocument, Delete, Edit, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Connection, CopyDocument, Delete, Edit, Plus, RefreshRight, Search, Upload } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
   ConfigTypeBadge,
@@ -16,10 +16,11 @@ import {
   type MockBusinessScenarioItem,
   type MockCallLogItem,
   type MockEndpointItem,
+  type MockReleaseItem,
   type MockScenarioItem,
 } from '@/entities/config'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { confirmDelete } from '@/shared/ui'
+import { confirmAction, confirmDelete } from '@/shared/ui'
 import ConfigReferenceDrawer from '@/widgets/config-reference-drawer/ConfigReferenceDrawer.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -55,6 +56,7 @@ const applications = ref<MockApplicationItem[]>([])
 const endpoints = ref<MockEndpointItem[]>([])
 const scenarios = ref<MockScenarioItem[]>([])
 const businessScenarios = ref<MockBusinessScenarioItem[]>([])
+const releases = ref<MockReleaseItem[]>([])
 const logs = ref<MockCallLogItem[]>([])
 const activeAppId = ref<number | null>(null)
 const activeEndpointId = ref<number | null>(null)
@@ -62,6 +64,7 @@ const activeScenarioId = ref<number | null>(null)
 const activeLog = ref<MockCallLogItem | null>(null)
 const keyword = ref('')
 const loading = ref(false)
+const releaseLoading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
 const appDialogVisible = ref(false)
@@ -138,6 +141,7 @@ const endpointScenarios = computed(() => scenarios.value.filter(item => item.end
 const appScenarios = computed(() => scenarios.value.filter(item => item.appId === activeAppId.value))
 const appBusinessScenarios = computed(() => businessScenarios.value.filter(item => item.appId === activeAppId.value))
 const appLogs = computed(() => logs.value.filter(item => !activeAppId.value || item.appId === activeAppId.value))
+const activeRelease = computed(() => releases.value.find(item => item.active) || null)
 const invokePath = computed(() => {
   if (!activeApp.value || !activeEndpoint.value) {
     return ''
@@ -164,10 +168,26 @@ async function loadAll() {
     normalizeActiveApp()
     normalizeActiveEndpoint()
     normalizeActiveScenario()
+    await loadReleases()
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadReleases() {
+  if (!activeAppId.value) {
+    releases.value = []
+    return
+  }
+  releaseLoading.value = true
+  try {
+    releases.value = await configApi.getMockReleases(props.workspaceCode, activeAppId.value)
+  } catch {
+    releases.value = []
+  } finally {
+    releaseLoading.value = false
   }
 }
 
@@ -524,6 +544,63 @@ async function openApplicationReferences(row: MockApplicationItem) {
   }
 }
 
+async function publishCurrentRelease() {
+  if (!activeApp.value) {
+    return
+  }
+  releaseLoading.value = true
+  try {
+    const nextVersion = Math.max(0, ...releases.value.map(item => item.versionNo)) + 1
+    const { value } = await ElMessageBox.prompt(
+      '发布后，自动化执行将使用这份配置快照；之后的编辑不会影响已发布版本。',
+      '发布 Mock 配置',
+      {
+        confirmButtonText: '发布',
+        cancelButtonText: '取消',
+        inputValue: `v${nextVersion} - 当前配置`,
+        inputPlaceholder: '例如：支付成功回归基线',
+        inputValidator: input => Boolean(input?.trim()),
+        inputErrorMessage: '请输入版本名称',
+      },
+    )
+    await configApi.publishMockRelease(props.workspaceCode, activeApp.value.id, {
+      releaseName: value.trim(),
+    })
+    ElMessage.success('当前 Mock 配置已发布，后续运行将优先使用该版本')
+    await loadReleases()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(getRequestErrorMessage(error))
+    }
+  } finally {
+    releaseLoading.value = false
+  }
+}
+
+async function activateRelease(release: MockReleaseItem) {
+  if (!activeApp.value || release.active) {
+    return
+  }
+  try {
+    await confirmAction({
+      title: '切换 Mock 运行版本',
+      message: `确认将运行版本切换为 v${release.versionNo}「${release.releaseName}」？后续调用会使用该版本快照。`,
+      confirmText: '确认切换',
+      tone: 'warning',
+    })
+    releaseLoading.value = true
+    await configApi.activateMockRelease(props.workspaceCode, activeApp.value.id, release.id)
+    ElMessage.success(`已切换到 Mock v${release.versionNo}`)
+    await loadReleases()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(getRequestErrorMessage(error))
+    }
+  } finally {
+    releaseLoading.value = false
+  }
+}
+
 async function removeEndpoint(row: MockEndpointItem) {
   await confirmAndRun(
     `删除 Mock 接口「${row.endpointName}」会同时删除下属场景和调用日志。确认删除？`,
@@ -602,6 +679,7 @@ function prettyJson(value: string | null) {
 watch(activeAppId, () => {
   normalizeActiveEndpoint()
   normalizeActiveScenario()
+  void loadReleases()
 })
 
 watch(activeEndpointId, () => {
@@ -686,6 +764,7 @@ onMounted(() => {
             <p>{{ activeApp.description || '暂无描述' }}</p>
           </div>
           <div class="config-mock-summary__actions">
+            <AppButton size="small" type="primary" :icon="Upload" :loading="releaseLoading" @click="publishCurrentRelease">发布当前配置</AppButton>
             <AppButton size="small" :icon="Connection" @click="openApplicationReferences(activeApp)">引用详情</AppButton>
             <AppButton size="small" :icon="Edit" @click="openEditAppDialog(activeApp)">编辑应用</AppButton>
             <AppButton size="small" :icon="Delete" @click="removeApplication(activeApp)">删除</AppButton>
@@ -695,6 +774,55 @@ onMounted(() => {
         <AppEmptyState v-else title="请选择 Mock 应用" description="左侧选择应用后维护接口、场景和调用日志。" />
 
         <template v-if="activeApp">
+          <section class="config-mock-release">
+            <div class="config-mock-release__summary">
+              <strong>运行版本</strong>
+              <p v-if="activeRelease">当前运行使用 {{ activeRelease.releaseName }}，修改配置不会影响已发布版本。</p>
+              <p v-else>当前配置尚未发布，旧数据仍按实时配置兼容运行；建议完成接口和场景配置后发布。</p>
+            </div>
+            <div class="config-mock-release__meta">
+              <ConfigTypeBadge
+                :label="activeRelease ? 'v' + activeRelease.versionNo + ' 已发布' : '未发布'"
+                :tone="activeRelease ? 'success' : 'warning'"
+              />
+            </div>
+          </section>
+
+          <section class="config-mock-release-history">
+            <div class="config-mock-section__header">
+              <div>
+                <h3>版本历史</h3>
+                <p>每次发布都会保存当前接口和场景快照；切换旧版本可快速回滚运行配置。</p>
+              </div>
+              <AppButton size="small" :icon="RefreshRight" :loading="releaseLoading" @click="loadReleases">刷新版本</AppButton>
+            </div>
+            <AppLoadingState v-if="releaseLoading && !releases.length" text="正在加载版本..." />
+            <el-table v-else-if="releases.length" :data="releases" row-key="id" height="200">
+              <el-table-column label="版本" width="90">
+                <template #default="{ row }">v{{ row.versionNo }}</template>
+              </el-table-column>
+              <el-table-column prop="releaseName" label="版本名称" min-width="220" show-overflow-tooltip />
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <ConfigTypeBadge :label="row.active ? '当前运行' : '已发布'" :tone="row.active ? 'success' : 'default'" />
+                </template>
+              </el-table-column>
+              <el-table-column label="发布时间" width="170">
+                <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+              </el-table-column>
+              <el-table-column label="操作" width="100" fixed="right">
+                <template #default="{ row }">
+                  <div class="config-mock-table-actions">
+                    <button type="button" :disabled="row.active || releaseLoading" @click="activateRelease(row)">
+                      {{ row.active ? '使用中' : '切换' }}
+                    </button>
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+            <AppEmptyState v-else title="暂无已发布版本" description="完成 Mock 接口和场景配置后，可发布第一份运行快照。" />
+          </section>
+
           <section class="config-mock-url">
             <span>当前接口调用地址</span>
             <code>{{ invokePath || '请选择接口' }}</code>
@@ -758,37 +886,40 @@ onMounted(() => {
             </el-table>
           </section>
 
-          <section class="config-mock-section">
-            <div class="config-mock-section__header">
-              <div>
-                <h3>业务场景组合</h3>
-                <p>把多个单接口 Mock 场景组合成一条可复用业务链路，例如支付成功、支付失败或超时。</p>
+          <details class="config-mock-advanced-section">
+            <summary>高级：业务场景组合</summary>
+            <section class="config-mock-section">
+              <div class="config-mock-section__header">
+                <div>
+                  <h3>业务场景组合</h3>
+                  <p>把多个单接口 Mock 场景组合成一条可复用业务链路，例如支付成功、支付失败或超时。</p>
+                </div>
+                <AppButton size="small" type="primary" :icon="Plus" @click="openCreateBusinessScenarioDialog">新增组合</AppButton>
               </div>
-              <AppButton size="small" type="primary" :icon="Plus" @click="openCreateBusinessScenarioDialog">新增组合</AppButton>
-            </div>
-            <el-table :data="appBusinessScenarios" row-key="id" height="220">
-              <el-table-column prop="scenarioName" label="组合名称" min-width="180" show-overflow-tooltip />
-              <el-table-column label="包含场景" min-width="220" show-overflow-tooltip>
-                <template #default="{ row }">
-                  {{ formatBusinessScenarioItems(row) }}
-                </template>
-              </el-table-column>
-              <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
-              <el-table-column label="状态" width="90">
-                <template #default="{ row }">
-                  <ConfigTypeBadge :label="row.status === 1 ? '启用' : '停用'" :tone="row.status === 1 ? 'success' : 'default'" />
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="150" fixed="right">
-                <template #default="{ row }">
-                  <div class="config-mock-table-actions">
-                    <button type="button" @click="openEditBusinessScenarioDialog(row)">编辑</button>
-                    <button type="button" @click="removeBusinessScenario(row)">删除</button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </section>
+              <el-table :data="appBusinessScenarios" row-key="id" height="220">
+                <el-table-column prop="scenarioName" label="组合名称" min-width="180" show-overflow-tooltip />
+                <el-table-column label="包含场景" min-width="220" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    {{ formatBusinessScenarioItems(row) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
+                <el-table-column label="状态" width="90">
+                  <template #default="{ row }">
+                    <ConfigTypeBadge :label="row.status === 1 ? '启用' : '停用'" :tone="row.status === 1 ? 'success' : 'default'" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="150" fixed="right">
+                  <template #default="{ row }">
+                    <div class="config-mock-table-actions">
+                      <button type="button" @click="openEditBusinessScenarioDialog(row)">编辑</button>
+                      <button type="button" @click="removeBusinessScenario(row)">删除</button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </section>
+          </details>
 
           <section class="config-mock-section">
             <div class="config-mock-section__header">
@@ -1006,6 +1137,7 @@ onMounted(() => {
           <dt>响应</dt>
           <dd>{{ activeLog.responseStatus || '-' }} / {{ activeLog.status }}</dd>
         </dl>
+        <p v-if="activeLog.releaseVersion" class="config-mock-log-detail__release">Mock v{{ activeLog.releaseVersion }}</p>
         <h4>请求头</h4>
         <pre>{{ prettyJson(activeLog.requestHeadersJson) }}</pre>
         <h4>请求体</h4>
@@ -1036,6 +1168,7 @@ onMounted(() => {
 .config-mock-panel__header,
 .config-mock-section__header,
 .config-mock-summary,
+.config-mock-release,
 .config-mock-url {
   display: flex;
   align-items: center;
@@ -1076,6 +1209,8 @@ onMounted(() => {
 .config-mock-apps,
 .config-mock-workspace,
 .config-mock-section,
+.config-mock-release,
+.config-mock-release-history,
 .config-mock-url,
 .config-mock-summary {
   border: 1px solid var(--app-border);
@@ -1142,9 +1277,41 @@ onMounted(() => {
 }
 
 .config-mock-summary,
+.config-mock-release,
 .config-mock-url,
-.config-mock-section {
+.config-mock-section,
+.config-mock-release-history {
   padding: var(--app-space-4);
+}
+
+.config-mock-release {
+  justify-content: space-between;
+  background: var(--app-bg-muted);
+}
+
+.config-mock-release strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-mock-release p {
+  margin: 4px 0 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-mock-release__meta {
+  flex: 0 0 auto;
+}
+
+.config-mock-release-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.config-mock-release-history .config-mock-section__header {
+  margin-bottom: 0;
 }
 
 .config-mock-summary__title {
@@ -1180,6 +1347,28 @@ onMounted(() => {
   min-width: 0;
   flex-direction: column;
   gap: var(--app-space-3);
+}
+
+.config-mock-advanced-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.config-mock-advanced-section > summary {
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-muted);
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+  list-style-position: inside;
+}
+
+.config-mock-advanced-section[open] > summary {
+  color: var(--app-text-primary);
 }
 
 .config-mock-table-actions button {

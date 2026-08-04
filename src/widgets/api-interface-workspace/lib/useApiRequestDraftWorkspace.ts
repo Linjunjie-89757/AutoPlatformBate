@@ -37,8 +37,8 @@ export function emptyRequestConfig(method = 'GET'): ApiRequestConfigInput {
     cookies: [],
     body: {
       type: 'RAW_JSON',
-      rawText: '{\n  "page": 1,\n  "pageSize": 20\n}',
-      jsonText: '{\n  "page": 1,\n  "pageSize": 20\n}',
+      rawText: '',
+      jsonText: '',
       xmlText: '',
       plainText: '',
       formItems: [emptyKeyValue()],

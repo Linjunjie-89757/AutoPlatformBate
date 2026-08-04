@@ -16,6 +16,9 @@ import com.company.autoplatform.settings.EnvConfigEntity;
 import com.company.autoplatform.settings.EnvConfigMapper;
 import com.company.autoplatform.settings.MockApplicationEntity;
 import com.company.autoplatform.settings.MockApplicationMapper;
+import com.company.autoplatform.settings.MockReleaseEntity;
+import com.company.autoplatform.settings.MockReleaseMapper;
+import com.company.autoplatform.settings.MockExecutionCredentialService;
 import com.company.autoplatform.settings.ParamSetEntity;
 import com.company.autoplatform.settings.ParamSetMapper;
 import com.company.autoplatform.workspace.WorkspaceEntity;
@@ -79,6 +82,8 @@ public class WebUiExecutionDomainService {
     private final EnvConfigMapper envConfigMapper;
     private final ParamSetMapper paramSetMapper;
     private final MockApplicationMapper mockApplicationMapper;
+    private final MockReleaseMapper mockReleaseMapper;
+    private final MockExecutionCredentialService executionCredentialService;
     private final WorkspaceService workspaceService;
     private final ApiWorkspaceScopeSupport workspaceScopeSupport;
     private final ObjectProvider<WebUiBrowserRunner> browserRunnerProvider;
@@ -102,6 +107,8 @@ public class WebUiExecutionDomainService {
             EnvConfigMapper envConfigMapper,
             ParamSetMapper paramSetMapper,
             MockApplicationMapper mockApplicationMapper,
+            MockReleaseMapper mockReleaseMapper,
+            MockExecutionCredentialService executionCredentialService,
             WorkspaceService workspaceService,
             ApiWorkspaceScopeSupport workspaceScopeSupport,
             ObjectProvider<WebUiBrowserRunner> browserRunnerProvider,
@@ -124,6 +131,8 @@ public class WebUiExecutionDomainService {
         this.envConfigMapper = envConfigMapper;
         this.paramSetMapper = paramSetMapper;
         this.mockApplicationMapper = mockApplicationMapper;
+        this.mockReleaseMapper = mockReleaseMapper;
+        this.executionCredentialService = executionCredentialService;
         this.workspaceService = workspaceService;
         this.workspaceScopeSupport = workspaceScopeSupport;
         this.browserRunnerProvider = browserRunnerProvider;
@@ -152,6 +161,7 @@ public class WebUiExecutionDomainService {
                 request == null ? null : request.headless(),
                 request == null ? null : request.variableSetId(),
                 request == null ? null : request.mockApplicationId(),
+                request == null ? null : request.mockReleaseId(),
                 request == null ? null : request.mockEnabled(),
                 request == null ? null : request.runtimeVariables()
         );
@@ -175,6 +185,7 @@ public class WebUiExecutionDomainService {
                 request == null ? null : request.headless(),
                 request == null ? null : request.variableSetId(),
                 request == null ? null : request.mockApplicationId(),
+                request == null ? null : request.mockReleaseId(),
                 request == null ? null : request.mockEnabled(),
                 request == null ? null : request.runtimeVariables()
         );
@@ -272,6 +283,7 @@ public class WebUiExecutionDomainService {
                 request != null && Boolean.TRUE.equals(request.stopOnFailure()),
                 request == null ? null : request.variableSetId(),
                 request == null ? null : request.mockApplicationId(),
+                request == null ? null : request.mockReleaseId(),
                 request == null ? null : request.mockEnabled(),
                 request == null ? null : request.runtimeVariables(),
                 MANUAL,
@@ -299,6 +311,7 @@ public class WebUiExecutionDomainService {
                 request.headless(),
                 Boolean.TRUE.equals(request.stopOnFailure()),
                 request.variableSetId(),
+                null,
                 null,
                 null,
                 request.runtimeVariables(),
@@ -351,7 +364,7 @@ public class WebUiExecutionDomainService {
         debugCase.setHeadless(request.headless() == null || request.headless());
         debugCase.setDefaultTimeoutMs(normalizeCaseTimeout(request.defaultTimeoutMs()));
         debugCase.setStatus(normalizeStatus(request.status()));
-        RunProfile profile = resolveRunProfile(debugCase, environment, request.headless(), request.variableSetId(), request.mockApplicationId(), request.mockEnabled(), request.runtimeVariables());
+        RunProfile profile = resolveRunProfile(debugCase, environment, request.headless(), request.variableSetId(), request.mockApplicationId(), request.mockReleaseId(), request.mockEnabled(), request.runtimeVariables());
         return execute(debugCase, enabledSteps, profile, false, null, null, CurrentUserContext.require().displayName());
     }
 
@@ -493,6 +506,7 @@ public class WebUiExecutionDomainService {
                 profile.headless(),
                 profile.baseUrl(),
                 profile.defaultTimeoutMs(),
+                profile.mockExecutionToken() == null ? Map.of() : Map.of(MockExecutionCredentialService.HEADER, profile.mockExecutionToken()),
                 runtimeSteps
         ));
 
@@ -728,6 +742,15 @@ public class WebUiExecutionDomainService {
         snapshot.put("browserType", profile.browserType());
         snapshot.put("headless", profile.headless());
         snapshot.put("defaultTimeoutMs", profile.defaultTimeoutMs());
+        WebUiExecutionContextSupport.ExecutionContextSnapshot contextSnapshot =
+                executionContextSupport.readExecutionContextSnapshot(profile.contextSnapshotJson());
+        WebUiExecutionContextSupport.MockSnapshot mock = contextSnapshot == null ? null : contextSnapshot.mock();
+        snapshot.put("mockApplicationId", mock == null ? null : mock.id());
+        snapshot.put("mockApplicationCode", mock == null ? null : mock.appCode());
+        snapshot.put("mockBaseUrl", mock == null ? null : mock.baseUrl());
+        snapshot.put("mockReleaseId", mock == null ? null : mock.releaseId());
+        snapshot.put("mockReleaseVersion", mock == null ? null : mock.releaseVersion());
+        snapshot.put("mockExecutionToken", profile.mockExecutionToken());
         return snapshot;
     }
 
@@ -780,6 +803,7 @@ public class WebUiExecutionDomainService {
             boolean stopOnFailure,
             Long variableSetId,
             Long mockApplicationId,
+            Long mockReleaseId,
             Boolean mockEnabled,
             Map<String, String> runtimeVariables,
             String source,
@@ -810,7 +834,7 @@ public class WebUiExecutionDomainService {
             if (enabledSteps.isEmpty()) {
                 throw new BadRequestException("Web UI case has no enabled steps: " + webCase.getCaseName());
             }
-            RunProfile profile = resolveRunProfile(webCase, environment, headless, variableSetId, mockApplicationId, mockEnabled, runtimeVariables);
+            RunProfile profile = resolveRunProfile(webCase, environment, headless, variableSetId, mockApplicationId, mockReleaseId, mockEnabled, runtimeVariables);
             WebUiRunResponse runResponse = execute(webCase, enabledSteps, profile, true, batch.getId(), sortOrder, operatorName);
             runSummaries.add(toRunSummary(requireRun(runResponse.runId())));
             sortOrder++;
@@ -1364,6 +1388,20 @@ public class WebUiExecutionDomainService {
             Boolean mockEnabled,
             Map<String, String> runtimeVariables
     ) {
+        return resolveRunProfile(webCase, environment, requestHeadless, requestVariableSetId,
+                requestMockApplicationId, null, mockEnabled, runtimeVariables);
+    }
+
+    private RunProfile resolveRunProfile(
+            WebUiCaseEntity webCase,
+            EnvironmentResolution environment,
+            Boolean requestHeadless,
+            Long requestVariableSetId,
+            Long requestMockApplicationId,
+            Long requestMockReleaseId,
+            Boolean mockEnabled,
+            Map<String, String> runtimeVariables
+    ) {
         String browserType = environment == null ? webCase.getBrowserType() : environment.browserType();
         Boolean headless = requestHeadless != null ? requestHeadless : (environment == null ? webCase.getHeadless() : environment.headless());
         String baseUrl = environment == null ? webCase.getBaseUrl() : environment.baseUrl();
@@ -1376,8 +1414,12 @@ public class WebUiExecutionDomainService {
         VariableSetResolution effectiveVariableSet = runtimeVariableSet == null ? defaultVariableSet : runtimeVariableSet;
         MockResolution mock = resolveMockApplication(
                 Boolean.FALSE.equals(mockEnabled) ? null : (requestMockApplicationId == null && environment != null ? environment.mockApplicationId() : requestMockApplicationId),
+                Boolean.FALSE.equals(mockEnabled) ? null : requestMockReleaseId,
                 webCase.getWorkspaceId()
         );
+        if (mock != null) {
+            baseUrl = mock.baseUrl();
+        }
         List<WebUiExecutionContextSupport.VariableSetSnapshot> variableSetSnapshots = new ArrayList<>();
         Map<String, WebUiExecutionContextSupport.RuntimeVariable> variables = executionContextSupport.mergeVariables(
                 executionContextSupport.builtInVariables(),
@@ -1406,6 +1448,7 @@ public class WebUiExecutionDomainService {
                 effectiveVariableSet == null ? null : effectiveVariableSet.id(),
                 effectiveVariableSet == null ? null : effectiveVariableSet.name(),
                 variables,
+                mock == null ? null : mock.executionToken(executionCredentialService),
                 executionContextSupport.toJson(new WebUiExecutionContextSupport.ExecutionContextSnapshot(
                         environment == null ? null : new WebUiExecutionContextSupport.EnvironmentSnapshot(
                                 environment.bridgeId(),
@@ -1421,10 +1464,12 @@ public class WebUiExecutionDomainService {
                         effectiveVariableSet == null ? null : effectiveVariableSet.name(),
                         variableSetSnapshots,
                         mock == null ? null : new WebUiExecutionContextSupport.MockSnapshot(
-                                mock.id(),
-                                mock.appName(),
-                                mock.appCode(),
-                                mock.baseUrl()
+                        mock.id(),
+                        mock.appName(),
+                        mock.appCode(),
+                        mock.baseUrl(),
+                                mock.releaseId(),
+                                mock.releaseVersion()
                         ),
                         executionContextSupport.maskVariables(variables),
                         null,
@@ -1498,7 +1543,7 @@ public class WebUiExecutionDomainService {
         );
     }
 
-    private MockResolution resolveMockApplication(Long mockApplicationId, Long workspaceId) {
+    private MockResolution resolveMockApplication(Long mockApplicationId, Long mockReleaseId, Long workspaceId) {
         if (mockApplicationId == null) {
             return null;
         }
@@ -1513,8 +1558,36 @@ public class WebUiExecutionDomainService {
                 application.getId(),
                 application.getAppName(),
                 application.getAppCode(),
-                mockPublicBaseUrl + "/" + application.getAppCode()
+                mockPublicBaseUrl + "/" + application.getAppCode(),
+                resolveMockRelease(application.getId(), workspaceId, mockReleaseId),
+                workspaceService.requireWorkspaceById(workspaceId).getWorkspaceCode()
         );
+    }
+
+    private MockReleaseEntity activeMockRelease(Long mockApplicationId, Long workspaceId) {
+        if (mockApplicationId == null) {
+            return null;
+        }
+        return mockReleaseMapper.selectOne(new LambdaQueryWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getAppId, mockApplicationId)
+                .eq(workspaceId != null, MockReleaseEntity::getWorkspaceId, workspaceId)
+                .eq(MockReleaseEntity::getActive, 1)
+                .orderByDesc(MockReleaseEntity::getVersionNo)
+                .last("LIMIT 1"));
+    }
+
+    private MockReleaseEntity resolveMockRelease(Long mockApplicationId, Long workspaceId, Long requestedReleaseId) {
+        if (requestedReleaseId == null) {
+            return activeMockRelease(mockApplicationId, workspaceId);
+        }
+        MockReleaseEntity release = mockReleaseMapper.selectOne(new LambdaQueryWrapper<MockReleaseEntity>()
+                .eq(MockReleaseEntity::getId, requestedReleaseId)
+                .eq(MockReleaseEntity::getAppId, mockApplicationId)
+                .eq(workspaceId != null, MockReleaseEntity::getWorkspaceId, workspaceId));
+        if (release == null) {
+            throw new BadRequestException("Mock release must belong to the selected Mock application and workspace");
+        }
+        return release;
     }
 
     private List<WebUiExecutionContextSupport.ServiceEndpoint> normalizeServices(
@@ -1874,6 +1947,7 @@ public class WebUiExecutionDomainService {
             Long variableSetId,
             String variableSetName,
             Map<String, WebUiExecutionContextSupport.RuntimeVariable> variables,
+            String mockExecutionToken,
             String contextSnapshotJson
     ) {
     }
@@ -1904,7 +1978,20 @@ public class WebUiExecutionDomainService {
             Long id,
             String appName,
             String appCode,
-            String baseUrl
+            String baseUrl,
+            MockReleaseEntity release,
+            String workspaceCode
     ) {
+        Long releaseId() {
+            return release == null ? null : release.getId();
+        }
+
+        Integer releaseVersion() {
+            return release == null ? null : release.getVersionNo();
+        }
+
+        String executionToken(MockExecutionCredentialService credentialService) {
+            return release == null ? null : credentialService.issue(workspaceCode, appCode, release.getId());
+        }
     }
 }

@@ -183,7 +183,7 @@ const routes: RouteRecordRaw[] = [
         name: 'bug-create',
         component: () => import('@/pages/defects/DefectEditPage.vue'),
         meta: {
-          title: '新增缺陷',
+          title: '缺陷管理',
           description: '按页面式编辑体验创建缺陷基础信息。',
         },
       },
@@ -192,7 +192,7 @@ const routes: RouteRecordRaw[] = [
         name: 'bug-edit',
         component: () => import('@/pages/defects/DefectEditPage.vue'),
         meta: {
-          title: '编辑缺陷',
+          title: '缺陷管理',
           description: '按页面式编辑节奏调整缺陷基础信息。',
         },
       },

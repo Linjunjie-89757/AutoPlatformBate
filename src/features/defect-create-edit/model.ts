@@ -1,4 +1,4 @@
-import type { DefectDetail, DefectPriority, DefectSeverity, DefectSummaryItem, SaveDefectPayload } from '@/entities/defect'
+import type { DefectDetail, DefectPriority, DefectSeverity, DefectSourceType, DefectSummaryItem, SaveDefectPayload } from '@/entities/defect'
 
 export type DefectDialogMode = 'create' | 'edit'
 
@@ -6,8 +6,13 @@ export interface DefectForm {
   workspaceCode: string
   title: string
   description: string
+  reproductionSteps: string
+  expectedResult: string
+  actualResult: string
+  moduleName: string
   priority: DefectPriority
   severity: DefectSeverity
+  sourceType: DefectSourceType
   assigneeId: string
   relatedCaseId: string
   relatedCaseIds: string[]
@@ -20,8 +25,13 @@ export function createDefaultDefectForm(workspaceCode = 'ALL'): DefectForm {
     workspaceCode,
     title: '',
     description: '',
+    reproductionSteps: '',
+    expectedResult: '',
+    actualResult: '',
+    moduleName: '',
     priority: 'P1',
     severity: 'MEDIUM',
+    sourceType: 'MANUAL',
     assigneeId: '',
     relatedCaseId: '',
     relatedCaseIds: [],
@@ -35,8 +45,13 @@ export function createDefectFormFromDetail(item: DefectDetail): DefectForm {
     workspaceCode: item.workspaceCode || 'ALL',
     title: item.title || '',
     description: item.description || '',
+    reproductionSteps: item.reproductionSteps || '',
+    expectedResult: item.expectedResult || '',
+    actualResult: item.actualResult || '',
+    moduleName: item.moduleName || '',
     priority: (item.priority || 'P1') as DefectPriority,
     severity: (item.severity || 'MEDIUM') as DefectSeverity,
+    sourceType: (item.sourceType || 'MANUAL') as DefectSourceType,
     assigneeId: item.assigneeId ? String(item.assigneeId) : '',
     relatedCaseId: item.relatedCaseId ? String(item.relatedCaseId) : '',
     relatedCaseIds: Array.isArray(item.relatedCases) ? item.relatedCases.map(caseItem => String(caseItem.id)) : item.relatedCaseId ? [String(item.relatedCaseId)] : [],
@@ -50,8 +65,13 @@ export function createDefectFormFromSummary(item: DefectSummaryItem, fallbackWor
     workspaceCode: item.workspaceCode || fallbackWorkspaceCode,
     title: item.title || '',
     description: '',
+    reproductionSteps: '',
+    expectedResult: '',
+    actualResult: '',
+    moduleName: '',
     priority: (item.priority || 'P1') as DefectPriority,
     severity: (item.severity || 'MEDIUM') as DefectSeverity,
+    sourceType: 'MANUAL',
     assigneeId: '',
     relatedCaseId: item.relatedCaseId ? String(item.relatedCaseId) : '',
     relatedCaseIds: item.relatedCaseId ? [String(item.relatedCaseId)] : [],
@@ -82,8 +102,13 @@ export function buildSaveDefectPayload(form: DefectForm): SaveDefectPayload {
     workspaceCode: form.workspaceCode === 'ALL' ? undefined : form.workspaceCode,
     title: form.title.trim(),
     description: form.description.trim(),
+    reproductionSteps: form.reproductionSteps.trim(),
+    expectedResult: form.expectedResult.trim(),
+    actualResult: form.actualResult.trim(),
+    moduleName: form.moduleName.trim(),
     priority: form.priority,
     severity: form.severity,
+    sourceType: form.sourceType,
     assigneeId: parseOptionalId(form.assigneeId),
     relatedCaseId: form.relatedCaseIds.length ? parseOptionalId(form.relatedCaseIds[0]) : parseOptionalId(form.relatedCaseId),
     tags: form.tags.length ? form.tags : parseTags(form.tagsText),

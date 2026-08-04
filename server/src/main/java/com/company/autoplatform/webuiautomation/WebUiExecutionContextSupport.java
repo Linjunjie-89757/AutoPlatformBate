@@ -237,7 +237,9 @@ public class WebUiExecutionContextSupport {
             Long id,
             String appName,
             String appCode,
-            String baseUrl
+            String baseUrl,
+            Long releaseId,
+            Integer releaseVersion
     ) {
     }
 }

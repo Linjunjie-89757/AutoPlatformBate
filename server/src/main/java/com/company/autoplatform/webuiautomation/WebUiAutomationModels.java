@@ -235,7 +235,8 @@ public final class WebUiAutomationModels {
             Long mockApplicationId,
             Map<String, String> runtimeVariables,
             String runnerId,
-            List<Map<String, Object>> artifactRefs
+            List<Map<String, Object>> artifactRefs,
+            Long mockReleaseId
     ) {
     }
 
@@ -248,7 +249,8 @@ public final class WebUiAutomationModels {
             Long variableSetId,
             Boolean mockEnabled,
             Long mockApplicationId,
-            Map<String, String> runtimeVariables
+            Map<String, String> runtimeVariables,
+            Long mockReleaseId
     ) {
     }
 
@@ -286,6 +288,7 @@ public final class WebUiAutomationModels {
             Long variableSetId,
             Boolean mockEnabled,
             Long mockApplicationId,
+            Long mockReleaseId,
             Map<String, String> runtimeVariables,
             List<@Valid SaveWebUiCaseStepRequest> steps
     ) {

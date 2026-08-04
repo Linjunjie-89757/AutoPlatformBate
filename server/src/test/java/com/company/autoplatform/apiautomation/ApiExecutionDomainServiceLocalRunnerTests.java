@@ -55,7 +55,7 @@ class ApiExecutionDomainServiceLocalRunnerTests {
         workspace.setWorkspaceCode("risk-ops");
 
         when(executionEngine.requireScenario(3001L)).thenReturn(scenario);
-        when(executionEngine.buildExecutionContext(7L, 21L, 31L, null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
+        when(executionEngine.buildExecutionContext(7L, 21L, 31L, (Long) null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
                 new ApiExecutionRuntimeModels.ResolvedEnvironment(
                         21L,
                         "http://127.0.0.1:18080",
@@ -230,7 +230,7 @@ class ApiExecutionDomainServiceLocalRunnerTests {
         workspace.setWorkspaceCode("risk-ops");
 
         when(executionEngine.requireScenario(3002L)).thenReturn(scenario);
-        when(executionEngine.buildExecutionContext(7L, 21L, 31L, null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
+        when(executionEngine.buildExecutionContext(7L, 21L, 31L, (Long) null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
                 new ApiExecutionRuntimeModels.ResolvedEnvironment(
                         21L,
                         "http://127.0.0.1:18080",
@@ -373,7 +373,7 @@ class ApiExecutionDomainServiceLocalRunnerTests {
         workspace.setWorkspaceCode("risk-ops");
 
         when(executionEngine.requireCase(9101L)).thenReturn(apiCase);
-        when(executionEngine.buildExecutionContext(7L, 21L, 31L, null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
+        when(executionEngine.buildExecutionContext(7L, 21L, 31L, (Long) null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
                 new ApiExecutionRuntimeModels.ResolvedEnvironment(
                         21L,
                         "http://127.0.0.1:18080",
@@ -530,7 +530,7 @@ class ApiExecutionDomainServiceLocalRunnerTests {
         workspace.setWorkspaceCode("risk-ops");
 
         when(executionEngine.requireScenario(3003L)).thenReturn(scenario);
-        when(executionEngine.buildExecutionContext(7L, 21L, 31L, null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
+        when(executionEngine.buildExecutionContext(7L, 21L, 31L, (Long) null, null, null, null)).thenReturn(new ApiExecutionRuntimeModels.ExecutionContext(
                 new ApiExecutionRuntimeModels.ResolvedEnvironment(
                         21L,
                         "http://127.0.0.1:18080",

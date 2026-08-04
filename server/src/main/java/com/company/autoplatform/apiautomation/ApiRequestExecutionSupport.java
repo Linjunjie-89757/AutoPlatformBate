@@ -65,6 +65,10 @@ public class ApiRequestExecutionSupport {
         if (environment.mockBusinessScenarioId() != null && isMockRequest(url, environment.mockBaseUrl())) {
             headers.put("X-Mock-Business-Scenario-Id", String.valueOf(environment.mockBusinessScenarioId()));
         }
+        if (environment.mockExecutionToken() != null && !environment.mockExecutionToken().isBlank()
+                && isMockRequest(url, environment.mockBaseUrl())) {
+            headers.put("X-Mock-Execution-Token", environment.mockExecutionToken());
+        }
 
         LinkedHashMap<String, String> cookies = new LinkedHashMap<>(variableResolver.toEnabledMap(defaultList(config.cookies()), variables));
 
