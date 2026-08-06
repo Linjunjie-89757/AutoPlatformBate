@@ -89,7 +89,6 @@ import runnerNavApp from './config-center/runner/runner-07.svg'
 import runnerNavBug from './config-center/runner/runner-04.svg'
 import runnerNavCase from './config-center/runner/runner-03.svg'
 import runnerNavConfig from './config-center/runner/runner-02.svg'
-import runnerNavConfigSliders from './config-center/runner/runner-nav-config-sliders.svg'
 import runnerNavDashboard from './config-center/runner/runner-01.svg'
 import runnerNavWeb from './config-center/runner/runner-06.svg'
 import taskNav from './tasks/task-nav.svg'
@@ -270,7 +269,7 @@ export const figmaConfigRunnerIcons = {
 
 export const figmaGlobalNavIcons = {
   dashboard: runnerNavDashboard,
-  config: runnerNavConfigSliders,
+  config: runnerNavConfig,
   case: runnerNavCase,
   bug: runnerNavBug,
   api: runnerNavApi,

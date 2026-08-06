@@ -222,7 +222,7 @@ public class ApiExecutionEngineSupport {
             throw new BadRequestException("Environment must belong to the same workspace");
         }
         EnvironmentConfigPayload config = ApiAutomationJsonSupport.read(environment.getConfigJson(), EnvironmentConfigPayload.class,
-                new EnvironmentConfigPayload(List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, List.of()));
+                new EnvironmentConfigPayload(List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, null, null, List.of()));
         List<EnvironmentServiceEndpoint> services = normalizeServices(config.services(), environment.getBaseUrl());
         String defaultServiceKey = normalizeDefaultServiceKey(config.defaultServiceKey(), services);
         String baseUrl = services.stream()
@@ -238,13 +238,13 @@ public class ApiExecutionEngineSupport {
                 config.timeoutMs() == null ? 10000 : config.timeoutMs(),
                 defaultList(config.variables()),
                 config.defaultVariableSetId(),
-                config.mockApplicationId(),
+                Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockApplicationId(),
                 null,
                 null,
                 null,
                 null,
                 null,
-                null,
+                Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockReleaseId(),
                 null,
                 null,
                 defaultServiceKey,
@@ -268,7 +268,8 @@ public class ApiExecutionEngineSupport {
             throw new BadRequestException("Mock application is disabled");
         }
         MockBusinessScenarioEntity businessScenario = resolveMockBusinessScenario(workspaceId, application.getId(), mockBusinessScenarioId);
-        MockReleaseEntity release = resolveMockRelease(application.getId(), workspaceId, mockReleaseId);
+        Long effectiveMockReleaseId = mockReleaseId != null ? mockReleaseId : environment.mockReleaseId();
+        MockReleaseEntity release = resolveMockRelease(application.getId(), workspaceId, effectiveMockReleaseId);
         String baseUrl = mockPublicBaseUrl + "/" + application.getAppCode();
         return copyEnvironmentWithMock(
                 environment,

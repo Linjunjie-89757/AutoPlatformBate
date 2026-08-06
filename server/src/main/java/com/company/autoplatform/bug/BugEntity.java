@@ -33,6 +33,9 @@ public class BugEntity extends BaseEntity {
     @TableField("module_name")
     private String moduleName;
 
+    @TableField("version_name")
+    private String versionName;
+
     private String priority;
 
     private String severity;

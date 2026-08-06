@@ -104,6 +104,7 @@ function normalizeDefectDetail(item: DefectDetail): DefectDetail {
     expectedResult: item.expectedResult || '',
     actualResult: item.actualResult || '',
     moduleName: item.moduleName || '',
+    versionName: item.versionName || '',
     sourceType: item.sourceType || null,
     assigneeId: item.assigneeId ?? null,
     reporterId: item.reporterId ?? null,

@@ -31,7 +31,9 @@ final class ApiExecutionRuntimeModels {
             Integer timeoutMs,
             List<ApiVariableItem> variables,
             Long defaultVariableSetId,
+            Boolean mockEnabled,
             Long mockApplicationId,
+            Long mockReleaseId,
             String defaultServiceKey,
             List<EnvironmentServiceEndpoint> services
     ) {

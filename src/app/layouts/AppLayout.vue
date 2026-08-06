@@ -36,6 +36,7 @@ const configCenterCrumbTitle = computed(() => {
     notification: '通知配置',
     runner: 'Runner 配置',
     ai: 'AI 连接配置',
+    mock: 'Mock 服务',
   }
   return typeof tab === 'string' && labels[tab] ? labels[tab] : '配置总览'
 })

@@ -91,6 +91,7 @@ public class BugResponseAssembler {
                 entity.getExpectedResult(),
                 entity.getActualResult(),
                 entity.getModuleName(),
+                entity.getVersionName(),
                 BugPriority.valueOf(entity.getPriority()),
                 BugSeverity.valueOf(entity.getSeverity()),
                 BugStatus.valueOf(entity.getStatus()),

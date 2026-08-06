@@ -51,6 +51,7 @@ export interface DefectDetail extends DefectSummaryItem {
   expectedResult: string
   actualResult: string
   moduleName: string
+  versionName: string
   sourceType: DefectSourceType | string | null
   assigneeId: number | null
   reporterId: number | null
@@ -95,6 +96,7 @@ export interface SaveDefectPayload {
   expectedResult: string
   actualResult: string
   moduleName: string
+  versionName?: string
   priority: string
   severity: string
   sourceType?: DefectSourceType | string

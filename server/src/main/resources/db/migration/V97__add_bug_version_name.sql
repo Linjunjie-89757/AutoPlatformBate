@@ -1,0 +1,1 @@
+ALTER TABLE tb_bug_info ADD COLUMN IF NOT EXISTS version_name VARCHAR(128);

@@ -493,7 +493,7 @@ public class ApiProcessorExecutor {
         EnvConfigEntity entity = requireEnvironment(environment.environmentId());
         ApiExecutionRuntimeModels.EnvironmentConfigPayload config = ApiAutomationJsonSupport.read(entity.getConfigJson(),
                 ApiExecutionRuntimeModels.EnvironmentConfigPayload.class,
-                new ApiExecutionRuntimeModels.EnvironmentConfigPayload(List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, List.of()));
+                new ApiExecutionRuntimeModels.EnvironmentConfigPayload(List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, null, null, List.of()));
         List<ApiVariableItem> nextVariables = new ArrayList<>();
         boolean updated = false;
         for (ApiVariableItem item : defaultList(config.variables())) {
@@ -513,7 +513,9 @@ public class ApiProcessorExecutor {
                 config.timeoutMs() == null ? 10000 : config.timeoutMs(),
                 nextVariables,
                 config.defaultVariableSetId(),
+                config.mockEnabled(),
                 config.mockApplicationId(),
+                config.mockReleaseId(),
                 config.defaultServiceKey(),
                 config.services()
         ), "Failed to serialize environment config"));

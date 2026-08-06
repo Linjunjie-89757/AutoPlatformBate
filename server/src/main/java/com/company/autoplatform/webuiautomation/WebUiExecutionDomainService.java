@@ -1414,7 +1414,7 @@ public class WebUiExecutionDomainService {
         VariableSetResolution effectiveVariableSet = runtimeVariableSet == null ? defaultVariableSet : runtimeVariableSet;
         MockResolution mock = resolveMockApplication(
                 Boolean.FALSE.equals(mockEnabled) ? null : (requestMockApplicationId == null && environment != null ? environment.mockApplicationId() : requestMockApplicationId),
-                Boolean.FALSE.equals(mockEnabled) ? null : requestMockReleaseId,
+                Boolean.FALSE.equals(mockEnabled) ? null : (requestMockReleaseId == null && environment != null ? environment.mockReleaseId() : requestMockReleaseId),
                 webCase.getWorkspaceId()
         );
         if (mock != null) {
@@ -1502,6 +1502,7 @@ public class WebUiExecutionDomainService {
                     legacyEnvironment.getDefaultTimeoutMs(),
                     legacyEnvironment.getDefaultVariableSetId(),
                     null,
+                    null,
                     List.of(),
                     "default",
                     List.of()
@@ -1536,7 +1537,8 @@ public class WebUiExecutionDomainService {
                 config.headless(),
                 config.defaultTimeoutMs(),
                 config.defaultVariableSetId(),
-                config.mockApplicationId(),
+                Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockApplicationId(),
+                Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockReleaseId(),
                 config.variables() == null ? List.of() : config.variables(),
                 defaultServiceKey,
                 services
@@ -1961,6 +1963,7 @@ public class WebUiExecutionDomainService {
             Integer defaultTimeoutMs,
             Long defaultVariableSetId,
             Long mockApplicationId,
+            Long mockReleaseId,
             List<WebUiExecutionContextSupport.VariableItem> variables,
             String defaultServiceKey,
             List<WebUiExecutionContextSupport.ServiceEndpoint> services

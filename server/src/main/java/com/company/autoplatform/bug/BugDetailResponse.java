@@ -12,6 +12,7 @@ public record BugDetailResponse(
         String expectedResult,
         String actualResult,
         String moduleName,
+        String versionName,
         BugPriority priority,
         BugSeverity severity,
         BugStatus status,

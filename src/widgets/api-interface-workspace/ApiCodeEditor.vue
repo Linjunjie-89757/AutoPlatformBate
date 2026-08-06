@@ -1,7 +1,13 @@
 <template>
   <div
     class="api-code-editor"
-    :class="{ 'is-fit-content': fitContent, 'is-plain': plain, 'is-fill': fill, 'is-dark': themeVariant === 'dark' }"
+    :class="{
+      'is-fit-content': fitContent,
+      'is-plain': plain,
+      'is-fill': fill,
+      'is-dark': themeVariant !== 'light',
+      'is-figma-dark': themeVariant === 'figma-dark',
+    }"
     :style="editorShellStyle"
   >
     <div v-if="showToolbar" class="api-code-editor__toolbar">
@@ -29,6 +35,7 @@ type ApiCodeLanguage = 'api-console' | 'javascript' | 'json' | 'sql' | 'text' | 
 const API_CONSOLE_LANGUAGE = 'api-console'
 const API_CODE_THEME = 'api-code-light'
 const API_CODE_DARK_THEME = 'api-code-dark'
+const API_CODE_FIGMA_DARK_THEME = 'api-code-figma-dark'
 let apiConsoleLanguageReady = false
 
 const props = withDefaults(defineProps<{
@@ -45,7 +52,12 @@ const props = withDefaults(defineProps<{
   plain?: boolean
   minFitContentHeight?: number
   maxFitContentHeight?: number
-  themeVariant?: 'light' | 'dark'
+  themeVariant?: 'light' | 'dark' | 'figma-dark'
+  fontSize?: number
+  lineHeight?: number
+  paddingTop?: number
+  paddingBottom?: number
+  lineDecorationsWidth?: number
 }>(), {
   language: 'javascript',
   height: '260px',
@@ -60,6 +72,11 @@ const props = withDefaults(defineProps<{
   minFitContentHeight: 120,
   maxFitContentHeight: 1000,
   themeVariant: 'light',
+  fontSize: 14,
+  lineHeight: 0,
+  paddingTop: 12,
+  paddingBottom: 12,
+  lineDecorationsWidth: 0,
 })
 
 const emit = defineEmits<{
@@ -143,6 +160,26 @@ function ensureApiConsoleLanguage() {
     },
   })
 
+  monaco.editor.defineTheme(API_CODE_FIGMA_DARK_THEME, {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'string.key.json', foreground: '9CDCFE' },
+      { token: 'string.value.json', foreground: 'CE9178' },
+      { token: 'delimiter.bracket.json', foreground: '569CD6' },
+    ],
+    colors: {
+      'editor.background': '#1E1E1E',
+      'editor.foreground': '#D4D4D4',
+      'editorLineNumber.foreground': '#858585',
+      'editorLineNumber.activeForeground': '#D4D4D4',
+      'editor.lineHighlightBackground': '#FFFFFF0A',
+      'editorCursor.foreground': '#D4D4D4',
+      'editor.selectionBackground': '#264F78',
+      'editor.inactiveSelectionBackground': '#3A3D41',
+    },
+  })
+
   apiConsoleLanguageReady = true
 }
 
@@ -189,6 +226,13 @@ function resolveEditorFontFamily() {
     .trim() || 'monospace'
 }
 
+function resolveEditorTheme(themeVariant = props.themeVariant) {
+  if (themeVariant === 'figma-dark') {
+    return API_CODE_FIGMA_DARK_THEME
+  }
+  return themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME
+}
+
 function createEditor() {
   if (!containerRef.value) {
     return
@@ -198,22 +242,25 @@ function createEditor() {
   editor = monaco.editor.create(containerRef.value, {
     value: props.modelValue ?? '',
     language: mapLanguage(props.language),
-    theme: props.themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME,
+    theme: resolveEditorTheme(),
     readOnly: props.readOnly,
     automaticLayout: true,
     fontFamily: resolveEditorFontFamily(),
+    fontSize: props.fontSize,
+    lineHeight: props.lineHeight,
     minimap: { enabled: false },
     contextmenu: !props.readOnly,
     lineNumbers: props.lineNumbers,
     lineNumbersMinChars: 3,
-    lineDecorationsWidth: 0,
+    lineDecorationsWidth: props.lineDecorationsWidth,
     glyphMargin: false,
     folding: props.folding,
     tabSize: 2,
     scrollBeyondLastLine: false,
     wordWrap: 'on',
     roundedSelection: false,
-    renderLineHighlight: 'line',
+    renderLineHighlight: props.themeVariant === 'figma-dark' ? 'none' : 'line',
+    bracketPairColorization: { enabled: props.themeVariant !== 'figma-dark' },
     scrollbar: {
       alwaysConsumeMouseWheel: false,
       useShadows: false,
@@ -221,8 +268,8 @@ function createEditor() {
       horizontalScrollbarSize: 10,
     },
     padding: {
-      top: 12,
-      bottom: 12,
+      top: props.paddingTop,
+      bottom: props.paddingBottom,
     },
     ariaLabel: props.placeholder || 'code editor',
   })
@@ -282,7 +329,11 @@ watch(
 watch(
   () => props.themeVariant,
   (themeVariant) => {
-    monaco.editor.setTheme(themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME)
+    monaco.editor.setTheme(resolveEditorTheme(themeVariant))
+    editor?.updateOptions({
+      renderLineHighlight: themeVariant === 'figma-dark' ? 'none' : 'line',
+      bracketPairColorization: { enabled: themeVariant !== 'figma-dark' },
+    })
   },
 )
 
@@ -292,6 +343,22 @@ watch(
     editor?.updateOptions({
       lineNumbers,
       folding,
+    })
+    syncEditorHeight()
+  },
+)
+
+watch(
+  () => [props.fontSize, props.lineHeight, props.paddingTop, props.paddingBottom, props.lineDecorationsWidth] as const,
+  ([fontSize, lineHeight, paddingTop, paddingBottom, lineDecorationsWidth]) => {
+    editor?.updateOptions({
+      fontSize,
+      lineHeight,
+      lineDecorationsWidth,
+      padding: {
+        top: paddingTop,
+        bottom: paddingBottom,
+      },
     })
     syncEditorHeight()
   },
@@ -401,6 +468,10 @@ onBeforeUnmount(() => {
   border-color: #e5e6eb;
   border-radius: 7px;
   background: #1e1e2e;
+}
+
+.api-code-editor.is-figma-dark {
+  background: #1e1e1e;
 }
 
 .api-code-editor.is-dark .api-code-editor__toolbar {

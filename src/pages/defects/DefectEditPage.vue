@@ -166,6 +166,7 @@ function buildDirtySnapshot() {
     expectedResult: form.expectedResult,
     actualResult: form.actualResult,
     moduleName: form.moduleName,
+    versionName: form.versionName,
     priority: form.priority,
     severity: form.severity,
     assigneeId: form.assigneeId,
@@ -732,19 +733,18 @@ watch(
           <aside class="defect-edit-page__side">
             <div class="defect-edit-page__card defect-edit-page__properties-card">
               <div class="defect-edit-page__field">
-                <span class="is-required">工作空间</span>
+                <span class="is-required">所属模块</span>
                 <el-select
-                  v-model="form.workspaceCode"
+                  v-model="form.moduleName"
                   class="defect-edit-page__select"
-                  :disabled="!isCreateMode"
-                  filterable
-                  placeholder="请选择工作空间"
+                  :disabled="saving"
+                  placeholder="请选择模块"
                 >
                   <el-option
-                    v-for="workspace in getConcreteWorkspaces()"
-                    :key="workspace.workspaceCode"
-                    :label="getWorkspaceLabel(workspace)"
-                    :value="workspace.workspaceCode"
+                    v-for="item in defectModuleOptions"
+                    :key="item"
+                    :label="item"
+                    :value="item"
                   />
                 </el-select>
               </div>
@@ -790,20 +790,13 @@ watch(
               </div>
 
               <div class="defect-edit-page__field">
-                <span class="is-required">所属模块</span>
-                <el-select
-                  v-model="form.moduleName"
-                  class="defect-edit-page__select"
+                <span>所属版本</span>
+                <el-input
+                  v-model="form.versionName"
                   :disabled="saving"
-                  placeholder="请选择模块"
-                >
-                  <el-option
-                    v-for="item in defectModuleOptions"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                  />
-                </el-select>
+                  maxlength="128"
+                  placeholder="请输入所属版本（选填）"
+                />
               </div>
             </div>
 

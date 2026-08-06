@@ -136,6 +136,7 @@ public class BugDomainService {
         entity.setExpectedResult(request.expectedResult());
         entity.setActualResult(request.actualResult());
         entity.setModuleName(request.moduleName());
+        entity.setVersionName(request.versionName());
         entity.setPriority(request.priority().name());
         entity.setSeverity(request.severity().name());
         entity.setStatus(BugStatus.ASSIGNED.name());
@@ -177,6 +178,7 @@ public class BugDomainService {
         entity.setExpectedResult(request.expectedResult());
         entity.setActualResult(request.actualResult());
         entity.setModuleName(request.moduleName());
+        entity.setVersionName(request.versionName());
         entity.setPriority(request.priority().name());
         entity.setSeverity(request.severity().name());
         entity.setSourceType(request.sourceType() == null ? entity.getSourceType() : request.sourceType().name());
@@ -194,6 +196,7 @@ public class BugDomainService {
                         .set(BugEntity::getExpectedResult, entity.getExpectedResult())
                         .set(BugEntity::getActualResult, entity.getActualResult())
                         .set(BugEntity::getModuleName, entity.getModuleName())
+                        .set(BugEntity::getVersionName, entity.getVersionName())
                         .set(BugEntity::getPriority, entity.getPriority())
                         .set(BugEntity::getSeverity, entity.getSeverity())
                         .set(BugEntity::getSourceType, entity.getSourceType())

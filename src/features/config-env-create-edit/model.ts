@@ -1,13 +1,15 @@
 import type { ConfigStatus, CreateEnvPayload, EnvConfigItem } from '@/entities/config'
 
 export type ConfigEnvDialogMode = 'create' | 'edit'
-export type ConfigAutomationType = 'API' | 'WEB_UI' | 'APP'
+export type ConfigAutomationType = 'API' | 'WEB_UI' | 'API_WEB_UI' | 'APP'
 export type ConfigEnvironmentStage = 'DEV' | 'TEST' | 'STAGING' | 'PROD' | 'SANDBOX'
 
 export interface ConfigEnvServiceEndpointForm {
   key: string
   name: string
   baseUrl: string
+  timeoutMs: number
+  enabled: boolean
 }
 
 export interface ConfigEnvLocalVariableForm {
@@ -15,6 +17,8 @@ export interface ConfigEnvLocalVariableForm {
   value: string
   sensitive: boolean
   description: string
+  valueType?: 'string' | 'integer' | 'boolean' | 'secret'
+  enabled?: boolean
 }
 
 export interface ConfigEnvForm {
@@ -35,6 +39,7 @@ export interface ConfigEnvForm {
   ignoreHttpsErrors: boolean
   defaultVariableSetId: number | null
   variableSetIds: number[]
+  disabledVariableSetIds: number[]
   localVariables: ConfigEnvLocalVariableForm[]
   mockEnabled: boolean
   mockApplicationId: number | null
@@ -64,11 +69,17 @@ interface WebUiEnvConfig {
     key?: unknown
     name?: unknown
     baseUrl?: unknown
+    timeoutMs?: unknown
+    timeout?: unknown
+    enabled?: unknown
   }>
   sites?: Array<{
     key?: unknown
     name?: unknown
     baseUrl?: unknown
+    timeoutMs?: unknown
+    timeout?: unknown
+    enabled?: unknown
   }>
   browser?: string
   browserType?: string
@@ -81,6 +92,7 @@ interface WebUiEnvConfig {
   ignoreHttpsErrors?: boolean
   defaultVariableSetId?: number | null
   variableSetIds?: unknown
+  disabledVariableSetIds?: unknown
   localVariables?: unknown
   mockEnabled?: boolean
   mockApplicationId?: number | null
@@ -107,6 +119,7 @@ export function createDefaultConfigEnvForm(workspaceCode = 'ALL'): ConfigEnvForm
     ignoreHttpsErrors: false,
     defaultVariableSetId: null,
     variableSetIds: [],
+    disabledVariableSetIds: [],
     localVariables: [],
     mockEnabled: false,
     mockApplicationId: null,
@@ -156,8 +169,11 @@ export function createConfigEnvFormFromItem(item: EnvConfigItem): ConfigEnvForm 
     ignoreHttpsErrors: envConfig.ignoreHttpsErrors === true || envConfig.ignoreSsl === true,
     defaultVariableSetId,
     variableSetIds,
+    disabledVariableSetIds: normalizeNumberList(envConfig.disabledVariableSetIds),
     localVariables: normalizeLocalVariables(envConfig.localVariables),
-    mockEnabled: envConfig.mockEnabled === true || typeof envConfig.mockApplicationId === 'number',
+    mockEnabled: typeof envConfig.mockEnabled === 'boolean'
+      ? envConfig.mockEnabled
+      : typeof envConfig.mockApplicationId === 'number',
     mockApplicationId: typeof envConfig.mockApplicationId === 'number' ? envConfig.mockApplicationId : null,
     mockReleaseId: typeof envConfig.mockReleaseId === 'number' ? envConfig.mockReleaseId : null,
     appPlatform: normalizeAppPlatform(appProfile.platform),
@@ -186,10 +202,10 @@ export function buildCreateEnvPayload(form: ConfigEnvForm): CreateEnvPayload {
     description: form.description.trim(),
     defaultServiceKey,
     services,
-    sites: form.automationType === 'WEB_UI' ? services : undefined,
-    browserType: form.automationType === 'WEB_UI' ? form.browserType : undefined,
-    headless: form.automationType === 'WEB_UI' ? form.headless : undefined,
-    viewport: form.automationType === 'WEB_UI'
+    sites: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI' ? services : undefined,
+    browserType: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI' ? form.browserType : undefined,
+    headless: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI' ? form.headless : undefined,
+    viewport: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI'
       ? {
           width: clampNumber(form.viewportWidth, 320, 7680, 1440),
           height: clampNumber(form.viewportHeight, 240, 4320, 900),
@@ -197,19 +213,23 @@ export function buildCreateEnvPayload(form: ConfigEnvForm): CreateEnvPayload {
       : undefined,
     timeoutMs: clampNumber(form.defaultTimeoutMs, 1000, 60000, 10000),
     ignoreSsl: form.ignoreHttpsErrors,
-    defaultVariableSetId: form.variableSetIds[0] ?? null,
+    defaultVariableSetId: form.variableSetIds.find(id => !form.disabledVariableSetIds.includes(id)) ?? null,
     variableSetIds: Array.from(new Set(form.variableSetIds)),
+    disabledVariableSetIds: Array.from(new Set(form.disabledVariableSetIds))
+      .filter(id => form.variableSetIds.includes(id)),
     localVariables: form.localVariables
       .map(variable => ({
         name: variable.name.trim(),
         value: variable.value,
         sensitive: variable.sensitive,
         description: variable.description.trim(),
+        valueType: variable.valueType || (variable.sensitive ? 'secret' : 'string'),
+        enabled: variable.enabled !== false,
       }))
       .filter(variable => variable.name),
     mockEnabled: form.mockEnabled,
-    mockApplicationId: form.mockEnabled ? form.mockApplicationId : null,
-    mockReleaseId: form.mockEnabled ? form.mockReleaseId : null,
+    mockApplicationId: form.mockApplicationId,
+    mockReleaseId: form.mockReleaseId,
     appProfile: form.automationType === 'APP'
       ? {
           platform: form.appPlatform,
@@ -308,7 +328,7 @@ function normalizeEnvGroup(value: unknown) {
 
 function normalizeAutomationType(value: unknown, config: WebUiEnvConfig, legacyEnvType?: string): ConfigAutomationType {
   const normalized = normalizeString(value).toUpperCase()
-  if (normalized === 'API' || normalized === 'WEB_UI' || normalized === 'APP') return normalized
+  if (normalized === 'API' || normalized === 'WEB_UI' || normalized === 'API_WEB_UI' || normalized === 'APP') return normalized
   const normalizedLegacyType = normalizeString(legacyEnvType).toUpperCase()
   if (normalizedLegacyType === 'APP') return 'APP'
   if (normalizedLegacyType === 'WEB' || normalizedLegacyType === 'WEB_UI') return 'WEB_UI'
@@ -345,6 +365,8 @@ function normalizeLocalVariables(value: unknown): ConfigEnvLocalVariableForm[] {
       value: normalizeString(item.value),
       sensitive: item.sensitive === true,
       description: normalizeString(item.description),
+      valueType: normalizeLocalVariableType(item.valueType, item.sensitive === true),
+      enabled: item.enabled !== false,
     }))
     .filter(item => item.name)
 }
@@ -365,11 +387,13 @@ function validateLocalVariables(variables: ConfigEnvLocalVariableForm[]) {
 function normalizeServiceEndpoints(value: unknown, fallbackBaseUrl: string) {
   const endpoints = Array.isArray(value)
     ? value
-      .filter((item): item is { key?: unknown; name?: unknown; baseUrl?: unknown } => typeof item === 'object' && item !== null)
+      .filter((item): item is { key?: unknown; name?: unknown; baseUrl?: unknown; timeoutMs?: unknown; timeout?: unknown; enabled?: unknown } => typeof item === 'object' && item !== null)
       .map((item, index) => ({
         key: normalizeServiceKey(item.key, index),
         name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : normalizeServiceKey(item.key, index),
         baseUrl: typeof item.baseUrl === 'string' ? item.baseUrl.trim() : '',
+        timeoutMs: clampNumber(item.timeoutMs ?? item.timeout, 1000, 120000, 30000),
+        enabled: item.enabled !== false,
       }))
       .filter(item => item.key && item.baseUrl)
     : []
@@ -402,7 +426,15 @@ export function createDefaultServiceEndpoint(): ConfigEnvServiceEndpointForm {
     key: 'default',
     name: '默认服务',
     baseUrl: '',
+    timeoutMs: 30000,
+    enabled: true,
   }
+}
+
+function normalizeLocalVariableType(value: unknown, sensitive: boolean): NonNullable<ConfigEnvLocalVariableForm['valueType']> {
+  const normalized = normalizeString(value).toLowerCase()
+  if (normalized === 'integer' || normalized === 'boolean' || normalized === 'secret') return normalized
+  return sensitive ? 'secret' : 'string'
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number) {

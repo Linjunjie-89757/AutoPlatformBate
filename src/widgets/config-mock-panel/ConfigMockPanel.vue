@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Connection, CopyDocument, Delete, Edit, Plus, RefreshRight, Search, Upload } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Edit2,
+  Play,
+  Plus as LucidePlus,
+  X,
+  Zap,
+} from '@lucide/vue'
+import { ElMessage } from 'element-plus'
 
 import {
-  ConfigTypeBadge,
   configApi,
   type ConfigReferenceSummary,
   type CreateMockApplicationPayload,
@@ -24,7 +32,8 @@ import { confirmAction, confirmDelete } from '@/shared/ui'
 import ConfigReferenceDrawer from '@/widgets/config-reference-drawer/ConfigReferenceDrawer.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
-import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
+import ApiCodeEditor from '@/widgets/api-interface-workspace/ApiCodeEditor.vue'
+import ConfigMockFigmaWorkspace from './ConfigMockFigmaWorkspace.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -52,6 +61,18 @@ interface BusinessScenarioForm {
   items: BusinessScenarioFormItem[]
 }
 
+interface MatchRuleRow {
+  source: string
+  field: string
+  operator: string
+  value: string
+}
+
+interface HeaderRow {
+  key: string
+  value: string
+}
+
 const applications = ref<MockApplicationItem[]>([])
 const endpoints = ref<MockEndpointItem[]>([])
 const scenarios = ref<MockScenarioItem[]>([])
@@ -62,7 +83,6 @@ const activeAppId = ref<number | null>(null)
 const activeEndpointId = ref<number | null>(null)
 const activeScenarioId = ref<number | null>(null)
 const activeLog = ref<MockCallLogItem | null>(null)
-const keyword = ref('')
 const loading = ref(false)
 const releaseLoading = ref(false)
 const saving = ref(false)
@@ -75,6 +95,12 @@ const referenceDrawerVisible = ref(false)
 const referenceLoading = ref(false)
 const referenceSummary = ref<ConfigReferenceSummary | null>(null)
 const logDrawerVisible = ref(false)
+const publishDialogVisible = ref(false)
+const scenarioEditorTab = ref<'match' | 'response' | 'variables'>('match')
+const matchMode = ref<'simple' | 'advanced'>('advanced')
+const releaseName = ref('')
+const matchRuleRows = ref<MatchRuleRow[]>([])
+const responseHeaderRows = ref<HeaderRow[]>([])
 const appDialogMode = ref<DialogMode>('create')
 const endpointDialogMode = ref<DialogMode>('create')
 const scenarioDialogMode = ref<DialogMode>('create')
@@ -125,29 +151,132 @@ const businessScenarioForm = reactive<BusinessScenarioForm>({
 
 const activeApp = computed(() => applications.value.find(item => item.id === activeAppId.value) || null)
 const activeEndpoint = computed(() => endpoints.value.find(item => item.id === activeEndpointId.value) || null)
-const filteredApplications = computed(() => {
-  const value = keyword.value.trim().toLowerCase()
-  if (!value) {
-    return applications.value
-  }
-  return applications.value.filter(item =>
-    item.appName.toLowerCase().includes(value)
-    || item.appCode.toLowerCase().includes(value)
-    || (item.description || '').toLowerCase().includes(value),
-  )
-})
 const appEndpoints = computed(() => endpoints.value.filter(item => item.appId === activeAppId.value))
 const endpointScenarios = computed(() => scenarios.value.filter(item => item.endpointId === activeEndpointId.value))
 const appScenarios = computed(() => scenarios.value.filter(item => item.appId === activeAppId.value))
-const appBusinessScenarios = computed(() => businessScenarios.value.filter(item => item.appId === activeAppId.value))
-const appLogs = computed(() => logs.value.filter(item => !activeAppId.value || item.appId === activeAppId.value))
 const activeRelease = computed(() => releases.value.find(item => item.active) || null)
-const invokePath = computed(() => {
-  if (!activeApp.value || !activeEndpoint.value) {
-    return ''
-  }
-  return `/api/mock/${activeApp.value.appCode}${activeEndpoint.value.pathPattern}`
+const nextReleaseVersion = computed(() => Math.max(0, ...releases.value.map(item => item.versionNo)) + 1)
+const environmentReferenceCount = computed(() => referenceSummary.value?.items.filter(item => item.sourceType.includes('环境')).length || 0)
+const responseStatusOptions = [
+  { value: '200', label: '200 OK' },
+  { value: '201', label: '201 Created' },
+  { value: '204', label: '204 No Content' },
+  { value: '400', label: '400 Bad Request' },
+  { value: '401', label: '401 Unauthorized' },
+  { value: '403', label: '403 Forbidden' },
+  { value: '404', label: '404 Not Found' },
+  { value: '409', label: '409 Conflict' },
+  { value: '422', label: '422 Unprocessable Entity' },
+  { value: '500', label: '500 Internal Server Error' },
+  { value: '502', label: '502 Bad Gateway' },
+  { value: '503', label: '503 Service Unavailable' },
+]
+const responseStatusModel = computed({
+  get: () => String(scenarioForm.responseStatus),
+  set: (value: string) => {
+    const status = Number(value)
+    if (Number.isInteger(status) && status >= 100 && status <= 599) {
+      scenarioForm.responseStatus = status
+    }
+  },
 })
+const responseContentType = computed({
+  get: () => responseHeaderRows.value.find(item => item.key.toLowerCase() === 'content-type')?.value || 'application/json',
+  set: (value: string) => {
+    const row = responseHeaderRows.value.find(item => item.key.toLowerCase() === 'content-type')
+    if (row) {
+      row.value = value
+    } else {
+      responseHeaderRows.value.unshift({ key: 'Content-Type', value })
+    }
+  },
+})
+const scenarioVariableRows = computed(() => {
+  const rows = new Map<string, { name: string; source: string; value: string; description: string }>()
+  try {
+    const variables = JSON.parse(scenarioForm.variablesJson || '{}') as Record<string, unknown>
+    Object.entries(variables).forEach(([name, value]) => {
+      rows.set(name, { name: `{{${name}}}`, source: '场景变量', value: String(value ?? ''), description: '当前场景配置' })
+    })
+  } catch {
+    // JSON 校验由保存流程统一处理。
+  }
+  const sourceText = `${scenarioForm.matchJson || ''}\n${scenarioForm.responseBody || ''}`
+  const matches = sourceText.matchAll(/\{\{\s*([^{}]+?)\s*\}\}|\$\{\s*([^{}]+?)\s*\}/g)
+  for (const match of matches) {
+    const name = (match[1] || match[2] || '').trim()
+    if (!name || rows.has(name)) continue
+    const source = name.startsWith('env.') ? '环境变量' : name.startsWith('request.') ? '请求上下文' : name.startsWith('ws.') ? '工作区变量' : '系统内置'
+    rows.set(name, { name: match[0], source, value: '运行时解析', description: '响应模板引用' })
+  }
+  return Array.from(rows.values())
+})
+
+function formatJsonSource(value: string, fallback: string) {
+  const source = value || fallback
+  try {
+    return JSON.stringify(JSON.parse(source), null, 2)
+  } catch {
+    return source
+  }
+}
+
+function hydrateScenarioEditor() {
+  matchRuleRows.value = []
+  try {
+    const parsed = JSON.parse(scenarioForm.matchJson || '{}') as { conditions?: MatchRuleRow[] }
+    if (Array.isArray(parsed.conditions)) {
+      matchRuleRows.value = parsed.conditions.map(item => ({
+        source: item.source || 'Query',
+        field: item.field || '',
+        operator: item.operator || 'equals',
+        value: item.value || '',
+      }))
+      matchMode.value = 'simple'
+    } else {
+      matchMode.value = 'advanced'
+    }
+  } catch {
+    matchMode.value = 'advanced'
+  }
+  responseHeaderRows.value = []
+  try {
+    const parsedHeaders = JSON.parse(scenarioForm.responseHeadersJson || '{}') as Record<string, unknown>
+    responseHeaderRows.value = Object.entries(parsedHeaders).map(([key, value]) => ({ key, value: String(value ?? '') }))
+  } catch {
+    responseHeaderRows.value = []
+  }
+  if (!responseHeaderRows.value.length) {
+    responseHeaderRows.value.push({ key: 'Content-Type', value: 'application/json' })
+  }
+}
+
+function addMatchRule() {
+  matchRuleRows.value.push({ source: 'Query', field: '', operator: 'equals', value: '' })
+}
+
+function removeMatchRule(index: number) {
+  matchRuleRows.value.splice(index, 1)
+}
+
+function addResponseHeader() {
+  responseHeaderRows.value.push({ key: '', value: '' })
+}
+
+function removeResponseHeader(index: number) {
+  responseHeaderRows.value.splice(index, 1)
+}
+
+function syncScenarioStructuredFields() {
+  if (matchMode.value === 'simple') {
+    scenarioForm.matchJson = JSON.stringify({ matchMode: 'all', conditions: matchRuleRows.value }, null, 2)
+  }
+  scenarioForm.responseHeadersJson = JSON.stringify(
+    Object.fromEntries(responseHeaderRows.value.filter(item => item.key.trim()).map(item => [item.key.trim(), item.value])),
+    null,
+    2,
+  )
+}
 
 async function loadAll() {
   loading.value = true
@@ -290,14 +419,17 @@ function openCreateScenarioDialog() {
     endpointId: activeEndpointId.value,
     scenarioName: '',
     priority: 100,
-    matchJson: '{}',
+    matchJson: formatJsonSource('{}', '{}'),
     responseStatus: 200,
     responseHeadersJson: '{"Content-Type":"application/json;charset=UTF-8"}',
-    responseBody: '{"success":true}',
+    responseBody: formatJsonSource('{"success":true}', '{"success":true}'),
     responseDelayMs: 0,
     variablesJson: '{}',
     status: 1,
   })
+  scenarioEditorTab.value = 'match'
+  hydrateScenarioEditor()
+  matchMode.value = 'simple'
   scenarioDialogVisible.value = true
 }
 
@@ -309,52 +441,17 @@ function openEditScenarioDialog(scenario: MockScenarioItem) {
     endpointId: scenario.endpointId,
     scenarioName: scenario.scenarioName,
     priority: scenario.priority,
-    matchJson: scenario.matchJson || '{}',
+    matchJson: formatJsonSource(scenario.matchJson || '{}', '{}'),
     responseStatus: scenario.responseStatus || 200,
     responseHeadersJson: scenario.responseHeadersJson || '{}',
-    responseBody: scenario.responseBody || '',
+    responseBody: formatJsonSource(scenario.responseBody || '', ''),
     responseDelayMs: scenario.responseDelayMs || 0,
     variablesJson: scenario.variablesJson || '{}',
     status: scenario.status,
   })
+  scenarioEditorTab.value = 'match'
+  hydrateScenarioEditor()
   scenarioDialogVisible.value = true
-}
-
-function openCreateBusinessScenarioDialog() {
-  if (!activeAppId.value) {
-    ElMessage.warning('请先创建或选择 Mock 应用')
-    return
-  }
-  businessScenarioDialogMode.value = 'create'
-  editingBusinessScenarioId.value = null
-  Object.assign(businessScenarioForm, {
-    appId: activeAppId.value,
-    scenarioName: '',
-    description: '',
-    variablesJson: '{}',
-    status: 1,
-    items: [],
-  })
-  businessScenarioDialogVisible.value = true
-}
-
-function openEditBusinessScenarioDialog(row: MockBusinessScenarioItem) {
-  businessScenarioDialogMode.value = 'edit'
-  editingBusinessScenarioId.value = row.id
-  Object.assign(businessScenarioForm, {
-    appId: row.appId,
-    scenarioName: row.scenarioName,
-    description: row.description || '',
-    variablesJson: row.variablesJson || '{}',
-    status: row.status,
-    items: row.items.map(item => ({
-      endpointId: item.endpointId,
-      scenarioId: item.scenarioId,
-      sortOrder: item.sortOrder,
-      status: item.status,
-    })),
-  })
-  businessScenarioDialogVisible.value = true
 }
 
 function addBusinessScenarioItem() {
@@ -382,10 +479,6 @@ function findScenario(id: number | null) {
 
 function scenarioSelectLabel(scenario: MockScenarioItem) {
   return `${scenario.endpointName} / ${scenario.scenarioName}`
-}
-
-function formatBusinessScenarioItems(row: MockBusinessScenarioItem) {
-  return row.items.map(item => `${item.endpointName}/${item.scenarioName}`).join('，') || '-'
 }
 
 function validateJson(text: string, label: string) {
@@ -445,6 +538,7 @@ async function submitScenario() {
     ElMessage.warning('请输入场景名称')
     return
   }
+  syncScenarioStructuredFields()
   if (!validateJson(scenarioForm.matchJson || '{}', '匹配规则')) {
     return
   }
@@ -519,20 +613,11 @@ async function submitBusinessScenario() {
   }
 }
 
-async function removeApplication(row: MockApplicationItem) {
-  await confirmAndRun(
-    `删除 Mock 应用「${row.appName}」会同时删除下属接口、场景和调用日志。确认删除？`,
-    async () => {
-      await configApi.deleteMockApplication(props.workspaceCode, row.id)
-      if (activeAppId.value === row.id) {
-        activeAppId.value = null
-      }
-    },
-  )
-}
-
-async function openApplicationReferences(row: MockApplicationItem) {
-  referenceDrawerVisible.value = true
+async function loadApplicationReferences(row = activeApp.value) {
+  if (!row) {
+    referenceSummary.value = null
+    return
+  }
   referenceLoading.value = true
   referenceSummary.value = null
   try {
@@ -544,29 +629,73 @@ async function openApplicationReferences(row: MockApplicationItem) {
   }
 }
 
+function selectApplicationById(id: number) {
+  const app = applications.value.find(item => item.id === id)
+  if (app) {
+    selectApplication(app)
+  }
+}
+
+function selectEndpointAndCreateScenario(endpoint: MockEndpointItem) {
+  selectEndpoint(endpoint)
+  openCreateScenarioDialog()
+}
+
+function openCopyEndpointDialog(endpoint: MockEndpointItem) {
+  endpointDialogMode.value = 'create'
+  editingEndpointId.value = null
+  Object.assign(endpointForm, {
+    appId: endpoint.appId,
+    endpointName: `${endpoint.endpointName} 副本`,
+    httpMethod: endpoint.httpMethod,
+    pathPattern: endpoint.pathPattern,
+    description: endpoint.description || '',
+    status: endpoint.status,
+  })
+  endpointDialogVisible.value = true
+}
+
+function openCopyScenarioDialog(scenario: MockScenarioItem) {
+  scenarioDialogMode.value = 'create'
+  editingScenarioId.value = null
+  Object.assign(scenarioForm, {
+    appId: scenario.appId,
+    endpointId: scenario.endpointId,
+    scenarioName: `${scenario.scenarioName} 副本`,
+    priority: scenario.priority,
+    matchJson: formatJsonSource(scenario.matchJson || '{}', '{}'),
+    responseStatus: scenario.responseStatus || 200,
+    responseHeadersJson: scenario.responseHeadersJson || '{}',
+    responseBody: formatJsonSource(scenario.responseBody || '', ''),
+    responseDelayMs: scenario.responseDelayMs || 0,
+    variablesJson: scenario.variablesJson || '{}',
+    status: scenario.status,
+  })
+  scenarioEditorTab.value = 'match'
+  hydrateScenarioEditor()
+  scenarioDialogVisible.value = true
+}
+
 async function publishCurrentRelease() {
+  if (!activeApp.value) {
+    return
+  }
+  await loadApplicationReferences(activeApp.value)
+  releaseName.value = ''
+  publishDialogVisible.value = true
+}
+
+async function confirmPublishRelease() {
   if (!activeApp.value) {
     return
   }
   releaseLoading.value = true
   try {
-    const nextVersion = Math.max(0, ...releases.value.map(item => item.versionNo)) + 1
-    const { value } = await ElMessageBox.prompt(
-      '发布后，自动化执行将使用这份配置快照；之后的编辑不会影响已发布版本。',
-      '发布 Mock 配置',
-      {
-        confirmButtonText: '发布',
-        cancelButtonText: '取消',
-        inputValue: `v${nextVersion} - 当前配置`,
-        inputPlaceholder: '例如：支付成功回归基线',
-        inputValidator: input => Boolean(input?.trim()),
-        inputErrorMessage: '请输入版本名称',
-      },
-    )
     await configApi.publishMockRelease(props.workspaceCode, activeApp.value.id, {
-      releaseName: value.trim(),
+      releaseName: releaseName.value.trim() || null,
     })
-    ElMessage.success('当前 Mock 配置已发布，后续运行将优先使用该版本')
+    ElMessage.success('当前 Mock 配置已发布为不可变版本，可在环境配置中选择使用')
+    publishDialogVisible.value = false
     await loadReleases()
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
@@ -574,6 +703,35 @@ async function publishCurrentRelease() {
     }
   } finally {
     releaseLoading.value = false
+  }
+}
+
+async function toggleApplication(row: MockApplicationItem) {
+  const nextStatus: ConfigStatus = row.status === 1 ? 0 : 1
+  try {
+    await confirmAction({
+      title: nextStatus === 1 ? '启用 Mock 应用' : '停用 Mock 应用',
+      message: nextStatus === 1
+        ? `确认启用 Mock 应用「${row.appName}」？`
+        : `确认停用 Mock 应用「${row.appName}」？停用后该应用将不再响应 Mock 请求。`,
+      confirmText: nextStatus === 1 ? '确认启用' : '确认停用',
+      tone: nextStatus === 1 ? 'success' : 'warning',
+    })
+    saving.value = true
+    await configApi.updateMockApplication(props.workspaceCode, row.id, {
+      appName: row.appName,
+      appCode: row.appCode,
+      description: row.description,
+      status: nextStatus,
+    })
+    ElMessage.success(nextStatus === 1 ? 'Mock 应用已启用' : 'Mock 应用已停用')
+    await loadAll()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(getRequestErrorMessage(error))
+    }
+  } finally {
+    saving.value = false
   }
 }
 
@@ -622,12 +780,6 @@ async function removeScenario(row: MockScenarioItem) {
   })
 }
 
-async function removeBusinessScenario(row: MockBusinessScenarioItem) {
-  await confirmAndRun(`确认删除业务场景组合「${row.scenarioName}」？不会删除下属单接口 Mock 场景。`, async () => {
-    await configApi.deleteMockBusinessScenario(props.workspaceCode, row.id)
-  })
-}
-
 async function confirmAndRun(message: string, action: () => Promise<void>) {
   try {
     await confirmDelete({
@@ -645,24 +797,9 @@ async function confirmAndRun(message: string, action: () => Promise<void>) {
   }
 }
 
-async function copyInvokePath() {
-  if (!invokePath.value) {
-    return
-  }
-  await navigator.clipboard.writeText(invokePath.value)
-  ElMessage.success('调用地址已复制')
-}
-
 function openLog(row: MockCallLogItem) {
   activeLog.value = row
   logDrawerVisible.value = true
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return '-'
-  }
-  return value.replace('T', ' ').slice(0, 19)
 }
 
 function prettyJson(value: string | null) {
@@ -679,7 +816,9 @@ function prettyJson(value: string | null) {
 watch(activeAppId, () => {
   normalizeActiveEndpoint()
   normalizeActiveScenario()
+  referenceSummary.value = null
   void loadReleases()
+  void loadApplicationReferences()
 })
 
 watch(activeEndpointId, () => {
@@ -703,280 +842,87 @@ onMounted(() => {
 
 <template>
   <section class="config-mock-panel">
-    <header class="config-mock-panel__header">
-      <div>
-        <h2>Mock 服务</h2>
-        <p>维护可被接口自动化、Web UI 和外部回调复用的模拟服务。</p>
-      </div>
-      <div class="config-mock-panel__actions">
-        <AppButton :icon="RefreshRight" :loading="loading" @click="loadAll">刷新</AppButton>
-        <AppButton type="primary" :icon="Plus" @click="openCreateAppDialog">新增应用</AppButton>
-      </div>
-    </header>
+    <ConfigMockFigmaWorkspace
+      :applications="applications"
+      :endpoints="endpoints"
+      :scenarios="scenarios"
+      :releases="releases"
+      :logs="logs"
+      :active-app-id="activeAppId"
+      :loading="loading"
+      :error-message="errorMessage"
+      :release-loading="releaseLoading"
+      :reference-loading="referenceLoading"
+      :reference-summary="referenceSummary"
+      @select-app="selectApplicationById"
+      @refresh="loadAll"
+      @create-app="openCreateAppDialog"
+      @edit-app="openEditAppDialog"
+      @toggle-app="toggleApplication"
+      @publish="publishCurrentRelease"
+      @activate-release="activateRelease"
+      @create-endpoint="openCreateEndpointDialog"
+      @edit-endpoint="openEditEndpointDialog"
+      @copy-endpoint="openCopyEndpointDialog"
+      @delete-endpoint="removeEndpoint"
+      @create-scenario="selectEndpointAndCreateScenario"
+      @edit-scenario="openEditScenarioDialog"
+      @copy-scenario="openCopyScenarioDialog"
+      @delete-scenario="removeScenario"
+      @open-log="openLog"
+      @load-references="loadApplicationReferences()"
+    />
 
-    <AppLoadingState v-if="loading && !applications.length" text="正在加载 Mock 服务..." />
 
-    <AppEmptyState
-      v-else-if="errorMessage && !applications.length"
-      title="Mock 服务加载失败"
-      :description="errorMessage"
+    <el-dialog
+      v-model="appDialogVisible"
+      class="figma-mock-dialog"
+      :class="{ 'is-create': appDialogMode === 'create' }"
+      modal-class="figma-mock-app-overlay"
+      :title="appDialogMode === 'edit' ? '编辑 Mock 应用' : '新建 Mock 应用'"
+      width="520px"
+      :close-on-click-modal="false"
     >
-      <template #actions>
-        <AppButton :icon="RefreshRight" @click="loadAll">重试</AppButton>
-      </template>
-    </AppEmptyState>
-
-    <div v-else class="config-mock-layout">
-      <aside class="config-mock-apps">
-        <div class="config-mock-apps__toolbar">
-          <el-input v-model="keyword" clearable placeholder="搜索应用" :prefix-icon="Search" />
-        </div>
-        <div v-if="filteredApplications.length" class="config-mock-apps__list app-soft-scrollbar">
-          <button
-            v-for="app in filteredApplications"
-            :key="app.id"
-            type="button"
-            class="config-mock-app"
-            :class="{ 'is-active': app.id === activeAppId }"
-            @click="selectApplication(app)"
-          >
-            <span>
-              <strong>{{ app.appName }}</strong>
-              <small>{{ app.appCode }}</small>
-            </span>
-            <ConfigTypeBadge :label="app.status === 1 ? '启用' : '停用'" :tone="app.status === 1 ? 'success' : 'default'" />
-          </button>
-        </div>
-        <AppEmptyState v-else title="暂无 Mock 应用" description="创建应用后即可获得 /api/mock/{appCode} 调用入口。">
-          <template #actions>
-            <AppButton size="small" type="primary" :icon="Plus" @click="openCreateAppDialog">新增应用</AppButton>
-          </template>
-        </AppEmptyState>
-      </aside>
-
-      <main class="config-mock-workspace">
-        <div v-if="activeApp" class="config-mock-summary">
-          <div>
-            <div class="config-mock-summary__title">
-              <h3>{{ activeApp.appName }}</h3>
-              <ConfigTypeBadge :label="activeApp.status === 1 ? '启用中' : '已停用'" :tone="activeApp.status === 1 ? 'success' : 'default'" />
-            </div>
-            <p>{{ activeApp.description || '暂无描述' }}</p>
-          </div>
-          <div class="config-mock-summary__actions">
-            <AppButton size="small" type="primary" :icon="Upload" :loading="releaseLoading" @click="publishCurrentRelease">发布当前配置</AppButton>
-            <AppButton size="small" :icon="Connection" @click="openApplicationReferences(activeApp)">引用详情</AppButton>
-            <AppButton size="small" :icon="Edit" @click="openEditAppDialog(activeApp)">编辑应用</AppButton>
-            <AppButton size="small" :icon="Delete" @click="removeApplication(activeApp)">删除</AppButton>
-          </div>
-        </div>
-
-        <AppEmptyState v-else title="请选择 Mock 应用" description="左侧选择应用后维护接口、场景和调用日志。" />
-
-        <template v-if="activeApp">
-          <section class="config-mock-release">
-            <div class="config-mock-release__summary">
-              <strong>运行版本</strong>
-              <p v-if="activeRelease">当前运行使用 {{ activeRelease.releaseName }}，修改配置不会影响已发布版本。</p>
-              <p v-else>当前配置尚未发布，旧数据仍按实时配置兼容运行；建议完成接口和场景配置后发布。</p>
-            </div>
-            <div class="config-mock-release__meta">
-              <ConfigTypeBadge
-                :label="activeRelease ? 'v' + activeRelease.versionNo + ' 已发布' : '未发布'"
-                :tone="activeRelease ? 'success' : 'warning'"
-              />
-            </div>
-          </section>
-
-          <section class="config-mock-release-history">
-            <div class="config-mock-section__header">
-              <div>
-                <h3>版本历史</h3>
-                <p>每次发布都会保存当前接口和场景快照；切换旧版本可快速回滚运行配置。</p>
-              </div>
-              <AppButton size="small" :icon="RefreshRight" :loading="releaseLoading" @click="loadReleases">刷新版本</AppButton>
-            </div>
-            <AppLoadingState v-if="releaseLoading && !releases.length" text="正在加载版本..." />
-            <el-table v-else-if="releases.length" :data="releases" row-key="id" height="200">
-              <el-table-column label="版本" width="90">
-                <template #default="{ row }">v{{ row.versionNo }}</template>
-              </el-table-column>
-              <el-table-column prop="releaseName" label="版本名称" min-width="220" show-overflow-tooltip />
-              <el-table-column label="状态" width="100">
-                <template #default="{ row }">
-                  <ConfigTypeBadge :label="row.active ? '当前运行' : '已发布'" :tone="row.active ? 'success' : 'default'" />
-                </template>
-              </el-table-column>
-              <el-table-column label="发布时间" width="170">
-                <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
-              </el-table-column>
-              <el-table-column label="操作" width="100" fixed="right">
-                <template #default="{ row }">
-                  <div class="config-mock-table-actions">
-                    <button type="button" :disabled="row.active || releaseLoading" @click="activateRelease(row)">
-                      {{ row.active ? '使用中' : '切换' }}
-                    </button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-            <AppEmptyState v-else title="暂无已发布版本" description="完成 Mock 接口和场景配置后，可发布第一份运行快照。" />
-          </section>
-
-          <section class="config-mock-url">
-            <span>当前接口调用地址</span>
-            <code>{{ invokePath || '请选择接口' }}</code>
-            <AppButton size="small" :icon="CopyDocument" :disabled="!invokePath" @click="copyInvokePath">复制</AppButton>
-          </section>
-
-          <section class="config-mock-section">
-            <div class="config-mock-section__header">
-              <div>
-                <h3>Mock 接口</h3>
-                <p>按请求方法和路径匹配进入应用的请求。</p>
-              </div>
-              <AppButton size="small" type="primary" :icon="Plus" @click="openCreateEndpointDialog">新增接口</AppButton>
-            </div>
-            <el-table :data="appEndpoints" row-key="id" height="220" highlight-current-row @row-click="selectEndpoint">
-              <el-table-column prop="httpMethod" label="方法" width="90" />
-              <el-table-column prop="endpointName" label="接口名称" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="pathPattern" label="匹配路径" min-width="180" show-overflow-tooltip />
-              <el-table-column label="状态" width="90">
-                <template #default="{ row }">
-                  <ConfigTypeBadge :label="row.status === 1 ? '启用' : '停用'" :tone="row.status === 1 ? 'success' : 'default'" />
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="150" fixed="right">
-                <template #default="{ row }">
-                  <div class="config-mock-table-actions">
-                    <button type="button" @click.stop="openEditEndpointDialog(row)">编辑</button>
-                    <button type="button" @click.stop="removeEndpoint(row)">删除</button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </section>
-
-          <section class="config-mock-section">
-            <div class="config-mock-section__header">
-              <div>
-                <h3>Mock 场景</h3>
-                <p>同一接口可按 Header、Query、Body 或 JSONPath 命中不同响应。</p>
-              </div>
-              <AppButton size="small" type="primary" :icon="Plus" :disabled="!activeEndpointId" @click="openCreateScenarioDialog">新增场景</AppButton>
-            </div>
-            <el-table :data="endpointScenarios" row-key="id" height="260">
-              <el-table-column prop="priority" label="优先级" width="90" />
-              <el-table-column prop="scenarioName" label="场景名称" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="responseStatus" label="响应码" width="90" />
-              <el-table-column prop="responseDelayMs" label="延迟(ms)" width="100" />
-              <el-table-column label="状态" width="90">
-                <template #default="{ row }">
-                  <ConfigTypeBadge :label="row.status === 1 ? '启用' : '停用'" :tone="row.status === 1 ? 'success' : 'default'" />
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="150" fixed="right">
-                <template #default="{ row }">
-                  <div class="config-mock-table-actions">
-                    <button type="button" @click="openEditScenarioDialog(row)">编辑</button>
-                    <button type="button" @click="removeScenario(row)">删除</button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </section>
-
-          <details class="config-mock-advanced-section">
-            <summary>高级：业务场景组合</summary>
-            <section class="config-mock-section">
-              <div class="config-mock-section__header">
-                <div>
-                  <h3>业务场景组合</h3>
-                  <p>把多个单接口 Mock 场景组合成一条可复用业务链路，例如支付成功、支付失败或超时。</p>
-                </div>
-                <AppButton size="small" type="primary" :icon="Plus" @click="openCreateBusinessScenarioDialog">新增组合</AppButton>
-              </div>
-              <el-table :data="appBusinessScenarios" row-key="id" height="220">
-                <el-table-column prop="scenarioName" label="组合名称" min-width="180" show-overflow-tooltip />
-                <el-table-column label="包含场景" min-width="220" show-overflow-tooltip>
-                  <template #default="{ row }">
-                    {{ formatBusinessScenarioItems(row) }}
-                  </template>
-                </el-table-column>
-                <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
-                <el-table-column label="状态" width="90">
-                  <template #default="{ row }">
-                    <ConfigTypeBadge :label="row.status === 1 ? '启用' : '停用'" :tone="row.status === 1 ? 'success' : 'default'" />
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="150" fixed="right">
-                  <template #default="{ row }">
-                    <div class="config-mock-table-actions">
-                      <button type="button" @click="openEditBusinessScenarioDialog(row)">编辑</button>
-                      <button type="button" @click="removeBusinessScenario(row)">删除</button>
-                    </div>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </section>
-          </details>
-
-          <section class="config-mock-section">
-            <div class="config-mock-section__header">
-              <div>
-                <h3>调用日志</h3>
-                <p>最近 100 条调用记录，包含请求、响应和命中场景。</p>
-              </div>
-            </div>
-            <el-table :data="appLogs" row-key="id" height="240">
-              <el-table-column prop="httpMethod" label="方法" width="90" />
-              <el-table-column prop="requestPath" label="路径" min-width="180" show-overflow-tooltip />
-              <el-table-column prop="businessScenarioName" label="业务组合" min-width="150" show-overflow-tooltip />
-              <el-table-column prop="scenarioName" label="命中场景" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="responseStatus" label="响应码" width="90" />
-              <el-table-column label="结果" width="90">
-                <template #default="{ row }">
-                  <ConfigTypeBadge :label="row.matched ? '命中' : '未命中'" :tone="row.matched ? 'success' : 'danger'" />
-                </template>
-              </el-table-column>
-              <el-table-column label="时间" width="170">
-                <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
-              </el-table-column>
-              <el-table-column label="操作" width="90" fixed="right">
-                <template #default="{ row }">
-                  <div class="config-mock-table-actions">
-                    <button type="button" @click="openLog(row)">详情</button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </section>
-        </template>
-      </main>
-    </div>
-
-    <el-dialog v-model="appDialogVisible" :title="appDialogMode === 'edit' ? '编辑 Mock 应用' : '新增 Mock 应用'" width="520px">
-      <div class="config-mock-form">
+      <div class="config-mock-form figma-mock-app-form">
         <label>
-          <span>应用名称 *</span>
-          <el-input v-model="appForm.appName" placeholder="例如：支付网关 Mock" />
+          <span>应用名称 <b>*</b></span>
+          <el-input v-model="appForm.appName" placeholder="例：支付网关 Mock" />
         </label>
         <label>
-          <span>应用编码 *</span>
-          <el-input v-model="appForm.appCode" placeholder="pay-service" />
+          <span>应用编码 <b>*</b></span>
+          <el-input class="figma-mock-app-form__code" v-model="appForm.appCode" :disabled="appDialogMode === 'edit'" placeholder="例：payment-mock（仅英文、数字、-）" />
+          <small class="figma-mock-form-tip">编码将作为 Mock 基础路径的一部分，创建后不可修改。</small>
         </label>
         <label>
           <span>描述</span>
-          <el-input v-model="appForm.description" type="textarea" :rows="3" placeholder="说明该 Mock 应用的用途" />
+          <el-input v-model="appForm.description" placeholder="说明此 Mock 应用的用途和范围" />
         </label>
-        <label>
+        <div class="config-mock-form__grid">
+          <label>
+            <span>默认响应延迟 (ms)</span>
+            <el-input model-value="50" readonly title="后端暂未提供应用级默认延迟字段" />
+          </label>
+          <label>
+            <span>未匹配策略</span>
+            <el-select class="figma-mock-app-form__readonly-select" model-value="strict" disabled title="后端暂未提供应用级未匹配策略字段">
+              <el-option label="严格失败 (推荐)" value="strict" />
+              <el-option label="返回空响应" value="empty" />
+              <el-option label="透传真实服务" value="passthrough" />
+            </el-select>
+          </label>
+        </div>
+        <div class="figma-mock-credential-field">
+          <div><strong>启用访问凭据</strong><p>启用后调用 Mock 接口需携带 Token，提升安全性</p></div>
+          <el-switch :model-value="false" disabled title="后端暂未提供应用级 Token 配置字段" />
+        </div>
+        <label v-if="appDialogMode === 'edit'">
           <span>状态</span>
           <el-switch v-model="appForm.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
         </label>
       </div>
       <template #footer>
-        <AppButton :disabled="saving" @click="appDialogVisible = false">取消</AppButton>
-        <AppButton type="primary" :loading="saving" @click="submitApplication">保存</AppButton>
+        <AppButton class="figma-mock-app-dialog__cancel" :disabled="saving" @click="appDialogVisible = false">取消</AppButton>
+        <AppButton class="figma-mock-app-dialog__submit" type="primary" :loading="saving" @click="submitApplication">{{ appDialogMode === 'create' ? '创建' : '保存' }}</AppButton>
       </template>
     </el-dialog>
 
@@ -1018,57 +964,126 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="scenarioDialogVisible" :title="scenarioDialogMode === 'edit' ? '编辑 Mock 场景' : '新增 Mock 场景'" width="760px">
-      <div class="config-mock-form">
-        <div class="config-mock-form__grid">
-          <label>
-            <span>场景名称 *</span>
-            <el-input v-model="scenarioForm.scenarioName" placeholder="例如：微信支付成功" />
-          </label>
-          <label>
-            <span>优先级</span>
-            <el-input-number v-model="scenarioForm.priority" :min="0" :max="9999" controls-position="right" />
-          </label>
-          <label>
-            <span>响应码</span>
-            <el-input-number v-model="scenarioForm.responseStatus" :min="100" :max="599" controls-position="right" />
-          </label>
-          <label>
-            <span>响应延迟(ms)</span>
-            <el-input-number v-model="scenarioForm.responseDelayMs" :min="0" :max="10000" controls-position="right" />
-          </label>
+    <el-drawer
+      v-model="scenarioDialogVisible"
+      class="figma-mock-scene-drawer"
+      :with-header="false"
+      size="760px"
+      destroy-on-close
+    >
+      <div class="figma-mock-scene-editor">
+        <header class="figma-mock-scene-editor__head">
+          <div class="figma-mock-scene-editor__path">
+            <span class="figma-mock-scene-method">{{ activeEndpoint?.httpMethod || 'ANY' }}</span>
+            <code>{{ activeEndpoint?.pathPattern || '-' }}</code><i>/</i>
+            <strong>{{ scenarioForm.scenarioName || (scenarioDialogMode === 'edit' ? '编辑场景' : '新建场景') }}</strong>
+          </div>
+          <div class="figma-mock-scene-editor__actions">
+            <el-switch v-model="scenarioForm.status" :active-value="1" :inactive-value="0" />
+            <span>启用</span>
+            <span class="figma-mock-publish-chip">{{ activeRelease ? '已发布' : '草稿' }}</span>
+            <button type="button" class="figma-mock-scene-btn" disabled title="后端暂未提供独立调试接口"><Play :size="13" />调试</button>
+            <button type="button" class="figma-mock-scene-btn is-primary" :disabled="saving" @click="submitScenario">{{ saving ? '保存中...' : '保存' }}</button>
+            <button type="button" class="figma-mock-scene-close" aria-label="关闭" @click="scenarioDialogVisible = false"><X :size="16" /></button>
+          </div>
+        </header>
+
+        <div class="figma-mock-scene-editor__summary">
+          <label class="is-inline-edit">场景名称 <el-input v-model="scenarioForm.scenarioName" /></label>
+          <label class="is-inline-edit">优先级 <el-input-number v-model="scenarioForm.priority" :min="0" :max="9999" :controls="false" /></label>
+          <span>默认场景 <b class="is-muted">—</b></span>
+          <span>响应码 <b class="is-success">{{ scenarioForm.responseStatus }}</b></span>
+          <span>延迟 <b>{{ scenarioForm.responseDelayMs }} ms</b></span>
         </div>
-        <label>
-          <span>匹配规则 JSON</span>
-          <el-input
-            v-model="scenarioForm.matchJson"
-            type="textarea"
-            :rows="5"
-            placeholder='{"query":{"payType":"WECHAT"},"jsonPath":{"path":"$.out_trade_no","value":"ORDER_001"}}'
-          />
-        </label>
-        <label>
-          <span>模板变量 JSON</span>
-          <el-input v-model="scenarioForm.variablesJson" type="textarea" :rows="3" placeholder='{"tradeStatus":"SUCCESS"}' />
-        </label>
-        <label>
-          <span>响应头 JSON</span>
-          <el-input v-model="scenarioForm.responseHeadersJson" type="textarea" :rows="3" />
-        </label>
-        <label>
-          <span>响应体</span>
-          <el-input v-model="scenarioForm.responseBody" type="textarea" :rows="6" placeholder='{"success":true,"tradeNo":"${out_trade_no}"}' />
-        </label>
-        <label>
-          <span>状态</span>
-          <el-switch v-model="scenarioForm.status" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
-        </label>
+
+        <nav class="figma-mock-scene-tabs">
+          <button type="button" :class="{ 'is-active': scenarioEditorTab === 'match' }" @click="scenarioEditorTab = 'match'">请求匹配</button>
+          <button type="button" :class="{ 'is-active': scenarioEditorTab === 'response' }" @click="scenarioEditorTab = 'response'">响应配置</button>
+          <button type="button" :class="{ 'is-active': scenarioEditorTab === 'variables' }" @click="scenarioEditorTab = 'variables'">变量替换</button>
+        </nav>
+
+        <div class="figma-mock-scene-editor__body app-soft-scrollbar">
+          <section v-if="scenarioEditorTab === 'match'" class="figma-mock-scene-section is-match">
+            <div class="figma-mock-scene-section__title">
+              <div><strong>匹配条件</strong><p>所有条件均满足时命中此场景。按优先级从高到低匹配。</p></div>
+              <div class="figma-mock-mode-switch"><span>模式：</span><div class="figma-mock-mode-switch__buttons"><button type="button" :class="{ 'is-active': matchMode === 'simple' }" @click="matchMode = 'simple'">简单配置</button><button type="button" :class="{ 'is-active': matchMode === 'advanced' }" @click="matchMode = 'advanced'">高级模式</button></div></div>
+            </div>
+            <template v-if="matchMode === 'simple'">
+              <div class="figma-mock-simple-rules">
+                <div class="figma-mock-rule-grid is-head"><span>来源</span><span>字段 / JSONPath</span><span>操作符</span><span>期望值</span><span /></div>
+                <div v-for="(rule, index) in matchRuleRows" :key="index" class="figma-mock-rule-grid">
+                  <el-select v-model="rule.source"><el-option label="Query" value="Query" /><el-option label="Header" value="Header" /><el-option label="Body.JSON" value="Body.JSON" /><el-option label="Path" value="Path" /><el-option label="Cookie" value="Cookie" /></el-select>
+                  <el-input v-model="rule.field" placeholder="字段名或 JSONPath" />
+                  <el-select v-model="rule.operator"><el-option label="等于" value="equals" /><el-option label="存在" value="exists" /><el-option label="包含" value="contains" /><el-option label="大于" value="greaterThan" /><el-option label="正则匹配" value="regex" /></el-select>
+                  <el-input v-model="rule.value" placeholder="期望值" />
+                  <button type="button" aria-label="删除匹配条件" @click="removeMatchRule(index)"><X :size="14" /></button>
+                </div>
+                <button type="button" class="figma-mock-add-row" @click="addMatchRule"><LucidePlus :size="13" />添加匹配条件</button>
+              </div>
+            </template>
+            <template v-else>
+              <div class="figma-mock-advanced">
+                <div class="figma-mock-advanced-tip"><AlertTriangle :size="14" />高级模式下你可以使用 JSONPath / XPath / 正则表达式直接编写匹配规则。错误的规则将导致场景永不命中。</div>
+                <ApiCodeEditor
+                  v-model="scenarioForm.matchJson"
+                  class="figma-mock-advanced-editor"
+                  language="json"
+                  height="162px"
+                  theme-variant="figma-dark"
+                  line-numbers="off"
+                  :folding="false"
+                  :font-size="12"
+                  :line-height="22"
+                  :padding-top="14"
+                  :padding-bottom="14"
+                  :line-decorations-width="16"
+                  :show-format-button="false"
+                />
+              </div>
+            </template>
+          </section>
+
+          <section v-else-if="scenarioEditorTab === 'response'" class="figma-mock-scene-section is-response">
+            <div class="figma-mock-response-grid">
+              <label><span>HTTP 状态码</span><el-select v-model="responseStatusModel" filterable allow-create default-first-option><el-option v-for="option in responseStatusOptions" :key="option.value" :label="option.label" :value="option.value" /></el-select></label>
+              <label><span>Content-Type</span><el-select v-model="responseContentType"><el-option label="application/json" value="application/json" /><el-option label="application/xml" value="application/xml" /><el-option label="text/plain" value="text/plain" /><el-option label="text/html" value="text/html" /></el-select></label>
+              <label><span>响应延迟 (ms)</span><el-input-number v-model="scenarioForm.responseDelayMs" :min="0" :max="10000" :controls="false" /></label>
+            </div>
+            <div class="figma-mock-response-headers">
+              <div class="figma-mock-scene-section__title is-compact"><strong>响应 Headers</strong><button type="button" class="figma-mock-add-row" @click="addResponseHeader"><LucidePlus :size="12" />添加</button></div>
+              <div class="figma-mock-response-header-rows">
+                <div v-for="(header, index) in responseHeaderRows" :key="index" class="figma-mock-header-row"><el-input v-model="header.key" placeholder="Header 名称" /><span>:</span><el-input v-model="header.value" placeholder="Header 值" /><button type="button" aria-label="删除响应 Header" @click="removeResponseHeader(index)"><X :size="14" /></button></div>
+              </div>
+            </div>
+            <div class="figma-mock-response-body">
+              <div class="figma-mock-scene-section__title is-compact"><strong>响应 Body</strong><span class="figma-mock-available-vars">可用变量：<code>&#123;&#123;env.API_URL&#125;&#125;</code> <code>&#123;&#123;faker.uuid&#125;&#125;</code></span></div>
+              <div class="figma-mock-response-editor">
+                <div class="figma-mock-response-editor__head"><span>response.json</span><span>Monaco Editor</span></div>
+                <ApiCodeEditor
+                  v-model="scenarioForm.responseBody"
+                  language="json"
+                  height="189px"
+                  theme-variant="figma-dark"
+                  line-numbers="off"
+                  :folding="false"
+                  :font-size="12"
+                  :line-height="21"
+                  :padding-top="9.5"
+                  :padding-bottom="9.5"
+                  :line-decorations-width="10.5"
+                  :show-format-button="false"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section v-else class="figma-mock-scene-section is-variables">
+            <div class="figma-mock-variable-tip"><Zap :size="14" /><div><strong>变量替换说明</strong><p>在响应 Body 中使用 <code>&#123;&#123;变量名&#125;&#125;</code> 语法引用变量。系统将按作用域优先级解析：场景变量 › 环境变量 › 工作区变量 › 系统内置变量。</p></div></div>
+            <table class="figma-mock-variable-table"><thead><tr><th>变量名</th><th>来源</th><th>当前值预览</th><th>说明</th><th>状态</th></tr></thead><tbody><tr v-for="row in scenarioVariableRows" :key="row.name"><td><code>{{ row.name }}</code></td><td><span class="figma-mock-variable-source">{{ row.source }}</span></td><td><code>{{ row.value }}</code></td><td>{{ row.description }}</td><td class="is-center"><CheckCircle2 :size="14" class="is-success" /></td></tr><tr v-if="!scenarioVariableRows.length"><td colspan="5" class="is-empty">当前响应模板未引用变量</td></tr></tbody></table>
+          </section>
+        </div>
       </div>
-      <template #footer>
-        <AppButton :disabled="saving" @click="scenarioDialogVisible = false">取消</AppButton>
-        <AppButton type="primary" :loading="saving" @click="submitScenario">保存</AppButton>
-      </template>
-    </el-dialog>
+    </el-drawer>
 
     <el-dialog
       v-model="businessScenarioDialogVisible"
@@ -1123,6 +1138,35 @@ onMounted(() => {
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="publishDialogVisible"
+      class="figma-mock-publish-dialog"
+      width="560px"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="figma-mock-publish-dialog__heading"><h2>确认发布 — {{ activeApp?.appName || 'Mock 应用' }}</h2><p>发布后当前版本不可变，可由环境配置选择并启用新版本。</p></div>
+      </template>
+      <div class="figma-mock-publish-dialog__stats">
+        <div><span>当前版本</span><strong>{{ activeRelease ? `v${activeRelease.versionNo}` : '尚未发布' }}</strong></div>
+        <div><span>新版本</span><strong>v{{ nextReleaseVersion }}</strong></div>
+        <div><span>引用环境</span><strong>{{ environmentReferenceCount }} 个环境</strong></div>
+      </div>
+      <strong class="figma-mock-publish-dialog__label">本次修改摘要</strong>
+      <div class="figma-mock-publish-dialog__changes">
+        <div class="figma-mock-publish-dialog__change is-edit"><span><Edit2 :size="11" /></span><div><strong><b>修改</b>接口配置</strong><p>{{ appEndpoints.length }} 个接口将写入新版本快照</p></div></div>
+        <div class="figma-mock-publish-dialog__change is-add"><span><LucidePlus :size="11" /></span><div><strong><b>收录</b>场景配置</strong><p>{{ appScenarios.length }} 个场景将写入新版本快照</p></div></div>
+        <div class="figma-mock-publish-dialog__change is-snapshot"><span><CheckCircle2 :size="11" /></span><div><strong><b>快照</b>生成不可变版本</strong><p>后端暂未提供新增、修改和删除的结构化差异</p></div></div>
+      </div>
+      <label class="figma-mock-publish-dialog__note"><span>发布说明 <small>（选填）</small></span><el-input v-model="releaseName" type="textarea" :rows="3" placeholder="描述本次发布的主要变更..." /></label>
+      <template #footer>
+        <div class="figma-mock-publish-dialog__footer">
+          <span><AlertTriangle :size="14" />发布不会修改环境已选择的版本，请在环境配置中切换</span>
+          <div><AppButton :disabled="releaseLoading" @click="publishDialogVisible = false">取消</AppButton><AppButton type="primary" :loading="releaseLoading" @click="confirmPublishRelease">确认发布</AppButton></div>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-drawer v-model="logDrawerVisible" title="调用日志详情" size="560px">
       <div v-if="activeLog" class="config-mock-log-detail">
         <dl>
@@ -1162,7 +1206,733 @@ onMounted(() => {
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: var(--app-space-5);
+  gap: 0;
+}
+
+:deep(.figma-mock-dialog),
+:deep(.figma-mock-publish-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__header),
+:deep(.figma-mock-publish-dialog .el-dialog__header) {
+  height: 64px;
+  margin: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid #e5e6eb;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.figma-mock-dialog .el-dialog__title),
+:deep(.figma-mock-publish-dialog .el-dialog__title) {
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+:deep(.figma-mock-dialog .el-dialog__body),
+:deep(.figma-mock-publish-dialog .el-dialog__body) {
+  padding: 20px 24px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__footer),
+:deep(.figma-mock-publish-dialog .el-dialog__footer) {
+  padding: 14px 20px;
+  border-top: 1px solid #e5e6eb;
+  background: #fafafa;
+}
+
+:global(.figma-mock-app-overlay) {
+  background: rgba(29, 33, 41, 0.5);
+}
+
+:deep(.figma-mock-dialog) {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  font-family: var(--app-font-family);
+}
+
+:deep(.figma-mock-dialog.is-create) {
+  display: flex;
+  height: 494.75px;
+  flex-direction: column;
+  margin-top: max(16px, calc((100vh - 494.75px) / 2));
+}
+
+:deep(.figma-mock-dialog .el-dialog__header) {
+  height: 59px;
+  min-height: 59px;
+  padding: 0 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__header) {
+  height: 60.5px;
+  min-height: 60.5px;
+  flex: 0 0 60.5px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__title) {
+  font-family: var(--app-font-family);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__headerbtn) {
+  top: 17px;
+  right: 21px;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__headerbtn:hover) {
+  background: #f7f8fa;
+}
+
+:deep(.figma-mock-dialog .el-dialog__headerbtn .el-dialog__close) {
+  width: 16px;
+  height: 16px;
+  color: #c9cdd4;
+}
+
+:deep(.figma-mock-dialog .el-dialog__body) {
+  padding: 17.5px 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__body) {
+  height: 374.75px;
+  min-height: 0;
+  flex: 0 0 374.75px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__footer) {
+  min-height: 61px;
+  padding: 14px 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__footer) {
+  display: flex;
+  height: 61px;
+  min-height: 61px;
+  flex: 0 0 61px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 14px 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__headerbtn) {
+  top: 17.5px;
+  right: 21px;
+  width: 24.5px;
+  height: 24.5px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__footer .el-button) {
+  margin-left: 0;
+}
+
+:deep(.figma-mock-scene-drawer) {
+  top: 31px;
+  height: calc(100% - 31px);
+  border-radius: 0;
+}
+
+:deep(.figma-mock-scene-drawer .el-drawer__body) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.figma-mock-scene-editor {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: #fff;
+  color: #1d2129;
+  font-size: 12px;
+}
+
+.figma-mock-scene-editor__head {
+  display: flex;
+  height: 56px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.figma-mock-scene-editor__path,
+.figma-mock-scene-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.figma-mock-scene-editor__path {
+  min-width: 0;
+}
+
+.figma-mock-scene-editor__path code,
+.figma-mock-scene-editor__path strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-mock-scene-editor__path code {
+  color: #4e5969;
+  font-family: Consolas, monospace;
+}
+
+.figma-mock-scene-editor__path i {
+  color: #c9cdd4;
+  font-style: normal;
+}
+
+.figma-mock-scene-method {
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #fff3e8;
+  color: #ff7d00;
+  font: 600 10px Consolas, monospace;
+}
+
+.figma-mock-publish-chip {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #e8ffea;
+  color: #00b42a;
+  font-size: 10px;
+}
+
+.figma-mock-scene-btn {
+  display: inline-flex;
+  height: 29px;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid #d9dce3;
+  border-radius: 7px;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.figma-mock-scene-btn.is-primary {
+  border-color: #165dff;
+  background: #165dff;
+  color: #fff;
+}
+
+.figma-mock-scene-btn:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.figma-mock-scene-close {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c9cdd4;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.figma-mock-scene-editor__summary {
+  display: flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 18px;
+  padding: 5px 20px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+  color: #86909c;
+}
+
+.figma-mock-scene-editor__summary label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.figma-mock-scene-editor__summary label:first-child {
+  width: 210px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) {
+  width: 126px;
+}
+
+.figma-mock-scene-editor__summary label:first-child :deep(.el-input) {
+  width: 145px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input-number) {
+  width: 84px;
+}
+
+.figma-mock-scene-editor__summary :deep(.el-input__wrapper),
+.figma-mock-scene-editor__summary :deep(.el-input-number) {
+  height: 26px;
+}
+
+.figma-mock-scene-editor__summary span {
+  white-space: nowrap;
+}
+
+.figma-mock-scene-editor__summary b {
+  margin-left: 4px;
+  color: #4e5969;
+  font-family: Consolas, monospace;
+}
+
+.figma-mock-scene-tabs {
+  display: flex;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  padding: 0 20px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.figma-mock-scene-tabs button {
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #86909c;
+  cursor: pointer;
+  font: 500 12px inherit;
+}
+
+.figma-mock-scene-tabs button.is-active {
+  border-bottom-color: #165dff;
+  color: #165dff;
+}
+
+.figma-mock-scene-editor__body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.figma-mock-scene-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.figma-mock-scene-section__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.figma-mock-scene-section__title > div:first-child {
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-section__title strong {
+  font-size: 13px;
+}
+
+.figma-mock-scene-section__title p {
+  margin: 2.25px 0 0;
+  color: #86909c;
+  font-size: 11px;
+}
+
+.figma-mock-scene-section__title.is-compact {
+  align-items: center;
+  margin-top: 4px;
+}
+
+.figma-mock-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6.625px;
+  color: #86909c;
+}
+
+.figma-mock-mode-switch__buttons {
+  box-sizing: border-box;
+  display: flex;
+  width: 140px;
+  height: 26.5px;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+}
+
+.figma-mock-mode-switch__buttons button {
+  flex: 0 0 69px;
+  height: 24.5px;
+  padding: 0 10.5px;
+  border: 0;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.figma-mock-mode-switch__buttons button.is-active {
+  background: #165dff;
+  color: #fff;
+}
+
+.figma-mock-simple-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 14px;
+}
+
+.figma-mock-rule-grid {
+  display: grid;
+  box-sizing: border-box;
+  height: 40.5px;
+  min-height: 40.5px;
+  align-items: center;
+  grid-template-columns: 100px minmax(0, 1fr) 120px minmax(0, 1fr) 36px;
+  gap: 10.5px;
+  padding: 0 10.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+}
+
+.figma-mock-rule-grid.is-head > span:nth-child(2),
+.figma-mock-rule-grid.is-head > span:nth-child(4) {
+  padding-left: 1.5px;
+}
+
+.figma-mock-rule-grid.is-head {
+  height: 32.5px;
+  min-height: 32.5px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.figma-mock-rule-grid button,
+.figma-mock-header-row button {
+  border: 0;
+  background: none;
+  color: #c9cdd4;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.figma-mock-add-row {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #165dff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.figma-mock-simple-rules > .figma-mock-add-row {
+  width: 100%;
+  height: 21.5px;
+  align-self: stretch;
+  justify-content: flex-start;
+  gap: 5.25px;
+}
+
+.figma-mock-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 10.5px;
+  padding-top: 14px;
+}
+
+.figma-mock-advanced-tip,
+.figma-mock-variable-tip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1px solid #ffd09a;
+  border-radius: 7px;
+  background: #fff7e8;
+  color: #ff7d00;
+  font-size: 11px;
+}
+
+.figma-mock-advanced-tip {
+  box-sizing: border-box;
+  min-height: 37.5px;
+  align-items: flex-start;
+  padding: 8.75px 10.5px;
+  border-color: #ffd595;
+  background: #fff3e8;
+}
+
+.figma-mock-advanced-tip > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.figma-mock-advanced-editor.api-code-editor.is-figma-dark {
+  min-height: 160px;
+  padding: 0;
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #1e1e1e;
+}
+
+.figma-mock-response-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.figma-mock-response-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5.25px;
+  color: #4e5969;
+}
+
+.figma-mock-response-grid :deep(.el-input-number),
+.figma-mock-response-grid :deep(.el-select) {
+  width: 100%;
+}
+
+.figma-mock-response-grid :deep(.el-select__wrapper),
+.figma-mock-response-grid :deep(.el-input-number .el-input__wrapper) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.figma-mock-response-headers,
+.figma-mock-response-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.figma-mock-response-header-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5.25px;
+  padding-top: 7px;
+  padding-bottom: 5.25px;
+}
+
+.figma-mock-response-body .figma-mock-response-editor {
+  margin-top: 7px;
+}
+
+.figma-mock-response-headers .figma-mock-scene-section__title.is-compact,
+.figma-mock-response-body .figma-mock-scene-section__title.is-compact {
+  margin-top: 0;
+}
+
+.figma-mock-response-headers .figma-mock-scene-section__title.is-compact {
+  height: 18px;
+}
+
+.figma-mock-response-body .figma-mock-scene-section__title.is-compact {
+  height: 20.5px;
+}
+
+.figma-mock-header-row {
+  display: grid;
+  height: 28px;
+  align-items: center;
+  grid-template-columns: 147.59375px 4px minmax(0, 1fr) 15.5px;
+  gap: 7px;
+}
+
+.figma-mock-header-row :deep(.el-input__wrapper) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.figma-mock-available-vars {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.figma-mock-available-vars code {
+  margin-left: 4px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.figma-mock-variable-tip {
+  display: block;
+  border-color: #bed0ff;
+  background: #f2f7ff;
+  color: #165dff;
+}
+
+.figma-mock-variable-tip p {
+  margin: 5px 0 0;
+  color: #4e5969;
+}
+
+.figma-mock-variable-json {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.figma-mock-variable-table {
+  width: 100%;
+  border: 1px solid #e5e6eb;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.figma-mock-variable-table th,
+.figma-mock-variable-table td {
+  height: 42px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #4e5969;
+  font-size: 11px;
+  text-align: left;
+}
+
+.figma-mock-variable-table th {
+  height: 33px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-variable-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.figma-mock-variable-table td.is-empty {
+  color: #86909c;
+  text-align: center;
+}
+
+.figma-mock-publish-dialog__intro {
+  margin: -6px 0 16px;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.figma-mock-publish-dialog__stats div {
+  padding: 11px;
+  border: 1px solid #e5e6eb;
+  border-radius: 9px;
+  background: #fafafa;
+}
+
+.figma-mock-publish-dialog__stats span,
+.figma-mock-publish-dialog__stats strong {
+  display: block;
+}
+
+.figma-mock-publish-dialog__stats span {
+  margin-bottom: 7px;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-publish-dialog__stats strong {
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.figma-mock-publish-dialog__label {
+  display: block;
+  margin-bottom: 9px;
+  color: #1d2129;
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__change {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.figma-mock-publish-dialog__change>span {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.figma-mock-publish-dialog__change strong {
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__change p {
+  margin: 3px 0 0;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-publish-dialog__note {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__note small {
+  color: #c9cdd4;
+}
+
+.figma-mock-publish-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.figma-mock-publish-dialog__footer>span,
+.figma-mock-publish-dialog__footer>div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.figma-mock-publish-dialog__footer>span {
+  color: #ff7d00;
+  font-size: 10px;
 }
 
 .config-mock-panel__header,
@@ -1410,6 +2180,192 @@ onMounted(() => {
   width: 100%;
 }
 
+.figma-mock-form-tip {
+  margin-top: -3px;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.figma-mock-credential-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.figma-mock-credential-field strong {
+  color: #1d2129;
+  font-size: 12px;
+}
+
+.figma-mock-credential-field p {
+  margin: 3px 0 0;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-app-form {
+  gap: 14px;
+}
+
+.figma-mock-app-form label {
+  gap: 5px;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-app-form label > span {
+  min-height: 18px;
+}
+
+.figma-mock-app-form label > span b {
+  color: #f53f3f;
+  font-weight: 500;
+}
+
+.figma-mock-app-form .config-mock-form__grid {
+  gap: 14px;
+}
+
+.figma-mock-app-form :deep(.el-input__wrapper),
+.figma-mock-app-form :deep(.el-select__wrapper) {
+  min-height: 28px;
+  padding: 1px 10px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+.figma-mock-app-form :deep(.el-input__wrapper:hover),
+.figma-mock-app-form :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c9cdd4 inset;
+}
+
+.figma-mock-app-form :deep(.el-input__wrapper.is-focus),
+.figma-mock-app-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #165dff inset;
+}
+
+.figma-mock-app-form :deep(.el-input__inner),
+.figma-mock-app-form :deep(.el-select__selected-item),
+.figma-mock-app-form :deep(.el-select__placeholder) {
+  height: 20px;
+  color: #4e5969;
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-app-form :deep(.el-input__inner::placeholder),
+.figma-mock-app-form :deep(.el-select__placeholder.is-transparent) {
+  color: #c9cdd4;
+}
+
+.figma-mock-app-form__code :deep(.el-input__inner) {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.figma-mock-app-form .figma-mock-form-tip {
+  margin-top: -1px;
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-app-form :deep(.figma-mock-app-form__readonly-select .el-select__wrapper.is-disabled) {
+  cursor: not-allowed;
+  background: #fff;
+  opacity: 1;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+.figma-mock-app-form :deep(.figma-mock-app-form__readonly-select .el-select__selected-item),
+.figma-mock-app-form :deep(.figma-mock-app-form__readonly-select .el-select__caret) {
+  color: #4e5969;
+  -webkit-text-fill-color: #4e5969;
+}
+
+.figma-mock-app-form .figma-mock-credential-field {
+  min-height: 56px;
+  gap: 14px;
+  padding: 8.5px 10.5px;
+  border-radius: 7px;
+}
+
+.figma-mock-app-form .figma-mock-credential-field strong {
+  display: block;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-app-form .figma-mock-credential-field p {
+  margin-top: 1px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-app-form .figma-mock-credential-field :deep(.el-switch) {
+  height: 14px;
+  opacity: 1;
+  --el-switch-off-color: #c9cdd4;
+}
+
+.figma-mock-app-form .figma-mock-credential-field :deep(.el-switch__core) {
+  width: 28px;
+  min-width: 28px;
+  height: 14px;
+  border: 0;
+}
+
+.figma-mock-app-form .figma-mock-credential-field :deep(.el-switch__action) {
+  left: 2px;
+  width: 10px;
+  height: 10px;
+}
+
+:deep(.figma-mock-app-dialog__cancel.el-button),
+:deep(.figma-mock-app-dialog__submit.el-button) {
+  margin-left: 7px;
+  border-radius: 6px;
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+:deep(.figma-mock-app-dialog__cancel.el-button) {
+  width: 49px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10.5px;
+  color: #4e5969;
+  background: transparent;
+  border-color: transparent;
+}
+
+:deep(.figma-mock-app-dialog__submit.el-button) {
+  width: 54px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 13px;
+  color: #fff;
+  background: #165dff;
+  border-color: #165dff;
+}
+
 .config-mock-combo-items {
   display: flex;
   flex-direction: column;
@@ -1512,6 +2468,751 @@ onMounted(() => {
   font-size: var(--app-font-size-sm);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Mock Figma restoration: Design 342:22145 / 23309 / 24488. */
+:deep(.figma-mock-scene-drawer) {
+  top: 0;
+  height: 100%;
+  box-shadow: -4px 0 32px rgb(0 0 0 / 15%);
+}
+
+.figma-mock-scene-editor__head {
+  padding: 0 24px;
+}
+
+.figma-mock-scene-editor__actions {
+  flex: 0 0 auto;
+}
+
+.figma-mock-scene-btn {
+  gap: 5px;
+}
+
+.figma-mock-scene-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: inherit;
+}
+
+.figma-mock-header-row button {
+  width: 15.5px;
+  height: 21px;
+}
+
+.figma-mock-scene-close:hover {
+  background: #f5f6f8;
+  color: #4e5969;
+}
+
+.figma-mock-scene-editor__summary {
+  min-height: 39px;
+  gap: 24px;
+  padding: 0 24px;
+}
+
+.figma-mock-scene-editor__summary label:first-child {
+  width: 190px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) {
+  width: 96px;
+}
+
+.figma-mock-scene-editor__summary label:first-child :deep(.el-input) {
+  width: 118px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input-number) {
+  width: 44px;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input__wrapper),
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input-number) {
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input__inner) {
+  height: 24px;
+  color: #1d2129;
+  font: 500 13px/24px inherit;
+  text-align: left;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input__inner) {
+  color: #165dff;
+  font-family: Consolas, monospace;
+  font-weight: 600;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit:focus-within :deep(.el-input__wrapper) {
+  padding: 0 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #165dff inset;
+}
+
+.figma-mock-scene-tabs {
+  padding: 0 24px;
+}
+
+.figma-mock-scene-tabs button {
+  font-size: 13px;
+}
+
+.figma-mock-scene-editor__body {
+  padding: 21px;
+}
+
+.figma-mock-scene-section {
+  gap: 20px;
+}
+
+.figma-mock-scene-section.is-match {
+  gap: 0;
+}
+
+.figma-mock-scene-section.is-response {
+  gap: 17.5px;
+}
+
+.figma-mock-scene-section.is-variables {
+  gap: 0;
+}
+
+.figma-mock-add-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.figma-mock-rule-grid button,
+.figma-mock-header-row button {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 6px;
+  font-size: inherit;
+}
+
+.figma-mock-rule-grid button:hover,
+.figma-mock-header-row button:hover {
+  background: #fff0f0;
+  color: #f53f3f;
+}
+
+.figma-mock-rule-grid:not(.is-head) :deep(.el-select__wrapper),
+.figma-mock-rule-grid:not(.is-head) :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 24.5px;
+  min-height: 24.5px;
+  padding: 0 8px;
+  border-radius: 4px;
+}
+
+.figma-mock-rule-grid:not(.is-head) > .el-select:first-child :deep(.el-select__wrapper) {
+  height: 21.5px;
+  min-height: 21.5px;
+  padding: 0 7px;
+  background: #f2f3f5;
+  box-shadow: none;
+}
+
+.figma-mock-rule-grid:not(.is-head) > .el-input:nth-child(2) :deep(.el-input__wrapper) {
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.figma-mock-response-grid :deep(.el-input-number) {
+  width: 100%;
+}
+
+.figma-mock-response-grid :deep(.el-input-number .el-input__inner) {
+  text-align: left;
+}
+
+.figma-mock-response-editor {
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #1e1e1e;
+}
+
+.figma-mock-response-editor__head {
+  display: flex;
+  height: 28.5px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 11px;
+  border-bottom: 1px solid #333;
+  background: #252526;
+  color: #888;
+  font-size: 11px;
+}
+
+.figma-mock-response-editor__head span:first-child {
+  color: #9cdcfe;
+}
+
+.figma-mock-response-editor :deep(.api-code-editor),
+.figma-mock-response-editor :deep(.api-code-editor__editor) {
+  height: 189px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.figma-mock-variable-tip {
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  height: 81px;
+  gap: 10.5px;
+  padding: 8.75px 10.5px;
+}
+
+.figma-mock-variable-tip > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.figma-mock-variable-tip strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.figma-mock-variable-tip p {
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.figma-mock-variable-tip code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-family: Consolas, monospace;
+}
+
+.figma-mock-variable-source {
+  display: inline-flex;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.figma-mock-variable-table td.is-center {
+  text-align: center;
+}
+
+.figma-mock-variable-table td.is-center svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__header) {
+  height: 80px;
+  padding: 0 24px;
+}
+
+:deep(.figma-mock-publish-dialog) {
+  display: flex;
+  height: 596px;
+  max-height: 85vh;
+  flex-direction: column;
+}
+
+.figma-mock-publish-dialog__heading h2 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.figma-mock-publish-dialog__heading p {
+  display: flex;
+  height: 21.5px;
+  align-items: flex-end;
+  margin: 0;
+  color: #86909c;
+  font-size: 12px;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__body) {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.figma-mock-publish-dialog__stats {
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.figma-mock-publish-dialog__stats div {
+  min-height: 62px;
+  padding: 11px 12px;
+}
+
+.figma-mock-publish-dialog__changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.figma-mock-publish-dialog__change {
+  min-height: 59px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.figma-mock-publish-dialog__change strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.figma-mock-publish-dialog__change strong b {
+  color: #165dff;
+  font-size: 11px;
+}
+
+.figma-mock-publish-dialog__change.is-add > span {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.figma-mock-publish-dialog__change.is-add strong b {
+  color: #00b42a;
+}
+
+.figma-mock-publish-dialog__change.is-snapshot > span {
+  background: #f2f3f5;
+  color: #86909c;
+}
+
+.figma-mock-publish-dialog__change.is-snapshot strong b {
+  color: #86909c;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__footer) {
+  min-height: 65px;
+  padding: 14px 24px;
+}
+
+/* Mock typography restoration: Figma 342:19926 / 21058 / 22145 / 23309 / 24488. */
+.figma-mock-scene-editor,
+:deep(.figma-mock-publish-dialog) {
+  font-family: var(--app-font-family);
+}
+
+.figma-mock-scene-method {
+  font-family: var(--app-font-family);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.figma-mock-scene-editor__path code {
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-scene-editor__path strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__actions > span:not(.figma-mock-publish-chip) {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-chip {
+  font-family: var(--app-font-family);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-scene-btn {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__summary label > span {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.figma-mock-scene-editor__summary label > b {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) > b,
+.figma-mock-scene-editor__summary label:nth-child(4) > b {
+  font-family: var(--app-font-family-mono);
+  font-weight: 600;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input__inner) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input__inner) {
+  font-family: var(--app-font-family-mono);
+  font-weight: 600;
+}
+
+.figma-mock-scene-tabs button {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-section__title strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-section__title p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-scene-section__title.is-compact strong {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-mode-switch span,
+.figma-mock-mode-switch button,
+.figma-mock-advanced-tip {
+  font-family: var(--app-font-family);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-mock-mode-switch button {
+  font-weight: 500;
+}
+
+.figma-mock-rule-grid.is-head > span,
+.figma-mock-variable-table th {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+  letter-spacing: 0.275px;
+}
+
+.figma-mock-rule-grid :deep(.el-input__inner),
+.figma-mock-rule-grid :deep(.el-select__selected-item),
+.figma-mock-response-grid :deep(.el-input__inner),
+.figma-mock-response-grid :deep(.el-select__selected-item),
+.figma-mock-header-row :deep(.el-input__inner) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-response-grid > label > span {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-add-row,
+.figma-mock-available-vars {
+  font-family: var(--app-font-family);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-available-vars code {
+  font-family: var(--app-font-family-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-response-editor__head {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-variable-tip strong,
+.figma-mock-variable-tip p,
+.figma-mock-variable-tip code {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-mock-variable-tip code,
+.figma-mock-variable-table code {
+  font-family: var(--app-font-family-mono);
+}
+
+.figma-mock-variable-table td {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__heading h2 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.figma-mock-publish-dialog__heading p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__stats span {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.figma-mock-publish-dialog__stats strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.figma-mock-publish-dialog__label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__change strong {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-publish-dialog__change strong b {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16.5px;
+}
+
+.figma-mock-publish-dialog__change p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__note > span {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__note small {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__note :deep(.el-textarea__inner) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-publish-dialog__footer > span {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__footer :deep(.el-button) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+/* Publish dialog: exact geometry from Figma 342:25204. */
+:deep(.figma-mock-publish-dialog) {
+  height: 596.5px;
+  margin-top: max(16px, calc((100vh - 596.5px) / 2));
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__header) {
+  box-sizing: border-box;
+  height: 81.5px;
+  min-height: 81.5px;
+  flex: 0 0 81.5px;
+  padding: 0 21px;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__body) {
+  box-sizing: border-box;
+  height: 454px;
+  flex: 0 0 454px;
+  padding: 17.5px 21px 16px;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__footer) {
+  box-sizing: border-box;
+  height: 61px;
+  min-height: 61px;
+  flex: 0 0 61px;
+  padding: 14px 21px;
+}
+
+.figma-mock-publish-dialog__stats {
+  height: 62.5px;
+  gap: 10.5px;
+  margin-bottom: 17.5px;
+}
+
+.figma-mock-publish-dialog__stats div {
+  box-sizing: border-box;
+  height: 62.5px;
+  min-height: 62.5px;
+  padding: 11.5px;
+}
+
+.figma-mock-publish-dialog__label {
+  height: 18px;
+  margin-bottom: 0;
+}
+
+.figma-mock-publish-dialog__changes {
+  box-sizing: border-box;
+  height: 202.25px;
+  gap: 7px;
+  margin-bottom: 0;
+  padding-top: 10.5px;
+}
+
+.figma-mock-publish-dialog__change {
+  box-sizing: border-box;
+  height: 59.25px;
+  min-height: 59.25px;
+  gap: 10.5px;
+  padding: 8.75px 10.5px;
+}
+
+.figma-mock-publish-dialog__change > span {
+  width: 17.5px;
+  height: 17.5px;
+  flex: 0 0 17.5px;
+  margin-top: 1.75px;
+}
+
+.figma-mock-publish-dialog__change > div {
+  height: 39.75px;
+  flex: 1;
+}
+
+.figma-mock-publish-dialog__change strong {
+  height: 20px;
+  gap: 7px;
+  line-height: 20px;
+}
+
+.figma-mock-publish-dialog__change p {
+  height: 19.75px;
+  margin: 0;
+  line-height: 19.75px;
+}
+
+.figma-mock-publish-dialog__note {
+  box-sizing: border-box;
+  height: 120.25px;
+  gap: 0;
+  padding-top: 17.5px;
+}
+
+.figma-mock-publish-dialog__note > span {
+  height: 23.25px;
+}
+
+.figma-mock-publish-dialog__note :deep(.el-textarea__inner) {
+  box-sizing: border-box;
+  height: 74.5px;
+  min-height: 74.5px !important;
+}
+
+.figma-mock-publish-dialog__footer {
+  height: 32px;
+}
+
+.figma-mock-publish-dialog__footer > span {
+  gap: 5.25px;
+}
+
+.figma-mock-publish-dialog__footer > span svg {
+  width: 13px;
+  height: 13px;
+}
+
+.figma-mock-publish-dialog__footer > div {
+  width: 136px;
+  height: 32px;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.figma-mock-publish-dialog__footer > div :deep(.el-button) {
+  margin: 0;
+}
+
+.figma-mock-publish-dialog__footer > div :deep(.el-button:first-child) {
+  width: 49px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 11.5px;
+}
+
+.figma-mock-publish-dialog__footer > div :deep(.el-button:last-child) {
+  width: 80px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 14px;
 }
 
 @media (max-width: 1100px) {

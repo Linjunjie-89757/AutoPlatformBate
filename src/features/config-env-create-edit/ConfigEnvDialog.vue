@@ -139,6 +139,8 @@ function addServiceEndpoint() {
     key: `service-${index}`,
     name: `服务 ${index}`,
     baseUrl: '',
+    timeoutMs: 30000,
+    enabled: true,
   })
 }
 

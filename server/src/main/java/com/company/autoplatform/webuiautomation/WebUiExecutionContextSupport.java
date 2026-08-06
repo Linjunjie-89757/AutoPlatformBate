@@ -165,13 +165,15 @@ public class WebUiExecutionContextSupport {
             Viewport viewport,
             Boolean ignoreHttpsErrors,
             Long defaultVariableSetId,
+            Boolean mockEnabled,
             Long mockApplicationId,
+            Long mockReleaseId,
             List<VariableItem> variables,
             String defaultServiceKey,
             List<ServiceEndpoint> services
     ) {
         static WebUiEnvironmentConfig defaults() {
-            return new WebUiEnvironmentConfig(null, null, null, null, null, null, null, List.of(), null, List.of());
+            return new WebUiEnvironmentConfig(null, null, null, null, null, null, null, null, null, List.of(), null, List.of());
         }
     }
 
