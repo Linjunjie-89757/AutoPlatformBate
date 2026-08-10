@@ -2,19 +2,28 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  DocumentAdd,
-  FolderOpened,
-  MagicStick,
-  RefreshRight,
-  View,
-} from '@element-plus/icons-vue'
+  AlertTriangle,
+  ArrowRight,
+  BookOpen,
+  Check,
+  CircleCheckBig,
+  ChevronRight,
+  CircleStop,
+  FileText,
+  FolderOpen,
+  LoaderCircle,
+  RotateCcw,
+  Sparkles,
+  Upload,
+  X,
+  XCircle,
+} from '@lucide/vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { caseAiApi, type AiGenerationTaskEventItem, type AiGenerationTaskItem, type AiRequirementAssetItem } from '@/entities/case-ai'
 import { caseApi, type CaseDirectoryNode, type CaseDirectoryWorkspace } from '@/entities/case'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import AiGenerationLiveLogDialog from '@/shared/ui/ai-live-log/AiGenerationLiveLogDialog.vue'
 
 type OutputMode = 'STREAM' | 'COMPLETE'
 type DirectoryPickerMode = 'manual' | 'document'
@@ -53,6 +62,12 @@ const generating = ref(false)
 const processDialogVisible = ref(false)
 const processPending = ref(false)
 const directoryPickerVisible = ref(false)
+const confirmGenerateVisible = ref(false)
+const inputMode = ref<DirectoryPickerMode>('manual')
+const pendingGenerateSource = ref<DirectoryPickerMode>('manual')
+const autoCreateSubdirectory = ref(true)
+const manualAutoCreateSubdirectory = ref(true)
+const documentAutoCreateSubdirectory = ref(true)
 
 const workspaces = ref<WorkspaceItem[]>([])
 const selectedTargetWorkspaceCode = ref('')
@@ -181,18 +196,28 @@ const manualDirectoryDisplayPath = computed(() => {
   if (!manualForm.value.manualDirectoryPath) {
     return ''
   }
-  return currentWorkspaceName.value
-    ? `${currentWorkspaceName.value} / ${manualForm.value.manualDirectoryPath}`
-    : manualForm.value.manualDirectoryPath
+  return formatDirectoryDisplayPath(manualForm.value.manualDirectoryPath)
 })
 
 const documentDirectoryDisplayPath = computed(() => {
   if (!documentForm.value.directoryPath) {
     return ''
   }
-  return currentWorkspaceName.value
-    ? `${currentWorkspaceName.value} / ${documentForm.value.directoryPath}`
-    : documentForm.value.directoryPath
+  return formatDirectoryDisplayPath(documentForm.value.directoryPath)
+})
+
+const directoryPickerPreviewPath = computed(() => {
+  if (!directoryPickerSelectedPath.value) {
+    return ''
+  }
+
+  const title = directoryPickerMode.value === 'manual'
+    ? manualForm.value.requirementTitle
+    : importedRequirementTitle.value
+  const previewPath = autoCreateSubdirectory.value && title.trim()
+    ? buildDirectoryPath(directoryPickerSelectedPath.value, title.trim().slice(0, 20))
+    : directoryPickerSelectedPath.value
+  return formatDirectoryDisplayPath(previewPath)
 })
 
 const canGenerate = computed(() => !manualGenerateBlockReason.value)
@@ -200,13 +225,30 @@ const canGenerate = computed(() => !manualGenerateBlockReason.value)
 const canGenerateDocument = computed(() => !documentGenerateBlockReason.value)
 
 const selectedRequirementAssetIds = computed(() => requirementAssets.value.map(item => item.id))
-const imageCapabilityNotices = computed(() => {
-  const supportsImageInput = generatorConfig.value?.supportsImageInput ?? false
-  return supportsImageInput
-    ? ['模型支持图文输入，如文档中包含图片素材，将一并参与本次测试用例生成。']
-    : ['模型不支持图片识别。若文档中包含图片素材，生成时可选择忽略图片并仅基于文本继续。']
+const activeProcessRecord = computed(() => getCurrentProcessRecord())
+const activeProcessGeneratedCount = computed(() => activeProcessRecord.value?.generatedCount ?? activeProcessRecord.value?.generatedCases?.length ?? 0)
+const activeProcessReviewedCount = computed(() => activeProcessRecord.value?.reviewResult?.caseDecisions?.length ?? 0)
+const activeProcessTotal = computed(() => Math.max(activeProcessGeneratedCount.value, 12))
+const activeProcessStep = computed(() => {
+  const record = activeProcessRecord.value
+  if (!record) return 0
+  if (record.status === 'COMPLETED') return 5
+  if (record.status === 'REVIEWING') return 3
+  return Math.max(0, Math.min(4, Number(record.currentStep ?? (record.status === 'GENERATING' ? 2 : 0))))
 })
-
+const activeProcessPercent = computed(() => {
+  if (activeProcessRecord.value?.status === 'COMPLETED') return 100
+  return Math.min(99, Math.round(((activeProcessGeneratedCount.value + activeProcessReviewedCount.value) / Math.max(activeProcessTotal.value * 2, 1)) * 100))
+})
+const activeProcessElapsed = computed(() => {
+  const createdAt = activeProcessRecord.value?.createdAt
+  if (!createdAt) return '0s'
+  const createdAtTimestamp = new Date(createdAt).getTime()
+  if (!Number.isFinite(createdAtTimestamp)) return '0s'
+  const seconds = Math.max(0, Math.floor((Date.now() - createdAtTimestamp) / 1000))
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m${seconds % 60}s`
+})
+const generationSteps = ['解析需求', '提取测试点', '生成用例', 'AI 评审', '保存结果']
 function getTaskSortTimestamp(task: AiGenerationTaskItem) {
   return new Date(task.updatedAt || task.createdAt || 0).getTime()
 }
@@ -252,13 +294,7 @@ const directoryPickerTree = computed<DirectoryPickerNode[]>(() => {
     }
   })
 
-  return [{
-    key: `workspace:${targetWorkspaceCode.value}`,
-    name: currentWorkspaceName.value,
-    fullPath: currentWorkspaceName.value,
-    selectable: false,
-    children: appendFullPath(currentWorkspace?.children ?? []),
-  }]
+  return appendFullPath(currentWorkspace?.children ?? [])
 })
 
 const filteredDirectoryPickerTree = computed<DirectoryPickerNode[]>(() => {
@@ -276,20 +312,6 @@ const filteredDirectoryPickerTree = computed<DirectoryPickerNode[]>(() => {
   }, [])
 
   return filterNodes(directoryPickerTree.value)
-})
-
-const directoryPickerPreviewPath = computed(() => {
-  if (!directoryPickerSelectedPath.value) {
-    return ''
-  }
-
-  const title = directoryPickerMode.value === 'manual'
-    ? manualForm.value.requirementTitle
-    : importedRequirementTitle.value
-  const fullDirectoryPath = buildDirectoryPath(directoryPickerSelectedPath.value, title)
-  return currentWorkspaceName.value
-    ? `${currentWorkspaceName.value} / ${fullDirectoryPath}`
-    : fullDirectoryPath
 })
 
 function describeAiRoleConfigIssue(config: AiConfigSummary | null, roleLabel: string) {
@@ -310,6 +332,10 @@ function normalizeDirectorySegments(path: string) {
 
 function normalizeDirectoryPath(path: string) {
   return normalizeDirectorySegments(path).join('/')
+}
+
+function formatDirectoryDisplayPath(path: string) {
+  return normalizeDirectorySegments(path).join(' / ')
 }
 
 function buildDirectoryPath(basePath: string, title: string) {
@@ -356,19 +382,28 @@ function formatTaskTime(value?: string | null) {
   if (!value) {
     return '-'
   }
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return '-'
+  }
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-function getTaskStatusLabel(status: string) {
-  const labelMap: Record<string, string> = {
-    PENDING: '待开始',
-    GENERATING: '生成中',
-    REVIEWING: '评审中',
-    COMPLETED: '已完成',
-    FAILED: '失败',
-    CANCELED: '已取消',
+function formatEventTime(value?: string | null) {
+  if (!value) {
+    return '--:--:--'
   }
-  return labelMap[status] ?? status
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) {
+    return '--:--:--'
+  }
+  return date.toLocaleTimeString('zh-CN', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
 }
 
 function getTaskStatusTone(status: string) {
@@ -397,16 +432,15 @@ function getCurrentProcessRecord() {
   return latestTaskRecord.value
 }
 
-function isTaskResultAvailable(task: AiGenerationTaskItem | null | undefined) {
-  return task?.status === 'COMPLETED'
-}
-
 function getTaskDetailActionLabel(task: AiGenerationTaskItem) {
   if (task.status === 'COMPLETED') {
     return '查看结果'
   }
   if (task.status === 'FAILED') {
-    return '查看记录'
+    return '重试'
+  }
+  if (isRunningTask(task)) {
+    return '恢复查看'
   }
   return '查看详情'
 }
@@ -724,7 +758,65 @@ function triggerRequirementImport() {
 async function handleRequirementFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  if (!file || !targetWorkspaceCode.value) {
+  if (!file) {
+    return
+  }
+
+  await importRequirementFile(file)
+  input.value = ''
+}
+
+function getTaskSourceLabel(task: AiGenerationTaskItem) {
+  if (task.taskId === documentTaskRecordId.value) return '上传文档'
+  if (task.taskId === manualTaskRecordId.value) return '手动输入'
+  if (task.sourceTaskId === documentTaskRecordId.value) return '上传文档'
+  return '手动输入'
+}
+
+function getTaskSourceDisplay(task: AiGenerationTaskItem) {
+  return getTaskSourceLabel(task) === '上传文档' ? '📎 上传文档' : '✏️ 手动输入'
+}
+
+async function handleRecentTaskAction(task: AiGenerationTaskItem) {
+  if (isRunningTask(task)) {
+    await openTaskProcessDialog(task.taskId)
+    return
+  }
+  if (task.status === 'COMPLETED') {
+    openTaskResult(task.taskId)
+    return
+  }
+  if (task.status === 'FAILED') {
+    try {
+      const source = getTaskSourceLabel(task)
+      const next = await caseAiApi.retryTask(task.workspaceCode || targetWorkspaceCode.value, task.taskId)
+      if (source === '上传文档') {
+        documentTaskRecordId.value = next.taskId
+      } else {
+        manualTaskRecordId.value = next.taskId
+      }
+      updateTaskRecordSnapshot(next)
+      await openTaskProcessDialog(next.taskId)
+      ElMessage.success('已创建新的重试任务，后台会继续执行')
+    } catch (error) {
+      ElMessage.error(getRequestErrorMessage(error))
+    }
+    return
+  }
+  openTaskDetail(task.taskId)
+}
+
+async function handleRequirementDrop(event: DragEvent) {
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) {
+    return
+  }
+  await importRequirementFile(file)
+}
+
+async function importRequirementFile(file: File) {
+  if (!targetWorkspaceCode.value) {
+    ElMessage.warning('请先选择目标空间')
     return
   }
 
@@ -743,7 +835,6 @@ async function handleRequirementFileChange(event: Event) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
     importingRequirement.value = false
-    input.value = ''
   }
 }
 
@@ -756,26 +847,6 @@ function clearImportedDocument() {
   documentForm.value.directoryPath = ''
 }
 
-function handleManualDirectorySelect(value: string) {
-  const normalizedPath = normalizeDirectoryPath(value)
-  manualDirectoryBasePath.value = findDirectoryBasePath(normalizedPath)
-  syncingManualDirectoryPath = true
-  manualForm.value.manualDirectoryPath = buildDirectoryPath(
-    manualDirectoryBasePath.value || normalizedPath,
-    manualForm.value.requirementTitle,
-  )
-}
-
-function handleDocumentDirectorySelect(value: string) {
-  const normalizedPath = normalizeDirectoryPath(value)
-  documentDirectoryBasePath.value = findDirectoryBasePath(normalizedPath)
-  syncingDocumentDirectoryPath = true
-  documentForm.value.directoryPath = buildDirectoryPath(
-    documentDirectoryBasePath.value || normalizedPath,
-    importedRequirementTitle.value,
-  )
-}
-
 function openDirectoryPicker(mode: DirectoryPickerMode) {
   if (!targetWorkspaceCode.value) {
     ElMessage.warning('请先选择目标空间')
@@ -784,6 +855,7 @@ function openDirectoryPicker(mode: DirectoryPickerMode) {
 
   directoryPickerMode.value = mode
   directoryPickerKeyword.value = ''
+  autoCreateSubdirectory.value = true
   directoryPickerSelectedPath.value = mode === 'manual'
     ? (manualDirectoryBasePath.value || findDirectoryBasePath(manualForm.value.manualDirectoryPath))
     : (documentDirectoryBasePath.value || findDirectoryBasePath(documentForm.value.directoryPath))
@@ -803,12 +875,41 @@ function confirmDirectoryPickerSelection() {
     return
   }
 
+  const selectedPath = normalizeDirectoryPath(directoryPickerSelectedPath.value)
   if (directoryPickerMode.value === 'manual') {
-    handleManualDirectorySelect(directoryPickerSelectedPath.value)
+    manualDirectoryBasePath.value = selectedPath
+    manualAutoCreateSubdirectory.value = autoCreateSubdirectory.value
+    syncingManualDirectoryPath = true
+    manualForm.value.manualDirectoryPath = autoCreateSubdirectory.value
+      ? buildDirectoryPath(selectedPath, manualForm.value.requirementTitle)
+      : selectedPath
   } else {
-    handleDocumentDirectorySelect(directoryPickerSelectedPath.value)
+    documentDirectoryBasePath.value = selectedPath
+    documentAutoCreateSubdirectory.value = autoCreateSubdirectory.value
+    syncingDocumentDirectoryPath = true
+    documentForm.value.directoryPath = autoCreateSubdirectory.value
+      ? buildDirectoryPath(selectedPath, importedRequirementTitle.value)
+      : selectedPath
   }
   directoryPickerVisible.value = false
+}
+
+function requestGenerateCases(source: DirectoryPickerMode) {
+  const blockReason = source === 'document'
+    ? documentGenerateBlockReason.value
+    : manualGenerateBlockReason.value
+  if (blockReason) {
+    ElMessage.warning(blockReason)
+    return
+  }
+  pendingGenerateSource.value = source
+  confirmGenerateVisible.value = true
+}
+
+async function confirmGenerateCases() {
+  const source = pendingGenerateSource.value
+  confirmGenerateVisible.value = false
+  await handleGenerateCases(source)
 }
 
 async function openTaskProcessDialog(taskId?: string) {
@@ -825,29 +926,6 @@ async function openTaskProcessDialog(taskId?: string) {
 
   if (!latestTaskRecord.value) {
     ElMessage.info('暂无可查看的任务')
-    return
-  }
-
-  activeProcessTaskId.value = latestTaskRecord.value.taskId
-  processDialogVisible.value = true
-  syncEventStream(latestTaskRecord.value)
-}
-
-async function openScopedProcessDialog(source: DirectoryPickerMode) {
-  const taskId = source === 'manual' ? manualTaskRecordId.value : documentTaskRecordId.value
-  if (!taskId) {
-    ElMessage.info('请先生成测试用例')
-    return
-  }
-
-  if (!targetWorkspaceCode.value) {
-    ElMessage.info('请先选择目标空间')
-    return
-  }
-
-  updateTaskRecordSnapshot(await caseAiApi.getTask(targetWorkspaceCode.value, taskId))
-  if (!latestTaskRecord.value) {
-    ElMessage.info('当前任务记录不存在或已被删除')
     return
   }
 
@@ -885,16 +963,6 @@ function goToAiConfig() {
   void router.push({
     name: 'cases-ai-config',
     query: {
-      workspace: targetWorkspaceCode.value || undefined,
-    },
-  })
-}
-
-function goToAiConnections() {
-  void router.push({
-    path: '/settings',
-    query: {
-      tab: 'aiConnection',
       workspace: targetWorkspaceCode.value || undefined,
     },
   })
@@ -1037,7 +1105,7 @@ watch(
 watch(
   () => manualForm.value.requirementTitle,
   (value) => {
-    if (!manualDirectoryBasePath.value) {
+    if (!manualDirectoryBasePath.value || !manualAutoCreateSubdirectory.value) {
       return
     }
     if (syncingManualDirectoryPath) {
@@ -1051,7 +1119,7 @@ watch(
 watch(
   () => importedRequirementTitle.value,
   (value) => {
-    if (!documentDirectoryBasePath.value) {
+    if (!documentDirectoryBasePath.value || !documentAutoCreateSubdirectory.value) {
       return
     }
     if (syncingDocumentDirectoryPath) {
@@ -1103,382 +1171,325 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="ai-generate-page">
-    <header class="ai-generate-page__heading">
-      <h2>AI 用例生成</h2>
-      <p>基于需求文档或手动输入，自动生成并 AI 评审测试用例草稿</p>
-    </header>
-
-    <div v-if="isAllScope" class="workspace-select-bar panel-card ai-generate-page__legacy-workspace">
-      <div class="workspace-select-bar__label">目标空间</div>
-      <el-select
-        v-model="selectedTargetWorkspaceCode"
-        class="workspace-select-bar__select"
-        :loading="loadingWorkspaces"
-        clearable
-        filterable
-        placeholder="请选择目标空间"
-      >
-        <el-option
-          v-for="workspace in workspaces"
-          :key="workspace.workspaceCode"
-          :label="workspace.workspaceName"
-          :value="workspace.workspaceCode"
-        />
-      </el-select>
-    </div>
-
-    <div class="main-content-grid">
-      <div class="panel-card input-panel">
-        <div class="panel-title-row">
-          <div>
-            <div class="section-title section-title-with-icon">
-              <span class="section-title-icon" aria-hidden="true">✍️</span>
-              <span>手动输入需求描述</span>
+  <section class="figma-ai-case-generation">
+    <template v-if="processDialogVisible && activeProcessRecord">
+      <div class="figma-ai-case-generation__process">
+        <main class="figma-ai-case-generation__process-main">
+          <header class="figma-ai-case-generation__process-header">
+            <div class="figma-ai-case-generation__process-title">
+              <span class="figma-ai-case-generation__status-dot"></span>
+              <strong>生成任务进行中</strong>
             </div>
-          </div>
-        </div>
-
-        <div class="form-stack">
-          <div class="field-label">需求标题 <span class="field-required">*</span></div>
-          <el-input
-            v-model="manualForm.requirementTitle"
-            maxlength="120"
-            placeholder="请输入需求标题，例如：用户登录功能需求"
-          />
-
-          <div class="field-label">用例保存路径 <span class="field-required">*</span></div>
-          <el-input
-            :model-value="manualDirectoryDisplayPath"
-            class="directory-path-input directory-path-input-with-action"
-            readonly
-            :placeholder="loadingDirectories ? '正在加载目录...' : '请选择模块路径，选中后会自动拼接需求标题'"
-          >
-            <template #suffix>
-              <el-tooltip content="选择保存路径" placement="top">
-                <button type="button" class="path-action-icon-button" @click="openDirectoryPicker('manual')">
-                  <el-icon><FolderOpened /></el-icon>
-                </button>
-              </el-tooltip>
-            </template>
-          </el-input>
-
-          <div class="field-label">需求描述 <span class="field-required">*</span></div>
-          <el-input
-            v-model="manualForm.requirementContent"
-            class="requirement-textarea"
-            type="textarea"
-            :autosize="{ minRows: 10, maxRows: 18 }"
-            resize="vertical"
-            placeholder="请详细描述您的需求，包括功能描述、使用场景、业务流程等"
-          />
-          <div class="char-count">{{ manualForm.requirementContent.length }}/5000</div>
-
-          <div class="path-action-stack">
-            <el-button
-              class="generate-primary-btn"
-              type="success"
-              :icon="MagicStick"
-              :loading="generating"
-              :disabled="!canGenerate"
-              @click="handleGenerateCases('manual')"
-            >
-              生成测试用例
-            </el-button>
-            <el-button
-              class="flow-secondary-btn"
-              :icon="View"
-              :disabled="!manualTaskRecordId"
-              @click="openScopedProcessDialog('manual')"
-            >
-              查看生成流程
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel-card upload-panel">
-        <div class="panel-title-row">
-          <div>
-            <div class="section-title section-title-with-icon">
-              <span class="section-title-icon" aria-hidden="true">📄</span>
-              <span>上传需求文档</span>
+            <div class="figma-ai-case-generation__process-actions">
+              <span>耗时 {{ activeProcessElapsed }}</span>
+              <button type="button" class="figma-ai-case-generation__ghost-button" @click="processDialogVisible = false">后台继续</button>
+              <button type="button" class="figma-ai-case-generation__danger-button" :disabled="processPending" @click="cancelCurrentTask">
+                <CircleStop :size="13" />取消
+              </button>
             </div>
-          </div>
-        </div>
+          </header>
 
-        <div class="upload-panel-body">
-          <template v-if="importedDocument">
-            <div class="upload-success-shell">
-              <div class="upload-success-box">
-                <div class="upload-success-file">
-                  <el-icon class="upload-success-icon"><DocumentAdd /></el-icon>
-                  <div class="upload-success-meta">
-                    <div class="upload-success-name">{{ importedDocument.fileName }}</div>
-                    <div class="upload-success-size">{{ formatFileSize(importedDocument.fileSize) }}</div>
-                  </div>
-                  <button class="upload-remove-btn" type="button" @click="clearImportedDocument">×</button>
-                </div>
-              </div>
-
-              <div class="upload-detail-form">
-                <div class="field-label">文档标题</div>
-                <el-input v-model="importedRequirementTitle" placeholder="请输入文档标题" />
-
-                <div class="field-label">用例保存路径 <span class="field-required">*</span></div>
-                <el-input
-                  :model-value="documentDirectoryDisplayPath"
-                  class="directory-path-input directory-path-input-with-action"
-                  readonly
-                  :placeholder="loadingDirectories ? '正在加载目录...' : '请选择模块路径，选中后会自动拼接文档标题'"
+          <section class="figma-ai-case-generation__step-panel">
+            <div class="figma-ai-case-generation__steps">
+              <template v-for="(step, index) in generationSteps" :key="step">
+                <div
+                  class="figma-ai-case-generation__step"
+                  :class="{ 'is-active': activeProcessStep === index, 'is-finished': activeProcessStep > index }"
                 >
-                  <template #suffix>
-                    <el-tooltip content="选择保存路径" placement="top">
-                      <button type="button" class="path-action-icon-button" @click="openDirectoryPicker('document')">
-                        <el-icon><FolderOpened /></el-icon>
-                      </button>
-                    </el-tooltip>
-                  </template>
-                </el-input>
-
-                <div class="field-label">图片能力提示</div>
-                <div class="upload-hint-box">
-                  <div v-for="notice in imageCapabilityNotices" :key="notice">{{ notice }}</div>
+                  <span class="figma-ai-case-generation__step-circle">
+                    <Check v-if="activeProcessStep > index" :size="13" />
+                    <LoaderCircle v-else-if="activeProcessStep === index" :size="14" />
+                    <template v-else>{{ index + 1 }}</template>
+                  </span>
+                  <span>{{ step }}</span>
                 </div>
-
-                <div class="upload-card-actions">
-                  <el-button
-                    class="generate-primary-btn"
-                    type="success"
-                    :icon="MagicStick"
-                    :loading="generating"
-                    :disabled="!canGenerateDocument"
-                    @click="handleGenerateCases('document')"
-                  >
-                    生成测试用例
-                  </el-button>
-                  <el-button
-                    class="flow-secondary-btn"
-                    :icon="View"
-                    :disabled="!documentTaskRecordId"
-                    @click="openScopedProcessDialog('document')"
-                  >
-                    查看生成流程
-                  </el-button>
-                </div>
+                <span
+                  v-if="index < generationSteps.length - 1"
+                  class="figma-ai-case-generation__step-connector"
+                  :class="{ 'is-finished': activeProcessStep > index }"
+                ></span>
+              </template>
+            </div>
+            <div class="figma-ai-case-generation__process-metrics">
+              <div><strong>{{ activeProcessGeneratedCount }}</strong><span>/ {{ activeProcessTotal }} 已生成</span></div>
+              <i></i>
+              <div><strong>{{ activeProcessReviewedCount }}</strong><span>/ {{ activeProcessTotal }} 已评审</span></div>
+              <div class="figma-ai-case-generation__progress">
+                <div><span :style="{ width: activeProcessPercent + '%' }"></span></div>
+                <em>{{ activeProcessPercent }}%</em>
               </div>
             </div>
-          </template>
+          </section>
 
-          <button
-            v-else
-            class="upload-large-box"
-            type="button"
-            @click="triggerRequirementImport"
+          <section class="figma-ai-case-generation__log-panel">
+            <div class="figma-ai-case-generation__section-caption">生成日志</div>
+            <div v-if="activeProcessRecord.events?.length" class="figma-ai-case-generation__log-list">
+              <div
+                v-for="event in activeProcessRecord.events"
+                :key="event.id || event.seq"
+                class="figma-ai-case-generation__log-row"
+                :class="'is-' + String(event.level || 'info').toLowerCase()"
+              >
+                <time>{{ formatEventTime(event.createdAt) }}</time><span></span><p>{{ event.message }}</p>
+              </div>
+            </div>
+            <div v-else class="figma-ai-case-generation__log-empty">
+              <LoaderCircle :size="16" />{{ activeProcessRecord.stepMessage || '正在准备生成任务...' }}
+            </div>
+          </section>
+        </main>
+
+        <aside class="figma-ai-case-generation__process-aside">
+          <section>
+            <div class="figma-ai-case-generation__section-caption">本次任务信息</div>
+            <dl class="figma-ai-case-generation__task-info">
+              <div><dt>需求标题</dt><dd>{{ activeProcessRecord.requirementTitle }}</dd></div>
+              <div><dt>来源</dt><dd>{{ getTaskSourceLabel(activeProcessRecord) }}</dd></div>
+              <div><dt>保存路径</dt><dd>{{ activeProcessRecord.directoryName || '-' }}</dd></div>
+              <div><dt>生成模型</dt><dd>{{ activeProcessRecord.model || generatorConfig?.model || '-' }}</dd></div>
+              <div><dt>评审模型</dt><dd>{{ reviewerConfig?.model || '-' }}</dd></div>
+              <div><dt>输出模式</dt><dd>{{ activeProcessRecord.outputMode === 'STREAM' ? '⚡ 实时流式' : '📋 完整输出' }}</dd></div>
+            </dl>
+          </section>
+          <section class="figma-ai-case-generation__preview-section">
+            <div class="figma-ai-case-generation__section-caption">实时预览（{{ activeProcessRecord.generatedCases?.length || 0 }} 条）</div>
+            <div class="figma-ai-case-generation__preview-list">
+              <article v-for="(item, index) in activeProcessRecord.generatedCases?.slice(-5)" :key="index" class="figma-ai-case-generation__preview-item">
+                <span :class="'is-' + String(item.priority || 'P2').toLowerCase()">{{ item.priority || 'P2' }}</span>
+                <p>{{ item.title || '生成用例 #' + (index + 1) }}</p>
+              </article>
+              <div v-if="!activeProcessRecord.generatedCases?.length" class="figma-ai-case-generation__preview-empty">用例生成后将在这里实时展示</div>
+            </div>
+          </section>
+          <footer>关闭页面后任务将在后台继续执行</footer>
+        </aside>
+      </div>
+    </template>
+
+    <template v-else>
+      <aside class="figma-ai-case-generation__recent">
+        <header>
+          <strong>最近生成任务</strong>
+          <button type="button" @click="openTaskRecordsPage">全部记录 <ArrowRight :size="11" /></button>
+        </header>
+        <div class="figma-ai-case-generation__recent-list">
+          <article
+            v-for="task in recentTaskRecords"
+            :key="task.taskId"
+            class="figma-ai-case-generation__recent-item"
+            :class="{ 'is-failed': task.status === 'FAILED' }"
           >
-            <el-icon class="upload-box-icon"><DocumentAdd /></el-icon>
-            <div class="upload-box-center">
-              <div class="upload-box-title">拖拽文件到此处或点击选择文件</div>
-              <div class="upload-box-desc">支持 PDF、Word、TXT、Markdown 格式</div>
-            </div>
-            <span class="upload-primary-btn">选择文件</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel-card ai-config-card">
-      <div class="panel-title-row">
-        <div>
-            <div class="section-title section-title-with-icon">
-              <span class="section-title-icon output-section-icon" aria-hidden="true">📤</span>
-              <span>输出模式设置</span>
-            </div>
-          <div class="section-desc">先选择本次任务的输出方式。</div>
-        </div>
-      </div>
-
-      <div class="output-mode-grid output-mode-grid-visual">
-        <label class="output-mode-card output-mode-card-visual" :class="{ 'output-mode-card-active': manualForm.outputMode === 'STREAM' }">
-          <input v-model="manualForm.outputMode" type="radio" value="STREAM">
-          <div class="output-mode-title">
-            <span class="output-mode-icon output-mode-icon-stream" aria-hidden="true">⚡</span>
-            <span>实时流式输出</span>
-          </div>
-          <div class="output-mode-desc">优先展示任务执行进度和阶段状态。适合需要实时观察生成过程、希望尽快看到部分结果的场景。每条用例生成后立即展示。</div>
-        </label>
-        <label class="output-mode-card output-mode-card-visual" :class="{ 'output-mode-card-active': manualForm.outputMode === 'COMPLETE' }">
-          <input v-model="manualForm.outputMode" type="radio" value="COMPLETE">
-          <div class="output-mode-title">
-            <span class="output-mode-icon output-mode-icon-complete" aria-hidden="true">📋</span>
-            <span>完整输出</span>
-          </div>
-          <div class="output-mode-desc">等待生成和评审全部完成后统一返回结果。适合需要批量处理、追求结果完整性的场景。所有用例评审完成后一次性展示。</div>
-        </label>
-      </div>
-    </div>
-
-    <div class="panel-card ai-config-card ai-generate-page__legacy-config">
-      <div class="panel-title-row">
-        <div>
-            <div class="section-title section-title-with-icon">
-              <span class="section-title-icon" aria-hidden="true">🤖</span>
-              <span>当前 AI 配置</span>
-            </div>
-          <div class="section-desc">展示当前空间下本次生成任务会使用的 AI 配置摘要。</div>
-        </div>
-        <div class="ai-config-actions">
-          <el-button v-if="!aiConfigReady" text @click="goToAiConnections">去创建连接</el-button>
-          <el-button v-if="!aiConfigReady" text @click="goToAiConfig">去配置AI</el-button>
-          <el-button :icon="RefreshRight" text @click="refreshPageData">刷新配置</el-button>
-        </div>
-      </div>
-
-      <div class="ai-config-grid ai-config-grid-five">
-        <div class="config-info-item config-info-item-status">
-          <div class="config-info-label">配置状态</div>
-          <div class="config-status-panel" :class="aiConfigStatusClass">
-            <span class="config-status-dot" />
-            <span class="config-status-text">{{ aiConfigStatusText }}</span>
-          </div>
-        </div>
-        <div class="config-info-item">
-          <div class="config-info-label">当前空间</div>
-          <div class="config-info-value">{{ currentWorkspaceName || '-' }}</div>
-        </div>
-        <div class="config-info-item">
-          <div class="config-info-label">编写模型</div>
-          <div class="config-info-value" :class="{ 'config-info-value-danger': generatorConfigIssue }">
-            {{ generatorConfigIssue || generatorConfig?.providerConnectionName || '-' }}
-          </div>
-        </div>
-        <div class="config-info-item">
-          <div class="config-info-label">评审模型</div>
-          <div class="config-info-value" :class="{ 'config-info-value-danger': reviewerConfigIssue }">
-            {{ reviewerConfigIssue || reviewerConfig?.providerConnectionName || '-' }}
-          </div>
-        </div>
-        <div class="config-info-item">
-          <div class="config-info-label">输出模式</div>
-          <div class="config-info-value">{{ manualForm.outputMode === 'STREAM' ? '实时流式输出' : '完整输出' }}</div>
-        </div>
-      </div>
-
-      <div v-if="!aiConfigReady" class="ai-config-empty-hint">
-        当前账号的 AI 配置还没准备好。先在“系统设置 > AI连接”里创建个人连接，再到“AI配置”页绑定生成模型和评审模型。
-      </div>
-    </div>
-
-    <div class="recent-task-card ai-generate-page__legacy-recent">
-      <div class="panel-title-row recent-task-header">
-        <div>
-          <div class="section-title section-title-with-icon">
-            <span class="section-title-icon" aria-hidden="true">🕘</span>
-            <span>最近任务</span>
-          </div>
-          <div class="section-desc">展示最近 3 条任务，优先显示进行中、失败和待处理任务。</div>
-        </div>
-        <el-button :icon="RefreshRight" text @click="refreshLatestTaskRecord">刷新任务</el-button>
-      </div>
-
-      <div v-if="recentTaskRecords.length" class="recent-task-list">
-        <div v-for="task in recentTaskRecords" :key="task.taskId" class="recent-task-item">
-          <div class="recent-task-main">
-            <div class="recent-task-top">
-              <div class="recent-task-title">{{ task.requirementTitle }}</div>
-              <span class="status-pill" :class="getTaskStatusTone(task.status)">
-                {{ getTaskStatusLabel(task.status) }}
+            <div class="figma-ai-case-generation__recent-title">
+              <span :class="getTaskStatusTone(task.status)">
+                <i v-if="isRunningTask(task)" class="figma-ai-case-generation__running-dot" aria-hidden="true"></i>
+                <CircleCheckBig v-else-if="task.status === 'COMPLETED'" :size="12" />
+                <XCircle v-else-if="task.status === 'FAILED'" :size="12" />
+                <CircleStop v-else :size="12" />
               </span>
+              <strong>{{ task.requirementTitle || '未命名生成任务' }}</strong>
             </div>
-            <div class="recent-task-meta">
-              <span>{{ task.workspaceName || currentWorkspaceName }}</span>
-              <span>{{ task.outputMode === 'STREAM' ? '实时流式输出' : '完整输出' }}</span>
-              <span>{{ formatTaskTime(task.updatedAt || task.createdAt) }}</span>
+            <div class="figma-ai-case-generation__recent-meta">
+              <span>{{ getTaskSourceDisplay(task) }}</span><span>{{ isRunningTask(task) ? '进行中' : formatTaskTime(task.createdAt) }}</span>
             </div>
-          </div>
-          <div class="recent-task-actions">
-            <el-button class="recent-task-button recent-task-button-primary" :icon="View" @click="openTaskProcessDialog(task.taskId)">查看流程</el-button>
-            <el-button
-              class="recent-task-button recent-task-button-secondary"
-              @click="isTaskResultAvailable(task) ? openTaskResult(task.taskId) : openTaskDetail(task.taskId)"
+            <div class="figma-ai-case-generation__recent-counts">
+              <span v-if="task.status === 'FAILED'" class="is-failed">生成失败</span>
+              <template v-else>
+                <span>生成 {{ task.generatedCount || task.generatedCases?.length || 0 }} 条</span>
+                <span v-if="task.savedCaseCount" class="is-adopted">采纳 {{ task.savedCaseCount }} 条</span>
+              </template>
+            </div>
+            <button
+              type="button"
+              class="figma-ai-case-generation__task-action"
+              :class="{ 'is-primary': isRunningTask(task), 'is-danger': task.status === 'FAILED' }"
+              @click="handleRecentTaskAction(task)"
             >
-              {{ getTaskDetailActionLabel(task) }}
-            </el-button>
+              <RotateCcw v-if="task.status === 'FAILED'" :size="11" />{{ getTaskDetailActionLabel(task) }}
+            </button>
+          </article>
+          <div v-if="!recentTaskRecords.length" class="figma-ai-case-generation__recent-empty">暂无生成任务</div>
+        </div>
+        <section class="figma-ai-case-generation__guide">
+          <h4><BookOpen :size="12" /> 如何开始</h4>
+          <ol>
+            <li><span>1</span>在右侧填写需求标题和描述</li>
+            <li><span>2</span>选择用例保存路径</li>
+            <li><span>3</span>点击「开始生成」</li>
+          </ol>
+        </section>
+      </aside>
+
+      <main class="figma-ai-case-generation__workspace">
+        <div v-if="isAllScope" class="figma-ai-case-generation__workspace-select">
+          <span>目标空间</span>
+          <el-select v-model="selectedTargetWorkspaceCode" :loading="loadingWorkspaces" clearable filterable placeholder="请选择目标空间">
+            <el-option v-for="workspace in workspaces" :key="workspace.workspaceCode" :label="workspace.workspaceName" :value="workspace.workspaceCode" />
+          </el-select>
+        </div>
+        <div class="figma-ai-case-generation__content">
+          <header class="figma-ai-case-generation__hero">
+            <div><Sparkles :size="18" /><h1>AI 用例生成</h1></div>
+            <p>输入需求描述，AI 自动生成结构化测试用例并完成双模型评审</p>
+          </header>
+          <div class="figma-ai-case-generation__mode-tabs" role="tablist" aria-label="需求来源">
+            <button type="button" :class="{ 'is-active': inputMode === 'manual' }" @click="inputMode = 'manual'">✏️ 手动输入</button>
+            <button type="button" :class="{ 'is-active': inputMode === 'document' }" @click="inputMode = 'document'">📎 上传文档</button>
+          </div>
+
+          <section v-if="inputMode === 'manual'" class="figma-ai-case-generation__card figma-ai-case-generation__requirement-card">
+            <label>
+              <span>需求标题 <em>*</em></span>
+              <input v-model="manualForm.requirementTitle" maxlength="120" type="text" placeholder="简要描述这批用例的需求主题，如：用户登录与认证流程" />
+            </label>
+            <label class="figma-ai-case-generation__description-field">
+              <span>需求描述 <em>*</em><small>{{ manualForm.requirementContent.length }} / 3000</small></span>
+              <textarea
+                v-model="manualForm.requirementContent"
+                maxlength="3000"
+                placeholder="详细说明功能逻辑、使用场景、用户角色、业务规则、异常处理和验收标准&#10;&#10;示例（可描述以下内容）：&#10;• 正常流程与步骤&#10;• 边界条件与异常场景&#10;• 角色权限与数据范围&#10;• 验收标准"
+              ></textarea>
+            </label>
+          </section>
+
+          <section v-else class="figma-ai-case-generation__card figma-ai-case-generation__upload-card">
+            <template v-if="importedDocument">
+              <div class="figma-ai-case-generation__uploaded-file">
+              <CircleCheckBig :size="16" />
+                <div>
+                  <strong>{{ importedDocument.fileName }}</strong>
+                  <span>{{ formatFileSize(importedDocument.fileSize) }} · 解析成功，识别到 {{ importedRequirementContent.length }} 字</span>
+                </div>
+                <button type="button" aria-label="移除文档" @click="clearImportedDocument"><X :size="15" /></button>
+              </div>
+              <label>
+                <span>需求标题 <em>*</em></span>
+                <input v-model="importedRequirementTitle" maxlength="120" type="text" placeholder="从文档提取或手动填写需求标题" />
+              </label>
+            </template>
+            <button
+              v-else
+              type="button"
+              class="figma-ai-case-generation__dropzone"
+              :class="{ 'is-loading': importingRequirement }"
+              @click="triggerRequirementImport"
+              @dragover.prevent
+              @drop.prevent="handleRequirementDrop"
+            >
+              <LoaderCircle v-if="importingRequirement" :size="32" />
+              <Upload v-else :size="32" />
+              <strong>{{ importingRequirement ? '正在上传并解析文档...' : '拖拽文件到此处或点击上传' }}</strong>
+              <span>支持 PDF、DOC、DOCX、TXT、Markdown · 最大 20MB</span>
+            </button>
+          </section>
+
+          <section class="figma-ai-case-generation__card figma-ai-case-generation__config-card">
+            <header>生成配置</header>
+            <div class="figma-ai-case-generation__config-row">
+              <label>保存路径 <em>*</em></label>
+              <button
+                type="button"
+                class="figma-ai-case-generation__path-button"
+                :class="{ 'has-value': inputMode === 'manual' ? !!manualDirectoryDisplayPath : !!documentDirectoryDisplayPath }"
+                :disabled="loadingDirectories"
+                @click="openDirectoryPicker(inputMode)"
+              >
+                <FolderOpen :size="14" />
+                <span>{{ inputMode === 'manual' ? (manualDirectoryDisplayPath || '点击选择保存目录...') : (documentDirectoryDisplayPath || '点击选择保存目录...') }}</span>
+              <CircleCheckBig v-if="inputMode === 'manual' ? !!manualDirectoryDisplayPath : !!documentDirectoryDisplayPath" :size="13" />
+                <ChevronRight v-else :size="14" />
+              </button>
+            </div>
+            <div class="figma-ai-case-generation__config-row">
+              <label>AI 配置</label>
+              <div class="figma-ai-case-generation__ai-config" :class="aiConfigStatusClass">
+                <CircleCheckBig v-if="aiConfigReady" :size="14" />
+                <AlertTriangle v-else :size="15" />
+                <span v-if="aiConfigReady">
+                  生成：{{ generatorConfig?.model || '-' }} · 评审：{{ reviewerConfig?.model || '-' }}
+                  <template v-if="generatorConfig?.supportsImageInput"> · 支持图片识别</template>
+                </span>
+                <span v-else>{{ aiConfigStatusText }}</span>
+                <button type="button" @click="goToAiConfig">AI 配置 <ArrowRight :size="12" /></button>
+              </div>
+            </div>
+            <div class="figma-ai-case-generation__config-row figma-ai-case-generation__output-row">
+              <label>输出模式</label>
+              <div class="figma-ai-case-generation__output-options">
+                <button type="button" :class="{ 'is-active': manualForm.outputMode === 'STREAM' }" @click="manualForm.outputMode = 'STREAM'">
+                  <strong>⚡ 实时流式</strong><span>逐步展示生成过程，适合观察</span>
+                </button>
+                <button type="button" :class="{ 'is-active': manualForm.outputMode === 'COMPLETE' }" @click="manualForm.outputMode = 'COMPLETE'">
+                  <strong>📋 完整输出</strong><span>全部完成后统一展示，适合批量</span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div class="figma-ai-case-generation__submit-row">
+            <span>{{ inputMode === 'manual' ? manualGenerateBlockReason : documentGenerateBlockReason }}</span>
+            <button
+              type="button"
+              class="figma-ai-case-generation__primary-button"
+              :disabled="generating || (inputMode === 'manual' ? !canGenerate : !canGenerateDocument)"
+              @click="requestGenerateCases(inputMode)"
+            >
+              <LoaderCircle v-if="generating" :size="15" /><Sparkles v-else :size="15" />开始生成
+            </button>
           </div>
         </div>
-      </div>
-      <div v-else class="recent-task-empty">还没有最近任务，生成一次测试用例后会显示在这里。</div>
+        <input ref="requirementFileInput" class="figma-ai-case-generation__hidden-input" type="file" accept=".pdf,.doc,.docx,.md,.markdown,.txt" @change="handleRequirementFileChange" />
+      </main>
+    </template>
 
-      <div class="recent-task-footer">
-        <el-button text @click="openTaskRecordsPage">查看全部记录</el-button>
-      </div>
-    </div>
-
-    <input
-      ref="requirementFileInput"
-      type="file"
-      class="hidden-file-input"
-      accept=".pdf,.doc,.docx,.txt,.md,.markdown"
-      @change="handleRequirementFileChange"
-    >
-
-    <AiGenerationLiveLogDialog
-      v-model="processDialogVisible"
-      :record="getCurrentProcessRecord()"
-      :pending="processPending"
-      title="ai_case_generation.log"
-      @cancel="cancelCurrentTask"
-      @view-result="record => openTaskResult(record.taskId)"
-    />
-
-    <el-dialog v-model="directoryPickerVisible" width="720px" destroy-on-close class="path-picker-dialog">
-      <template #header>
-        <div class="adopt-dialog-title">选择保存路径</div>
-      </template>
-      <div class="path-picker-layout">
-        <el-input
-          v-model="directoryPickerKeyword"
-          clearable
-          placeholder="搜索目录名称"
-          class="path-picker-search"
-        />
-        <div class="path-picker-tree-panel">
-          <div v-if="loadingDirectories" class="path-picker-empty">
-            正在加载目录...
-          </div>
-          <div v-else-if="!filteredDirectoryPickerTree.length" class="path-picker-empty">
-            未找到匹配的目录
-          </div>
+    <el-dialog v-model="directoryPickerVisible" class="figma-ai-case-generation-path-dialog" width="480px" :close-on-click-modal="false" align-center append-to-body>
+      <template #header><div class="figma-ai-case-generation-path-dialog__title">选择保存路径</div></template>
+      <div class="figma-ai-case-generation-path-dialog__body">
+        <p>当前工作区：{{ currentWorkspaceName || targetWorkspaceCode || '-' }}</p>
+        <div class="figma-ai-case-generation-path-dialog__tree">
           <el-tree
-            v-else
             :data="filteredDirectoryPickerTree"
             node-key="key"
+            :props="{ label: 'name', children: 'children' }"
+            :current-node-key="directoryPickerSelectedPath"
+            :default-expand-all="false"
             highlight-current
-            :expand-on-click-node="false"
-            :default-expanded-keys="targetWorkspaceCode ? [`workspace:${targetWorkspaceCode}`] : []"
-            :current-node-key="directoryPickerSelectedPath || undefined"
-            class="path-picker-tree"
             @node-click="handleDirectoryPickerNodeSelect"
           >
             <template #default="{ data }">
-              <div class="path-picker-tree-node" :class="{ 'is-workspace': !data.selectable }">
-                <span class="path-picker-tree-node-label">{{ data.name }}</span>
-              </div>
+              <span class="figma-ai-case-generation-path-dialog__node">
+                <FolderOpen v-if="data.children?.length" :size="14" /><FileText v-else :size="14" />{{ data.name }}
+              </span>
             </template>
           </el-tree>
         </div>
-        <div class="path-picker-selected-panel">
-          <div class="path-picker-selected-label">已选路径</div>
-          <div class="path-picker-selected-value">
-            {{ directoryPickerPreviewPath || '请在上方目录树中选择保存路径' }}
-          </div>
+        <div v-if="directoryPickerPreviewPath" class="figma-ai-case-generation-path-dialog__preview">
+          <span>保存路径预览</span>
+          <strong>{{ directoryPickerPreviewPath }}</strong>
         </div>
+        <label class="figma-ai-case-generation-path-dialog__checkbox">
+          <input v-model="autoCreateSubdirectory" type="checkbox" /><span>根据需求标题自动创建子目录</span>
+        </label>
       </div>
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="directoryPickerVisible = false">取消</el-button>
-          <el-button type="primary" :icon="FolderOpened" :disabled="!directoryPickerSelectedPath" @click="confirmDirectoryPickerSelection">确认修改</el-button>
-        </div>
+        <button type="button" class="figma-ai-case-generation__ghost-button" @click="directoryPickerVisible = false">取消</button>
+        <button type="button" class="figma-ai-case-generation__primary-button" :disabled="!directoryPickerSelectedPath" @click="confirmDirectoryPickerSelection">确认选择</button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="confirmGenerateVisible" class="figma-ai-case-generation-confirm-dialog" width="440px" :close-on-click-modal="false" align-center append-to-body>
+      <template #header><div class="figma-ai-case-generation-confirm-dialog__title"><Sparkles :size="18" />确认生成配置</div></template>
+      <dl class="figma-ai-case-generation-confirm-dialog__summary">
+        <div><dt>需求来源</dt><dd>{{ pendingGenerateSource === 'manual' ? '手动输入' : '上传文档' }}</dd></div>
+        <div><dt>需求标题</dt><dd>{{ pendingGenerateSource === 'manual' ? manualForm.requirementTitle : importedRequirementTitle }}</dd></div>
+        <div><dt>保存路径</dt><dd>{{ pendingGenerateSource === 'manual' ? manualDirectoryDisplayPath : documentDirectoryDisplayPath }}</dd></div>
+        <div><dt>生成模型</dt><dd>{{ generatorConfig?.model || '-' }}</dd></div>
+        <div><dt>评审模型</dt><dd>{{ reviewerConfig?.model || '-' }}</dd></div>
+        <div><dt>输出模式</dt><dd>{{ manualForm.outputMode === 'STREAM' ? '⚡ 实时流式' : '📋 完整输出' }}</dd></div>
+      </dl>
+      <div class="figma-ai-case-generation-confirm-dialog__warning"><AlertTriangle :size="14" />生成过程不可中断建议，完成前请保持页面打开或选择后台执行</div>
+      <template #footer>
+        <button type="button" class="figma-ai-case-generation__ghost-button" @click="confirmGenerateVisible = false">取消</button>
+        <button type="button" class="figma-ai-case-generation__primary-button" :disabled="generating" @click="confirmGenerateCases"><Sparkles :size="14" />开始生成</button>
       </template>
     </el-dialog>
   </section>
@@ -2462,6 +2473,1478 @@ onBeforeUnmount(() => {
 
   .workspace-select-bar__select {
     width: 100%;
+  }
+}
+</style>
+<style scoped>
+.figma-ai-case-generation {
+  --ai-primary: #165dff;
+  --ai-primary-hover: #0e42d2;
+  --ai-success: #00b42a;
+  --ai-danger: #f53f3f;
+  --ai-warning: #ff7d00;
+  --ai-text-1: #1d2129;
+  --ai-text-2: #4e5969;
+  --ai-text-3: #86909c;
+  --ai-text-4: #c9cdd4;
+  --ai-border: #e5e6eb;
+  --ai-fill: #f2f3f5;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--ai-text-1);
+  background: var(--ai-fill);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.figma-ai-case-generation *,
+.figma-ai-case-generation *::before,
+.figma-ai-case-generation *::after {
+  box-sizing: border-box;
+}
+
+.figma-ai-case-generation button,
+.figma-ai-case-generation input,
+.figma-ai-case-generation textarea {
+  font: inherit;
+}
+
+.figma-ai-case-generation button {
+  border: 0;
+  cursor: pointer;
+}
+
+.figma-ai-case-generation__recent {
+  position: relative;
+  display: flex;
+  flex: 0 0 280px;
+  flex-direction: column;
+  min-width: 280px;
+  height: auto;
+  align-self: stretch;
+  overflow: hidden;
+  border-right: 1px solid var(--ai-border);
+  background: #fff;
+}
+
+.figma-ai-case-generation__recent > header {
+  display: flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--ai-border);
+}
+
+.figma-ai-case-generation__recent > header strong {
+  color: var(--ai-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  line-height: 18px;
+}
+
+.figma-ai-case-generation__recent > header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  color: var(--ai-primary);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.figma-ai-case-generation__recent-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.figma-ai-case-generation__recent-item {
+  height: 127px;
+  min-height: 127px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ai-border);
+  background: #fff;
+}
+
+.figma-ai-case-generation__recent-item.is-failed {
+  height: 132px;
+  min-height: 132px;
+}
+
+.figma-ai-case-generation__recent-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.figma-ai-case-generation__recent-title > span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--ai-text-3);
+}
+
+.figma-ai-case-generation__running-dot {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ai-success);
+}
+
+.figma-ai-case-generation__recent-title > span.status-info {
+  color: var(--ai-success);
+}
+
+.figma-ai-case-generation__recent-title > span.status-success {
+  color: var(--ai-success);
+}
+
+.figma-ai-case-generation__recent-title > span.status-danger {
+  color: var(--ai-danger);
+}
+
+.figma-ai-case-generation__recent-title > span.status-warning {
+  color: var(--ai-warning);
+}
+
+.figma-ai-case-generation__recent-title > span.status-neutral {
+  color: var(--ai-text-3);
+}
+
+.figma-ai-case-generation__recent-title > span.status-info svg {
+  animation: figma-ai-spin 1s linear infinite;
+}
+
+.figma-ai-case-generation__recent-title strong {
+  overflow: hidden;
+  color: var(--ai-text-1);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__recent-meta,
+.figma-ai-case-generation__recent-counts {
+  display: flex;
+  align-items: flex-start;
+  height: 22px;
+  padding-top: 5px;
+  color: var(--ai-text-3);
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.figma-ai-case-generation__recent-counts {
+  height: 22.5px;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.figma-ai-case-generation__recent-item.is-failed .figma-ai-case-generation__recent-meta {
+  height: 28px;
+  padding-top: 5px;
+  padding-bottom: 6px;
+}
+
+.figma-ai-case-generation__recent-item.is-failed .figma-ai-case-generation__recent-counts {
+  height: 21px;
+  padding-top: 3px;
+}
+
+.figma-ai-case-generation__recent-meta span + span::before {
+  margin-right: 7px;
+  content: "·";
+}
+
+.figma-ai-case-generation__recent-counts .is-adopted {
+  color: var(--ai-success);
+}
+
+.figma-ai-case-generation__recent-counts .is-failed {
+  color: var(--ai-danger);
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__task-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 30px;
+  margin-top: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--ai-border);
+  border-radius: 6px;
+  color: var(--ai-primary);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__task-action.is-primary {
+  border-color: var(--ai-primary);
+  color: #fff;
+  background: var(--ai-primary);
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__task-action.is-primary:hover {
+  border-color: var(--ai-primary-hover);
+  color: #fff;
+  background: var(--ai-primary-hover);
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__task-action:hover {
+  border-color: var(--ai-primary);
+  background: #f2f7ff;
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__task-action.is-danger {
+  border-color: rgba(245, 63, 63, 0.19);
+  color: var(--ai-danger);
+}
+
+.figma-ai-case-generation__recent-empty {
+  padding: 48px 20px;
+  color: var(--ai-text-4);
+  text-align: center;
+}
+
+.figma-ai-case-generation__guide {
+  height: 123px;
+  min-height: 123px;
+  flex: 0 0 123px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--ai-border);
+  background: rgb(22 93 255 / 2%);
+}
+
+.figma-ai-case-generation__guide h4 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 16.5px;
+  margin: 0;
+  color: var(--ai-primary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.figma-ai-case-generation__guide ol {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.figma-ai-case-generation__guide li {
+  display: flex;
+  height: 23px;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 5px;
+  color: var(--ai-text-2);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-ai-case-generation__guide li:first-child {
+  height: 26px;
+  padding-top: 8px;
+}
+
+.figma-ai-case-generation__guide li:last-child {
+  height: 28px;
+  padding-bottom: 5px;
+}
+
+.figma-ai-case-generation__guide li span {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--ai-primary);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.figma-ai-case-generation__workspace {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  align-self: stretch;
+  overflow-y: auto;
+  background: var(--ai-fill);
+}
+
+.figma-ai-case-generation__workspace-select {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: flex;
+  width: min(720px, calc(100% - 48px));
+  height: 52px;
+  align-items: center;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 8px 0;
+  background: var(--ai-fill);
+}
+
+.figma-ai-case-generation__workspace-select > span {
+  color: var(--ai-text-2);
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__workspace-select :deep(.el-select) {
+  width: 260px;
+}
+
+.figma-ai-case-generation__content {
+  width: 720px;
+  max-width: calc(100% - 48px);
+  margin: 0 auto;
+  padding: 32px 0 36px;
+}
+
+.figma-ai-case-generation__workspace-select + .figma-ai-case-generation__content {
+  padding-top: 10px;
+}
+
+.figma-ai-case-generation__hero {
+  position: relative;
+  margin-bottom: 28px;
+}
+
+.figma-ai-case-generation__hero > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.figma-ai-case-generation__hero svg {
+  color: var(--ai-primary);
+  stroke-width: 2;
+}
+
+.figma-ai-case-generation__hero h1 {
+  margin: 0;
+  color: var(--ai-text-1);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 27px;
+}
+
+.figma-ai-case-generation__hero p {
+  margin: 6px 0 0;
+  color: var(--ai-text-3);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.figma-ai-case-generation__mode-tabs {
+  display: flex;
+  width: 216px;
+  align-items: center;
+  gap: 0;
+  height: 38px;
+  margin-bottom: 24px;
+  padding: 3px;
+}
+
+.figma-ai-case-generation__mode-tabs button {
+  width: 105px;
+  height: 32px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--ai-text-3);
+  background: transparent;
+  font-size: 13px;
+}
+
+.figma-ai-case-generation__mode-tabs button.is-active {
+  border: 1px solid var(--ai-border);
+  color: var(--ai-text-1);
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 6%);
+  font-weight: 500;
+}
+
+.figma-ai-case-generation__card {
+  overflow: hidden;
+  border: 1px solid var(--ai-border);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.figma-ai-case-generation__requirement-card {
+  display: block;
+  height: 352px;
+  min-height: 0;
+  padding: 0;
+}
+
+.figma-ai-case-generation__requirement-card > label:first-child {
+  height: 85px;
+  padding: 20px 24px 0;
+}
+
+.figma-ai-case-generation__requirement-card > .figma-ai-case-generation__description-field {
+  height: 265px;
+  padding: 18px 24px;
+}
+
+.figma-ai-case-generation__card label {
+  display: block;
+}
+
+.figma-ai-case-generation__card label > span {
+  display: flex;
+  height: 24px;
+  margin-bottom: 0;
+  padding-bottom: 6px;
+  color: var(--ai-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.figma-ai-case-generation em {
+  margin-left: 3px;
+  color: var(--ai-danger);
+  font-style: normal;
+}
+
+.figma-ai-case-generation__description-field > span small {
+  margin-left: auto;
+  color: var(--ai-text-4);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.figma-ai-case-generation__card input,
+.figma-ai-case-generation__card textarea {
+  width: 100%;
+  border: 1px solid #d9dce1;
+  border-radius: 6px;
+  outline: 0;
+  color: var(--ai-text-1);
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.figma-ai-case-generation__card input {
+  height: 41px;
+  padding: 0 13px;
+}
+
+.figma-ai-case-generation__card textarea {
+  height: 200px;
+  padding: 10px 12px;
+  resize: none;
+  line-height: 22.1px;
+}
+
+.figma-ai-case-generation__card input::placeholder,
+.figma-ai-case-generation__card textarea::placeholder {
+  color: #a9afb8;
+}
+
+.figma-ai-case-generation__card input:focus,
+.figma-ai-case-generation__card textarea:focus {
+  border-color: var(--ai-primary);
+  box-shadow: 0 0 0 2px rgb(22 93 255 / 10%);
+}
+
+.figma-ai-case-generation__upload-card {
+  padding: 24px;
+}
+
+.figma-ai-case-generation__upload-card > label {
+  margin-top: 18px;
+}
+
+button.figma-ai-case-generation__dropzone {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  border: 2px dashed var(--ai-border);
+  border-radius: 8px;
+  color: var(--ai-text-3);
+  background: #fff;
+}
+
+button.figma-ai-case-generation__dropzone:hover {
+  border-color: var(--ai-primary);
+  background: #f7f9ff;
+}
+
+.figma-ai-case-generation__dropzone svg {
+  margin-bottom: 12px;
+  color: var(--ai-text-4);
+}
+
+.figma-ai-case-generation__dropzone.is-loading svg {
+  animation: figma-ai-spin 1s linear infinite;
+}
+
+.figma-ai-case-generation__dropzone strong {
+  margin-bottom: 4px;
+  color: var(--ai-text-1);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 21px;
+}
+
+.figma-ai-case-generation__dropzone span {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-ai-case-generation__uploaded-file {
+  display: flex;
+  min-height: 65px;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid #b7ebc6;
+  border-radius: 7px;
+  color: var(--ai-success);
+  background: #f7fcf8;
+}
+
+.figma-ai-case-generation__uploaded-file > div {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+}
+
+.figma-ai-case-generation__uploaded-file strong {
+  color: var(--ai-text-1);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.figma-ai-case-generation__uploaded-file span {
+  color: var(--ai-text-3);
+  font-size: 12px;
+}
+
+.figma-ai-case-generation__uploaded-file button {
+  display: inline-flex;
+  color: var(--ai-text-3);
+  background: transparent;
+}
+
+.figma-ai-case-generation__config-card {
+  margin-top: 16px;
+}
+
+.figma-ai-case-generation__config-card > header {
+  height: 47px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--ai-border);
+  color: var(--ai-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 47px;
+}
+
+.figma-ai-case-generation__config-row {
+  display: grid;
+  min-height: 66px;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--ai-border);
+}
+
+.figma-ai-case-generation__config-row:last-child {
+  border-bottom: 0;
+}
+
+.figma-ai-case-generation__config-row > label {
+  color: var(--ai-text-2);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__path-button {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #d9dce1;
+  border-radius: 6px;
+  color: var(--ai-text-4);
+  background: #f7f8fa;
+  text-align: left;
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__path-button.has-value {
+  border-color: rgb(22 93 255 / 38%);
+  color: var(--ai-text-1);
+  background: rgb(22 93 255 / 2.4%);
+}
+
+.figma-ai-case-generation__path-button span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__path-button svg {
+  flex: 0 0 auto;
+}
+
+.figma-ai-case-generation__path-button.has-value svg:first-child {
+  color: var(--ai-primary);
+}
+
+.figma-ai-case-generation__path-button.has-value svg:last-child {
+  color: var(--ai-success);
+}
+
+.figma-ai-case-generation__ai-config {
+  display: grid;
+  height: 38px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #b7ebc6;
+  border-radius: 6px;
+  color: var(--ai-text-2);
+  background: #f7fcf8;
+  font-size: 12px;
+}
+
+.figma-ai-case-generation__ai-config.config-status-success > svg {
+  color: var(--ai-success);
+}
+
+.figma-ai-case-generation__ai-config.config-status-danger {
+  border-color: #ffccc7;
+  color: #a8071a;
+  background: #fff8f7;
+}
+
+.figma-ai-case-generation__ai-config.config-status-danger > svg {
+  color: var(--ai-danger);
+}
+
+.figma-ai-case-generation__ai-config > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__ai-config button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  color: var(--ai-primary);
+  background: transparent;
+  font-size: 12px;
+}
+
+.figma-ai-case-generation__output-row {
+  min-height: 88px;
+}
+
+.figma-ai-case-generation__output-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.figma-ai-case-generation__output-options button {
+  display: grid;
+  min-height: 63px;
+  gap: 4px;
+  align-content: center;
+  padding: 8px 13px;
+  border: 1px solid #d9dce1;
+  border-radius: 6px;
+  color: var(--ai-text-3);
+  background: #fff;
+  text-align: left;
+}
+
+.figma-ai-case-generation__output-options button.is-active {
+  border: 2px solid var(--ai-primary);
+  padding: 7px 12px;
+  background: #f7f9ff;
+}
+
+.figma-ai-case-generation__output-options button.is-active > strong {
+  color: var(--ai-primary);
+}
+
+.figma-ai-case-generation__output-options strong {
+  color: var(--ai-text-1);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.figma-ai-case-generation__output-options span {
+  font-size: 11px;
+}
+
+.figma-ai-case-generation__submit-row {
+  display: flex;
+  min-height: 59px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 15px;
+}
+
+.figma-ai-case-generation__submit-row > span {
+  max-width: 480px;
+  overflow: hidden;
+  color: var(--ai-text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__primary-button,
+.figma-ai-case-generation__ghost-button,
+.figma-ai-case-generation__danger-button {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.figma-ai-case-generation__primary-button {
+  color: #fff;
+  background: var(--ai-primary);
+}
+
+.figma-ai-case-generation__primary-button:hover {
+  background: var(--ai-primary-hover);
+}
+
+.figma-ai-case-generation__primary-button:disabled,
+.figma-ai-case-generation__ghost-button:disabled,
+.figma-ai-case-generation__danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.figma-ai-case-generation__primary-button svg:first-child:is(.lucide-loader-circle) {
+  animation: figma-ai-spin 1s linear infinite;
+}
+
+.figma-ai-case-generation__ghost-button {
+  border: 1px solid #d9dce1;
+  color: var(--ai-primary);
+  background: #fff;
+}
+
+.figma-ai-case-generation__danger-button {
+  border: 1px solid #ffccc7;
+  color: var(--ai-danger);
+  background: #fff;
+}
+
+.figma-ai-case-generation__hidden-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.figma-ai-case-generation__process {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  grid-template-columns: 3fr 2fr;
+  background: #fff;
+}
+
+.figma-ai-case-generation__process-main {
+  min-width: 0;
+  border-right: 1px solid var(--ai-border);
+  background: var(--ai-fill);
+}
+
+.figma-ai-case-generation__process-header {
+  display: flex;
+  height: 59px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px 7px;
+  border-bottom: 1px solid var(--ai-border);
+  background: #fff;
+}
+
+.figma-ai-case-generation__process-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.figma-ai-case-generation__process-title strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.figma-ai-case-generation__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4cd263;
+}
+
+.figma-ai-case-generation__process-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.figma-ai-case-generation__process-actions > span {
+  margin-right: 2px;
+  color: var(--ai-text-3);
+  font-size: 12px;
+}
+
+.figma-ai-case-generation__process-actions button {
+  height: 32px;
+  padding: 0 13px;
+}
+
+.figma-ai-case-generation__step-panel {
+  height: 109px;
+  padding: 6px 28px 12px;
+  border-bottom: 1px solid var(--ai-border);
+  background: #fff;
+}
+
+.figma-ai-case-generation__steps {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.figma-ai-case-generation__step {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: var(--ai-text-4);
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__step-connector {
+  flex: 1;
+  height: 2px;
+  margin: 13px 4px 0;
+  background: #dfe2e8;
+}
+
+.figma-ai-case-generation__step-connector.is-finished {
+  background: var(--ai-success);
+}
+
+.figma-ai-case-generation__step-circle {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #dfe2e8;
+  border-radius: 50%;
+  color: var(--ai-text-4);
+  background: #f7f8fa;
+  font-size: 11px;
+}
+
+.figma-ai-case-generation__step.is-active {
+  color: var(--ai-primary);
+}
+
+.figma-ai-case-generation__step.is-active .figma-ai-case-generation__step-circle {
+  border-color: var(--ai-primary);
+  color: #fff;
+  background: var(--ai-primary);
+}
+
+.figma-ai-case-generation__step.is-finished {
+  color: var(--ai-success);
+}
+
+.figma-ai-case-generation__step.is-finished .figma-ai-case-generation__step-circle {
+  border-color: var(--ai-success);
+  color: #fff;
+  background: var(--ai-success);
+}
+
+.figma-ai-case-generation__step.is-active .figma-ai-case-generation__step-circle svg {
+  animation: figma-ai-spin 1s linear infinite;
+}
+
+.figma-ai-case-generation__process-metrics {
+  display: flex;
+  height: 22px;
+  align-items: center;
+  gap: 8px;
+}
+
+.figma-ai-case-generation__process-metrics > div:not(.figma-ai-case-generation__progress) {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.figma-ai-case-generation__process-metrics strong {
+  font-size: 22px;
+  line-height: 22px;
+}
+
+.figma-ai-case-generation__process-metrics span {
+  color: var(--ai-text-3);
+  font-size: 12px;
+}
+
+.figma-ai-case-generation__process-metrics > i {
+  width: 1px;
+  height: 20px;
+  margin: 0 8px;
+  background: var(--ai-border);
+}
+
+.figma-ai-case-generation__progress {
+  display: flex;
+  width: 200px;
+  flex: 0 0 200px;
+  align-items: center;
+  gap: 9px;
+  margin-left: auto;
+}
+
+.figma-ai-case-generation__progress > div {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #e8eaed;
+}
+
+.figma-ai-case-generation__progress > div span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ai-primary);
+}
+
+.figma-ai-case-generation__progress em {
+  width: 30px;
+  color: var(--ai-text-3);
+  font-size: 11px;
+  text-align: right;
+}
+
+.figma-ai-case-generation__log-panel {
+  min-height: calc(100% - 168px);
+  padding: 0;
+}
+
+.figma-ai-case-generation__log-panel > .figma-ai-case-generation__section-caption {
+  padding: 10px 28px 6px;
+  color: var(--ai-text-4);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: 0.5px;
+}
+
+.figma-ai-case-generation__log-list {
+  padding: 0 28px 20px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.figma-ai-case-generation__log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid #ebecef;
+}
+
+.figma-ai-case-generation__log-row time {
+  color: var(--ai-text-4);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__log-row > span {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--ai-primary);
+}
+
+.figma-ai-case-generation__log-row p {
+  margin: 0;
+  color: var(--ai-text-2);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-ai-case-generation__log-row.is-success > span {
+  background: var(--ai-success);
+}
+
+.figma-ai-case-generation__log-row.is-success p {
+  color: var(--ai-success);
+}
+
+.figma-ai-case-generation__log-row.is-error > span {
+  background: var(--ai-danger);
+}
+
+.figma-ai-case-generation__log-row.is-error p {
+  color: var(--ai-danger);
+}
+
+.figma-ai-case-generation__log-row.is-warn > span,
+.figma-ai-case-generation__log-row.is-warning > span {
+  background: #ff7d00;
+}
+
+.figma-ai-case-generation__log-row.is-warn p,
+.figma-ai-case-generation__log-row.is-warning p {
+  color: #ff7d00;
+}
+
+.figma-ai-case-generation__log-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 14px;
+  color: var(--ai-text-3);
+  font-size: 12px;
+}
+
+.figma-ai-case-generation__log-empty svg {
+  animation: figma-ai-spin 1s linear infinite;
+}
+
+.figma-ai-case-generation__process-aside {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  padding-bottom: 38px;
+  background: #fff;
+}
+
+.figma-ai-case-generation__process-aside > section {
+  padding: 17px 22px 18px;
+  border-bottom: 1px solid var(--ai-border);
+}
+
+.figma-ai-case-generation__task-info {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.figma-ai-case-generation__task-info > div {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 0;
+}
+
+.figma-ai-case-generation__task-info dt,
+.figma-ai-case-generation__task-info dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-ai-case-generation__task-info dt {
+  color: var(--ai-text-3);
+}
+
+.figma-ai-case-generation__task-info dd {
+  overflow: hidden;
+  color: var(--ai-text-1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__preview-section {
+  min-height: 220px;
+}
+
+.figma-ai-case-generation__preview-list {
+  margin-top: 8px;
+}
+
+.figma-ai-case-generation__preview-item {
+  display: flex;
+  min-height: 39px;
+  align-items: center;
+  gap: 9px;
+  border-bottom: 1px solid var(--ai-border);
+}
+
+.figma-ai-case-generation__preview-item > span {
+  display: inline-flex;
+  min-width: 27px;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: #165dff;
+  background: #e8f3ff;
+  font-size: 11px;
+}
+
+.figma-ai-case-generation__preview-item > span.is-p0 {
+  color: #f53f3f;
+  background: #fff0f0;
+}
+
+.figma-ai-case-generation__preview-item > span.is-p1 {
+  color: #ff7d00;
+  background: #fff7e6;
+}
+
+.figma-ai-case-generation__preview-item > span.is-p3 {
+  color: #86909c;
+  background: #f2f3f5;
+}
+
+.figma-ai-case-generation__preview-item p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ai-text-1);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation__preview-empty {
+  padding: 35px 0;
+  color: var(--ai-text-4);
+  font-size: 12px;
+  text-align: center;
+}
+
+.figma-ai-case-generation__process-aside > footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 38px;
+  padding: 0 22px;
+  border-top: 1px solid #f0f1f2;
+  color: var(--ai-text-3);
+  background: #fffbf0;
+  font-size: 11px;
+  line-height: 38px;
+}
+
+:global(.el-dialog.figma-ai-case-generation-path-dialog),
+:global(.el-dialog.figma-ai-case-generation-confirm-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 18%);
+  font-family: inherit;
+}
+
+:global(.figma-ai-case-generation-path-dialog .el-dialog__header),
+:global(.figma-ai-case-generation-confirm-dialog .el-dialog__header) {
+  height: 62px;
+  margin: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+:global(.figma-ai-case-generation-path-dialog .el-dialog__headerbtn),
+:global(.figma-ai-case-generation-confirm-dialog .el-dialog__headerbtn) {
+  top: 12px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+}
+
+.figma-ai-case-generation-path-dialog__title,
+.figma-ai-case-generation-confirm-dialog__title {
+  display: flex;
+  height: 62px;
+  align-items: center;
+  gap: 8px;
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.figma-ai-case-generation-path-dialog__title {
+  font-size: 15px;
+  line-height: 22.5px;
+}
+
+.figma-ai-case-generation-confirm-dialog__title svg {
+  color: #165dff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .el-dialog__body) {
+  padding: 16px 24px;
+}
+
+:global(.figma-ai-case-generation-confirm-dialog .el-dialog__body) {
+  padding: 16px 24px 15px;
+}
+
+.figma-ai-case-generation-path-dialog__body > p {
+  margin: 0 0 12px;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.figma-ai-case-generation-path-dialog__tree {
+  height: 260px;
+  overflow-y: auto;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+}
+
+.figma-ai-case-generation-path-dialog__tree :deep(.el-tree-node__content) {
+  height: 38px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.figma-ai-case-generation-path-dialog__tree :deep(.el-tree-node:last-child > .el-tree-node__content) {
+  border-bottom: 0;
+}
+
+.figma-ai-case-generation-path-dialog__tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
+  color: #165dff;
+  background: #f2f7ff;
+}
+
+.figma-ai-case-generation-path-dialog__node {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.figma-ai-case-generation-path-dialog__node svg {
+  color: #86909c;
+}
+
+.figma-ai-case-generation-path-dialog__node svg.lucide-folder-open {
+  color: #ff7d00;
+}
+
+.figma-ai-case-generation-path-dialog__tree :deep(.el-tree-node.is-current > .el-tree-node__content .figma-ai-case-generation-path-dialog__node),
+.figma-ai-case-generation-path-dialog__tree :deep(.el-tree-node.is-current > .el-tree-node__content .figma-ai-case-generation-path-dialog__node svg) {
+  color: #165dff;
+}
+
+.figma-ai-case-generation-path-dialog__preview {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgb(22 93 255 / 19%);
+  border-radius: 6px;
+  background: rgb(22 93 255 / 3.2%);
+}
+
+.figma-ai-case-generation-path-dialog__preview span,
+.figma-ai-case-generation-path-dialog__preview strong {
+  display: block;
+}
+
+.figma-ai-case-generation-path-dialog__preview span {
+  margin-bottom: 2px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-ai-case-generation-path-dialog__preview strong {
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation-path-dialog__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.figma-ai-case-generation-path-dialog__checkbox input {
+  width: 14px;
+  height: 14px;
+  accent-color: #165dff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .el-dialog__footer),
+:global(.figma-ai-case-generation-confirm-dialog .el-dialog__footer) {
+  display: flex;
+  height: 66px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 0;
+  padding: 0 24px;
+  border-top: 1px solid #e5e6eb;
+}
+
+.figma-ai-case-generation-confirm-dialog__summary {
+  height: 244px;
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid #d9dce1;
+  border-radius: 6px;
+}
+
+.figma-ai-case-generation-confirm-dialog__summary > div {
+  display: grid;
+  height: 40.5px;
+  grid-template-columns: 90px minmax(0, 1fr);
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.figma-ai-case-generation-confirm-dialog__summary > div:last-child {
+  height: 39.5px;
+  border-bottom: 0;
+}
+
+.figma-ai-case-generation-confirm-dialog__summary dt,
+.figma-ai-case-generation-confirm-dialog__summary dd {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0 13px;
+  font-size: 12px;
+}
+
+.figma-ai-case-generation-confirm-dialog__summary dt {
+  color: #86909c;
+  background: #f7f8fa;
+}
+
+.figma-ai-case-generation-confirm-dialog__summary dd {
+  overflow: hidden;
+  color: #1d2129;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-ai-case-generation-confirm-dialog__warning {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 14px;
+  padding: 8px 11px;
+  border: 1px solid #ffcc99;
+  border-radius: 6px;
+  color: #4e5969;
+  background: #fff7e8;
+  font-size: 12px;
+}
+
+.figma-ai-case-generation-confirm-dialog__warning svg {
+  flex: 0 0 auto;
+  color: #ff7d00;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__primary-button) {
+  color: #fff;
+  background: #165dff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button),
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__ghost-button) {
+  height: 38px;
+  padding: 0 20px;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button:disabled) {
+  opacity: 0.5;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__ghost-button),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__ghost-button) {
+  border: 1px solid #d9dce1;
+  color: #165dff;
+  background: #fff;
+}
+
+@keyframes figma-ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1180px) {
+  .figma-ai-case-generation__recent {
+    flex-basis: 248px;
+    min-width: 248px;
+  }
+
+  .figma-ai-case-generation__content {
+    max-width: calc(100% - 32px);
+  }
+
+  .figma-ai-case-generation__process {
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
   }
 }
 </style>

@@ -20,6 +20,7 @@ export { default as AppTableColumnSettingsDrawer } from './app-table-column-sett
 export { default as AppTableSettingsTrigger } from './app-table-settings-trigger/AppTableSettingsTrigger.vue'
 export * from './app-figma-action-column'
 export * from './app-figma-table'
+export { default as AppFigmaSwitch } from './app-figma-switch/AppFigmaSwitch.vue'
 export { default as AppTagInput } from './app-tag-input/AppTagInput.vue'
 export { default as AppUserSelect } from './app-user-select/AppUserSelect.vue'
 export { default as AiGenerationLiveLogDialog } from './ai-live-log/AiGenerationLiveLogDialog.vue'

@@ -93,7 +93,7 @@ watch(
 <template>
   <AppDialog
     :model-value="modelValue"
-    :title="mode === 'create' ? '添加空间成员' : '编辑成员角色'"
+    :title="mode === 'create' ? '添加空间成员' : '编辑成员身份'"
     width="520px"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -119,7 +119,7 @@ watch(
       </div>
 
       <div class="workspace-member-dialog__field">
-        <span>成员角色</span>
+        <span>工作区身份</span>
         <div class="workspace-member-dialog__segment">
           <button
             v-for="item in workspaceMemberRoleOptions"

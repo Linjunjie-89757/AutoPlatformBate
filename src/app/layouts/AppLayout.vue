@@ -2,11 +2,14 @@
 import {
   ChevronDown,
   ChevronRight,
+  KeyRound,
   LogOut,
   Search,
+  SlidersHorizontal,
+  User,
 } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useSession } from '@/entities/session'
@@ -22,6 +25,8 @@ const { currentUser } = useSession()
 const { loading: logoutLoading, errorMessage: logoutErrorMessage, logout } = useLogout()
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
 const switchableWorkspaces = ref<WorkspaceItem[]>([])
+const userMenuOpen = ref(false)
+const userMenuRef = ref<HTMLElement | null>(null)
 
 const headerTitle = computed(() => {
   return typeof route.meta.title === 'string' && route.meta.title ? route.meta.title : '前端 2.0 重建'
@@ -55,6 +60,10 @@ const caseCenterCrumbTitle = computed(() => {
 })
 
 const headerCrumbs = computed(() => {
+  if (route.name === 'profile-settings') {
+    return []
+  }
+
   if (route.name === 'config-center') {
     return ['配置中心', configCenterCrumbTitle.value]
   }
@@ -75,7 +84,17 @@ const userDisplayName = computed(() => {
   return user?.displayName || user?.username || '当前用户'
 })
 
-const userRoleText = computed(() => currentUser.value?.roleCode || '已登录')
+const userRoleText = computed(() => {
+  const roleCode = currentUser.value?.roleCode || ''
+  const labels: Record<string, string> = {
+    SUPER_ADMIN: '超级管理员',
+    ADMIN: '管理员',
+    TEST_MANAGER: '测试负责人',
+    TESTER: '测试工程师',
+    VIEWER: '只读访客',
+  }
+  return labels[roleCode] || roleCode || '已登录'
+})
 
 const navigationTargetQuery = computed(() => ({
   workspace: selectedWorkspaceCode.value,
@@ -215,6 +234,38 @@ async function handleLogout() {
   }
 }
 
+function toggleUserMenu() {
+  if (logoutLoading.value) return
+  userMenuOpen.value = !userMenuOpen.value
+}
+
+function closeUserMenu() {
+  userMenuOpen.value = false
+}
+
+function handleDocumentMouseDown(event: MouseEvent) {
+  if (!userMenuOpen.value || !userMenuRef.value) return
+  if (!userMenuRef.value.contains(event.target as Node)) {
+    closeUserMenu()
+  }
+}
+
+async function openProfileSettings(tab: 'profile' | 'security' | 'preferences') {
+  closeUserMenu()
+  await router.push({
+    path: '/profile',
+    query: {
+      ...navigationTargetQuery.value,
+      tab,
+    },
+  })
+}
+
+async function handleMenuLogout() {
+  closeUserMenu()
+  await handleLogout()
+}
+
 watch(
   () => route.query.workspace,
   (value) => {
@@ -226,7 +277,12 @@ watch(
 )
 
 onMounted(() => {
+  document.addEventListener('mousedown', handleDocumentMouseDown)
   void loadSwitchableWorkspaces()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleDocumentMouseDown)
 })
 </script>
 
@@ -322,28 +378,54 @@ onMounted(() => {
           </button>
           <span class="app-layout__header-divider app-layout__header-divider--right" />
 
-          <el-dropdown trigger="click" @command="handleLogout">
+          <div ref="userMenuRef" class="app-layout__user-menu-wrap">
             <button
               class="app-layout__user"
+              :class="{ 'is-open': userMenuOpen }"
               type="button"
               :aria-busy="logoutLoading"
+              :aria-expanded="userMenuOpen"
+              aria-haspopup="menu"
               :disabled="logoutLoading"
+              @click="toggleUserMenu"
             >
               <span class="app-layout__user-avatar">{{ userDisplayName.slice(0, 1).toUpperCase() }}</span>
               <span class="app-layout__user-name">{{ userDisplayName }}</span>
-              <ChevronDown class="app-layout__user-arrow" />
+              <ChevronDown class="app-layout__user-arrow" :class="{ 'is-open': userMenuOpen }" />
             </button>
 
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item disabled>{{ userRoleText }}</el-dropdown-item>
-                <el-dropdown-item divided command="logout" :disabled="logoutLoading">
-                  <LogOut class="app-layout__dropdown-icon" />
-                  {{ logoutLoading ? '正在退出' : '退出登录' }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+            <div v-if="userMenuOpen" class="app-layout__user-menu" role="menu">
+              <div class="app-layout__user-menu-profile">
+                <span class="app-layout__user-menu-avatar">{{ userDisplayName.slice(0, 1).toUpperCase() }}</span>
+                <div>
+                  <strong>{{ userDisplayName }}</strong>
+                  <span>{{ userRoleText }}</span>
+                </div>
+              </div>
+
+              <div class="app-layout__user-menu-items">
+                <button type="button" role="menuitem" @click="openProfileSettings('profile')">
+                  <User />
+                  <span>个人资料</span>
+                </button>
+                <button type="button" role="menuitem" @click="openProfileSettings('security')">
+                  <KeyRound />
+                  <span>修改密码</span>
+                </button>
+                <button type="button" role="menuitem" @click="openProfileSettings('preferences')">
+                  <SlidersHorizontal />
+                  <span>操作偏好</span>
+                </button>
+              </div>
+
+              <div class="app-layout__user-menu-footer">
+                <button type="button" role="menuitem" :disabled="logoutLoading" @click="handleMenuLogout">
+                  <LogOut />
+                  <span>{{ logoutLoading ? '正在退出' : '退出登录' }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -438,8 +520,7 @@ onMounted(() => {
 }
 
 .app-layout__nav-group.is-separated {
-  margin-top: 4.5px;
-  padding-top: 4.5px;
+  padding-top: 3.5px;
   border-top: 1px solid var(--app-border);
 }
 
@@ -650,11 +731,11 @@ onMounted(() => {
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
-  max-width: 112px;
-  height: 24.5px;
-  padding: 0;
+  max-width: 132px;
+  height: 31.5px;
+  padding: 3.5px 7px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   color: var(--app-text-primary);
   cursor: pointer;
@@ -667,7 +748,11 @@ onMounted(() => {
 }
 
 .app-layout__user:hover {
-  background: transparent;
+  background: rgba(22, 93, 255, .031);
+}
+
+.app-layout__user.is-open {
+  background: rgba(22, 93, 255, .051);
 }
 
 .app-layout__user-avatar {
@@ -685,10 +770,10 @@ onMounted(() => {
 }
 
 .app-layout__user-name {
-  max-width: 52px;
+  max-width: 68px;
   overflow: hidden;
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 500;
   line-height: 19.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -700,13 +785,132 @@ onMounted(() => {
   height: 12px;
   color: var(--app-text-muted);
   stroke-width: 2;
+  transition: transform 150ms ease;
 }
 
-.app-layout__dropdown-icon {
-  width: 15px;
-  height: 15px;
-  margin-right: 6px;
+.app-layout__user-arrow.is-open {
+  transform: rotate(180deg);
+}
+
+.app-layout__user-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.app-layout__user-menu {
+  position: absolute;
+  top: calc(100% + .75px);
+  right: 0;
+  z-index: 80;
+  width: 200px;
+  height: 223px;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .14);
+}
+
+.app-layout__user-menu-profile {
+  display: flex;
+  height: 59px;
+  align-items: center;
+  gap: 10.5px;
+  padding: 10.5px 14px;
+  border-bottom: 1px solid #e5e6eb;
+  background: rgba(22, 93, 255, .02);
+}
+
+.app-layout__user-menu-avatar {
+  display: grid;
+  width: 31.5px;
+  height: 31.5px;
+  flex: 0 0 31.5px;
+  place-items: center;
+  border-radius: 50%;
+  background: #165dff;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 21px;
+}
+
+.app-layout__user-menu-profile > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.app-layout__user-menu-profile strong {
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-layout__user-menu-profile div span {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.app-layout__user-menu-items {
+  height: 118px;
+  padding: 3.5px 0;
+}
+
+.app-layout__user-menu-items button,
+.app-layout__user-menu-footer button {
+  display: flex;
+  width: 100%;
+  height: 37px;
+  align-items: center;
+  gap: 10.5px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: #4e5969;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+  text-align: left;
+}
+
+.app-layout__user-menu-items button svg,
+.app-layout__user-menu-footer button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
   stroke-width: 2;
+}
+
+.app-layout__user-menu-items button:hover {
+  background: #f4f6fa;
+  color: #1d2129;
+}
+
+.app-layout__user-menu-footer {
+  height: 46px;
+  padding: 4px 0;
+  border-top: 1px solid #e5e6eb;
+}
+
+.app-layout__user-menu-footer button {
+  color: #f53f3f;
+}
+
+.app-layout__user-menu-footer button:hover {
+  background: rgba(245, 63, 63, .039);
+}
+
+.app-layout__user-menu-footer button:disabled {
+  cursor: wait;
+  opacity: .72;
 }
 
 .app-layout__main {

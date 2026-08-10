@@ -90,4 +90,17 @@ public class WorkspaceController {
         workspaceService.deleteMember(workspaceCode, memberId);
         return ApiResponse.ok(null, "成员移除成功");
     }
+
+    @GetMapping("/{workspaceCode}/roles")
+    public ApiResponse<List<WorkspaceRoleItem>> listRoles(@PathVariable String workspaceCode) {
+        return ApiResponse.ok(workspaceService.listRoles(workspaceCode));
+    }
+
+    @PostMapping("/{workspaceCode}/roles")
+    public ApiResponse<WorkspaceRoleItem> createRole(
+            @PathVariable String workspaceCode,
+            @Valid @RequestBody CreateWorkspaceRoleRequest request
+    ) {
+        return ApiResponse.ok(workspaceService.createRole(workspaceCode, request), "角色创建成功");
+    }
 }

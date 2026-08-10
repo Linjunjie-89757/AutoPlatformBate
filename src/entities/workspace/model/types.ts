@@ -34,14 +34,45 @@ export interface WorkspaceMemberItem {
   email: string
   displayName: string
   roleCode: string
+  memberType?: 'OWNER' | 'ADMIN' | 'MEMBER' | string
+  roles?: WorkspaceMemberRoleItem[]
   status: number | null
+}
+
+export interface WorkspaceMemberRoleItem {
+  id: number
+  roleCode: string
+  name: string
+  system: boolean
 }
 
 export interface CreateWorkspaceMemberPayload {
   userId: number
+  memberType?: 'ADMIN' | 'MEMBER' | string | null
+  roleIds?: number[] | null
+  /** @deprecated 兼容旧后端字段，新的成员身份使用 memberType。 */
   roleCode?: string | null
 }
 
 export interface UpdateWorkspaceMemberPayload {
+  memberType: 'ADMIN' | 'MEMBER' | string
+  roleIds?: number[] | null
+  /** @deprecated 兼容旧后端字段，新的成员身份使用 memberType。 */
+  roleCode?: string | null
+}
+
+export interface WorkspaceRoleItem {
+  id: number
   roleCode: string
+  name: string
+  description?: string | null
+  memberCount: number | null
+  permissionCount: number | null
+  updatedAt?: string | null
+  system: boolean
+}
+
+export interface CreateWorkspaceRolePayload {
+  name: string
+  description?: string | null
 }

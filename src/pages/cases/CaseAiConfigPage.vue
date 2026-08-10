@@ -18,6 +18,7 @@ import {
   AppEmptyState,
   AppLoadingState,
 } from '@/shared/ui'
+import CaseAiConfigFigmaWorkspace from '@/widgets/case-ai-config/CaseAiConfigFigmaWorkspace.vue'
 
 type RoleType = 'CASE_GENERATOR' | 'CASE_REVIEWER'
 
@@ -86,12 +87,14 @@ const testingRole = ref<RoleType | null>(null)
 const loadingWorkspaces = ref(false)
 const loadingProviders = ref(false)
 const bootstrapping = ref(false)
+const savingAll = ref(false)
 const selectedTargetWorkspaceCode = ref('')
 const configState = ref<AiCaseConfigResponse | null>(null)
 const providers = ref<AiProviderConnectionItem[]>([])
 const workspaces = ref<WorkspaceItem[]>([])
 const openModelRole = ref<RoleType | null>(null)
 const advancedVisible = ref(false)
+const useFigmaLayout = true
 
 const promptExpanded = reactive<Record<RoleType, boolean>>({
   CASE_GENERATOR: false,
@@ -323,6 +326,21 @@ function selectModelOption(roleType: RoleType, option: ModelPoolOption) {
   forms[roleType].supportsImageInput = provider?.providerType === 'google' || provider?.providerType === 'openai'
 }
 
+function handleFigmaModelSelect(payload: { role: RoleType, key: string }) {
+  const option = modelPoolOptions.value.find(item => item.key === payload.key)
+  if (option) {
+    selectModelOption(payload.role, option)
+  }
+}
+
+function handleFigmaPromptUpdate(payload: { role: RoleType, value: string }) {
+  forms[payload.role].promptTemplate = payload.value
+}
+
+function handleFigmaMaxCasesUpdate(value: number) {
+  forms.CASE_GENERATOR.maxCases = value
+}
+
 function toggleModelSelect(roleType: RoleType) {
   openModelRole.value = openModelRole.value === roleType ? null : roleType
 }
@@ -465,6 +483,40 @@ async function saveRole(roleType: RoleType) {
   }
 }
 
+async function saveAllRoles() {
+  if (!effectiveWorkspaceCode.value) {
+    ElMessage.warning('请先选择工作空间')
+    return
+  }
+  if (!isRoleValid('CASE_GENERATOR') || !isRoleValid('CASE_REVIEWER')) {
+    ElMessage.warning('请先补全生成模型和评审模型配置')
+    return
+  }
+
+  savingAll.value = true
+  try {
+    const roles: RoleType[] = ['CASE_GENERATOR', 'CASE_REVIEWER']
+    for (const roleType of roles) {
+      const payload = {
+        ...buildSavePayload(roleType),
+        workspaceCode: effectiveWorkspaceCode.value,
+      }
+      const currentId = forms[roleType].id
+      await (currentId
+        ? caseAiApi.updateConfig('ALL', currentId, payload)
+        : caseAiApi.createConfig('ALL', payload))
+    }
+    await loadConfig()
+    ElMessage.success('AI 配置已保存')
+  }
+  catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+  finally {
+    savingAll.value = false
+  }
+}
+
 async function bootstrapLegacyConfig() {
   if (!effectiveWorkspaceCode.value) {
     ElMessage.warning('请先选择工作空间')
@@ -539,7 +591,28 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="case-ai-config-page">
+  <CaseAiConfigFigmaWorkspace
+    v-if="useFigmaLayout"
+    :loading="loading || loadingProviders"
+    :saving="savingAll"
+    :workspace-ready="!!effectiveWorkspaceCode"
+    :config-complete="isRoleValid('CASE_GENERATOR') && isRoleValid('CASE_REVIEWER')"
+    :model-options="modelPoolOptions"
+    :generator-model-key="selectedModelKey('CASE_GENERATOR')"
+    :reviewer-model-key="selectedModelKey('CASE_REVIEWER')"
+    :generator-prompt="forms.CASE_GENERATOR.promptTemplate"
+    :reviewer-prompt="forms.CASE_REVIEWER.promptTemplate"
+    :default-generator-prompt="DEFAULT_GENERATOR_PROMPT"
+    :default-reviewer-prompt="DEFAULT_REVIEW_PROMPT"
+    :max-cases="forms.CASE_GENERATOR.maxCases"
+    @manage-connections="goToAiConnections"
+    @save="saveAllRoles"
+    @select-model="handleFigmaModelSelect"
+    @update-prompt="handleFigmaPromptUpdate"
+    @update:max-cases="handleFigmaMaxCasesUpdate"
+  />
+
+  <section v-else class="case-ai-config-page">
     <header class="case-ai-config-page__figma-header">
       <h2>AI 配置</h2>
       <p>配置用于生成和评审测试用例的 AI 模型</p>

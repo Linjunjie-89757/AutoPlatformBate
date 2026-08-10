@@ -40,6 +40,28 @@ public class WorkspaceAccessSupport {
         return requireReadableWorkspace(workspaceCode);
     }
 
+    public WorkspaceEntity requireWorkspaceAdmin(String workspaceCode) {
+        WorkspaceEntity workspace = requireReadableWorkspace(workspaceCode);
+        if (isPlatformAdmin()) {
+            return workspace;
+        }
+
+        CurrentUserPrincipal currentUser = CurrentUserContext.require();
+        if (workspace.getOwnerUserId() != null && workspace.getOwnerUserId().equals(currentUser.userId())) {
+            return workspace;
+        }
+
+        Long adminCount = workspaceMemberMapper.selectCount(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
+                .eq(WorkspaceMemberEntity::getUserId, currentUser.userId())
+                .eq(WorkspaceMemberEntity::getRoleCode, "ADMIN")
+                .eq(WorkspaceMemberEntity::getStatus, 1));
+        if (adminCount == 0) {
+            throw new BadRequestException("只有工作区管理员可执行该操作");
+        }
+        return workspace;
+    }
+
     public String resolveTargetWorkspace(String headerWorkspaceCode, String bodyWorkspaceCode) {
         String normalized = WorkspaceScope.normalize(headerWorkspaceCode);
         if (WorkspaceScope.isAll(normalized)) {

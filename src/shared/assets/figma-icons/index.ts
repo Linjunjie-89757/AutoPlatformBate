@@ -88,7 +88,7 @@ import runnerNavApi from './config-center/runner/runner-05.svg'
 import runnerNavApp from './config-center/runner/runner-07.svg'
 import runnerNavBug from './config-center/runner/runner-04.svg'
 import runnerNavCase from './config-center/runner/runner-03.svg'
-import runnerNavConfig from './config-center/runner/runner-02.svg'
+import runnerNavConfigSliders from './config-center/runner/runner-nav-config-sliders.svg'
 import runnerNavDashboard from './config-center/runner/runner-01.svg'
 import runnerNavWeb from './config-center/runner/runner-06.svg'
 import taskNav from './tasks/task-nav.svg'
@@ -130,6 +130,7 @@ import reportExpandDetail from './reports/expand-detail.svg'
 import reportFilter from './reports/filter.svg'
 import reportListSearch from './reports/list-search.svg'
 import reportNav from './reports/nav-report.svg'
+import globalNavSetting from './reports/home-nav-setting.svg'
 import reportOpenDetail from './reports/open-detail.svg'
 import reportQuickSearch from './reports/quick-search.svg'
 import reportRowCopy from './reports/row-copy.svg'
@@ -269,7 +270,7 @@ export const figmaConfigRunnerIcons = {
 
 export const figmaGlobalNavIcons = {
   dashboard: runnerNavDashboard,
-  config: runnerNavConfig,
+  config: runnerNavConfigSliders,
   case: runnerNavCase,
   bug: runnerNavBug,
   api: runnerNavApi,
@@ -277,7 +278,7 @@ export const figmaGlobalNavIcons = {
   app: runnerNavApp,
   task: taskNav,
   report: reportNav,
-  setting: runnerNavConfig,
+  setting: globalNavSetting,
 } as const
 
 export const figmaConfigOverviewIcons = {

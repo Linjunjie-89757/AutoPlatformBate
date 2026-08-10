@@ -26,6 +26,8 @@ public class WorkspaceDomainService {
 
     private final WorkspaceMapper workspaceMapper;
     private final WorkspaceMemberMapper workspaceMemberMapper;
+    private final WorkspaceMemberRoleMapper workspaceMemberRoleMapper;
+    private final WorkspaceRoleMapper workspaceRoleMapper;
     private final UserService userService;
     private final CaseMapper caseMapper;
     private final TaskMapper taskMapper;
@@ -37,6 +39,8 @@ public class WorkspaceDomainService {
     public WorkspaceDomainService(
             WorkspaceMapper workspaceMapper,
             WorkspaceMemberMapper workspaceMemberMapper,
+            WorkspaceMemberRoleMapper workspaceMemberRoleMapper,
+            WorkspaceRoleMapper workspaceRoleMapper,
             UserService userService,
             CaseMapper caseMapper,
             TaskMapper taskMapper,
@@ -47,6 +51,8 @@ public class WorkspaceDomainService {
     ) {
         this.workspaceMapper = workspaceMapper;
         this.workspaceMemberMapper = workspaceMemberMapper;
+        this.workspaceMemberRoleMapper = workspaceMemberRoleMapper;
+        this.workspaceRoleMapper = workspaceRoleMapper;
         this.userService = userService;
         this.caseMapper = caseMapper;
         this.taskMapper = taskMapper;
@@ -112,8 +118,19 @@ public class WorkspaceDomainService {
         requirePlatformAdmin();
         WorkspaceEntity workspace = requireWorkspace(workspaceCode);
         validateWorkspaceDeletable(workspace.getId());
+        List<Long> memberIds = workspaceMemberMapper.selectList(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                        .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId()))
+                .stream()
+                .map(WorkspaceMemberEntity::getId)
+                .toList();
+        if (!memberIds.isEmpty()) {
+            workspaceMemberRoleMapper.delete(new LambdaQueryWrapper<WorkspaceMemberRoleEntity>()
+                    .in(WorkspaceMemberRoleEntity::getMemberId, memberIds));
+        }
         workspaceMemberMapper.delete(new LambdaQueryWrapper<WorkspaceMemberEntity>()
                 .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId()));
+        workspaceRoleMapper.delete(new LambdaQueryWrapper<WorkspaceRoleEntity>()
+                .eq(WorkspaceRoleEntity::getWorkspaceId, workspace.getId()));
         workspaceMapper.deleteById(workspace.getId());
     }
 

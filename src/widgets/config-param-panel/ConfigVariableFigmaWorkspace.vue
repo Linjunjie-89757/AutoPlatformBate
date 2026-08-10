@@ -37,7 +37,7 @@ import {
   type WebUiVariableItem,
 } from '@/features/config-param-create-edit'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { confirmDelete } from '@/shared/ui'
+import { AppFigmaSwitch, confirmDelete } from '@/shared/ui'
 
 import ConfigVariableBuiltinPanel from './ConfigVariableBuiltinPanel.vue'
 
@@ -804,7 +804,7 @@ watch(() => props.workspaceCode, () => {
                 <td><span class="figma-variable__type" :class="`is-${effectiveVariableType(row.variable).toLowerCase()}`">{{ variableTypeLabel(row.variable) }}</span></td>
                 <td><span class="figma-variable__description">{{ row.variable.description || '—' }}</span></td>
                 <td>
-                  <button type="button" class="figma-variable__toggle" :class="{ 'is-on': row.variable.enabled !== false }" :disabled="saving" @click="toggleVariable(row.index)"><span /></button>
+                  <AppFigmaSwitch :model-value="row.variable.enabled !== false" size="regular" :disabled="saving" :label="row.variable.enabled === false ? '启用变量' : '停用变量'" @update:model-value="toggleVariable(row.index)" />
                 </td>
                 <td v-if="isGlobalView"><span class="figma-variable__updated">—<small>暂无记录</small></span></td>
                 <td>
@@ -848,12 +848,12 @@ watch(() => props.workspaceCode, () => {
               </div>
               <div class="figma-variable-modal__option-column is-sensitive">
                 <span>敏感变量</span>
-                <div><button type="button" class="figma-variable__toggle" :class="{ 'is-on': variableDraft.sensitive }" @click="variableDraft.sensitive = !variableDraft.sensitive"><i /></button><small>{{ variableDraft.sensitive ? '值将在界面上隐藏显示' : '值明文可见' }}</small></div>
+                <div><AppFigmaSwitch v-model="variableDraft.sensitive" size="regular" label="敏感变量" /><small>{{ variableDraft.sensitive ? '值将在界面上隐藏显示' : '值明文可见' }}</small></div>
               </div>
             </div>
             <label class="figma-variable-modal__field"><span>值 <em>*</em></span><textarea v-if="effectiveVariableType(variableDraft) === 'JSON'" v-model="variableDraft.value" rows="5" placeholder="请输入 JSON"></textarea><input v-else v-model="variableDraft.value" :type="variableDraft.sensitive ? 'password' : 'text'" placeholder="变量值"></label>
             <label class="figma-variable-modal__field"><span>说明</span><input v-model="variableDraft.description" placeholder="描述该变量的用途、注意事项"></label>
-            <div class="figma-variable-modal__enabled"><span>是否启用</span><button type="button" class="figma-variable__toggle" :class="{ 'is-on': variableDraft.enabled !== false }" @click="variableDraft.enabled = variableDraft.enabled === false"><i /></button><small>{{ variableDraft.enabled === false ? '已停用' : '已启用' }}</small></div>
+            <div class="figma-variable-modal__enabled"><span>是否启用</span><AppFigmaSwitch :model-value="variableDraft.enabled !== false" size="regular" label="是否启用" @update:model-value="variableDraft.enabled = $event" /><small>{{ variableDraft.enabled === false ? '已停用' : '已启用' }}</small></div>
             <div v-if="variableDraft.sensitive" class="figma-variable-modal__warning"><AlertTriangle :size="13" /><span>敏感变量保存后，值将不再以明文展示。如需修改请重新输入。</span></div>
             <p v-if="variableError" class="figma-variable-modal__error">{{ variableError }}</p>
           </div>
@@ -868,7 +868,7 @@ watch(() => props.workspaceCode, () => {
             <label class="figma-variable-modal__field"><span>变量集名称 <em>*</em></span><input v-model="variableSetDraft.paramName" placeholder="请输入变量集名称"></label>
             <div class="figma-variable-modal__field"><span>适用范围</span><div class="figma-variable-modal__scope-options"><button v-for="item in variableSetTypeOptions" :key="item.value" type="button" :class="{ 'is-active': variableSetDraft.paramType === item.value }" @click="variableSetDraft.paramType = item.value">{{ item.label }}</button></div></div>
             <label class="figma-variable-modal__field"><span>描述</span><textarea v-model="variableSetDraft.description" rows="4" placeholder="说明变量集的用途和包含内容"></textarea></label>
-            <div class="figma-variable-modal__enabled"><span>是否启用</span><button type="button" class="figma-variable__toggle" :class="{ 'is-on': variableSetDraft.status === 1 }" @click="variableSetDraft.status = variableSetDraft.status === 1 ? 0 : 1"><i /></button><small>{{ variableSetDraft.status === 1 ? '已启用' : '已停用' }}</small></div>
+            <div class="figma-variable-modal__enabled"><span>是否启用</span><AppFigmaSwitch :model-value="variableSetDraft.status === 1" size="regular" label="是否启用" @update:model-value="variableSetDraft.status = $event ? 1 : 0" /><small>{{ variableSetDraft.status === 1 ? '已启用' : '已停用' }}</small></div>
             <p v-if="variableSetError" class="figma-variable-modal__error">{{ variableSetError }}</p>
           </div>
           <footer><button type="button" @click="variableSetDialogVisible = false">取消</button><button type="button" class="is-primary" :disabled="saving" @click="submitVariableSet">{{ saving ? '保存中...' : (variableSetDialogMode === 'create' ? '创建变量集' : '保存更改') }}</button></footer>
@@ -1089,10 +1089,6 @@ button { cursor: pointer; }
 .figma-variable__type.is-secret { background: #ffe8e8; color: var(--variable-danger); }
 .figma-variable__type.is-json { background: #fff3e8; color: var(--variable-warning); }
 .figma-variable__description { display: block; overflow: hidden; color: #86909c; text-overflow: ellipsis; white-space: nowrap; }
-.figma-variable__toggle { position: relative; width: 32px; height: 16px; padding: 0; border: 0; border-radius: 999px; background: #c9cdd4; vertical-align: middle; }
-.figma-variable__toggle span, .figma-variable__toggle i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); transition: left 140ms ease; }
-.figma-variable__toggle.is-on { background: var(--variable-primary); }
-.figma-variable__toggle.is-on span, .figma-variable__toggle.is-on i { left: 18px; }
 .figma-variable__updated { display: grid; color: #86909c; font-size: 11px; line-height: 16.5px; }
 .figma-variable__updated small { color: #c9cdd4; font-size: 10px; line-height: 15px; }
 .figma-variable__row-actions { display: flex; justify-content: flex-end; }

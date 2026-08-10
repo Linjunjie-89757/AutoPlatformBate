@@ -11,15 +11,18 @@ public class WorkspaceService {
     private final WorkspaceAccessSupport workspaceAccessSupport;
     private final WorkspaceMemberDomainService workspaceMemberDomainService;
     private final WorkspaceDomainService workspaceDomainService;
+    private final WorkspaceRoleDomainService workspaceRoleDomainService;
 
     public WorkspaceService(
             WorkspaceAccessSupport workspaceAccessSupport,
             WorkspaceDomainService workspaceDomainService,
-            WorkspaceMemberDomainService workspaceMemberDomainService
+            WorkspaceMemberDomainService workspaceMemberDomainService,
+            WorkspaceRoleDomainService workspaceRoleDomainService
     ) {
         this.workspaceAccessSupport = workspaceAccessSupport;
         this.workspaceDomainService = workspaceDomainService;
         this.workspaceMemberDomainService = workspaceMemberDomainService;
+        this.workspaceRoleDomainService = workspaceRoleDomainService;
     }
 
     public List<WorkspaceItem> listAll() {
@@ -86,6 +89,14 @@ public class WorkspaceService {
 
     public void deleteMember(String workspaceCode, Long memberId) {
         workspaceMemberDomainService.deleteMember(workspaceCode, memberId);
+    }
+
+    public List<WorkspaceRoleItem> listRoles(String workspaceCode) {
+        return workspaceRoleDomainService.listRoles(workspaceCode);
+    }
+
+    public WorkspaceRoleItem createRole(String workspaceCode, CreateWorkspaceRoleRequest request) {
+        return workspaceRoleDomainService.createRole(workspaceCode, request);
     }
 
     public List<WorkspaceEntity> listReadableWorkspaceEntities() {

@@ -17,6 +17,7 @@ import DefectDetailPage from '@/pages/defects/DefectDetailPage.vue'
 import DefectsPage from '@/pages/defects/DefectsPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage.vue'
+import ProfileSettingsPage from '@/pages/profile/ProfileSettingsPage.vue'
 import ReportCenterPage from '@/pages/reports/ReportCenterPage.vue'
 import ReportSharePage from '@/pages/reports/ReportSharePage.vue'
 import SystemSettingsPage from '@/pages/system-settings/SystemSettingsPage.vue'
@@ -82,6 +83,15 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '系统设置',
           description: '管理 AI 连接、工作空间、成员与用户账号。',
+        },
+      },
+      {
+        path: 'profile',
+        name: 'profile-settings',
+        component: ProfileSettingsPage,
+        meta: {
+          title: '个人设置',
+          description: '维护个人资料、安全设置、操作偏好、通知偏好和主题外观。',
         },
       },
       {

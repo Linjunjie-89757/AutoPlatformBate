@@ -28,7 +28,7 @@ import {
   type MockScenarioItem,
 } from '@/entities/config'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { confirmAction, confirmDelete } from '@/shared/ui'
+import { AppFigmaSwitch, confirmAction, confirmDelete } from '@/shared/ui'
 import ConfigReferenceDrawer from '@/widgets/config-reference-drawer/ConfigReferenceDrawer.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -913,7 +913,7 @@ onMounted(() => {
         </div>
         <div class="figma-mock-credential-field">
           <div><strong>启用访问凭据</strong><p>启用后调用 Mock 接口需携带 Token，提升安全性</p></div>
-          <el-switch :model-value="false" disabled title="后端暂未提供应用级 Token 配置字段" />
+          <AppFigmaSwitch :model-value="false" label="启用访问凭据" disabled title="后端暂未提供应用级 Token 配置字段" />
         </div>
         <label v-if="appDialogMode === 'edit'">
           <span>状态</span>
@@ -2315,25 +2315,6 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 400;
   line-height: 16.5px;
-}
-
-.figma-mock-app-form .figma-mock-credential-field :deep(.el-switch) {
-  height: 14px;
-  opacity: 1;
-  --el-switch-off-color: #c9cdd4;
-}
-
-.figma-mock-app-form .figma-mock-credential-field :deep(.el-switch__core) {
-  width: 28px;
-  min-width: 28px;
-  height: 14px;
-  border: 0;
-}
-
-.figma-mock-app-form .figma-mock-credential-field :deep(.el-switch__action) {
-  left: 2px;
-  width: 10px;
-  height: 10px;
 }
 
 :deep(.figma-mock-app-dialog__cancel.el-button),

@@ -37,7 +37,10 @@ import {
   workspaceApi,
   type WorkspaceItem,
   type WorkspaceMemberItem,
+  type WorkspaceMemberRoleItem,
+  type WorkspaceRoleItem,
 } from '@/entities/workspace'
+import roleDialogCloseIcon from '@/shared/assets/figma-icons/system-settings/role-dialog-close.svg'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import {
   type AppTableColumnDefinition,
@@ -76,10 +79,11 @@ interface SettingsUser extends Record<string, unknown> {
   email: string
   platformRoleCode: string
   workspaceRoleCode: string
+  memberType: string
+  businessRoles: WorkspaceMemberRoleItem[]
   workspaceCodes: string[]
   name: string
   account: string
-  role: string
   status: UserStatus
   lastLogin: string
   avatar: string
@@ -87,7 +91,8 @@ interface SettingsUser extends Record<string, unknown> {
 
 interface SettingsRole {
   id: string
-  roleCode: 'ADMIN' | 'MEMBER'
+  backendId: number | null
+  roleCode: string
   name: string
   desc: string
   members: number | null
@@ -136,6 +141,10 @@ const palette = {
 const activePage = ref<SettingsPage>('home')
 const { currentUser } = useSession()
 const { selectedWorkspaceCode } = useWorkspaceContext()
+const canManagePlatformAccounts = computed(() => {
+  const roleCode = String(currentUser.value?.roleCode || '').toUpperCase()
+  return ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN'].includes(roleCode)
+})
 const workspaceForm = reactive({
   name: '',
   description: '',
@@ -149,6 +158,7 @@ const workspaceForm = reactive({
 })
 
 const userKeyword = ref('')
+const identityFilter = ref('all')
 const roleFilter = ref('all')
 const statusFilter = ref('all')
 const inviteDialogVisible = ref(false)
@@ -165,12 +175,20 @@ const usersLoading = ref(false)
 const usersError = ref('')
 const usersSaving = ref(false)
 let usersRequestSeq = 0
+const customRoles = ref<SettingsRole[]>([])
+const rolesLoading = ref(false)
+const roleDialogVisible = ref(false)
+const roleSaving = ref(false)
+const roleForm = reactive({
+  name: '',
+  description: '',
+})
 
 const inviteForm = reactive({
   account: '',
   name: '',
-  role: '测试工程师',
-  workspace: 'X-MAN',
+  memberType: 'MEMBER' as 'ADMIN' | 'MEMBER',
+  roleIds: [] as number[],
   note: '',
   active: true,
 })
@@ -180,9 +198,10 @@ const users = ref<SettingsUser[]>([])
 const userTableColumns: AppTableColumnDefinition[] = [
   { key: 'member', label: '成员', minWidth: 150, required: true, defaultVisible: true },
   { key: 'account', label: '账号', minWidth: 250, defaultVisible: true },
-  { key: 'role', label: '角色', minWidth: 140, defaultVisible: true },
+  { key: 'identity', label: '工作区身份', minWidth: 120, defaultVisible: true },
+  { key: 'roles', label: '业务角色', minWidth: 190, defaultVisible: true },
   { key: 'status', label: '状态', minWidth: 108, defaultVisible: true },
-  { key: 'lastLogin', label: '最近登录', minWidth: 207, defaultVisible: true },
+  { key: 'lastLogin', label: '最近登录', minWidth: 150, defaultVisible: true },
 ]
 const userColumnSettings = useTableColumnSettings({
   columns: userTableColumns,
@@ -198,34 +217,10 @@ const userOperationActionCount = 3
 const userOperationColumnWidth = getAppFigmaActionColumnWidth(userOperationActionCount)
 
 const roles = computed<SettingsRole[]>(() => {
-  const memberCount = (roleCode: 'ADMIN' | 'MEMBER') => {
-    if (usersError.value) return null
-    return users.value.filter(user => user.workspaceRoleCode === roleCode).length
-  }
-
-  return [
-    {
-      id: 'R1',
-      roleCode: 'ADMIN',
-      name: '测试负责人',
-      desc: '后台固定工作空间管理员角色，负责成员和工作空间管理',
-      members: memberCount('ADMIN'),
-      permCount: null,
-      updatedAt: '—',
-      isSystem: true,
-    },
-    {
-      id: 'R2',
-      roleCode: 'MEMBER',
-      name: '测试工程师',
-      desc: '后台固定工作空间成员角色，使用平台统一成员权限',
-      members: memberCount('MEMBER'),
-      permCount: null,
-      updatedAt: '—',
-      isSystem: true,
-    },
-  ]
+  return customRoles.value
 })
+
+const roleCreateDisabled = computed(() => roleSaving.value || !roleForm.name.trim())
 
 const auditKeyword = ref('')
 const auditTypeFilter = ref('all')
@@ -277,6 +272,7 @@ watch([auditTypeFilter, auditResultFilter], () => {
 
 watch(activePage, (page) => {
   if (page === 'audit') void loadAuditRecords()
+  if (page === 'roles') void loadRoles()
 })
 
 const permissionModules: PermissionModule[] = [
@@ -329,9 +325,12 @@ const roleIconMap: Record<string, Component> = {
   只读访客: Eye,
 }
 
-const workspaceRoleCodeByLabel: Record<string, 'ADMIN' | 'MEMBER'> = {
-  测试负责人: 'ADMIN',
-  测试工程师: 'MEMBER',
+function roleVisualColor(roleName: string) {
+  return roleColorMap[roleName] || palette.textSecondary
+}
+
+function roleVisualBackground(roleName: string) {
+  return roleBgMap[roleName] || '#F2F3F5'
 }
 
 const quickCards = computed(() => [
@@ -344,6 +343,7 @@ const quickCards = computed(() => [
 function mapSettingsUser(user: UserItem, member?: WorkspaceMemberItem): SettingsUser {
   const platformRoleCode = String(user.roleCode || 'MEMBER').toUpperCase()
   const workspaceRoleCode = String(member?.roleCode || (platformRoleCode === 'ADMIN' ? 'ADMIN' : 'MEMBER')).toUpperCase()
+  const memberType = String(member?.memberType || workspaceRoleCode).toUpperCase()
   const name = user.displayName || user.username
   return {
     id: String(user.id),
@@ -353,10 +353,11 @@ function mapSettingsUser(user: UserItem, member?: WorkspaceMemberItem): Settings
     email: user.email,
     platformRoleCode,
     workspaceRoleCode,
+    memberType,
+    businessRoles: [...(member?.roles || [])],
     workspaceCodes: [...(user.workspaceCodes || [])],
     name,
     account: user.email || user.username,
-    role: workspaceRoleCode === 'ADMIN' ? '测试负责人' : '测试工程师',
     status: Number(user.status) === 1 ? 'active' : 'disabled',
     lastLogin: '—',
     avatar: name.slice(0, 1) || user.username.slice(0, 1) || '用',
@@ -388,8 +389,41 @@ async function loadUsers() {
   }
 }
 
-function resolveWorkspaceRoleCode(roleLabel: string) {
-  return workspaceRoleCodeByLabel[roleLabel] || null
+function formatRoleUpdatedAt(value?: string | null) {
+  if (!value) return '—'
+  const normalized = value.replace('T', ' ')
+  return normalized.length >= 10 ? normalized.slice(0, 10) : normalized
+}
+
+function mapWorkspaceRole(role: WorkspaceRoleItem): SettingsRole {
+  return {
+    id: String(role.id),
+    backendId: role.id,
+    roleCode: role.roleCode,
+    name: role.name,
+    desc: role.description || '未填写角色描述',
+    members: role.memberCount,
+    permCount: role.permissionCount,
+    updatedAt: formatRoleUpdatedAt(role.updatedAt),
+    isSystem: role.system,
+  }
+}
+
+async function loadRoles() {
+  const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+  if (workspaceCode === 'ALL') {
+    customRoles.value = []
+    return
+  }
+  rolesLoading.value = true
+  try {
+    customRoles.value = (await workspaceApi.getWorkspaceRoles(workspaceCode)).map(mapWorkspaceRole)
+  } catch (error) {
+    customRoles.value = []
+    if (activePage.value === 'roles') ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    rolesLoading.value = false
+  }
 }
 
 function currentConcreteWorkspaceCode() {
@@ -462,7 +496,8 @@ function preventUnsupportedWorkspaceSelect(event: KeyboardEvent, setting: string
 const filteredUsers = computed(() => users.value.filter((item) => {
   const keyword = userKeyword.value.trim()
   if (keyword && !item.name.includes(keyword) && !item.account.includes(keyword)) return false
-  if (roleFilter.value !== 'all' && item.role !== roleFilter.value) return false
+  if (identityFilter.value !== 'all' && item.memberType !== identityFilter.value) return false
+  if (roleFilter.value !== 'all' && !item.businessRoles.some(role => role.roleCode === roleFilter.value)) return false
   if (statusFilter.value !== 'all' && item.status !== statusFilter.value) return false
   return true
 }))
@@ -476,16 +511,18 @@ const {
   resetPage: resetUserPage,
 } = useLocalPagedTable(filteredUsers, { initialPageSize: 10 })
 
-watch([userKeyword, roleFilter, statusFilter], resetUserPage)
+watch([userKeyword, identityFilter, roleFilter, statusFilter], resetUserPage)
 watch(selectedWorkspaceCode, () => {
   resetUserPage()
   inviteDialogVisible.value = false
   editingUser.value = null
   confirmToggleUser.value = null
+  roleDialogVisible.value = false
   auditPageNo.value = 1
   window.clearTimeout(auditSearchTimer)
   void loadWorkspace()
   void loadUsers()
+  void loadRoles()
   if (activePage.value === 'audit') void loadAuditRecords()
 }, { immediate: true })
 
@@ -610,11 +647,31 @@ function getUserTableRowClass({ row }: { row: SettingsUser }) {
   return row.status === 'disabled' ? 'is-muted' : ''
 }
 
+function getWorkspaceIdentityLabel(user: SettingsUser) {
+  if (user.memberType === 'OWNER') return '工作区负责人'
+  if (user.memberType === 'ADMIN') return '管理员'
+  return '普通成员'
+}
+
+function getWorkspaceIdentityClass(user: SettingsUser) {
+  if (user.memberType === 'OWNER') return 'is-owner'
+  if (user.memberType === 'ADMIN') return 'is-admin'
+  return 'is-member'
+}
+
+function defaultRoleIds(memberType: 'ADMIN' | 'MEMBER') {
+  const defaultRoleCode = memberType === 'ADMIN' ? 'SYSTEM_TEST_LEAD' : 'SYSTEM_TEST_ENGINEER'
+  const defaultRole = roles.value.find(role => role.roleCode === defaultRoleCode && role.backendId != null)
+  return defaultRole?.backendId == null ? [] : [defaultRole.backendId]
+}
+
 function resetInviteForm(user?: SettingsUser) {
   inviteForm.account = user?.account || ''
   inviteForm.name = user?.name || ''
-  inviteForm.role = user?.role || '测试工程师'
-  inviteForm.workspace = selectedWorkspaceCode.value || 'ALL'
+  inviteForm.memberType = user?.memberType === 'ADMIN' || user?.memberType === 'OWNER' ? 'ADMIN' : 'MEMBER'
+  inviteForm.roleIds = user
+    ? user.businessRoles.map(role => role.id)
+    : defaultRoleIds('MEMBER')
   inviteForm.note = ''
   inviteForm.active = user?.status !== 'disabled'
 }
@@ -631,17 +688,22 @@ function openEditUserDialog(user: SettingsUser) {
   inviteDialogVisible.value = true
 }
 
+function handleInviteMemberTypeChange() {
+  if (inviteForm.memberType === 'MEMBER' && inviteForm.roleIds.length === 0) {
+    inviteForm.roleIds = defaultRoleIds('MEMBER')
+  }
+}
+
 async function submitInviteDialog() {
   if (usersSaving.value) return
   const account = inviteForm.account.trim()
   const displayName = inviteForm.name.trim()
-  const workspaceRoleCode = resolveWorkspaceRoleCode(inviteForm.role)
   if (!account) {
     ElMessage.warning('请输入账号或邮箱')
     return
   }
-  if (!workspaceRoleCode) {
-    ElMessage.warning('后台暂不支持“开发人员”和“只读访客”工作空间角色')
+  if (inviteForm.memberType === 'MEMBER' && inviteForm.roleIds.length === 0) {
+    ElMessage.warning('普通成员至少需要分配一个业务角色')
     return
   }
 
@@ -650,19 +712,24 @@ async function submitInviteDialog() {
     if (editingUser.value) {
       const target = editingUser.value
       const workspaceCode = selectedWorkspaceCode.value || 'ALL'
-      if (target.memberId != null && target.memberId < 0 && workspaceCode !== 'ALL' && workspaceRoleCode !== 'ADMIN') {
-        ElMessage.warning('平台管理员默认拥有全部工作空间，不能在单个工作空间内降级角色')
+      if (target.memberId != null && target.memberId < 0 && workspaceCode !== 'ALL') {
+        ElMessage.warning('平台管理员默认拥有全部工作区，不能在单个工作区内调整身份和业务角色')
         return
       }
-      await userApi.updateUser(target.userId, {
-        email: account,
-        displayName: displayName || target.name,
-        roleCode: workspaceCode === 'ALL' ? workspaceRoleCode : target.platformRoleCode,
-        status: inviteForm.active ? 1 : 0,
-        workspaceCodes: target.workspaceCodes,
-      })
-      if (workspaceCode !== 'ALL' && target.memberId != null && target.memberId > 0 && workspaceRoleCode !== target.workspaceRoleCode) {
-        await workspaceApi.updateWorkspaceMember(workspaceCode, target.memberId, { roleCode: workspaceRoleCode })
+      if (canManagePlatformAccounts.value) {
+        await userApi.updateUser(target.userId, {
+          email: account,
+          displayName: displayName || target.name,
+          roleCode: target.platformRoleCode,
+          status: inviteForm.active ? 1 : 0,
+          workspaceCodes: target.workspaceCodes,
+        })
+      }
+      if (workspaceCode !== 'ALL' && target.memberId != null && target.memberId > 0) {
+        await workspaceApi.updateWorkspaceMember(workspaceCode, target.memberId, {
+          memberType: inviteForm.memberType,
+          roleIds: [...inviteForm.roleIds],
+        })
       }
       ElMessage.success('成员信息已保存')
     } else {
@@ -676,6 +743,10 @@ async function submitInviteDialog() {
         return
       }
       if (!target) {
+        if (!canManagePlatformAccounts.value) {
+          ElMessage.warning('该账号尚未创建，请联系超级管理员先创建平台账号')
+          return
+        }
         if (!account.includes('@')) {
           ElMessage.warning('创建新账号时请输入邮箱；已有账号可直接输入用户名')
           return
@@ -691,16 +762,7 @@ async function submitInviteDialog() {
           roleCode: 'MEMBER',
           workspaceCodes: [workspaceCode],
         })
-      } else {
-        target = await userApi.updateUser(target.id, {
-          email: target.email,
-          displayName: displayName || target.displayName || target.username,
-          roleCode: target.roleCode,
-          status: inviteForm.active ? 1 : 0,
-          workspaceCodes: [...new Set([...(target.workspaceCodes || []), workspaceCode])],
-        })
-      }
-      if (!inviteForm.active && Number(target.status) !== 0) {
+      } else if (canManagePlatformAccounts.value && !inviteForm.active && Number(target.status) !== 0) {
         target = await userApi.updateUser(target.id, {
           email: target.email,
           displayName: target.displayName,
@@ -709,16 +771,15 @@ async function submitInviteDialog() {
           workspaceCodes: target.workspaceCodes,
         })
       }
-      if (workspaceRoleCode === 'ADMIN') {
-        const members = await workspaceApi.getWorkspaceMembers(workspaceCode)
-        const member = members.find(item => item.userId === target.id)
-        if (!member || member.id < 0) throw new Error('成员已创建，但工作空间角色无法调整')
-        await workspaceApi.updateWorkspaceMember(workspaceCode, member.id, { roleCode: 'ADMIN' })
-      }
+      await workspaceApi.createWorkspaceMember(workspaceCode, {
+        userId: target.id,
+        memberType: inviteForm.memberType,
+        roleIds: [...inviteForm.roleIds],
+      })
       ElMessage.success('成员已添加；当前后台未提供邀请邮件发送能力')
     }
     inviteDialogVisible.value = false
-    await loadUsers()
+    await Promise.all([loadUsers(), loadRoles()])
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
@@ -743,7 +804,7 @@ async function removeUser(user: SettingsUser) {
       },
     })
     ElMessage.success('成员已移出当前工作空间')
-    await loadUsers()
+    await Promise.all([loadUsers(), loadRoles()])
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') ElMessage.error(getRequestErrorMessage(error))
   }
@@ -752,6 +813,10 @@ async function removeUser(user: SettingsUser) {
 async function confirmToggleUserStatus() {
   const target = confirmToggleUser.value
   if (!target || usersSaving.value) return
+  if (!canManagePlatformAccounts.value) {
+    ElMessage.warning('只有超级管理员或平台管理员可以修改全局账号状态')
+    return
+  }
   usersSaving.value = true
   try {
     await userApi.updateUser(target.userId, {
@@ -772,7 +837,37 @@ async function confirmToggleUserStatus() {
 }
 
 function openRoleDialog() {
-  ElMessage.warning('当前后台仅支持固定的 ADMIN/MEMBER 工作空间角色，尚未提供自定义角色新增接口')
+  if (!currentConcreteWorkspaceCode()) return
+  roleForm.name = ''
+  roleForm.description = ''
+  roleDialogVisible.value = true
+}
+
+function closeRoleDialog() {
+  if (roleSaving.value) return
+  roleDialogVisible.value = false
+}
+
+async function submitRoleDialog() {
+  if (roleCreateDisabled.value) return
+  const workspaceCode = currentConcreteWorkspaceCode()
+  if (!workspaceCode) return
+  roleSaving.value = true
+  try {
+    const created = await workspaceApi.createWorkspaceRole(workspaceCode, {
+      name: roleForm.name.trim(),
+      description: roleForm.description.trim() || null,
+    })
+    customRoles.value.push(mapWorkspaceRole(created))
+    roleDialogVisible.value = false
+    roleForm.name = ''
+    roleForm.description = ''
+    ElMessage.success('角色创建成功')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    roleSaving.value = false
+  }
 }
 
 function editRole() {
@@ -898,8 +993,7 @@ function notifyPermissionBackendGap() {
             <span><strong>8</strong><small>模块</small></span>
             <i />
             <span class="settings-workspace-banner__health">
-              <em />
-              <strong>系统正常</strong>
+              <strong><em />系统正常</strong>
               <small>所有服务在线</small>
             </span>
           </div>
@@ -1053,9 +1147,15 @@ function notifyPermissionBackendGap() {
             <Search />
             <input v-model="userKeyword" placeholder="搜索姓名或账号" type="text">
           </label>
+          <select v-model="identityFilter">
+            <option value="all">全部身份</option>
+            <option value="OWNER">工作区负责人</option>
+            <option value="ADMIN">管理员</option>
+            <option value="MEMBER">普通成员</option>
+          </select>
           <select v-model="roleFilter">
             <option value="all">全部角色</option>
-            <option v-for="role in roles" :key="role.id" :value="role.name">{{ role.name }}</option>
+            <option v-for="role in roles" :key="role.id" :value="role.roleCode">{{ role.name }}</option>
           </select>
           <select v-model="statusFilter">
             <option value="all">全部状态</option>
@@ -1101,12 +1201,26 @@ function notifyPermissionBackendGap() {
                 {{ user.account }}
               </span>
               <em
-                v-else-if="column.key === 'role'"
-                class="settings-role-tag"
-                :style="{ color: roleColorMap[user.role], background: roleBgMap[user.role] }"
+                v-else-if="column.key === 'identity'"
+                class="settings-identity-tag"
+                :class="getWorkspaceIdentityClass(user)"
               >
-                {{ user.role }}
+                {{ getWorkspaceIdentityLabel(user) }}
               </em>
+              <span v-else-if="column.key === 'roles'" class="settings-role-tags">
+                <em
+                  v-for="role in user.businessRoles.slice(0, 2)"
+                  :key="role.id"
+                  class="settings-role-tag"
+                  :style="{ color: roleVisualColor(role.name), background: roleVisualBackground(role.name) }"
+                >
+                  {{ role.name }}
+                </em>
+                <em v-if="user.businessRoles.length > 2" class="settings-role-tag is-more">
+                  +{{ user.businessRoles.length - 2 }}
+                </em>
+                <small v-if="user.businessRoles.length === 0" class="settings-role-empty">未分配</small>
+              </span>
               <span v-else-if="column.key === 'status'" class="settings-status-cell">
                 <i :class="{ 'is-disabled': user.status === 'disabled' }" />
                 {{ user.status === 'active' ? '已启用' : '已禁用' }}
@@ -1137,7 +1251,7 @@ function notifyPermissionBackendGap() {
                 type="button"
                 :title="user.status === 'active' ? '禁用账号' : '启用账号'"
                 :aria-label="user.status === 'active' ? '禁用账号' : '启用账号'"
-                :disabled="usersSaving"
+                :disabled="usersSaving || !canManagePlatformAccounts"
                 @click.stop="confirmToggleUser = user"
               >
                 <Power />
@@ -1171,7 +1285,7 @@ function notifyPermissionBackendGap() {
             <header>
               <span
                 class="settings-role-card__icon"
-                :style="{ color: roleColorMap[role.name], background: roleBgMap[role.name] }"
+                :style="{ color: roleVisualColor(role.name), background: roleVisualBackground(role.name) }"
               >
                 <component :is="roleIconMap[role.name] || Shield" />
               </span>
@@ -1194,7 +1308,7 @@ function notifyPermissionBackendGap() {
               <span><em>{{ role.updatedAt }}</em><small>最近更新</small></span>
               <button
                 type="button"
-                :style="{ color: roleColorMap[role.name], borderColor: roleColorMap[role.name] }"
+                :style="{ color: roleVisualColor(role.name), borderColor: roleVisualColor(role.name) }"
                 @click="gotoPermission(role)"
               >
                 配置权限
@@ -1368,6 +1482,51 @@ function notifyPermissionBackendGap() {
       </section>
     </main>
 
+    <div v-if="roleDialogVisible" class="settings-modal-backdrop" @click="closeRoleDialog" />
+    <section
+      v-if="roleDialogVisible"
+      class="settings-modal settings-role-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-role-modal-title"
+    >
+      <form class="settings-role-modal__panel" @submit.prevent="submitRoleDialog">
+        <header class="settings-role-modal__header">
+          <h3 id="settings-role-modal-title">新建角色</h3>
+          <button type="button" aria-label="关闭" :disabled="roleSaving" @click="closeRoleDialog">
+            <img :src="roleDialogCloseIcon" alt="">
+          </button>
+        </header>
+        <div class="settings-role-modal__body">
+          <label class="settings-role-modal__field is-name-field">
+            <span>角色名称 <em>*</em></span>
+            <input
+              v-model="roleForm.name"
+              type="text"
+              maxlength="128"
+              placeholder="例：高级测试工程师"
+              autocomplete="off"
+            >
+          </label>
+          <label class="settings-role-modal__field is-description-field">
+            <span>角色描述</span>
+            <textarea
+              v-model="roleForm.description"
+              maxlength="500"
+              placeholder="描述该角色的职责范围"
+            />
+          </label>
+          <div class="settings-role-modal__info">创建后可在「权限配置」中为该角色分配具体权限。</div>
+        </div>
+        <footer class="settings-role-modal__footer">
+          <button class="settings-role-modal__cancel" type="button" :disabled="roleSaving" @click="closeRoleDialog">取消</button>
+          <button class="settings-role-modal__submit" type="submit" :disabled="roleCreateDisabled">
+            {{ roleSaving ? '创建中...' : '创建角色' }}
+          </button>
+        </footer>
+      </form>
+    </section>
+
     <AppTableColumnSettingsDrawer
       :model-value="userColumnSettings.drawerVisible.value"
       title="字段展示"
@@ -1410,25 +1569,57 @@ function notifyPermissionBackendGap() {
           <div class="settings-modal-grid">
             <label class="settings-field">
               <span>账号 / 邮箱 <em>*</em></span>
-              <input v-model="inviteForm.account" placeholder="name@company.com" type="text">
+              <input
+                v-model="inviteForm.account"
+                placeholder="name@company.com"
+                type="text"
+                :readonly="Boolean(editingUser) && !canManagePlatformAccounts"
+              >
             </label>
             <label class="settings-field">
               <span>姓名</span>
-              <input v-model="inviteForm.name" placeholder="显示名称" type="text">
+              <input
+                v-model="inviteForm.name"
+                placeholder="显示名称"
+                type="text"
+                :readonly="Boolean(editingUser) && !canManagePlatformAccounts"
+              >
             </label>
           </div>
           <div class="settings-modal-grid">
             <label class="settings-field">
-              <span>分配角色 <em>*</em></span>
-              <select v-model="inviteForm.role">
-                <option v-for="role in roles" :key="role.id">{{ role.name }}</option>
-              </select>
+              <span>业务角色 <em v-if="inviteForm.memberType === 'MEMBER'">*</em></span>
+              <el-select
+                v-model="inviteForm.roleIds"
+                class="settings-role-multi-select"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                :max-collapse-tags="2"
+                placeholder="请选择业务角色"
+              >
+                <el-option
+                  v-for="role in roles"
+                  :key="role.id"
+                  :label="role.name"
+                  :value="role.backendId"
+                  :disabled="role.backendId == null"
+                />
+              </el-select>
             </label>
             <label class="settings-field">
-              <span>所属工作区</span>
-              <input v-model="inviteForm.workspace" type="text" readonly>
+              <span>工作区身份 <em>*</em></span>
+              <select v-model="inviteForm.memberType" @change="handleInviteMemberTypeChange">
+                <option value="MEMBER">普通成员</option>
+                <option value="ADMIN">管理员</option>
+              </select>
             </label>
           </div>
+          <p class="settings-member-permission-tip">
+            {{ inviteForm.memberType === 'ADMIN'
+              ? '管理员默认拥有当前工作区全部权限，业务角色仅用于职责标识。'
+              : '普通成员的实际权限由所分配业务角色共同决定。' }}
+          </p>
           <label class="settings-field">
             <span>备注</span>
             <textarea v-model="inviteForm.note" placeholder="可选" rows="3" />
@@ -1439,7 +1630,8 @@ function notifyPermissionBackendGap() {
               class="settings-switch"
               :class="{ 'is-on': inviteForm.active }"
               type="button"
-              @click="inviteForm.active = !inviteForm.active"
+              :disabled="!canManagePlatformAccounts"
+              @click="canManagePlatformAccounts && (inviteForm.active = !inviteForm.active)"
             >
               <span />
             </button>
@@ -1504,21 +1696,23 @@ function notifyPermissionBackendGap() {
   flex: 0 0 216px;
   flex-direction: column;
   overflow-y: auto;
-  padding: 16px 0;
+  padding: 14px 0;
   border-right: 1px solid #e5e6eb;
   background: #fff;
 }
 
 .system-settings-nav__section {
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .system-settings-nav__label {
-  padding: 6px 16px;
+  height: 25.5px;
+  box-sizing: border-box;
+  padding: 5.25px 14px;
   color: #c9cdd4;
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 1px;
   line-height: 15px;
 }
 
@@ -1527,15 +1721,17 @@ function notifyPermissionBackendGap() {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
+  height: 33.5px;
+  box-sizing: border-box;
+  gap: 8.75px;
+  padding: 7px 14px;
   border: 0;
   background: transparent;
   color: #4e5969;
   cursor: pointer;
   font-size: 13px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 19.5px;
   text-align: left;
 }
 
@@ -1561,10 +1757,10 @@ function notifyPermissionBackendGap() {
 
 .system-settings-nav__active-bar {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 3.5px;
+  bottom: 3.5px;
   left: 0;
-  width: 2px;
+  width: 1.75px;
   border-radius: 0 999px 999px 0;
   background: #334155;
 }
@@ -1577,26 +1773,31 @@ function notifyPermissionBackendGap() {
 
 .settings-narrow {
   max-width: 900px;
-  padding: 24px;
+  box-sizing: border-box;
+  padding: 21px;
 }
 
 .settings-workspace-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
-  padding: 24px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #1d2129 0%, #2d3748 100%);
+  height: 115px;
+  box-sizing: border-box;
+  padding: 21px;
+  border-radius: 14px;
+  background: linear-gradient(172.365993deg, #1d2129 0%, #2d3748 100%);
   color: #fff;
 }
 
 .settings-workspace-banner__copy {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  width: 206.0625px;
+  height: 73px;
+  flex-direction: column;
 }
 
 .settings-workspace-banner__copy span {
+  height: 15px;
   color: rgba(255, 255, 255, 0.45);
   font-size: 10px;
   letter-spacing: 0.12em;
@@ -1604,6 +1805,9 @@ function notifyPermissionBackendGap() {
 }
 
 .settings-workspace-banner__copy strong {
+  height: 31px;
+  box-sizing: border-box;
+  padding-top: 7px;
   font-size: 24px;
   font-weight: 700;
   line-height: 24px;
@@ -1612,19 +1816,31 @@ function notifyPermissionBackendGap() {
 .settings-workspace-banner__copy small,
 .settings-workspace-banner__stats small {
   color: rgba(255, 255, 255, 0.55);
+}
+
+.settings-workspace-banner__copy small {
+  height: 27px;
+  box-sizing: border-box;
+  padding-top: 7px;
   font-size: 13px;
-  line-height: 20px;
+  line-height: 19.5px;
 }
 
 .settings-workspace-banner__stats {
   display: flex;
+  width: 231px;
+  height: 46.5px;
   align-items: center;
-  gap: 24px;
+  gap: 21px;
 }
 
 .settings-workspace-banner__stats > span {
-  display: grid;
-  justify-items: center;
+  display: flex;
+  width: 22px;
+  height: 46.5px;
+  flex: 0 0 22px;
+  flex-direction: column;
+  align-items: center;
 }
 
 .settings-workspace-banner__stats strong {
@@ -1634,19 +1850,38 @@ function notifyPermissionBackendGap() {
 }
 
 .settings-workspace-banner__stats > i {
-  width: 1px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.12);
+  width: 15px;
+  height: 35px;
+  flex: 0 0 15px;
+  background: linear-gradient(
+    to right,
+    transparent 7px,
+    rgba(255, 255, 255, 0.12) 7px,
+    rgba(255, 255, 255, 0.12) 8px,
+    transparent 8px
+  );
+}
+
+.settings-workspace-banner__stats > span:not(.settings-workspace-banner__health) small {
+  height: 20.5px;
+  box-sizing: border-box;
+  padding-top: 3.5px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  line-height: 16.5px;
 }
 
 .settings-workspace-banner__health {
-  justify-items: start !important;
+  width: 66px !important;
+  height: 38.75px !important;
+  flex: 0 0 66px !important;
+  align-items: flex-start !important;
 }
 
 .settings-workspace-banner__health em {
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
+  width: 7px;
+  height: 7px;
+  margin-right: 5.25px;
   border-radius: 999px;
   background: #00b42a;
 }
@@ -1656,15 +1891,26 @@ function notifyPermissionBackendGap() {
   align-items: center;
   font-size: 13px;
   font-weight: 500;
-  line-height: 20px;
+  height: 20px;
+  line-height: 19.5px;
+}
+
+.settings-workspace-banner__health small {
+  height: 18.75px;
+  box-sizing: border-box;
+  padding-top: 1.75px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  line-height: 16.5px;
 }
 
 .settings-current-user {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 24px;
-  padding: 0 4px;
+  height: 49px;
+  box-sizing: border-box;
+  gap: 0;
+  padding: 21px 3.5px 0;
 }
 
 .settings-avatar,
@@ -1684,8 +1930,10 @@ function notifyPermissionBackendGap() {
 }
 
 .settings-current-user strong {
+  margin-left: 8.75px;
   font-size: 13px;
   font-weight: 500;
+  line-height: 19.5px;
 }
 
 .settings-current-user em,
@@ -1703,37 +1951,102 @@ function notifyPermissionBackendGap() {
   line-height: 16.5px;
 }
 
-.settings-current-user small {
+.settings-current-user em {
+  margin-left: 7px;
+}
+
+.settings-role-tags {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.settings-role-tag {
+  max-width: 116px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-role-tag.is-more {
+  flex: 0 0 auto;
+  background: #f2f3f5;
   color: #86909c;
+}
+
+.settings-role-empty {
+  color: #c9cdd4;
   font-size: 12px;
 }
 
+.settings-identity-tag {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.settings-identity-tag.is-owner {
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.settings-identity-tag.is-admin {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.settings-identity-tag.is-member {
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.settings-current-user small {
+  margin-left: 9px;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .settings-section-label {
-  margin: 0 0 12px;
+  height: 38px;
+  box-sizing: border-box;
+  margin: 0;
+  padding-top: 21px;
   color: #c9cdd4;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  line-height: 17px;
+  letter-spacing: 1.1px;
+  line-height: 16.5px;
 }
 
 .settings-quick-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 24px;
+  height: 216px;
+  grid-template-rows: repeat(2, 102.75px);
+  gap: 10.5px;
+  margin-top: 10.5px;
 }
 
 .settings-quick-card {
   display: flex;
-  min-height: 102px;
+  height: 102.75px;
+  box-sizing: border-box;
   align-items: flex-start;
-  gap: 16px;
-  padding: 20px;
+  gap: 14px;
+  padding: 17.5px;
   border: 1px solid #e5e6eb;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   cursor: pointer;
   text-align: left;
 }
@@ -1745,11 +2058,11 @@ function notifyPermissionBackendGap() {
 
 .settings-quick-card__icon {
   display: inline-grid;
-  width: 40px;
-  height: 40px;
+  width: 35px;
+  height: 35px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 11px;
   background: var(--card-bg);
   color: var(--card-color);
 }
@@ -1763,19 +2076,21 @@ function notifyPermissionBackendGap() {
   display: grid;
   min-width: 0;
   flex: 1;
-  gap: 2px;
+  gap: 0;
 }
 
 .settings-quick-card__title {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 21px;
 }
 
 .settings-quick-card__title strong {
   color: #1d2129;
   font-size: 14px;
   font-weight: 600;
+  line-height: 21px;
 }
 
 .settings-quick-card__title svg {
@@ -1785,34 +2100,56 @@ function notifyPermissionBackendGap() {
 }
 
 .settings-quick-card__body small {
+  display: block;
+  height: 19.75px;
+  box-sizing: border-box;
+  padding-top: 1.75px;
   color: #86909c;
   font-size: 12px;
+  font-weight: 500;
   line-height: 18px;
 }
 
 .settings-quick-card__body em {
-  margin-top: 8px;
+  display: block;
+  height: 25px;
+  box-sizing: border-box;
+  padding-top: 7px;
   color: var(--card-color);
   font-size: 12px;
   font-style: normal;
   font-weight: 500;
+  line-height: 18px;
 }
 
 .settings-status-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 16px;
+  height: 66px;
+  box-sizing: border-box;
+  margin-top: 10.5px;
+  padding: 14px;
   border: 1px solid #e5e6eb;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #fff;
 }
 
 .settings-status-strip span {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 12px;
-  padding: 0 20px;
+  height: 37px;
+  box-sizing: border-box;
+  column-gap: 10.5px;
+  padding: 0 18.5px 0 0;
   border-right: 1px solid #e5e6eb;
+}
+
+.settings-status-strip span:not(:first-child) {
+  padding-left: 17.5px;
+}
+
+.settings-status-strip span:last-child {
+  padding-right: 0;
 }
 
 .settings-status-strip span:last-child {
@@ -1821,8 +2158,10 @@ function notifyPermissionBackendGap() {
 
 .settings-status-strip i,
 .settings-status-cell i {
-  width: 5.25px;
-  height: 5.25px;
+  width: 7px;
+  height: 7px;
+  grid-row: 1 / span 2;
+  align-self: center;
   border-radius: 999px;
   background: #00b42a;
 }
@@ -1831,13 +2170,14 @@ function notifyPermissionBackendGap() {
   color: #1d2129;
   font-size: 13px;
   font-weight: 500;
-  line-height: 20px;
+  line-height: 19.5px;
 }
 
 .settings-status-strip small {
   grid-column: 2;
   color: #86909c;
   font-size: 11px;
+  line-height: 16.5px;
 }
 
 .settings-form-page,
@@ -1936,6 +2276,12 @@ function notifyPermissionBackendGap() {
   padding: 0 12px;
 }
 
+.settings-field input[readonly] {
+  background: #f7f8fa;
+  color: #86909c;
+  cursor: default;
+}
+
 .settings-field textarea {
   height: 56px;
   padding-top: 8px;
@@ -2031,6 +2377,11 @@ function notifyPermissionBackendGap() {
 
 .settings-switch.is-on span {
   left: 18px;
+}
+
+.settings-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .settings-card-footer {
@@ -2757,6 +3108,233 @@ function notifyPermissionBackendGap() {
   background: #f0f9ff;
   color: #0369a1;
   font-size: 12px;
+}
+
+.settings-role-multi-select {
+  width: 100%;
+}
+
+.settings-field :deep(.settings-role-multi-select .el-select__wrapper) {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.settings-field :deep(.settings-role-multi-select .el-select__wrapper.is-focused) {
+  border-color: #165dff;
+  box-shadow: 0 0 0 1px #165dff inset;
+}
+
+.settings-field :deep(.settings-role-multi-select .el-tag) {
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-size: 11px;
+}
+
+.settings-member-permission-tip {
+  margin: -4px 0 0;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.settings-role-modal__panel {
+  width: 440px;
+  height: 354px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.16);
+  pointer-events: auto;
+}
+
+.settings-role-modal__header {
+  display: flex;
+  width: 440px;
+  height: 53.5px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 21px 15px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.settings-role-modal__header h3 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22.5px;
+}
+
+.settings-role-modal__header button {
+  display: inline-grid;
+  width: 24.5px;
+  height: 24.5px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.settings-role-modal__header button:hover {
+  background: #f2f3f5;
+}
+
+.settings-role-modal__header button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.settings-role-modal__header img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.settings-role-modal__body {
+  display: grid;
+  width: 440px;
+  height: 239.5px;
+  box-sizing: border-box;
+  grid-template-rows: 51.25px 84.25px 41px;
+  gap: 14px;
+  padding: 17.5px 21px;
+}
+
+.settings-role-modal__field {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  grid-template-rows: 23.25px auto;
+}
+
+.settings-role-modal__field > span {
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.settings-role-modal__field em {
+  color: #f53f3f;
+  font-style: normal;
+}
+
+.settings-role-modal__field input,
+.settings-role-modal__field textarea {
+  width: 398px;
+  box-sizing: border-box;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #1d2129;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  outline: none;
+}
+
+.settings-role-modal__field input {
+  height: 28px;
+  padding: 0 11.5px;
+  line-height: 19.5px;
+}
+
+.settings-role-modal__field textarea {
+  height: 56px;
+  padding: 8px 11.5px;
+  line-height: 19.5px;
+  resize: none;
+}
+
+.settings-role-modal__field input::placeholder,
+.settings-role-modal__field textarea::placeholder {
+  color: rgba(29, 33, 41, 0.5);
+  opacity: 1;
+}
+
+.settings-role-modal__field input:focus,
+.settings-role-modal__field textarea:focus {
+  border-color: #165dff;
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.1);
+}
+
+.settings-role-modal__info {
+  display: flex;
+  width: 398px;
+  height: 41px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 11.5px;
+  border: 1px solid #bae6fd;
+  border-radius: 11px;
+  background: #f0f9ff;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.settings-role-modal .settings-role-modal__footer {
+  display: flex;
+  width: 440px;
+  height: 61px;
+  box-sizing: border-box;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 15px 21px 14px;
+  border-top: 1px solid #e5e6eb;
+}
+
+.settings-role-modal .settings-role-modal__footer button {
+  box-sizing: border-box;
+  padding: 0;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.settings-role-modal .settings-role-modal__cancel {
+  width: 49px;
+  height: 28px;
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.settings-role-modal .settings-role-modal__cancel:hover {
+  background: #f7f8fa;
+}
+
+.settings-role-modal .settings-role-modal__submit {
+  width: 80px;
+  height: 32px;
+  border: 0;
+  background: #334155;
+  color: #fff;
+  cursor: pointer;
+}
+
+.settings-role-modal .settings-role-modal__submit:hover:not(:disabled) {
+  background: #263244;
+}
+
+.settings-role-modal .settings-role-modal__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .settings-delete-modal {

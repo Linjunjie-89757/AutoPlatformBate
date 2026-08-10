@@ -2,10 +2,12 @@ import { httpDelete, httpGet, httpPost, httpPut, type ApiResponse } from '@/shar
 
 import type {
   CreateWorkspaceMemberPayload,
+  CreateWorkspaceRolePayload,
   SaveWorkspacePayload,
   UpdateWorkspaceMemberPayload,
   WorkspaceItem,
   WorkspaceMemberItem,
+  WorkspaceRoleItem,
 } from '../model/types'
 
 function workspaceHeaders(workspaceCode = 'ALL') {
@@ -150,6 +152,37 @@ export const workspaceApi = {
 
     if (response.success === false) {
       throw new Error(response.message || '成员移除失败')
+    }
+
+    return response.data
+  },
+
+  async getWorkspaceRoles(workspaceCode: string) {
+    const response = await httpGet<ApiResponse<WorkspaceRoleItem[]>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/roles`,
+      {
+        headers: workspaceHeaders('ALL'),
+      },
+    )
+
+    if (response.success === false) {
+      throw new Error(response.message || '角色列表加载失败')
+    }
+
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  async createWorkspaceRole(workspaceCode: string, payload: CreateWorkspaceRolePayload) {
+    const response = await httpPost<ApiResponse<WorkspaceRoleItem>, CreateWorkspaceRolePayload>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/roles`,
+      payload,
+      {
+        headers: workspaceHeaders('ALL'),
+      },
+    )
+
+    if (response.success === false) {
+      throw new Error(response.message || '角色创建失败')
     }
 
     return response.data

@@ -17,6 +17,11 @@ const activeTabName = computed(() => {
   if (routeName === 'cases-ai-record-detail') return 'cases-ai-records'
   return routeName
 })
+
+const tabQuery = computed(() => {
+  const { source: _source, ...query } = route.query
+  return query
+})
 </script>
 
 <template>
@@ -25,7 +30,7 @@ const activeTabName = computed(() => {
       <RouterLink
         v-for="item in caseCenterTabs"
         :key="item.routeName"
-        :to="{ name: item.routeName, query: route.query }"
+        :to="{ name: item.routeName, query: tabQuery }"
         class="case-center-page__tab"
         :class="{ 'is-active': activeTabName === item.routeName }"
       >
@@ -42,6 +47,7 @@ const activeTabName = computed(() => {
 <style scoped>
 .case-center-page {
   display: flex;
+  height: calc(100dvh - 42px);
   flex: 1;
   min-width: 0;
   min-height: 0;

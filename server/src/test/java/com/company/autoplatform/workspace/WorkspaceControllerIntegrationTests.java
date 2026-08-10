@@ -159,6 +159,8 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.userId").value(12))
                 .andExpect(jsonPath("$.data.username").value("chennan"))
                 .andExpect(jsonPath("$.data.roleCode").value("MEMBER"))
+                .andExpect(jsonPath("$.data.memberType").value("MEMBER"))
+                .andExpect(jsonPath("$.data.roles[0].roleCode").value("SYSTEM_TEST_ENGINEER"))
                 .andReturn();
         long memberId = data(createResult).path("id").asLong();
 
@@ -175,7 +177,9 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(memberId))
-                .andExpect(jsonPath("$.data.roleCode").value("ADMIN"));
+                .andExpect(jsonPath("$.data.roleCode").value("ADMIN"))
+                .andExpect(jsonPath("$.data.memberType").value("ADMIN"))
+                .andExpect(jsonPath("$.data.roles[0].roleCode").value("SYSTEM_TEST_LEAD"));
 
         mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberId))
                 .andExpect(status().isOk())
@@ -272,6 +276,99 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void createAndListWorkspaceRolePersistsRoleDefinition() throws Exception {
+        String roleName = "角色集成测试-" + System.nanoTime();
+
+        MvcResult createResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(roleRequest(roleName, "用于验证工作区角色创建接口")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.name").value(roleName))
+                .andExpect(jsonPath("$.data.roleCode").value(org.hamcrest.Matchers.startsWith("CUSTOM_")))
+                .andExpect(jsonPath("$.data.memberCount").value(0))
+                .andExpect(jsonPath("$.data.permissionCount").value(0))
+                .andExpect(jsonPath("$.data.system").value(false))
+                .andReturn();
+
+        long roleId = data(createResult).path("id").asLong();
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.id == %s)].name".formatted(roleId), hasItem(roleName)));
+
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(roleRequest(roleName, "重复角色")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void nonPlatformAdminCannotCreateWorkspaceRole() throws Exception {
+        setMemberUser();
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(roleRequest("无权创建角色-" + System.nanoTime(), "权限验证")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void workspaceIdentityAndBusinessRolesAreManagedSeparately() throws Exception {
+        String code = "ws_rbac_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "rbac", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        MvcResult roleResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", code)
+                        .contentType("application/json")
+                        .content(roleRequest("接口测试工程师-" + System.nanoTime(), "业务角色绑定测试")))
+                .andExpect(status().isOk())
+                .andReturn();
+        long roleId = data(roleResult).path("id").asLong();
+
+        MvcResult createResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
+                        .contentType("application/json")
+                        .content(memberRequestWithRoles(12L, "MEMBER", roleId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.memberType").value("MEMBER"))
+                .andExpect(jsonPath("$.data.roles[0].id").value(roleId))
+                .andReturn();
+        long memberId = data(createResult).path("id").asLong();
+
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberId)
+                        .contentType("application/json")
+                        .content(updateMemberRequestWithRoles("MEMBER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberId)
+                        .contentType("application/json")
+                        .content(updateMemberRequestWithRoles("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.memberType").value("ADMIN"))
+                .andExpect(jsonPath("$.data.roles").isEmpty());
+
+        setMemberUser(12L, "chennan", "Chen Nan");
+        MvcResult managedMember = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
+                        .contentType("application/json")
+                        .content(memberRequest(13L, "MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId").value(13))
+                .andReturn();
+
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, data(managedMember).path("id").asLong()))
+                .andExpect(status().isOk());
+
+        setPlatformAdminUser();
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberId))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
+    }
+
     private String workspaceRequest(String code, String name, String type, int status) {
         return """
                 {
@@ -306,6 +403,28 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 """.formatted(userId, roleCode);
     }
 
+    private String roleRequest(String name, String description) {
+        return """
+                {
+                  "name": "%s",
+                  "description": "%s"
+                }
+                """.formatted(name, description);
+    }
+
+    private String memberRequestWithRoles(Long userId, String memberType, Long... roleIds) {
+        String ids = java.util.Arrays.stream(roleIds)
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(", "));
+        return """
+                {
+                  "userId": %d,
+                  "memberType": "%s",
+                  "roleIds": [%s]
+                }
+                """.formatted(userId, memberType, ids);
+    }
+
     private String batchMemberRequest(String roleCode, Long... userIds) {
         String ids = java.util.Arrays.stream(userIds)
                 .map(String::valueOf)
@@ -324,6 +443,18 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                   "roleCode": "%s"
                 }
                 """.formatted(roleCode);
+    }
+
+    private String updateMemberRequestWithRoles(String memberType, Long... roleIds) {
+        String ids = java.util.Arrays.stream(roleIds)
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(", "));
+        return """
+                {
+                  "memberType": "%s",
+                  "roleIds": [%s]
+                }
+                """.formatted(memberType, ids);
     }
 
     private JsonNode data(MvcResult result) throws Exception {

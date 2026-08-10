@@ -9,6 +9,7 @@ export type WorkspaceMemberDialogMode = 'create' | 'edit'
 export interface WorkspaceMemberForm {
   userIds: number[]
   roleCode: string
+  roleIds: number[]
 }
 
 export const workspaceMemberRoleOptions = [
@@ -20,6 +21,7 @@ export function createDefaultWorkspaceMemberForm(): WorkspaceMemberForm {
   return {
     userIds: [],
     roleCode: 'MEMBER',
+    roleIds: [],
   }
 }
 
@@ -27,19 +29,22 @@ export function createWorkspaceMemberFormFromItem(item: WorkspaceMemberItem): Wo
   return {
     userIds: [item.userId],
     roleCode: item.roleCode || 'MEMBER',
+    roleIds: (item.roles || []).map(role => role.id),
   }
 }
 
 export function buildCreateWorkspaceMemberPayload(form: WorkspaceMemberForm): CreateWorkspaceMemberPayload[] {
   return form.userIds.map((userId) => ({
     userId: Number(userId),
-    roleCode: form.roleCode,
+    memberType: form.roleCode,
+    roleIds: form.roleIds.length > 0 ? form.roleIds : undefined,
   }))
 }
 
 export function buildUpdateWorkspaceMemberPayload(form: WorkspaceMemberForm): UpdateWorkspaceMemberPayload {
   return {
-    roleCode: form.roleCode,
+    memberType: form.roleCode,
+    roleIds: form.roleIds.length > 0 ? form.roleIds : undefined,
   }
 }
 
@@ -48,7 +53,7 @@ export function validateWorkspaceMemberForm(form: WorkspaceMemberForm, mode: Wor
     return '请选择用户'
   }
   if (!form.roleCode) {
-    return '请选择成员角色'
+    return '请选择工作区身份'
   }
   return ''
 }

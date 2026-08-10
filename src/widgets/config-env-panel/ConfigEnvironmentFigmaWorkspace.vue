@@ -59,6 +59,7 @@ import { deleteConfigEnv } from '@/features/config-env-delete'
 import { toggleConfigEnvStatus } from '@/features/config-env-toggle-status'
 import { parseWebUiVariables, type WebUiVariableItem } from '@/features/config-param-create-edit'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { AppFigmaSwitch } from '@/shared/ui'
 import { confirmDelete } from '@/shared/ui/app-delete-confirm/confirmDelete'
 
 type DetailTab = 'services' | 'variables' | 'mock' | 'effective' | 'references'
@@ -1344,7 +1345,7 @@ watch(() => props.workspaceCode, () => void loadData(null))
                 <div><strong>{{ item.paramName }}</strong><span>{{ variableSetScopeLabel(item) }}</span><span v-if="variableSetHasSensitive(item)" class="is-sensitive">含敏感变量</span></div>
                 <p>{{ parseWebUiVariables(item.contentJson).length }} 个变量 <i>·</i> <code>{{ variableSetVersionLabel(item) }}</code></p>
               </div>
-              <button class="figma-env-switch" :class="{ 'is-on': isVariableSetEnabled(item) }" type="button" :title="isVariableSetEnabled(item) ? '停用变量集' : '启用变量集'" @click="toggleVariableSetEnabled(item)"><i /></button>
+              <AppFigmaSwitch :model-value="isVariableSetEnabled(item)" :label="isVariableSetEnabled(item) ? '停用变量集' : '启用变量集'" :title="isVariableSetEnabled(item) ? '停用变量集' : '启用变量集'" @update:model-value="toggleVariableSetEnabled(item)" />
               <span class="figma-env__variable-order-actions">
                 <button type="button" title="上移" :disabled="index === 0" @click="moveBoundVariableSet(index, -1)"><el-icon><ArrowUp /></el-icon></button>
                 <button type="button" title="下移" :disabled="index === selectedVariableSets.length - 1" @click="moveBoundVariableSet(index, 1)"><el-icon><ArrowDown /></el-icon></button>
@@ -1376,7 +1377,7 @@ watch(() => props.workspaceCode, () => void loadData(null))
                   <td><code :class="{ 'is-masked': variable.sensitive }">{{ variable.sensitive ? '••••••••' : variable.value }}</code></td>
                   <td><span>{{ variable.valueType || (variable.sensitive ? 'secret' : 'string') }}</span></td>
                   <td>{{ variable.description || '—' }}</td>
-                  <td><button class="figma-env-switch" :class="{ 'is-on': variable.enabled !== false }" type="button" :title="variable.enabled === false ? '启用变量' : '停用变量'" @click="toggleLocalVariable(index)"><i /></button></td>
+                  <td><AppFigmaSwitch :model-value="variable.enabled !== false" :label="variable.enabled === false ? '启用变量' : '停用变量'" :title="variable.enabled === false ? '启用变量' : '停用变量'" @update:model-value="toggleLocalVariable(index)" /></td>
                   <td><span class="figma-env__row-actions"><button type="button" title="编辑" @click="openLocalVariableDialog(index)"><el-icon><Edit /></el-icon></button><button type="button" title="删除" @click="requestDeleteLocalVariable(index)"><el-icon><Delete /></el-icon></button></span></td>
                 </tr>
               </tbody>
@@ -1403,7 +1404,7 @@ watch(() => props.workspaceCode, () => void loadData(null))
           <article class="figma-env__mock-card">
             <header>
               <div>
-                <button class="figma-env-switch" :class="{ 'is-on': form.mockEnabled }" type="button" :aria-label="form.mockEnabled ? '停用 Mock' : '启用 Mock'" @click="toggleMockEnabled"><i /></button>
+                <AppFigmaSwitch :model-value="form.mockEnabled" :label="form.mockEnabled ? '停用 Mock' : '启用 Mock'" @update:model-value="toggleMockEnabled" />
                 <strong>{{ form.mockEnabled ? 'Mock 已启用，接口请求将被拦截' : 'Mock 已停用，接口请求将直接到达真实服务' }}</strong>
               </div>
               <button type="button" @click="goToMockService">前往 Mock 服务查看详情 →</button>
@@ -1593,10 +1594,10 @@ watch(() => props.workspaceCode, () => void loadData(null))
             <label><span>值</span><input v-model="localVariableEditor.value" :type="localVariableEditor.sensitive ? 'password' : 'text'" :placeholder="localVariableEditor.valueType === 'secret' ? '输入后将按敏感变量存储' : ''"></label>
             <div class="figma-env-modal__row figma-env-modal__row--local-variable">
               <label><span>类型</span><select v-model="localVariableEditor.valueType" @change="syncLocalVariableType"><option v-for="option in localVariableTypeOptions" :key="option" :value="option">{{ option }}</option></select></label>
-              <div class="figma-env-modal__default"><span>敏感变量</span><button type="button" class="figma-env-switch" :class="{ 'is-on': localVariableEditor.sensitive }" @click="localVariableEditor.sensitive = !localVariableEditor.sensitive"><i /></button></div>
+              <div class="figma-env-modal__default"><span>敏感变量</span><AppFigmaSwitch v-model="localVariableEditor.sensitive" label="敏感变量" /></div>
             </div>
             <label><span>说明</span><input v-model="localVariableEditor.description" type="text" placeholder="简要描述此变量的用途"></label>
-            <div class="figma-env-modal__local-enabled"><span>是否启用</span><button type="button" class="figma-env-switch" :class="{ 'is-on': localVariableEditor.enabled }" @click="localVariableEditor.enabled = !localVariableEditor.enabled"><i /></button></div>
+            <div class="figma-env-modal__local-enabled"><span>是否启用</span><AppFigmaSwitch v-model="localVariableEditor.enabled" label="是否启用" /></div>
           </div>
           <footer><button type="button" @click="closeLocalVariableDialog">取消</button><button class="is-primary" type="button" :disabled="saving" @click="submitLocalVariable">保存</button></footer>
         </section>
@@ -1745,8 +1746,8 @@ watch(() => props.workspaceCode, () => void loadData(null))
           <div class="figma-env-modal__body">
             <label><span>服务名称 <b>*</b></span><input v-model="serviceEditor.name" type="text" placeholder="例：订单服务"></label>
             <label><span>Base URL <b>*</b></span><div class="figma-env-modal__url"><input v-model="serviceEditor.baseUrl" type="text" placeholder="https://api.example.com"><button type="button" @click="testConnection()"><el-icon><Connection /></el-icon>连接测试</button></div></label>
-            <div class="figma-env-modal__row"><label><span>连接超时 (ms)</span><input v-model.number="serviceEditor.timeoutMs" type="number" min="1000" max="120000"></label><div class="figma-env-modal__default"><span>设为默认入口</span><button type="button" class="figma-env-switch" :class="{ 'is-on': serviceEditor.isDefault }" @click="serviceEditor.isDefault = !serviceEditor.isDefault"><i /></button></div></div>
-            <div class="figma-env-modal__enabled"><span><strong>是否启用</strong><small>停用后此服务地址不参与执行</small></span><button type="button" class="figma-env-switch" :class="{ 'is-on': serviceEditor.enabled }" @click="serviceEditor.enabled = !serviceEditor.enabled"><i /></button></div>
+            <div class="figma-env-modal__row"><label><span>连接超时 (ms)</span><input v-model.number="serviceEditor.timeoutMs" type="number" min="1000" max="120000"></label><div class="figma-env-modal__default"><span>设为默认入口</span><AppFigmaSwitch v-model="serviceEditor.isDefault" label="设为默认入口" size="regular" /></div></div>
+            <div class="figma-env-modal__enabled"><span><strong>是否启用</strong><small>停用后此服务地址不参与执行</small></span><AppFigmaSwitch v-model="serviceEditor.enabled" label="是否启用" size="regular" /></div>
           </div>
           <footer><button type="button" @click="closeServiceDialog">取消</button><button class="is-primary" type="button" :disabled="saving" @click="submitService">保存</button></footer>
         </section>
@@ -4252,31 +4253,6 @@ input {
   font-size: 11px;
   line-height: 17px;
 }
-
-.figma-env-switch {
-  position: relative;
-  width: 28px !important;
-  height: 14px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 999px !important;
-  background: #c9cdd4 !important;
-}
-
-.figma-env-switch i {
-  position: absolute;
-  top: 1.75px;
-  left: 2px;
-  width: 10.5px;
-  height: 10.5px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 1px 2px rgba(0, 0, 0, .1);
-  transition: left 150ms ease;
-}
-
-.figma-env-switch.is-on { background: #165dff !important; }
-.figma-env-switch.is-on i { left: 15.5px; }
 
 .figma-env-modal__dialog > footer {
   display: flex;
