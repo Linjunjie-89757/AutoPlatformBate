@@ -7,6 +7,7 @@ import type {
   UpdateWorkspaceMemberPayload,
   WorkspaceItem,
   WorkspaceMemberItem,
+  WorkspaceMemberCandidateItem,
   WorkspaceRoleItem,
 } from '../model/types'
 
@@ -108,6 +109,22 @@ export const workspaceApi = {
     )
 
     return unwrapMemberResponse(payload)
+  },
+
+  async findWorkspaceMemberCandidate(workspaceCode: string, account: string) {
+    const response = await httpGet<ApiResponse<WorkspaceMemberCandidateItem | null>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/members/lookup`,
+      {
+        headers: workspaceHeaders(workspaceCode),
+        params: { account },
+      },
+    )
+
+    if (response.success === false) {
+      throw new Error(response.message || '成员账号查询失败')
+    }
+
+    return response.data
   },
 
   async createWorkspaceMember(workspaceCode: string, payload: CreateWorkspaceMemberPayload) {

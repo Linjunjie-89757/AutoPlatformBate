@@ -128,6 +128,10 @@ public class UserService {
         return userDomainService.requireAnyUser(userId);
     }
 
+    public UserEntity findAnyUserByAccount(String account) {
+        return userDomainService.findAnyUserByAccount(account);
+    }
+
     public boolean isPlatformAdmin(Long userId) {
         return userRoleSupport.isPlatformAdmin(userId);
     }

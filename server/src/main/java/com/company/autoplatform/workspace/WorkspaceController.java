@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -55,6 +56,14 @@ public class WorkspaceController {
     @GetMapping("/{workspaceCode}/members")
     public ApiResponse<List<WorkspaceMemberItem>> listMembers(@PathVariable String workspaceCode) {
         return ApiResponse.ok(workspaceService.listMembers(workspaceCode));
+    }
+
+    @GetMapping("/{workspaceCode}/members/lookup")
+    public ApiResponse<WorkspaceMemberCandidateItem> findMemberCandidate(
+            @PathVariable String workspaceCode,
+            @RequestParam String account
+    ) {
+        return ApiResponse.ok(workspaceService.findMemberCandidate(workspaceCode, account));
     }
 
     @PostMapping("/{workspaceCode}/members")

@@ -3,6 +3,7 @@ package com.company.autoplatform.user;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.auth.PlatformRole;
 import com.company.autoplatform.common.BadRequestException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -44,7 +45,7 @@ public class UserRoleSupport {
 
     public void requirePlatformAdmin() {
         if (!isCurrentPlatformAdmin()) {
-            throw new BadRequestException("只有管理员可执行该操作");
+            throw new AccessDeniedException("只有管理员可执行该操作");
         }
     }
 
@@ -61,7 +62,7 @@ public class UserRoleSupport {
             throw new BadRequestException("超级管理员仅允许系统初始化创建");
         }
         if (PlatformRole.PLATFORM_ADMIN.equals(storedRole) && !isCurrentSuperAdmin()) {
-            throw new BadRequestException("只有超级管理员可以创建或调整管理员");
+            throw new AccessDeniedException("只有超级管理员可以创建或调整管理员");
         }
     }
 
@@ -73,7 +74,7 @@ public class UserRoleSupport {
 
     public void ensureAdminMutationAllowed(UserEntity targetUser) {
         if (PlatformRole.PLATFORM_ADMIN.equalsIgnoreCase(targetUser.getRoleCode()) && !isCurrentSuperAdmin()) {
-            throw new BadRequestException("只有超级管理员可以操作管理员");
+            throw new AccessDeniedException("只有超级管理员可以操作管理员");
         }
     }
 

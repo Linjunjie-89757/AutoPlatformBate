@@ -1,7 +1,7 @@
 package com.company.autoplatform.user;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.company.autoplatform.auth.CurrentUserContext;
+import com.company.autoplatform.auth.AuthenticatedSessionService;
 import com.company.autoplatform.auth.PlatformRole;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.workspace.WorkspaceEntity;
@@ -18,21 +18,24 @@ public class UserDomainService {
     private final UserCredentialSupport userCredentialSupport;
     private final UserRoleSupport userRoleSupport;
     private final UserWorkspaceGrantSupport userWorkspaceGrantSupport;
+    private final AuthenticatedSessionService authenticatedSessionService;
 
     public UserDomainService(
             UserMapper userMapper,
             UserCredentialSupport userCredentialSupport,
             UserRoleSupport userRoleSupport,
-            UserWorkspaceGrantSupport userWorkspaceGrantSupport
+            UserWorkspaceGrantSupport userWorkspaceGrantSupport,
+            AuthenticatedSessionService authenticatedSessionService
     ) {
         this.userMapper = userMapper;
         this.userCredentialSupport = userCredentialSupport;
         this.userRoleSupport = userRoleSupport;
         this.userWorkspaceGrantSupport = userWorkspaceGrantSupport;
+        this.authenticatedSessionService = authenticatedSessionService;
     }
 
     public List<UserItem> listUsers() {
-        CurrentUserContext.require();
+        userRoleSupport.requirePlatformAdmin();
         List<UserEntity> users = userMapper.selectList(new LambdaQueryWrapper<UserEntity>().orderByAsc(UserEntity::getId));
         Map<Long, List<WorkspaceEntity>> workspaceMap = userWorkspaceGrantSupport.buildUserWorkspaceMap();
         return users.stream()
@@ -82,12 +85,16 @@ public class UserDomainService {
         userRoleSupport.requireAssignableRole(storedRole);
         userRoleSupport.ensureAdminMutationAllowed(entity);
 
+        Integer previousStatus = entity.getStatus();
         entity.setEmail(email);
         entity.setDisplayName(request.displayName().trim());
         entity.setRoleCode(storedRole);
         entity.setStatus(request.status());
         entity.setUpdatedAt(LocalDateTime.now());
         userMapper.updateById(entity);
+        if (previousStatus != null && previousStatus == 1 && request.status() == 0) {
+            authenticatedSessionService.expireUserSessions(entity.getId());
+        }
 
         userWorkspaceGrantSupport.replaceWorkspaceCodes(entity, request.workspaceCodes() == null ? List.of() : request.workspaceCodes());
         return toItem(entity, userWorkspaceGrantSupport.findUserWorkspaces(entity.getId()));
@@ -115,6 +122,18 @@ public class UserDomainService {
             throw new BadRequestException("用户不存在");
         }
         return user;
+    }
+
+    public UserEntity findAnyUserByAccount(String account) {
+        if (account == null || account.isBlank()) {
+            return null;
+        }
+        String normalized = account.trim();
+        return userMapper.selectOne(new LambdaQueryWrapper<UserEntity>()
+                .and(wrapper -> wrapper.eq(UserEntity::getUsername, normalized)
+                        .or()
+                        .eq(UserEntity::getEmail, normalized))
+                .last("limit 1"));
     }
 
     UserItem toItem(UserEntity user, List<WorkspaceEntity> workspaces) {

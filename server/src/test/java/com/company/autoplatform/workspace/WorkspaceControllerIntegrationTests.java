@@ -129,17 +129,17 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
         mockMvc.perform(post("/api/workspaces")
                         .contentType("application/json")
                         .content(workspaceRequest(code, "denied", "PROJECT", 1)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
         mockMvc.perform(put("/api/workspaces/{workspaceCode}", WORKSPACE_CODE)
                         .contentType("application/json")
                         .content(workspaceRequest(WORKSPACE_CODE, "denied-update", "PROJECT", 1)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
         mockMvc.perform(delete("/api/workspaces/{workspaceCode}", WORKSPACE_CODE))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
@@ -215,6 +215,18 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[*].code", hasItem(code)));
 
+        mockMvc.perform(get("/api/workspaces/switchable")
+                        .with(authentication(authenticationFor(12L, "chennan", "Chen Nan", PlatformRole.MEMBER))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].code", hasItem(code)))
+                .andExpect(jsonPath("$.data[*].code", not(hasItem(WorkspaceScope.ALL))));
+
+        mockMvc.perform(get("/api/auth/me")
+                        .with(authentication(authenticationFor(12L, "chennan", "Chen Nan", PlatformRole.MEMBER))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].memberType".formatted(code), hasItem("MEMBER")))
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].canManage".formatted(code), hasItem(false)));
+
         setMemberUser(12L, "chennan", "Chen Nan");
         assertThat(workspaceService.listReadableWorkspaceCodes()).contains(code);
         assertThat(workspaceService.listReadableWorkspaceIds())
@@ -224,7 +236,7 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
 
         mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", code)
                         .with(authentication(authenticationFor(14L, "zhaofeng", "Zhao Feng", PlatformRole.MEMBER))))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
         setMemberUser(14L, "zhaofeng", "Zhao Feng");
         assertThatThrownBy(() -> workspaceService.requireReadableWorkspace(code))
@@ -307,10 +319,41 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
     @Test
     void nonPlatformAdminCannotCreateWorkspaceRole() throws Exception {
         setMemberUser();
-        mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", WORKSPACE_CODE)
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles", "retail-onboarding"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", "retail-onboarding")
                         .contentType("application/json")
                         .content(roleRequest("无权创建角色-" + System.nanoTime(), "权限验证")))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void ordinaryMemberCanReadRuntimeConfigButCannotManageWorkspaceResources() throws Exception {
+        setMemberUser();
+        String readableWorkspaceCode = "retail-onboarding";
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", readableWorkspaceCode))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/api/settings/envs")
+                        .header(WorkspaceScope.HEADER, readableWorkspaceCode))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(post("/api/settings/envs")
+                        .header(WorkspaceScope.HEADER, readableWorkspaceCode)
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/api/audit-logs")
+                        .header(WorkspaceScope.HEADER, readableWorkspaceCode))
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
@@ -352,6 +395,17 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.roles").isEmpty());
 
         setMemberUser(12L, "chennan", "Chen Nan");
+        mockMvc.perform(get("/api/auth/me"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].memberType".formatted(code), hasItem("ADMIN")))
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].canManage".formatted(code), hasItem(true)));
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/members/lookup", code)
+                        .param("account", "liping"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.userId").value(13))
+                .andExpect(jsonPath("$.data.alreadyMember").value(false));
+
         MvcResult managedMember = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
                         .contentType("application/json")
                         .content(memberRequest(13L, "MEMBER")))

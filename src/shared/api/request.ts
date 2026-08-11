@@ -32,6 +32,14 @@ export const request: AxiosInstance = axios.create({
 request.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    const requestUrl = String(error.config?.url || '')
+    if (
+      error.response?.status === 401
+      && !requestUrl.includes('/auth/login')
+      && !requestUrl.includes('/auth/me')
+    ) {
+      window.dispatchEvent(new CustomEvent('autotest:unauthorized'))
+    }
     const requestError: RequestError = {
       status: error.response?.status,
       message: error.message || '请求失败',

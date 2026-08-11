@@ -6,6 +6,7 @@ import com.company.autoplatform.auth.PlatformRole;
 import com.company.autoplatform.bug.BugMapper;
 import com.company.autoplatform.casecenter.CaseMapper;
 import com.company.autoplatform.common.BadRequestException;
+import org.springframework.security.access.AccessDeniedException;
 import com.company.autoplatform.execution.ReportMapper;
 import com.company.autoplatform.execution.TaskMapper;
 import com.company.autoplatform.settings.EnvConfigMapper;
@@ -216,7 +217,7 @@ public class WorkspaceDomainService {
 
     private void requirePlatformAdmin() {
         if (!isPlatformAdmin()) {
-            throw new BadRequestException("只有管理员可执行该操作");
+            throw new AccessDeniedException("只有管理员可执行该操作");
         }
     }
 

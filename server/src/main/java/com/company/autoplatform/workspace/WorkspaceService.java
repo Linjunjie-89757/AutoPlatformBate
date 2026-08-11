@@ -33,8 +33,10 @@ public class WorkspaceService {
 
     public List<WorkspaceItem> listSwitchable() {
         List<WorkspaceItem> result = new ArrayList<>();
-        result.add(new WorkspaceItem(WorkspaceScope.ALL, "全部", "查看当前账号可见的全部空间数据", true,
-                null, null, null, 1, null, null));
+        if (isPlatformAdmin()) {
+            result.add(new WorkspaceItem(WorkspaceScope.ALL, "全部", "查看当前账号可见的全部空间数据", true,
+                    null, null, null, 1, null, null));
+        }
         result.addAll(listAll());
         return result;
     }
@@ -75,6 +77,10 @@ public class WorkspaceService {
         return workspaceMemberDomainService.listMembers(workspaceCode);
     }
 
+    public WorkspaceMemberCandidateItem findMemberCandidate(String workspaceCode, String account) {
+        return workspaceMemberDomainService.findMemberCandidate(workspaceCode, account);
+    }
+
     public WorkspaceMemberItem createMember(String workspaceCode, CreateWorkspaceMemberRequest request) {
         return workspaceMemberDomainService.createMember(workspaceCode, request);
     }
@@ -109,6 +115,10 @@ public class WorkspaceService {
 
     public List<String> listReadableWorkspaceCodes() {
         return workspaceAccessSupport.listReadableWorkspaceCodes();
+    }
+
+    public List<WorkspaceAccessItem> listCurrentWorkspaceAccesses() {
+        return workspaceAccessSupport.listCurrentWorkspaceAccesses();
     }
 
     public boolean isSuperAdmin() {

@@ -32,7 +32,7 @@ public class WorkspaceRoleDomainService {
     }
 
     public List<WorkspaceRoleItem> listRoles(String workspaceCode) {
-        WorkspaceEntity workspace = workspaceAccessSupport.requireReadableWorkspace(workspaceCode);
+        WorkspaceEntity workspace = workspaceAccessSupport.requireWorkspaceAdmin(workspaceCode);
         ensureSystemRoles(workspace.getId());
         return workspaceRoleMapper.selectList(new LambdaQueryWrapper<WorkspaceRoleEntity>()
                         .eq(WorkspaceRoleEntity::getWorkspaceId, workspace.getId())

@@ -364,16 +364,43 @@ function mapSettingsUser(user: UserItem, member?: WorkspaceMemberItem): Settings
   }
 }
 
+function mapSettingsMember(member: WorkspaceMemberItem, workspaceCode: string): SettingsUser {
+  const platformRoleCode = member.id < 0 ? 'ADMIN' : 'MEMBER'
+  const workspaceRoleCode = String(member.roleCode || 'MEMBER').toUpperCase()
+  const memberType = String(member.memberType || workspaceRoleCode).toUpperCase()
+  const name = member.displayName || member.username
+  return {
+    id: String(member.userId),
+    userId: member.userId,
+    memberId: member.id,
+    username: member.username,
+    email: member.email,
+    platformRoleCode,
+    workspaceRoleCode,
+    memberType,
+    businessRoles: [...(member.roles || [])],
+    workspaceCodes: [workspaceCode],
+    name,
+    account: member.email || member.username,
+    status: Number(member.status) === 1 ? 'active' : 'disabled',
+    lastLogin: '—',
+    avatar: name.slice(0, 1) || member.username.slice(0, 1) || '用',
+  }
+}
+
 async function loadUsers() {
   const requestSeq = ++usersRequestSeq
   const workspaceCode = selectedWorkspaceCode.value || 'ALL'
   usersLoading.value = true
   usersError.value = ''
   try {
-    const [allUsers, members] = await Promise.all([
-      userApi.getUsers(),
-      workspaceCode === 'ALL' ? Promise.resolve([]) : workspaceApi.getWorkspaceMembers(workspaceCode),
-    ])
+    const members = workspaceCode === 'ALL' ? [] : await workspaceApi.getWorkspaceMembers(workspaceCode)
+    if (requestSeq !== usersRequestSeq) return
+    if (!canManagePlatformAccounts.value) {
+      users.value = members.map(item => mapSettingsMember(item, workspaceCode))
+      return
+    }
+    const allUsers = await userApi.getUsers()
     if (requestSeq !== usersRequestSeq) return
     const membersByUserId = new Map(members.map(item => [item.userId, item]))
     const visibleUsers = workspaceCode === 'ALL'
@@ -735,10 +762,30 @@ async function submitInviteDialog() {
     } else {
       const workspaceCode = currentConcreteWorkspaceCode()
       if (!workspaceCode) return
-      const allUsers = await userApi.getUsers()
       const normalizedAccount = account.toLowerCase()
-      let target = allUsers.find(item => item.username.toLowerCase() === normalizedAccount || item.email.toLowerCase() === normalizedAccount)
-      if (target?.workspaceCodes?.includes(workspaceCode)) {
+      let target: UserItem | undefined
+      let alreadyMember = false
+      if (canManagePlatformAccounts.value) {
+        const allUsers = await userApi.getUsers()
+        target = allUsers.find(item => item.username.toLowerCase() === normalizedAccount || item.email.toLowerCase() === normalizedAccount)
+        alreadyMember = Boolean(target?.workspaceCodes?.includes(workspaceCode))
+      } else {
+        const candidate = await workspaceApi.findWorkspaceMemberCandidate(workspaceCode, account)
+        if (candidate) {
+          alreadyMember = candidate.alreadyMember
+          target = {
+            id: candidate.userId,
+            username: candidate.username,
+            email: candidate.email,
+            displayName: candidate.displayName,
+            roleCode: 'MEMBER',
+            status: Number(candidate.status) === 1 ? 1 : 0,
+            workspaceCodes: candidate.alreadyMember ? [workspaceCode] : [],
+            workspaceNames: [],
+          }
+        }
+      }
+      if (alreadyMember) {
         ElMessage.info('该用户已经是当前工作空间成员')
         return
       }
@@ -762,6 +809,9 @@ async function submitInviteDialog() {
           roleCode: 'MEMBER',
           workspaceCodes: [workspaceCode],
         })
+      } else if (!canManagePlatformAccounts.value && Number(target.status) !== 1) {
+        ElMessage.warning('该账号已停用，请联系超级管理员或平台管理员启用后再添加')
+        return
       } else if (canManagePlatformAccounts.value && !inviteForm.active && Number(target.status) !== 0) {
         target = await userApi.updateUser(target.id, {
           email: target.email,

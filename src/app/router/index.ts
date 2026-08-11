@@ -1,7 +1,13 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 import AppLayout from '@/app/layouts/AppLayout.vue'
-import { loadCurrentUser, sessionState } from '@/entities/session'
+import {
+  canManageWorkspace,
+  clearCurrentUser,
+  firstManageableWorkspaceCode,
+  loadCurrentUser,
+  sessionState,
+} from '@/entities/session'
 import ApiAutomationPage from '@/pages/automation-api/ApiAutomationPage.vue'
 import AutomationTasksPage from '@/pages/automation-tasks/AutomationTasksPage.vue'
 import WebAutomationPage from '@/pages/automation-web/WebAutomationPage.vue'
@@ -83,6 +89,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '系统设置',
           description: '管理 AI 连接、工作空间、成员与用户账号。',
+          requiresWorkspaceAdmin: true,
         },
       },
       {
@@ -101,6 +108,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '配置中心',
           description: '后续保持公共配置边界，迁移环境、参数、数据库连接配置。',
+          requiresWorkspaceAdmin: true,
         },
       },
       {
@@ -403,6 +411,16 @@ export const router = createRouter({
   routes,
 })
 
+window.addEventListener('autotest:unauthorized', () => {
+  const currentRoute = router.currentRoute.value
+  if (currentRoute.name === 'login') return
+  clearCurrentUser()
+  void router.replace({
+    path: '/login',
+    query: currentRoute.fullPath === '/' ? undefined : { redirect: currentRoute.fullPath },
+  })
+})
+
 router.beforeEach(async (to) => {
   const isPublicRoute = to.meta.public === true
   const shouldCheckSession = !isPublicRoute || to.name === 'login'
@@ -425,6 +443,27 @@ router.beforeEach(async (to) => {
       path: '/login',
       query: to.fullPath === '/' ? undefined : { redirect: to.fullPath },
       replace: true,
+    }
+  }
+
+  if (to.meta.requiresWorkspaceAdmin === true) {
+    const requestedWorkspace = Array.isArray(to.query.workspace) ? to.query.workspace[0] : to.query.workspace
+    if (!canManageWorkspace(sessionState.currentUser.value, requestedWorkspace)) {
+      const manageableWorkspace = firstManageableWorkspaceCode(sessionState.currentUser.value)
+      if (manageableWorkspace) {
+        return {
+          path: to.path,
+          query: { ...to.query, workspace: manageableWorkspace },
+          hash: to.hash,
+          replace: true,
+        }
+      }
+      const readableWorkspace = sessionState.currentUser.value?.workspaceCodes?.[0]
+      return {
+        path: '/',
+        query: readableWorkspace ? { workspace: readableWorkspace } : undefined,
+        replace: true,
+      }
     }
   }
 

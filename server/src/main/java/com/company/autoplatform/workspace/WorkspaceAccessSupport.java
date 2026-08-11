@@ -5,10 +5,13 @@ import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.auth.CurrentUserPrincipal;
 import com.company.autoplatform.auth.PlatformRole;
 import com.company.autoplatform.common.BadRequestException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -31,7 +34,7 @@ public class WorkspaceAccessSupport {
     public WorkspaceEntity requireReadableWorkspace(String workspaceCode) {
         WorkspaceEntity workspace = workspaceDomainService.requireWorkspace(workspaceCode);
         if (!isPlatformAdmin() && !listReadableWorkspaceIds().contains(workspace.getId())) {
-            throw new BadRequestException("当前账号无权访问该工作空间");
+            throw new AccessDeniedException("当前账号无权访问该工作空间");
         }
         return workspace;
     }
@@ -57,7 +60,7 @@ public class WorkspaceAccessSupport {
                 .eq(WorkspaceMemberEntity::getRoleCode, "ADMIN")
                 .eq(WorkspaceMemberEntity::getStatus, 1));
         if (adminCount == 0) {
-            throw new BadRequestException("只有工作区管理员可执行该操作");
+            throw new AccessDeniedException("只有工作区管理员可执行该操作");
         }
         return workspace;
     }
@@ -117,6 +120,38 @@ public class WorkspaceAccessSupport {
                 .toList();
     }
 
+    public List<WorkspaceAccessItem> listCurrentWorkspaceAccesses() {
+        CurrentUserPrincipal currentUser = CurrentUserContext.require();
+        List<WorkspaceEntity> workspaces = listReadableWorkspaceEntities();
+        if (workspaces.isEmpty()) {
+            return List.of();
+        }
+
+        boolean platformAdmin = isPlatformAdmin();
+        Map<Long, WorkspaceMemberEntity> memberships = new LinkedHashMap<>();
+        if (!platformAdmin) {
+            workspaceMemberMapper.selectList(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                            .eq(WorkspaceMemberEntity::getUserId, currentUser.userId())
+                            .eq(WorkspaceMemberEntity::getStatus, 1)
+                            .in(WorkspaceMemberEntity::getWorkspaceId, workspaces.stream().map(WorkspaceEntity::getId).toList()))
+                    .forEach(member -> memberships.put(member.getWorkspaceId(), member));
+        }
+
+        return workspaces.stream().map(workspace -> {
+            if (platformAdmin) {
+                return new WorkspaceAccessItem(workspace.getWorkspaceCode(), "ADMIN", true);
+            }
+            if (workspace.getOwnerUserId() != null && workspace.getOwnerUserId().equals(currentUser.userId())) {
+                return new WorkspaceAccessItem(workspace.getWorkspaceCode(), "OWNER", true);
+            }
+            WorkspaceMemberEntity member = memberships.get(workspace.getId());
+            String memberType = member == null || member.getRoleCode() == null
+                    ? "MEMBER"
+                    : member.getRoleCode().trim().toUpperCase();
+            return new WorkspaceAccessItem(workspace.getWorkspaceCode(), memberType, "ADMIN".equals(memberType));
+        }).toList();
+    }
+
     public boolean isSuperAdmin() {
         return PlatformRole.isSuperAdmin(CurrentUserContext.require().platformRole());
     }
@@ -127,7 +162,7 @@ public class WorkspaceAccessSupport {
 
     public void requirePlatformAdmin() {
         if (!isPlatformAdmin()) {
-            throw new BadRequestException("只有管理员可执行该操作");
+            throw new AccessDeniedException("只有管理员可执行该操作");
         }
     }
 }

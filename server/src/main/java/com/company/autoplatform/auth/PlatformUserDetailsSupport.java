@@ -23,8 +23,8 @@ public class PlatformUserDetailsSupport {
                         .or()
                         .eq(UserEntity::getEmail, username))
                 .last("limit 1"));
-        if (user == null || user.getStatus() != 1) {
-            throw new UsernameNotFoundException("用户不存在或已停用");
+        if (user == null) {
+            throw new UsernameNotFoundException("用户不存在");
         }
         if (user.getPassword() == null || user.getPassword().isBlank()) {
             throw new BadRequestException("当前账号未设置密码");

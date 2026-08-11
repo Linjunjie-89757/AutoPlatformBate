@@ -46,6 +46,15 @@ export interface WorkspaceMemberRoleItem {
   system: boolean
 }
 
+export interface WorkspaceMemberCandidateItem {
+  userId: number
+  username: string
+  email: string
+  displayName: string
+  status: number | null
+  alreadyMember: boolean
+}
+
 export interface CreateWorkspaceMemberPayload {
   userId: number
   memberType?: 'ADMIN' | 'MEMBER' | string | null

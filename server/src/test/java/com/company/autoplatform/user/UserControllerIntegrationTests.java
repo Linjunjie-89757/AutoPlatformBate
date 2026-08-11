@@ -165,32 +165,37 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
         String username = "deny_user_" + System.nanoTime();
         setMemberUser();
 
+        mockMvc.perform(get("/api/users"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
         mockMvc.perform(post("/api/users")
                         .contentType("application/json")
                         .content(createUserRequest(username, username + "@demo.local", "Denied", "MEMBER", WORKSPACE_CODE)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
         mockMvc.perform(put("/api/users/{userId}", 12L)
                         .contentType("application/json")
                         .content(updateUserRequest("chennan-denied@demo.local", "Denied", "MEMBER", 1, WORKSPACE_CODE)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
         mockMvc.perform(post("/api/users/{userId}/reset-password", 12L))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
     void superAdminCannotBeMaintainedThroughUserManagement() throws Exception {
-        mockMvc.perform(put("/api/users/{userId}", 1L)
+        long superAdminUserId = requireSuperAdminUserId();
+        mockMvc.perform(put("/api/users/{userId}", superAdminUserId)
                         .contentType("application/json")
                         .content(updateUserRequest("superadmin@local", "Super Admin", "MEMBER", 1, WORKSPACE_CODE)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(post("/api/users/{userId}/reset-password", 1L))
+        mockMvc.perform(post("/api/users/{userId}/reset-password", superAdminUserId))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
     }
@@ -344,7 +349,7 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
 
     private void setSuperAdminUser() {
         CurrentUserPrincipal principal = new CurrentUserPrincipal(
-                1L,
+                requireSuperAdminUserId(),
                 "superadmin",
                 "Super Admin",
                 "{noop}superadmin123",

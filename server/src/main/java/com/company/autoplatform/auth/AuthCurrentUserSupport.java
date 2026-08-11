@@ -25,7 +25,8 @@ public class AuthCurrentUserSupport {
                 currentUser.username(),
                 currentUser.displayName(),
                 roleCode,
-                workspaceService.listReadableWorkspaceCodes()
+                workspaceService.listReadableWorkspaceCodes(),
+                workspaceService.listCurrentWorkspaceAccesses()
         );
     }
 }

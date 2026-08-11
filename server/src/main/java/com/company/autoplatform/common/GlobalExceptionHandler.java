@@ -2,6 +2,7 @@ package com.company.autoplatform.common;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -37,6 +38,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Void> handleAuthentication(AuthenticationException exception) {
         return ApiResponse.fail("请先登录");
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ApiResponse<Void> handleDisabled(DisabledException exception) {
+        return ApiResponse.fail("账号已停用，请联系管理员");
     }
 
     @ExceptionHandler(AccessDeniedException.class)

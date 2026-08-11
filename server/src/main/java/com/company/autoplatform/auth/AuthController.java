@@ -22,10 +22,16 @@ public class AuthController {
 
     private final AuthenticationManager authenticationManager;
     private final AuthService authService;
+    private final AuthenticatedSessionService authenticatedSessionService;
 
-    public AuthController(AuthenticationManager authenticationManager, AuthService authService) {
+    public AuthController(
+            AuthenticationManager authenticationManager,
+            AuthService authService,
+            AuthenticatedSessionService authenticatedSessionService
+    ) {
         this.authenticationManager = authenticationManager;
         this.authService = authService;
+        this.authenticatedSessionService = authenticatedSessionService;
     }
 
     @PostMapping("/login")
@@ -41,6 +47,7 @@ public class AuthController {
         SecurityContextHolder.setContext(context);
         HttpSession session = httpServletRequest.getSession(true);
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+        authenticatedSessionService.register(session, authentication);
         return ApiResponse.ok(authService.currentUser(), "Login successful");
     }
 
@@ -53,6 +60,7 @@ public class AuthController {
     public ApiResponse<Void> logout(HttpServletRequest httpServletRequest) {
         HttpSession session = httpServletRequest.getSession(false);
         if (session != null) {
+            authenticatedSessionService.remove(session.getId());
             session.invalidate();
         }
         SecurityContextHolder.clearContext();

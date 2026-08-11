@@ -44,7 +44,7 @@ public class WorkspaceMemberDomainService {
     }
 
     public List<WorkspaceMemberItem> listMembers(String workspaceCode) {
-        WorkspaceEntity workspace = workspaceAccessSupport.requireReadableWorkspace(workspaceCode);
+        WorkspaceEntity workspace = workspaceAccessSupport.requireWorkspaceAdmin(workspaceCode);
         workspaceRoleDomainService.ensureSystemRoles(workspace.getId());
         Map<Long, WorkspaceMemberItem> result = new LinkedHashMap<>();
 
@@ -73,6 +73,27 @@ public class WorkspaceMemberDomainService {
                 .forEach(item -> result.put(item.userId(), item));
 
         return new ArrayList<>(result.values());
+    }
+
+    public WorkspaceMemberCandidateItem findMemberCandidate(String workspaceCode, String account) {
+        WorkspaceEntity workspace = workspaceAccessSupport.requireWorkspaceAdmin(workspaceCode);
+        UserEntity user = userService.findAnyUserByAccount(account);
+        if (user == null || userService.isSuperAdmin(user.getId())) {
+            return null;
+        }
+        boolean alreadyMember = userService.isPlatformAdmin(user.getId())
+                || workspaceMemberMapper.selectCount(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                        .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
+                        .eq(WorkspaceMemberEntity::getUserId, user.getId())
+                        .eq(WorkspaceMemberEntity::getStatus, 1)) > 0;
+        return new WorkspaceMemberCandidateItem(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getDisplayName(),
+                user.getStatus(),
+                alreadyMember
+        );
     }
 
     @Transactional

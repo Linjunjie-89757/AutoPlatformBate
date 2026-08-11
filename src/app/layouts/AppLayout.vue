@@ -12,7 +12,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { useSession } from '@/entities/session'
+import { canManageWorkspace, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { useLogout } from '@/features/auth-logout'
 import autotestFigmaMarkUrl from '@/assets/brand/autotest-figma-mark.svg'
@@ -178,6 +178,11 @@ const navigationItems: NavigationItem[] = [
   { path: '/settings', label: '系统设置', icon: figmaGlobalNavIcons.setting, color: '#4E5969', lightBg: '#F2F3F5' },
 ]
 
+const visibleNavigationItems = computed(() => navigationItems.filter((item) => {
+  if (!['/config-center', '/settings'].includes(item.path)) return true
+  return canManageWorkspace(currentUser.value, selectedWorkspaceCode.value)
+}))
+
 function matchesNavigationPath(path: string) {
   return route.path === path || route.path.startsWith(`${path}/`)
 }
@@ -307,7 +312,7 @@ onBeforeUnmount(() => {
 
       <nav class="app-layout__nav" aria-label="主导航">
         <div
-          v-for="item in navigationItems"
+          v-for="item in visibleNavigationItems"
           :key="item.path"
           class="app-layout__nav-group"
           :class="{
