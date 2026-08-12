@@ -14,8 +14,10 @@
   font-family: var(--app-font-family);
 }
 
-button,
-input {
+.figma-env button,
+.figma-env input,
+.figma-env-modal button,
+.figma-env-modal input {
   font: inherit;
 }
 
@@ -1539,7 +1541,7 @@ input {
   line-height: 18px;
 }
 
-.figma-env__secondary-panel :deep(.el-select) {
+.figma-env__secondary-panel .el-select {
   width: min(720px, 100%);
 }
 
@@ -1587,7 +1589,7 @@ input {
   gap: 6px;
 }
 
-.figma-env__secondary-grid :deep(.el-select) { width: 100%; }
+.figma-env__secondary-grid .el-select { width: 100%; }
 
 .figma-env__ready {
   max-width: 760px;

@@ -1,0 +1,117 @@
+.api-settings-panel {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-content: start;
+  align-items: center;
+  gap: 12px 14px;
+  max-width: none;
+  height: 100%;
+  overflow: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 14px;
+  color: var(--app-text-primary);
+  font-size: 13px;
+}
+
+.api-config-panel-head {
+  display: flex;
+  min-height: 42px;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--app-border-soft);
+}
+
+.api-config-panel-head strong {
+  color: var(--app-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.api-config-panel-head span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.api-settings-panel > label {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-settings-panel > .el-input,
+.api-settings-panel > .el-textarea,
+.api-settings-panel > .api-settings-control-cell {
+  min-width: 0;
+}
+
+.api-settings-panel .el-input__wrapper,
+.api-settings-panel .el-input-number .el-input__wrapper,
+.api-settings-panel .el-textarea__inner {
+  min-height: 32px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+.api-settings-panel .el-input__inner,
+.api-settings-panel .el-textarea__inner {
+  color: var(--app-text-primary);
+  font-size: 13px;
+}
+
+.api-settings-panel .el-input__wrapper:hover,
+.api-settings-panel .el-textarea__inner:hover {
+  box-shadow: inset 0 0 0 1px #c9cdd4;
+}
+
+.api-settings-panel .el-input.is-focus .el-input__wrapper,
+.api-settings-panel .el-textarea__inner:focus {
+  box-shadow: inset 0 0 0 1px var(--app-primary);
+}
+
+.api-settings-panel > label:nth-of-type(5),
+.api-settings-panel > .el-textarea,
+.api-settings-footer {
+  grid-column: 1 / -1;
+}
+
+.api-settings-panel > label:nth-of-type(5) {
+  margin-top: 2px;
+}
+
+.api-settings-panel .el-textarea__inner {
+  min-height: 96px;
+  padding: 8px 11.5px;
+  line-height: 20px;
+}
+
+.api-settings-control-cell .el-input-number {
+  width: 180px;
+}
+
+.api-settings-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-settings-footer span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #f7f8fa;
+}

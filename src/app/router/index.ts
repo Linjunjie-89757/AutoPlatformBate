@@ -281,12 +281,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'automation/api/reports',
-        name: 'automation-api-reports',
-        component: ApiAutomationPage,
-        meta: {
-          title: '接口自动化报告',
-          description: '查看接口用例、场景和执行套件的运行报告。',
-        },
+        redirect: to => ({ path: '/reports', query: to.query, hash: to.hash }),
       },
       {
         path: 'automation/api/settings',

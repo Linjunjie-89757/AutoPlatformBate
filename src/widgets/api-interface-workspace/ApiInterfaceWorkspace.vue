@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
 
 import {
   apiAutomationApi,
@@ -14,9 +13,8 @@ import type { WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import ApiAutomationSettingsPlaceholder from './ApiAutomationSettingsPlaceholder.vue'
 import ApiDefinitionWorkspaceModule from './ApiDefinitionWorkspaceModule.vue'
-import ApiReportModule from './ApiReportModule.vue'
 
-type ApiTopTab = 'definitions' | 'scenarios' | 'execution' | 'reports' | 'settings'
+type ApiTopTab = 'definitions' | 'scenarios' | 'execution' | 'settings'
 
 const props = defineProps<{
   activeSection?: ApiTopTab
@@ -34,70 +32,11 @@ const emit = defineEmits<{
   loaded: [payload: { definitions: ApiDefinitionItem[]; modules: ApiDefinitionModuleItem[]; cases: ApiDefinitionCaseItem[] }]
 }>()
 
-const route = useRoute()
 const activeTopTab = computed<ApiTopTab>(() => props.activeSection || 'definitions')
 const environments = ref<ApiAutomationEnvironmentItem[]>([])
 const variableSets = ref<ApiAutomationVariableSetItem[]>([])
 const runOptionsLoading = ref(false)
 const runOptionsErrorMessage = ref('')
-
-function firstRouteQueryValue(value: unknown) {
-  if (Array.isArray(value)) {
-    return typeof value[0] === 'string' ? value[0] : null
-  }
-  return typeof value === 'string' ? value : null
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString()
-}
-
-function formatDuration(value?: number | null) {
-  if (value === null || value === undefined) return '-'
-  if (value < 1000) return `${value}ms`
-  return `${(value / 1000).toFixed(2)}s`
-}
-
-function formatResponseSize(value?: number | null) {
-  if (value === null || value === undefined) return '-'
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
-  return `${(value / 1024 / 1024).toFixed(1)} MB`
-}
-
-function runResultLabel(result?: string | null) {
-  switch ((result || '').toUpperCase()) {
-    case 'PASSED':
-    case 'SUCCESS':
-      return '通过'
-    case 'FAILED':
-      return '失败'
-    case 'ERROR':
-      return '异常'
-    case 'SKIPPED':
-      return '跳过'
-    default:
-      return '未执行'
-  }
-}
-
-function runResultClass(result?: string | null) {
-  switch ((result || '').toUpperCase()) {
-    case 'PASSED':
-    case 'SUCCESS':
-      return 'is-success'
-    case 'FAILED':
-    case 'ERROR':
-      return 'is-danger'
-    case 'SKIPPED':
-      return 'is-warning'
-    default:
-      return 'is-muted'
-  }
-}
 
 async function loadRunOptions() {
   if (!props.workspaceReady) {
@@ -152,18 +91,6 @@ onMounted(() => {
       :can-execute="props.canExecute"
       :can-export="props.canExport"
       @loaded="payload => emit('loaded', payload)"
-    />
-
-    <ApiReportModule
-      v-else-if="activeTopTab === 'reports'"
-      :workspace-code="props.workspaceCode"
-      :workspace-ready="props.workspaceReady"
-      :report-key="firstRouteQueryValue(route.query.reportKey)"
-      :format-date-time="formatDateTime"
-      :format-duration="formatDuration"
-      :format-response-size="formatResponseSize"
-      :run-result-class="runResultClass"
-      :run-result-label="runResultLabel"
     />
 
     <ApiAutomationSettingsPlaceholder v-else-if="activeTopTab === 'settings'" />

@@ -21,7 +21,7 @@ const ApiScenarioFigmaWorkspace = defineAsyncComponent(
   () => import('@/widgets/api-scenario-workspace/ApiScenarioFigmaWorkspace.vue'),
 )
 
-type ApiAutomationSection = 'definitions' | 'scenarios' | 'execution' | 'reports' | 'settings'
+type ApiAutomationSection = 'definitions' | 'scenarios' | 'execution' | 'settings'
 
 const route = useRoute()
 const { currentUser } = useSession()
@@ -37,7 +37,6 @@ const canExportApi = computed(() => hasWorkspacePermission(currentUser.value, wo
 const activeSection = computed<ApiAutomationSection>(() => {
   if (route.path.endsWith('/scenarios')) return 'scenarios'
   if (route.path.endsWith('/execution-suites')) return 'execution'
-  if (route.path.endsWith('/reports')) return 'reports'
   if (route.path.endsWith('/settings')) return 'settings'
   return 'definitions'
 })
@@ -90,7 +89,7 @@ watch(selectedWorkspaceCode, (value) => {
   <AppPage
     class="api-automation-app-page"
     title="接口自动化"
-    description="管理接口、场景、执行套件、报告和设置。"
+    description="管理接口、场景、执行套件和设置。"
     fill
   >
     <div class="api-automation-page">

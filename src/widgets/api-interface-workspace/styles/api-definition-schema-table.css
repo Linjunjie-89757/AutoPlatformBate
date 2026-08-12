@@ -1,0 +1,123 @@
+.api-doc-schema-table {
+  overflow: auto;
+}
+
+.api-doc-schema-head,
+.api-doc-schema-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.1fr) 116px 64px minmax(170px, 1fr) minmax(150px, 0.9fr);
+  align-items: center;
+  column-gap: 12px;
+  min-width: 840px;
+  padding: 0 12px;
+}
+
+.api-doc-schema-head {
+  height: 31px;
+  border-bottom: 1px solid var(--app-border-soft);
+  background: #fafafa;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-doc-schema-row {
+  min-height: 34.5px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.api-doc-schema-row:last-child {
+  border-bottom: 0;
+}
+
+.api-doc-field-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.api-doc-field-name {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 22px;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 7px;
+  border-radius: 4px;
+  background: #eef6ff;
+  color: #2563eb;
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-doc-field-cell small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text-placeholder);
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-doc-required {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-doc-required.is-required {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.api-doc-muted {
+  min-width: 0;
+  overflow: hidden;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-schema-type {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.api-schema-type.is-string {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.api-schema-type.is-number {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.api-schema-type.is-boolean {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.api-schema-type.is-object,
+.api-schema-type.is-array {
+  background: #f5f3ff;
+  color: #7c3aed;
+}

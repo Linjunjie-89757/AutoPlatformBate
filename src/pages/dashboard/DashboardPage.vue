@@ -94,7 +94,7 @@ const quickActions = [
   { label: '执行任务', icon: Play, color: palette.primary, path: '/automation/api/execution-suites' },
   { label: '新建用例', icon: FileText, color: palette.success, path: '/cases/manage' },
   { label: 'AI 生成', icon: Sparkles, color: palette.purple, path: '/cases/ai-generate' },
-  { label: '查看报告', icon: Activity, color: palette.purple, path: '/automation/api/reports' },
+  { label: '查看报告', icon: Activity, color: palette.purple, path: '/reports' },
 ]
 
 const recentTasks: RecentTask[] = [

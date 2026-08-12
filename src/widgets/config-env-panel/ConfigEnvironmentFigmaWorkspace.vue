@@ -1,34 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
-  Activity as Connection,
   AlertTriangle as Warning,
-  ArrowDown,
-  ArrowUp,
-  Check,
   CheckCircle as CircleCheck,
-  ChevronDown,
-  ChevronRight,
-  Clock,
-  Code2,
   Copy as CopyDocument,
   Edit2 as Edit,
-  Eye,
   Globe,
   Layers,
-  Link2 as Link,
-  Minus,
   Monitor,
   Plus,
   Power as SwitchButton,
-  RefreshCw,
   Search,
   Server as Service,
   Trash2 as Delete,
   Timer,
-  Variable,
-  X as Close,
-  XCircle as CircleClose,
   Zap,
 } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
@@ -59,20 +44,28 @@ import { deleteConfigEnv } from '@/features/config-env-delete'
 import { toggleConfigEnvStatus } from '@/features/config-env-toggle-status'
 import { parseWebUiVariables, type WebUiVariableItem } from '@/features/config-param-create-edit'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { AppFigmaSwitch } from '@/shared/ui'
 import { confirmDelete } from '@/shared/ui/app-delete-confirm/confirmDelete'
 
-type DetailTab = 'services' | 'variables' | 'mock' | 'effective' | 'references'
-type ServiceTestState = 'untested' | 'testing' | 'success' | 'failed' | 'timeout'
+import ConfigEnvironmentEffectivePanel from './ConfigEnvironmentEffectivePanel.vue'
+import ConfigEnvironmentEditorDialogs from './ConfigEnvironmentEditorDialogs.vue'
+import ConfigEnvironmentMockPanel from './ConfigEnvironmentMockPanel.vue'
+import ConfigEnvironmentMockDialogs from './ConfigEnvironmentMockDialogs.vue'
+import ConfigEnvironmentReferencesPanel from './ConfigEnvironmentReferencesPanel.vue'
+import ConfigEnvironmentServicesPanel from './ConfigEnvironmentServicesPanel.vue'
+import ConfigEnvironmentVariableDialogs from './ConfigEnvironmentVariableDialogs.vue'
+import ConfigEnvironmentVariablesPanel from './ConfigEnvironmentVariablesPanel.vue'
+import type {
+  EffectiveVariableRow,
+  EffectiveVariableSourceType,
+  EnvironmentEditorForm,
+  LocalVariableEditorForm,
+  ReferenceKind,
+  ReferenceViewItem,
+  ServiceEditorForm,
+  ServiceTestState,
+} from './configEnvironmentPanel.types'
 
-interface ServiceEditorForm {
-  key: string
-  name: string
-  baseUrl: string
-  timeoutMs: number
-  enabled: boolean
-  isDefault: boolean
-}
+type DetailTab = 'services' | 'variables' | 'mock' | 'effective' | 'references'
 
 interface StageMeta {
   label: string
@@ -80,54 +73,10 @@ interface StageMeta {
   background: string
 }
 
-interface EnvironmentEditorForm {
-  envName: string
-  envType: string
-  automationType: ConfigAutomationType
-  description: string
-}
-
-interface LocalVariableEditorForm {
-  name: string
-  value: string
-  valueType: NonNullable<ConfigEnvLocalVariableForm['valueType']>
-  sensitive: boolean
-  description: string
-  enabled: boolean
-}
-
 interface RuntimeReferenceState {
   running?: boolean
   status?: string | null
   executionStatus?: string | null
-}
-
-type ReferenceKind = 'api-scenario' | 'api-suite' | 'web-ui' | 'scheduled'
-
-interface ReferenceViewItem {
-  key: string
-  kind: ReferenceKind
-  typeLabel: string
-  sourceType: string
-  sourceId: number | null
-  name: string
-  lastRun: string
-  status: 'running' | 'idle' | 'unknown'
-}
-
-type EffectiveVariableSourceType = 'local' | 'variable-set' | 'workspace'
-
-interface EffectiveVariableRow {
-  name: string
-  value: string
-  rawValue: string
-  source: string
-  sourceType: EffectiveVariableSourceType
-  overriddenSource: string | null
-  description: string
-  sensitive: boolean
-  ok: boolean
-  order: number
 }
 
 const props = withDefaults(defineProps<{ workspaceCode?: string }>(), { workspaceCode: 'ALL' })
@@ -1143,7 +1092,7 @@ function viewReference(item: ReferenceViewItem) {
     path = isBatch ? '/automation/web/batches' : '/automation/web/runs'
     if (item.sourceId != null) query[isBatch ? 'batchId' : 'runId'] = String(item.sourceId)
   } else if (item.sourceType.includes('历史') || item.sourceType.includes('调试')) {
-    path = '/automation/api/reports'
+    path = '/reports'
   } else if (item.kind === 'api-suite') {
     path = '/automation/api/execution-suites'
   }
@@ -1278,482 +1227,164 @@ watch(() => props.workspaceCode, () => void loadData(null))
         </button>
       </nav>
 
-      <section v-if="activeTab === 'services'" class="figma-env__services" data-node-id="311:4040">
-        <div class="figma-env__service-toolbar">
-          <span>共 {{ form.services.filter(item => item.baseUrl).length }} 个服务，其中 {{ defaultServiceCount }} 个默认入口</span>
-          <i />
-          <button type="button" @click="batchTestConnections"><el-icon><Connection /></el-icon>批量连接测试</button>
-          <button class="is-primary" type="button" @click="openAddService"><el-icon><Plus /></el-icon>添加服务</button>
-        </div>
+      <ConfigEnvironmentServicesPanel
+        v-if="activeTab === 'services'"
+        :services="form.services"
+        :default-service-key="form.defaultServiceKey"
+        :default-service-count="defaultServiceCount"
+        :service-status="serviceStatus"
+        :format-timeout="formatTimeout"
+        @batch-test="batchTestConnections"
+        @add="openAddService"
+        @test="testConnection"
+        @edit="openEditService"
+        @copy="copyService"
+        @remove="removeService"
+      />
 
-        <div v-if="form.services.length" class="figma-env__service-list">
-          <article v-for="(service, index) in form.services" :key="service.key" class="figma-env__service-card">
-            <span class="figma-env__service-icon" :class="{ 'is-default': service.key === form.defaultServiceKey }">
-              <el-icon v-if="service.key === form.defaultServiceKey"><Globe /></el-icon>
-              <el-icon v-else><Service /></el-icon>
-            </span>
-            <div class="figma-env__service-copy">
-              <div><strong>{{ service.name }}</strong><b v-if="service.key === form.defaultServiceKey">默认入口</b><b v-if="!service.enabled" class="is-disabled">已停用</b></div>
-              <p><code>{{ service.baseUrl }}</code><i>·</i><span>超时 {{ formatTimeout(service.timeoutMs) }}</span></p>
-            </div>
-            <div class="figma-env__service-actions">
-              <span class="figma-env__service-status" :class="`is-${serviceStatus(service)}`">
-                <el-icon><CircleCheck v-if="serviceStatus(service) === 'success'" /><Warning v-else-if="serviceStatus(service) === 'failed'" /><Clock v-else /></el-icon>
-                {{ serviceStatus(service) === 'testing' ? '测试中...' : serviceStatus(service) === 'success' ? '连通' : serviceStatus(service) === 'failed' ? '失败' : serviceStatus(service) === 'timeout' ? '超时' : '未检测' }}
-              </span>
-              <button type="button" @click="testConnection(service)"><el-icon><Connection /></el-icon>测试连接</button>
-              <span class="figma-env__row-actions">
-                <button type="button" title="编辑" @click="openEditService(index)"><el-icon><Edit /></el-icon></button>
-                <button type="button" title="复制" @click="copyService(index)"><el-icon><CopyDocument /></el-icon></button>
-                <button type="button" title="删除" @click="removeService(index)"><el-icon><Delete /></el-icon></button>
-              </span>
-            </div>
-          </article>
-        </div>
+      <ConfigEnvironmentVariablesPanel
+        v-else-if="activeTab === 'variables'"
+        :variable-sets="selectedVariableSets"
+        :local-variables="form.localVariables"
+        :scope-label="variableSetScopeLabel"
+        :has-sensitive="variableSetHasSensitive"
+        :version-label="variableSetVersionLabel"
+        :is-enabled="isVariableSetEnabled"
+        @adjust-priority="openPriorityDialog"
+        @bind="openBindVariableSetDialog"
+        @toggle-set="toggleVariableSetEnabled"
+        @move-set="moveBoundVariableSet"
+        @view-sets="goToVariableSetConfig"
+        @unbind="unbindVariableSet"
+        @add-local="openLocalVariableDialog()"
+        @toggle-local="toggleLocalVariable"
+        @edit-local="openLocalVariableDialog"
+        @delete-local="requestDeleteLocalVariable"
+      />
 
-        <div v-else class="figma-env__service-empty" data-node-id="311:6146">
-          <el-icon><Service /></el-icon>
-          <strong>暂无服务配置</strong>
-          <p>添加业务服务地址，接口和 UI 测试将使用这些地址发起请求</p>
-          <button class="figma-env__primary-button" type="button" @click="openAddService"><el-icon><Plus /></el-icon>添加第一个服务</button>
-        </div>
-      </section>
+      <ConfigEnvironmentMockPanel
+        v-else-if="activeTab === 'mock'"
+        :production-environment="productionEnvironment"
+        :mock-bound="mockBound"
+        :application="selectedMockApplication"
+        :release="selectedMockRelease"
+        :version-option-count="mockVersionOptions.length"
+        :mock-enabled="form.mockEnabled"
+        :mock-base-url="mockBaseUrl"
+        :endpoint-count="mockEndpointCount"
+        :scenario-count="mockScenarioCount"
+        :unmatched24h-count="mockUnmatched24hCount"
+        @switch-version="openMockVersionDialog"
+        @unbind="mockUnbindDialogVisible = true"
+        @toggle-enabled="toggleMockEnabled"
+        @view-mock="goToMockService"
+        @bind="openMockBindDialog"
+      />
 
-      <section v-else-if="activeTab === 'variables'" class="figma-env__variables" data-node-id="332:2871">
-        <div class="figma-env__variable-priority">
-          <el-icon><Zap /></el-icon>
-          <span>变量优先级：</span>
-          <strong>环境局部覆盖</strong><el-icon><ChevronRight /></el-icon>
-          <strong>环境绑定变量集</strong><el-icon><ChevronRight /></el-icon>
-          <strong>工作区全局变量</strong>
-          <small>（优先级从高到低）</small>
-        </div>
+      <ConfigEnvironmentEffectivePanel
+        v-else-if="activeTab === 'effective'"
+        :variables="effectiveVariables"
+        :filtered-variables="filteredEffectiveVariables"
+        :source-filter="effectiveSourceFilter"
+        :keyword="effectiveKeyword"
+        @update:source-filter="effectiveSourceFilter = $event"
+        @update:keyword="effectiveKeyword = $event"
+      />
 
-        <section class="figma-env__variable-section">
-          <header class="figma-env__variable-heading">
-            <div><h3>绑定变量集</h3><p>从变量配置页面选择已有变量集，多个变量集按优先级顺序生效</p></div>
-            <div>
-              <button v-if="selectedVariableSets.length > 1" type="button" @click="openPriorityDialog"><el-icon><ArrowUp /></el-icon>调整优先级</button>
-              <button type="button" @click="openBindVariableSetDialog"><el-icon><Plus /></el-icon>绑定变量集</button>
-            </div>
-          </header>
-
-          <div v-if="selectedVariableSets.length" class="figma-env__variable-set-list">
-            <article v-for="(item, index) in selectedVariableSets" :key="item.id" :class="{ 'is-disabled': !isVariableSetEnabled(item) }">
-              <button class="figma-env__priority-index" type="button" title="调整优先级" @click="openPriorityDialog">{{ index + 1 }}</button>
-              <div class="figma-env__variable-set-copy">
-                <div><strong>{{ item.paramName }}</strong><span>{{ variableSetScopeLabel(item) }}</span><span v-if="variableSetHasSensitive(item)" class="is-sensitive">含敏感变量</span></div>
-                <p>{{ parseWebUiVariables(item.contentJson).length }} 个变量 <i>·</i> <code>{{ variableSetVersionLabel(item) }}</code></p>
-              </div>
-              <AppFigmaSwitch :model-value="isVariableSetEnabled(item)" :label="isVariableSetEnabled(item) ? '停用变量集' : '启用变量集'" :title="isVariableSetEnabled(item) ? '停用变量集' : '启用变量集'" @update:model-value="toggleVariableSetEnabled(item)" />
-              <span class="figma-env__variable-order-actions">
-                <button type="button" title="上移" :disabled="index === 0" @click="moveBoundVariableSet(index, -1)"><el-icon><ArrowUp /></el-icon></button>
-                <button type="button" title="下移" :disabled="index === selectedVariableSets.length - 1" @click="moveBoundVariableSet(index, 1)"><el-icon><ArrowDown /></el-icon></button>
-              </span>
-              <span class="figma-env__row-actions">
-                <button type="button" title="查看变量集" @click="goToVariableSetConfig"><el-icon><Eye /></el-icon></button>
-                <button type="button" title="解除绑定" @click="unbindVariableSet(item)"><el-icon><Minus /></el-icon></button>
-              </span>
-            </article>
-          </div>
-          <div v-else class="figma-env__variable-empty">
-            <el-icon><Variable /></el-icon><span>尚未绑定变量集，请前往「变量配置」创建后在此绑定</span>
-          </div>
-        </section>
-
-        <section class="figma-env__variable-section">
-          <header class="figma-env__variable-heading">
-            <div><h3>环境局部变量</h3><p>用于覆盖少量环境差异，此处定义的变量优先级最高</p></div>
-            <button type="button" @click="openLocalVariableDialog()"><el-icon><Plus /></el-icon>添加变量</button>
-          </header>
-
-          <div v-if="form.localVariables.length" class="figma-env__local-variable-table">
-            <table>
-              <colgroup><col class="is-name"><col class="is-value"><col class="is-type"><col><col class="is-status"><col class="is-actions"></colgroup>
-              <thead><tr><th>变量名</th><th>值</th><th>类型</th><th>说明</th><th>状态</th><th>操作</th></tr></thead>
-              <tbody>
-                <tr v-for="(variable, index) in form.localVariables" :key="`${variable.name}-${index}`" :class="{ 'is-disabled': variable.enabled === false }">
-                  <td><code>{{ variable.name }}</code></td>
-                  <td><code :class="{ 'is-masked': variable.sensitive }">{{ variable.sensitive ? '••••••••' : variable.value }}</code></td>
-                  <td><span>{{ variable.valueType || (variable.sensitive ? 'secret' : 'string') }}</span></td>
-                  <td>{{ variable.description || '—' }}</td>
-                  <td><AppFigmaSwitch :model-value="variable.enabled !== false" :label="variable.enabled === false ? '启用变量' : '停用变量'" :title="variable.enabled === false ? '启用变量' : '停用变量'" @update:model-value="toggleLocalVariable(index)" /></td>
-                  <td><span class="figma-env__row-actions"><button type="button" title="编辑" @click="openLocalVariableDialog(index)"><el-icon><Edit /></el-icon></button><button type="button" title="删除" @click="requestDeleteLocalVariable(index)"><el-icon><Delete /></el-icon></button></span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-else class="figma-env__variable-empty is-local"><span>暂无局部变量，当需要覆盖特定环境差异时添加</span></div>
-        </section>
-      </section>
-
-      <section v-else-if="activeTab === 'mock'" class="figma-env__mock-panel" data-node-id="334:7687">
-        <div v-if="productionEnvironment" class="figma-env__mock-production-warning">
-          <el-icon><Warning /></el-icon>
-          <div><strong>生产环境禁止启用 Mock</strong><span>生产阶段的环境中不允许绑定 Mock 版本，以防止生产请求被拦截或返回模拟数据。</span></div>
-        </div>
-
-        <template v-if="mockBound && selectedMockApplication && selectedMockRelease">
-          <div class="figma-env__mock-toolbar">
-            <h3>当前绑定</h3>
-            <span />
-            <button type="button" :disabled="mockVersionOptions.length < 2" @click="openMockVersionDialog"><el-icon><RefreshCw /></el-icon>切换版本</button>
-            <button type="button" @click="mockUnbindDialogVisible = true"><el-icon><Minus /></el-icon>解除绑定</button>
-          </div>
-
-          <article class="figma-env__mock-card">
-            <header>
-              <div>
-                <AppFigmaSwitch :model-value="form.mockEnabled" :label="form.mockEnabled ? '停用 Mock' : '启用 Mock'" @update:model-value="toggleMockEnabled" />
-                <strong>{{ form.mockEnabled ? 'Mock 已启用，接口请求将被拦截' : 'Mock 已停用，接口请求将直接到达真实服务' }}</strong>
-              </div>
-              <button type="button" @click="goToMockService">前往 Mock 服务查看详情 →</button>
-            </header>
-            <div class="figma-env__mock-grid">
-              <div><span>Mock 应用</span><strong>{{ selectedMockApplication.appName }}</strong></div>
-              <div><span>应用编码</span><code>{{ selectedMockApplication.appCode }}</code></div>
-              <div><span>当前版本</span><code class="is-version">v{{ selectedMockRelease.versionNo }}</code></div>
-              <div><span>Mock 基础地址</span><code class="is-link">{{ mockBaseUrl }}</code></div>
-              <div><span>接口 / 场景</span><strong>{{ mockEndpointCount ?? '—' }} 接口 · {{ mockScenarioCount ?? '—' }} 场景</strong></div>
-              <div><span>访问凭据</span><strong class="is-credential">未启用</strong></div>
-              <div><span>未匹配策略</span><strong>严格失败</strong></div>
-              <div class="is-empty" />
-            </div>
-            <footer v-if="mockUnmatched24hCount">
-              <el-icon><Warning /></el-icon>
-              <span>过去 24 小时内有 {{ mockUnmatched24hCount }} 次请求未匹配到任何场景，可在 Mock 服务调用日志中查看详情</span>
-              <button type="button" @click="goToMockService">查看日志 →</button>
-            </footer>
-          </article>
-        </template>
-
-        <div v-else-if="!productionEnvironment" class="figma-env__mock-empty">
-          <el-icon><Code2 /></el-icon>
-          <strong>尚未绑定 Mock</strong>
-          <p>绑定后，测试执行中的接口请求将由 Mock 服务拦截并返回模拟响应</p>
-          <button class="figma-env__primary-button" type="button" @click="openMockBindDialog"><el-icon><Plus /></el-icon>绑定 Mock 应用</button>
-        </div>
-      </section>
-
-      <section v-else-if="activeTab === 'effective'" class="figma-env__effective-panel" data-node-id="336:9791">
-        <div class="figma-env__effective-toolbar" data-node-id="336:9793">
-          <p>下表展示当前环境执行时各变量的最终生效值及来源。敏感变量已脱敏，同名变量按优先级覆盖。</p>
-          <span />
-          <label class="figma-env__effective-filter" data-node-id="336:9798">
-            <select v-model="effectiveSourceFilter" aria-label="筛选变量来源">
-              <option value="all">全部变量</option>
-              <option value="local">环境局部覆盖</option>
-              <option value="variable-set">变量集变量</option>
-              <option value="workspace">工作区变量</option>
-            </select>
-            <el-icon><ChevronDown /></el-icon>
-          </label>
-          <label class="figma-env__effective-search" data-node-id="336:9805">
-            <el-icon><Search /></el-icon>
-            <input v-model="effectiveKeyword" type="text" placeholder="搜索变量名" aria-label="搜索变量名">
-          </label>
-        </div>
-
-        <div v-if="!effectiveVariables.length" class="figma-env__effective-empty">
-          <el-icon><Variable /></el-icon>
-          <p>尚未配置任何变量，请先绑定变量集或添加局部变量</p>
-        </div>
-
-        <div v-else class="figma-env__effective-table-shell" data-node-id="336:9812">
-          <div class="figma-env__effective-table-scroll app-soft-scrollbar">
-            <table class="figma-env__effective-table" data-node-id="336:9813">
-              <colgroup><col><col><col><col><col><col></colgroup>
-              <thead><tr data-node-id="336:9815"><th>变量名</th><th>最终值</th><th>来源</th><th>是否覆盖</th><th>说明</th><th>状态</th></tr></thead>
-              <tbody>
-                <tr v-for="item in filteredEffectiveVariables" :key="item.name">
-                  <td><code class="figma-env__effective-name">{{ item.name }}</code></td>
-                  <td><code class="figma-env__effective-value" :class="{ 'is-sensitive': item.sensitive }">{{ item.value || '—' }}</code></td>
-                  <td><span class="figma-env__effective-source" :class="`is-${item.sourceType}`">{{ item.source }}</span></td>
-                  <td><span v-if="item.overriddenSource" class="figma-env__effective-override">覆盖自 {{ item.overriddenSource }}</span><span v-else class="figma-env__effective-dash">—</span></td>
-                  <td><span class="figma-env__effective-description">{{ item.description }}</span></td>
-                  <td><el-icon v-if="item.ok" class="figma-env__effective-status is-ok" title="解析正常"><CircleCheck /></el-icon><el-icon v-else class="figma-env__effective-status is-error" title="存在无法解析的变量"><Warning /></el-icon></td>
-                </tr>
-                <tr v-if="!filteredEffectiveVariables.length" class="figma-env__effective-no-result"><td colspan="6">没有符合当前筛选条件的变量</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section v-else class="figma-env__references" data-node-id="337:10369">
-        <div v-if="runningReferences.length" class="figma-env__reference-warning" data-node-id="337:10371">
-          <el-icon><Warning /></el-icon>
-          <span>当前有任务正在使用此环境运行，停用或删除操作将被阻止。</span>
-        </div>
-
-        <div v-if="referenceLoading" class="figma-env__reference-empty is-loading">
-          <el-icon class="is-spinning"><RefreshCw /></el-icon>
-          <strong>正在加载引用数据</strong>
-        </div>
-
-        <template v-else-if="referenceRows.length">
-          <div class="figma-env__reference-stats" data-node-id="337:10379">
-            <article
-              v-for="stat in referenceStats"
-              :key="stat.kind"
-              class="figma-env__reference-stat"
-              :class="`is-${stat.kind}`"
-              :title="referenceListIsSampled ? '当前接口只返回部分引用明细，卡片数量为当前已返回记录数' : ''"
-            >
-              <el-icon><component :is="referenceTypeMeta(stat.kind).icon" /></el-icon>
-              <div><strong>{{ stat.count }}</strong><span>{{ referenceTypeMeta(stat.kind).label }}</span></div>
-            </article>
-          </div>
-
-          <div class="figma-env__reference-table-shell" data-node-id="337:10430">
-            <div class="figma-env__reference-table-scroll app-soft-scrollbar">
-              <table class="figma-env__reference-table" data-node-id="337:10431">
-                <colgroup><col><col><col><col><col></colgroup>
-                <thead><tr data-node-id="337:10433"><th>类型</th><th>资源名称</th><th>最近执行</th><th>状态</th><th>操作</th></tr></thead>
-                <tbody>
-                  <tr v-for="item in referenceRows" :key="item.key">
-                    <td>
-                      <span class="figma-env__reference-type" :class="`is-${item.kind}`" :title="item.sourceType">
-                        <el-icon><component :is="referenceTypeMeta(item.kind).icon" /></el-icon>{{ item.typeLabel }}
-                      </span>
-                    </td>
-                    <td><strong class="figma-env__reference-name">{{ item.name }}</strong></td>
-                    <td><code class="figma-env__reference-time" :title="item.sourceType.includes('历史') ? '执行时间' : '当前接口仅提供资源更新时间'">{{ item.lastRun }}</code></td>
-                    <td class="figma-env__reference-status-cell">
-                      <span v-if="item.status === 'running'" class="figma-env__reference-status is-running"><el-icon><Connection /></el-icon>运行中</span>
-                      <span v-else-if="item.status === 'idle'" class="figma-env__reference-status is-idle">空闲</span>
-                      <span v-else class="figma-env__reference-status is-unknown">—</span>
-                    </td>
-                    <td class="figma-env__reference-action-cell"><button type="button" :aria-label="`查看 ${item.name}`" @click="viewReference(item)">查看</button></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </template>
-
-        <div v-else class="figma-env__reference-empty">
-          <el-icon><Connection /></el-icon>
-          <strong>暂无引用</strong>
-          <span>此环境尚未被任何接口场景、套件或定时任务引用</span>
-        </div>
-      </section>
+      <ConfigEnvironmentReferencesPanel
+        v-else
+        :running-count="runningReferences.length"
+        :loading="referenceLoading"
+        :rows="referenceRows"
+        :stats="referenceStats"
+        :sampled="referenceListIsSampled"
+        @view="viewReference"
+      />
     </main>
 
     <div v-else class="figma-env__detail figma-env__no-selection">
       <el-icon><Service /></el-icon><strong>{{ errorMessage || '暂无环境配置' }}</strong><p>新建环境后，可以继续添加服务地址。</p>
     </div>
 
-    <Teleport to="body">
-      <div v-if="bindVariableSetVisible" class="figma-env-modal" data-node-id="332:4204" @mousedown.self="bindVariableSetVisible = false">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--bind-variable">
-          <header>
-            <div class="figma-env-modal__heading-copy"><h2>绑定变量集</h2><p>已绑定 {{ selectedVariableSets.length }} 个，可绑定 {{ availableVariableSets.length }} 个</p></div>
-            <button type="button" @click="bindVariableSetVisible = false"><el-icon><Close /></el-icon></button>
-          </header>
-          <div class="figma-env-modal__variable-set-options app-soft-scrollbar">
-            <button v-for="item in availableVariableSets" :key="item.id" type="button" :class="{ 'is-selected': bindVariableSetSelection.includes(item.id) }" @click="toggleVariableSetSelection(item.id)">
-              <span class="figma-env-modal__checkbox"><el-icon v-if="bindVariableSetSelection.includes(item.id)"><Check /></el-icon></span>
-              <span class="figma-env-modal__variable-set-option-copy">
-                <span><strong>{{ item.paramName }}</strong><em>{{ variableSetScopeLabel(item) }}</em><em v-if="variableSetHasSensitive(item)" class="is-sensitive">含敏感变量</em></span>
-                <small>{{ parseWebUiVariables(item.contentJson).length }} 个变量 <i>·</i> <code>{{ variableSetVersionLabel(item) }}</code></small>
-              </span>
-            </button>
-            <div v-if="!availableVariableSets.length" class="figma-env-modal__variable-empty">暂无可绑定的变量集</div>
-          </div>
-          <footer><span>已选 {{ bindVariableSetSelection.length }} 个</span><button type="button" @click="bindVariableSetVisible = false">取消</button><button class="is-primary" type="button" :disabled="!bindVariableSetSelection.length || saving" @click="bindSelectedVariableSets">确认绑定</button></footer>
-        </section>
-      </div>
-    </Teleport>
+    <ConfigEnvironmentVariableDialogs
+      :bind-visible="bindVariableSetVisible"
+      :selected-set-count="selectedVariableSets.length"
+      :available-sets="availableVariableSets"
+      :bind-selection="bindVariableSetSelection"
+      :priority-visible="priorityDialogVisible"
+      :priority-sets="priorityPreviewSets"
+      :conflicts="variableSetConflicts"
+      :local-mode="localVariableDialogMode"
+      :local-editor="localVariableEditor"
+      :local-type-options="localVariableTypeOptions"
+      :delete-variable="deleteLocalVariable"
+      :saving="saving"
+      :scope-label="variableSetScopeLabel"
+      :has-sensitive="variableSetHasSensitive"
+      :version-label="variableSetVersionLabel"
+      @close-bind="bindVariableSetVisible = false"
+      @toggle-set="toggleVariableSetSelection"
+      @confirm-bind="bindSelectedVariableSets"
+      @close-priority="priorityDialogVisible = false"
+      @move-priority="movePriorityDraft"
+      @save-priority="saveVariableSetPriority"
+      @close-local="closeLocalVariableDialog"
+      @sync-local-type="syncLocalVariableType"
+      @submit-local="submitLocalVariable"
+      @close-delete="deleteLocalVariableIndex = null"
+      @confirm-delete="confirmDeleteLocalVariable"
+    />
 
-    <Teleport to="body">
-      <div v-if="priorityDialogVisible" class="figma-env-modal" data-node-id="332:4969" @mousedown.self="priorityDialogVisible = false">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--priority">
-          <header>
-            <div class="figma-env-modal__heading-copy"><h2>调整优先级</h2><p>数字越小优先级越高，同名变量将以高优先级变量集为准</p></div>
-            <button type="button" @click="priorityDialogVisible = false"><el-icon><Close /></el-icon></button>
-          </header>
-          <div class="figma-env-modal__priority-body">
-            <div class="figma-env-modal__priority-columns">
-              <section><h3>当前顺序（可调整）</h3><article v-for="(item, index) in priorityPreviewSets" :key="item.id"><b>{{ index + 1 }}</b><span><strong>{{ item.paramName }}</strong><small>{{ parseWebUiVariables(item.contentJson).length }} 变量 · {{ variableSetVersionLabel(item) }}</small></span><i><button type="button" :disabled="index === 0" @click="movePriorityDraft(index, -1)"><el-icon><ArrowUp /></el-icon></button><button type="button" :disabled="index === priorityPreviewSets.length - 1" @click="movePriorityDraft(index, 1)"><el-icon><ArrowDown /></el-icon></button></i></article></section>
-              <section><h3>调整后预览</h3><article v-for="(item, index) in priorityPreviewSets" :key="item.id" class="is-preview"><b>{{ index + 1 }}</b><strong>{{ item.paramName }}</strong></article></section>
-            </div>
-            <section v-if="variableSetConflicts.length" class="figma-env-modal__conflicts"><header>以下变量存在同名冲突，高优先级将覆盖低优先级</header><div><p v-for="items in variableSetConflicts" :key="items[0]?.name"><code>{{ items[0]?.name }}</code><span>存在于</span><template v-for="(owner, index) in items" :key="owner.set.id"><span>{{ owner.set.paramName }}</span><i v-if="index < items.length - 1">和</i></template><span>，以</span><strong>{{ priorityPreviewSets[0]?.paramName }}</strong><span>为准</span></p></div></section>
-          </div>
-          <footer><button type="button" @click="priorityDialogVisible = false">取消</button><button class="is-primary" type="button" :disabled="saving" @click="saveVariableSetPriority">保存优先级</button></footer>
-        </section>
-      </div>
-    </Teleport>
+    <ConfigEnvironmentMockDialogs
+      :bind-visible="mockBindDialogVisible"
+      :applications="mockApplications"
+      :bind-application-id="mockBindApplicationId"
+      :bind-release-id="mockBindReleaseId"
+      :bind-releases="mockBindReleases"
+      :version-visible="mockVersionDialogVisible"
+      :current-release="selectedMockRelease"
+      :version-options="mockVersionOptions"
+      :version-selection="mockVersionSelection"
+      :selected-version-name="selectedMockVersionOption?.releaseName || ''"
+      :current-release-id="form.mockReleaseId"
+      :unbind-visible="mockUnbindDialogVisible"
+      :current-application="selectedMockApplication"
+      :reference-count="mockReferenceCount"
+      :saving="saving"
+      @close-bind="mockBindDialogVisible = false"
+      @update:bind-application-id="mockBindApplicationId = $event"
+      @update:bind-release-id="mockBindReleaseId = $event"
+      @change-application="changeMockBindApplication"
+      @confirm-bind="confirmMockBinding"
+      @close-version="mockVersionDialogVisible = false"
+      @update:version-selection="mockVersionSelection = $event"
+      @confirm-version="confirmMockVersionSwitch"
+      @close-unbind="mockUnbindDialogVisible = false"
+      @confirm-unbind="confirmMockUnbind"
+    />
 
-    <Teleport to="body">
-      <div v-if="localVariableDialogMode" class="figma-env-modal" :data-node-id="localVariableDialogMode === 'create' ? '332:5784' : '332:6521'" @mousedown.self="closeLocalVariableDialog">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--local-variable">
-          <header><h2>{{ localVariableDialogMode === 'create' ? '添加局部变量' : '编辑局部变量' }}</h2><button type="button" @click="closeLocalVariableDialog"><el-icon><Close /></el-icon></button></header>
-          <div class="figma-env-modal__body figma-env-modal__body--local-variable">
-            <label><span>变量名 <b>*</b></span><input v-model="localVariableEditor.name" class="is-mono" type="text" placeholder="例：API_GATEWAY_URL"></label>
-            <label><span>值</span><input v-model="localVariableEditor.value" :type="localVariableEditor.sensitive ? 'password' : 'text'" :placeholder="localVariableEditor.valueType === 'secret' ? '输入后将按敏感变量存储' : ''"></label>
-            <div class="figma-env-modal__row figma-env-modal__row--local-variable">
-              <label><span>类型</span><select v-model="localVariableEditor.valueType" @change="syncLocalVariableType"><option v-for="option in localVariableTypeOptions" :key="option" :value="option">{{ option }}</option></select></label>
-              <div class="figma-env-modal__default"><span>敏感变量</span><AppFigmaSwitch v-model="localVariableEditor.sensitive" label="敏感变量" /></div>
-            </div>
-            <label><span>说明</span><input v-model="localVariableEditor.description" type="text" placeholder="简要描述此变量的用途"></label>
-            <div class="figma-env-modal__local-enabled"><span>是否启用</span><AppFigmaSwitch v-model="localVariableEditor.enabled" label="是否启用" /></div>
-          </div>
-          <footer><button type="button" @click="closeLocalVariableDialog">取消</button><button class="is-primary" type="button" :disabled="saving" @click="submitLocalVariable">保存</button></footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="deleteLocalVariable" class="figma-env-modal" data-node-id="332:7259" @mousedown.self="deleteLocalVariableIndex = null">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--delete-variable">
-          <header><h2>删除局部变量</h2><button type="button" @click="deleteLocalVariableIndex = null"><el-icon><Close /></el-icon></button></header>
-          <div class="figma-env-modal__delete-variable-copy">确认删除变量「<strong>{{ deleteLocalVariable.name }}</strong>」？此操作不可恢复。</div>
-          <footer><button type="button" @click="deleteLocalVariableIndex = null">取消</button><button class="is-danger" type="button" :disabled="saving" @click="confirmDeleteLocalVariable">确认删除</button></footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="mockBindDialogVisible" class="figma-env-modal" @mousedown.self="mockBindDialogVisible = false">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--mock-bind">
-          <header><h2>绑定 Mock 应用</h2><button type="button" @click="mockBindDialogVisible = false"><el-icon><Close /></el-icon></button></header>
-          <div class="figma-env-modal__mock-bind-body">
-            <label><span>Mock 应用 <b>*</b></span><select v-model="mockBindApplicationId" @change="changeMockBindApplication(mockBindApplicationId)"><option :value="null" disabled>请选择 Mock 应用</option><option v-for="item in mockApplications" :key="item.id" :value="item.id">{{ item.appName }}（{{ item.appCode }}）</option></select></label>
-            <label><span>发布版本 <b>*</b></span><select v-model="mockBindReleaseId" :disabled="!mockBindApplicationId"><option :value="null" disabled>请选择发布版本</option><option v-for="item in mockBindReleases" :key="item.id" :value="item.id">v{{ item.versionNo }} · {{ item.releaseName || '未命名版本' }}</option></select></label>
-            <div class="figma-env-modal__mock-bind-tip"><el-icon><Warning /></el-icon><span>绑定后默认启用 Mock，请求将按所选不可变发布版本执行。</span></div>
-          </div>
-          <footer><button type="button" @click="mockBindDialogVisible = false">取消</button><button class="is-primary" type="button" :disabled="saving || !mockBindApplicationId || !mockBindReleaseId" @click="confirmMockBinding">确认绑定</button></footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="mockVersionDialogVisible && selectedMockRelease" class="figma-env-modal" data-node-id="334:8784" @mousedown.self="mockVersionDialogVisible = false">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--mock-version" data-node-id="334:8785">
-          <header><h2>切换 Mock 版本</h2><button type="button" @click="mockVersionDialogVisible = false"><el-icon><Close /></el-icon></button></header>
-          <div class="figma-env-modal__mock-version-body">
-            <div class="figma-env-modal__mock-current"><span>当前版本：</span><code>v{{ selectedMockRelease.versionNo }}</code></div>
-            <div class="figma-env-modal__mock-version-list app-soft-scrollbar">
-              <button
-                v-for="release in mockVersionOptions"
-                :key="release.id"
-                type="button"
-                :class="{ 'is-selected': mockVersionSelection === release.id && release.id !== form.mockReleaseId, 'is-current': release.id === form.mockReleaseId }"
-                :disabled="release.id === form.mockReleaseId"
-                @click="mockVersionSelection = release.id"
-              >
-                <i><span /></i><code>v{{ release.versionNo }}</code><em v-if="release.id === form.mockReleaseId">当前</em><small v-else-if="release.active">当前启用</small>
-              </button>
-            </div>
-            <div class="figma-env-modal__mock-version-warning">
-              <el-icon><Warning /></el-icon>
-              <div><p>版本切换将立即生效，当前正在运行的测试任务会在下次调用时使用新版本</p><small>{{ selectedMockVersionOption?.releaseName || '该发布版本暂无说明' }}</small></div>
-            </div>
-          </div>
-          <footer><button type="button" @click="mockVersionDialogVisible = false">取消</button><button class="is-primary" type="button" :disabled="saving || !mockVersionSelection || mockVersionSelection === form.mockReleaseId" @click="confirmMockVersionSwitch">确认切换</button></footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="mockUnbindDialogVisible && selectedMockApplication && selectedMockRelease" class="figma-env-modal" data-node-id="334:9351" @mousedown.self="mockUnbindDialogVisible = false">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--mock-unbind" data-node-id="334:9352">
-          <header><h2>解除 Mock 绑定</h2><button type="button" @click="mockUnbindDialogVisible = false"><el-icon><Close /></el-icon></button></header>
-          <div class="figma-env-modal__mock-unbind-body">
-            <p>解除后，测试请求将直接发送到真实服务，不再经过 Mock 拦截</p>
-            <div v-if="mockReferenceCount" class="figma-env-modal__mock-unbind-warning"><el-icon><Warning /></el-icon><span>当前 Mock 应用有 {{ mockReferenceCount }} 个引用，解除当前环境绑定后请确认相关任务配置</span></div>
-            <div class="figma-env-modal__mock-unbind-target">即将解除：<strong>{{ selectedMockApplication.appName }}</strong><i>·</i><code>v{{ selectedMockRelease.versionNo }}</code></div>
-          </div>
-          <footer><button type="button" @click="mockUnbindDialogVisible = false">取消</button><button class="is-danger" type="button" :disabled="saving" @click="confirmMockUnbind">确认解除绑定</button></footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="environmentDialogMode" class="figma-env-modal" :data-node-id="environmentDialogMode === 'create' ? '331:2778' : '330:730'" @mousedown.self="closeEnvironmentDialog">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--environment" :class="{ 'is-create': environmentDialogMode === 'create' }">
-          <header>
-            <div class="figma-env-modal__heading-copy">
-              <h2>{{ environmentDialogMode === 'create' ? '新建环境' : '编辑环境' }}</h2>
-              <p v-if="environmentDialogMode === 'create'">先创建环境，再配置服务地址、变量和 Mock</p>
-            </div>
-            <button type="button" @click="closeEnvironmentDialog"><el-icon><Close /></el-icon></button>
-          </header>
-          <div class="figma-env-modal__body figma-env-modal__body--environment">
-            <label><span>环境名称 <b>*</b></span><input v-model="environmentEditor.envName" type="text" :placeholder="environmentDialogMode === 'create' ? '例：功能测试环境、性能测试环境' : '请输入环境名称'"></label>
-            <fieldset class="figma-env-modal__choice-field">
-              <legend>环境阶段</legend>
-              <div class="figma-env-modal__stage-options">
-                <button
-                  v-for="option in environmentStageOptions"
-                  :key="option.value"
-                  type="button"
-                  :class="{ 'is-selected': environmentEditor.envType === option.value }"
-                  @click="environmentEditor.envType = option.value"
-                >{{ option.label }}</button>
-              </div>
-            </fieldset>
-            <fieldset class="figma-env-modal__choice-field">
-              <legend>适用范围</legend>
-              <div class="figma-env-modal__applicability-options">
-                <button
-                  v-for="option in environmentApplicabilityOptions"
-                  :key="option.value"
-                  type="button"
-                  :class="{ 'is-selected': environmentEditor.automationType === option.value }"
-                  @click="environmentEditor.automationType = option.value"
-                >
-                  <el-icon><Link v-if="option.icon === 'api'" /><Monitor v-else-if="option.icon === 'web'" /><Layers v-else /></el-icon>
-                  {{ option.label }}
-                </button>
-              </div>
-            </fieldset>
-            <label><span>描述</span><input v-model="environmentEditor.description" type="text" :placeholder="environmentDialogMode === 'create' ? '说明该环境的用途和范围' : '请输入环境说明'"></label>
-          </div>
-          <footer><button type="button" @click="closeEnvironmentDialog">取消</button><button class="is-primary" type="button" :disabled="saving" @click="submitEnvironment">{{ environmentDialogMode === 'create' ? '创建环境' : '保存' }}</button></footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="disableDialogVisible" class="figma-env-modal" :data-node-id="runningReferences.length ? '330:2031' : '330:1272'" @mousedown.self="disableDialogVisible = false">
-        <section class="figma-env-modal__dialog figma-env-modal__dialog--confirm" :class="{ 'is-blocked': runningReferences.length > 0 }">
-          <header><h2>停用环境</h2><button type="button" @click="disableDialogVisible = false"><el-icon><Close /></el-icon></button></header>
-          <div class="figma-env-modal__confirm-body">
-            <div v-if="runningReferences.length" class="figma-env-modal__notice is-danger">
-              <el-icon><CircleClose /></el-icon>
-              <div><strong>存在运行中任务，无法停用</strong><span v-for="item in runningReferences" :key="`${item.sourceType}-${item.sourceId}`">· {{ item.sourceName || '未命名任务' }}</span></div>
-            </div>
-            <div v-else class="figma-env-modal__notice is-warning">
-              <el-icon><Warning /></el-icon>
-              <span>停用后以下 <b>{{ referenceCount }}</b> 个引用任务将无法使用此环境</span>
-            </div>
-          </div>
-          <footer>
-            <button type="button" @click="disableDialogVisible = false">取消</button>
-            <button v-if="runningReferences.length" class="is-disabled-action" type="button" disabled>存在运行中任务，无法停用</button>
-            <button v-else class="is-warning-action" type="button" :disabled="operating" @click="submitStatusChange">确认停用</button>
-          </footer>
-        </section>
-      </div>
-    </Teleport>
-
-    <Teleport to="body">
-      <div v-if="serviceDialogVisible" class="figma-env-modal" data-node-id="311:6625" @mousedown.self="closeServiceDialog">
-        <section class="figma-env-modal__dialog" data-node-id="311:6626">
-          <header><h2>{{ serviceEditingIndex == null ? '添加服务' : '编辑服务' }}</h2><button type="button" @click="closeServiceDialog"><el-icon><Close /></el-icon></button></header>
-          <div class="figma-env-modal__body">
-            <label><span>服务名称 <b>*</b></span><input v-model="serviceEditor.name" type="text" placeholder="例：订单服务"></label>
-            <label><span>Base URL <b>*</b></span><div class="figma-env-modal__url"><input v-model="serviceEditor.baseUrl" type="text" placeholder="https://api.example.com"><button type="button" @click="testConnection()"><el-icon><Connection /></el-icon>连接测试</button></div></label>
-            <div class="figma-env-modal__row"><label><span>连接超时 (ms)</span><input v-model.number="serviceEditor.timeoutMs" type="number" min="1000" max="120000"></label><div class="figma-env-modal__default"><span>设为默认入口</span><AppFigmaSwitch v-model="serviceEditor.isDefault" label="设为默认入口" size="regular" /></div></div>
-            <div class="figma-env-modal__enabled"><span><strong>是否启用</strong><small>停用后此服务地址不参与执行</small></span><AppFigmaSwitch v-model="serviceEditor.enabled" label="是否启用" size="regular" /></div>
-          </div>
-          <footer><button type="button" @click="closeServiceDialog">取消</button><button class="is-primary" type="button" :disabled="saving" @click="submitService">保存</button></footer>
-        </section>
-      </div>
-    </Teleport>
+    <ConfigEnvironmentEditorDialogs
+      :environment-mode="environmentDialogMode"
+      :environment-editor="environmentEditor"
+      :stage-options="environmentStageOptions"
+      :applicability-options="environmentApplicabilityOptions"
+      :disable-visible="disableDialogVisible"
+      :running-references="runningReferences"
+      :reference-count="referenceCount"
+      :service-visible="serviceDialogVisible"
+      :service-editing-index="serviceEditingIndex"
+      :service-editor="serviceEditor"
+      :saving="saving"
+      :operating="operating"
+      @close-environment="closeEnvironmentDialog"
+      @submit-environment="submitEnvironment"
+      @close-disable="disableDialogVisible = false"
+      @submit-status="submitStatusChange"
+      @close-service="closeServiceDialog"
+      @test-service="testConnection()"
+      @submit-service="submitService"
+    />
   </section>
 </template>
 
-<style scoped src="./config-environment-figma-workspace.css"></style>
+<style src="./config-environment-figma-workspace.css"></style>

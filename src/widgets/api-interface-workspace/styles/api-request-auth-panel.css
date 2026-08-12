@@ -1,0 +1,112 @@
+.api-auth-panel {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-content: start;
+  align-items: center;
+  gap: 12px 14px;
+  max-width: none;
+  height: 100%;
+  overflow: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 7px;
+  background: #ffffff;
+  padding: 14px;
+  color: var(--app-text-primary);
+  font-size: 13px;
+}
+
+.api-config-panel-head {
+  display: flex;
+  min-height: 42px;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--app-border-soft);
+}
+
+.api-config-panel-head strong {
+  color: var(--app-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.api-config-panel-head span,
+.api-auth-empty {
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.api-form-label,
+.api-auth-grid label {
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-auth-panel .el-radio-button__inner {
+  height: 28px;
+  padding: 0 12px;
+  border-color: var(--app-border);
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 26px;
+}
+
+.api-auth-panel .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  border-color: rgba(255, 125, 0, 0.28);
+  background: #fff7e8;
+  box-shadow: -1px 0 0 0 rgba(255, 125, 0, 0.28);
+  color: #ff7d00;
+}
+
+.api-auth-grid {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 14px;
+  max-width: 640px;
+  padding-top: 2px;
+}
+
+.api-auth-empty {
+  display: flex;
+  grid-column: 1 / -1;
+  min-height: 140px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--app-border);
+  border-radius: 7px;
+  background: #fafbfc;
+}
+
+.api-auth-form-control {
+  min-width: 0;
+}
+
+.api-auth-form-control .el-input__wrapper {
+  min-height: 32px;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--app-border);
+}
+
+.api-auth-form-control .el-input__inner {
+  color: var(--app-text-primary);
+  font-size: 13px;
+}
+
+.api-auth-form-control .el-input__wrapper:hover {
+  box-shadow: inset 0 0 0 1px #c9cdd4;
+}
+
+.api-auth-form-control .el-input.is-focus .el-input__wrapper {
+  box-shadow: inset 0 0 0 1px var(--app-primary);
+}

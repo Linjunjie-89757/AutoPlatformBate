@@ -155,7 +155,6 @@ const navigationItems: NavigationItem[] = [
       { path: '/automation/api/interfaces', label: '接口管理' },
       { path: '/automation/api/scenarios', label: '接口场景' },
       { path: '/automation/api/execution-suites', label: '执行套件' },
-      { path: '/automation/api/reports', label: '报告' },
       { path: '/automation/api/settings', label: '设置' },
     ],
   },
