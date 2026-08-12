@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
-import AppLayout from '@/app/layouts/AppLayout.vue'
 import {
   canManageWorkspace,
   clearCurrentUser,
@@ -9,26 +8,28 @@ import {
   loadCurrentUser,
   sessionState,
 } from '@/entities/session'
-import ApiAutomationPage from '@/pages/automation-api/ApiAutomationPage.vue'
-import AutomationTasksPage from '@/pages/automation-tasks/AutomationTasksPage.vue'
-import WebAutomationPage from '@/pages/automation-web/WebAutomationPage.vue'
-import WebUiSharedReportPage from '@/pages/automation-web/WebUiSharedReportPage.vue'
-import CaseAiConfigPage from '@/pages/cases/CaseAiConfigPage.vue'
-import CaseAiGeneratePage from '@/pages/cases/CaseAiGeneratePage.vue'
-import CaseAiRecordsPage from '@/pages/cases/CaseAiRecordsPage.vue'
-import CaseCenterPage from '@/pages/cases/CaseCenterPage.vue'
-import CasesPage from '@/pages/cases/CasesPage.vue'
-import ConfigCenterPage from '@/pages/config-center/ConfigCenterPage.vue'
-import DashboardPage from '@/pages/dashboard/DashboardPage.vue'
-import DefectDetailPage from '@/pages/defects/DefectDetailPage.vue'
-import DefectsPage from '@/pages/defects/DefectsPage.vue'
-import LoginPage from '@/pages/login/LoginPage.vue'
-import PlaceholderPage from '@/pages/placeholder/PlaceholderPage.vue'
-import ProfileSettingsPage from '@/pages/profile/ProfileSettingsPage.vue'
-import ReportCenterPage from '@/pages/reports/ReportCenterPage.vue'
-import ReportSharePage from '@/pages/reports/ReportSharePage.vue'
-import SystemSettingsPage from '@/pages/system-settings/SystemSettingsPage.vue'
-import WorkspaceSelectPage from '@/pages/workspace-select/WorkspaceSelectPage.vue'
+
+const AppLayout = () => import('@/app/layouts/AppLayout.vue')
+const ApiAutomationPage = () => import('@/pages/automation-api/ApiAutomationPage.vue')
+const AutomationTasksPage = () => import('@/pages/automation-tasks/AutomationTasksPage.vue')
+const WebAutomationPage = () => import('@/pages/automation-web/WebAutomationPage.vue')
+const WebUiSharedReportPage = () => import('@/pages/automation-web/WebUiSharedReportPage.vue')
+const CaseAiConfigPage = () => import('@/pages/cases/CaseAiConfigPage.vue')
+const CaseAiGeneratePage = () => import('@/pages/cases/CaseAiGeneratePage.vue')
+const CaseAiRecordsPage = () => import('@/pages/cases/CaseAiRecordsPage.vue')
+const CaseCenterPage = () => import('@/pages/cases/CaseCenterPage.vue')
+const CasesPage = () => import('@/pages/cases/CasesPage.vue')
+const ConfigCenterPage = () => import('@/pages/config-center/ConfigCenterPage.vue')
+const DashboardPage = () => import('@/pages/dashboard/DashboardPage.vue')
+const DefectDetailPage = () => import('@/pages/defects/DefectDetailPage.vue')
+const DefectsPage = () => import('@/pages/defects/DefectsPage.vue')
+const LoginPage = () => import('@/pages/login/LoginPage.vue')
+const PlaceholderPage = () => import('@/pages/placeholder/PlaceholderPage.vue')
+const ProfileSettingsPage = () => import('@/pages/profile/ProfileSettingsPage.vue')
+const ReportCenterPage = () => import('@/pages/reports/ReportCenterPage.vue')
+const ReportSharePage = () => import('@/pages/reports/ReportSharePage.vue')
+const SystemSettingsPage = () => import('@/pages/system-settings/SystemSettingsPage.vue')
+const WorkspaceSelectPage = () => import('@/pages/workspace-select/WorkspaceSelectPage.vue')
 
 const routes: RouteRecordRaw[] = [
   {

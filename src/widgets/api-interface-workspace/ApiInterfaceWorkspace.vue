@@ -12,8 +12,6 @@ import {
 } from '@/entities/api-automation'
 import type { WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { ApiExecutionWorkspace } from '@/widgets/api-execution-workspace'
-import { ApiScenarioWorkspace } from '@/widgets/api-scenario-workspace'
 import ApiAutomationSettingsPlaceholder from './ApiAutomationSettingsPlaceholder.vue'
 import ApiDefinitionWorkspaceModule from './ApiDefinitionWorkspaceModule.vue'
 import ApiReportModule from './ApiReportModule.vue'
@@ -154,24 +152,6 @@ onMounted(() => {
       :can-execute="props.canExecute"
       :can-export="props.canExport"
       @loaded="payload => emit('loaded', payload)"
-    />
-
-    <ApiScenarioWorkspace
-      v-else-if="activeTopTab === 'scenarios'"
-      :workspace-code="props.workspaceCode"
-      :workspace-ready="props.workspaceReady"
-      :workspaces="props.workspaces"
-      :environments="environments"
-      :variable-sets="variableSets"
-    />
-
-    <ApiExecutionWorkspace
-      v-else-if="activeTopTab === 'execution'"
-      :workspace-code="props.workspaceCode"
-      :workspace-ready="props.workspaceReady"
-      :workspaces="props.workspaces"
-      :environments="environments"
-      :variable-sets="variableSets"
     />
 
     <ApiReportModule

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import type {
@@ -10,9 +10,16 @@ import type {
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
-import ApiExecutionSuiteFigmaWorkspace from '@/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue'
-import { ApiInterfaceWorkspace } from '@/widgets/api-interface-workspace'
-import ApiScenarioFigmaWorkspace from '@/widgets/api-scenario-workspace/ApiScenarioFigmaWorkspace.vue'
+
+const ApiExecutionSuiteFigmaWorkspace = defineAsyncComponent(
+  () => import('@/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue'),
+)
+const ApiInterfaceWorkspace = defineAsyncComponent(
+  () => import('@/widgets/api-interface-workspace/ApiInterfaceWorkspace.vue'),
+)
+const ApiScenarioFigmaWorkspace = defineAsyncComponent(
+  () => import('@/widgets/api-scenario-workspace/ApiScenarioFigmaWorkspace.vue'),
+)
 
 type ApiAutomationSection = 'definitions' | 'scenarios' | 'execution' | 'reports' | 'settings'
 

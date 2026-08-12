@@ -22,11 +22,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
-import 'monaco-editor/esm/vs/language/json/monaco.contribution'
-import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
-import 'monaco-editor/esm/vs/basic-languages/sql/sql.contribution'
-import 'monaco-editor/esm/vs/basic-languages/xml/xml.contribution'
+import type * as MonacoApi from 'monaco-editor/esm/vs/editor/editor.api'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 
@@ -37,6 +33,8 @@ const API_CODE_THEME = 'api-code-light'
 const API_CODE_DARK_THEME = 'api-code-dark'
 const API_CODE_FIGMA_DARK_THEME = 'api-code-figma-dark'
 let apiConsoleLanguageReady = false
+let monacoModulePromise: Promise<typeof MonacoApi> | null = null
+const languageModulePromises = new Map<ApiCodeLanguage, Promise<unknown>>()
 
 const props = withDefaults(defineProps<{
   modelValue?: string | null
@@ -87,7 +85,10 @@ const emit = defineEmits<{
 const slots = useSlots()
 const containerRef = ref<HTMLDivElement | null>(null)
 const bodyHeight = ref(props.height)
-let editor: monaco.editor.IStandaloneCodeEditor | null = null
+let monaco: typeof MonacoApi | null = null
+let editor: MonacoApi.editor.IStandaloneCodeEditor | null = null
+let editorReadyPromise: Promise<void> | null = null
+let unmounted = false
 let suppressModelSync = false
 
 const showToolbar = computed(() => !props.readOnly && (props.showFormatButton || Boolean(slots.toolbar)))
@@ -108,16 +109,16 @@ function mapLanguage(language: ApiCodeLanguage) {
   return language === 'text' ? 'plaintext' : language
 }
 
-function ensureApiConsoleLanguage() {
+function ensureApiConsoleLanguage(monacoApi: typeof MonacoApi) {
   if (apiConsoleLanguageReady) {
     return
   }
 
-  if (!monaco.languages.getLanguages().some(item => item.id === API_CONSOLE_LANGUAGE)) {
-    monaco.languages.register({ id: API_CONSOLE_LANGUAGE })
+  if (!monacoApi.languages.getLanguages().some(item => item.id === API_CONSOLE_LANGUAGE)) {
+    monacoApi.languages.register({ id: API_CONSOLE_LANGUAGE })
   }
 
-  monaco.languages.setMonarchTokensProvider(API_CONSOLE_LANGUAGE, {
+  monacoApi.languages.setMonarchTokensProvider(API_CONSOLE_LANGUAGE, {
     tokenizer: {
       root: [
         [/^\[Error\].*$/, 'api-console-error'],
@@ -131,7 +132,7 @@ function ensureApiConsoleLanguage() {
     },
   })
 
-  monaco.editor.defineTheme(API_CODE_THEME, {
+  monacoApi.editor.defineTheme(API_CODE_THEME, {
     base: 'vs',
     inherit: true,
     rules: [
@@ -144,7 +145,7 @@ function ensureApiConsoleLanguage() {
     colors: {},
   })
 
-  monaco.editor.defineTheme(API_CODE_DARK_THEME, {
+  monacoApi.editor.defineTheme(API_CODE_DARK_THEME, {
     base: 'vs-dark',
     inherit: true,
     rules: [],
@@ -160,7 +161,7 @@ function ensureApiConsoleLanguage() {
     },
   })
 
-  monaco.editor.defineTheme(API_CODE_FIGMA_DARK_THEME, {
+  monacoApi.editor.defineTheme(API_CODE_FIGMA_DARK_THEME, {
     base: 'vs-dark',
     inherit: true,
     rules: [
@@ -183,6 +184,40 @@ function ensureApiConsoleLanguage() {
   apiConsoleLanguageReady = true
 }
 
+function loadLanguageModule(language: ApiCodeLanguage) {
+  const existing = languageModulePromises.get(language)
+  if (existing) {
+    return existing
+  }
+
+  let promise: Promise<unknown>
+  switch (language) {
+    case 'json':
+      promise = import('monaco-editor/esm/vs/language/json/monaco.contribution')
+      break
+    case 'javascript':
+      promise = import('monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution')
+      break
+    case 'sql':
+      promise = import('monaco-editor/esm/vs/basic-languages/sql/sql.contribution')
+      break
+    case 'xml':
+      promise = import('monaco-editor/esm/vs/basic-languages/xml/xml.contribution')
+      break
+    default:
+      promise = Promise.resolve()
+  }
+  languageModulePromises.set(language, promise)
+  return promise
+}
+
+async function loadMonaco(language: ApiCodeLanguage) {
+  monacoModulePromise ??= import('monaco-editor/esm/vs/editor/editor.api')
+  const monacoApi = await monacoModulePromise
+  await loadLanguageModule(language)
+  return monacoApi
+}
+
 function ensureMonacoWorkers() {
   const globalWithMonaco = globalThis as typeof globalThis & {
     MonacoEnvironment?: {
@@ -201,6 +236,7 @@ function ensureMonacoWorkers() {
 }
 
 async function formatDocument() {
+  await editorReadyPromise
   if (!editor) {
     return
   }
@@ -233,13 +269,13 @@ function resolveEditorTheme(themeVariant = props.themeVariant) {
   return themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME
 }
 
-function createEditor() {
+function createEditor(monacoApi: typeof MonacoApi) {
   if (!containerRef.value) {
     return
   }
 
   bodyHeight.value = props.height
-  editor = monaco.editor.create(containerRef.value, {
+  editor = monacoApi.editor.create(containerRef.value, {
     value: props.modelValue ?? '',
     language: mapLanguage(props.language),
     theme: resolveEditorTheme(),
@@ -273,7 +309,7 @@ function createEditor() {
     },
     ariaLabel: props.placeholder || 'code editor',
   })
-  editor.getModel()?.setEOL(monaco.editor.EndOfLineSequence.LF)
+  editor.getModel()?.setEOL(monacoApi.editor.EndOfLineSequence.LF)
   if (props.fitContent) {
     editor.onDidContentSizeChange(() => {
       syncEditorHeight()
@@ -306,9 +342,13 @@ watch(
 
 watch(
   () => props.language,
-  (language) => {
+  async (language) => {
+    await loadLanguageModule(language)
+    if (language !== props.language) {
+      return
+    }
     const model = editor?.getModel()
-    if (model) {
+    if (model && monaco) {
       monaco.editor.setModelLanguage(model, mapLanguage(language))
       syncEditorHeight()
     }
@@ -329,7 +369,7 @@ watch(
 watch(
   () => props.themeVariant,
   (themeVariant) => {
-    monaco.editor.setTheme(resolveEditorTheme(themeVariant))
+    monaco?.editor.setTheme(resolveEditorTheme(themeVariant))
     editor?.updateOptions({
       renderLineHighlight: themeVariant === 'figma-dark' ? 'none' : 'line',
       bracketPairColorization: { enabled: themeVariant !== 'figma-dark' },
@@ -375,13 +415,22 @@ watch(
 
 onMounted(() => {
   ensureMonacoWorkers()
-  ensureApiConsoleLanguage()
-  createEditor()
+  editorReadyPromise = (async () => {
+    const monacoApi = await loadMonaco(props.language)
+    if (unmounted) {
+      return
+    }
+    monaco = monacoApi
+    ensureApiConsoleLanguage(monacoApi)
+    createEditor(monacoApi)
+  })()
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
   editor?.dispose()
   editor = null
+  monaco = null
 })
 </script>
 

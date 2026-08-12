@@ -1,0 +1,2003 @@
+.config-mock-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0;
+}
+
+:deep(.figma-mock-dialog),
+:deep(.figma-mock-publish-dialog) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__header),
+:deep(.figma-mock-publish-dialog .el-dialog__header) {
+  height: 64px;
+  margin: 0;
+  padding: 0 24px;
+  border-bottom: 1px solid #e5e6eb;
+  display: flex;
+  align-items: center;
+}
+
+:deep(.figma-mock-dialog .el-dialog__title),
+:deep(.figma-mock-publish-dialog .el-dialog__title) {
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+:deep(.figma-mock-dialog .el-dialog__body),
+:deep(.figma-mock-publish-dialog .el-dialog__body) {
+  padding: 20px 24px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__footer),
+:deep(.figma-mock-publish-dialog .el-dialog__footer) {
+  padding: 14px 20px;
+  border-top: 1px solid #e5e6eb;
+  background: #fafafa;
+}
+
+:global(.figma-mock-app-overlay) {
+  background: rgba(29, 33, 41, 0.5);
+}
+
+:deep(.figma-mock-dialog) {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  font-family: var(--app-font-family);
+}
+
+:deep(.figma-mock-dialog.is-create) {
+  display: flex;
+  height: 494.75px;
+  flex-direction: column;
+  margin-top: max(16px, calc((100vh - 494.75px) / 2));
+}
+
+:deep(.figma-mock-dialog .el-dialog__header) {
+  height: 59px;
+  min-height: 59px;
+  padding: 0 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__header) {
+  height: 60.5px;
+  min-height: 60.5px;
+  flex: 0 0 60.5px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__title) {
+  font-family: var(--app-font-family);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__headerbtn) {
+  top: 17px;
+  right: 21px;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__headerbtn:hover) {
+  background: #f7f8fa;
+}
+
+:deep(.figma-mock-dialog .el-dialog__headerbtn .el-dialog__close) {
+  width: 16px;
+  height: 16px;
+  color: #c9cdd4;
+}
+
+:deep(.figma-mock-dialog .el-dialog__body) {
+  padding: 17.5px 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__body) {
+  height: 374.75px;
+  min-height: 0;
+  flex: 0 0 374.75px;
+}
+
+:deep(.figma-mock-dialog .el-dialog__footer) {
+  min-height: 61px;
+  padding: 14px 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__footer) {
+  display: flex;
+  height: 61px;
+  min-height: 61px;
+  flex: 0 0 61px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 14px 21px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__headerbtn) {
+  top: 17.5px;
+  right: 21px;
+  width: 24.5px;
+  height: 24.5px;
+}
+
+:deep(.figma-mock-dialog.is-create .el-dialog__footer .el-button) {
+  margin-left: 0;
+}
+
+:deep(.figma-mock-scene-drawer) {
+  top: 31px;
+  height: calc(100% - 31px);
+  border-radius: 0;
+}
+
+:deep(.figma-mock-scene-drawer .el-drawer__body) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.figma-mock-scene-editor {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: #fff;
+  color: #1d2129;
+  font-size: 12px;
+}
+
+.figma-mock-scene-editor__head {
+  display: flex;
+  height: 56px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.figma-mock-scene-editor__path,
+.figma-mock-scene-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.figma-mock-scene-editor__path {
+  min-width: 0;
+}
+
+.figma-mock-scene-editor__path code,
+.figma-mock-scene-editor__path strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.figma-mock-scene-editor__path code {
+  color: #4e5969;
+  font-family: Consolas, monospace;
+}
+
+.figma-mock-scene-editor__path i {
+  color: #c9cdd4;
+  font-style: normal;
+}
+
+.figma-mock-scene-method {
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #fff3e8;
+  color: #ff7d00;
+  font: 600 10px Consolas, monospace;
+}
+
+.figma-mock-publish-chip {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #e8ffea;
+  color: #00b42a;
+  font-size: 10px;
+}
+
+.figma-mock-scene-btn {
+  display: inline-flex;
+  height: 29px;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid #d9dce3;
+  border-radius: 7px;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.figma-mock-scene-btn.is-primary {
+  border-color: #165dff;
+  background: #165dff;
+  color: #fff;
+}
+
+.figma-mock-scene-btn:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.figma-mock-scene-close {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c9cdd4;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.figma-mock-scene-editor__summary {
+  display: flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 18px;
+  padding: 5px 20px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+  color: #86909c;
+}
+
+.figma-mock-scene-editor__summary label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.figma-mock-scene-editor__summary label:first-child {
+  width: 210px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) {
+  width: 126px;
+}
+
+.figma-mock-scene-editor__summary label:first-child :deep(.el-input) {
+  width: 145px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input-number) {
+  width: 84px;
+}
+
+.figma-mock-scene-editor__summary :deep(.el-input__wrapper),
+.figma-mock-scene-editor__summary :deep(.el-input-number) {
+  height: 26px;
+}
+
+.figma-mock-scene-editor__summary span {
+  white-space: nowrap;
+}
+
+.figma-mock-scene-editor__summary b {
+  margin-left: 4px;
+  color: #4e5969;
+  font-family: Consolas, monospace;
+}
+
+.figma-mock-scene-tabs {
+  display: flex;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  padding: 0 20px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.figma-mock-scene-tabs button {
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #86909c;
+  cursor: pointer;
+  font: 500 12px inherit;
+}
+
+.figma-mock-scene-tabs button.is-active {
+  border-bottom-color: #165dff;
+  color: #165dff;
+}
+
+.figma-mock-scene-editor__body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.figma-mock-scene-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.figma-mock-scene-section__title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.figma-mock-scene-section__title > div:first-child {
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-section__title strong {
+  font-size: 13px;
+}
+
+.figma-mock-scene-section__title p {
+  margin: 2.25px 0 0;
+  color: #86909c;
+  font-size: 11px;
+}
+
+.figma-mock-scene-section__title.is-compact {
+  align-items: center;
+  margin-top: 4px;
+}
+
+.figma-mock-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6.625px;
+  color: #86909c;
+}
+
+.figma-mock-mode-switch__buttons {
+  box-sizing: border-box;
+  display: flex;
+  width: 140px;
+  height: 26.5px;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+}
+
+.figma-mock-mode-switch__buttons button {
+  flex: 0 0 69px;
+  height: 24.5px;
+  padding: 0 10.5px;
+  border: 0;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.figma-mock-mode-switch__buttons button.is-active {
+  background: #165dff;
+  color: #fff;
+}
+
+.figma-mock-simple-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 14px;
+}
+
+.figma-mock-rule-grid {
+  display: grid;
+  box-sizing: border-box;
+  height: 40.5px;
+  min-height: 40.5px;
+  align-items: center;
+  grid-template-columns: 100px minmax(0, 1fr) 120px minmax(0, 1fr) 36px;
+  gap: 10.5px;
+  padding: 0 10.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+}
+
+.figma-mock-rule-grid.is-head > span:nth-child(2),
+.figma-mock-rule-grid.is-head > span:nth-child(4) {
+  padding-left: 1.5px;
+}
+
+.figma-mock-rule-grid.is-head {
+  height: 32.5px;
+  min-height: 32.5px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.figma-mock-rule-grid button,
+.figma-mock-header-row button {
+  border: 0;
+  background: none;
+  color: #c9cdd4;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.figma-mock-add-row {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #165dff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.figma-mock-simple-rules > .figma-mock-add-row {
+  width: 100%;
+  height: 21.5px;
+  align-self: stretch;
+  justify-content: flex-start;
+  gap: 5.25px;
+}
+
+.figma-mock-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 10.5px;
+  padding-top: 14px;
+}
+
+.figma-mock-advanced-tip,
+.figma-mock-variable-tip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1px solid #ffd09a;
+  border-radius: 7px;
+  background: #fff7e8;
+  color: #ff7d00;
+  font-size: 11px;
+}
+
+.figma-mock-advanced-tip {
+  box-sizing: border-box;
+  min-height: 37.5px;
+  align-items: flex-start;
+  padding: 8.75px 10.5px;
+  border-color: #ffd595;
+  background: #fff3e8;
+}
+
+.figma-mock-advanced-tip > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.figma-mock-advanced-editor.api-code-editor.is-figma-dark {
+  min-height: 160px;
+  padding: 0;
+  border-color: #e5e6eb;
+  border-radius: 7px;
+  background: #1e1e1e;
+}
+
+.figma-mock-response-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.figma-mock-response-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5.25px;
+  color: #4e5969;
+}
+
+.figma-mock-response-grid :deep(.el-input-number),
+.figma-mock-response-grid :deep(.el-select) {
+  width: 100%;
+}
+
+.figma-mock-response-grid :deep(.el-select__wrapper),
+.figma-mock-response-grid :deep(.el-input-number .el-input__wrapper) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.figma-mock-response-headers,
+.figma-mock-response-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.figma-mock-response-header-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5.25px;
+  padding-top: 7px;
+  padding-bottom: 5.25px;
+}
+
+.figma-mock-response-body .figma-mock-response-editor {
+  margin-top: 7px;
+}
+
+.figma-mock-response-headers .figma-mock-scene-section__title.is-compact,
+.figma-mock-response-body .figma-mock-scene-section__title.is-compact {
+  margin-top: 0;
+}
+
+.figma-mock-response-headers .figma-mock-scene-section__title.is-compact {
+  height: 18px;
+}
+
+.figma-mock-response-body .figma-mock-scene-section__title.is-compact {
+  height: 20.5px;
+}
+
+.figma-mock-header-row {
+  display: grid;
+  height: 28px;
+  align-items: center;
+  grid-template-columns: 147.59375px 4px minmax(0, 1fr) 15.5px;
+  gap: 7px;
+}
+
+.figma-mock-header-row :deep(.el-input__wrapper) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.figma-mock-available-vars {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.figma-mock-available-vars code {
+  margin-left: 4px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.figma-mock-variable-tip {
+  display: block;
+  border-color: #bed0ff;
+  background: #f2f7ff;
+  color: #165dff;
+}
+
+.figma-mock-variable-tip p {
+  margin: 5px 0 0;
+  color: #4e5969;
+}
+
+.figma-mock-variable-json {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.figma-mock-variable-table {
+  width: 100%;
+  border: 1px solid #e5e6eb;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.figma-mock-variable-table th,
+.figma-mock-variable-table td {
+  height: 42px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #4e5969;
+  font-size: 11px;
+  text-align: left;
+}
+
+.figma-mock-variable-table th {
+  height: 33px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-variable-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.figma-mock-variable-table td.is-empty {
+  color: #86909c;
+  text-align: center;
+}
+
+.figma-mock-publish-dialog__intro {
+  margin: -6px 0 16px;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.figma-mock-publish-dialog__stats div {
+  padding: 11px;
+  border: 1px solid #e5e6eb;
+  border-radius: 9px;
+  background: #fafafa;
+}
+
+.figma-mock-publish-dialog__stats span,
+.figma-mock-publish-dialog__stats strong {
+  display: block;
+}
+
+.figma-mock-publish-dialog__stats span {
+  margin-bottom: 7px;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-publish-dialog__stats strong {
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.figma-mock-publish-dialog__label {
+  display: block;
+  margin-bottom: 9px;
+  color: #1d2129;
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__change {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.figma-mock-publish-dialog__change>span {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.figma-mock-publish-dialog__change strong {
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__change p {
+  margin: 3px 0 0;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-publish-dialog__note {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.figma-mock-publish-dialog__note small {
+  color: #c9cdd4;
+}
+
+.figma-mock-publish-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.figma-mock-publish-dialog__footer>span,
+.figma-mock-publish-dialog__footer>div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.figma-mock-publish-dialog__footer>span {
+  color: #ff7d00;
+  font-size: 10px;
+}
+
+.config-mock-panel__header,
+.config-mock-section__header,
+.config-mock-summary,
+.config-mock-release,
+.config-mock-url {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-4);
+}
+
+.config-mock-panel__header h2,
+.config-mock-section__header h3,
+.config-mock-summary h3 {
+  margin: 0;
+  color: var(--app-text-primary);
+}
+
+.config-mock-panel__header p,
+.config-mock-section__header p,
+.config-mock-summary p {
+  margin: 4px 0 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-mock-panel__actions,
+.config-mock-summary__actions,
+.config-mock-table-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.config-mock-layout {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--app-space-5);
+}
+
+.config-mock-apps,
+.config-mock-workspace,
+.config-mock-section,
+.config-mock-release,
+.config-mock-release-history,
+.config-mock-url,
+.config-mock-summary {
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-panel);
+}
+
+.config-mock-apps {
+  display: flex;
+  min-height: 640px;
+  flex-direction: column;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+}
+
+.config-mock-apps__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+  overflow: auto;
+}
+
+.config-mock-app {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--app-radius-sm);
+  background: transparent;
+  color: var(--app-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.config-mock-app:hover {
+  background: var(--app-bg-muted);
+}
+
+.config-mock-app.is-active {
+  border-color: var(--app-primary);
+  background: var(--app-primary-soft);
+}
+
+.config-mock-app strong,
+.config-mock-app small {
+  display: block;
+}
+
+.config-mock-app small {
+  margin-top: 2px;
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-mock-workspace {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--app-space-4);
+  padding: var(--app-space-4);
+}
+
+.config-mock-summary,
+.config-mock-release,
+.config-mock-url,
+.config-mock-section,
+.config-mock-release-history {
+  padding: var(--app-space-4);
+}
+
+.config-mock-release {
+  justify-content: space-between;
+  background: var(--app-bg-muted);
+}
+
+.config-mock-release strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-mock-release p {
+  margin: 4px 0 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-mock-release__meta {
+  flex: 0 0 auto;
+}
+
+.config-mock-release-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.config-mock-release-history .config-mock-section__header {
+  margin-bottom: 0;
+}
+
+.config-mock-summary__title {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.config-mock-url {
+  justify-content: flex-start;
+  background: var(--app-bg-muted);
+}
+
+.config-mock-url span {
+  flex: 0 0 auto;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+}
+
+.config-mock-url code {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-mock-section {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.config-mock-advanced-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.config-mock-advanced-section > summary {
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-muted);
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+  list-style-position: inside;
+}
+
+.config-mock-advanced-section[open] > summary {
+  color: var(--app-text-primary);
+}
+
+.config-mock-table-actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-primary);
+  cursor: pointer;
+  font-size: var(--app-font-size-sm);
+}
+
+.config-mock-table-actions button:hover {
+  color: var(--app-primary-hover);
+}
+
+.config-mock-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-4);
+}
+
+.config-mock-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+}
+
+.config-mock-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-3);
+}
+
+.config-mock-form :deep(.el-select),
+.config-mock-form :deep(.el-input-number) {
+  width: 100%;
+}
+
+.figma-mock-form-tip {
+  margin-top: -3px;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.figma-mock-credential-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.figma-mock-credential-field strong {
+  color: #1d2129;
+  font-size: 12px;
+}
+
+.figma-mock-credential-field p {
+  margin: 3px 0 0;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.figma-mock-app-form {
+  gap: 14px;
+}
+
+.figma-mock-app-form label {
+  gap: 5px;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-app-form label > span {
+  min-height: 18px;
+}
+
+.figma-mock-app-form label > span b {
+  color: #f53f3f;
+  font-weight: 500;
+}
+
+.figma-mock-app-form .config-mock-form__grid {
+  gap: 14px;
+}
+
+.figma-mock-app-form :deep(.el-input__wrapper),
+.figma-mock-app-form :deep(.el-select__wrapper) {
+  min-height: 28px;
+  padding: 1px 10px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+.figma-mock-app-form :deep(.el-input__wrapper:hover),
+.figma-mock-app-form :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c9cdd4 inset;
+}
+
+.figma-mock-app-form :deep(.el-input__wrapper.is-focus),
+.figma-mock-app-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px #165dff inset;
+}
+
+.figma-mock-app-form :deep(.el-input__inner),
+.figma-mock-app-form :deep(.el-select__selected-item),
+.figma-mock-app-form :deep(.el-select__placeholder) {
+  height: 20px;
+  color: #4e5969;
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-app-form :deep(.el-input__inner::placeholder),
+.figma-mock-app-form :deep(.el-select__placeholder.is-transparent) {
+  color: #c9cdd4;
+}
+
+.figma-mock-app-form__code :deep(.el-input__inner) {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.figma-mock-app-form .figma-mock-form-tip {
+  margin-top: -1px;
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-app-form :deep(.figma-mock-app-form__readonly-select .el-select__wrapper.is-disabled) {
+  cursor: not-allowed;
+  background: #fff;
+  opacity: 1;
+  box-shadow: 0 0 0 1px #e5e6eb inset;
+}
+
+.figma-mock-app-form :deep(.figma-mock-app-form__readonly-select .el-select__selected-item),
+.figma-mock-app-form :deep(.figma-mock-app-form__readonly-select .el-select__caret) {
+  color: #4e5969;
+  -webkit-text-fill-color: #4e5969;
+}
+
+.figma-mock-app-form .figma-mock-credential-field {
+  min-height: 56px;
+  gap: 14px;
+  padding: 8.5px 10.5px;
+  border-radius: 7px;
+}
+
+.figma-mock-app-form .figma-mock-credential-field strong {
+  display: block;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-app-form .figma-mock-credential-field p {
+  margin-top: 1px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+:deep(.figma-mock-app-dialog__cancel.el-button),
+:deep(.figma-mock-app-dialog__submit.el-button) {
+  margin-left: 7px;
+  border-radius: 6px;
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+:deep(.figma-mock-app-dialog__cancel.el-button) {
+  width: 49px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10.5px;
+  color: #4e5969;
+  background: transparent;
+  border-color: transparent;
+}
+
+:deep(.figma-mock-app-dialog__submit.el-button) {
+  width: 54px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 13px;
+  color: #fff;
+  background: #165dff;
+  border-color: #165dff;
+}
+
+.config-mock-combo-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.config-mock-combo-items__header,
+.config-mock-combo-item {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+}
+
+.config-mock-combo-items__header {
+  justify-content: space-between;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+}
+
+.config-mock-combo-items__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-2);
+}
+
+.config-mock-combo-item {
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-muted);
+}
+
+.config-mock-combo-item__order {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--app-bg-panel);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-xs);
+  font-weight: 700;
+}
+
+.config-mock-combo-item__remove {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-danger);
+  cursor: pointer;
+  font-size: var(--app-font-size-sm);
+}
+
+.config-mock-combo-item__remove:hover {
+  color: var(--app-danger-hover);
+}
+
+.config-mock-log-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-3);
+}
+
+.config-mock-log-detail dl {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: var(--app-space-2) var(--app-space-3);
+  margin: 0;
+}
+
+.config-mock-log-detail dt {
+  color: var(--app-text-secondary);
+  font-weight: 600;
+}
+
+.config-mock-log-detail dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--app-text-primary);
+  word-break: break-all;
+}
+
+.config-mock-log-detail h4 {
+  margin: var(--app-space-2) 0 0;
+  color: var(--app-text-primary);
+}
+
+.config-mock-log-detail pre {
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-muted);
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Mock Figma restoration: Design 342:22145 / 23309 / 24488. */
+:deep(.figma-mock-scene-drawer) {
+  top: 0;
+  height: 100%;
+  box-shadow: -4px 0 32px rgb(0 0 0 / 15%);
+}
+
+.figma-mock-scene-editor__head {
+  padding: 0 24px;
+}
+
+.figma-mock-scene-editor__actions {
+  flex: 0 0 auto;
+}
+
+.figma-mock-scene-btn {
+  gap: 5px;
+}
+
+.figma-mock-scene-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: inherit;
+}
+
+.figma-mock-header-row button {
+  width: 15.5px;
+  height: 21px;
+}
+
+.figma-mock-scene-close:hover {
+  background: #f5f6f8;
+  color: #4e5969;
+}
+
+.figma-mock-scene-editor__summary {
+  min-height: 39px;
+  gap: 24px;
+  padding: 0 24px;
+}
+
+.figma-mock-scene-editor__summary label:first-child {
+  width: 190px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) {
+  width: 96px;
+}
+
+.figma-mock-scene-editor__summary label:first-child :deep(.el-input) {
+  width: 118px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input-number) {
+  width: 44px;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input__wrapper),
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input-number) {
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input__inner) {
+  height: 24px;
+  color: #1d2129;
+  font: 500 13px/24px inherit;
+  text-align: left;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input__inner) {
+  color: #165dff;
+  font-family: Consolas, monospace;
+  font-weight: 600;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit:focus-within :deep(.el-input__wrapper) {
+  padding: 0 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #165dff inset;
+}
+
+.figma-mock-scene-tabs {
+  padding: 0 24px;
+}
+
+.figma-mock-scene-tabs button {
+  font-size: 13px;
+}
+
+.figma-mock-scene-editor__body {
+  padding: 21px;
+}
+
+.figma-mock-scene-section {
+  gap: 20px;
+}
+
+.figma-mock-scene-section.is-match {
+  gap: 0;
+}
+
+.figma-mock-scene-section.is-response {
+  gap: 17.5px;
+}
+
+.figma-mock-scene-section.is-variables {
+  gap: 0;
+}
+
+.figma-mock-add-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.figma-mock-rule-grid button,
+.figma-mock-header-row button {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 6px;
+  font-size: inherit;
+}
+
+.figma-mock-rule-grid button:hover,
+.figma-mock-header-row button:hover {
+  background: #fff0f0;
+  color: #f53f3f;
+}
+
+.figma-mock-rule-grid:not(.is-head) :deep(.el-select__wrapper),
+.figma-mock-rule-grid:not(.is-head) :deep(.el-input__wrapper) {
+  box-sizing: border-box;
+  height: 24.5px;
+  min-height: 24.5px;
+  padding: 0 8px;
+  border-radius: 4px;
+}
+
+.figma-mock-rule-grid:not(.is-head) > .el-select:first-child :deep(.el-select__wrapper) {
+  height: 21.5px;
+  min-height: 21.5px;
+  padding: 0 7px;
+  background: #f2f3f5;
+  box-shadow: none;
+}
+
+.figma-mock-rule-grid:not(.is-head) > .el-input:nth-child(2) :deep(.el-input__wrapper) {
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.figma-mock-response-grid :deep(.el-input-number) {
+  width: 100%;
+}
+
+.figma-mock-response-grid :deep(.el-input-number .el-input__inner) {
+  text-align: left;
+}
+
+.figma-mock-response-editor {
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #1e1e1e;
+}
+
+.figma-mock-response-editor__head {
+  display: flex;
+  height: 28.5px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 11px;
+  border-bottom: 1px solid #333;
+  background: #252526;
+  color: #888;
+  font-size: 11px;
+}
+
+.figma-mock-response-editor__head span:first-child {
+  color: #9cdcfe;
+}
+
+.figma-mock-response-editor :deep(.api-code-editor),
+.figma-mock-response-editor :deep(.api-code-editor__editor) {
+  height: 189px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.figma-mock-variable-tip {
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  height: 81px;
+  gap: 10.5px;
+  padding: 8.75px 10.5px;
+}
+
+.figma-mock-variable-tip > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.figma-mock-variable-tip strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.figma-mock-variable-tip p {
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.figma-mock-variable-tip code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-family: Consolas, monospace;
+}
+
+.figma-mock-variable-source {
+  display: inline-flex;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.figma-mock-variable-table td.is-center {
+  text-align: center;
+}
+
+.figma-mock-variable-table td.is-center svg {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__header) {
+  height: 80px;
+  padding: 0 24px;
+}
+
+:deep(.figma-mock-publish-dialog) {
+  display: flex;
+  height: 596px;
+  max-height: 85vh;
+  flex-direction: column;
+}
+
+.figma-mock-publish-dialog__heading h2 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.figma-mock-publish-dialog__heading p {
+  display: flex;
+  height: 21.5px;
+  align-items: flex-end;
+  margin: 0;
+  color: #86909c;
+  font-size: 12px;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__body) {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.figma-mock-publish-dialog__stats {
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.figma-mock-publish-dialog__stats div {
+  min-height: 62px;
+  padding: 11px 12px;
+}
+
+.figma-mock-publish-dialog__changes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.figma-mock-publish-dialog__change {
+  min-height: 59px;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.figma-mock-publish-dialog__change strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.figma-mock-publish-dialog__change strong b {
+  color: #165dff;
+  font-size: 11px;
+}
+
+.figma-mock-publish-dialog__change.is-add > span {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.figma-mock-publish-dialog__change.is-add strong b {
+  color: #00b42a;
+}
+
+.figma-mock-publish-dialog__change.is-snapshot > span {
+  background: #f2f3f5;
+  color: #86909c;
+}
+
+.figma-mock-publish-dialog__change.is-snapshot strong b {
+  color: #86909c;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__footer) {
+  min-height: 65px;
+  padding: 14px 24px;
+}
+
+/* Mock typography restoration: Figma 342:19926 / 21058 / 22145 / 23309 / 24488. */
+.figma-mock-scene-editor,
+:deep(.figma-mock-publish-dialog) {
+  font-family: var(--app-font-family);
+}
+
+.figma-mock-scene-method {
+  font-family: var(--app-font-family);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+.figma-mock-scene-editor__path code {
+  font-family: var(--app-font-family-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-scene-editor__path strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__actions > span:not(.figma-mock-publish-chip) {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-chip {
+  font-family: var(--app-font-family);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-scene-btn {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__summary label > span {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.figma-mock-scene-editor__summary label > b {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) > b,
+.figma-mock-scene-editor__summary label:nth-child(4) > b {
+  font-family: var(--app-font-family-mono);
+  font-weight: 600;
+}
+
+.figma-mock-scene-editor__summary .is-inline-edit :deep(.el-input__inner) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-editor__summary label:nth-child(2) :deep(.el-input__inner) {
+  font-family: var(--app-font-family-mono);
+  font-weight: 600;
+}
+
+.figma-mock-scene-tabs button {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-section__title strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.figma-mock-scene-section__title p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-scene-section__title.is-compact strong {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-mode-switch span,
+.figma-mock-mode-switch button,
+.figma-mock-advanced-tip {
+  font-family: var(--app-font-family);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-mock-mode-switch button {
+  font-weight: 500;
+}
+
+.figma-mock-rule-grid.is-head > span,
+.figma-mock-variable-table th {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+  letter-spacing: 0.275px;
+}
+
+.figma-mock-rule-grid :deep(.el-input__inner),
+.figma-mock-rule-grid :deep(.el-select__selected-item),
+.figma-mock-response-grid :deep(.el-input__inner),
+.figma-mock-response-grid :deep(.el-select__selected-item),
+.figma-mock-header-row :deep(.el-input__inner) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-response-grid > label > span {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-add-row,
+.figma-mock-available-vars {
+  font-family: var(--app-font-family);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-available-vars code {
+  font-family: var(--app-font-family-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-response-editor__head {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.figma-mock-variable-tip strong,
+.figma-mock-variable-tip p,
+.figma-mock-variable-tip code {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-mock-variable-tip code,
+.figma-mock-variable-table code {
+  font-family: var(--app-font-family-mono);
+}
+
+.figma-mock-variable-table td {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__heading h2 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.figma-mock-publish-dialog__heading p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__stats span {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.figma-mock-publish-dialog__stats strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.figma-mock-publish-dialog__label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__change strong {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.figma-mock-publish-dialog__change strong b {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16.5px;
+}
+
+.figma-mock-publish-dialog__change p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__note > span {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__note small {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__note :deep(.el-textarea__inner) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+}
+
+.figma-mock-publish-dialog__footer > span {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.figma-mock-publish-dialog__footer :deep(.el-button) {
+  font-family: var(--app-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+/* Publish dialog: exact geometry from Figma 342:25204. */
+:deep(.figma-mock-publish-dialog) {
+  height: 596.5px;
+  margin-top: max(16px, calc((100vh - 596.5px) / 2));
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__header) {
+  box-sizing: border-box;
+  height: 81.5px;
+  min-height: 81.5px;
+  flex: 0 0 81.5px;
+  padding: 0 21px;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__body) {
+  box-sizing: border-box;
+  height: 454px;
+  flex: 0 0 454px;
+  padding: 17.5px 21px 16px;
+}
+
+:deep(.figma-mock-publish-dialog .el-dialog__footer) {
+  box-sizing: border-box;
+  height: 61px;
+  min-height: 61px;
+  flex: 0 0 61px;
+  padding: 14px 21px;
+}
+
+.figma-mock-publish-dialog__stats {
+  height: 62.5px;
+  gap: 10.5px;
+  margin-bottom: 17.5px;
+}
+
+.figma-mock-publish-dialog__stats div {
+  box-sizing: border-box;
+  height: 62.5px;
+  min-height: 62.5px;
+  padding: 11.5px;
+}
+
+.figma-mock-publish-dialog__label {
+  height: 18px;
+  margin-bottom: 0;
+}
+
+.figma-mock-publish-dialog__changes {
+  box-sizing: border-box;
+  height: 202.25px;
+  gap: 7px;
+  margin-bottom: 0;
+  padding-top: 10.5px;
+}
+
+.figma-mock-publish-dialog__change {
+  box-sizing: border-box;
+  height: 59.25px;
+  min-height: 59.25px;
+  gap: 10.5px;
+  padding: 8.75px 10.5px;
+}
+
+.figma-mock-publish-dialog__change > span {
+  width: 17.5px;
+  height: 17.5px;
+  flex: 0 0 17.5px;
+  margin-top: 1.75px;
+}
+
+.figma-mock-publish-dialog__change > div {
+  height: 39.75px;
+  flex: 1;
+}
+
+.figma-mock-publish-dialog__change strong {
+  height: 20px;
+  gap: 7px;
+  line-height: 20px;
+}
+
+.figma-mock-publish-dialog__change p {
+  height: 19.75px;
+  margin: 0;
+  line-height: 19.75px;
+}
+
+.figma-mock-publish-dialog__note {
+  box-sizing: border-box;
+  height: 120.25px;
+  gap: 0;
+  padding-top: 17.5px;
+}
+
+.figma-mock-publish-dialog__note > span {
+  height: 23.25px;
+}
+
+.figma-mock-publish-dialog__note :deep(.el-textarea__inner) {
+  box-sizing: border-box;
+  height: 74.5px;
+  min-height: 74.5px !important;
+}
+
+.figma-mock-publish-dialog__footer {
+  height: 32px;
+}
+
+.figma-mock-publish-dialog__footer > span {
+  gap: 5.25px;
+}
+
+.figma-mock-publish-dialog__footer > span svg {
+  width: 13px;
+  height: 13px;
+}
+
+.figma-mock-publish-dialog__footer > div {
+  width: 136px;
+  height: 32px;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.figma-mock-publish-dialog__footer > div :deep(.el-button) {
+  margin: 0;
+}
+
+.figma-mock-publish-dialog__footer > div :deep(.el-button:first-child) {
+  width: 49px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 11.5px;
+}
+
+.figma-mock-publish-dialog__footer > div :deep(.el-button:last-child) {
+  width: 80px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 14px;
+}
+
+@media (max-width: 1100px) {
+  .config-mock-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .config-mock-apps {
+    min-height: auto;
+  }
+}
