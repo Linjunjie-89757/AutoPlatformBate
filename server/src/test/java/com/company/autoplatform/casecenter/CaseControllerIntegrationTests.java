@@ -301,7 +301,8 @@ class CaseControllerIntegrationTests extends IntegrationTestSupport {
     void excelImportSupportsTemplateValidationAndDuplicateStrategies() throws Exception {
         String unique = uniquePrefix("excel-import");
 
-        mockMvc.perform(get("/api/cases/import/template"))
+        mockMvc.perform(get("/api/cases/import/template")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
 
