@@ -18,15 +18,12 @@ import {
   createDefaultConfigEnvForm,
   type ConfigAutomationType,
   type ConfigEnvForm,
-  type ConfigEnvLocalVariableForm,
-  type ConfigEnvServiceEndpointForm,
   validateConfigEnvForm,
 } from '@/features/config-env-create-edit'
 import { deleteConfigEnv } from '@/features/config-env-delete'
 import { toggleConfigEnvStatus } from '@/features/config-env-toggle-status'
 import { parseWebUiVariables } from '@/features/config-param-create-edit'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { confirmDelete } from '@/shared/ui/app-delete-confirm/confirmDelete'
 
 import ConfigEnvironmentEffectivePanel from './ConfigEnvironmentEffectivePanel.vue'
 import ConfigEnvironmentDetailHeader from './ConfigEnvironmentDetailHeader.vue'
@@ -43,8 +40,6 @@ import {
   buildEffectiveVariables,
   buildReferenceRows,
   calculateConfigIssues,
-  createLocalVariableEditor,
-  createServiceEditor,
   environmentCardSummary,
   environmentStageMeta,
   variableSetHasSensitive,
@@ -58,9 +53,10 @@ import type {
   LocalVariableEditorForm,
   ReferenceKind,
   ReferenceViewItem,
-  ServiceEditorForm,
-  ServiceTestState,
 } from './configEnvironmentPanel.types'
+import { useConfigEnvironmentServiceActions } from './useConfigEnvironmentServiceActions'
+import { useConfigEnvironmentVariableActions } from './useConfigEnvironmentVariableActions'
+import { useConfigEnvironmentMockActions } from './useConfigEnvironmentMockActions'
 
 const props = withDefaults(defineProps<{ workspaceCode?: string }>(), { workspaceCode: 'ALL' })
 const route = useRoute()
@@ -81,24 +77,7 @@ const referenceLoading = ref(false)
 const referenceSummary = ref<ConfigReferenceSummary | null>(null)
 const environmentDialogMode = ref<'create' | 'edit' | null>(null)
 const disableDialogVisible = ref(false)
-const serviceDialogVisible = ref(false)
-const serviceEditingIndex = ref<number | null>(null)
-const serviceTests = ref<Record<string, ServiceTestState>>({})
 const variableSetVersions = ref<Record<number, number | null>>({})
-const bindVariableSetVisible = ref(false)
-const bindVariableSetSelection = ref<number[]>([])
-const priorityDialogVisible = ref(false)
-const priorityDraft = ref<number[]>([])
-const localVariableDialogMode = ref<'create' | 'edit' | null>(null)
-const localVariableEditingIndex = ref<number | null>(null)
-const deleteLocalVariableIndex = ref<number | null>(null)
-const mockBindDialogVisible = ref(false)
-const mockBindApplicationId = ref<number | null>(null)
-const mockBindReleaseId = ref<number | null>(null)
-const mockBindReleases = ref<MockReleaseItem[]>([])
-const mockVersionDialogVisible = ref(false)
-const mockVersionSelection = ref<number | null>(null)
-const mockUnbindDialogVisible = ref(false)
 const mockEndpointCount = ref<number | null>(null)
 const mockScenarioCount = ref<number | null>(null)
 const mockUnmatched24hCount = ref<number | null>(null)
@@ -112,8 +91,6 @@ const environmentEditor = reactive<EnvironmentEditorForm>({
   automationType: 'API',
   description: '',
 })
-const serviceEditor = reactive<ServiceEditorForm>(createServiceEditor())
-const localVariableEditor = reactive<LocalVariableEditorForm>(createLocalVariableEditor())
 
 const environmentStageOptions = [
   { value: 'DEV', label: '开发' },
@@ -183,11 +160,7 @@ const variableCount = computed(() => form.variableSetIds.length + form.localVari
 const defaultServiceCount = computed(() => form.services.filter(item => item.key === form.defaultServiceKey).length)
 const selectedMockApplication = computed(() => mockApplications.value.find(item => item.id === form.mockApplicationId) || null)
 const selectedMockRelease = computed(() => mockReleases.value.find(item => item.id === form.mockReleaseId) || null)
-const mockBound = computed(() => form.mockApplicationId != null && form.mockReleaseId != null)
 const mockBaseUrl = computed(() => selectedMockApplication.value ? `/api/mock/${selectedMockApplication.value.appCode}` : '—')
-const mockVersionOptions = computed(() => [...mockReleases.value].sort((left, right) => right.versionNo - left.versionNo))
-const selectedMockVersionOption = computed(() => mockVersionOptions.value.find(item => item.id === mockVersionSelection.value) || null)
-const productionEnvironment = computed(() => form.envType === 'PROD')
 const effectiveVariables = computed<EffectiveVariableRow[]>(() => buildEffectiveVariables(form, variableSets.value, selectedVariableSets.value))
 const filteredEffectiveVariables = computed(() => {
   const query = effectiveKeyword.value.trim().toLowerCase()
@@ -256,7 +229,7 @@ async function selectEnv(env: EnvConfigItem, preferredTab: EnvironmentDetailTab 
   activeTab.value = preferredTab
   effectiveSourceFilter.value = 'all'
   effectiveKeyword.value = ''
-  serviceTests.value = {}
+  resetServiceTests()
   await Promise.all([
     loadReferences(),
     loadMockReleases(form.mockApplicationId),
@@ -353,95 +326,80 @@ async function saveCurrentForm(
   }
 }
 
-function openAddService() {
-  serviceEditingIndex.value = null
-  Object.assign(serviceEditor, createServiceEditor())
-  serviceEditor.key = `service-${Date.now()}`
-  serviceDialogVisible.value = true
-}
+const {
+  serviceDialogVisible,
+  serviceEditingIndex,
+  serviceEditor,
+  resetServiceTests,
+  openAddService,
+  openEditService,
+  closeServiceDialog,
+  submitService,
+  copyService,
+  removeService,
+  testConnection,
+  batchTestConnections,
+  serviceStatus,
+  formatTimeout,
+} = useConfigEnvironmentServiceActions(form, saveCurrentForm)
 
-function openEditService(index: number) {
-  const service = form.services[index]
-  if (!service) return
-  serviceEditingIndex.value = index
-  Object.assign(serviceEditor, createServiceEditor(service, service.key === form.defaultServiceKey))
-  serviceDialogVisible.value = true
-}
+const {
+  bindVariableSetVisible,
+  bindVariableSetSelection,
+  priorityDialogVisible,
+  priorityDraft,
+  localVariableDialogMode,
+  deleteLocalVariableIndex,
+  localVariableEditor,
+  openBindVariableSetDialog,
+  toggleVariableSetSelection,
+  bindSelectedVariableSets,
+  openPriorityDialog,
+  movePriorityDraft,
+  saveVariableSetPriority,
+  moveBoundVariableSet,
+  toggleVariableSetEnabled,
+  unbindVariableSet,
+  openLocalVariableDialog,
+  closeLocalVariableDialog,
+  syncLocalVariableType,
+  submitLocalVariable,
+  toggleLocalVariable,
+  requestDeleteLocalVariable,
+  confirmDeleteLocalVariable,
+} = useConfigEnvironmentVariableActions(
+  form,
+  saveCurrentForm,
+  loadVariableSetVersions,
+  isVariableSetEnabled,
+)
 
-function closeServiceDialog() {
-  serviceDialogVisible.value = false
-  serviceEditingIndex.value = null
-}
-
-async function submitService() {
-  if (!serviceEditor.name.trim()) {
-    ElMessage.warning('请输入服务名称')
-    return
-  }
-  if (!/^https?:\/\//i.test(serviceEditor.baseUrl.trim())) {
-    ElMessage.warning('Base URL 必须以 http:// 或 https:// 开头')
-    return
-  }
-  const next: ConfigEnvServiceEndpointForm = {
-    key: serviceEditor.key || `service-${Date.now()}`,
-    name: serviceEditor.name.trim(),
-    baseUrl: serviceEditor.baseUrl.trim(),
-    timeoutMs: Math.min(120000, Math.max(1000, Number(serviceEditor.timeoutMs) || 30000)),
-    enabled: serviceEditor.enabled,
-  }
-  if (serviceEditingIndex.value == null) form.services.push(next)
-  else form.services.splice(serviceEditingIndex.value, 1, next)
-  if (serviceEditor.isDefault || form.services.length === 1) {
-    form.defaultServiceKey = next.key
-    form.baseUrl = next.baseUrl
-  }
-  const saved = await saveCurrentForm(serviceEditingIndex.value == null ? '服务已添加' : '服务已更新')
-  if (saved) closeServiceDialog()
-}
-
-async function copyService(index: number) {
-  const source = form.services[index]
-  if (!source) return
-  form.services.splice(index + 1, 0, {
-    ...source,
-    key: `service-${Date.now()}`,
-    name: `副本 - ${source.name}`,
-  })
-  await saveCurrentForm('服务已复制')
-}
-
-async function removeService(index: number) {
-  const service = form.services[index]
-  if (!service) return
-  try {
-    await confirmDelete({
-      title: '删除服务',
-      message: `确认删除服务「${service.name}」吗？`,
-      confirmText: '确认删除',
-    })
-  } catch {
-    return
-  }
-  form.services.splice(index, 1)
-  if (service.key === form.defaultServiceKey) {
-    form.defaultServiceKey = form.services[0]?.key || 'default'
-    form.baseUrl = form.services[0]?.baseUrl || ''
-  }
-  await saveCurrentForm('服务已删除')
-}
-
-function testConnection(service?: ConfigEnvServiceEndpointForm) {
-  const key = service?.key || serviceEditor.key || 'draft'
-  serviceTests.value = { ...serviceTests.value, [key]: 'testing' }
-  window.setTimeout(() => {
-    serviceTests.value = { ...serviceTests.value, [key]: 'untested' }
-    ElMessage.warning('服务连接测试接口暂未接入，未伪造测试结果')
-  }, 450)
-}
-
-function batchTestConnections() {
-  ElMessage.warning('批量连接测试接口暂未接入，未伪造测试结果')
-}
+const {
+  mockBindDialogVisible,
+  mockBindApplicationId,
+  mockBindReleaseId,
+  mockBindReleases,
+  mockVersionDialogVisible,
+  mockVersionSelection,
+  mockUnbindDialogVisible,
+  productionEnvironment,
+  mockBound,
+  mockVersionOptions,
+  selectedMockVersionOption,
+  openMockBindDialog,
+  changeMockBindApplication,
+  confirmMockBinding,
+  toggleMockEnabled,
+  openMockVersionDialog,
+  confirmMockVersionSwitch,
+  confirmMockUnbind,
+} = useConfigEnvironmentMockActions(
+  () => props.workspaceCode,
+  form,
+  mockApplications,
+  mockReleases,
+  saveCurrentForm,
+)
 
 async function switchStatus() {
   if (!selectedEnv.value) return
@@ -567,79 +525,6 @@ function createEnvironment() {
   environmentDialogMode.value = 'create'
 }
 
-function openBindVariableSetDialog() {
-  bindVariableSetSelection.value = []
-  bindVariableSetVisible.value = true
-  void loadVariableSetVersions()
-}
-
-function toggleVariableSetSelection(id: number) {
-  bindVariableSetSelection.value = bindVariableSetSelection.value.includes(id)
-    ? bindVariableSetSelection.value.filter(item => item !== id)
-    : [...bindVariableSetSelection.value, id]
-}
-
-async function bindSelectedVariableSets() {
-  if (!bindVariableSetSelection.value.length) return
-  const previous = [...form.variableSetIds]
-  form.variableSetIds = Array.from(new Set([...form.variableSetIds, ...bindVariableSetSelection.value]))
-  const saved = await saveCurrentForm('变量集已绑定')
-  if (saved) bindVariableSetVisible.value = false
-  else form.variableSetIds = previous
-}
-
-function openPriorityDialog() {
-  priorityDraft.value = [...form.variableSetIds]
-  priorityDialogVisible.value = true
-}
-
-function movePriorityDraft(index: number, direction: -1 | 1) {
-  const nextIndex = index + direction
-  if (nextIndex < 0 || nextIndex >= priorityDraft.value.length) return
-  const next = [...priorityDraft.value]
-  ;[next[index], next[nextIndex]] = [next[nextIndex], next[index]]
-  priorityDraft.value = next
-}
-
-async function saveVariableSetPriority() {
-  const previous = [...form.variableSetIds]
-  form.variableSetIds = [...priorityDraft.value]
-  const saved = await saveCurrentForm('变量集优先级已保存')
-  if (saved) priorityDialogVisible.value = false
-  else form.variableSetIds = previous
-}
-
-async function moveBoundVariableSet(index: number, direction: -1 | 1) {
-  const nextIndex = index + direction
-  if (nextIndex < 0 || nextIndex >= form.variableSetIds.length) return
-  const previous = [...form.variableSetIds]
-  const next = [...form.variableSetIds]
-  ;[next[index], next[nextIndex]] = [next[nextIndex], next[index]]
-  form.variableSetIds = next
-  if (!await saveCurrentForm('变量集优先级已更新')) form.variableSetIds = previous
-}
-
-async function toggleVariableSetEnabled(item: ParamSetItem) {
-  const previous = [...form.disabledVariableSetIds]
-  form.disabledVariableSetIds = isVariableSetEnabled(item)
-    ? [...form.disabledVariableSetIds, item.id]
-    : form.disabledVariableSetIds.filter(id => id !== item.id)
-  if (!await saveCurrentForm(isVariableSetEnabled(item) ? '变量集已启用' : '变量集已停用')) {
-    form.disabledVariableSetIds = previous
-  }
-}
-
-async function unbindVariableSet(item: ParamSetItem) {
-  const previousIds = [...form.variableSetIds]
-  const previousDisabledIds = [...form.disabledVariableSetIds]
-  form.variableSetIds = form.variableSetIds.filter(id => id !== item.id)
-  form.disabledVariableSetIds = form.disabledVariableSetIds.filter(id => id !== item.id)
-  if (!await saveCurrentForm('变量集已解除绑定')) {
-    form.variableSetIds = previousIds
-    form.disabledVariableSetIds = previousDisabledIds
-  }
-}
-
 function goToVariableSetConfig() {
   void router.push({
     path: route.path,
@@ -652,185 +537,6 @@ function goToMockService() {
     path: route.path,
     query: { ...route.query, tab: 'mock' },
   })
-}
-
-async function openMockBindDialog() {
-  if (productionEnvironment.value) {
-    ElMessage.warning('生产环境禁止绑定 Mock')
-    return
-  }
-  mockBindApplicationId.value = form.mockApplicationId || mockApplications.value[0]?.id || null
-  mockBindReleaseId.value = null
-  mockBindReleases.value = []
-  if (mockBindApplicationId.value) {
-    try {
-      mockBindReleases.value = await configApi.getMockReleases(props.workspaceCode, mockBindApplicationId.value)
-      const activeRelease = mockBindReleases.value.find(item => item.active) || mockBindReleases.value[0]
-      mockBindReleaseId.value = activeRelease?.id || null
-    } catch {
-      mockBindReleases.value = []
-    }
-  }
-  mockBindDialogVisible.value = true
-}
-
-async function changeMockBindApplication(applicationId: number | null) {
-  mockBindReleaseId.value = null
-  mockBindReleases.value = []
-  if (!applicationId) return
-  try {
-    mockBindReleases.value = await configApi.getMockReleases(props.workspaceCode, applicationId)
-    const activeRelease = mockBindReleases.value.find(item => item.active) || mockBindReleases.value[0]
-    mockBindReleaseId.value = activeRelease?.id || null
-  } catch {
-    ElMessage.error('Mock 发布版本加载失败')
-  }
-}
-
-async function confirmMockBinding() {
-  if (!mockBindApplicationId.value || !mockBindReleaseId.value) {
-    ElMessage.warning('请选择 Mock 应用和发布版本')
-    return
-  }
-  const previous = {
-    enabled: form.mockEnabled,
-    applicationId: form.mockApplicationId,
-    releaseId: form.mockReleaseId,
-  }
-  form.mockApplicationId = mockBindApplicationId.value
-  form.mockReleaseId = mockBindReleaseId.value
-  form.mockEnabled = true
-  const saved = await saveCurrentForm('Mock 应用已绑定')
-  if (saved) mockBindDialogVisible.value = false
-  else {
-    form.mockEnabled = previous.enabled
-    form.mockApplicationId = previous.applicationId
-    form.mockReleaseId = previous.releaseId
-  }
-}
-
-async function toggleMockEnabled() {
-  if (!mockBound.value) {
-    await openMockBindDialog()
-    return
-  }
-  if (!form.mockEnabled && productionEnvironment.value) {
-    ElMessage.warning('生产环境禁止启用 Mock')
-    return
-  }
-  const previous = form.mockEnabled
-  form.mockEnabled = !previous
-  if (!await saveCurrentForm(
-    form.mockEnabled ? 'Mock 已启用' : 'Mock 已停用',
-    { reload: false },
-  )) form.mockEnabled = previous
-}
-
-function openMockVersionDialog() {
-  const next = mockVersionOptions.value.find(item => item.id !== form.mockReleaseId)
-  if (!next) {
-    ElMessage.warning('暂无其他可切换的发布版本')
-    return
-  }
-  mockVersionSelection.value = next.id
-  mockVersionDialogVisible.value = true
-}
-
-async function confirmMockVersionSwitch() {
-  if (!mockVersionSelection.value || mockVersionSelection.value === form.mockReleaseId) return
-  const previous = form.mockReleaseId
-  form.mockReleaseId = mockVersionSelection.value
-  const version = selectedMockVersionOption.value?.versionNo
-  const saved = await saveCurrentForm(version == null ? 'Mock 版本已切换' : `Mock 版本已切换至 v${version}`)
-  if (saved) mockVersionDialogVisible.value = false
-  else form.mockReleaseId = previous
-}
-
-async function confirmMockUnbind() {
-  const previous = {
-    enabled: form.mockEnabled,
-    applicationId: form.mockApplicationId,
-    releaseId: form.mockReleaseId,
-  }
-  form.mockEnabled = false
-  form.mockApplicationId = null
-  form.mockReleaseId = null
-  const saved = await saveCurrentForm('Mock 绑定已解除')
-  if (saved) mockUnbindDialogVisible.value = false
-  else {
-    form.mockEnabled = previous.enabled
-    form.mockApplicationId = previous.applicationId
-    form.mockReleaseId = previous.releaseId
-  }
-}
-
-function openLocalVariableDialog(index?: number) {
-  const variable = index == null ? undefined : form.localVariables[index]
-  localVariableEditingIndex.value = index ?? null
-  Object.assign(localVariableEditor, createLocalVariableEditor(variable))
-  localVariableDialogMode.value = variable ? 'edit' : 'create'
-}
-
-function closeLocalVariableDialog() {
-  localVariableDialogMode.value = null
-  localVariableEditingIndex.value = null
-}
-
-function syncLocalVariableType() {
-  if (localVariableEditor.valueType === 'secret') localVariableEditor.sensitive = true
-}
-
-function validateLocalVariableEditor() {
-  const name = localVariableEditor.name.trim()
-  if (!name) return '请输入变量名'
-  if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(name)) return '变量名格式不正确'
-  const duplicate = form.localVariables.some((variable, index) => (
-    index !== localVariableEditingIndex.value && variable.name.trim().toUpperCase() === name.toUpperCase()
-  ))
-  return duplicate ? `变量名 ${name} 已存在` : ''
-}
-
-async function submitLocalVariable() {
-  const validationMessage = validateLocalVariableEditor()
-  if (validationMessage) {
-    ElMessage.warning(validationMessage)
-    return
-  }
-  const previous = form.localVariables.map(variable => ({ ...variable }))
-  const variable: ConfigEnvLocalVariableForm = {
-    name: localVariableEditor.name.trim(),
-    value: localVariableEditor.value,
-    valueType: localVariableEditor.valueType,
-    sensitive: localVariableEditor.sensitive || localVariableEditor.valueType === 'secret',
-    description: localVariableEditor.description.trim(),
-    enabled: localVariableEditor.enabled,
-  }
-  if (localVariableEditingIndex.value == null) form.localVariables.push(variable)
-  else form.localVariables.splice(localVariableEditingIndex.value, 1, variable)
-  const saved = await saveCurrentForm(localVariableEditingIndex.value == null ? '局部变量已添加' : '局部变量已更新')
-  if (saved) closeLocalVariableDialog()
-  else form.localVariables = previous
-}
-
-async function toggleLocalVariable(index: number) {
-  const variable = form.localVariables[index]
-  if (!variable) return
-  const previous = variable.enabled !== false
-  variable.enabled = !previous
-  if (!await saveCurrentForm(variable.enabled ? '局部变量已启用' : '局部变量已停用')) variable.enabled = previous
-}
-
-function requestDeleteLocalVariable(index: number) {
-  deleteLocalVariableIndex.value = index
-}
-
-async function confirmDeleteLocalVariable() {
-  if (deleteLocalVariableIndex.value == null) return
-  const previous = form.localVariables.map(variable => ({ ...variable }))
-  form.localVariables.splice(deleteLocalVariableIndex.value, 1)
-  const saved = await saveCurrentForm('局部变量已删除')
-  if (saved) deleteLocalVariableIndex.value = null
-  else form.localVariables = previous
 }
 
 function viewReference(item: ReferenceViewItem) {
@@ -862,14 +568,6 @@ function tabLabel(tab: EnvironmentDetailTab) {
 function selectDetailTab(tab: EnvironmentDetailTab) {
   activeTab.value = tab
   if (tab === 'variables') void loadVariableSetVersions()
-}
-
-function serviceStatus(service: ConfigEnvServiceEndpointForm) {
-  return serviceTests.value[service.key] || 'untested'
-}
-
-function formatTimeout(timeoutMs: number) {
-  return `${Math.round(timeoutMs / 1000)}s`
 }
 
 onMounted(() => void loadData())
