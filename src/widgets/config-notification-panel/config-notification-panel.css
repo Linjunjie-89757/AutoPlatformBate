@@ -41,26 +41,26 @@
   min-width: 0;
 }
 
-.notification-tabs :deep(.el-tabs__header) {
+.notification-tabs .el-tabs__header {
   margin-bottom: var(--app-space-4);
 }
 
-.notification-tabs :deep(.el-tabs__nav-wrap::after) {
+.notification-tabs .el-tabs__nav-wrap::after {
   height: 1px;
   background: var(--app-border-soft);
 }
 
-.notification-tabs :deep(.el-tabs__item) {
+.notification-tabs .el-tabs__item {
   height: 38px;
   color: var(--app-text-muted);
   font-weight: 500;
 }
 
-.notification-tabs :deep(.el-tabs__item.is-active) {
+.notification-tabs .el-tabs__item.is-active {
   color: var(--app-primary-active);
 }
 
-.notification-tabs :deep(.el-tabs__active-bar) {
+.notification-tabs .el-tabs__active-bar {
   height: 2px;
   border-radius: 2px;
   background: var(--app-primary);
@@ -120,11 +120,11 @@
   color: var(--app-text-secondary);
 }
 
-:global(.notification-rule-drawer) {
+.notification-rule-drawer {
   box-shadow: -4px 0 12px rgba(0, 0, 0, 0.12);
 }
 
-:global(.notification-rule-drawer .el-drawer__body) {
+.notification-rule-drawer .el-drawer__body {
   overflow: hidden;
   padding: 0;
 }
@@ -225,47 +225,47 @@
   font-weight: 500;
 }
 
-.notification-drawer-field :deep(.el-input__wrapper),
-.notification-drawer-field :deep(.el-select__wrapper),
-.notification-drawer-field :deep(.el-input-number) {
+.notification-drawer-field .el-input__wrapper,
+.notification-drawer-field .el-select__wrapper,
+.notification-drawer-field .el-input-number {
   box-sizing: border-box;
   min-height: 28px;
   border-radius: 7px;
   box-shadow: 0 0 0 1px #e5e6eb inset;
 }
 
-.notification-drawer-field :deep(.el-input__wrapper),
-.notification-drawer-field :deep(.el-select__wrapper) {
+.notification-drawer-field .el-input__wrapper,
+.notification-drawer-field .el-select__wrapper {
   height: 28px;
   padding: 1px 13px;
 }
 
-.notification-drawer-field :deep(.el-input__inner),
-.notification-drawer-field :deep(.el-select__placeholder),
-.notification-drawer-field :deep(.el-select__selected-item) {
+.notification-drawer-field .el-input__inner,
+.notification-drawer-field .el-select__placeholder,
+.notification-drawer-field .el-select__selected-item {
   color: #1d2129;
   font-size: 13px;
   font-weight: 400;
   line-height: 19.5px;
 }
 
-.notification-drawer-field :deep(.el-input__inner::placeholder) {
+.notification-drawer-field .el-input__inner::placeholder {
   color: rgba(29, 33, 41, 0.5);
 }
 
-.notification-drawer-field :deep(.el-input-number) {
+.notification-drawer-field .el-input-number {
   width: 100%;
   height: 28px;
   overflow: hidden;
 }
 
-.notification-drawer-field :deep(.el-input-number .el-input__wrapper) {
+.notification-drawer-field .el-input-number .el-input__wrapper {
   width: 100%;
   height: 28px;
 }
 
-.notification-drawer-field :deep(.el-input-number__decrease),
-.notification-drawer-field :deep(.el-input-number__increase) {
+.notification-drawer-field .el-input-number__decrease,
+.notification-drawer-field .el-input-number__increase {
   width: 24px;
   height: 14px;
   border-color: #e5e6eb;
@@ -454,11 +454,11 @@ button.notification-rule-toggle {
   height: 13px;
 }
 
-:global(.notification-channel-drawer) {
+.notification-channel-drawer {
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
 }
 
-:global(.notification-channel-drawer .el-drawer__body) {
+.notification-channel-drawer .el-drawer__body {
   overflow: hidden;
   padding: 0;
 }
@@ -543,36 +543,36 @@ button.notification-rule-toggle {
   line-height: 16.5px;
 }
 
-.notification-channel-field :deep(.el-input__wrapper),
-.notification-channel-field :deep(.el-select__wrapper),
-.notification-channel-field :deep(.el-input-number) {
+.notification-channel-field .el-input__wrapper,
+.notification-channel-field .el-select__wrapper,
+.notification-channel-field .el-input-number {
   box-sizing: border-box;
   min-height: 32px;
   border-radius: 8px;
   box-shadow: 0 0 0 1px #e5e6eb inset;
 }
 
-.notification-channel-field :deep(.el-input__wrapper),
-.notification-channel-field :deep(.el-select__wrapper) {
+.notification-channel-field .el-input__wrapper,
+.notification-channel-field .el-select__wrapper {
   height: 32px;
   padding: 1px 12px;
 }
 
-.notification-channel-field :deep(.el-input__inner),
-.notification-channel-field :deep(.el-select__placeholder),
-.notification-channel-field :deep(.el-select__selected-item) {
+.notification-channel-field .el-input__inner,
+.notification-channel-field .el-select__placeholder,
+.notification-channel-field .el-select__selected-item {
   color: #1d2129;
   font-size: 13px;
   font-weight: 400;
   line-height: 19.5px;
 }
 
-.notification-channel-field :deep(.el-input__inner::placeholder),
-.notification-channel-field :deep(.el-textarea__inner::placeholder) {
+.notification-channel-field .el-input__inner::placeholder,
+.notification-channel-field .el-textarea__inner::placeholder {
   color: rgba(29, 33, 41, 0.5);
 }
 
-.notification-channel-field :deep(.el-textarea__inner) {
+.notification-channel-field .el-textarea__inner {
   border-radius: 8px;
   color: #1d2129;
   font-size: 13px;
@@ -580,13 +580,13 @@ button.notification-rule-toggle {
   box-shadow: 0 0 0 1px #e5e6eb inset;
 }
 
-.notification-channel-field :deep(.el-input-number) {
+.notification-channel-field .el-input-number {
   width: 100%;
   height: 32px;
   overflow: hidden;
 }
 
-.notification-channel-field :deep(.el-input-number .el-input__wrapper) {
+.notification-channel-field .el-input-number .el-input__wrapper {
   width: 100%;
   height: 32px;
 }
@@ -734,11 +734,11 @@ button.notification-rule-toggle {
   height: 14px;
 }
 
-:global(.notification-history-drawer) {
+.notification-history-drawer {
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
 }
 
-:global(.notification-history-drawer .el-drawer__body) {
+.notification-history-drawer .el-drawer__body {
   overflow: hidden;
   padding: 0;
 }
@@ -1122,19 +1122,19 @@ button.notification-rule-toggle {
   width: 217px;
 }
 
-.notification-toolbar__search :deep(.el-input__wrapper),
-.notification-record-toolbar :deep(.el-input__wrapper),
-.notification-record-toolbar :deep(.el-select__wrapper) {
+.notification-toolbar__search .el-input__wrapper,
+.notification-record-toolbar .el-input__wrapper,
+.notification-record-toolbar .el-select__wrapper {
   height: 28px;
   border-radius: 7px;
   background: #ffffff;
   box-shadow: 0 0 0 1px var(--app-border) inset;
 }
 
-.notification-toolbar__search :deep(.el-input__inner),
-.notification-record-toolbar :deep(.el-input__inner),
-.notification-record-toolbar :deep(.el-select__placeholder),
-.notification-record-toolbar :deep(.el-select__selected-item) {
+.notification-toolbar__search .el-input__inner,
+.notification-record-toolbar .el-input__inner,
+.notification-record-toolbar .el-select__placeholder,
+.notification-record-toolbar .el-select__selected-item {
   color: var(--app-text-secondary);
   font-size: 12px;
   line-height: 18px;

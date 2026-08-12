@@ -1,28 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import {
-  AlertTriangle as Warning,
-  CheckCircle as CircleCheck,
-  Copy as CopyDocument,
-  Edit2 as Edit,
-  Globe,
-  Layers,
-  Monitor,
-  Plus,
-  Power as SwitchButton,
-  Search,
-  Server as Service,
-  Trash2 as Delete,
-  Timer,
-  Zap,
-} from '@lucide/vue'
+import { Server as Service } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 
 import {
   configApi,
-  parseParamContent,
-  type ConfigReferenceItem,
   type ConfigReferenceSummary,
   type EnvConfigItem,
   type MockApplicationItem,
@@ -33,7 +16,6 @@ import {
   buildCreateEnvPayload,
   createConfigEnvFormFromItem,
   createDefaultConfigEnvForm,
-  createDefaultServiceEndpoint,
   type ConfigAutomationType,
   type ConfigEnvForm,
   type ConfigEnvLocalVariableForm,
@@ -42,21 +24,36 @@ import {
 } from '@/features/config-env-create-edit'
 import { deleteConfigEnv } from '@/features/config-env-delete'
 import { toggleConfigEnvStatus } from '@/features/config-env-toggle-status'
-import { parseWebUiVariables, type WebUiVariableItem } from '@/features/config-param-create-edit'
+import { parseWebUiVariables } from '@/features/config-param-create-edit'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { confirmDelete } from '@/shared/ui/app-delete-confirm/confirmDelete'
 
 import ConfigEnvironmentEffectivePanel from './ConfigEnvironmentEffectivePanel.vue'
+import ConfigEnvironmentDetailHeader from './ConfigEnvironmentDetailHeader.vue'
+import ConfigEnvironmentDetailTabs from './ConfigEnvironmentDetailTabs.vue'
 import ConfigEnvironmentEditorDialogs from './ConfigEnvironmentEditorDialogs.vue'
 import ConfigEnvironmentMockPanel from './ConfigEnvironmentMockPanel.vue'
 import ConfigEnvironmentMockDialogs from './ConfigEnvironmentMockDialogs.vue'
 import ConfigEnvironmentReferencesPanel from './ConfigEnvironmentReferencesPanel.vue'
 import ConfigEnvironmentServicesPanel from './ConfigEnvironmentServicesPanel.vue'
+import ConfigEnvironmentSidebar from './ConfigEnvironmentSidebar.vue'
 import ConfigEnvironmentVariableDialogs from './ConfigEnvironmentVariableDialogs.vue'
 import ConfigEnvironmentVariablesPanel from './ConfigEnvironmentVariablesPanel.vue'
+import {
+  buildEffectiveVariables,
+  buildReferenceRows,
+  calculateConfigIssues,
+  createLocalVariableEditor,
+  createServiceEditor,
+  environmentCardSummary,
+  environmentStageMeta,
+  variableSetHasSensitive,
+  variableSetScopeLabel,
+} from './configEnvironmentPanel.view'
 import type {
   EffectiveVariableRow,
   EffectiveVariableSourceType,
+  EnvironmentDetailTab,
   EnvironmentEditorForm,
   LocalVariableEditorForm,
   ReferenceKind,
@@ -65,38 +62,16 @@ import type {
   ServiceTestState,
 } from './configEnvironmentPanel.types'
 
-type DetailTab = 'services' | 'variables' | 'mock' | 'effective' | 'references'
-
-interface StageMeta {
-  label: string
-  color: string
-  background: string
-}
-
-interface RuntimeReferenceState {
-  running?: boolean
-  status?: string | null
-  executionStatus?: string | null
-}
-
 const props = withDefaults(defineProps<{ workspaceCode?: string }>(), { workspaceCode: 'ALL' })
 const route = useRoute()
 const router = useRouter()
-
-const stageMeta: Record<string, StageMeta> = {
-  DEV: { label: '开发', color: '#4e5969', background: '#f2f3f5' },
-  TEST: { label: '测试', color: '#165dff', background: '#e8f3ff' },
-  STAGING: { label: '预发布', color: '#7816ff', background: '#f5e8ff' },
-  PROD: { label: '生产', color: '#f53f3f', background: '#ffe8e8' },
-  SANDBOX: { label: '沙箱', color: '#0fc6c2', background: '#e8fffe' },
-}
 
 const envs = ref<EnvConfigItem[]>([])
 const variableSets = ref<ParamSetItem[]>([])
 const mockApplications = ref<MockApplicationItem[]>([])
 const mockReleases = ref<MockReleaseItem[]>([])
 const selectedEnvId = ref<number | null>(null)
-const activeTab = ref<DetailTab>('services')
+const activeTab = ref<EnvironmentDetailTab>('services')
 const keyword = ref('')
 const loading = ref(false)
 const saving = ref(false)
@@ -155,7 +130,7 @@ const environmentApplicabilityOptions: Array<{ value: ConfigAutomationType; labe
 const localVariableTypeOptions: LocalVariableEditorForm['valueType'][] = ['string', 'integer', 'boolean', 'secret']
 
 const selectedEnv = computed(() => envs.value.find(item => item.id === selectedEnvId.value) || null)
-const selectedStage = computed(() => stageMeta[form.envType] || stageMeta.TEST)
+const selectedStage = computed(() => environmentStageMeta[form.envType] || environmentStageMeta.TEST)
 const filteredEnvs = computed(() => {
   const query = keyword.value.trim().toLowerCase()
   return envs.value.filter(item => !query || item.envName.toLowerCase().includes(query))
@@ -187,23 +162,11 @@ const variableSetConflicts = computed(() => {
 })
 const referenceCount = computed(() => referenceSummary.value?.totalCount || 0)
 const runningReferences = computed(() => (referenceSummary.value?.items || []).filter(item => {
-  const runtime = item as typeof item & RuntimeReferenceState
+  const runtime = item as typeof item & { running?: boolean; status?: string | null; executionStatus?: string | null }
   const status = String(runtime.executionStatus || runtime.status || '').toUpperCase()
   return runtime.running === true || status === 'RUNNING' || status === 'EXECUTING' || status === 'IN_PROGRESS'
 }))
-const referenceRows = computed<ReferenceViewItem[]>(() => (referenceSummary.value?.items || []).map((item, index) => {
-  const kind = referenceKind(item.sourceType)
-  return {
-    key: `${item.sourceType}-${item.sourceId ?? index}-${index}`,
-    kind,
-    typeLabel: referenceTypeMeta(kind).label,
-    sourceType: item.sourceType,
-    sourceId: item.sourceId,
-    name: item.sourceName || '未命名引用',
-    lastRun: formatReferenceTime(item.updatedAt),
-    status: referenceRuntimeStatus(item),
-  }
-}))
+const referenceRows = computed<ReferenceViewItem[]>(() => buildReferenceRows(referenceSummary.value?.items || []))
 const referenceStats = computed(() => (['api-scenario', 'api-suite', 'web-ui', 'scheduled'] as ReferenceKind[])
   .map(kind => ({ kind, count: referenceRows.value.filter(item => item.kind === kind).length }))
   .filter(item => item.count > 0))
@@ -225,7 +188,7 @@ const mockBaseUrl = computed(() => selectedMockApplication.value ? `/api/mock/${
 const mockVersionOptions = computed(() => [...mockReleases.value].sort((left, right) => right.versionNo - left.versionNo))
 const selectedMockVersionOption = computed(() => mockVersionOptions.value.find(item => item.id === mockVersionSelection.value) || null)
 const productionEnvironment = computed(() => form.envType === 'PROD')
-const effectiveVariables = computed<EffectiveVariableRow[]>(() => buildEffectiveVariables())
+const effectiveVariables = computed<EffectiveVariableRow[]>(() => buildEffectiveVariables(form, variableSets.value, selectedVariableSets.value))
 const filteredEffectiveVariables = computed(() => {
   const query = effectiveKeyword.value.trim().toLowerCase()
   return effectiveVariables.value.filter(item => (
@@ -233,162 +196,6 @@ const filteredEffectiveVariables = computed(() => {
     && (!query || item.name.toLowerCase().includes(query))
   ))
 })
-
-function createServiceEditor(service?: ConfigEnvServiceEndpointForm, isDefault = false): ServiceEditorForm {
-  const initial = service || createDefaultServiceEndpoint()
-  return {
-    key: initial.key,
-    name: service?.name || '',
-    baseUrl: service?.baseUrl || '',
-    timeoutMs: service?.timeoutMs || 30000,
-    enabled: service?.enabled !== false,
-    isDefault,
-  }
-}
-
-function paramSetVariables(item: ParamSetItem): WebUiVariableItem[] {
-  const variables = parseWebUiVariables(item.contentJson)
-  if (variables.length) return variables
-  const legacy = parseParamContent(item.contentJson)
-  if (!item.paramName.trim() || !legacy.value) return []
-  return [{
-    name: item.paramName,
-    value: legacy.value,
-    sensitive: legacy.sensitive,
-    description: legacy.description,
-    enabled: true,
-  }]
-}
-
-function variableAppliesToEnvironment(item: WebUiVariableItem) {
-  if (item.enabled === false) return false
-  const stage = item.stageType || 'COMMON'
-  if (stage !== 'COMMON' && stage !== form.envType) return false
-  const scope = item.scopeType || 'ALL'
-  if (scope === 'ALL') return true
-  if (form.automationType === 'API_WEB_UI') return scope === 'API' || scope === 'WEB_UI'
-  return scope === form.automationType
-}
-
-function buildEffectiveVariables(): EffectiveVariableRow[] {
-  const resolvedRows = new Map<string, EffectiveVariableRow>()
-  let order = 0
-  const put = (
-    variable: Pick<WebUiVariableItem, 'name' | 'value' | 'sensitive'>,
-    source: string,
-    sourceType: EffectiveVariableSourceType,
-  ) => {
-    const name = variable.name.trim()
-    if (!name) return
-    const key = name.toUpperCase()
-    const previous = resolvedRows.get(key)
-    resolvedRows.set(key, {
-      name,
-      value: variable.value,
-      rawValue: variable.value,
-      source,
-      sourceType,
-      overriddenSource: previous && previous.source !== source ? previous.source : null,
-      description: '',
-      sensitive: variable.sensitive,
-      ok: true,
-      order: order++,
-    })
-  }
-
-  variableSets.value
-    .filter(item => item.paramType === 'GLOBAL' && item.status === 1)
-    .forEach(item => paramSetVariables(item).filter(variableAppliesToEnvironment).forEach(variable => (
-      put(variable, '工作区全局变量', 'workspace')
-    )))
-
-  const boundVariableSets = [...selectedVariableSets.value]
-  boundVariableSets
-    .reverse()
-    .filter(item => !form.disabledVariableSetIds.includes(item.id))
-    .forEach(item => paramSetVariables(item).filter(variableAppliesToEnvironment).forEach(variable => (
-      put(variable, item.paramName, 'variable-set')
-    )))
-
-  form.localVariables
-    .filter(item => item.enabled !== false)
-    .forEach(variable => put(variable, '环境局部覆盖', 'local'))
-
-  const referencePattern = /\{\{\s*([\w.-]+)\s*}}|\$\{\s*([\w.-]+)\s*}/g
-  const resolveValue = (row: EffectiveVariableRow, stack = new Set<string>()): { value: string; unresolved: string[] } => {
-    const key = row.name.toUpperCase()
-    if (stack.has(key)) return { value: row.rawValue, unresolved: [row.name] }
-    const nextStack = new Set(stack)
-    nextStack.add(key)
-    const unresolved: string[] = []
-    const value = row.rawValue.replace(referencePattern, (token, first: string | undefined, second: string | undefined) => {
-      const reference = first || second || ''
-      const target = resolvedRows.get(reference.toUpperCase())
-      if (!target) {
-        unresolved.push(token)
-        return token
-      }
-      const nested = resolveValue(target, nextStack)
-      unresolved.push(...nested.unresolved)
-      return nested.value
-    })
-    return { value, unresolved: Array.from(new Set(unresolved)) }
-  }
-
-  const sourceRank: Record<EffectiveVariableSourceType, number> = {
-    local: 0,
-    'variable-set': 1,
-    workspace: 2,
-  }
-  return Array.from(resolvedRows.values())
-    .map(row => {
-      const resolution = resolveValue(row)
-      const unresolved = resolution.unresolved
-      const overrideDescription = row.overriddenSource
-        ? row.sourceType === 'local'
-          ? '局部变量覆盖了变量集或全局配置中的同名变量'
-          : `按变量集优先级覆盖了 ${row.overriddenSource} 中的同名变量`
-        : ''
-      return {
-        ...row,
-        value: row.sensitive ? '••••••••' : unresolved.length ? '—' : resolution.value,
-        description: unresolved.length
-          ? `引用了无法解析的变量 ${unresolved.join('、')}`
-          : row.sensitive
-            ? '敏感变量，已脱敏'
-            : overrideDescription || '—',
-        ok: unresolved.length === 0,
-      }
-    })
-    .sort((left, right) => sourceRank[left.sourceType] - sourceRank[right.sourceType] || left.order - right.order)
-}
-
-function createLocalVariableEditor(variable?: ConfigEnvLocalVariableForm): LocalVariableEditorForm {
-  const valueType = variable?.valueType || (variable?.sensitive ? 'secret' : 'string')
-  return {
-    name: variable?.name || '',
-    value: variable?.value || '',
-    valueType,
-    sensitive: variable?.sensitive === true || valueType === 'secret',
-    description: variable?.description || '',
-    enabled: variable?.enabled !== false,
-  }
-}
-
-function variableSetScopeLabel(item: ParamSetItem) {
-  const labels: Record<string, string> = {
-    BUSINESS: '通用',
-    API_VARIABLE_SET: '接口自动化',
-    WEB_UI_VARIABLE_SET: 'Web UI',
-    APP_UI_VARIABLE_SET: 'APP 自动化',
-    PAYMENT_CHANNEL: '支付渠道',
-  }
-  return labels[item.paramType] || item.workspaceName || '当前工作区'
-}
-
-function variableSetHasSensitive(item: ParamSetItem) {
-  return parseWebUiVariables(item.contentJson).some(variable => variable.sensitive)
-}
 
 function variableSetVersionLabel(item: ParamSetItem) {
   const version = variableSetVersions.value[item.id]
@@ -399,30 +206,7 @@ function isVariableSetEnabled(item: ParamSetItem) {
   return !form.disabledVariableSetIds.includes(item.id)
 }
 
-function formForEnv(env: EnvConfigItem) {
-  return createConfigEnvFormFromItem(env)
-}
-
-function calculateConfigIssues(target: ConfigEnvForm) {
-  let issues = 0
-  if (!target.services.length) issues += 1
-  if (target.services.some(service => !service.name.trim() || !service.baseUrl.trim())) issues += 1
-  if ((target.mockApplicationId || target.mockReleaseId) && (!target.mockApplicationId || !target.mockReleaseId)) issues += 1
-  return issues
-}
-
-function environmentCardSummary(env: EnvConfigItem) {
-  const envForm = formForEnv(env)
-  return {
-    stage: stageMeta[envForm.envType] || stageMeta.TEST,
-    services: envForm.services.filter(service => service.baseUrl).length,
-    variableSets: envForm.variableSetIds.length,
-    issues: calculateConfigIssues(envForm),
-    mockEnabled: Boolean(envForm.mockApplicationId && envForm.mockReleaseId),
-  }
-}
-
-async function loadData(preferredId = selectedEnvId.value, preferredTab?: DetailTab) {
+async function loadData(preferredId = selectedEnvId.value, preferredTab?: EnvironmentDetailTab) {
   loading.value = true
   errorMessage.value = ''
   try {
@@ -466,7 +250,7 @@ async function loadVariableSetVersions() {
   variableSetVersions.value = { ...variableSetVersions.value, ...Object.fromEntries(entries) }
 }
 
-async function selectEnv(env: EnvConfigItem, preferredTab: DetailTab = 'services') {
+async function selectEnv(env: EnvConfigItem, preferredTab: EnvironmentDetailTab = 'services') {
   selectedEnvId.value = env.id
   Object.assign(form, createConfigEnvFormFromItem(env))
   activeTab.value = preferredTab
@@ -1049,38 +833,6 @@ async function confirmDeleteLocalVariable() {
   else form.localVariables = previous
 }
 
-const REFERENCE_TYPE_META = {
-  'api-scenario': { label: '接口场景', color: '#ff7d00', background: '#fff3e8', icon: Zap },
-  'api-suite': { label: '接口套件', color: '#165dff', background: '#e8f3ff', icon: Layers },
-  'web-ui': { label: 'Web UI', color: '#0fc6c2', background: '#e8fffe', icon: Monitor },
-  scheduled: { label: '定时任务', color: '#7816ff', background: '#f5e8ff', icon: Timer },
-} as const
-
-function referenceKind(sourceType: string): ReferenceKind {
-  const normalized = sourceType.toLowerCase()
-  if (normalized.includes('web ui') || normalized.includes('webui')) return 'web-ui'
-  if (normalized.includes('定时') || normalized.includes('任务')) return 'scheduled'
-  if (normalized.includes('套件')) return 'api-suite'
-  return 'api-scenario'
-}
-
-function referenceTypeMeta(kind: ReferenceKind) {
-  return REFERENCE_TYPE_META[kind]
-}
-
-function referenceRuntimeStatus(item: ConfigReferenceItem): ReferenceViewItem['status'] {
-  const runtime = item as ConfigReferenceItem & RuntimeReferenceState
-  const status = String(runtime.executionStatus || runtime.status || '').toUpperCase()
-  if (runtime.running === true || status === 'RUNNING' || status === 'EXECUTING' || status === 'IN_PROGRESS') return 'running'
-  if (runtime.running === false || status === 'IDLE' || status === 'COMPLETED' || status === 'SUCCESS' || status === 'FAILED') return 'idle'
-  return 'unknown'
-}
-
-function formatReferenceTime(value: string | null) {
-  if (!value) return '—'
-  return value.replace('T', ' ').slice(0, 16)
-}
-
 function viewReference(item: ReferenceViewItem) {
   const query: Record<string, string> = { workspace: props.workspaceCode }
   let path = '/automation/api/scenarios'
@@ -1099,7 +851,7 @@ function viewReference(item: ReferenceViewItem) {
   void router.push({ path, query })
 }
 
-function tabLabel(tab: DetailTab) {
+function tabLabel(tab: EnvironmentDetailTab) {
   if (tab === 'services') return `服务配置 (${form.services.filter(item => item.baseUrl).length})`
   if (tab === 'variables') return `变量配置 (${variableCount.value})`
   if (tab === 'mock') return mockBound.value ? 'Mock 已启用' : 'Mock 配置'
@@ -1107,7 +859,7 @@ function tabLabel(tab: DetailTab) {
   return `引用分析 (${referenceCount.value})`
 }
 
-function selectDetailTab(tab: DetailTab) {
+function selectDetailTab(tab: EnvironmentDetailTab) {
   activeTab.value = tab
   if (tab === 'variables') void loadVariableSetVersions()
 }
@@ -1122,110 +874,49 @@ function formatTimeout(timeoutMs: number) {
 
 onMounted(() => void loadData())
 watch(() => props.workspaceCode, () => void loadData(null))
+
+const detailTabLabels = computed<Record<EnvironmentDetailTab, string>>(() => ({
+  services: tabLabel('services'),
+  variables: tabLabel('variables'),
+  mock: tabLabel('mock'),
+  effective: tabLabel('effective'),
+  references: tabLabel('references'),
+}))
 </script>
 
 <template>
   <section class="figma-env" data-node-id="311:3773">
-    <aside class="figma-env__sidebar" data-node-id="311:3774">
-      <header class="figma-env__sidebar-head">
-        <div class="figma-env__sidebar-title-row">
-          <strong>测试环境</strong>
-          <button class="figma-env__primary-button is-small" type="button" @click="createEnvironment">
-            <el-icon><Plus /></el-icon><span>新建</span>
-          </button>
-        </div>
-        <label class="figma-env__search">
-          <el-icon><Search /></el-icon>
-          <input v-model="keyword" type="text" placeholder="搜索环境名称">
-        </label>
-      </header>
-
-      <div class="figma-env__sidebar-list app-soft-scrollbar">
-        <template v-if="loading && !envs.length">
-          <div v-for="index in 5" :key="index" class="figma-env__env-card is-skeleton" />
-        </template>
-        <button
-          v-for="env in filteredEnvs"
-          v-else
-          :key="env.id"
-          class="figma-env__env-card"
-          :class="{ 'is-active': selectedEnvId === env.id }"
-          :style="{
-            '--stage-color': environmentCardSummary(env).stage.color,
-            '--stage-background': environmentCardSummary(env).stage.background,
-          }"
-          type="button"
-          @click="selectEnv(env)"
-        >
-          <span class="figma-env__env-card-main">
-            <i class="figma-env__stage-line" />
-            <span class="figma-env__env-card-copy">
-              <span class="figma-env__env-name-row">
-                <strong>{{ env.envName }}</strong>
-                <em v-if="env.status === 0">停用</em>
-              </span>
-              <span class="figma-env__env-meta-row">
-                <b>{{ environmentCardSummary(env).stage.label }}</b>
-                <small>{{ environmentCardSummary(env).services }} 服务 · {{ environmentCardSummary(env).variableSets }} 变量集</small>
-              </span>
-            </span>
-          </span>
-          <span class="figma-env__env-card-foot">
-            <span :class="{ 'is-warning': environmentCardSummary(env).issues > 0 }">
-              <el-icon><Warning v-if="environmentCardSummary(env).issues > 0" /><CircleCheck v-else /></el-icon>
-              {{ environmentCardSummary(env).issues > 0 ? `${environmentCardSummary(env).issues} 项待完善` : '配置完整' }}
-            </span>
-            <small v-if="environmentCardSummary(env).mockEnabled">Mock 已接入</small>
-          </span>
-        </button>
-        <div v-if="!loading && !filteredEnvs.length" class="figma-env__sidebar-empty">暂无环境</div>
-      </div>
-    </aside>
+    <ConfigEnvironmentSidebar
+      :environments="filteredEnvs"
+      :selected-environment-id="selectedEnvId"
+      :keyword="keyword"
+      :loading="loading"
+      :card-summary="environmentCardSummary"
+      @update:keyword="keyword = $event"
+      @create="createEnvironment"
+      @select="selectEnv"
+    />
 
     <main v-if="selectedEnv" class="figma-env__detail" data-node-id="311:3923">
-      <header class="figma-env__detail-head">
-        <div class="figma-env__detail-summary">
-          <span class="figma-env__detail-icon" :style="{ color: selectedStage.color, background: selectedStage.background }"><el-icon><Globe /></el-icon></span>
-          <div class="figma-env__detail-copy">
-            <div class="figma-env__detail-title-row">
-              <h2>{{ form.envName }}</h2>
-              <span class="figma-env__stage-badge" :style="{ color: selectedStage.color, background: selectedStage.background }">{{ selectedStage.label }}</span>
-              <span class="figma-env__apply-badge">
-                <el-icon><Layers :size="10" /></el-icon>
-                {{ applicationLabel }}
-              </span>
-            </div>
-            <div class="figma-env__detail-description">
-              <span>{{ form.description || '暂未填写环境说明' }}</span>
-              <i>·</i><span>更新人：—</span><i>·</i><span>—</span>
-              <template v-if="!configComplete"><i>·</i><span class="is-warning"><el-icon><Warning /></el-icon>{{ configIssueCount }} 项配置待完善</span></template>
-            </div>
-          </div>
-        </div>
+      <ConfigEnvironmentDetailHeader
+        :environment-name="form.envName"
+        :description="form.description"
+        :stage="selectedStage"
+        :application-label="applicationLabel"
+        :config-complete="configComplete"
+        :config-issue-count="configIssueCount"
+        :service-count="form.services.filter(item => item.baseUrl).length"
+        :variable-set-count="form.variableSetIds.length"
+        :reference-count="referenceCount"
+        :enabled="selectedEnv.status === 1"
+        :operating="operating"
+        @copy="copyEnvironment"
+        @edit="editEnvironment"
+        @switch-status="switchStatus"
+        @remove="removeEnvironment"
+      />
 
-        <div class="figma-env__detail-actions">
-          <div v-for="metric in [{ value: form.services.filter(item => item.baseUrl).length, label: '服务' }, { value: form.variableSetIds.length, label: '变量集' }, { value: referenceCount, label: '引用任务' }]" :key="metric.label" class="figma-env__metric">
-            <strong>{{ metric.value }}</strong><span>{{ metric.label }}</span>
-          </div>
-          <i class="figma-env__action-divider" />
-          <button type="button" @click="copyEnvironment"><el-icon><CopyDocument /></el-icon>复制</button>
-          <button type="button" @click="editEnvironment"><el-icon><Edit /></el-icon>编辑</button>
-          <button type="button" :disabled="operating" @click="switchStatus"><el-icon><SwitchButton /></el-icon>{{ selectedEnv.status === 1 ? '停用' : '启用' }}</button>
-          <button class="figma-env__icon-button" type="button" title="删除环境" :disabled="operating" @click="removeEnvironment"><el-icon><Delete /></el-icon></button>
-        </div>
-      </header>
-
-      <nav class="figma-env__tabs">
-        <button
-          v-for="tab in (['services', 'variables', 'mock', 'effective', 'references'] as DetailTab[])"
-          :key="tab"
-          type="button"
-          :class="{ 'is-active': activeTab === tab }"
-          @click="selectDetailTab(tab)"
-        >
-          {{ tabLabel(tab) }}
-        </button>
-      </nav>
+      <ConfigEnvironmentDetailTabs :active-tab="activeTab" :labels="detailTabLabels" @select="selectDetailTab" />
 
       <ConfigEnvironmentServicesPanel
         v-if="activeTab === 'services'"

@@ -1,5 +1,21 @@
 import type { ConfigAutomationType, ConfigEnvLocalVariableForm } from '@/features/config-env-create-edit'
 
+export type EnvironmentDetailTab = 'services' | 'variables' | 'mock' | 'effective' | 'references'
+
+export interface EnvironmentStageMeta {
+  label: string
+  color: string
+  background: string
+}
+
+export interface EnvironmentCardSummary {
+  stage: EnvironmentStageMeta
+  services: number
+  variableSets: number
+  issues: number
+  mockEnabled: boolean
+}
+
 export type ServiceTestState = 'untested' | 'testing' | 'success' | 'failed' | 'timeout'
 
 export interface ServiceEditorForm {
