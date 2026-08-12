@@ -1,0 +1,345 @@
+:global(.config-runner-editor-drawer .el-drawer__body) {
+  padding: 0;
+  background: #fff;
+}
+
+.config-runner-editor-drawer { box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12); }
+
+.config-runner-editor-drawer__shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: #fff;
+}
+
+.config-runner-editor-drawer__header {
+  display: flex;
+  min-height: 68.25px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12.25px 17.5px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.config-runner-editor-drawer__header h3 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.config-runner-editor-drawer__header p {
+  margin: 4px 0 0;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-editor-drawer__header button {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  flex: 0 0 24.5px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+}
+
+.config-runner-editor-drawer__header button:hover {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-runner-editor-drawer__header button img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.config-runner-editor-drawer__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding: 14px 17.5px 0;
+}
+
+.config-runner-editor-field {
+  display: grid;
+  gap: 5.25px;
+}
+
+.config-runner-editor-field label {
+  display: grid;
+  gap: 5.25px;
+  min-width: 0;
+}
+
+.config-runner-editor-field label span {
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.config-runner-editor-field p {
+  margin: 0;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.config-runner-editor-field input,
+.config-runner-editor-field select,
+.config-runner-editor-field textarea {
+  width: 100%;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  outline: none;
+  background: #fff;
+  color: #1d2129;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.config-runner-editor-field input,
+.config-runner-editor-field select {
+  height: 28px;
+  padding: 0 11.5px;
+}
+
+.config-runner-editor-field textarea {
+  min-height: 49px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.config-runner-editor-field input:focus,
+.config-runner-editor-field select:focus,
+.config-runner-editor-field textarea:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.08);
+}
+
+.config-runner-editor-field input::placeholder,
+.config-runner-editor-field textarea::placeholder { color: #c9cdd4; }
+
+.config-runner-editor-grid {
+  display: grid;
+  gap: 10.5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.config-runner-editor-grid.is-host { grid-template-columns: minmax(0, 319.83px) minmax(0, 154.67px); }
+
+.config-runner-editor-divider {
+  height: 1px;
+  margin: 0;
+  background: #e5e6eb;
+}
+
+.config-runner-editor-capability-block {
+  display: grid;
+  gap: 8.75px;
+}
+
+.config-runner-editor-capability-block h4 {
+  margin: 0;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.config-runner-editor-capability-list {
+  display: grid;
+  gap: 7px;
+}
+
+.config-runner-editor-capability {
+  display: flex;
+  height: 44px;
+  align-items: center;
+  gap: 10.5px;
+  padding: 11.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 11px;
+  background: #fff;
+  color: #1d2129;
+}
+
+.config-runner-editor-capability.is-selected {
+  border-color: #0284c7;
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.config-runner-editor-capability__check {
+  position: relative;
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #767676;
+  border-radius: 2px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.config-runner-editor-capability.is-selected .config-runner-editor-capability__check {
+  border-color: #0284c7;
+  background: #0284c7;
+}
+
+.config-runner-editor-capability__check img {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.config-runner-editor-capability__icon {
+  display: inline-flex;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+.config-runner-editor-capability__icon img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.config-runner-editor-capability strong {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.config-runner-editor-enable {
+  display: flex;
+  height: 66.25px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13.25px;
+  border: 1px solid #e5e6eb;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.config-runner-editor-enable div {
+  display: grid;
+  gap: 1.75px;
+}
+
+.config-runner-editor-enable strong {
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
+}
+
+.config-runner-editor-enable span {
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-editor-toggle {
+  position: relative;
+  width: 28px;
+  height: 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #c9cdd4;
+  cursor: pointer;
+}
+
+.config-runner-editor-toggle i {
+  position: absolute;
+  top: 1.75px;
+  left: 2px;
+  width: 10.5px;
+  height: 10.5px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.config-runner-editor-toggle.is-on { background: #165dff; }
+.config-runner-editor-toggle.is-on i { left: 14px; }
+
+.config-runner-editor-drawer__footer {
+  display: flex;
+  height: 57.5px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 13.25px 17.5px 12.25px;
+  border-top: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.config-runner-secondary-button,
+.config-runner-primary-button {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
+}
+
+.config-runner-secondary-button {
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+}
+
+.config-runner-secondary-button:hover {
+  border-color: #c9cdd4;
+  background: #fafafa;
+  color: #1d2129;
+}
+
+.config-runner-primary-button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #0284c7;
+  background: #0284c7;
+  color: #fff;
+}
+
+.config-runner-primary-button:hover { filter: brightness(1.08); }
+
+.config-runner-primary-button img {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}

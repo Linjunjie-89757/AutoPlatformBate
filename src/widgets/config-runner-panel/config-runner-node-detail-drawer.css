@@ -1,0 +1,575 @@
+:global(.config-runner-node-drawer .el-drawer__body) {
+  padding: 0;
+  background: #fff;
+}
+
+.config-runner-node-drawer { box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12); }
+
+.config-runner-node-drawer__shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: #fff;
+}
+
+.config-runner-node-drawer__header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.config-runner-node-drawer__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.config-runner-node-drawer__title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-runner-node-drawer__title > span {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.config-runner-node-drawer__title h3 {
+  overflow: hidden;
+  margin: 0;
+  color: #1d2129;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-node-drawer__title b,
+.config-runner-node-drawer__title em {
+  display: inline-flex;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.config-runner-node-drawer__title em {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.config-runner-node-drawer__header p {
+  margin: 6px 0 0 40px;
+  color: #86909c;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-node-drawer__close {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  flex: 0 0 24.5px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  line-height: 1;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.config-runner-node-drawer__close:hover {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-runner-node-drawer__close img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.config-runner-node-drawer__tabs {
+  display: flex;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.config-runner-node-drawer__tabs button {
+  display: inline-flex;
+  height: 40px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.config-runner-node-drawer__tabs button.is-active {
+  border-bottom-color: #0284c7;
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.config-runner-node-drawer__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  overflow: auto;
+  padding: 24px;
+}
+
+.config-runner-current-task {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(2, 132, 199, 0.3);
+  border-radius: 12px;
+  background: #e0f2fe;
+}
+
+.config-runner-current-task > span {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 999px;
+  background: #0284c7;
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.1);
+}
+
+.config-runner-current-task div {
+  min-width: 0;
+  flex: 1;
+}
+
+.config-runner-current-task small {
+  display: block;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-current-task strong {
+  display: block;
+  overflow: hidden;
+  color: #0284c7;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-current-task button {
+  display: inline-flex;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0284c7;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.config-runner-node-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.config-runner-node-section h4,
+.config-runner-node-capability-section h4 {
+  margin: 0;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.config-runner-resource-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.config-runner-resource-bars div { display: block; }
+
+.config-runner-resource-bars p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 4px;
+}
+
+.config-runner-resource-bars span {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.config-runner-resource-bars i {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f2f3f5;
+}
+
+.config-runner-resource-bars b {
+  display: block;
+  height: 6px;
+  border-radius: inherit;
+}
+
+.config-runner-resource-bars em {
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.config-runner-node-stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.config-runner-node-stats article {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  padding: 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  background: #fff;
+  text-align: center;
+}
+
+.config-runner-node-stats strong {
+  color: #1d2129;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.config-runner-node-stats span {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.config-runner-node-stats article.is-success strong { color: #00b42a; }
+.config-runner-node-stats article.is-danger strong { color: #f53f3f; }
+
+.config-runner-node-capability-section {
+  display: grid;
+  gap: 10px;
+}
+
+.config-runner-node-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.config-runner-node-capabilities span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-node-capabilities span img {
+  display: block;
+  width: 11px;
+  height: 11px;
+}
+
+.config-runner-node-task-panel,
+.config-runner-node-log-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.config-runner-node-task-panel > p,
+.config-runner-node-log-panel > p {
+  margin: 0;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-node-task-table {
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.config-runner-node-task-table table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.config-runner-node-task-table thead { background: #fafafa; }
+
+.config-runner-node-task-table th {
+  height: 36px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.config-runner-node-task-table td {
+  height: 44px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
+.config-runner-node-task-table tr:last-child td { border-bottom: 0; }
+
+.config-runner-node-task-table code,
+.config-runner-node-task-table time {
+  color: inherit;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.config-runner-node-task-table code { color: #165dff; }
+
+.config-runner-node-task-status {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.config-runner-node-task-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.config-runner-node-task-actions button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.config-runner-node-task-actions button:hover { background: #f2f3f5; }
+
+.config-runner-node-task-actions img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.config-runner-node-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.config-runner-node-log-list article {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #ff7d00;
+}
+
+.config-runner-node-log-list article.is-error {
+  border-color: #ffccc7;
+  background: #fff0f0;
+  color: #f53f3f;
+}
+
+.config-runner-node-log-list svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.config-runner-node-log-list div {
+  display: grid;
+  gap: 2px;
+}
+
+.config-runner-node-log-list time {
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-node-log-list span {
+  color: #1d2129;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-node-empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  color: #86909c;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.config-runner-node-info {
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.config-runner-node-info div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid #e5e6eb;
+}
+
+.config-runner-node-info div:first-child { border-top: 0; }
+.config-runner-node-info div.is-striped { background: #fafafa; }
+
+.config-runner-node-info span {
+  width: 80px;
+  flex: 0 0 80px;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-node-info strong {
+  flex: 1;
+  overflow: hidden;
+  color: #4e5969;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-secondary-button,
+.config-runner-primary-button {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
+}
+
+.config-runner-secondary-button {
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+}
+
+.config-runner-secondary-button:hover {
+  border-color: #c9cdd4;
+  background: #fafafa;
+  color: #1d2129;
+}
+
+.config-runner-primary-button {
+  border: 1px solid #0284c7;
+  background: #0284c7;
+  color: #fff;
+}
+
+.config-runner-primary-button:hover { filter: brightness(1.08); }
+
+.config-runner-secondary-button.is-small,
+.config-runner-primary-button.is-small {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.config-runner-primary-button.is-warning {
+  border-color: #ff7d00;
+  background: #ff7d00;
+}
+
+@media (max-width: 720px) {
+  .config-runner-node-info { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,291 @@
+.config-runner-table-card {
+  min-height: 120px;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.config-runner-table-card table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.config-runner-table-card__name-col { width: 14.31%; }
+.config-runner-table-card__address-col { width: 8.28%; }
+.config-runner-table-card__status-col { width: 7.31%; }
+.config-runner-table-card__task-col { width: 12.16%; }
+.config-runner-table-card__capability-col { width: 18.1%; }
+.config-runner-table-card__browser-col { width: 7.5%; }
+.config-runner-table-card__version-col { width: 5.77%; }
+.config-runner-table-card__heartbeat-col { width: 6.07%; }
+.config-runner-table-card__resource-col { width: 8.66%; }
+.config-runner-table-card__action-col { width: 11.09%; }
+
+.config-runner-table-card thead {
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+}
+
+.config-runner-table-card th {
+  height: 34.5px;
+  padding: 0 10.5px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  line-height: 16px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.config-runner-table-card td {
+  height: 56px;
+  padding: 8px 10.5px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #1d2129;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.config-runner-table-card th:last-child,
+.config-runner-table-card td:last-child {
+  padding-right: 10px;
+  padding-left: 8px;
+}
+
+.config-runner-table-card tbody tr {
+  cursor: pointer;
+  transition: background-color 0.16s ease;
+}
+
+.config-runner-table-card tbody tr:hover { background: #fafbff; }
+.config-runner-table-card tr:last-child td { border-bottom: 0; }
+.config-runner-table-card tr.is-offline { background: transparent; }
+
+.config-runner-node-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-runner-node-icon {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  flex: 0 0 24.5px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+.config-runner-node-cell strong {
+  display: block;
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-node-cell span:not(.config-runner-node-icon) {
+  display: block;
+  overflow: hidden;
+  max-width: 160px;
+  color: #c9cdd4;
+  font-size: 10px;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: #86909c;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-status-pill {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.config-runner-status-pill span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+.config-runner-task-link {
+  display: grid;
+  max-width: 150px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0284c7;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+}
+
+.config-runner-task-link small {
+  overflow: hidden;
+  color: #c9cdd4;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 10px;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-capability-list,
+.config-runner-browser-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.config-runner-capability-pill,
+.config-runner-extra-pill,
+.config-runner-browser-list span {
+  display: inline-flex;
+  min-width: 0;
+  height: 18.5px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5.25px;
+  border-radius: 3.5px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.config-runner-extra-pill,
+.config-runner-browser-list span {
+  background: #f2f3f5;
+  color: #86909c;
+}
+
+.config-runner-browser-list span { min-width: 20px; }
+
+.config-runner-resource-mini {
+  display: grid;
+  width: 70px;
+  gap: 3.5px;
+}
+
+.config-runner-resource-mini span {
+  display: flex;
+  align-items: center;
+  gap: 5.25px;
+}
+
+.config-runner-resource-mini i {
+  display: block;
+  height: 3.5px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f2f3f5;
+}
+
+.config-runner-resource-mini b {
+  display: block;
+  height: 3.5px;
+  border-radius: inherit;
+}
+
+.config-runner-resource-mini em {
+  width: 28px;
+  font-family: var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
+  font-size: 10px;
+  font-style: normal;
+  line-height: 14px;
+  text-align: right;
+}
+
+.config-runner-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.75px;
+}
+
+.config-runner-row-actions button {
+  display: inline-flex;
+  width: 24.5px;
+  height: 24.5px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #c9cdd4;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.config-runner-row-actions button:hover {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-runner-row-actions button img {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.config-runner-row-actions button.is-danger:hover {
+  background: #fff0f0;
+  color: #f53f3f;
+}
+
+.config-runner-warning-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid #e5e6eb;
+  background: #fffbeb;
+  color: #ff7d00;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-runner-muted {
+  overflow: hidden;
+  color: #c9cdd4;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-muted.is-danger { color: #f53f3f; }
+
+@media (max-width: 900px) {
+  .config-runner-table-card { overflow-x: auto; }
+  .config-runner-table-card table { min-width: 1180px; }
+}

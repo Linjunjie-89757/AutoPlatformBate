@@ -1,0 +1,156 @@
+.config-runner-detail {
+  display: grid;
+  gap: var(--app-space-4);
+}
+
+.config-runner-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+}
+
+.config-runner-detail__header h3 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-lg);
+  line-height: var(--app-line-height-lg);
+}
+
+.config-runner-detail__header code,
+.config-runner-detail-log__head code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-family: Consolas, Monaco, monospace;
+  font-size: var(--app-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+}
+
+.config-runner-detail__section {
+  display: grid;
+  gap: var(--app-space-3);
+  min-width: 0;
+  padding: var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-panel);
+}
+
+.config-runner-detail__section h4 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-md);
+  line-height: var(--app-line-height-md);
+}
+
+.config-runner-detail__section p {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-md);
+}
+
+.config-runner-detail__section pre,
+.config-runner-detail-log pre {
+  overflow: auto;
+  max-height: 220px;
+  margin: 0;
+  padding: var(--app-space-3);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-page);
+  color: var(--app-text-secondary);
+  font-family: Consolas, Monaco, monospace;
+  font-size: var(--app-font-size-xs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.config-runner-detail-grid,
+.config-runner-detail-summary,
+.config-runner-detail-timeline {
+  display: grid;
+  gap: var(--app-space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.config-runner-detail-grid div,
+.config-runner-detail-summary div,
+.config-runner-detail-timeline div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.config-runner-detail-grid span,
+.config-runner-detail-summary span,
+.config-runner-detail-timeline span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-detail-grid strong,
+.config-runner-detail-summary strong,
+.config-runner-detail-timeline strong {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-detail-logs {
+  display: grid;
+  gap: var(--app-space-3);
+}
+
+.config-runner-detail-log {
+  display: grid;
+  gap: var(--app-space-2);
+  min-width: 0;
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-subtle);
+}
+
+.config-runner-detail-log__head {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.config-runner-detail-log__head span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-detail-log p {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-md);
+}
+
+.config-runner-muted {
+  color: var(--app-text-muted);
+}
+
+@media (max-width: 720px) {
+  .config-runner-detail-grid,
+  .config-runner-detail-summary,
+  .config-runner-detail-timeline {
+    grid-template-columns: 1fr;
+  }
+}

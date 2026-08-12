@@ -1,0 +1,546 @@
+.config-runner-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: #f4f6fa;
+  box-shadow: none;
+}
+
+.config-runner-panel__tabs {
+  display: flex;
+  height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.config-runner-panel__tab {
+  display: inline-flex;
+  height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #86909c;
+  cursor: default;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.config-runner-panel__tab.is-active {
+  border-bottom-color: #0284c7;
+  color: #0284c7;
+}
+
+.config-runner-panel__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;
+  padding: 20px;
+}
+
+.config-runner-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--app-space-4);
+}
+
+.config-runner-panel__header h2 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-xl);
+  line-height: 26px;
+}
+
+.config-runner-panel__header p {
+  margin: var(--app-space-1) 0 0;
+  color: var(--app-text-muted);
+}
+
+.config-runner-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--app-space-2);
+}
+
+.config-runner-panel__stats {
+  display: grid;
+  gap: 10.5px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.config-runner-stat-card {
+  display: flex;
+  min-width: 0;
+  height: 58px;
+  align-items: center;
+  gap: 8.75px;
+  padding: 13.25px;
+  border: 1px solid #e5e6eb;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+}
+
+.config-runner-stat-card__value {
+  display: inline-flex;
+  width: 31.5px;
+  height: 31.5px;
+  flex: 0 0 31.5px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.config-runner-stat-card > span:last-child {
+  overflow: hidden;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-runner-search {
+  position: relative;
+  display: flex;
+  width: 217px;
+  height: 28px;
+  align-items: center;
+  color: #86909c;
+}
+
+.config-runner-search svg {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+}
+
+.config-runner-search input,
+.config-runner-filter {
+  height: 28px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  outline: none;
+  background: #fff;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 18px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.config-runner-search input {
+  width: 100%;
+  padding: 0 12px 0 32px;
+}
+
+.config-runner-filter {
+  width: 120px;
+  padding: 0 28px 0 10px;
+}
+
+.config-runner-search input::placeholder {
+  color: #c9cdd4;
+}
+
+.config-runner-search input:focus,
+.config-runner-filter:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.08);
+}
+
+.config-runner-toolbar__spacer {
+  min-width: 8px;
+  flex: 1 1 auto;
+}
+
+.config-runner-secondary-button,
+.config-runner-primary-button {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, filter 0.16s ease;
+}
+
+.config-runner-secondary-button img,
+.config-runner-primary-button img {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}
+
+.config-runner-secondary-button {
+  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #4e5969;
+}
+
+.config-runner-secondary-button:hover {
+  border-color: #c9cdd4;
+  background: #fafafa;
+  color: #1d2129;
+}
+
+.config-runner-primary-button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #0284c7;
+  background: #0284c7;
+  color: #fff;
+}
+
+.config-runner-primary-button:hover {
+  filter: brightness(1.08);
+}
+
+.config-runner-secondary-button:disabled,
+.config-runner-primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.config-runner-secondary-button.is-small,
+.config-runner-primary-button.is-small {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.config-runner-primary-button.is-warning {
+  border-color: #ff7d00;
+  background: #ff7d00;
+}
+
+.config-runner-mode-strip {
+  display: grid;
+  gap: var(--app-space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-bg-panel);
+}
+
+.config-runner-mode-strip div {
+  min-width: 0;
+}
+
+.config-runner-mode-strip strong,
+.config-runner-mode-strip span {
+  display: block;
+}
+
+.config-runner-mode-strip strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-runner-mode-strip span {
+  margin-top: var(--app-space-1);
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-sm);
+  line-height: 1.6;
+}
+
+.config-runner-refresh-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-subtle);
+}
+
+.config-runner-refresh-bar__status {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-runner-refresh-bar__status small {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-refresh-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--app-text-subtle);
+}
+
+.config-runner-refresh-dot.is-active {
+  background: var(--app-success);
+}
+
+.config-runner-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid #fed7aa;
+  border-radius: var(--app-radius-md);
+  background: var(--app-warning-soft);
+  color: var(--app-warning);
+}
+
+.config-runner-warning .el-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.config-runner-warning div {
+  min-width: 0;
+  flex: 1;
+}
+
+.config-runner-warning strong {
+  display: block;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-runner-warning p {
+  margin: 2px 0 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  line-height: var(--app-line-height-md);
+}
+
+.config-runner-panel__inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  padding: var(--app-space-2) var(--app-space-3);
+  border: 1px solid #fecaca;
+  border-radius: var(--app-radius-md);
+  background: var(--app-danger-soft);
+  color: var(--app-danger);
+  font-size: var(--app-font-size-sm);
+}
+
+
+.config-runner-title {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-subtitle {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-muted {
+  overflow: hidden;
+  color: #c9cdd4;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-muted.is-danger {
+  color: #f53f3f;
+}
+
+.config-runner-resource,
+.config-runner-dispatch,
+.config-runner-runtime {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.config-runner-resource strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-md);
+}
+
+.config-runner-resource span,
+.config-runner-dispatch span,
+.config-runner-runtime span {
+  overflow: hidden;
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-task-list {
+  display: grid;
+  gap: var(--app-space-2);
+}
+
+.config-runner-task {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: var(--app-space-2);
+  border: 1px solid var(--app-border-soft);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-subtle);
+}
+
+.config-runner-task__head,
+.config-runner-task__meta {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.config-runner-task__head strong {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-task__head > span:not(.config-type-badge) {
+  color: var(--app-primary);
+  font-size: var(--app-font-size-xs);
+  font-weight: 600;
+}
+
+.config-runner-task__meta span {
+  color: var(--app-text-muted);
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-task__footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+}
+
+.config-runner-task__footer code {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--app-text-subtle);
+  font-family: Consolas, Monaco, monospace;
+  font-size: var(--app-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-task__footer :deep(.el-button) {
+  flex: 0 0 auto;
+}
+
+.config-runner-task__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+
+.config-runner-runtime code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 6px;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-page);
+  color: var(--app-text-secondary);
+  font-family: Consolas, Monaco, monospace;
+  font-size: var(--app-font-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+
+@media (max-width: 1100px) {
+  .config-runner-panel__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .config-runner-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .config-runner-toolbar__spacer {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .config-runner-panel__header {
+    flex-direction: column;
+  }
+
+  .config-runner-panel__actions {
+    justify-content: flex-start;
+  }
+
+  .config-runner-refresh-bar,
+  .config-runner-warning {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+
+  .config-runner-search {
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  .config-runner-panel__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .config-runner-filter {
+    width: calc(50% - 4px);
+  }
+
+
+}

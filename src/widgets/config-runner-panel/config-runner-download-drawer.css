@@ -1,0 +1,242 @@
+.config-runner-guide {
+  display: grid;
+  gap: var(--app-space-5);
+}
+
+.config-runner-guide__intro {
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  line-height: 1.7;
+}
+
+.config-runner-guide section {
+  display: grid;
+  gap: var(--app-space-3);
+}
+
+.config-runner-guide__download {
+  padding: var(--app-space-4);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-page);
+}
+
+.config-runner-guide__download-main {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-3);
+}
+
+.config-runner-guide__download-icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--app-radius-md);
+  background: #e0f2fe;
+  color: var(--app-primary);
+}
+
+.config-runner-guide__primary-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--app-space-3);
+  border: 1px solid var(--app-primary);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.config-runner-guide__primary-action:hover {
+  border-color: #0369a1;
+  background: #0369a1;
+}
+
+.config-runner-guide__primary-action:disabled {
+  border-color: var(--app-border);
+  background: var(--app-bg-muted);
+  color: var(--app-text-muted);
+  cursor: not-allowed;
+}
+
+.config-runner-guide__availability {
+  color: var(--app-text-muted) !important;
+  font-size: var(--app-font-size-xs) !important;
+}
+
+.config-runner-guide__availability.is-error { color: var(--app-danger) !important; }
+
+.config-runner-guide h3 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-lg);
+  line-height: var(--app-line-height-lg);
+}
+
+.config-runner-guide p,
+.config-runner-guide li {
+  margin: 0;
+  color: var(--app-text-secondary);
+  font-size: var(--app-font-size-sm);
+  line-height: 1.7;
+}
+
+.config-runner-guide ul {
+  display: grid;
+  gap: var(--app-space-2);
+  margin: 0;
+  padding-left: 18px;
+}
+
+.config-runner-guide__steps {
+  display: grid;
+  gap: var(--app-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.config-runner-guide__steps li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--app-space-3);
+}
+
+.config-runner-guide__steps li > span {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e0f2fe;
+  color: var(--app-primary);
+  font-size: var(--app-font-size-xs);
+  font-weight: 700;
+}
+
+.config-runner-guide__steps strong,
+.config-runner-guide__check strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+}
+
+.config-runner-guide__check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+  border: 1px solid #bae6fd;
+  border-radius: var(--app-radius-md);
+  background: #f0f9ff;
+  color: var(--app-primary);
+}
+
+.config-runner-guide__check p { margin: 0; }
+
+.config-runner-guide__collapse {
+  border-top: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.config-runner-guide__collapse :deep(.el-collapse-item__header) {
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 600;
+}
+
+.config-runner-guide__collapse :deep(.el-collapse-item__content) { padding-bottom: var(--app-space-4); }
+
+.config-runner-guide code {
+  padding: 2px 6px;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-page);
+  color: var(--app-text-primary);
+  font-family: Consolas, Monaco, monospace;
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-guide__command {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+  padding: var(--app-space-3);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-bg-page);
+}
+
+.config-runner-guide__command code {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-runner-guide__command button {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--app-space-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-bg-panel);
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  font-size: var(--app-font-size-xs);
+}
+
+.config-runner-guide__command button:hover {
+  border-color: #bfdbfe;
+  color: var(--app-primary);
+}
+
+.config-runner-secondary-button {
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.config-runner-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (max-width: 560px) {
+  .config-runner-guide__check { grid-template-columns: auto minmax(0, 1fr); }
+
+  .config-runner-guide__check .config-runner-secondary-button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+}
