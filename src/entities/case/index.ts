@@ -41,6 +41,8 @@ export type {
   CaseDetail,
   CaseExecutionHistoryItem,
   CaseExecutionAttachment,
+  CaseExportQuery,
+  CaseExportScope,
   CaseImportDuplicateStrategy,
   CaseImportResult,
   CaseImportRowIssue,

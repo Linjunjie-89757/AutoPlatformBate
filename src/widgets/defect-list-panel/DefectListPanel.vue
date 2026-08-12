@@ -44,10 +44,16 @@ const props = withDefaults(
     filter: DefectClientFilter
     embedded?: boolean
     assigneeOptions?: Array<{ label: string; value: string }>
+    canEdit?: boolean
+    canReview?: boolean
+    canDelete?: boolean
   }>(),
   {
     workspaceCode: 'ALL',
     embedded: false,
+    canEdit: true,
+    canReview: true,
+    canDelete: true,
   },
 )
 
@@ -277,6 +283,7 @@ function openCreateDialog() {
 }
 
 function openEditDialog(item: DefectSummaryItem) {
+  if (!props.canEdit) return
   void router.push({
     path: `/bugs/${item.id}/edit`,
     query: item.workspaceCode ? { workspace: item.workspaceCode } : undefined,
@@ -290,6 +297,7 @@ function openDetailDrawer(item: DefectSummaryItem) {
 }
 
 function openTransitionDialog(item: DefectSummaryItem) {
+  if (!props.canReview) return
   transitioningDefect.value = item
   transitionDialogVisible.value = true
 }
@@ -303,6 +311,7 @@ function getActiveDetailDefect() {
 }
 
 function openActiveDetailEditDialog() {
+  if (!props.canEdit) return
   const item = getActiveDetailDefect()
   if (item) {
     openEditDialog(item)
@@ -310,6 +319,7 @@ function openActiveDetailEditDialog() {
 }
 
 function openActiveDetailTransitionDialog() {
+  if (!props.canReview) return
   const item = getActiveDetailDefect()
   if (item) {
     openTransitionDialog(item)
@@ -330,6 +340,7 @@ function navigateDetail(delta: -1 | 1) {
 }
 
 async function deleteActiveDetailDefect() {
+  if (!props.canDelete) return
   const item = getActiveDetailDefect()
   if (!item || deletingDefectId.value !== null) {
     return
@@ -358,6 +369,7 @@ async function deleteActiveDetailDefect() {
 }
 
 async function deleteRowDefect(item: DefectSummaryItem) {
+  if (!props.canDelete) return
   if (!item || deletingDefectId.value !== null) {
     return
   }
@@ -387,6 +399,7 @@ async function deleteRowDefect(item: DefectSummaryItem) {
 }
 
 function batchAssignSelectedDefects() {
+  if (!props.canEdit) return
   if (!selectedDefects.value.length) {
     return
   }
@@ -395,6 +408,7 @@ function batchAssignSelectedDefects() {
 }
 
 async function batchCloseSelectedDefects() {
+  if (!props.canReview) return
   const targets = selectedDefects.value.filter(item => item.status !== 'CLOSED')
   if (!targets.length || batchOperationRunning.value) {
     if (selectedDefects.value.length && !targets.length) {
@@ -447,6 +461,7 @@ async function batchCloseSelectedDefects() {
 }
 
 async function deleteSelectedDefects() {
+  if (!props.canDelete) return
   const targets = selectedDefects.value
   if (!targets.length || deletingDefectId.value !== null) {
     return
@@ -680,10 +695,11 @@ defineExpose({
               <button type="button" title="查看" aria-label="查看" @click.stop="openDetailDrawer(row)">
                 <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.view" alt="" />
               </button>
-              <button type="button" title="编辑" aria-label="编辑" :disabled="saving" @click.stop="openEditDialog(row)">
+              <button v-if="canEdit" type="button" title="编辑" aria-label="编辑" :disabled="saving" @click.stop="openEditDialog(row)">
                 <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.edit" alt="" />
               </button>
               <button
+                v-if="canReview"
                 type="button"
                 title="流转"
                 aria-label="流转"
@@ -693,6 +709,7 @@ defineExpose({
                 <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.transition" alt="" />
               </button>
               <button
+                v-if="canDelete"
                 type="button"
                 data-danger="true"
                 title="删除"
@@ -729,6 +746,8 @@ defineExpose({
       :current-index="activeDetailIndex"
       :total-count="pagedDefects.length"
       :refresh-key="detailRefreshKey"
+      :can-edit="canEdit"
+      :can-transition="canReview"
       @edit="openActiveDetailEditDialog"
       @transition="openActiveDetailTransitionDialog"
       @delete="deleteActiveDetailDefect"

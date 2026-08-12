@@ -19,15 +19,21 @@ public class WorkspaceAccessSupport {
 
     private final WorkspaceMapper workspaceMapper;
     private final WorkspaceMemberMapper workspaceMemberMapper;
+    private final WorkspaceMemberRoleMapper workspaceMemberRoleMapper;
+    private final WorkspaceRolePermissionMapper workspaceRolePermissionMapper;
     private final WorkspaceDomainService workspaceDomainService;
 
     public WorkspaceAccessSupport(
             WorkspaceMapper workspaceMapper,
             WorkspaceMemberMapper workspaceMemberMapper,
+            WorkspaceMemberRoleMapper workspaceMemberRoleMapper,
+            WorkspaceRolePermissionMapper workspaceRolePermissionMapper,
             WorkspaceDomainService workspaceDomainService
     ) {
         this.workspaceMapper = workspaceMapper;
         this.workspaceMemberMapper = workspaceMemberMapper;
+        this.workspaceMemberRoleMapper = workspaceMemberRoleMapper;
+        this.workspaceRolePermissionMapper = workspaceRolePermissionMapper;
         this.workspaceDomainService = workspaceDomainService;
     }
 
@@ -61,6 +67,29 @@ public class WorkspaceAccessSupport {
                 .eq(WorkspaceMemberEntity::getStatus, 1));
         if (adminCount == 0) {
             throw new AccessDeniedException("只有工作区管理员可执行该操作");
+        }
+        return workspace;
+    }
+
+    public WorkspaceEntity requirePermission(String workspaceCode, String permissionCode) {
+        if (!WorkspacePermissionCatalog.contains(permissionCode)) {
+            throw new IllegalArgumentException("Unknown workspace permission: " + permissionCode);
+        }
+        WorkspaceEntity workspace = requireReadableWorkspace(workspaceCode);
+        if (isPlatformAdmin()) {
+            return workspace;
+        }
+
+        CurrentUserPrincipal currentUser = CurrentUserContext.require();
+        if (workspace.getOwnerUserId() != null && workspace.getOwnerUserId().equals(currentUser.userId())) {
+            return workspace;
+        }
+        WorkspaceMemberEntity membership = findActiveMembership(workspace.getId(), currentUser.userId());
+        if (membership != null && "ADMIN".equalsIgnoreCase(membership.getRoleCode())) {
+            return workspace;
+        }
+        if (membership == null || !listPermissionCodes(membership.getId()).contains(permissionCode)) {
+            throw new AccessDeniedException("当前账号缺少权限: " + permissionCode);
         }
         return workspace;
     }
@@ -139,17 +168,65 @@ public class WorkspaceAccessSupport {
 
         return workspaces.stream().map(workspace -> {
             if (platformAdmin) {
-                return new WorkspaceAccessItem(workspace.getWorkspaceCode(), "ADMIN", true);
+                return new WorkspaceAccessItem(
+                        workspace.getWorkspaceCode(),
+                        "ADMIN",
+                        true,
+                        WorkspacePermissionCatalog.allCodes()
+                );
             }
             if (workspace.getOwnerUserId() != null && workspace.getOwnerUserId().equals(currentUser.userId())) {
-                return new WorkspaceAccessItem(workspace.getWorkspaceCode(), "OWNER", true);
+                return new WorkspaceAccessItem(
+                        workspace.getWorkspaceCode(),
+                        "OWNER",
+                        true,
+                        WorkspacePermissionCatalog.allCodes()
+                );
             }
             WorkspaceMemberEntity member = memberships.get(workspace.getId());
             String memberType = member == null || member.getRoleCode() == null
                     ? "MEMBER"
                     : member.getRoleCode().trim().toUpperCase();
-            return new WorkspaceAccessItem(workspace.getWorkspaceCode(), memberType, "ADMIN".equals(memberType));
+            boolean canManage = "ADMIN".equals(memberType);
+            return new WorkspaceAccessItem(
+                    workspace.getWorkspaceCode(),
+                    memberType,
+                    canManage,
+                    canManage
+                            ? WorkspacePermissionCatalog.allCodes()
+                            : member == null ? List.of() : listPermissionCodes(member.getId())
+            );
         }).toList();
+    }
+
+    private WorkspaceMemberEntity findActiveMembership(Long workspaceId, Long userId) {
+        return workspaceMemberMapper.selectOne(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                .eq(WorkspaceMemberEntity::getWorkspaceId, workspaceId)
+                .eq(WorkspaceMemberEntity::getUserId, userId)
+                .eq(WorkspaceMemberEntity::getStatus, 1)
+                .last("limit 1"));
+    }
+
+    private List<String> listPermissionCodes(Long memberId) {
+        List<Long> roleIds = workspaceMemberRoleMapper.selectList(
+                        new LambdaQueryWrapper<WorkspaceMemberRoleEntity>()
+                                .eq(WorkspaceMemberRoleEntity::getMemberId, memberId))
+                .stream()
+                .map(WorkspaceMemberRoleEntity::getRoleId)
+                .distinct()
+                .toList();
+        if (roleIds.isEmpty()) {
+            return List.of();
+        }
+        return workspaceRolePermissionMapper.selectList(
+                        new LambdaQueryWrapper<WorkspaceRolePermissionEntity>()
+                                .in(WorkspaceRolePermissionEntity::getRoleId, roleIds)
+                                .orderByAsc(WorkspaceRolePermissionEntity::getId))
+                .stream()
+                .map(WorkspaceRolePermissionEntity::getPermissionCode)
+                .filter(WorkspacePermissionCatalog::contains)
+                .distinct()
+                .toList();
     }
 
     public boolean isSuperAdmin() {

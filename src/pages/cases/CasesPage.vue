@@ -19,6 +19,7 @@ import {
   type CaseTreeNode,
   getCaseWorkspaceNodeId,
 } from '@/entities/case'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
@@ -33,6 +34,7 @@ import CaseImportDialog from '@/features/case-import/CaseImportDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { currentUser } = useSession()
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
 const workspaceCode = ref('ALL')
 const workspaces = ref<WorkspaceItem[]>([])
@@ -51,6 +53,8 @@ const currentPageCases = ref<CaseSummaryItem[]>([])
 const caseListRef = ref<InstanceType<typeof CaseListPanel> | null>(null)
 const openedCaseDetailQueryKey = ref('')
 const importDialogVisible = ref(false)
+const importExportDefaultTab = ref<'import' | 'export'>('import')
+const exportSelectedCaseIds = ref<number[]>([])
 const moduleDialogVisible = ref(false)
 const moduleDialogMode = ref<'create' | 'rename'>('create')
 const moduleSaving = ref(false)
@@ -122,6 +126,11 @@ const currentDirectoryName = computed(() => {
   return node?.label || '空间根目录'
 })
 const moduleSubmitDisabled = computed(() => !moduleForm.name.trim() || moduleSaving.value)
+const canCreateCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.create'))
+const canExportCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.export'))
+const canEditCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.edit'))
+const canDeleteCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.delete'))
+const canExecuteCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.execute'))
 const moveTargetOptions = computed(() => {
   const node = activeDirectoryNode.value
   if (!node || node.directoryId === null) {
@@ -370,14 +379,18 @@ async function handleWorkspaceChange(value: string) {
 }
 
 function openCreateCase() {
+  if (!canCreateCases.value) return
   caseListRef.value?.openCreateDialog()
 }
 
-function handleImportCases() {
+function handleImportExportCases() {
+  if (!canCreateCases.value && !canExportCases.value) return
   if (workspaceCode.value === 'ALL') {
-    ElMessage.warning('请先选择具体工作空间再导入用例')
+    ElMessage.warning('请先选择具体工作空间再导入或导出用例')
     return
   }
+  exportSelectedCaseIds.value = caseListRef.value?.getSelectedCaseIds?.() ?? []
+  importExportDefaultTab.value = canCreateCases.value ? 'import' : 'export'
   importDialogVisible.value = true
 }
 
@@ -386,6 +399,7 @@ function handleCasesImported() {
 }
 
 function openCreateModule(payload: { nodeId: string; workspaceCode: string; directoryId: number | null; label: string; type: 'root' | 'workspace' | 'module' }) {
+  if (!canCreateCases.value) return
   activeDirectoryNode.value = payload
   selectedNodeId.value = payload.nodeId
   moduleDialogMode.value = 'create'
@@ -394,6 +408,7 @@ function openCreateModule(payload: { nodeId: string; workspaceCode: string; dire
 }
 
 function openRenameModule(payload: { nodeId: string; workspaceCode: string; directoryId: number; label: string }) {
+  if (!canEditCases.value) return
   activeDirectoryNode.value = {
     ...payload,
     type: 'module',
@@ -405,6 +420,7 @@ function openRenameModule(payload: { nodeId: string; workspaceCode: string; dire
 }
 
 function openMoveModule(payload: { nodeId: string; workspaceCode: string; directoryId: number; label: string }) {
+  if (!canEditCases.value) return
   activeDirectoryNode.value = {
     ...payload,
     type: 'module',
@@ -449,6 +465,7 @@ async function refreshCasesAfterDirectoryChange() {
 }
 
 async function submitModule() {
+  if (moduleDialogMode.value === 'create' ? !canCreateCases.value : !canEditCases.value) return
   const node = activeDirectoryNode.value
   if (!node || moduleSubmitDisabled.value) {
     return
@@ -485,6 +502,7 @@ async function submitModule() {
 }
 
 async function submitMoveModule() {
+  if (!canEditCases.value) return
   const node = activeDirectoryNode.value
   if (!node || node.directoryId === null || moduleSaving.value) {
     return
@@ -510,6 +528,7 @@ async function submitMoveModule() {
 }
 
 async function deleteModule(payload: { nodeId: string; workspaceCode: string; directoryId: number; label: string }) {
+  if (!canDeleteCases.value) return
   try {
     await confirmDelete({
       title: '删除模块',
@@ -626,6 +645,9 @@ watch(
         :current-workspace-code="workspaceCode"
         :expanded-node-ids="expandedTreeKeys"
         :render-key="treeRenderKey"
+        :can-create="canCreateCases"
+        :can-edit="canEditCases"
+        :can-delete="canDeleteCases"
         @select="handleDirectorySelect"
         @create-child="openCreateModule"
         @rename="openRenameModule"
@@ -664,11 +686,11 @@ watch(
                 :show-workspace-filter="workspaceCode === 'ALL'"
               />
               <div class="cases-page__toolbar-actions">
-                <button type="button" class="cases-page__import-button" @click="handleImportCases">
+                <button v-if="canCreateCases || canExportCases" type="button" class="cases-page__import-button" @click="handleImportExportCases">
                   <img :src="figmaCaseIcons.import" alt="" />
-                  导入
+                  导入/导出
                 </button>
-                <button type="button" class="cases-page__create-button" @click="openCreateCase">
+                <button v-if="canCreateCases" type="button" class="cases-page__create-button" @click="openCreateCase">
                   <img :src="figmaCaseIcons.add" alt="" />
                   新增用例
                 </button>
@@ -683,6 +705,10 @@ watch(
               :filter="filter"
               :directories="directories"
               :show-toolbar="false"
+              :can-create="canCreateCases"
+              :can-edit="canEditCases"
+              :can-delete="canDeleteCases"
+              :can-execute="canExecuteCases"
               @loaded="currentPageCases = $event"
               @reload-directories="loadDirectories"
             />
@@ -761,6 +787,11 @@ watch(
       :workspace-name="currentWorkspaceName"
       :directory-id="selectedDirectoryId"
       :directory-name="currentDirectoryName"
+      :default-tab="importExportDefaultTab"
+      :can-import="canCreateCases"
+      :can-export="canExportCases"
+      :selected-case-ids="exportSelectedCaseIds"
+      :filter="filter"
       @imported="handleCasesImported"
     />
   </AppPage>

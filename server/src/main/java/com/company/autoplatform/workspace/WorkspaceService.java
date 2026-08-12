@@ -105,6 +105,26 @@ public class WorkspaceService {
         return workspaceRoleDomainService.createRole(workspaceCode, request);
     }
 
+    public void deleteRole(String workspaceCode, Long roleId) {
+        workspaceRoleDomainService.deleteRole(workspaceCode, roleId);
+    }
+
+    public List<WorkspacePermissionModuleItem> listPermissionCatalog(String workspaceCode) {
+        return workspaceRoleDomainService.listPermissionCatalog(workspaceCode);
+    }
+
+    public WorkspaceRolePermissionItem listRolePermissions(String workspaceCode, Long roleId) {
+        return workspaceRoleDomainService.listRolePermissions(workspaceCode, roleId);
+    }
+
+    public WorkspaceRolePermissionItem updateRolePermissions(
+            String workspaceCode,
+            Long roleId,
+            UpdateWorkspaceRolePermissionsRequest request
+    ) {
+        return workspaceRoleDomainService.updateRolePermissions(workspaceCode, roleId, request);
+    }
+
     public List<WorkspaceEntity> listReadableWorkspaceEntities() {
         return workspaceAccessSupport.listReadableWorkspaceEntities();
     }

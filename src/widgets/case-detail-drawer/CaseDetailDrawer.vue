@@ -19,10 +19,14 @@ const props = withDefaults(
     modelValue: boolean
     caseId?: number | null
     workspaceCode?: string
+    canEdit?: boolean
+    canRun?: boolean
   }>(),
   {
     caseId: null,
     workspaceCode: 'ALL',
+    canEdit: true,
+    canRun: true,
   },
 )
 
@@ -82,13 +86,13 @@ function getSourceLabel(sourceType: string) {
 }
 
 function emitEdit() {
-  if (detail.value) {
+  if (props.canEdit && detail.value) {
     emit('edit', detail.value)
   }
 }
 
 function emitRun() {
-  if (detail.value) {
+  if (props.canRun && detail.value) {
     emit('run', detail.value)
   }
 }
@@ -174,11 +178,11 @@ watch(
             <h3>{{ detail.title }}</h3>
           </div>
           <div class="case-detail-drawer__hero-actions">
-            <button type="button" class="case-detail-drawer__outline-button" @click="emitEdit">
+            <button v-if="canEdit" type="button" class="case-detail-drawer__outline-button" @click="emitEdit">
               <img :src="figmaCaseIcons.action.edit" alt="" />
               编辑
             </button>
-            <button type="button" class="case-detail-drawer__primary-button" @click="emitRun">
+            <button v-if="canRun" type="button" class="case-detail-drawer__primary-button" @click="emitRun">
               <img :src="figmaCaseIcons.action.run" alt="" />
               执行用例
             </button>

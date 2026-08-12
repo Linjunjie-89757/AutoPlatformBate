@@ -2,6 +2,7 @@ export interface WorkspaceAccess {
   workspaceCode: string
   memberType: 'OWNER' | 'ADMIN' | 'MEMBER' | string
   canManage: boolean
+  permissionCodes?: readonly string[]
 }
 
 export interface CurrentUser {

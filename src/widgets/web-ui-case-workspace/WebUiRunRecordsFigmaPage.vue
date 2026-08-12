@@ -29,9 +29,13 @@ import WebUiModuleTabs from './WebUiModuleTabs.vue'
 const props = withDefaults(defineProps<{
   workspaceCode?: string
   workspaceReady?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
 }>(), {
   workspaceCode: 'ALL',
   workspaceReady: false,
+  canDelete: true,
+  canExecute: true,
 })
 
 type RunStatus = 'pass' | 'fail' | 'running' | 'canceled'
@@ -346,7 +350,7 @@ onBeforeUnmount(() => {
         <span>{{ item.label }}</span>
       </div>
       <div class="web-ui-runs-page__spacer" />
-      <button class="web-ui-runs-batch" type="button" @click="showUnsupportedAction('批量执行')"><Play />批量执行</button>
+      <button v-if="canExecute" class="web-ui-runs-batch" type="button" @click="showUnsupportedAction('批量执行')"><Play />批量执行</button>
     </header>
 
     <div class="web-ui-runs-page__filters">
@@ -408,7 +412,7 @@ onBeforeUnmount(() => {
             <template #default="{ row: item }">
               <button type="button" title="查看详情" aria-label="查看详情" @click.stop="viewRun(item)"><Eye /></button>
               <button type="button" title="重跑" aria-label="重跑" @click.stop="showUnsupportedAction('重跑')"><Play /></button>
-              <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="showUnsupportedAction('删除执行记录')"><Trash2 /></button>
+              <button v-if="canDelete" type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="showUnsupportedAction('删除执行记录')"><Trash2 /></button>
             </template>
           </AppFigmaActionColumn>
         </AppFigmaTable>

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { defectApi, type DefectClientFilter, type DefectStatistics } from '@/entities/defect'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import {
   useWorkspaceContext,
   workspaceApi,
@@ -18,6 +19,7 @@ import { DefectSummaryPanel } from '@/widgets/defect-summary-panel'
 
 const route = useRoute()
 const router = useRouter()
+const { currentUser } = useSession()
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
 const workspaceCode = ref('ALL')
 const workspaceSelectorCode = ref('ALL')
@@ -39,6 +41,10 @@ const listPanelRef = ref<InstanceType<typeof DefectListPanel> | null>(null)
 const activeView = ref<'list' | 'stats'>('list')
 const statusDonutProgress = ref(1)
 const selectedDefectCount = ref(0)
+const canCreateDefects = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'bugs.create'))
+const canEditDefects = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'bugs.edit'))
+const canDeleteDefects = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'bugs.delete'))
+const canReviewDefects = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'bugs.review'))
 
 const STATUS_DONUT_CX = 200
 const STATUS_DONUT_CY = 86
@@ -292,6 +298,7 @@ async function handleWorkspaceChange(value: string) {
 }
 
 function handleCreateDefect() {
+  if (!canCreateDefects.value) return
   listPanelRef.value?.openCreateDialog()
 }
 
@@ -300,14 +307,17 @@ function handleDefectSelectionChange(count: number) {
 }
 
 function handleBatchAssignDefects() {
+  if (!canEditDefects.value) return
   listPanelRef.value?.batchAssignSelectedDefects()
 }
 
 function handleBatchCloseDefects() {
+  if (!canReviewDefects.value) return
   listPanelRef.value?.batchCloseSelectedDefects()
 }
 
 function handleBatchDeleteDefects() {
+  if (!canDeleteDefects.value) return
   void listPanelRef.value?.deleteSelectedDefects()
 }
 
@@ -737,7 +747,7 @@ watch(
         <DefectSummaryPanel
           :statistics="statistics"
           :active-status="filter.status"
-          :show-create-button="workspaceReady"
+          :show-create-button="workspaceReady && canCreateDefects"
           @select="handleStatSelect"
           @create="handleCreateDefect"
         />
@@ -751,6 +761,9 @@ watch(
             :show-create-button="false"
             :show-workspace-filter="showWorkspaceFilter"
             :selected-count="selectedDefectCount"
+            :can-edit="canEditDefects"
+            :can-review="canReviewDefects"
+            :can-delete="canDeleteDefects"
             embedded
             @reset="resetFilters"
             @create="handleCreateDefect"
@@ -765,6 +778,9 @@ watch(
             :workspace-code="workspaceCode"
             :filter="filter"
             :assignee-options="assigneeOptions"
+            :can-edit="canEditDefects"
+            :can-review="canReviewDefects"
+            :can-delete="canDeleteDefects"
             embedded
             @selection-change="handleDefectSelectionChange"
           />

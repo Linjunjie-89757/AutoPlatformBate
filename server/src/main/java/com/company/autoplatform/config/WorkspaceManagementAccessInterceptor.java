@@ -39,6 +39,6 @@ public class WorkspaceManagementAccessInterceptor implements HandlerInterceptor,
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(this)
-                .addPathPatterns("/api/settings/**", "/api/audit-logs/**");
+                .addPathPatterns("/api/audit-logs/**");
     }
 }

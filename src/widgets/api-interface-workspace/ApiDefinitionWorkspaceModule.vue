@@ -96,6 +96,11 @@ const props = defineProps<{
   variableSets?: ApiAutomationVariableSetItem[]
   runOptionsLoading?: boolean
   runOptionsErrorMessage?: string
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
+  canExport?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -722,6 +727,9 @@ useApiDefinitionWorkspaceLifecycle({
         :directory-initialized="directoryInitialized"
         :selected-directory-key="selectedDirectoryKey"
         :directory-tree-render-key="directoryTreeRenderKey"
+        :can-create="props.canCreate"
+        :can-edit="props.canEdit"
+        :can-delete="props.canDelete"
         @create-request="openNewRequestTab(undefined, { directoryName: null })"
         @import="openImportDialog"
         @collapse="collapseDirectoryTree"
@@ -743,7 +751,8 @@ useApiDefinitionWorkspaceLifecycle({
           :tabs="tabs"
           :has-active-editor="Boolean(activeEditor)"
           :request-method-class="requestMethodClass"
-          @add="openNewRequestTab(undefined, { directoryName: null })"
+          :can-create="props.canCreate"
+          @add="props.canCreate !== false && openNewRequestTab(undefined, { directoryName: null })"
           @close="closeEditorTab"
           @menu="handleEditorTabMenu"
         />
@@ -771,7 +780,7 @@ useApiDefinitionWorkspaceLifecycle({
 
         <div v-if="!activeEditor" class="api-editor-empty">
           <span>请选择左侧请求，或新建一个请求</span>
-          <button type="button" @click="openNewRequestTab(undefined, { directoryName: null })">新建请求</button>
+          <button v-if="props.canCreate !== false" type="button" @click="openNewRequestTab(undefined, { directoryName: null })">新建请求</button>
         </div>
 
         <ApiRequestEditorMain
@@ -788,6 +797,11 @@ useApiDefinitionWorkspaceLifecycle({
           :environments="environments"
           :selected-environment="selectedEnvironment"
           :run-options-loading="runOptionsLoading"
+          :can-create="props.canCreate"
+          :can-edit="props.canEdit"
+          :can-delete="props.canDelete"
+          :can-execute="props.canExecute"
+          :can-export="props.canExport"
           :sending="sending"
           :saving="saving"
           :content-tabs="contentTabs"

@@ -527,10 +527,6 @@ async function submit(keepCreating = false) {
     formError.value = error
     return
   }
-  if (!form.moduleName.trim()) {
-    formError.value = '请选择所属模块'
-    return
-  }
   if (!isCreateMode.value && !defectId.value) {
     formError.value = '缺陷不存在或链接参数无效。'
     return
@@ -733,23 +729,6 @@ watch(
           <aside class="defect-edit-page__side">
             <div class="defect-edit-page__card defect-edit-page__properties-card">
               <div class="defect-edit-page__field">
-                <span class="is-required">所属模块</span>
-                <el-select
-                  v-model="form.moduleName"
-                  class="defect-edit-page__select"
-                  :disabled="saving"
-                  placeholder="请选择模块"
-                >
-                  <el-option
-                    v-for="item in defectModuleOptions"
-                    :key="item"
-                    :label="item"
-                    :value="item"
-                  />
-                </el-select>
-              </div>
-
-              <div class="defect-edit-page__field">
                 <span class="is-required">处理人</span>
                 <AppUserSelect
                   v-model="form.assigneeId"
@@ -790,12 +769,29 @@ watch(
               </div>
 
               <div class="defect-edit-page__field">
-                <span>所属版本</span>
+                <span>所属模块</span>
+                <el-select
+                  v-model="form.moduleName"
+                  class="defect-edit-page__select"
+                  :disabled="saving"
+                  placeholder="请选择模块"
+                >
+                  <el-option
+                    v-for="item in defectModuleOptions"
+                    :key="item"
+                    :label="item"
+                    :value="item"
+                  />
+                </el-select>
+              </div>
+
+              <div class="defect-edit-page__field">
+                <span>影响版本</span>
                 <el-input
                   v-model="form.versionName"
                   :disabled="saving"
                   maxlength="128"
-                  placeholder="请输入所属版本（选填）"
+                  placeholder="请输入影响版本（选填）"
                 />
               </div>
             </div>

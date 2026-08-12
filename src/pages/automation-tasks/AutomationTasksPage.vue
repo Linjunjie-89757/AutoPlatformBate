@@ -10,7 +10,7 @@ import {
   type AutomationTaskSummaryItem,
   type SaveAutomationTaskPayload,
 } from '@/entities/automation-task'
-import { useSession } from '@/entities/session'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaTaskIcons } from '@/shared/assets/figma-icons'
@@ -88,6 +88,10 @@ const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
 const { currentUser } = useSession()
 const { selectedWorkspaceCode } = useWorkspaceContext()
+const canCreateTasks = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'tasks.create'))
+const canEditTasks = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'tasks.edit'))
+const canDeleteTasks = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'tasks.delete'))
+const canExecuteTasks = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'tasks.execute'))
 let loadRequestSeq = 0
 let detailRequestSeq = 0
 let tableFrameObserver: ResizeObserver | null = null
@@ -348,6 +352,7 @@ function closeTaskDetail() {
 }
 
 function openTaskEditor(item: TaskCenterRow = activeDetailTask.value) {
+  if (!canEditTasks.value) return
   isCreatingTask.value = false
   editingTask.value = item
   taskEditorForm.value = {
@@ -360,6 +365,7 @@ function openTaskEditor(item: TaskCenterRow = activeDetailTask.value) {
 }
 
 function openTaskCreator() {
+  if (!canCreateTasks.value) return
   isCreatingTask.value = true
   editingTask.value = null
   taskEditorForm.value = {
@@ -397,6 +403,7 @@ function handleUnsupportedFilter(field: 'status' | 'environment') {
 }
 
 async function saveTask() {
+  if (isCreatingTask.value ? !canCreateTasks.value : !canEditTasks.value) return
   const taskName = taskEditorForm.value.name.trim()
   if (!taskName) {
     ElMessage.warning('请输入任务名称')
@@ -441,6 +448,7 @@ async function saveTask() {
 }
 
 async function deleteTask(item: TaskCenterRow) {
+  if (!canDeleteTasks.value) return
   const taskId = Number(item.taskId)
   if (!Number.isFinite(taskId)) {
     ElMessage.error('任务 ID 无效')
@@ -470,10 +478,12 @@ async function deleteTask(item: TaskCenterRow) {
 }
 
 function runTask() {
+  if (!canExecuteTasks.value) return
   showUnsupportedCapability('当前任务接口只能修改状态，尚未提供真实执行或 Runner 调度接口')
 }
 
 function toggleTaskEnabled() {
+  if (!canEditTasks.value) return
   showUnsupportedCapability('当前任务模型没有启用状态字段，暂不能保存启停设置')
 }
 
@@ -705,7 +715,7 @@ onBeforeUnmount(() => {
               <option value="预发布">预发布</option>
               <option value="生产环境">生产环境</option>
             </select>
-            <button class="task-create-button" type="button" @click="openTaskCreator">
+            <button v-if="canCreateTasks" class="task-create-button" type="button" @click="openTaskCreator">
               <Plus class="task-create-button__icon" />
               新建任务
             </button>
@@ -770,7 +780,9 @@ onBeforeUnmount(() => {
                     type="button"
                     class="task-switch"
                     :class="{ 'is-on': item.enabled }"
+                    :disabled="!canEditTasks"
                     :aria-pressed="item.enabled"
+                    :title="canEditTasks ? '切换任务启用状态' : '当前角色无编辑权限'"
                     aria-label="切换任务启用状态"
                     @click.stop="toggleTaskEnabled"
                   />
@@ -801,16 +813,16 @@ onBeforeUnmount(() => {
                   />
                 </template>
                 <template #default="{ row: item }">
-                  <button type="button" aria-label="立即执行" title="立即执行" @click.stop="runTask">
+                  <button v-if="canExecuteTasks" type="button" aria-label="立即执行" title="立即执行" @click.stop="runTask">
                     <img class="task-action-icon" :src="figmaTaskIcons.action.run" alt="">
                   </button>
                   <button type="button" aria-label="查看" title="查看" @click.stop="openTaskDetail(item)">
                     <img class="task-action-icon" :src="figmaTaskIcons.action.view" alt="">
                   </button>
-                  <button type="button" aria-label="编辑" title="编辑" @click.stop="openTaskEditor(item)">
+                  <button v-if="canEditTasks" type="button" aria-label="编辑" title="编辑" @click.stop="openTaskEditor(item)">
                     <img class="task-action-icon" :src="figmaTaskIcons.action.edit" alt="">
                   </button>
-                  <button type="button" data-danger="true" aria-label="删除" title="删除" @click.stop="deleteTask(item)">
+                  <button v-if="canDeleteTasks" type="button" data-danger="true" aria-label="删除" title="删除" @click.stop="deleteTask(item)">
                     <img class="task-action-icon" :src="figmaTaskIcons.action.delete" alt="">
                   </button>
                 </template>
@@ -845,11 +857,11 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="task-detail-actions">
-            <button type="button" class="task-detail-run" @click="runTask">
+            <button v-if="canExecuteTasks" type="button" class="task-detail-run" @click="runTask">
               <img :src="figmaTaskIcons.action.runHeader" alt="">
               立即执行
             </button>
-            <button type="button" class="task-detail-icon-button" aria-label="编辑任务" @click="openTaskEditor(activeDetailTask)">
+            <button v-if="canEditTasks" type="button" class="task-detail-icon-button" aria-label="编辑任务" @click="openTaskEditor(activeDetailTask)">
               <img :src="figmaTaskIcons.action.edit" alt="">
             </button>
             <button type="button" class="task-detail-icon-button" aria-label="关闭详情" @click="closeTaskDetail">
@@ -1186,7 +1198,7 @@ onBeforeUnmount(() => {
       </div>
 
       <footer class="task-edit-drawer__footer">
-        <button type="button" class="task-edit-test-button" @click="runTask">
+        <button v-if="canExecuteTasks" type="button" class="task-edit-test-button" @click="runTask">
           <img :src="figmaTaskIcons.editDrawer.testRun" alt="">
           <span>测试执行</span>
         </button>

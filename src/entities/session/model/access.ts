@@ -22,6 +22,15 @@ export function canManageWorkspace(
   return findWorkspaceAccess(user, workspaceCode)?.canManage === true
 }
 
+export function hasWorkspacePermission(
+  user: CurrentUser | null | undefined,
+  workspaceCode: string | null | undefined,
+  permissionCode: string,
+) {
+  if (isPlatformAdmin(user) || canManageWorkspace(user, workspaceCode)) return true
+  return findWorkspaceAccess(user, workspaceCode)?.permissionCodes?.includes(permissionCode) === true
+}
+
 export function firstManageableWorkspaceCode(user: CurrentUser | null | undefined) {
   return (user?.workspaceAccesses || []).find(item => item.canManage)?.workspaceCode || ''
 }

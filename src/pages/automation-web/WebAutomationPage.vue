@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -22,7 +23,12 @@ const environments = ref<WebUiEnvironmentItem[]>([])
 const workspaceReady = ref(false)
 const route = useRoute()
 const router = useRouter()
+const { currentUser } = useSession()
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
+const canCreateWebUi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'webui.create'))
+const canEditWebUi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'webui.edit'))
+const canDeleteWebUi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'webui.delete'))
+const canExecuteWebUi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'webui.execute'))
 
 type WebUiSection = 'cases' | 'caseDetail' | 'elements' | 'suites' | 'collectTask' | 'templates' | 'runs' | 'batches' | 'environments' | 'variables' | 'variableDetail'
 
@@ -225,27 +231,43 @@ watch(
         :workspace-ready="workspaceReady"
         :workspaces="workspaces"
         :mode="workspaceMode"
+        :can-create="canCreateWebUi"
+        :can-edit="canEditWebUi"
+        :can-delete="canDeleteWebUi"
+        :can-execute="canExecuteWebUi"
       />
       <WebUiCaseDetailWorkspace
         v-else-if="activeSection === 'caseDetail'"
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
+        :can-edit="canEditWebUi"
+        :can-execute="canExecuteWebUi"
       />
       <WebUiElementFigmaLibrary
         v-else-if="activeSection === 'elements'"
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
         :environments="environments"
+        :can-create="canCreateWebUi"
+        :can-edit="canEditWebUi"
+        :can-delete="canDeleteWebUi"
+        :can-execute="canExecuteWebUi"
       />
       <WebUiSuiteFigmaWorkspace
         v-else-if="activeSection === 'suites'"
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
+        :can-create="canCreateWebUi"
+        :can-edit="canEditWebUi"
+        :can-delete="canDeleteWebUi"
+        :can-execute="canExecuteWebUi"
       />
       <WebUiRunRecordsFigmaPage
         v-else-if="activeSection === 'runs'"
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
+        :can-delete="canDeleteWebUi"
+        :can-execute="canExecuteWebUi"
       />
       <WebUiElementCollectTaskWorkspace
         v-else-if="activeSection === 'collectTask'"

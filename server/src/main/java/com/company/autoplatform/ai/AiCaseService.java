@@ -22,9 +22,9 @@ public class AiCaseService {
 
     private static final String ROLE_GENERATOR = AiCaseConfigDomainService.ROLE_GENERATOR;
     private static final String ROLE_REVIEWER = AiCaseConfigDomainService.ROLE_REVIEWER;
-    public static final int INITIAL_SMART_MAX_CASES = 50;
-    public static final int REVIEW_SUPPLEMENT_MAX_CASES = 30;
-    public static final int FINAL_MAX_CASES = 80;
+    public static final int DEFAULT_MAX_CASES = 50;
+    public static final int SYSTEM_MAX_CASES = 200;
+    public static final int FINAL_MAX_CASES = 200;
 
     private final AiCaseConfigDomainService aiCaseConfigDomainService;
     private final AiRequirementAssetDomainService aiRequirementAssetDomainService;
@@ -93,13 +93,16 @@ public class AiCaseService {
         );
         ResolvedRoleConfig resolved = aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_GENERATOR);
         AiCaseConfigEntity config = resolved.roleConfig();
-        int systemMaxCases = INITIAL_SMART_MAX_CASES;
-        int requestedMaxCases = request.maxCases() == null ? INITIAL_SMART_MAX_CASES : request.maxCases();
-        int effectiveMaxCases = Math.min(requestedMaxCases, INITIAL_SMART_MAX_CASES);
+        int systemMaxCases = SYSTEM_MAX_CASES;
+        int requestedMaxCases = request.maxCases() == null
+                ? (config.getMaxCases() == null ? DEFAULT_MAX_CASES : config.getMaxCases())
+                : request.maxCases();
+        int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
         if (!assets.isEmpty() && !aiCaseConfigDomainService.supportsImageInputForGeneration(resolved)) {
             throw new BadRequestException("The current AI config does not support image input. Remove the images or enable an image-capable model.");
         }
+        List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         boolean ignoredImages = false;
         String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, effectiveMaxCases, assets, false);
         AiGeneratedCasesResult result;
@@ -108,7 +111,7 @@ public class AiCaseService {
                     resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
-                    aiRequirementAssetDomainService.toImageInputs(assets)
+                    imageInputs
             );
         } catch (BadRequestException exception) {
             if (assets.isEmpty() || !aiResponseParsingSupport.isImageInputUnsupportedError(exception)) {
@@ -153,13 +156,16 @@ public class AiCaseService {
         );
         ResolvedRoleConfig resolved = aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_GENERATOR);
         AiCaseConfigEntity config = resolved.roleConfig();
-        int systemMaxCases = INITIAL_SMART_MAX_CASES;
-        int requestedMaxCases = request.maxCases() == null ? INITIAL_SMART_MAX_CASES : request.maxCases();
-        int effectiveMaxCases = Math.min(requestedMaxCases, INITIAL_SMART_MAX_CASES);
+        int systemMaxCases = SYSTEM_MAX_CASES;
+        int requestedMaxCases = request.maxCases() == null
+                ? (config.getMaxCases() == null ? DEFAULT_MAX_CASES : config.getMaxCases())
+                : request.maxCases();
+        int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
         if (!assets.isEmpty() && !aiCaseConfigDomainService.supportsImageInputForGeneration(resolved)) {
             throw new BadRequestException("The current AI config does not support image input. Remove the images or enable an image-capable model.");
         }
+        List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         if (modelConsumer != null) {
             modelConsumer.accept(new AiStreamModelInfo(resolved.profile().provider(), config.getModel()));
         }
@@ -190,6 +196,7 @@ public class AiCaseService {
                     resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
+                    imageInputs,
                     deltaConsumer
             );
         } catch (BadRequestException exception) {
@@ -207,6 +214,7 @@ public class AiCaseService {
                     resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
+                    List.of(),
                     deltaConsumer
             );
         }

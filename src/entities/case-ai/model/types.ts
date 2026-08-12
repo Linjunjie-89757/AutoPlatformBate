@@ -1,5 +1,5 @@
 export interface AiCapabilityValue {
-  supported: boolean
+  supported: boolean | null
   source?: string | null
   detail?: string | null
 }
@@ -64,7 +64,7 @@ export interface SaveAiCaseConfigPayload {
   topP?: number | null
   maxCases?: number | null
   capabilityOverride?: AiCapabilityOverride | null
-  supportsImageInput?: boolean
+  supportsImageInput?: boolean | null
   status?: number | null
 }
 

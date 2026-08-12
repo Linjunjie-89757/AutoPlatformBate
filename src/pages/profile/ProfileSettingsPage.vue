@@ -64,7 +64,7 @@ const avatarColors = ['#165DFF', '#7816FF', '#00B42A', '#FF7D00', '#F53F3F', '#0
 const roleLabels: Record<string, string> = {
   SUPER_ADMIN: '超级管理员',
   ADMIN: '管理员',
-  TEST_MANAGER: '测试负责人',
+  TEST_MANAGER: '项目负责人',
   TESTER: '测试工程师',
   VIEWER: '只读访客',
 }

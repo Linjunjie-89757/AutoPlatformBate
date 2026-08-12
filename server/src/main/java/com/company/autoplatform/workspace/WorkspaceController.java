@@ -112,4 +112,40 @@ public class WorkspaceController {
     ) {
         return ApiResponse.ok(workspaceService.createRole(workspaceCode, request), "角色创建成功");
     }
+
+    @DeleteMapping("/{workspaceCode}/roles/{roleId}")
+    public ApiResponse<Void> deleteRole(
+            @PathVariable String workspaceCode,
+            @PathVariable Long roleId
+    ) {
+        workspaceService.deleteRole(workspaceCode, roleId);
+        return ApiResponse.ok(null, "角色删除成功");
+    }
+
+    @GetMapping("/{workspaceCode}/permissions/catalog")
+    public ApiResponse<List<WorkspacePermissionModuleItem>> listPermissionCatalog(
+            @PathVariable String workspaceCode
+    ) {
+        return ApiResponse.ok(workspaceService.listPermissionCatalog(workspaceCode));
+    }
+
+    @GetMapping("/{workspaceCode}/roles/{roleId}/permissions")
+    public ApiResponse<WorkspaceRolePermissionItem> listRolePermissions(
+            @PathVariable String workspaceCode,
+            @PathVariable Long roleId
+    ) {
+        return ApiResponse.ok(workspaceService.listRolePermissions(workspaceCode, roleId));
+    }
+
+    @PutMapping("/{workspaceCode}/roles/{roleId}/permissions")
+    public ApiResponse<WorkspaceRolePermissionItem> updateRolePermissions(
+            @PathVariable String workspaceCode,
+            @PathVariable Long roleId,
+            @Valid @RequestBody UpdateWorkspaceRolePermissionsRequest request
+    ) {
+        return ApiResponse.ok(
+                workspaceService.updateRolePermissions(workspaceCode, roleId, request),
+                "角色权限保存成功"
+        );
+    }
 }

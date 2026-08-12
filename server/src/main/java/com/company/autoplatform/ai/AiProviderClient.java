@@ -61,19 +61,29 @@ public class AiProviderClient {
             String prompt,
             Consumer<String> deltaConsumer
     ) {
+        return streamStructuredContentWithResult(profile, apiKey, prompt, List.of(), deltaConsumer);
+    }
+
+    public StreamContentResult streamStructuredContentWithResult(
+            AiProviderRequestProfile profile,
+            String apiKey,
+            String prompt,
+            List<ImageInput> images,
+            Consumer<String> deltaConsumer
+    ) {
         AiProtocolAdapter adapter = adapter(profile.protocolType());
         if (!adapter.supportsStructuredStreaming()) {
-            String content = adapter.requestStructuredContent(profile, apiKey, prompt, List.of());
+            String content = adapter.requestStructuredContent(profile, apiKey, prompt, images);
             return new StreamContentResult(content, true, "当前协议适配器不支持实时流式输出");
         }
         try {
             return new StreamContentResult(
-                    adapter.streamStructuredContent(profile, apiKey, prompt, List.of(), deltaConsumer),
+                    adapter.streamStructuredContent(profile, apiKey, prompt, images, deltaConsumer),
                     false,
                     null
             );
         } catch (RuntimeException exception) {
-            String content = adapter.requestStructuredContent(profile, apiKey, prompt, List.of());
+            String content = adapter.requestStructuredContent(profile, apiKey, prompt, images);
             return new StreamContentResult(content, true, exception.getMessage());
         }
     }

@@ -194,9 +194,13 @@ const props = withDefaults(
   defineProps<{
     workspaceCode: string
     workspaceReady?: boolean
+    canEdit?: boolean
+    canExecute?: boolean
   }>(),
   {
     workspaceReady: true,
+    canEdit: true,
+    canExecute: true,
   },
 )
 
@@ -1725,6 +1729,7 @@ function validateBeforeSave() {
 }
 
 async function saveCase(options: { successMessage?: string | null } = {}) {
+  if (!props.canEdit) return null
   if (!caseId.value || !validateBeforeSave()) {
     return null
   }
@@ -1787,6 +1792,7 @@ function validateStepBeforeDebug(index: number) {
 }
 
 async function debugSelectedStep() {
+  if (!props.canExecute) return
   const index = selectedStepIndex.value
   if (running.value || !validateStepBeforeDebug(index)) {
     return
@@ -1809,6 +1815,7 @@ async function debugSelectedStep() {
 }
 
 async function debugCurrentDraft() {
+  if (!props.canExecute) return
   if (running.value || !caseId.value || !validateBeforeSave()) {
     return
   }
@@ -1856,6 +1863,7 @@ function ensureLocalRunnerUploadReplayReady() {
 }
 
 async function runCase(localRunner: boolean, options: { localSuccessMessage?: string; recordingReplay?: boolean } = {}) {
+  if (!props.canExecute) return
   if (!caseId.value) {
     return
   }
@@ -2135,6 +2143,7 @@ function backToList() {
 }
 
 async function openRecordingPage() {
+  if (!props.canEdit) return
   const url = readRecordingTargetUrl()
   if (!url) {
     ElMessage.warning('请先填写基础地址')
@@ -2367,6 +2376,7 @@ async function maybeAutoRematchRecordedElements() {
 }
 
 async function startRecordingSteps() {
+  if (!props.canEdit) return
   recordingStarting.value = true
   try {
     resetRecordingDraftProtection()
@@ -3505,7 +3515,7 @@ watch(elementPickerLocatorType, () => {
       </button>
     </nav>
 
-    <aside v-if="!loading && !errorMessage" class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--fixed" aria-label="快速运行">
+    <aside v-if="!loading && !errorMessage && canExecute" class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--fixed" aria-label="快速运行">
       <p>快速运行</p>
       <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
         <el-option label="使用用例配置" :value="0" />
@@ -3538,6 +3548,7 @@ watch(elementPickerLocatorType, () => {
       </div>
       <div class="web-ui-case-detail__actions">
         <button
+          v-if="canEdit"
           type="button"
           class="web-ui-case-detail__record-action"
           :disabled="saving || running || localRunning || recordingCapturing || recordingInProgress"
@@ -3546,13 +3557,13 @@ watch(elementPickerLocatorType, () => {
           <i />
           重新录制
         </button>
-        <button type="button" class="web-ui-case-detail__editor-button" :disabled="recordingOpening || recordingCapturing || recordingInProgress" @click="startRecordingSteps"><CirclePlus />追加录制</button>
+        <button v-if="canEdit" type="button" class="web-ui-case-detail__editor-button" :disabled="recordingOpening || recordingCapturing || recordingInProgress" @click="startRecordingSteps"><CirclePlus />追加录制</button>
+        <span v-if="canEdit || canExecute" class="web-ui-case-detail__divider" />
+        <button v-if="canExecute" type="button" class="web-ui-case-detail__editor-button" :disabled="!selectedStep || saving || running || localRunning" @click="debugSelectedStep"><SkipForward />单步调试</button>
+        <button v-if="canExecute" type="button" class="web-ui-case-detail__editor-button" :disabled="saving || running" @click="runCase(true)"><Play />整体回放</button>
         <span class="web-ui-case-detail__divider" />
-        <button type="button" class="web-ui-case-detail__editor-button" :disabled="!selectedStep || saving || running || localRunning" @click="debugSelectedStep"><SkipForward />单步调试</button>
-        <button type="button" class="web-ui-case-detail__editor-button" :disabled="saving || running" @click="runCase(true)"><Play />整体回放</button>
-        <span class="web-ui-case-detail__divider" />
-        <button type="button" class="web-ui-case-detail__editor-button is-primary" :disabled="saving || running || localRunning" @click="debugCurrentDraft"><Play />调试运行</button>
-        <button type="button" class="web-ui-case-detail__editor-button" :disabled="loading || running || localRunning" @click="() => saveCase()"><Save />保存</button>
+        <button v-if="canExecute" type="button" class="web-ui-case-detail__editor-button is-primary" :disabled="saving || running || localRunning" @click="debugCurrentDraft"><Play />调试运行</button>
+        <button v-if="canEdit" type="button" class="web-ui-case-detail__editor-button" :disabled="loading || running || localRunning" @click="() => saveCase()"><Save />保存</button>
       </div>
     </div>
 

@@ -23,6 +23,7 @@ const props = defineProps<{
   tabs: EditorTabLike[]
   hasActiveEditor: boolean
   requestMethodClass: (method?: string) => string
+  canCreate?: boolean
 }>()
 
 const activeKey = defineModel<string>('activeKey', { default: '' })
@@ -141,7 +142,7 @@ onBeforeUnmount(() => {
     >
       <LucideChevronRight class="api-workspace-icon" />
     </button>
-    <button type="button" class="api-editor-tab-add" @click="emit('add')">
+    <button v-if="canCreate !== false" type="button" class="api-editor-tab-add" @click="emit('add')">
       <LucidePlus class="api-workspace-icon" />
     </button>
     <el-dropdown v-if="tabs.length" trigger="click" @command="emit('menu', $event)">

@@ -81,7 +81,29 @@ export interface WorkspaceRoleItem {
   system: boolean
 }
 
+export interface WorkspacePermissionItem {
+  code: string
+  action: string
+  label: string
+  risky: boolean
+}
+
+export interface WorkspacePermissionModuleItem {
+  id: string
+  label: string
+  permissions: WorkspacePermissionItem[]
+}
+
+export interface WorkspaceRolePermissionItem {
+  roleId: number
+  permissionCodes: string[]
+}
+
 export interface CreateWorkspaceRolePayload {
   name: string
   description?: string | null
+}
+
+export interface UpdateWorkspaceRolePermissionsPayload {
+  permissionCodes: string[]
 }

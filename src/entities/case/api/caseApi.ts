@@ -10,6 +10,7 @@ import type {
   CaseExecutionAttachment,
   CaseExecutionHistoryItem,
   CaseImportDuplicateStrategy,
+  CaseExportQuery,
   CaseImportResult,
   CaseDirectoryWorkspace,
   CreateCaseDirectoryPayload,
@@ -31,7 +32,7 @@ function workspaceHeaders(workspaceCode = 'ALL') {
   }
 }
 
-function cleanQuery(query?: CaseListQuery) {
+function cleanQuery<T extends object>(query?: T) {
   if (!query) {
     return undefined
   }
@@ -239,6 +240,18 @@ export const caseApi = {
 
   async downloadCaseImportTemplate() {
     const response = await request.get<Blob>('/cases/import/template', {
+      responseType: 'blob',
+    })
+    return response.data
+  },
+
+  async exportCases(workspaceCode: string, query: CaseExportQuery) {
+    const response = await request.get<Blob>('/cases/export', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery({
+        ...query,
+        caseIds: query.caseIds?.join(','),
+      }),
       responseType: 'blob',
     })
     return response.data

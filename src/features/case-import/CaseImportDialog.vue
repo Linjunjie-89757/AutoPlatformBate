@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, X } from '@lucide/vue'
+import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, FolderTree, ListFilter, MousePointerClick, Upload, X } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 
 import {
   caseApi,
+  type CaseClientFilter,
+  type CaseExportScope,
   type CaseImportDuplicateStrategy,
   type CaseImportResult,
 } from '@/entities/case'
@@ -18,6 +20,11 @@ const props = defineProps<{
   workspaceName: string
   directoryId: number | null
   directoryName: string
+  defaultTab: 'import' | 'export'
+  canImport: boolean
+  canExport: boolean
+  selectedCaseIds: number[]
+  filter: CaseClientFilter
 }>()
 
 const emit = defineEmits<{
@@ -33,8 +40,15 @@ const downloading = ref(false)
 const dragActive = ref(false)
 const result = ref<CaseImportResult | null>(null)
 const errorMessage = ref('')
+const activeTab = ref<'import' | 'export'>('import')
+const exportScope = ref<CaseExportScope>('FILTERED')
+const exporting = ref(false)
+const exportErrorMessage = ref('')
 
-const canImport = computed(() => Boolean(selectedFile.value) && !importing.value)
+const canSubmitImport = computed(() => Boolean(selectedFile.value) && !importing.value)
+const canSubmitExport = computed(() => props.canExport
+  && !exporting.value
+  && (exportScope.value !== 'SELECTED' || props.selectedCaseIds.length > 0))
 
 watch(() => props.modelValue, (visible) => {
   if (!visible) return
@@ -44,10 +58,14 @@ watch(() => props.modelValue, (visible) => {
   dragActive.value = false
   result.value = null
   errorMessage.value = ''
+  activeTab.value = props.defaultTab === 'export' && props.canExport ? 'export' : 'import'
+  exportScope.value = props.selectedCaseIds.length ? 'SELECTED' : 'FILTERED'
+  exporting.value = false
+  exportErrorMessage.value = ''
 })
 
 function closeDialog() {
-  if (importing.value) return
+  if (importing.value || exporting.value) return
   emit('update:modelValue', false)
 }
 
@@ -134,17 +152,67 @@ async function submitImport() {
     importing.value = false
   }
 }
+
+function buildExportFileName() {
+  const safeWorkspaceName = props.workspaceName.replace(/[\\/:*?"<>|]/g, '_')
+  const safeDirectoryName = props.directoryName.replace(/[\\/:*?"<>|]/g, '_')
+  const date = new Date()
+  const timestamp = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('')
+  return `${safeWorkspaceName}_${safeDirectoryName}_测试用例_${timestamp}.xlsx`
+}
+
+async function submitExport() {
+  if (!canSubmitExport.value) return
+  exporting.value = true
+  exportErrorMessage.value = ''
+  try {
+    const blob = await caseApi.exportCases(props.workspaceCode, {
+      scope: exportScope.value,
+      caseIds: exportScope.value === 'SELECTED' ? props.selectedCaseIds : undefined,
+      directoryId: props.directoryId,
+      keyword: exportScope.value === 'FILTERED' ? props.filter.keyword : undefined,
+      priority: exportScope.value === 'FILTERED' ? props.filter.priority : undefined,
+      reviewStatus: exportScope.value === 'FILTERED' ? props.filter.reviewStatus : undefined,
+      executionStatus: exportScope.value === 'FILTERED' ? props.filter.executionStatus : undefined,
+      executorName: exportScope.value === 'FILTERED' ? props.filter.executorName : undefined,
+      createdByName: exportScope.value === 'FILTERED' ? props.filter.createdByName : undefined,
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = buildExportFileName()
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    ElMessage.success('Excel 导出成功')
+    emit('update:modelValue', false)
+  } catch (error) {
+    exportErrorMessage.value = getRequestErrorMessage(error)
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
   <AppDialog
     :model-value="modelValue"
-    title="导入用例"
+    title="导入/导出用例"
     width="640px"
     dialog-class="case-import-dialog-shell"
     @update:model-value="value => { if (!value) closeDialog() }"
   >
     <div class="case-import-dialog">
+      <el-tabs v-model="activeTab" class="case-import-dialog__tabs">
+        <el-tab-pane label="导入用例" name="import" :disabled="!props.canImport" />
+        <el-tab-pane label="导出用例" name="export" :disabled="!props.canExport" />
+      </el-tabs>
+
       <section class="case-import-dialog__location">
         <div>
           <span>工作空间</span>
@@ -157,6 +225,7 @@ async function submitImport() {
         </div>
       </section>
 
+      <template v-if="activeTab === 'import'">
       <section class="case-import-dialog__section">
         <header>
           <div>
@@ -231,13 +300,68 @@ async function submitImport() {
           </div>
         </div>
       </section>
+      </template>
+
+      <template v-else>
+        <section class="case-import-dialog__section">
+          <header>
+            <div>
+              <h4>导出范围</h4>
+              <p>导出完整结果，不受列表当前分页影响</p>
+            </div>
+          </header>
+          <el-radio-group v-model="exportScope" class="case-import-dialog__export-scopes" :disabled="exporting">
+            <el-radio value="SELECTED" :disabled="selectedCaseIds.length === 0">
+              <span class="case-import-dialog__export-icon"><MousePointerClick /></span>
+              <span class="case-import-dialog__export-copy">
+                <strong>导出选中用例</strong>
+                <small>{{ selectedCaseIds.length ? `已选择 ${selectedCaseIds.length} 条用例` : '请先在用例列表中勾选用例' }}</small>
+              </span>
+            </el-radio>
+            <el-radio value="FILTERED">
+              <span class="case-import-dialog__export-icon"><ListFilter /></span>
+              <span class="case-import-dialog__export-copy">
+                <strong>当前筛选结果</strong>
+                <small>按当前目录、关键词、优先级和状态等筛选条件导出</small>
+              </span>
+            </el-radio>
+            <el-radio value="DIRECTORY">
+              <span class="case-import-dialog__export-icon"><FolderTree /></span>
+              <span class="case-import-dialog__export-copy">
+                <strong>当前目录全部用例</strong>
+                <small>包含“{{ directoryName }}”及其所有子目录中的用例</small>
+              </span>
+            </el-radio>
+          </el-radio-group>
+        </section>
+
+        <section class="case-import-dialog__section">
+          <header><h4>导出格式</h4></header>
+          <div class="case-import-dialog__format">
+            <span><FileSpreadsheet /></span>
+            <div>
+              <strong>Excel 工作簿</strong>
+              <small>.xlsx，包含用例信息、步骤、预期结果和状态</small>
+            </div>
+            <em>Excel</em>
+          </div>
+        </section>
+
+        <div v-if="exportErrorMessage" class="case-import-dialog__error">
+          <AlertCircle />
+          <span>{{ exportErrorMessage }}</span>
+        </div>
+      </template>
     </div>
 
     <template #footer>
       <div class="case-import-dialog__footer">
-        <AppButton :disabled="importing" @click="closeDialog">{{ result ? '关闭' : '取消' }}</AppButton>
-        <AppButton v-if="!result" type="primary" :loading="importing" :disabled="!canImport" @click="submitImport">
+        <AppButton :disabled="importing || exporting" @click="closeDialog">{{ activeTab === 'import' && result ? '关闭' : '取消' }}</AppButton>
+        <AppButton v-if="activeTab === 'import' && !result" type="primary" :loading="importing" :disabled="!canSubmitImport" @click="submitImport">
           开始导入
+        </AppButton>
+        <AppButton v-if="activeTab === 'export'" type="primary" :loading="exporting" :disabled="!canSubmitExport" @click="submitExport">
+          导出 Excel
         </AppButton>
       </div>
     </template>
@@ -251,6 +375,33 @@ async function submitImport() {
   gap: 16px;
   color: #1d2129;
   font-family: var(--app-font-family);
+}
+
+.case-import-dialog__tabs {
+  margin: -8px 0 0;
+}
+
+.case-import-dialog__tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.case-import-dialog__tabs :deep(.el-tabs__content) {
+  display: none;
+}
+
+.case-import-dialog__tabs :deep(.el-tabs__item) {
+  height: 36px;
+  color: #4e5969;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.case-import-dialog__tabs :deep(.el-tabs__item.is-active) {
+  color: #165dff;
+}
+
+.case-import-dialog__tabs :deep(.el-tabs__active-bar) {
+  background: #165dff;
 }
 
 .case-import-dialog__location {
@@ -456,6 +607,126 @@ async function submitImport() {
   margin-right: 0;
   color: #4e5969;
   font-size: 12px;
+}
+
+.case-import-dialog__export-scopes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.case-import-dialog__export-scopes :deep(.el-radio) {
+  display: grid;
+  width: 100%;
+  height: auto;
+  min-height: 58px;
+  grid-template-columns: 14px 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.case-import-dialog__export-scopes :deep(.el-radio.is-checked) {
+  border-color: #94bfff;
+  background: #f2f7ff;
+}
+
+.case-import-dialog__export-scopes :deep(.el-radio.is-disabled) {
+  background: #f7f8fa;
+}
+
+.case-import-dialog__export-scopes :deep(.el-radio__label) {
+  display: contents;
+  padding: 0;
+}
+
+.case-import-dialog__export-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.case-import-dialog__export-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.case-import-dialog__export-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.case-import-dialog__export-copy strong,
+.case-import-dialog__format strong {
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.case-import-dialog__export-copy small,
+.case-import-dialog__format small {
+  overflow: hidden;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-import-dialog__format {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.case-import-dialog__format > span {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.case-import-dialog__format > span svg {
+  width: 16px;
+  height: 16px;
+}
+
+.case-import-dialog__format > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.case-import-dialog__format em {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
 }
 
 .case-import-dialog__error {

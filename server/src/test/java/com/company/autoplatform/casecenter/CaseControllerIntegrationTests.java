@@ -15,9 +15,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
@@ -360,6 +362,47 @@ class CaseControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void excelExportSupportsSelectedFilteredAndDirectoryScopes() throws Exception {
+        String unique = uniquePrefix("excel-export");
+        Integer parentId = createDirectory(unique + "-parent", null);
+        Integer childId = createDirectory(unique + "-child", parentId);
+        Integer firstId = createCase(unique + "-selected", "P0", parentId);
+        createCase(unique + "-child-case", "P1", childId);
+
+        byte[] selectedExport = mockMvc.perform(get("/api/cases/export")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("scope", "SELECTED")
+                        .param("caseIds", firstId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        assertEquals(List.of(unique + "-selected"), exportedCaseTitles(selectedExport));
+
+        byte[] filteredExport = mockMvc.perform(get("/api/cases/export")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("scope", "FILTERED")
+                        .param("directoryId", parentId.toString())
+                        .param("keyword", unique + "-child-case"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        assertEquals(List.of(unique + "-child-case"), exportedCaseTitles(filteredExport));
+
+        byte[] directoryExport = mockMvc.perform(get("/api/cases/export")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("scope", "DIRECTORY")
+                        .param("directoryId", parentId.toString()))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        assertEquals(2, exportedCaseTitles(directoryExport).size());
+    }
+
+    @Test
     void aiReviewCaseSmokeUsesMockedProviderClient() throws Exception {
         String unique = uniquePrefix("ai-review");
         Integer caseId = createCase(unique + "-case", "P1", null);
@@ -525,6 +568,15 @@ class CaseControllerIntegrationTests extends IntegrationTestSupport {
             }
             workbook.write(output);
             return output.toByteArray();
+        }
+    }
+
+    private List<String> exportedCaseTitles(byte[] content) throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(content))) {
+            var sheet = workbook.getSheet("测试用例");
+            return java.util.stream.IntStream.rangeClosed(1, sheet.getLastRowNum())
+                    .mapToObj(rowIndex -> sheet.getRow(rowIndex).getCell(3).getStringCellValue())
+                    .toList();
         }
     }
 

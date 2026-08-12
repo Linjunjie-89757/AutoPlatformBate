@@ -116,11 +116,19 @@ const props = withDefaults(
     workspaceReady?: boolean
     workspaces?: WorkspaceItem[]
     mode?: WorkspaceMode
+    canCreate?: boolean
+    canEdit?: boolean
+    canDelete?: boolean
+    canExecute?: boolean
   }>(),
   {
     workspaceReady: true,
     workspaces: () => [],
     mode: 'cases',
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+    canExecute: true,
   },
 )
 const route = useRoute()
@@ -459,14 +467,14 @@ const figmaCaseDefaultColumnWeights: Record<string, number> = {
   lastRun: 12,
   creator: 7,
 }
-const figmaCaseOperationActionCount = 4
-const figmaCaseOperationWidth = Math.max(168, getAppFigmaActionColumnWidth(figmaCaseOperationActionCount))
+const figmaCaseOperationActionCount = computed(() => [props.canEdit, props.canExecute, props.canCreate, props.canDelete].filter(Boolean).length)
+const figmaCaseOperationWidth = computed(() => Math.max(96, getAppFigmaActionColumnWidth(figmaCaseOperationActionCount.value)))
 const figmaCaseBaselineTableWidth = computed(() => Math.max(1100, figmaCaseTableWidth.value ? figmaCaseTableWidth.value - 2 : 1100))
 const figmaCaseColumnWidths = computed(() => {
   const entries = Object.entries(figmaCaseDefaultColumnWeights)
   const totalWeight = entries.reduce((total, [, weight]) => total + weight, 0)
   const selection = Math.max(40, Math.round(figmaCaseBaselineTableWidth.value * 0.03))
-  const targetWidth = figmaCaseBaselineTableWidth.value - selection - figmaCaseOperationWidth
+  const targetWidth = figmaCaseBaselineTableWidth.value - selection - figmaCaseOperationWidth.value
   let allocatedWidth = 0
   const widths = entries.reduce<Record<string, number>>((result, [key, weight], index) => {
     const width = index === entries.length - 1
@@ -488,7 +496,7 @@ const figmaCaseTableNeedsScroll = computed(() => {
   if (!figmaCaseTableWidth.value) return false
   const columnsWidth = caseColumnSettings.visibleColumns.value
     .reduce((total, column) => total + getFigmaCaseColumnWidth(column), 0)
-  return figmaCaseColumnWidths.value.selection + columnsWidth + figmaCaseOperationWidth > figmaCaseTableWidth.value
+  return figmaCaseColumnWidths.value.selection + columnsWidth + figmaCaseOperationWidth.value > figmaCaseTableWidth.value
 })
 
 function openCaseColumnSettings() {
@@ -976,6 +984,7 @@ function applyFigmaCaseFilters() {
 }
 
 async function handleFigmaBatchDelete() {
+  if (!props.canDelete) return
   if (!selectedCases.value.length || batchDeletingCases.value) {
     return
   }
@@ -1036,6 +1045,7 @@ function clearVisualRecordingTimer() {
 }
 
 function openRecordCasePlaceholder() {
+  if (!props.canCreate) return
   recordingConfig.name = ''
   // The design starts these fields blank; recording data is selected after entering the workstation.
   recordingConfig.directory = ''
@@ -1229,6 +1239,7 @@ function getCaseCreator(row: WebUiCaseItem) {
 }
 
 function openCreateDrawer() {
+  if (!props.canCreate) return
   copyCaseRequestSeq += 1
   basicInfoRequestSeq += 1
   basicInfoDialogMode.value = 'create'
@@ -1238,11 +1249,13 @@ function openCreateDrawer() {
 }
 
 function openTemplateDialog() {
+  if (!props.canCreate) return
   templateDialogVisible.value = true
   void loadTemplates()
 }
 
 function openImportDialog() {
+  if (!props.canCreate) return
   importJsonText.value = ''
   importDialogVisible.value = true
 }
@@ -1495,6 +1508,7 @@ function getTemplateStepRowClassName({ row }: { row: WebUiCaseTemplateDetail['st
 }
 
 function openStepDrawer(caseItem: WebUiCaseItem) {
+  if (!props.canEdit) return
   void router.push({
     path: `/automation/web/cases/${caseItem.id}`,
     query: {
@@ -1561,6 +1575,7 @@ async function saveCaseBasicInfo(payload: SaveWebUiCasePayload) {
 }
 
 async function openCopyDrawer(caseItem: WebUiCaseItem) {
+  if (!props.canCreate) return
   const requestId = ++copyCaseRequestSeq
   const workspaceCode = props.workspaceCode
   const caseId = caseItem.id
@@ -1664,6 +1679,7 @@ async function removeCase(caseItem: WebUiCaseItem) {
 }
 
 function openRunDialog(caseItem: WebUiCaseItem) {
+  if (!props.canExecute) return
   pendingRunCase.value = caseItem
   runForm.environmentId = enabledEnvironments.value[0]?.id ?? null
   runForm.headless = caseItem.headless !== false
@@ -1704,6 +1720,7 @@ function handleCaseSelectionChange(selection: WebUiCaseItem[]) {
 }
 
 function openBatchRunDialog() {
+  if (!props.canExecute) return
   if (batchSubmitting.value) {
     return
   }
@@ -1916,6 +1933,7 @@ function handleRunPageSizeChange(value: number) {
 }
 
 function handleCaseMoreAction(command: string, caseItem: WebUiCaseItem) {
+  if ((command === 'basic-edit' && !props.canEdit) || ((command === 'copy' || command === 'save-template') && !props.canCreate) || (command === 'delete' && !props.canDelete)) return
   if (command === 'basic-edit') {
     void openEditDrawer(caseItem)
     return
@@ -2085,12 +2103,12 @@ watch(
         <AppButton :icon="RefreshRight" :loading="workspaceLoading" @click="loadWorkspaceData">
           刷新
         </AppButton>
-        <AppButton v-if="isCasesMode" :icon="VideoPlay" :disabled="!selectedCases.length || batchSubmitting" :loading="batchSubmitting" @click="openBatchRunDialog">
+        <AppButton v-if="isCasesMode && canExecute" :icon="VideoPlay" :disabled="!selectedCases.length || batchSubmitting" :loading="batchSubmitting" @click="openBatchRunDialog">
           批量运行
         </AppButton>
-        <AppButton v-if="isCasesMode" :icon="CopyDocument" @click="openTemplateDialog">从模板新建</AppButton>
-        <AppButton v-if="isCasesMode" :icon="Upload" @click="openImportDialog">导入 JSON</AppButton>
-        <AppButton v-if="isCasesMode" type="primary" :icon="Plus" @click="openCreateDrawer">新建用例</AppButton>
+        <AppButton v-if="isCasesMode && canCreate" :icon="CopyDocument" @click="openTemplateDialog">从模板新建</AppButton>
+        <AppButton v-if="isCasesMode && canCreate" :icon="Upload" @click="openImportDialog">导入 JSON</AppButton>
+        <AppButton v-if="isCasesMode && canCreate" type="primary" :icon="Plus" @click="openCreateDrawer">新建用例</AppButton>
         <AppButton
           v-if="isTemplatesMode && usingBuiltinTemplates"
           :loading="initializingTemplates"
@@ -2098,7 +2116,7 @@ watch(
         >
           导入内置模板
         </AppButton>
-        <AppButton v-if="isTemplatesMode" type="primary" :icon="Plus" @click="openCreateTemplateDialog">新建模板</AppButton>
+        <AppButton v-if="isTemplatesMode && canCreate" type="primary" :icon="Plus" @click="openCreateTemplateDialog">新建模板</AppButton>
       </div>
     </header>
 
@@ -2119,7 +2137,7 @@ watch(
         <div class="web-ui-case-workspace-shell">
           <aside class="web-ui-case-directory">
             <div class="web-ui-case-directory__head">
-              <button type="button" class="web-ui-figma-primary-button web-ui-figma-primary-button--small" @click="openCreateDrawer">
+              <button v-if="canCreate" type="button" class="web-ui-figma-primary-button web-ui-figma-primary-button--small" @click="openCreateDrawer">
                 <img :src="figmaCaseIcons.addDirectory" alt="" />
                 新建目录
               </button>
@@ -2190,20 +2208,20 @@ watch(
               <div class="web-ui-case-toolbar__spacer" />
               <div v-if="selectedCases.length" class="web-ui-case-toolbar__selection">
                 <span>已选 {{ selectedCases.length }}</span>
-                <button type="button" :disabled="batchSubmitting" @click="openBatchRunDialog">
+                <button v-if="canExecute" type="button" :disabled="batchSubmitting" @click="openBatchRunDialog">
                   <VideoPlay :size="13" />
                   批量运行
                 </button>
-                <button type="button" class="is-danger" :disabled="batchDeletingCases" @click="handleFigmaBatchDelete">
+                <button v-if="canDelete" type="button" class="is-danger" :disabled="batchDeletingCases" @click="handleFigmaBatchDelete">
                   <Delete :size="13" />
                   删除
                 </button>
               </div>
-              <button type="button" class="web-ui-case-toolbar__record" @click="openRecordCasePlaceholder">
+              <button v-if="canCreate" type="button" class="web-ui-case-toolbar__record" @click="openRecordCasePlaceholder">
                 <i />
                 录制用例
               </button>
-              <button type="button" class="web-ui-figma-primary-button" @click="openCreateDrawer">
+              <button v-if="canCreate" type="button" class="web-ui-figma-primary-button" @click="openCreateDrawer">
                 <img :src="figmaCaseIcons.add" alt="" />
                 新建用例
               </button>
@@ -2304,10 +2322,11 @@ watch(
                         <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openCaseColumnSettings" />
                       </template>
                       <template #default="{ row }">
-                        <button type="button" title="编辑" aria-label="编辑" @click.stop="openStepDrawer(row)">
+                        <button v-if="canEdit" type="button" title="编辑" aria-label="编辑" @click.stop="openStepDrawer(row)">
                           <img class="web-ui-case-action-icon" :src="figmaCaseIcons.action.edit" alt="" />
                         </button>
                         <button
+                          v-if="canExecute"
                           class="web-ui-case-run-action"
                           type="button"
                           title="运行"
@@ -2318,10 +2337,10 @@ watch(
                           <img class="web-ui-case-action-icon" :src="figmaCaseIcons.action.run" alt="" />
                           <span v-if="runningCaseId === row.id" class="web-ui-case-actions__running" />
                         </button>
-                        <button type="button" title="复制" aria-label="复制" @click.stop="openCopyDrawer(row)">
+                        <button v-if="canCreate" type="button" title="复制" aria-label="复制" @click.stop="openCopyDrawer(row)">
                           <CopyDocument />
                         </button>
-                        <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="handleCaseMoreAction('delete', row)">
+                        <button v-if="canDelete" type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="handleCaseMoreAction('delete', row)">
                           <img class="web-ui-case-action-icon" :src="figmaCaseIcons.action.delete" alt="" />
                         </button>
                       </template>

@@ -120,6 +120,20 @@ export interface CaseImportResult {
   issues: CaseImportRowIssue[]
 }
 
+export type CaseExportScope = 'SELECTED' | 'FILTERED' | 'DIRECTORY'
+
+export interface CaseExportQuery {
+  scope: CaseExportScope
+  caseIds?: number[]
+  directoryId?: number | null
+  keyword?: string
+  priority?: string
+  reviewStatus?: string
+  executionStatus?: string
+  executorName?: string
+  createdByName?: string
+}
+
 export type BatchUpdateCasesResult = PageResponse<CaseSummaryItem>
 
 export interface BatchMoveCasesPayload {

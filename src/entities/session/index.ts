@@ -12,5 +12,6 @@ export {
   canManageWorkspace,
   findWorkspaceAccess,
   firstManageableWorkspaceCode,
+  hasWorkspacePermission,
   isPlatformAdmin,
 } from './model/access'

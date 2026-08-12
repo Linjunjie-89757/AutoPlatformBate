@@ -13,6 +13,10 @@ defineProps<{
   pageSize: number
   pageSizes: number[]
   runningId: number | null
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
   caseProtocolLabel: () => string
   casePriorityLabel: (row: ApiDefinitionCaseItem) => string
   caseStatusLabel: (row: ApiDefinitionCaseItem) => string
@@ -37,6 +41,7 @@ const emit = defineEmits<{
     <div class="request-section case-list-panel">
       <div class="editor-actions left">
         <el-button
+          v-if="canCreate !== false"
           type="primary"
           :title="definitionId ? '新建用例' : '请先保存接口，再创建用例'"
           :disabled="!definitionId"
@@ -45,6 +50,7 @@ const emit = defineEmits<{
           新建用例
         </el-button>
         <button
+          v-if="canCreate !== false"
           type="button"
           class="case-ai-generate-button"
           :disabled="!definitionId"
@@ -96,8 +102,8 @@ const emit = defineEmits<{
             </template>
             <template #default="{ row }">
               <div class="case-list-actions">
-                <el-button text type="primary" size="small" class="case-list-action-button" @click="emit('edit', row)">编辑</el-button>
-                <el-button text size="small" type="primary" :loading="runningId === row.id" @click="emit('run', row)">执行</el-button>
+                <el-button v-if="canEdit !== false" text type="primary" size="small" class="case-list-action-button" @click="emit('edit', row)">编辑</el-button>
+                <el-button v-if="canExecute !== false" text size="small" type="primary" :loading="runningId === row.id" @click="emit('run', row)">执行</el-button>
                 <el-dropdown trigger="click" placement="bottom-end">
                   <el-button text type="primary" size="small" class="case-list-more-button">
                     <el-icon><MoreFilled /></el-icon>
@@ -105,8 +111,8 @@ const emit = defineEmits<{
                   <template #dropdown>
                     <el-dropdown-menu class="case-list-more-menu">
                       <el-dropdown-item class="case-list-menu-item" @click="emit('detail', row)">查看详情</el-dropdown-item>
-                      <el-dropdown-item class="case-list-menu-item" @click="emit('duplicate', row)">复制</el-dropdown-item>
-                      <el-dropdown-item class="case-list-menu-item is-danger" @click="emit('delete', row)">删除</el-dropdown-item>
+                      <el-dropdown-item v-if="canCreate !== false" class="case-list-menu-item" @click="emit('duplicate', row)">复制</el-dropdown-item>
+                      <el-dropdown-item v-if="canDelete !== false" class="case-list-menu-item is-danger" @click="emit('delete', row)">删除</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
                 </el-dropdown>

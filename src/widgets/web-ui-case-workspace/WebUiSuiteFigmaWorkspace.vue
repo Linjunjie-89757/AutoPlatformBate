@@ -41,9 +41,17 @@ import WebUiModuleTabs from './WebUiModuleTabs.vue'
 const props = withDefaults(defineProps<{
   workspaceCode?: string
   workspaceReady?: boolean
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
 }>(), {
   workspaceCode: 'ALL',
   workspaceReady: false,
+  canCreate: true,
+  canEdit: true,
+  canDelete: true,
+  canExecute: true,
 })
 
 type Priority = 'P0' | 'P1' | 'P2' | 'P3' | '—'
@@ -132,16 +140,19 @@ const selectedSuiteCaseIds = computed(() => new Set(selectedSuite.value?.cases.m
 const selectedCaseCount = computed(() => selectedAvailableCaseIds.value.length)
 
 function updateSuite(patch: Partial<Suite>) {
+  if (!props.canEdit) return
   const suite = selectedSuite.value
   if (!suite) return
   suites.value = suites.value.map(item => item.id === suite.id ? { ...item, ...patch } : item)
 }
 
 function updateSuiteCases(cases: SuiteCase[]) {
+  if (!props.canEdit) return
   updateSuite({ cases })
 }
 
 function createSuite(focusName = true) {
+  if (focusName && !props.canCreate) return
   const id = `draft-suite-${Date.now()}-${++draftSequence}`
   suites.value.push({
     id,
@@ -166,6 +177,7 @@ function createSuite(focusName = true) {
 }
 
 function moveSuiteCase(index: number, direction: -1 | 1) {
+  if (!props.canEdit) return
   const cases = [...(selectedSuite.value?.cases || [])]
   const next = index + direction
   if (next < 0 || next >= cases.length) return
@@ -174,14 +186,17 @@ function moveSuiteCase(index: number, direction: -1 | 1) {
 }
 
 function removeSuiteCase(id: string) {
+  if (!props.canEdit) return
   updateSuiteCases((selectedSuite.value?.cases || []).filter(item => item.id !== id))
 }
 
 function toggleSuiteCase(id: string) {
+  if (!props.canEdit) return
   updateSuiteCases((selectedSuite.value?.cases || []).map(item => item.id === id ? { ...item, enabled: !item.enabled } : item))
 }
 
 async function openAddCaseDialog() {
+  if (!props.canEdit) return
   if (!availableCases.value.length) {
     await loadCases(workspaceRequestVersion)
   }
@@ -348,10 +363,12 @@ async function reloadWorkspaceData() {
 }
 
 function saveSuite() {
+  if (!props.canEdit) return
   ElMessage.info('后台尚无 Web UI 套件 CRUD，当前编排是未保存草稿；已记录到遗留问题')
 }
 
 async function runSuite() {
+  if (!props.canExecute) return
   const suite = selectedSuite.value
   if (!suite || running.value) return
   const enabledCases = suite.cases.filter(item => item.enabled)
@@ -429,7 +446,7 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
             <Search aria-hidden="true" />
             <input v-model="suiteSearch" placeholder="搜索套件..." />
           </label>
-          <button type="button" aria-label="新建套件" @click="createSuite()"><Plus /></button>
+          <button v-if="canCreate" type="button" aria-label="新建套件" @click="createSuite()"><Plus /></button>
         </header>
 
         <div class="web-ui-suite-list__items">
@@ -453,13 +470,13 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
         </div>
 
         <footer class="web-ui-suite-list__footer">
-          <button type="button" @click="createSuite()"><Plus />新建套件</button>
+          <button v-if="canCreate" type="button" @click="createSuite()"><Plus />新建套件</button>
         </footer>
       </aside>
 
       <main v-if="selectedSuite" class="web-ui-suite-editor">
         <header class="web-ui-suite-editor__toolbar">
-          <select v-model="selectedSuite.priority" class="web-ui-suite-priority" :style="priorityStyle(selectedSuite.priority)" aria-label="套件优先级">
+          <select v-model="selectedSuite.priority" :disabled="!canEdit" class="web-ui-suite-priority" :style="priorityStyle(selectedSuite.priority)" aria-label="套件优先级">
             <option v-for="priority in ['P0', 'P1', 'P2', 'P3']" :key="priority">{{ priority }}</option>
           </select>
 
@@ -471,8 +488,8 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
             @blur="editingName = false"
             @keydown.enter="editingName = false"
           />
-          <button v-else type="button" class="web-ui-suite-name" @click="editingName = true">
-            <strong>{{ selectedSuite.name }}</strong><Edit2 />
+          <button v-else type="button" class="web-ui-suite-name" :disabled="!canEdit" @click="editingName = true">
+            <strong>{{ selectedSuite.name }}</strong><Edit2 v-if="canEdit" />
           </button>
 
           <div class="web-ui-suite-editor__spacer" />
@@ -502,8 +519,8 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
               @click="updateSuite({ notify: !selectedSuite.notify })"
             ><i /></button>
           </label>
-          <button class="web-ui-suite-save" type="button" :disabled="loading || running" @click="saveSuite"><Save />保存</button>
-          <button class="web-ui-suite-run" type="button" :disabled="loading || running" @click="runSuite"><Play />{{ running ? '运行中' : '运行' }}</button>
+          <button v-if="canEdit" class="web-ui-suite-save" type="button" :disabled="loading || running" @click="saveSuite"><Save />保存</button>
+          <button v-if="canExecute" class="web-ui-suite-run" type="button" :disabled="loading || running" @click="runSuite"><Play />{{ running ? '运行中' : '运行' }}</button>
         </header>
 
         <nav class="web-ui-suite-sub-tabs" role="tablist" aria-label="套件详情">
@@ -515,7 +532,7 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
           <section class="web-ui-suite-arrange__cases">
             <header>
               <span>共 <b>{{ selectedSuite.cases.length }}</b> 个用例，按顺序执行</span>
-              <button type="button" @click="openAddCaseDialog"><Plus />添加用例</button>
+              <button v-if="canEdit" type="button" @click="openAddCaseDialog"><Plus />添加用例</button>
             </header>
             <div class="web-ui-suite-arrange__list">
               <template v-if="selectedSuite.cases.length">
@@ -532,17 +549,17 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
                   <strong>{{ suiteCase.name }}</strong>
                   <span class="web-ui-suite-case__directory">{{ suiteCase.directory }}</span>
                   <em :class="suiteCase.result || 'is-pending'">{{ suiteCase.result === 'pass' ? '✓ 通过' : suiteCase.result === 'fail' ? '✗ 失败' : '未运行' }}</em>
-                  <span class="web-ui-suite-case__actions">
+                  <span v-if="canEdit" class="web-ui-suite-case__actions">
                     <button type="button" :disabled="index === 0" aria-label="上移" @click="moveSuiteCase(index, -1)"><ArrowUp /></button>
                     <button type="button" :disabled="index === selectedSuite.cases.length - 1" aria-label="下移" @click="moveSuiteCase(index, 1)"><ArrowDown /></button>
                     <button type="button" aria-label="删除用例" @click="removeSuiteCase(suiteCase.id)"><Trash2 /></button>
                   </span>
                 </article>
-                <button class="web-ui-suite-add-line" type="button" @click="openAddCaseDialog"><Plus />添加用例</button>
+                <button v-if="canEdit" class="web-ui-suite-add-line" type="button" @click="openAddCaseDialog"><Plus />添加用例</button>
               </template>
               <div v-else class="web-ui-suite-empty">
                 <p>套件还没有用例</p>
-                <button type="button" @click="openAddCaseDialog"><Plus />添加 Web UI 用例</button>
+                <button v-if="canEdit" type="button" @click="openAddCaseDialog"><Plus />添加 Web UI 用例</button>
               </div>
             </div>
           </section>

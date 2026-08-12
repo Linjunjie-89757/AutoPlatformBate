@@ -12,7 +12,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { canManageWorkspace, useSession } from '@/entities/session'
+import { canManageWorkspace, hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { useLogout } from '@/features/auth-logout'
 import autotestFigmaMarkUrl from '@/assets/brand/autotest-figma-mark.svg'
@@ -89,7 +89,7 @@ const userRoleText = computed(() => {
   const labels: Record<string, string> = {
     SUPER_ADMIN: '超级管理员',
     ADMIN: '管理员',
-    TEST_MANAGER: '测试负责人',
+    TEST_MANAGER: '项目负责人',
     TESTER: '测试工程师',
     VIEWER: '只读访客',
   }
@@ -119,6 +119,7 @@ interface NavigationItem {
   color: string
   lightBg: string
   separated?: boolean
+  permissionCode?: string
   children?: Array<{
     path: string
     label: string
@@ -127,13 +128,14 @@ interface NavigationItem {
 
 const navigationItems: NavigationItem[] = [
   { path: '/', label: '工作台', icon: figmaGlobalNavIcons.dashboard, color: '#165DFF', lightBg: '#E8F3FF' },
-  { path: '/config-center', label: '配置中心', icon: figmaGlobalNavIcons.config, color: '#4E5AC8', lightBg: '#EEF0FA' },
+  { path: '/config-center', label: '配置中心', icon: figmaGlobalNavIcons.config, color: '#4E5AC8', lightBg: '#EEF0FA', permissionCode: 'config.view' },
   {
     path: '/cases',
     label: '用例中心',
     icon: figmaGlobalNavIcons.case,
     color: '#00B42A',
     lightBg: '#E8FFEA',
+    permissionCode: 'cases.view',
     children: [
       { path: '/cases/manage', label: '用例管理' },
       { path: '/cases/ai-generate', label: 'AI 用例生成' },
@@ -141,13 +143,14 @@ const navigationItems: NavigationItem[] = [
       { path: '/cases/ai-config', label: 'AI 配置' },
     ],
   },
-  { path: '/bugs', label: '缺陷管理', icon: figmaGlobalNavIcons.bug, color: '#F53F3F', lightBg: '#FFE8E8' },
+  { path: '/bugs', label: '缺陷管理', icon: figmaGlobalNavIcons.bug, color: '#F53F3F', lightBg: '#FFE8E8', permissionCode: 'bugs.view' },
   {
     path: '/automation/api',
     label: '接口自动化',
     icon: figmaGlobalNavIcons.api,
     color: '#FF7D00',
     lightBg: '#FFF3E8',
+    permissionCode: 'api.view',
     children: [
       { path: '/automation/api/interfaces', label: '接口管理' },
       { path: '/automation/api/scenarios', label: '接口场景' },
@@ -162,6 +165,7 @@ const navigationItems: NavigationItem[] = [
     icon: figmaGlobalNavIcons.web,
     color: '#0FC6C2',
     lightBg: '#E8FFFB',
+    permissionCode: 'webui.view',
     children: [
       { path: '/automation/web/cases', label: '用例管理' },
       { path: '/automation/web/elements', label: '元素库' },
@@ -173,14 +177,19 @@ const navigationItems: NavigationItem[] = [
     ],
   },
   { path: '/automation/app', label: 'APP 自动化', icon: figmaGlobalNavIcons.app, color: '#7816FF', lightBg: '#F5E8FF' },
-  { path: '/tasks', label: '任务中心', icon: figmaGlobalNavIcons.task, color: '#F59E0B', lightBg: '#FFF7E8' },
-  { path: '/reports', label: '报告中心', icon: figmaGlobalNavIcons.report, color: '#7816FF', lightBg: '#F5E8FF', separated: true },
+  { path: '/tasks', label: '任务中心', icon: figmaGlobalNavIcons.task, color: '#F59E0B', lightBg: '#FFF7E8', permissionCode: 'tasks.view' },
+  { path: '/reports', label: '报告中心', icon: figmaGlobalNavIcons.report, color: '#7816FF', lightBg: '#F5E8FF', separated: true, permissionCode: 'reports.view' },
   { path: '/settings', label: '系统设置', icon: figmaGlobalNavIcons.setting, color: '#4E5969', lightBg: '#F2F3F5' },
 ]
 
 const visibleNavigationItems = computed(() => navigationItems.filter((item) => {
-  if (!['/config-center', '/settings'].includes(item.path)) return true
-  return canManageWorkspace(currentUser.value, selectedWorkspaceCode.value)
+  if (item.path === '/settings') {
+    return canManageWorkspace(currentUser.value, selectedWorkspaceCode.value)
+  }
+  if (item.permissionCode) {
+    return hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, item.permissionCode)
+  }
+  return true
 }))
 
 function matchesNavigationPath(path: string) {

@@ -80,7 +80,7 @@ const router = useRouter()
 const { currentUser } = useSession()
 
 const userName = computed(() => currentUser.value?.displayName || currentUser.value?.username || '张程远')
-const roleName = computed(() => currentUser.value?.roleCode || '测试负责人')
+const roleName = computed(() => currentUser.value?.roleCode || '项目负责人')
 
 const stats = [
   { label: '今日执行', value: '236', sub: '次', color: palette.primary, trend: false },

@@ -10,7 +10,7 @@ import {
   type ReportShareSummary,
   type ReportSummaryItem,
 } from '@/entities/report'
-import { useSession } from '@/entities/session'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaReportIcons } from '@/shared/assets/figma-icons'
@@ -71,6 +71,10 @@ const copiedCodeBlockKey = ref('')
 const copiedResetTimers = new Map<string, ReturnType<typeof window.setTimeout>>()
 const { currentUser } = useSession()
 const { selectedWorkspaceCode } = useWorkspaceContext()
+const canEditReports = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'reports.edit'))
+const canDeleteReports = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'reports.delete'))
+const canExportReports = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'reports.export'))
+const canShareReports = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'reports.share'))
 const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
 const reportItems = ref<ReportSummaryItem[]>([])
@@ -368,10 +372,12 @@ async function createReportShare(item?: unknown, openPage = true) {
 }
 
 function openSharedReport(item?: unknown) {
+  if (!canShareReports.value) return
   void createReportShare(item, true)
 }
 
 function copySharedReportLink(item: ReportRow) {
+  if (!canShareReports.value) return
   void createReportShare(item, false)
 }
 
@@ -403,6 +409,7 @@ function shareState(item: ReportShareSummary) {
 }
 
 async function regenerateReportShare(item: ReportShareSummary) {
+  if (!canShareReports.value) return
   try {
     const created = await reportApi.regenerateReportShare(item.workspaceCode, item.id)
     await loadReportShares()
@@ -413,6 +420,7 @@ async function regenerateReportShare(item: ReportShareSummary) {
 }
 
 async function revokeReportShare(item: ReportShareSummary) {
+  if (!canShareReports.value) return
   try {
     await confirmAction({
       title: '撤销报告分享',
@@ -461,6 +469,7 @@ function handleReportTypeFilterChange(event: Event) {
 }
 
 async function deleteReport(item: ReportRow) {
+  if (!canDeleteReports.value) return
   try {
     await confirmDelete({
       title: '删除报告',
@@ -688,11 +697,11 @@ onBeforeUnmount(() => {
             </select>
           </div>
           <div class="report-list-actions">
-            <button type="button" class="report-light-button" @click="showUnsupportedCapability('通用报告接口尚未提供批量导出能力')">
+            <button v-if="canExportReports" type="button" class="report-light-button" @click="showUnsupportedCapability('通用报告接口尚未提供批量导出能力')">
               <img :src="figmaReportIcons.action.batchExport" alt="">
               <span>批量导出</span>
             </button>
-            <button type="button" class="report-primary-button" @click="showUnsupportedCapability('通用报告接口尚未提供从报告中心发起执行的能力')">
+            <button v-if="canEditReports" type="button" class="report-primary-button" @click="showUnsupportedCapability('通用报告接口尚未提供从报告中心发起执行的能力')">
               <img :src="figmaReportIcons.action.runNow" alt="">
               <span>立即执行</span>
             </button>
@@ -790,13 +799,13 @@ onBeforeUnmount(() => {
                 <button type="button" title="查看报告" aria-label="查看报告" @click.stop="selectReport(row)">
                   <img class="report-action-icon" :src="figmaReportIcons.rowAction.view" alt="">
                 </button>
-                <button type="button" title="分享报告" aria-label="分享报告" @click.stop="openSharedReport(row)">
+                <button v-if="canShareReports" type="button" title="分享报告" aria-label="分享报告" @click.stop="openSharedReport(row)">
                   <img class="report-action-icon" :src="figmaReportIcons.rowAction.share" alt="">
                 </button>
-                <button type="button" title="复制分享链接" aria-label="复制分享链接" @click.stop="copySharedReportLink(row)">
+                <button v-if="canShareReports" type="button" title="复制分享链接" aria-label="复制分享链接" @click.stop="copySharedReportLink(row)">
                   <img class="report-action-icon" :src="figmaReportIcons.rowAction.copy" alt="">
                 </button>
-                <button type="button" data-danger="true" title="删除报告" aria-label="删除报告" @click.stop="deleteReport(row)">
+                <button v-if="canDeleteReports" type="button" data-danger="true" title="删除报告" aria-label="删除报告" @click.stop="deleteReport(row)">
                   <img class="report-action-icon" :src="figmaReportIcons.rowAction.delete" alt="">
                 </button>
               </template>
@@ -866,10 +875,11 @@ onBeforeUnmount(() => {
           </el-table-column>
           <AppFigmaActionColumn :action-count="2" :width="shareOperationColumnWidth">
             <template #default="{ row }">
-              <button type="button" title="重新生成并打开" aria-label="重新生成并打开" @click.stop="regenerateReportShare(row)">
+              <button v-if="canShareReports" type="button" title="重新生成并打开" aria-label="重新生成并打开" @click.stop="regenerateReportShare(row)">
                 <img class="report-action-icon" :src="figmaReportIcons.action.rerun" alt="">
               </button>
               <button
+                v-if="canShareReports"
                 type="button"
                 data-danger="true"
                 title="撤销分享"
@@ -912,15 +922,15 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="report-actions">
-            <button type="button" @click="openSharedReport">
+            <button v-if="canShareReports" type="button" @click="openSharedReport">
               <img :src="figmaReportIcons.action.share" alt="">
               <span>分享报告</span>
             </button>
-            <button type="button" @click="showUnsupportedCapability('通用报告接口尚未提供报告导出能力')">
+            <button v-if="canExportReports" type="button" @click="showUnsupportedCapability('通用报告接口尚未提供报告导出能力')">
               <img :src="figmaReportIcons.action.export" alt="">
               <span>导出</span>
             </button>
-            <button type="button" @click="showUnsupportedCapability('通用报告接口尚未提供重新执行能力')">
+            <button v-if="canEditReports" type="button" @click="showUnsupportedCapability('通用报告接口尚未提供重新执行能力')">
               <img :src="figmaReportIcons.action.rerun" alt="">
               <span>重新执行</span>
             </button>

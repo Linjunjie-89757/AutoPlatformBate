@@ -7,6 +7,7 @@ import type {
   ApiDefinitionItem,
   ApiDefinitionModuleItem,
 } from '@/entities/api-automation'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
 import ApiExecutionSuiteFigmaWorkspace from '@/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue'
@@ -16,10 +17,16 @@ import ApiScenarioFigmaWorkspace from '@/widgets/api-scenario-workspace/ApiScena
 type ApiAutomationSection = 'definitions' | 'scenarios' | 'execution' | 'reports' | 'settings'
 
 const route = useRoute()
+const { currentUser } = useSession()
 const workspaceCode = ref('ALL')
 const workspaces = ref<WorkspaceItem[]>([])
 const workspaceReady = ref(false)
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
+const canCreateApi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'api.create'))
+const canEditApi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'api.edit'))
+const canDeleteApi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'api.delete'))
+const canExecuteApi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'api.execute'))
+const canExportApi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'api.export'))
 const activeSection = computed<ApiAutomationSection>(() => {
   if (route.path.endsWith('/scenarios')) return 'scenarios'
   if (route.path.endsWith('/execution-suites')) return 'execution'
@@ -83,10 +90,19 @@ watch(selectedWorkspaceCode, (value) => {
       <ApiScenarioFigmaWorkspace
         v-if="activeSection === 'scenarios'"
         :workspace-code="workspaceCode"
+        :can-create="canCreateApi"
+        :can-edit="canEditApi"
+        :can-delete="canDeleteApi"
+        :can-execute="canExecuteApi"
+        :can-export="canExportApi"
       />
       <ApiExecutionSuiteFigmaWorkspace
         v-else-if="activeSection === 'execution'"
         :workspace-code="workspaceCode"
+        :can-create="canCreateApi"
+        :can-edit="canEditApi"
+        :can-delete="canDeleteApi"
+        :can-execute="canExecuteApi"
       />
       <ApiInterfaceWorkspace
         v-else
@@ -94,6 +110,11 @@ watch(selectedWorkspaceCode, (value) => {
         :workspace-code="workspaceCode"
         :workspace-ready="workspaceReady"
         :workspaces="workspaces"
+        :can-create="canCreateApi"
+        :can-edit="canEditApi"
+        :can-delete="canDeleteApi"
+        :can-execute="canExecuteApi"
+        :can-export="canExportApi"
         @loaded="handleWorkspaceDataLoaded"
       />
     </div>

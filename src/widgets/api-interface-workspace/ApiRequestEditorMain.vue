@@ -19,6 +19,11 @@ defineProps<{
   runOptionsLoading: boolean
   sending: boolean
   saving: boolean
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
+  canExport?: boolean
   contentTabs: any[]
   paramTypeOptions: any[]
   bodyModes: any[]
@@ -182,6 +187,10 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
   :run-options-loading="runOptionsLoading"
   :sending="sending"
   :saving="saving"
+  :can-create="canCreate"
+  :can-edit="canEdit"
+  :can-delete="canDelete"
+  :can-execute="canExecute"
   @update:method="activeEditor.detail.requestConfig.method = $event"
   @update:path="activeEditor.detail.requestConfig.path = $event"
   @update:environment-id="selectedEnvironmentId = $event"
@@ -361,6 +370,10 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
         :total-pages="caseListTotalPages"
         :page-sizes="[10, 20, 30, 40, 50]"
         :running-id="caseRunningId"
+        :can-create="canCreate"
+        :can-edit="canEdit"
+        :can-delete="canDelete"
+        :can-execute="canExecute"
         :case-protocol-label="caseProtocolLabel"
         :case-priority-label="casePriorityLabel"
         :case-status-label="caseStatusLabel"

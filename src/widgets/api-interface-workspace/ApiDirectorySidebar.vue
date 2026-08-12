@@ -19,6 +19,9 @@ defineProps<{
   directoryInitialized: boolean
   selectedDirectoryKey: string
   directoryTreeRenderKey: string
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
 }>()
 
 const directoryKeyword = defineModel<string>('directoryKeyword', { default: '' })
@@ -60,11 +63,11 @@ defineExpose({
 <template>
   <aside class="api-interface-sidebar">
     <div class="api-interface-sidebar__actions">
-      <button type="button" class="api-sidebar-primary" @click="emit('createRequest')">
+      <button v-if="canCreate !== false" type="button" class="api-sidebar-primary" @click="emit('createRequest')">
         <img class="api-sidebar-button-icon" :src="figmaApiInterfaceIcons.newRequest" alt="" />
         新建请求
       </button>
-      <button type="button" class="api-sidebar-secondary" @click="emit('import')">
+      <button v-if="canCreate !== false" type="button" class="api-sidebar-secondary" @click="emit('import')">
         <img class="api-sidebar-button-icon" :src="figmaApiInterfaceIcons.import" alt="" />
         导入
       </button>
@@ -113,6 +116,9 @@ defineExpose({
         :selected-key="selectedDirectoryKey"
         :render-key="directoryTreeRenderKey"
         :loading="directorySearchLoading"
+        :can-create="canCreate"
+        :can-edit="canEdit"
+        :can-delete="canDelete"
         @node-click="emit('nodeClick', $event)"
         @node-expand="emit('nodeExpand', $event)"
         @node-collapse="emit('nodeCollapse', $event)"

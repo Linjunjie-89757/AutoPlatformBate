@@ -41,10 +41,18 @@ const props = withDefaults(defineProps<{
   workspaceCode?: string
   workspaceReady?: boolean
   environments?: WebUiEnvironmentItem[]
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
 }>(), {
   workspaceCode: 'ALL',
   workspaceReady: false,
   environments: () => [],
+  canCreate: true,
+  canEdit: true,
+  canDelete: true,
+  canExecute: true,
 })
 
 type PageId = 'root' | number
@@ -150,14 +158,14 @@ const columnWeights: Record<string, number> = {
   refCount: 8,
   verified: 9,
 }
-const operationActionCount = 4
-const operationWidth = Math.max(168, getAppFigmaActionColumnWidth(operationActionCount))
+const operationActionCount = computed(() => 1 + [props.canExecute, props.canEdit, props.canDelete].filter(Boolean).length)
+const operationWidth = computed(() => Math.max(96, getAppFigmaActionColumnWidth(operationActionCount.value)))
 const baselineTableWidth = computed(() => Math.max(1100, tableFrameWidth.value ? tableFrameWidth.value - 2 : 1100))
 const tableNeedsScroll = computed(() => Boolean(tableFrameWidth.value && baselineTableWidth.value > tableFrameWidth.value))
 const tableColumnWidths = computed<Record<string, number>>(() => {
   const entries = Object.entries(columnWeights)
   const totalWeight = entries.reduce((total, [, weight]) => total + weight, 0)
-  const targetWidth = baselineTableWidth.value - operationWidth
+  const targetWidth = baselineTableWidth.value - operationWidth.value
   let allocatedWidth = 0
 
   return entries.reduce<Record<string, number>>((widths, [key, weight], index) => {
@@ -358,6 +366,7 @@ function resolveCaptureUrl(page: WebUiElementPageItem) {
 }
 
 function openCapture() {
+  if (!props.canCreate) return
   const page = getSelectedPage()
   if (!page) {
     ElMessage.warning('请先在左侧选择候选元素要归属的页面')
@@ -391,6 +400,7 @@ function mapCandidate(item: WebUiElementCollectCandidate, index: number, pageNam
 }
 
 async function startCapture() {
+  if (!props.canCreate) return
   const page = getSelectedPage()
   if (!page) {
     ElMessage.warning('请返回元素库并选择候选元素要归属的页面')
@@ -455,6 +465,7 @@ async function startCapture() {
 }
 
 function setCandidateStatus(id: string, status: AdoptStatus) {
+  if (!props.canCreate) return
   const candidate = candidates.value.find(item => item.id === id)
   if (!candidate) return
   if (status === 'adopted' && candidate.source.saveBlockedReason) {
@@ -465,6 +476,7 @@ function setCandidateStatus(id: string, status: AdoptStatus) {
 }
 
 function adoptAll() {
+  if (!props.canCreate) return
   candidates.value.forEach((candidate) => {
     if (candidate.status === 'pending' && !candidate.source.saveBlockedReason) candidate.status = 'adopted'
   })
@@ -475,6 +487,7 @@ function showPendingDesign(action: string) {
 }
 
 async function validateRow(row: ElementRow) {
+  if (!props.canExecute) return
   if (validatingId.value !== null) return
   const environment = enabledEnvironments.value[0]
   if (!environment?.baseUrl) {
@@ -502,6 +515,7 @@ async function validateRow(row: ElementRow) {
 }
 
 async function deleteRow(row: ElementRow) {
+  if (!props.canDelete) return
   try {
     await confirmDelete({
       title: '删除元素',
@@ -546,6 +560,7 @@ function buildCandidateDescription(candidate: Candidate) {
 }
 
 async function confirmCandidates() {
+  if (!props.canCreate) return
   if (savingCandidates.value) return
   const page = getSelectedPage()
   const adopted = candidates.value.filter(item => item.status === 'adopted' && !item.source.saveBlockedReason)
@@ -641,7 +656,7 @@ function confidenceClass(confidence: number) {
 
     <div v-if="state === 'list'" class="figma-elements__list">
       <aside class="figma-elements__tree">
-        <button class="figma-elements__collect-entry" type="button" @click="openCapture"><Sparkles />AI 采集元素</button>
+        <button v-if="canCreate" class="figma-elements__collect-entry" type="button" @click="openCapture"><Sparkles />AI 采集元素</button>
         <label class="figma-elements__tree-search"><Search /><input v-model="pageKeyword" placeholder="搜索页面" /></label>
         <nav>
           <button
@@ -664,8 +679,8 @@ function confidenceClass(confidence: number) {
           <select v-model="locatorFilter"><option value="">全部定位方式</option><option>id</option><option>css</option><option>xpath</option><option>text</option><option>role</option></select>
           <select v-model="verifyFilter"><option value="">全部验证状态</option><option value="pass">验证通过</option><option value="fail">验证失败</option><option value="unverified">未验证</option></select>
           <span class="figma-elements__fill" />
-          <button class="figma-elements__ghost" type="button" @click="showPendingDesign('手动添加元素')"><Plus />手动添加</button>
-          <button class="figma-elements__primary" type="button" @click="openCapture"><Sparkles />AI 采集</button>
+          <button v-if="canCreate" class="figma-elements__ghost" type="button" @click="showPendingDesign('手动添加元素')"><Plus />手动添加</button>
+          <button v-if="canCreate" class="figma-elements__primary" type="button" @click="openCapture"><Sparkles />AI 采集</button>
         </div>
         <div ref="tableFrameRef" class="figma-elements__table-frame">
           <AppFigmaTable
@@ -721,10 +736,10 @@ function confidenceClass(confidence: number) {
                 <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="openColumnSettings" />
               </template>
               <template #default="{ row }">
-                <button type="button" title="验证" aria-label="验证" @click.stop="validateRow(row)"><CircleCheck /></button>
+                <button v-if="canExecute" type="button" title="验证" aria-label="验证" @click.stop="validateRow(row)"><CircleCheck /></button>
                 <button type="button" title="查看" aria-label="查看" @click.stop="showPendingDesign('查看元素详情')"><Eye /></button>
-                <button type="button" title="编辑" aria-label="编辑" @click.stop="showPendingDesign('编辑元素')"><Pencil /></button>
-                <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="deleteRow(row)"><Trash2 /></button>
+                <button v-if="canEdit" type="button" title="编辑" aria-label="编辑" @click.stop="showPendingDesign('编辑元素')"><Pencil /></button>
+                <button v-if="canDelete" type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="deleteRow(row)"><Trash2 /></button>
               </template>
             </AppFigmaActionColumn>
           </AppFigmaTable>

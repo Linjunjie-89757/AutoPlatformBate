@@ -14,6 +14,9 @@ const props = defineProps<{
   selectedKey: string
   renderKey: string
   loading?: boolean
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -100,25 +103,29 @@ defineExpose({
         </div>
 
         <div class="api-directory-node__actions" @click.stop>
-          <el-dropdown v-if="data.type === 'workspace' || data.type === 'module' || data.type === 'request'" trigger="click" @click.stop>
+          <el-dropdown
+            v-if="(data.type === 'workspace' || data.type === 'module' || data.type === 'request') && (canCreate !== false || canEdit !== false || canDelete !== false)"
+            trigger="click"
+            @click.stop
+          >
             <button type="button" class="api-directory-node__action is-more" :title="moreMenuTitle" @click.stop>
               <span class="api-directory-node__ellipsis" aria-hidden="true">...</span>
             </button>
             <template #dropdown>
               <el-dropdown-menu>
                 <template v-if="data.type === 'workspace'">
-                  <el-dropdown-item @click="emit('createModule', null)">{{ addRootDirectoryLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canCreate !== false" @click="emit('createModule', null)">{{ addRootDirectoryLabel }}</el-dropdown-item>
                 </template>
                 <template v-if="data.type === 'module'">
-                  <el-dropdown-item @click="emit('createModule', data.moduleId)">{{ addChildDirectoryLabel }}</el-dropdown-item>
-                  <el-dropdown-item @click="emit('createRequest', data)">{{ addRequestLabel }}</el-dropdown-item>
-                  <el-dropdown-item @click="emit('renameModule', data)">{{ renameDirectoryLabel }}</el-dropdown-item>
-                  <el-dropdown-item @click="emit('deleteModule', data)">{{ deleteDirectoryLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canCreate !== false" @click="emit('createModule', data.moduleId)">{{ addChildDirectoryLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canCreate !== false" @click="emit('createRequest', data)">{{ addRequestLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canEdit !== false" @click="emit('renameModule', data)">{{ renameDirectoryLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canDelete !== false" @click="emit('deleteModule', data)">{{ deleteDirectoryLabel }}</el-dropdown-item>
                 </template>
                 <template v-else-if="data.type === 'request'">
-                  <el-dropdown-item @click="emit('renameRequest', data)">{{ renameRequestLabel }}</el-dropdown-item>
-                  <el-dropdown-item @click="emit('copyRequest', data)">{{ copyRequestLabel }}</el-dropdown-item>
-                  <el-dropdown-item divided @click="emit('deleteRequest', data)">{{ deleteRequestLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canEdit !== false" @click="emit('renameRequest', data)">{{ renameRequestLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canCreate !== false" @click="emit('copyRequest', data)">{{ copyRequestLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canDelete !== false" divided @click="emit('deleteRequest', data)">{{ deleteRequestLabel }}</el-dropdown-item>
                 </template>
               </el-dropdown-menu>
             </template>

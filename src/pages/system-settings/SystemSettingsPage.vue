@@ -38,6 +38,7 @@ import {
   type WorkspaceItem,
   type WorkspaceMemberItem,
   type WorkspaceMemberRoleItem,
+  type WorkspacePermissionModuleItem,
   type WorkspaceRoleItem,
 } from '@/entities/workspace'
 import roleDialogCloseIcon from '@/shared/assets/figma-icons/system-settings/role-dialog-close.svg'
@@ -121,6 +122,7 @@ interface PermissionModule {
   id: string
   label: string
   perms: string[]
+  permissionCodes: Record<string, string>
 }
 
 const palette = {
@@ -164,7 +166,7 @@ const statusFilter = ref('all')
 const inviteDialogVisible = ref(false)
 const editingUser = ref<SettingsUser | null>(null)
 const confirmToggleUser = ref<SettingsUser | null>(null)
-const permissionRoleId = ref('R2')
+const permissionRoleId = ref('')
 const workspaceSaved = ref(false)
 const currentWorkspace = ref<WorkspaceItem | null>(null)
 const workspaceLoading = ref(false)
@@ -179,6 +181,11 @@ const customRoles = ref<SettingsRole[]>([])
 const rolesLoading = ref(false)
 const roleDialogVisible = ref(false)
 const roleSaving = ref(false)
+const roleDeleteTarget = ref<SettingsRole | null>(null)
+const roleDeleting = ref(false)
+const permissionsLoading = ref(false)
+const permissionsSaving = ref(false)
+let permissionRequestSeq = 0
 const roleForm = reactive({
   name: '',
   description: '',
@@ -275,20 +282,12 @@ watch(activePage, (page) => {
   if (page === 'roles') void loadRoles()
 })
 
-const permissionModules: PermissionModule[] = [
-  { id: 'cases', label: '用例中心', perms: ['查看', '新建', '编辑', '删除', '导出'] },
-  { id: 'api', label: '接口自动化', perms: ['查看', '新建', '编辑', '删除', '执行', '导出'] },
-  { id: 'webui', label: 'Web UI 自动化', perms: ['查看', '新建', '编辑', '删除', '执行'] },
-  { id: 'bugs', label: '缺陷管理', perms: ['查看', '新建', '编辑', '删除', '审核'] },
-  { id: 'config', label: '配置中心', perms: ['查看', '配置'] },
-  { id: 'reports', label: '报告中心', perms: ['查看', '导出', '分享'] },
-  { id: 'tasks', label: '任务中心', perms: ['查看', '新建', '编辑', '删除', '执行'] },
-]
+const permissionModules = reactive<PermissionModule[]>([])
 
 const riskyPermissions = ['删除', '权限管理', '配置']
-const expandedModules = reactive<Record<string, boolean>>(Object.fromEntries(permissionModules.map(item => [item.id, true])))
+const expandedModules = reactive<Record<string, boolean>>({})
 
-const permissionState = ref<PermState>(makePermissionState(permissionRoleId.value))
+const permissionState = ref<PermState>(makePermissionState())
 
 const navSections: NavSection[] = [
   { label: '概览', items: [{ key: 'home', label: '设置首页', icon: LayoutDashboard }] },
@@ -305,21 +304,21 @@ const navSections: NavSection[] = [
 ]
 
 const roleColorMap: Record<string, string> = {
-  测试负责人: palette.purple,
+  项目负责人: palette.purple,
   测试工程师: palette.primary,
   开发人员: palette.success,
   只读访客: palette.textTertiary,
 }
 
 const roleBgMap: Record<string, string> = {
-  测试负责人: '#F5E8FF',
+  项目负责人: '#F5E8FF',
   测试工程师: '#E8F3FF',
   开发人员: '#E8FFEA',
   只读访客: '#F2F3F5',
 }
 
 const roleIconMap: Record<string, Component> = {
-  测试负责人: Crown,
+  项目负责人: Crown,
   测试工程师: Users,
   开发人员: Shield,
   只读访客: Eye,
@@ -337,7 +336,7 @@ const quickCards = computed(() => [
   { key: 'users' as SettingsPage, label: '用户管理', desc: '管理平台成员和访问权限', badge: `${users.value.length} 名成员`, icon: Users, color: palette.primary, bg: '#E8F3FF' },
   { key: 'roles' as SettingsPage, label: '角色管理', desc: '定义角色和分配职责', badge: `${roles.value.length} 个角色`, icon: Crown, color: palette.purple, bg: '#F5E8FF' },
   { key: 'workspace' as SettingsPage, label: '工作区配置', desc: '工作区基础信息和策略', badge: currentWorkspace.value?.workspaceName || (selectedWorkspaceCode.value === 'ALL' ? '全部工作空间' : selectedWorkspaceCode.value), icon: Building2, color: palette.success, bg: '#E8FFEA' },
-  { key: 'perms' as SettingsPage, label: '权限配置', desc: '精细化权限树管理', badge: '8 个模块', icon: Key, color: palette.warning, bg: '#FFF3E8' },
+  { key: 'perms' as SettingsPage, label: '权限配置', desc: '精细化权限树管理', badge: `${permissionModules.length} 个模块`, icon: Key, color: palette.warning, bg: '#FFF3E8' },
 ])
 
 function mapSettingsUser(user: UserItem, member?: WorkspaceMemberItem): SettingsUser {
@@ -436,6 +435,17 @@ function mapWorkspaceRole(role: WorkspaceRoleItem): SettingsRole {
   }
 }
 
+function mapPermissionModule(moduleItem: WorkspacePermissionModuleItem): PermissionModule {
+  return {
+    id: moduleItem.id,
+    label: moduleItem.label,
+    perms: moduleItem.permissions.map(permission => permission.label),
+    permissionCodes: Object.fromEntries(
+      moduleItem.permissions.map(permission => [permission.label, permission.code]),
+    ),
+  }
+}
+
 async function loadRoles() {
   const workspaceCode = selectedWorkspaceCode.value || 'ALL'
   if (workspaceCode === 'ALL') {
@@ -444,12 +454,54 @@ async function loadRoles() {
   }
   rolesLoading.value = true
   try {
-    customRoles.value = (await workspaceApi.getWorkspaceRoles(workspaceCode)).map(mapWorkspaceRole)
+    const [roleItems, permissionCatalog] = await Promise.all([
+      workspaceApi.getWorkspaceRoles(workspaceCode),
+      workspaceApi.getWorkspacePermissionCatalog(workspaceCode),
+    ])
+    customRoles.value = roleItems.map(mapWorkspaceRole)
+    permissionModules.splice(0, permissionModules.length, ...permissionCatalog.map(mapPermissionModule))
+    for (const moduleItem of permissionModules) {
+      if (!(moduleItem.id in expandedModules)) expandedModules[moduleItem.id] = true
+    }
+    const selectedRoleId = roles.value.some(role => role.id === permissionRoleId.value)
+      ? permissionRoleId.value
+      : roles.value[0]?.id || ''
+    permissionRoleId.value = selectedRoleId
+    if (selectedRoleId) {
+      await loadRolePermissions(selectedRoleId)
+    } else {
+      permissionState.value = makePermissionState()
+    }
   } catch (error) {
     customRoles.value = []
-    if (activePage.value === 'roles') ElMessage.error(getRequestErrorMessage(error))
+    permissionModules.splice(0)
+    permissionRoleId.value = ''
+    permissionState.value = makePermissionState()
+    if (['roles', 'perms'].includes(activePage.value)) ElMessage.error(getRequestErrorMessage(error))
   } finally {
     rolesLoading.value = false
+  }
+}
+
+async function loadRolePermissions(roleId: string) {
+  const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+  const role = roles.value.find(item => item.id === roleId)
+  if (workspaceCode === 'ALL' || !role?.backendId) {
+    permissionState.value = makePermissionState()
+    return
+  }
+  const requestSeq = ++permissionRequestSeq
+  permissionsLoading.value = true
+  try {
+    const result = await workspaceApi.getWorkspaceRolePermissions(workspaceCode, role.backendId)
+    if (requestSeq !== permissionRequestSeq) return
+    permissionState.value = makePermissionState(result.permissionCodes)
+  } catch (error) {
+    if (requestSeq !== permissionRequestSeq) return
+    permissionState.value = makePermissionState()
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    if (requestSeq === permissionRequestSeq) permissionsLoading.value = false
   }
 }
 
@@ -545,6 +597,7 @@ watch(selectedWorkspaceCode, () => {
   editingUser.value = null
   confirmToggleUser.value = null
   roleDialogVisible.value = false
+  roleDeleteTarget.value = null
   auditPageNo.value = 1
   window.clearTimeout(auditSearchTimer)
   void loadWorkspace()
@@ -568,12 +621,22 @@ const hasRiskyPermission = computed(() => permissionModules.some(moduleItem => m
   return riskyPermissions.includes(perm) && permissionState.value[moduleItem.id]?.[perm]
 })))
 
-function makePermissionState(roleId: string) {
-  void roleId
+function makePermissionState(permissionCodes: readonly string[] = []) {
+  const selectedCodes = new Set(permissionCodes)
   return Object.fromEntries(permissionModules.map((moduleItem) => [
     moduleItem.id,
-    Object.fromEntries(moduleItem.perms.map(perm => [perm, false])),
+    Object.fromEntries(moduleItem.perms.map(perm => [
+      perm,
+      selectedCodes.has(moduleItem.permissionCodes[perm] || ''),
+    ])),
   ])) as PermState
+}
+
+function selectedPermissionCodes() {
+  return permissionModules.flatMap(moduleItem => moduleItem.perms
+    .filter(perm => permissionState.value[moduleItem.id]?.[perm])
+    .map(perm => moduleItem.permissionCodes[perm])
+    .filter((code): code is string => Boolean(code)))
 }
 
 function getAuditCategoryLabel(category: OperationAuditCategory) {
@@ -920,26 +983,60 @@ async function submitRoleDialog() {
   }
 }
 
+function openRoleDeleteDialog(role: SettingsRole) {
+  if (!role.backendId || roleDeleting.value) return
+  roleDeleteTarget.value = role
+}
+
+function closeRoleDeleteDialog() {
+  if (roleDeleting.value) return
+  roleDeleteTarget.value = null
+}
+
+async function confirmDeleteRole() {
+  const workspaceCode = currentConcreteWorkspaceCode()
+  const role = roleDeleteTarget.value
+  if (!workspaceCode || !role?.backendId || roleDeleting.value) return
+
+  roleDeleting.value = true
+  try {
+    await workspaceApi.deleteWorkspaceRole(workspaceCode, role.backendId)
+    roleDeleteTarget.value = null
+    await Promise.all([loadRoles(), loadUsers()])
+    ElMessage.success('角色删除成功')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    roleDeleting.value = false
+  }
+}
+
 function editRole() {
   ElMessage.warning('当前后台角色为系统固定角色，尚未提供角色编辑接口')
 }
 
-function applyPermissionRole(roleId: string) {
+async function applyPermissionRole(roleId: string) {
   permissionRoleId.value = roleId
-  permissionState.value = makePermissionState(roleId)
+  permissionState.value = makePermissionState()
+  await loadRolePermissions(roleId)
 }
 
 function gotoPermission(role: SettingsRole) {
-  applyPermissionRole(role.id)
+  void applyPermissionRole(role.id)
   activePage.value = 'perms'
 }
 
 function clearPermissions() {
-  notifyPermissionBackendGap()
+  if (permissionsLoading.value || permissionsSaving.value) return
+  permissionState.value = makePermissionState()
 }
 
 function selectAllPermissions() {
-  notifyPermissionBackendGap()
+  if (permissionsLoading.value || permissionsSaving.value) return
+  permissionState.value = Object.fromEntries(permissionModules.map(moduleItem => [
+    moduleItem.id,
+    Object.fromEntries(moduleItem.perms.map(perm => [perm, true])),
+  ])) as PermState
 }
 
 function moduleSelectedCount(moduleItem: PermissionModule) {
@@ -956,14 +1053,18 @@ function isModulePartiallySelected(moduleItem: PermissionModule) {
 }
 
 function toggleModule(moduleItem: PermissionModule) {
-  void moduleItem
-  notifyPermissionBackendGap()
+  if (permissionsLoading.value || permissionsSaving.value) return
+  const shouldSelect = !isModuleFullySelected(moduleItem)
+  permissionState.value[moduleItem.id] = Object.fromEntries(
+    moduleItem.perms.map(perm => [perm, shouldSelect]),
+  )
 }
 
 function togglePermission(moduleId: string, perm: string) {
-  void moduleId
-  void perm
-  notifyPermissionBackendGap()
+  if (permissionsLoading.value || permissionsSaving.value) return
+  const moduleState = permissionState.value[moduleId]
+  if (!moduleState || !(perm in moduleState)) return
+  moduleState[perm] = !moduleState[perm]
 }
 
 async function saveWorkspace() {
@@ -1000,12 +1101,29 @@ async function saveWorkspace() {
   }
 }
 
-function savePermissions() {
-  notifyPermissionBackendGap()
-}
-
-function notifyPermissionBackendGap() {
-  ElMessage.warning('当前后台没有细粒度角色权限模型和保存接口，无法修改或保存权限配置')
+async function savePermissions() {
+  if (permissionsLoading.value || permissionsSaving.value) return
+  const workspaceCode = currentConcreteWorkspaceCode()
+  const role = selectedRole.value
+  if (!workspaceCode || !role?.backendId) {
+    ElMessage.warning('请选择需要授权的业务角色')
+    return
+  }
+  permissionsSaving.value = true
+  try {
+    const result = await workspaceApi.updateWorkspaceRolePermissions(workspaceCode, role.backendId, {
+      permissionCodes: selectedPermissionCodes(),
+    })
+    permissionState.value = makePermissionState(result.permissionCodes)
+    customRoles.value = customRoles.value.map(item => item.id === role.id
+      ? { ...item, permCount: result.permissionCodes.length, updatedAt: formatRoleUpdatedAt(new Date().toISOString()) }
+      : item)
+    ElMessage.success('角色权限保存成功')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    permissionsSaving.value = false
+  }
 }
 </script>
 
@@ -1052,7 +1170,7 @@ function notifyPermissionBackendGap() {
         <div class="settings-current-user">
           <span class="settings-avatar">张</span>
           <strong>张程远</strong>
-          <em>测试负责人</em>
+          <em>项目负责人</em>
           <small>· 拥有工作区管理权限</small>
         </div>
 
@@ -1341,13 +1459,12 @@ function notifyPermissionBackendGap() {
               </span>
               <span>
                 <strong>{{ role.name }}</strong>
-                <em v-if="role.isSystem">系统内置</em>
                 <small>{{ role.desc }}</small>
               </span>
               <span class="settings-row-actions">
                 <button type="button" title="授权配置" @click="gotoPermission(role)"><Key /></button>
                 <button type="button" title="编辑" @click="editRole"><Edit2 /></button>
-                <button v-if="!role.isSystem" type="button" title="删除"><Trash2 /></button>
+                <button type="button" title="删除" @click="openRoleDeleteDialog(role)"><Trash2 /></button>
               </span>
             </header>
             <footer>
@@ -1375,14 +1492,14 @@ function notifyPermissionBackendGap() {
             <p>为角色配置模块级和操作级权限</p>
           </span>
           <span class="settings-permission-actions">
-            <select v-model="permissionRoleId" @change="applyPermissionRole(permissionRoleId)">
+            <select v-model="permissionRoleId" :disabled="permissionsLoading || permissionsSaving" @change="applyPermissionRole(permissionRoleId)">
               <option v-for="role in roles" :key="role.id" :value="role.id">{{ role.name }}</option>
             </select>
-            <button type="button" @click="clearPermissions">清空</button>
-            <button type="button" @click="selectAllPermissions">全选</button>
-            <button class="settings-primary-button" type="button" @click="savePermissions">
+            <button type="button" :disabled="permissionsLoading || permissionsSaving" @click="clearPermissions">清空</button>
+            <button type="button" :disabled="permissionsLoading || permissionsSaving" @click="selectAllPermissions">全选</button>
+            <button class="settings-primary-button" type="button" :disabled="permissionsLoading || permissionsSaving || !selectedRole" @click="savePermissions">
               <Save />
-              保存授权
+              {{ permissionsSaving ? '保存中...' : '保存授权' }}
             </button>
           </span>
         </header>
@@ -1390,7 +1507,7 @@ function notifyPermissionBackendGap() {
         <div class="settings-permission-layout">
           <section class="settings-permission-tree-card">
             <header>
-              <strong>权限树 — {{ selectedRole.name }}</strong>
+              <strong>权限树 — {{ selectedRole?.name || '未选择角色' }}</strong>
               <em>已选 {{ selectedPermissionCount }} 项</em>
             </header>
             <article v-for="moduleItem in permissionModules" :key="moduleItem.id" class="settings-permission-module">
@@ -1575,6 +1692,27 @@ function notifyPermissionBackendGap() {
           </button>
         </footer>
       </form>
+    </section>
+
+    <div v-if="roleDeleteTarget" class="settings-modal-backdrop" @click="closeRoleDeleteDialog" />
+    <section v-if="roleDeleteTarget" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-role-delete-title">
+      <div class="settings-delete-modal settings-toggle-confirm-modal settings-role-delete-modal">
+        <span class="settings-delete-modal__icon">
+          <Trash2 />
+        </span>
+        <span>
+          <strong id="settings-role-delete-title">删除角色</strong>
+          <small>
+            「{{ roleDeleteTarget.name }}」下有 {{ roleDeleteTarget.members ?? 0 }} 名成员，删除后成员将失去该角色的所有权限。此操作不可撤销。
+          </small>
+        </span>
+        <footer>
+          <button type="button" :disabled="roleDeleting" @click="closeRoleDeleteDialog">取消</button>
+          <button type="button" :disabled="roleDeleting" @click="confirmDeleteRole">
+            {{ roleDeleting ? '删除中...' : '确认删除' }}
+          </button>
+        </footer>
+      </div>
     </section>
 
     <AppTableColumnSettingsDrawer
@@ -3522,6 +3660,24 @@ function notifyPermissionBackendGap() {
 }
 
 .settings-toggle-confirm-modal footer button.settings-confirm-toggle-button {
+  width: 80px;
+  min-width: 80px;
+  height: 32px;
+  padding: 0;
+}
+
+.settings-role-delete-modal {
+  width: 400px;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
+}
+
+.settings-role-delete-modal > span:not(.settings-delete-modal__icon) {
+  width: auto;
+}
+
+.settings-role-delete-modal footer button:last-child {
   width: 80px;
   min-width: 80px;
   height: 32px;

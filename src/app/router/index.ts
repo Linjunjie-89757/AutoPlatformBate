@@ -5,6 +5,7 @@ import {
   canManageWorkspace,
   clearCurrentUser,
   firstManageableWorkspaceCode,
+  hasWorkspacePermission,
   loadCurrentUser,
   sessionState,
 } from '@/entities/session'
@@ -108,7 +109,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '配置中心',
           description: '后续保持公共配置边界，迁移环境、参数、数据库连接配置。',
-          requiresWorkspaceAdmin: true,
+          permissionCode: 'config.view',
         },
       },
       {
@@ -130,6 +131,7 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: '用例中心',
               description: '按旧项目方向重建用例管理页。',
+              permissionCode: 'cases.view',
             },
           },
           {
@@ -139,6 +141,7 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: '用例执行',
               description: '按 Figma 执行工作台接入用例执行。',
+              permissionCode: 'cases.execute',
             },
           },
           {
@@ -148,6 +151,7 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: '用例中心',
               description: 'AI 用例生成页面将按旧项目方向后续补齐。',
+              permissionCode: 'cases.create',
             },
           },
           {
@@ -203,6 +207,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '缺陷管理',
           description: '按页面式编辑体验创建缺陷基础信息。',
+          permissionCode: 'bugs.create',
         },
       },
       {
@@ -212,6 +217,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '缺陷管理',
           description: '按页面式编辑节奏调整缺陷基础信息。',
+          permissionCode: 'bugs.edit',
         },
       },
       {
@@ -467,5 +473,31 @@ router.beforeEach(async (to) => {
     }
   }
 
+  const permissionCode = typeof to.meta.permissionCode === 'string'
+    ? to.meta.permissionCode
+    : requiredPermissionForPath(to.path)
+  if (permissionCode) {
+    const requestedWorkspace = Array.isArray(to.query.workspace) ? to.query.workspace[0] : to.query.workspace
+    const workspaceCode = requestedWorkspace || sessionState.currentUser.value?.workspaceCodes?.[0]
+    if (!hasWorkspacePermission(sessionState.currentUser.value, workspaceCode, permissionCode)) {
+      return {
+        path: '/',
+        query: workspaceCode ? { workspace: workspaceCode } : undefined,
+        replace: true,
+      }
+    }
+  }
+
   return true
 })
+
+function requiredPermissionForPath(path: string) {
+  if (path.startsWith('/config-center')) return 'config.view'
+  if (path.startsWith('/cases')) return 'cases.view'
+  if (path.startsWith('/bugs')) return 'bugs.view'
+  if (path.startsWith('/automation/api')) return 'api.view'
+  if (path.startsWith('/automation/web')) return 'webui.view'
+  if (path.startsWith('/tasks')) return 'tasks.view'
+  if (path.startsWith('/reports')) return 'reports.view'
+  return ''
+}

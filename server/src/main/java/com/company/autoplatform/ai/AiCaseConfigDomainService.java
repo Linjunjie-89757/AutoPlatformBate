@@ -18,7 +18,8 @@ public class AiCaseConfigDomainService {
     private static final long PERSONAL_SCOPE_WORKSPACE_ID = 0L;
     private static final String PERSONAL_SCOPE_WORKSPACE_CODE = "PERSONAL";
     private static final String PERSONAL_SCOPE_WORKSPACE_NAME = "我的配置";
-    private static final int INITIAL_SMART_MAX_CASES = 50;
+    private static final int DEFAULT_MAX_CASES = 50;
+    private static final int SYSTEM_MAX_CASES = 200;
     private static final double DEFAULT_GENERATOR_TOP_P = 0.9;
     private static final double DEFAULT_REVIEWER_TOP_P = 0.7;
 
@@ -294,22 +295,16 @@ public class AiCaseConfigDomainService {
     }
 
     AiCapabilityOverride readCapabilityOverride(AiCaseConfigEntity entity) {
-        AiCapabilityOverride override = AiCaseJsonSupport.read(entity.getCapabilityOverrideJson(), AiCapabilityOverride.class, null);
-        if (override != null) {
-            return override;
-        }
-        if (entity.getSupportsImageInput() == null) {
-            return null;
-        }
-        return new AiCapabilityOverride(null, null, null, entity.getSupportsImageInput() == 1, null, null);
+        return AiCaseJsonSupport.read(entity.getCapabilityOverrideJson(), AiCapabilityOverride.class, null);
     }
 
     boolean supportsImageInputForGeneration(ResolvedRoleConfig resolved) {
         AiCapabilityValue effectiveImage = resolved.effectiveCapabilities().imageInput();
-        if (Boolean.FALSE.equals(effectiveImage.supported())) {
-            return false;
+        if (!Boolean.FALSE.equals(effectiveImage.supported())) {
+            return true;
         }
-        return Boolean.TRUE.equals(resolved.detectedCapabilities().imageInput().supported());
+        return AiModelCapabilities.SOURCE_INFERRED.equals(effectiveImage.source())
+                || AiModelCapabilities.SOURCE_UNKNOWN.equals(effectiveImage.source());
     }
 
     public ResolvedRoleConfig requireResolvedRoleConfig(String roleType) {
@@ -386,7 +381,7 @@ public class AiCaseConfigDomainService {
                 ? (existing == null ? defaultTopPForRole(roleType) : normalizeTopP(roleType, existing.getTopP()))
                 : normalizeTopP(roleType, request.topP());
         Integer maxCases = request.maxCases() == null
-                ? (existing == null ? INITIAL_SMART_MAX_CASES : existing.getMaxCases())
+                ? (existing == null ? DEFAULT_MAX_CASES : existing.getMaxCases())
                 : request.maxCases();
         return new AiProviderRequestProfile(
                 protocolType,
@@ -420,12 +415,12 @@ public class AiCaseConfigDomainService {
 
     Integer normalizeRoleMaxCases(Integer maxCases) {
         if (maxCases == null) {
-            return INITIAL_SMART_MAX_CASES;
+            return DEFAULT_MAX_CASES;
         }
-        if (maxCases < 1 || maxCases > 100) {
-            throw new BadRequestException("Max cases must be between 1 and 100");
+        if (maxCases < 1 || maxCases > SYSTEM_MAX_CASES) {
+            throw new BadRequestException("Max cases must be between 1 and 200");
         }
-        return Math.min(maxCases, INITIAL_SMART_MAX_CASES);
+        return maxCases;
     }
 
     Double normalizeTopP(String roleType, Double topP) {

@@ -307,13 +307,72 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
         long roleId = data(createResult).path("id").asLong();
         mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles", WORKSPACE_CODE))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[?(@.id == %s)].name".formatted(roleId), hasItem(roleName)));
+                .andExpect(jsonPath("$.data[?(@.id == %s)].name".formatted(roleId), hasItem(roleName)))
+                .andExpect(jsonPath("$.data[?(@.roleCode == 'SYSTEM_TEST_LEAD')].name", hasItem("项目负责人")))
+                .andExpect(jsonPath("$.data[?(@.roleCode == 'SYSTEM_TEST_LEAD')].permissionCount", hasItem(34)))
+                .andExpect(jsonPath("$.data[?(@.roleCode == 'SYSTEM_TEST_ENGINEER')].permissionCount", hasItem(22)))
+                .andExpect(jsonPath("$.data[?(@.roleCode == 'SYSTEM_DEVELOPER')].permissionCount", hasItem(8)))
+                .andExpect(jsonPath("$.data[?(@.roleCode == 'SYSTEM_READ_ONLY')].permissionCount", hasItem(4)));
 
         mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", WORKSPACE_CODE)
                         .contentType("application/json")
                         .content(roleRequest(roleName, "重复角色")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void deleteDefaultWorkspaceRoleRemovesMemberBindingsAndDoesNotRecreateRole() throws Exception {
+        String code = "ws_role_delete_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "role delete", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        MvcResult rolesResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles", code))
+                .andExpect(status().isOk())
+                .andReturn();
+        long roleId = 0L;
+        for (JsonNode role : data(rolesResult)) {
+            if (WorkspaceRoleDomainService.SYSTEM_TEST_ENGINEER.equals(role.path("roleCode").asText())) {
+                roleId = role.path("id").asLong();
+                break;
+            }
+        }
+        assertThat(roleId).isPositive();
+
+        MvcResult memberResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
+                        .contentType("application/json")
+                        .content(memberRequestWithRoles(12L, "MEMBER", roleId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.roles[0].id").value(roleId))
+                .andReturn();
+
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/roles/{roleId}", code, roleId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].roleCode", not(hasItem(WorkspaceRoleDomainService.SYSTEM_TEST_ENGINEER))));
+
+        MvcResult membersResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", code))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode deletedRoleMember = null;
+        for (JsonNode member : data(membersResult)) {
+            if (member.path("userId").asLong() == 12L) {
+                deletedRoleMember = member;
+                break;
+            }
+        }
+        assertThat(deletedRoleMember).isNotNull();
+        assertThat(deletedRoleMember.path("roles").isEmpty()).isTrue();
+
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, data(memberResult).path("id").asLong()))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -418,6 +477,124 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
 
         setPlatformAdminUser();
         mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberId))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void workspaceRolePermissionsArePersistedAndEnforced() throws Exception {
+        String code = "ws_permission_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "permission", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        MvcResult roleResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", code)
+                        .contentType("application/json")
+                        .content(roleRequest("只读用例角色-" + System.nanoTime(), "仅允许查看用例")))
+                .andExpect(status().isOk())
+                .andReturn();
+        long roleId = data(roleResult).path("id").asLong();
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/permissions/catalog", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.id == 'cases')].permissions[*].code", hasItem("cases.view")))
+                .andExpect(jsonPath("$.data[?(@.id == 'config')].permissions[*].code", hasItem("config.manage")));
+
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/roles/{roleId}/permissions", code, roleId)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "permissionCodes": ["cases.view"]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.roleId").value(roleId))
+                .andExpect(jsonPath("$.data.permissionCodes[0]").value("cases.view"));
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles/{roleId}/permissions", code, roleId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.permissionCodes[0]").value("cases.view"));
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.id == %s)].permissionCount".formatted(roleId), hasItem(1)));
+
+        MvcResult memberResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
+                        .contentType("application/json")
+                        .content(memberRequestWithRoles(12L, "MEMBER", roleId)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        setMemberUser(12L, "chennan", "Chen Nan");
+        Authentication memberAuthentication = authenticationFor(
+                12L,
+                "chennan",
+                "Chen Nan",
+                PlatformRole.MEMBER
+        );
+        mockMvc.perform(get("/api/auth/me")
+                        .with(authentication(memberAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].permissionCodes[*]".formatted(code), hasItem("cases.view")));
+
+        mockMvc.perform(get("/api/cases")
+                        .with(authentication(memberAuthentication))
+                        .header(WorkspaceScope.HEADER, code))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/cases")
+                        .with(authentication(memberAuthentication))
+                        .header(WorkspaceScope.HEADER, code)
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(get("/api/automation/api/definitions")
+                        .with(authentication(memberAuthentication))
+                        .header(WorkspaceScope.HEADER, code))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+
+        setPlatformAdminUser();
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/roles/{roleId}/permissions", code, roleId)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "permissionCodes": ["cases.view", "config.manage"]
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        MvcResult envResult = mockMvc.perform(post("/api/settings/envs")
+                        .with(authentication(memberAuthentication))
+                        .header(WorkspaceScope.HEADER, code)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "envType": "DEV",
+                                  "envName": "角色配置权限环境",
+                                  "baseUrl": "https://permission.example.com",
+                                  "configJson": "{}"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/roles/{roleId}/permissions", code, roleId)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "permissionCodes": ["unknown.permission"]
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+
+        setPlatformAdminUser();
+        settingsService.deleteEnv(data(envResult).path("id").asLong(), code);
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, data(memberResult).path("id").asLong()))
                 .andExpect(status().isOk());
         mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
                 .andExpect(status().isOk());

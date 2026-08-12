@@ -156,7 +156,7 @@ function appendVariable(variable: string) {
 }
 
 function updateMaxCases(value: number) {
-  emit('update:max-cases', Math.min(50, Math.max(5, value)))
+  emit('update:max-cases', Math.min(200, Math.max(5, value)))
 }
 </script>
 
@@ -358,7 +358,7 @@ function updateMaxCases(value: number) {
                   :value="maxCases"
                   type="range"
                   min="5"
-                  max="50"
+                  max="200"
                   @input="updateMaxCases(Number(($event.target as HTMLInputElement).value))"
                 >
                 <div class="figma-ai-config__stepper">
@@ -366,7 +366,7 @@ function updateMaxCases(value: number) {
                   <strong>{{ maxCases }}</strong>
                   <button type="button" aria-label="增加生成数量" @click="updateMaxCases(maxCases + 1)">+</button>
                 </div>
-                <span>条（5 - 50）</span>
+                <span>条（5 - 200）</span>
               </div>
             </div>
 

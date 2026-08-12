@@ -33,15 +33,18 @@ public class CaseController {
     private final CaseService caseService;
     private final CaseReviewDomainService caseReviewDomainService;
     private final CaseImportDomainService caseImportDomainService;
+    private final CaseExportDomainService caseExportDomainService;
 
     public CaseController(
             CaseService caseService,
             CaseReviewDomainService caseReviewDomainService,
-            CaseImportDomainService caseImportDomainService
+            CaseImportDomainService caseImportDomainService,
+            CaseExportDomainService caseExportDomainService
     ) {
         this.caseService = caseService;
         this.caseReviewDomainService = caseReviewDomainService;
         this.caseImportDomainService = caseImportDomainService;
+        this.caseExportDomainService = caseExportDomainService;
     }
 
     @GetMapping
@@ -106,6 +109,41 @@ public class CaseController {
                 .contentLength(template.content().length)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
                         .filename(template.fileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .body(resource);
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<Resource> exportCases(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(value = "scope", defaultValue = "FILTERED") String scope,
+            @RequestParam(value = "caseIds", required = false) String caseIds,
+            @RequestParam(value = "directoryId", required = false) Long directoryId,
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "priority", required = false) String priority,
+            @RequestParam(value = "reviewStatus", required = false) String reviewStatus,
+            @RequestParam(value = "executionStatus", required = false) String executionStatus,
+            @RequestParam(value = "executorName", required = false) String executorName,
+            @RequestParam(value = "createdByName", required = false) String createdByName
+    ) {
+        CaseExportFile export = caseExportDomainService.exportCases(
+                workspaceCode,
+                scope,
+                caseIds,
+                directoryId,
+                keyword,
+                priority,
+                reviewStatus,
+                executionStatus,
+                executorName,
+                createdByName);
+        ByteArrayResource resource = new ByteArrayResource(export.content());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(export.contentType()))
+                .contentLength(export.content().length)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(export.fileName(), StandardCharsets.UTF_8)
                         .build()
                         .toString())
                 .body(resource);

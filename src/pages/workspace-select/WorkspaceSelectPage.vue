@@ -23,7 +23,7 @@ const FIGMA_WORKSPACE_FALLBACKS = [
     description: '电商平台 · 订单/风控全链路自动化',
     memberCount: 8,
     lastAccessTime: '今天 09:31',
-    roleName: '测试负责人',
+    roleName: '项目负责人',
   },
   {
     description: '风控中台 · 规则引擎和策略测试',
@@ -92,7 +92,7 @@ function getWorkspaceRole(item: WorkspaceSelectItem, index: number) {
 
   const role = String(item.role || item.roleCode || '').toUpperCase()
   if (['OWNER', 'ADMIN', 'MANAGER'].includes(role)) {
-    return '测试负责人'
+    return '项目负责人'
   }
   if (['VIEWER', 'READONLY', 'GUEST'].includes(role)) {
     return '只读访客'

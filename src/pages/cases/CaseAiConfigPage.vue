@@ -48,7 +48,7 @@ interface RoleFormState {
   temperature: number
   topP: number
   maxCases: number
-  supportsImageInput: boolean
+  supportsImageInput: boolean | null
 }
 
 const roleCards: RoleCardMeta[] = [
@@ -116,7 +116,7 @@ function createDefaultForm(roleType: RoleType): RoleFormState {
     temperature: roleType === 'CASE_GENERATOR' ? 0.7 : 0.5,
     topP: roleType === 'CASE_GENERATOR' ? 0.9 : 0.7,
     maxCases: 50,
-    supportsImageInput: false,
+    supportsImageInput: null,
   }
 }
 
@@ -143,7 +143,7 @@ function applyConfig(roleType: RoleType, config: AiCaseConfigItem | null) {
     temperature: config.temperature ?? (roleType === 'CASE_GENERATOR' ? 0.7 : 0.5),
     topP: config.topP ?? (roleType === 'CASE_GENERATOR' ? 0.9 : 0.7),
     maxCases: config.maxCases ?? 50,
-    supportsImageInput: config.supportsImageInput,
+    supportsImageInput: config.capabilityOverride?.imageInput ?? null,
   })
 }
 
@@ -308,7 +308,9 @@ function buildSavePayload(roleType: RoleType): SaveAiCaseConfigPayload {
     temperature: form.temperature,
     topP: form.topP,
     maxCases: form.maxCases,
-    supportsImageInput: form.supportsImageInput,
+    capabilityOverride: {
+      imageInput: form.supportsImageInput,
+    },
     status: 1,
     protocolType: provider?.protocolType ?? null,
     baseUrl: provider?.baseUrl ?? null,
@@ -322,8 +324,7 @@ function selectModelOption(roleType: RoleType, option: ModelPoolOption) {
   const providerConnectionId = Number(providerIdText)
   forms[roleType].providerConnectionId = Number.isFinite(providerConnectionId) ? providerConnectionId : null
   forms[roleType].model = model ?? ''
-  const provider = getSelectedProvider(roleType)
-  forms[roleType].supportsImageInput = provider?.providerType === 'google' || provider?.providerType === 'openai'
+  forms[roleType].supportsImageInput = null
 }
 
 function handleFigmaModelSelect(payload: { role: RoleType, key: string }) {

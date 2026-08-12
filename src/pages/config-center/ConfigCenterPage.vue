@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { aiProviderApi } from '@/entities/ai-provider'
 import { configApi, type ConfigCenterTab } from '@/entities/config'
 import { localRunnerApi } from '@/entities/local-runner'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { ConfigAiPanel } from '@/widgets/config-ai-panel'
@@ -70,6 +71,7 @@ const configTabKeys = new Set<ConfigCenterView>(configTabs.map(item => item.key)
 
 const route = useRoute()
 const router = useRouter()
+const { currentUser } = useSession()
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
 const workspaces = ref<WorkspaceItem[]>([])
 const workspaceReady = ref(false)
@@ -89,6 +91,7 @@ const workspaceCode = computed({
   get: () => selectedWorkspaceCode.value,
   set: (value: string) => setSelectedWorkspaceCode(value),
 })
+const canManageConfig = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'config.manage'))
 const pageErrorMessage = computed(() => (
   workspaceErrorMessage.value
   || (activeTab.value === 'overview' ? overviewErrorMessage.value : '')
@@ -395,15 +398,21 @@ watch(
         </section>
       </section>
 
-      <section v-else class="config-center-page__panel">
-        <ConfigDbPanel v-if="activeTab === 'dbConnection'" :workspace-code="workspaceCode" />
-        <ConfigEnvironmentFigmaWorkspace v-else-if="activeTab === 'env'" :workspace-code="workspaceCode" />
-        <ConfigVariableFigmaWorkspace v-else-if="activeTab === 'param'" :workspace-code="workspaceCode" />
-        <ConfigMockPanel v-else-if="activeTab === 'mock'" :workspace-code="workspaceCode" />
-        <ConfigNotificationPanel v-else-if="activeTab === 'notification'" :workspace-code="workspaceCode" />
-        <ConfigRunnerPanel v-else-if="activeTab === 'runner'" />
-        <ConfigAiPanel v-else-if="activeTab === 'ai'" :workspace-code="workspaceCode" />
-      </section>
+      <template v-else>
+        <div v-if="!canManageConfig" class="config-center-page__readonly-tip">
+          当前角色仅可查看配置；新增、编辑、启停、测试和删除操作需要“配置管理”权限。
+        </div>
+
+        <fieldset class="config-center-page__panel" :disabled="!canManageConfig">
+          <ConfigDbPanel v-if="activeTab === 'dbConnection'" :workspace-code="workspaceCode" />
+          <ConfigEnvironmentFigmaWorkspace v-else-if="activeTab === 'env'" :workspace-code="workspaceCode" />
+          <ConfigVariableFigmaWorkspace v-else-if="activeTab === 'param'" :workspace-code="workspaceCode" />
+          <ConfigMockPanel v-else-if="activeTab === 'mock'" :workspace-code="workspaceCode" />
+          <ConfigNotificationPanel v-else-if="activeTab === 'notification'" :workspace-code="workspaceCode" />
+          <ConfigRunnerPanel v-else-if="activeTab === 'runner'" />
+          <ConfigAiPanel v-else-if="activeTab === 'ai'" :workspace-code="workspaceCode" />
+        </fieldset>
+      </template>
     </main>
   </div>
 </template>
@@ -460,6 +469,20 @@ watch(
 
 .config-center-page__panel {
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.config-center-page__readonly-tip {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid #bedaff;
+  border-radius: var(--app-radius-md);
+  background: #f2f7ff;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .config-center-page__workspace-error {

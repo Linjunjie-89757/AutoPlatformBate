@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Local review and generated output
+output/
+
 # Playwright CLI artifacts
 .playwright-cli/
 

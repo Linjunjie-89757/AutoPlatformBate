@@ -25,6 +25,11 @@ const props = defineProps<{
   workspaceCode: string
   workspaceReady?: boolean
   workspaces?: WorkspaceItem[]
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
+  canExport?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -143,6 +148,11 @@ onMounted(() => {
       :variable-sets="variableSets"
       :run-options-loading="runOptionsLoading"
       :run-options-error-message="runOptionsErrorMessage"
+      :can-create="props.canCreate"
+      :can-edit="props.canEdit"
+      :can-delete="props.canDelete"
+      :can-execute="props.canExecute"
+      :can-export="props.canExport"
       @loaded="payload => emit('loaded', payload)"
     />
 

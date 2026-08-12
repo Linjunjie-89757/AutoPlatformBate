@@ -22,6 +22,9 @@ const props = defineProps<{
   currentWorkspaceCode?: string
   expandedNodeIds?: string[]
   renderKey?: number
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -62,8 +65,8 @@ function mapCaseNodeToDirectoryNode(node: CaseTreeNode): CaseDirectoryTreeNode {
     id: node.id,
     label: node.label,
     type: node.type,
-    canCreate: node.type !== 'root',
-    canMore: node.type === 'module',
+    canCreate: props.canCreate !== false && node.type !== 'root',
+    canMore: node.type === 'module' && (props.canEdit !== false || props.canDelete !== false),
     children: node.children.map(mapCaseNodeToDirectoryNode),
     meta: node,
   }
@@ -100,7 +103,7 @@ function findDirectoryNode(nodes: CaseDirectoryTreeNode[], nodeId: string): Case
 }
 
 function handlePrimaryCreate() {
-  if (primaryCreateTarget.value) {
+  if (props.canCreate !== false && primaryCreateTarget.value) {
     emitCreateChild(primaryCreateTarget.value)
   }
 }
@@ -119,6 +122,7 @@ function handleNodeSelect(node: AppDirectoryTreeNode) {
 }
 
 function emitCreateChild(node: AppDirectoryTreeNode) {
+  if (props.canCreate === false) return
   const data = getCaseNode(node)
   emit('createChild', {
     nodeId: data.id,
@@ -136,6 +140,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
   }
 
   if (String(payload.command) === 'rename') {
+    if (props.canEdit === false) return
     emit('rename', {
       nodeId: data.id,
       workspaceCode: data.workspaceCode,
@@ -146,6 +151,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
   }
 
   if (String(payload.command) === 'move') {
+    if (props.canEdit === false) return
     emit('move', {
       nodeId: data.id,
       workspaceCode: data.workspaceCode,
@@ -155,6 +161,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
     return
   }
 
+  if (props.canDelete === false) return
   emit('delete', {
     nodeId: data.id,
     workspaceCode: data.workspaceCode,
@@ -185,6 +192,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
   >
     <template #toolbar>
       <button
+        v-if="canCreate !== false"
         type="button"
         class="case-directory-tree__create-button"
         :disabled="!primaryCreateTarget"
@@ -196,10 +204,10 @@ function handleModuleCommand(payload: { command: string | number | object; node:
     </template>
 
     <template #dropdown="{ node }">
-      <el-dropdown-menu v-if="(node.meta as CaseTreeNode).type === 'module'">
-        <el-dropdown-item command="rename">重命名</el-dropdown-item>
-        <el-dropdown-item command="move">移动</el-dropdown-item>
-        <el-dropdown-item command="delete" class="case-directory-tree__danger-action">
+      <el-dropdown-menu v-if="(node.meta as CaseTreeNode).type === 'module' && (canEdit !== false || canDelete !== false)">
+        <el-dropdown-item v-if="canEdit !== false" command="rename">重命名</el-dropdown-item>
+        <el-dropdown-item v-if="canEdit !== false" command="move">移动</el-dropdown-item>
+        <el-dropdown-item v-if="canDelete !== false" command="delete" class="case-directory-tree__danger-action">
           删除
         </el-dropdown-item>
       </el-dropdown-menu>

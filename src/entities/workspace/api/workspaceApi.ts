@@ -4,10 +4,13 @@ import type {
   CreateWorkspaceMemberPayload,
   CreateWorkspaceRolePayload,
   SaveWorkspacePayload,
+  UpdateWorkspaceRolePermissionsPayload,
   UpdateWorkspaceMemberPayload,
   WorkspaceItem,
   WorkspaceMemberItem,
   WorkspaceMemberCandidateItem,
+  WorkspacePermissionModuleItem,
+  WorkspaceRolePermissionItem,
   WorkspaceRoleItem,
 } from '../model/types'
 
@@ -202,6 +205,57 @@ export const workspaceApi = {
       throw new Error(response.message || '角色创建失败')
     }
 
+    return response.data
+  },
+
+  async deleteWorkspaceRole(workspaceCode: string, roleId: number) {
+    const response = await httpDelete<ApiResponse<null>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/roles/${roleId}`,
+      { headers: workspaceHeaders('ALL') },
+    )
+
+    if (response.success === false) {
+      throw new Error(response.message || '角色删除失败')
+    }
+
+    return response.data
+  },
+
+  async getWorkspacePermissionCatalog(workspaceCode: string) {
+    const response = await httpGet<ApiResponse<WorkspacePermissionModuleItem[]>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/permissions/catalog`,
+      { headers: workspaceHeaders('ALL') },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '权限目录加载失败')
+    }
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  async getWorkspaceRolePermissions(workspaceCode: string, roleId: number) {
+    const response = await httpGet<ApiResponse<WorkspaceRolePermissionItem>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/roles/${roleId}/permissions`,
+      { headers: workspaceHeaders('ALL') },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '角色权限加载失败')
+    }
+    return response.data
+  },
+
+  async updateWorkspaceRolePermissions(
+    workspaceCode: string,
+    roleId: number,
+    payload: UpdateWorkspaceRolePermissionsPayload,
+  ) {
+    const response = await httpPut<ApiResponse<WorkspaceRolePermissionItem>, UpdateWorkspaceRolePermissionsPayload>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/roles/${roleId}/permissions`,
+      payload,
+      { headers: workspaceHeaders('ALL') },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '角色权限保存失败')
+    }
     return response.data
   },
 }

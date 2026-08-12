@@ -63,6 +63,10 @@ const props = withDefaults(
     filter: CaseClientFilter
     directories?: CaseDirectoryWorkspace[]
     showToolbar?: boolean
+    canCreate?: boolean
+    canEdit?: boolean
+    canDelete?: boolean
+    canExecute?: boolean
   }>(),
   {
     workspaceCode: 'ALL',
@@ -70,6 +74,10 @@ const props = withDefaults(
     selectedNodeId: null,
     directories: () => [],
     showToolbar: true,
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+    canExecute: true,
   },
 )
 
@@ -390,6 +398,7 @@ async function loadCases() {
 }
 
 function openCreateDialog() {
+  if (!props.canCreate) return
   dialogMode.value = 'create'
   editingCase.value = null
   editingCaseDetail.value = null
@@ -411,6 +420,7 @@ function openDetailById(caseId: number) {
 }
 
 async function openEditDialog(item: CaseSummaryItem) {
+  if (!props.canEdit) return
   dialogMode.value = 'edit'
   editingCase.value = item
   editingCaseDetail.value = null
@@ -594,6 +604,7 @@ function isMessageBoxCancel(error: unknown) {
 }
 
 async function handleDeleteCase(item: CaseSummaryItem) {
+  if (!props.canDelete) return
   if (deletingCaseId.value !== null || runningCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
     return
   }
@@ -613,6 +624,7 @@ async function handleDeleteCase(item: CaseSummaryItem) {
 }
 
 async function handleBatchDeleteCases() {
+  if (!props.canDelete) return
   if (!selectedCaseIds.value.length || deletingCaseId.value !== null || runningCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
     return
   }
@@ -651,6 +663,7 @@ function buildReturnQuery() {
 }
 
 function openExecutionPage(item: CaseSummaryItem) {
+  if (!props.canExecute) return
   if (runningCaseId.value !== null || deletingCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
     return
   }
@@ -753,6 +766,7 @@ defineExpose({
   reload: loadCases,
   openCreateDialog,
   openDetailById,
+  getSelectedCaseIds: () => [...selectedCaseIds.value],
 })
 </script>
 
@@ -763,7 +777,7 @@ defineExpose({
         <h2>用例列表</h2>
       </div>
       <div class="case-list-panel__actions">
-        <AppButton :icon="Plus" type="primary" @click="openCreateDialog">新增用例</AppButton>
+        <AppButton v-if="canCreate" :icon="Plus" type="primary" @click="openCreateDialog">新增用例</AppButton>
         <AppButton :icon="RefreshRight" :loading="loading" @click="loadCases">刷新</AppButton>
       </div>
     </header>
@@ -883,10 +897,11 @@ defineExpose({
               <button type="button" title="查看详情" aria-label="查看详情" @click.stop="openDetailDrawer(item)">
                 <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.view" alt="" />
               </button>
-              <button type="button" title="编辑用例" aria-label="编辑用例" @click.stop="openEditDialog(item)">
+              <button v-if="canEdit" type="button" title="编辑用例" aria-label="编辑用例" @click.stop="openEditDialog(item)">
                 <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.edit" alt="" />
               </button>
               <button
+                v-if="canExecute"
                 type="button"
                 title="执行用例"
                 aria-label="执行用例"
@@ -896,6 +911,7 @@ defineExpose({
                 <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.run" alt="" />
               </button>
               <button
+                v-if="canDelete"
                 type="button"
                 data-danger="true"
                 title="删除用例"
@@ -912,9 +928,9 @@ defineExpose({
             <div v-if="selectedCaseIds.length" class="case-list-panel__batch-bar">
               <span>已选 {{ selectedCaseIds.length }} 条</span>
               <div class="case-list-panel__batch-actions">
-                <AppButton size="small" @click="openBatchMoveDialog">移动到</AppButton>
-                <AppButton size="small" @click="openBatchDialog">批量编辑</AppButton>
-                <AppButton size="small" type="danger" :loading="deletingCaseId === -1" @click="handleBatchDeleteCases">
+                <AppButton v-if="canEdit" size="small" @click="openBatchMoveDialog">移动到</AppButton>
+                <AppButton v-if="canEdit" size="small" @click="openBatchDialog">批量编辑</AppButton>
+                <AppButton v-if="canDelete" size="small" type="danger" :loading="deletingCaseId === -1" @click="handleBatchDeleteCases">
                   批量删除
                 </AppButton>
                 <AppButton size="small" @click="clearSelection">取消</AppButton>
@@ -1093,6 +1109,8 @@ defineExpose({
       v-model="detailDrawerVisible"
       :case-id="detailCaseId"
       :workspace-code="workspaceCode"
+      :can-edit="canEdit"
+      :can-run="canExecute"
       @edit="openEditDialog"
       @run="openExecutionPage"
     />

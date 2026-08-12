@@ -42,6 +42,8 @@ const props = withDefaults(
     currentIndex?: number | null
     totalCount?: number
     refreshKey?: number
+    canEdit?: boolean
+    canTransition?: boolean
   }>(),
   {
     defectId: null,
@@ -49,6 +51,8 @@ const props = withDefaults(
     currentIndex: null,
     totalCount: 0,
     refreshKey: 0,
+    canEdit: true,
+    canTransition: true,
   },
 )
 
@@ -731,7 +735,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="defect-detail-drawer__actions">
-          <button v-if="detail" type="button" class="defect-detail-drawer__edit-button" @click="emitIfDetail('edit')">
+          <button v-if="detail && canEdit" type="button" class="defect-detail-drawer__edit-button" @click="emitIfDetail('edit')">
             <img :src="figmaDefectIcons.drawerEdit" alt="" />
             <span>编辑</span>
           </button>
@@ -741,7 +745,7 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <div v-if="detail" class="defect-detail-drawer__flowbar">
+      <div v-if="detail && canTransition" class="defect-detail-drawer__flowbar">
         <span>流转至：</span>
         <button type="button" class="is-verify" @click="emitIfDetail('transition')">提交验证</button>
         <button type="button" class="is-close" @click="emitIfDetail('transition')">直接关闭</button>

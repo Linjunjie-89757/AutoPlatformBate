@@ -9,6 +9,11 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class AiProviderClientTests {
 
@@ -193,5 +198,31 @@ class AiProviderClientTests {
         Long timeoutSeconds = (Long) method.invoke(chatAdapter, 180);
 
         assertThat(timeoutSeconds).isEqualTo(180L);
+    }
+
+    @Test
+    void forwardsImagesToStreamingAdapter() {
+        AiProtocolAdapter adapter = mock(AiProtocolAdapter.class);
+        when(adapter.protocolType()).thenReturn(AiProviderClient.PROTOCOL_OPENAI_COMPATIBLE_CHAT);
+        when(adapter.supportsStructuredStreaming()).thenReturn(true);
+        when(adapter.streamStructuredContent(any(), any(), any(), any(), any())).thenReturn("{}");
+        AiProviderClient client = new AiProviderClient(List.of(adapter));
+        AiProviderRequestProfile profile = new AiProviderRequestProfile(
+                AiProviderClient.PROTOCOL_OPENAI_COMPATIBLE_CHAT,
+                "OPENAI_COMPATIBLE_CHAT",
+                "deepseek-v4-pro",
+                "https://proxy.example/v1",
+                0.3,
+                0.9,
+                20,
+                60
+        );
+        List<AiProviderClient.ImageInput> images = List.of(
+                new AiProviderClient.ImageInput("a.png", "image/png", new byte[]{1, 2, 3})
+        );
+
+        client.streamStructuredContentWithResult(profile, "key", "prompt", images, delta -> { });
+
+        verify(adapter).streamStructuredContent(eq(profile), eq("key"), eq("prompt"), eq(images), any());
     }
 }

@@ -47,8 +47,18 @@ import {
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
+  canExport?: boolean
 }>(), {
   workspaceCode: 'ALL',
+  canCreate: true,
+  canEdit: true,
+  canDelete: true,
+  canExecute: true,
+  canExport: true,
 })
 
 type ScenarioResult = 'pass' | 'fail' | 'idle'
@@ -430,7 +440,7 @@ const scenarioDefaultColumnWeights: Record<string, number> = {
   result: 0.2317,
 }
 
-const scenarioOperationActionCount = 4
+const scenarioOperationActionCount = computed(() => [props.canEdit, props.canExecute, props.canCreate, props.canDelete].filter(Boolean).length)
 const scenarioTableBaselineWidth = computed(() => Math.max(960, sceneTableFrameWidth.value || 960))
 const scenarioOperationWidth = computed(() => Math.max(96, Math.round(scenarioTableBaselineWidth.value * 0.068)))
 const hasAdditionalScenarioColumns = computed(() => scenarioColumnSettings.visibleColumns.value.some(column => column.defaultVisible === false))
@@ -646,6 +656,7 @@ function activateScenarioTab(id: number) {
 }
 
 function createScenario() {
+  if (!props.canCreate) return
   const draft = makeScenario(-Date.now(), `新建场景 ${scenarioTotal.value + 1}`)
   const defaultModule = flatScenarioModules.value[0]
   const defaultEnvironment = environments.value.find(item => item.status !== 0)
@@ -661,6 +672,7 @@ function createScenario() {
 }
 
 async function removeScenario(item: Scenario) {
+  if (!props.canDelete) return
   if (!item.persistedId) {
     scenarios.value = scenarios.value.filter(candidate => candidate.id !== item.id)
     closeEditor(item.id)
@@ -766,7 +778,8 @@ async function saveScenarioDatasets(item: Scenario) {
 
 async function saveScenario(): Promise<Scenario | null> {
   const item = activeScenario.value
-  if (!item || !validateScenarioBeforeSave(item)) return null
+  if (!item || (item.persistedId ? !props.canEdit : !props.canCreate)) return null
+  if (!validateScenarioBeforeSave(item)) return null
   scenarioSaving.value = true
   const originalId = item.id
   try {
@@ -800,6 +813,7 @@ async function saveScenario(): Promise<Scenario | null> {
 }
 
 async function runScenario(item: Scenario, saveBeforeRun = false) {
+  if (!props.canExecute) return
   let target = item
   if (saveBeforeRun) {
     const saved = await saveScenario()
@@ -846,11 +860,13 @@ async function runScenario(item: Scenario, saveBeforeRun = false) {
 }
 
 async function runScenarioFromList(item: Scenario) {
+  if (!props.canExecute) return
   await runScenario(item)
   await loadScenarioList()
 }
 
 async function copyScenario(item: Scenario) {
+  if (!props.canCreate) return
   if (!item.persistedId) return
   if (!item.workspaceCode || item.workspaceCode === 'ALL') {
     ElMessage.warning('请先切换到具体工作空间后再复制场景')
@@ -1210,7 +1226,7 @@ function addChildStep(parent: ScenarioStep) {
             <span>{{ scenarios.find(item => item.id === id)?.name || '未命名场景' }}</span>
           </button>
         </div>
-        <button type="button" title="新建场景" @click="createScenario()"><Plus /></button>
+        <button v-if="canCreate" type="button" title="新建场景" @click="createScenario()"><Plus /></button>
         <button class="figma-api-scenarios__scene-more" type="button" title="更多场景">···</button>
       </header>
       <section class="figma-api-scenarios__scene-list" aria-label="接口场景列表">
@@ -1218,7 +1234,7 @@ function addChildStep(parent: ScenarioStep) {
           <label class="figma-api-scenarios__scene-search"><Search /><input v-model="keyword" placeholder="搜索场景名称" /></label>
           <select v-model="moduleFilter" aria-label="所属模块筛选"><option>全部</option><option v-for="module in flatScenarioModules" :key="module.id" :value="module.name">{{ module.name }}</option></select>
           <select v-model="statusFilter" aria-label="场景状态筛选"><option>全部</option><option>进行中</option><option>未激活</option></select>
-          <span /><button class="figma-api-scenarios__primary" type="button" @click="createScenario()"><Plus />新建场景</button>
+          <span /><button v-if="canCreate" class="figma-api-scenarios__primary" type="button" @click="createScenario()"><Plus />新建场景</button>
         </div>
         <div ref="sceneTableFrameRef" class="figma-api-scenarios__scene-table">
           <AppFigmaTable
@@ -1267,10 +1283,10 @@ function addChildStep(parent: ScenarioStep) {
                 <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="scenarioColumnSettings.open()" />
               </template>
               <template #default="{ row: item }">
-                <button type="button" title="编辑" aria-label="编辑" @click.stop="openEditor(item)"><Edit2 /></button>
-                <button type="button" title="执行" aria-label="执行" :disabled="scenarioRunning" @click.stop="runScenarioFromList(item)"><Play /></button>
-                <button type="button" title="复制" aria-label="复制" :disabled="scenarioCopyingId === item.id" @click.stop="copyScenario(item)"><Copy /></button>
-                <button type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="removeScenario(item)"><Trash2 /></button>
+                <button v-if="canEdit" type="button" title="编辑" aria-label="编辑" @click.stop="openEditor(item)"><Edit2 /></button>
+                <button v-if="canExecute" type="button" title="执行" aria-label="执行" :disabled="scenarioRunning" @click.stop="runScenarioFromList(item)"><Play /></button>
+                <button v-if="canCreate" type="button" title="复制" aria-label="复制" :disabled="scenarioCopyingId === item.id" @click.stop="copyScenario(item)"><Copy /></button>
+                <button v-if="canDelete" type="button" data-danger="true" title="删除" aria-label="删除" @click.stop="removeScenario(item)"><Trash2 /></button>
               </template>
             </AppFigmaActionColumn>
           </AppFigmaTable>
@@ -1287,7 +1303,7 @@ function addChildStep(parent: ScenarioStep) {
             <span>{{ scenarios.find(item => item.id === id)?.name }}</span><X @click.stop="closeEditor(id)" />
           </button>
         </div>
-        <button class="figma-api-scenarios__tool-icon" type="button" title="新建场景" @click="createScenario()"><Plus /></button>
+        <button v-if="canCreate" class="figma-api-scenarios__tool-icon" type="button" title="新建场景" @click="createScenario()"><Plus /></button>
         <button class="figma-api-scenarios__tool-icon" type="button" title="更多场景" @click="showMoreTabs = !showMoreTabs"><MoreHorizontal /></button>
         <div v-if="showMoreTabs" class="figma-api-scenarios__tab-menu"><button v-for="id in openScenarioIds" :key="id" type="button" @click="activateScenarioTab(id); showMoreTabs = false">{{ scenarios.find(item => item.id === id)?.name }}</button></div>
       </header>
@@ -1316,28 +1332,28 @@ function addChildStep(parent: ScenarioStep) {
           <div v-if="activeEditorTab === 'steps'" class="figma-api-scenarios__steps">
             <div class="figma-api-scenarios__scene-info" :class="{ 'is-new': isNewScenario }">
               <div>
-                <select v-model="activeScenario.priority"><option>P0</option><option>P1</option><option>P2</option></select>
+                <select v-model="activeScenario.priority" :disabled="!canEdit && !isNewScenario"><option>P0</option><option>P1</option><option>P2</option></select>
                 <input v-if="isEditingSceneName" ref="sceneNameInput" :value="activeScenario.name" @blur="isEditingSceneName = false" @input="updateActiveScenario({ name: ($event.target as HTMLInputElement).value })" @keydown.enter="isEditingSceneName = false" />
-                <button v-else class="figma-api-scenarios__scene-name-button" type="button" @click="startSceneNameEdit"><span>{{ activeScenario.name }}</span><Edit2 /></button>
+                <button v-else class="figma-api-scenarios__scene-name-button" type="button" :disabled="!canEdit && !isNewScenario" @click="startSceneNameEdit"><span>{{ activeScenario.name }}</span><Edit2 v-if="canEdit || isNewScenario" /></button>
               </div>
               <p v-if="!isNewScenario">{{ activeScenario.description || '暂无场景描述' }}</p><small>{{ activeScenarioAuthor }} · 更新于 {{ activeScenarioUpdatedAt }} · {{ activeScenario.module || '未分配模块' }}</small>
             </div>
-            <div class="figma-api-scenarios__steps-toolbar"><p>共 <b>{{ activeScenario.steps.length }}</b> 个步骤</p><div><button type="button" @click="showImportSteps = true"><Upload />导入步骤</button><button type="button" @click="showAddStep = true"><Plus />添加步骤</button></div></div>
+            <div class="figma-api-scenarios__steps-toolbar"><p>共 <b>{{ activeScenario.steps.length }}</b> 个步骤</p><div v-if="canEdit || isNewScenario"><button type="button" @click="showImportSteps = true"><Upload />导入步骤</button><button type="button" @click="showAddStep = true"><Plus />添加步骤</button></div></div>
             <div v-if="activeScenario.steps.length" class="figma-api-scenarios__step-list">
               <div v-for="(step, index) in activeScenario.steps" :key="step.id" class="figma-api-scenarios__step-group">
                 <article class="figma-api-scenarios__step-row" :class="{ 'is-disabled': !step.enabled, 'is-controller': isControllerStep(step.type) }" :style="{ '--step-color': stepTypeConfig[step.type].color }">
                   <div class="figma-api-scenarios__step-row-main">
                     <GripVertical class="figma-api-scenarios__drag-handle" />
-                    <button class="figma-api-scenarios__step-toggle" :class="{ 'is-on': step.enabled }" type="button" @click="step.enabled = !step.enabled"><i /></button>
+                    <button class="figma-api-scenarios__step-toggle" :class="{ 'is-on': step.enabled }" type="button" :disabled="!canEdit && !isNewScenario" @click="step.enabled = !step.enabled"><i /></button>
                     <span class="figma-api-scenarios__step-index">{{ index + 1 }}</span>
                     <b class="figma-api-scenarios__step-type" :style="{ color: stepTypeConfig[step.type].color, background: stepTypeConfig[step.type].background }">{{ stepTypeLabel(step.type) }}</b>
                     <b v-if="step.method" class="figma-api-scenarios__method" :class="`is-${step.method.toLowerCase()}`">{{ step.method }}</b>
                     <p><strong>{{ step.label }}</strong></p>
                     <small v-if="step.method && step.detail" class="figma-api-scenarios__step-path">{{ step.detail }}</small>
                     <em v-if="isControllerStep(step.type)" :style="{ color: stepTypeConfig[step.type].color, background: stepTypeConfig[step.type].background }">{{ step.children?.length || 0 }} 子步骤</em>
-                    <div class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="openStepConfiguration(step)"><ChevronRight /></button><button type="button" title="上移" :disabled="index === 0" @click="reorderStep(index, -1)"><ArrowUp /></button><button type="button" title="下移" :disabled="index === activeScenario.steps.length - 1" @click="reorderStep(index, 1)"><ArrowDown /></button><button type="button" title="复制" @click="duplicateStep(index)"><Copy /></button><button type="button" title="删除" @click="activeScenario.steps.splice(index, 1)"><Trash2 /></button></div>
+                    <div v-if="canEdit || isNewScenario" class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="openStepConfiguration(step)"><ChevronRight /></button><button type="button" title="上移" :disabled="index === 0" @click="reorderStep(index, -1)"><ArrowUp /></button><button type="button" title="下移" :disabled="index === activeScenario.steps.length - 1" @click="reorderStep(index, 1)"><ArrowDown /></button><button type="button" title="复制" @click="duplicateStep(index)"><Copy /></button><button type="button" title="删除" @click="activeScenario.steps.splice(index, 1)"><Trash2 /></button></div>
                   </div>
-                  <button v-if="isControllerStep(step.type)" class="figma-api-scenarios__add-child" type="button" :style="{ color: stepTypeConfig[step.type].color }" @click="addChildStep(step)"><Plus />添加子步骤</button>
+                  <button v-if="isControllerStep(step.type) && (canEdit || isNewScenario)" class="figma-api-scenarios__add-child" type="button" :style="{ color: stepTypeConfig[step.type].color }" @click="addChildStep(step)"><Plus />添加子步骤</button>
                 </article>
                 <template v-if="isControllerStep(step.type)">
                   <article v-for="(child, childIndex) in step.children" :key="child.id" class="figma-api-scenarios__step-row figma-api-scenarios__step-row--child" :class="{ 'is-disabled': !child.enabled }">
@@ -1347,13 +1363,13 @@ function addChildStep(parent: ScenarioStep) {
                     <b class="figma-api-scenarios__step-type" :style="{ color: stepTypeConfig[child.type].color, background: stepTypeConfig[child.type].background }">{{ stepTypeLabel(child.type) }}</b>
                     <b v-if="child.method" class="figma-api-scenarios__method" :class="`is-${child.method.toLowerCase()}`">{{ child.method }}</b>
                     <p><strong>{{ child.label }}</strong></p><small class="figma-api-scenarios__step-path">{{ child.detail }}</small>
-                    <div class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="openStepConfiguration(child)"><ChevronRight /></button><button type="button" title="删除" @click="step.children?.splice(childIndex, 1)"><Trash2 /></button></div>
+                    <div v-if="canEdit || isNewScenario" class="figma-api-scenarios__step-actions"><button type="button" title="配置" @click="openStepConfiguration(child)"><ChevronRight /></button><button type="button" title="删除" @click="step.children?.splice(childIndex, 1)"><Trash2 /></button></div>
                   </article>
                 </template>
               </div>
-              <button class="figma-api-scenarios__add-step" type="button" @click="showAddStep = true"><Plus />添加测试步骤</button>
+              <button v-if="canEdit || isNewScenario" class="figma-api-scenarios__add-step" type="button" @click="showAddStep = true"><Plus />添加测试步骤</button>
             </div>
-            <div v-else class="figma-api-scenarios__step-empty"><Layers /><p>还没有步骤，点击添加开始编排</p><button type="button" @click="showAddStep = true"><Plus />添加步骤</button></div>
+            <div v-else class="figma-api-scenarios__step-empty"><Layers /><p>还没有步骤，点击添加开始编排</p><button v-if="canEdit || isNewScenario" type="button" @click="showAddStep = true"><Plus />添加步骤</button></div>
             </div>
           <div v-else-if="activeEditorTab === 'test-data'" class="figma-api-scenarios__test-data">
             <aside class="figma-api-scenarios__dataset-list"><div class="figma-api-scenarios__dataset-list-head"><b>数据集列表</b><button type="button" @click="addDataset()"><Plus /></button></div><div v-for="dataset in datasets" :key="dataset.id" :class="{ 'is-active': selectedDataset === dataset.id }" class="figma-api-scenarios__dataset-item"><button type="button" @click="selectedDataset = dataset.id"><i :class="{ 'is-on': dataset.enabled }" @click.stop="dataset.enabled = !dataset.enabled"><span /></i><span><b>{{ dataset.name }}</b><small>{{ dataset.rows.length }} 行数据</small></span></button><button class="figma-api-scenarios__dataset-more" type="button" title="操作" @click.stop><MoreHorizontal /></button></div></aside>
@@ -1378,7 +1394,7 @@ function addChildStep(parent: ScenarioStep) {
           <label>标签<button type="button">+ 添加</button></label>
         </aside>
         <aside class="figma-api-scenarios__run-config" :class="{ 'is-new': isNewScenario }">
-          <div class="figma-api-scenarios__run-actions"><div><select v-model.number="activeScenario.environmentId" @change="syncActiveScenarioEnvironment"><option :value="null">请选择环境</option><option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}</option></select><button type="button" title="环境设置" @click="openEnvironmentSettings"><Settings /></button></div><button type="button" :disabled="scenarioRunning || scenarioSaving" @click="runScenario(activeScenario, true)"><Play />运行</button><button type="button" :disabled="scenarioSaving || scenarioRunning" @click="saveScenario"><Save />保存</button></div>
+          <div class="figma-api-scenarios__run-actions"><div><select v-model.number="activeScenario.environmentId" :disabled="!canEdit && !isNewScenario" @change="syncActiveScenarioEnvironment"><option :value="null">请选择环境</option><option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}</option></select><button type="button" title="环境设置" @click="openEnvironmentSettings"><Settings /></button></div><button v-if="canExecute" type="button" :disabled="scenarioRunning || scenarioSaving" @click="runScenario(activeScenario, canEdit || isNewScenario)"><Play />运行</button><button v-if="canEdit || isNewScenario" type="button" :disabled="scenarioSaving || scenarioRunning" @click="saveScenario"><Save />保存</button></div>
           <div class="figma-api-scenarios__run-fields">
           <label><em>*</em> 所属模块<select v-model.number="activeScenario.moduleId" @change="syncActiveScenarioModule"><option :value="null">请选择所属模块</option><option v-for="module in flatScenarioModules" :key="module.id" :value="module.id">{{ module.name }}</option></select></label>
           <label>测试数据<select v-model="activeScenario.testData"><option value="">请选择测试数据</option><option>不使用测试数据</option><option v-for="dataset in datasets" :key="dataset.id">{{ dataset.name }}</option></select></label>

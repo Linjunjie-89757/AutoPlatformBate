@@ -209,7 +209,8 @@ public class WorkspaceMemberDomainService {
     ) {
         List<WorkspaceRoleEntity> roles;
         if (requestedRoleIds == null) {
-            roles = List.of(workspaceRoleDomainService.requireDefaultRole(workspaceId, memberType));
+            WorkspaceRoleEntity defaultRole = workspaceRoleDomainService.findDefaultRole(workspaceId, memberType);
+            roles = defaultRole == null ? List.of() : List.of(defaultRole);
         } else {
             roles = workspaceRoleDomainService.requireRoles(workspaceId, requestedRoleIds);
             if (ROLE_MEMBER.equals(memberType) && roles.isEmpty()) {
@@ -231,15 +232,6 @@ public class WorkspaceMemberDomainService {
     }
 
     private List<WorkspaceMemberRoleItem> ensureAndListMemberRoles(WorkspaceMemberEntity entity) {
-        List<WorkspaceMemberRoleItem> roles = workspaceRoleDomainService.listMemberRoles(entity.getId());
-        if (!roles.isEmpty()) {
-            return roles;
-        }
-        String memberType = normalizeMemberType(entity.getRoleCode(), null);
-        if (ROLE_ADMIN.equals(memberType)) {
-            return List.of();
-        }
-        replaceMemberRoles(entity, entity.getWorkspaceId(), memberType, null);
         return workspaceRoleDomainService.listMemberRoles(entity.getId());
     }
 

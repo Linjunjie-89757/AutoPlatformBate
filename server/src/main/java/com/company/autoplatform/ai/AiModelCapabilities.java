@@ -38,6 +38,9 @@ public record AiModelCapabilities(
                 || normalizedModel.contains("gemini")
                 || normalizedModel.contains("claude-3")
                 || normalizedModel.contains("pixtral");
+        AiCapabilityValue imageInput = likelyImage
+                ? value(true, SOURCE_INFERRED, "根据模型名称推断可能支持图片输入")
+                : value(null, SOURCE_UNKNOWN, "模型名称未提供足够信息，需以能力探测或实际请求为准");
         boolean likelyLongContext = normalizedModel.contains("128k")
                 || normalizedModel.contains("200k")
                 || normalizedModel.contains("32k")
@@ -49,7 +52,7 @@ public record AiModelCapabilities(
                 value(true, SOURCE_INFERRED, "同协议模型默认支持文本对话"),
                 value(likelyStream, SOURCE_INFERRED, "基于协议能力做初步推断"),
                 value(likelyStructured, SOURCE_INFERRED, "基于协议能力做初步推断"),
-                value(likelyImage, SOURCE_INFERRED, likelyImage ? "根据模型名称推断可能支持图片输入" : "未从模型名称中识别出视觉能力"),
+                imageInput,
                 value(likelyLongContext, SOURCE_INFERRED, likelyLongContext ? "根据模型名称推断可能具备长上下文" : "未识别出明显长上下文标识"),
                 value(stableAvailable, stableAvailable ? SOURCE_PROBED : SOURCE_UNKNOWN, stableAvailable ? "最近一次连接或探测成功" : null)
         );

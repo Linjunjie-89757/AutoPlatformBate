@@ -67,8 +67,16 @@ import { confirmDelete } from '@/shared/ui'
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
 }>(), {
   workspaceCode: 'ALL',
+  canCreate: true,
+  canEdit: true,
+  canDelete: true,
+  canExecute: true,
 })
 
 type Priority = 'P0' | 'P1' | 'P2' | 'P3'
@@ -324,7 +332,7 @@ const suiteDefaultColumnWeights: Record<string, number> = {
   lastRun: 0.2355,
 }
 
-const suiteOperationActionCount = 3
+const suiteOperationActionCount = computed(() => [props.canEdit, props.canExecute, props.canDelete].filter(Boolean).length)
 const suiteTableBaselineWidth = computed(() => Math.max(960, suiteTableFrameWidth.value || 960))
 const suiteOperationWidth = computed(() => Math.max(96, Math.round(suiteTableBaselineWidth.value * 0.05768)))
 const hasAdditionalSuiteColumns = computed(() => suiteColumnSettings.visibleColumns.value.some(column => column.defaultVisible === false))
@@ -552,6 +560,7 @@ function closeSuite(id: string) {
 }
 
 function createSuite() {
+  if (!props.canCreate) return
   const id = `draft-${Date.now()}`
   const defaultModule = flatSuiteModules.value[0]
   const defaultEnvironment = environments.value.find(item => item.status !== 0)
@@ -580,6 +589,7 @@ function createSuite() {
 }
 
 function startNameEdit() {
+  if (!props.canEdit && activeSuite.value?.persistedId) return
   if (!activeSuite.value) return
   editingNameDraft.value = activeSuite.value.name
   editingName.value = true
@@ -592,6 +602,7 @@ function finishNameEdit() {
 }
 
 async function moveItem(index: number, direction: -1 | 1) {
+  if (!props.canEdit) return
   if (!activeSuite.value) return
   const target = index + direction
   if (target < 0 || target >= activeSuite.value.items.length) return
@@ -612,6 +623,7 @@ async function moveItem(index: number, direction: -1 | 1) {
 }
 
 async function removeItem(item: SuiteItem) {
+  if (!props.canEdit) return
   const suite = activeSuite.value
   if (!suite) return
   if (!suite.persistedId || !item.arrangeId) {
@@ -633,6 +645,7 @@ async function removeItem(item: SuiteItem) {
 }
 
 async function openPicker(type: SuiteItemType) {
+  if (!props.canEdit) return
   if (!activeSuite.value?.persistedId) {
     ElMessage.warning('请先保存套件后再添加编排内容')
     return
@@ -659,6 +672,7 @@ function toggleAllPickerItems(event: Event) {
 }
 
 async function addPickerItems() {
+  if (!props.canEdit) return
   const suite = activeSuite.value
   if (!suite?.persistedId || !pickerType.value) return
   const source = pickerType.value === 'scene' ? sceneCandidates.value : caseCandidates.value
@@ -741,7 +755,7 @@ function validateSuite(suite: Suite) {
 
 async function saveSuite(): Promise<Suite | null> {
   const suite = activeSuite.value
-  if (!suite || !validateSuite(suite)) return null
+  if (!suite || (suite.persistedId ? !props.canEdit : !props.canCreate) || !validateSuite(suite)) return null
   suiteSaving.value = true
   const originalId = suite.id
   try {
@@ -768,6 +782,7 @@ async function saveSuite(): Promise<Suite | null> {
 }
 
 async function executeSuite(suite: Suite, saveBeforeRun = false) {
+  if (!props.canExecute) return
   let target = suite
   if (saveBeforeRun) {
     const saved = await saveSuite()
@@ -818,6 +833,7 @@ async function runSuiteFromList(suite: Suite) {
 }
 
 async function deleteSuite(suite: Suite) {
+  if (!props.canDelete) return
   if (!suite.persistedId) {
     suites.value = suites.value.filter(item => item.id !== suite.id)
     closeSuite(suite.id)
@@ -926,7 +942,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
           <span class="figma-suite__tab-close" title="关闭" @click.stop="closeSuite(id)"><X /></span>
         </button>
       </div>
-      <button class="figma-suite__new-tab" title="新建套件" type="button" @click="createSuite"><Plus /></button>
+      <button v-if="canCreate" class="figma-suite__new-tab" title="新建套件" type="button" @click="createSuite"><Plus /></button>
     </header>
 
     <div v-if="activeTab === 'list'" class="figma-suite__list-view">
@@ -939,7 +955,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
           <ChevronDown aria-hidden="true" />
         </label>
         <span />
-        <button class="figma-suite__primary" type="button" @click="createSuite"><Plus />新建套件</button>
+        <button v-if="canCreate" class="figma-suite__primary" type="button" @click="createSuite"><Plus />新建套件</button>
       </div>
 
       <div ref="suiteTableFrameRef" class="figma-suite__table-wrap">
@@ -990,9 +1006,9 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
               <AppTableSettingsTrigger variant="figma" :size="13" label="字段展示" @click.stop="suiteColumnSettings.open()" />
             </template>
             <template #default="{ row: suite }">
-              <button title="编辑" aria-label="编辑" type="button" @click.stop="openSuite(suite.id)"><Edit2 /></button>
-              <button title="运行" aria-label="运行" type="button" @click.stop="runSuiteFromList(suite)"><Play /></button>
-              <button title="删除" aria-label="删除" data-danger="true" type="button" @click.stop="deleteSuite(suite)"><Trash2 /></button>
+              <button v-if="canEdit" title="编辑" aria-label="编辑" type="button" @click.stop="openSuite(suite.id)"><Edit2 /></button>
+              <button v-if="canExecute" title="运行" aria-label="运行" type="button" @click.stop="runSuiteFromList(suite)"><Play /></button>
+              <button v-if="canDelete" title="删除" aria-label="删除" data-danger="true" type="button" @click.stop="deleteSuite(suite)"><Trash2 /></button>
             </template>
           </AppFigmaActionColumn>
         </AppFigmaTable>
@@ -1016,14 +1032,14 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
                 <ChevronDown aria-hidden="true" />
               </label>
               <input v-if="editingName" v-model="editingNameDraft" class="figma-suite__name-input" @blur="finishNameEdit" @keydown.enter="finishNameEdit" />
-              <button v-else class="figma-suite__name" type="button" @click="startNameEdit">{{ activeSuite.name }}<Edit2 /></button>
+              <button v-else class="figma-suite__name" type="button" :disabled="!canEdit && Boolean(activeSuite.persistedId)" @click="startNameEdit">{{ activeSuite.name }}<Edit2 v-if="canEdit || !activeSuite.persistedId" /></button>
             </div>
             <p v-if="activeSuite.desc">{{ activeSuite.desc }}</p>
           </section>
 
           <section class="figma-suite__arrange-toolbar">
             <p>共 <strong>{{ activeSuite.items.length }}</strong> 个编排项，执行顺序即保存顺序</p>
-            <div><button type="button" @click="openPicker('api')"><FileText />添加接口用例</button><button type="button" @click="openPicker('scene')"><Layers />添加场景</button></div>
+            <div v-if="canEdit"><button type="button" @click="openPicker('api')"><FileText />添加接口用例</button><button type="button" @click="openPicker('scene')"><Layers />添加场景</button></div>
           </section>
 
           <section class="figma-suite__items">
@@ -1035,10 +1051,10 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
                 <b v-if="item.method" class="figma-suite__method" :class="`is-${item.method.toLowerCase()}`">{{ item.method }}</b>
                 <p>{{ item.name }}</p>
                 <code v-if="item.path">{{ item.path }}</code><small v-else>{{ item.desc }}</small>
-                <div><button title="上移" :disabled="index === 0" type="button" @click="moveItem(index, -1)"><ArrowUp /></button><button title="下移" :disabled="index === activeSuite.items.length - 1" type="button" @click="moveItem(index, 1)"><ArrowDown /></button><button title="移除" type="button" @click="removeItem(item)"><Trash2 /></button></div>
+                <div v-if="canEdit"><button title="上移" :disabled="index === 0" type="button" @click="moveItem(index, -1)"><ArrowUp /></button><button title="下移" :disabled="index === activeSuite.items.length - 1" type="button" @click="moveItem(index, 1)"><ArrowDown /></button><button title="移除" type="button" @click="removeItem(item)"><Trash2 /></button></div>
               </article>
             </template>
-            <div v-else class="figma-suite__arrange-empty"><FileText /><p>还没有编排项，添加接口用例或场景开始</p><div><button type="button" @click="openPicker('api')"><FileText />添加用例</button><button type="button" @click="openPicker('scene')"><Layers />添加场景</button></div></div>
+            <div v-else class="figma-suite__arrange-empty"><FileText /><p>还没有编排项，添加接口用例或场景开始</p><div v-if="canEdit"><button type="button" @click="openPicker('api')"><FileText />添加用例</button><button type="button" @click="openPicker('scene')"><Layers />添加场景</button></div></div>
           </section>
         </template>
 
@@ -1092,7 +1108,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
       </main>
 
       <aside class="figma-suite__config">
-        <header><label class="figma-suite__select-shell"><select v-model.number="activeSuite.environmentId" @change="syncSuiteEnvironment"><option :value="null">请选择执行环境</option><option v-for="item in environments" :key="item.id" :value="item.id">{{ item.name }}</option></select><ChevronDown aria-hidden="true" /></label><div><button :disabled="suiteRunning || suiteSaving" type="button" @click="runSuite"><Play />运行</button><button :disabled="suiteSaving || suiteRunning" type="button" @click="saveSuite"><Save />保存</button></div></header>
+        <header><label class="figma-suite__select-shell"><select v-model.number="activeSuite.environmentId" :disabled="!canEdit && Boolean(activeSuite.persistedId)" @change="syncSuiteEnvironment"><option :value="null">请选择执行环境</option><option v-for="item in environments" :key="item.id" :value="item.id">{{ item.name }}</option></select><ChevronDown aria-hidden="true" /></label><div><button v-if="canExecute" :disabled="suiteRunning || suiteSaving" type="button" @click="runSuite"><Play />运行</button><button v-if="canEdit || !activeSuite.persistedId" :disabled="suiteSaving || suiteRunning" type="button" @click="saveSuite"><Save />保存</button></div></header>
         <div class="figma-suite__config-body">
           <div class="figma-suite__config-field is-module"><span><em>*</em> 所属模块</span><label class="figma-suite__select-shell"><select v-model.number="activeSuite.moduleId" @change="syncSuiteModule"><option :value="null">请选择所属模块</option><option v-for="item in flatSuiteModules" :key="item.id" :value="item.id">{{ item.name }}</option></select><ChevronDown aria-hidden="true" /></label></div>
           <fieldset><legend>运行模式</legend><div class="figma-suite__radio-row"><label><input v-model="activeSuite.runMode" class="figma-suite__radio-input" type="radio" value="serial" />串行</label><label><input v-model="activeSuite.runMode" class="figma-suite__radio-input" type="radio" value="parallel" />并行</label></div></fieldset>

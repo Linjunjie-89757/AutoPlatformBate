@@ -410,7 +410,7 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.workspaceCode").value(WORKSPACE_CODE))
                 .andExpect(jsonPath("$.data.provider").value("OPENAI_COMPATIBLE_CHAT"))
                 .andExpect(jsonPath("$.data.model").value("gpt-4o-mini"))
-                .andExpect(jsonPath("$.data.systemMaxCases").value(50))
+                .andExpect(jsonPath("$.data.systemMaxCases").value(200))
                 .andExpect(jsonPath("$.data.requestedMaxCases").value(2))
                 .andExpect(jsonPath("$.data.effectiveMaxCases").value(2))
                 .andExpect(jsonPath("$.data.actualGeneratedCount").value(1))

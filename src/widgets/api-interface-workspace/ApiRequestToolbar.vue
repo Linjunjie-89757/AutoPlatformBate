@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { ApiAutomationEnvironmentItem } from '@/entities/api-automation'
 import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
@@ -16,6 +16,10 @@ const props = defineProps<{
   runOptionsLoading: boolean
   sending: boolean
   saving: boolean
+  canCreate?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
+  canExecute?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +38,7 @@ const emit = defineEmits<{
 }>()
 
 const apiMethodOptions = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH', 'TRACE'] as const
+const canMutate = computed(() => props.definitionId ? props.canEdit !== false : props.canCreate !== false)
 
 function requestMethodClass(method?: string) {
   return `method-${String(method || 'GET').toLowerCase()}`
@@ -66,6 +71,7 @@ defineExpose({
         :model-value="props.method"
         :class="['api-method-select', requestMethodClass(props.method)]"
         popper-class="api-method-popper"
+        :disabled="!canMutate"
         @update:model-value="updateMethod"
       >
         <el-option v-for="methodOption in apiMethodOptions" :key="methodOption" :label="methodOption" :value="methodOption">
@@ -76,9 +82,10 @@ defineExpose({
         ref="pathInputRef"
         :model-value="props.path"
         placeholder="请输入包含 http/https 的完整 URL 或接口路径"
+        :disabled="!canMutate"
         @update:model-value="updatePath"
       />
-      <button type="button" class="api-curl-button" @click="emit('importCurl')">Curl</button>
+      <button type="button" class="api-curl-button" :disabled="!canMutate" @click="emit('importCurl')">Curl</button>
     </div>
     <div class="api-run-environment-combo">
       <button
@@ -109,7 +116,7 @@ defineExpose({
     <button
       type="button"
       class="api-send-button"
-      :disabled="props.sending || !props.path.trim()"
+      :disabled="props.canExecute === false || props.sending || !props.path.trim()"
       @click="emit('send')"
     >
       <img class="api-send-button__icon" :src="figmaApiInterfaceIcons.send" alt="" />
@@ -119,7 +126,7 @@ defineExpose({
       split-button
       class="api-save-dropdown"
       popper-class="api-save-dropdown-menu"
-      :disabled="!props.path.trim()"
+      :disabled="!canMutate || !props.path.trim()"
       :loading="props.saving"
       @click="emit('save')"
     >
@@ -129,11 +136,11 @@ defineExpose({
       </span>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item v-if="props.definitionId" @click="emit('saveAsCase')">保存为用例</el-dropdown-item>
-          <el-dropdown-item @click="emit('duplicate')">
+          <el-dropdown-item v-if="props.definitionId && props.canCreate !== false" @click="emit('saveAsCase')">保存为用例</el-dropdown-item>
+          <el-dropdown-item v-if="props.canCreate !== false" @click="emit('duplicate')">
             复制接口
           </el-dropdown-item>
-          <el-dropdown-item @click="emit('delete')">
+          <el-dropdown-item v-if="props.canDelete !== false" @click="emit('delete')">
             删除接口
           </el-dropdown-item>
         </el-dropdown-menu>
