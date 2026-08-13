@@ -151,7 +151,8 @@ const {
   logs,
   nextReleaseVersion,
   openLog,
-  prettyJson,
+  formatMockLogHeaders,
+  formatMockLogJson,
   publishCurrentRelease,
   publishDialogVisible,
   referenceDrawerVisible,
@@ -690,13 +691,13 @@ onMounted(() => {
         </dl>
         <p v-if="activeLog.releaseVersion" class="config-mock-log-detail__release">Mock v{{ activeLog.releaseVersion }}</p>
         <h4>请求头</h4>
-        <pre>{{ prettyJson(activeLog.requestHeadersJson) }}</pre>
+        <pre>{{ formatMockLogHeaders(activeLog.requestHeadersJson) }}</pre>
         <h4>请求体</h4>
-        <pre>{{ prettyJson(activeLog.requestBody) }}</pre>
+        <pre>{{ formatMockLogJson(activeLog.requestBody) }}</pre>
         <h4>响应头</h4>
-        <pre>{{ prettyJson(activeLog.responseHeadersJson) }}</pre>
+        <pre>{{ formatMockLogHeaders(activeLog.responseHeadersJson) }}</pre>
         <h4>响应体</h4>
-        <pre>{{ prettyJson(activeLog.responseBody) }}</pre>
+        <pre>{{ formatMockLogJson(activeLog.responseBody) }}</pre>
       </div>
     </el-drawer>
     <ConfigReferenceDrawer

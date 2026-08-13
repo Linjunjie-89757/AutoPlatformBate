@@ -11,6 +11,8 @@ import {
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { confirmAction } from '@/shared/ui'
 
+import { formatMockLogHeaders, formatMockLogJson } from './mockLogFormatting'
+
 interface UseConfigMockReleaseActivityOptions {
   activeApp: ComputedRef<MockApplicationItem | null>
   activeAppId: Ref<number | null>
@@ -120,15 +122,6 @@ export function useConfigMockReleaseActivity(options: UseConfigMockReleaseActivi
     logDrawerVisible.value = true
   }
 
-  function prettyJson(value: string | null) {
-    if (!value) return '-'
-    try {
-      return JSON.stringify(JSON.parse(value), null, 2)
-    } catch {
-      return value
-    }
-  }
-
   return {
     activateRelease,
     activeLog,
@@ -142,7 +135,8 @@ export function useConfigMockReleaseActivity(options: UseConfigMockReleaseActivi
     logs,
     nextReleaseVersion,
     openLog,
-    prettyJson,
+    formatMockLogHeaders,
+    formatMockLogJson,
     publishCurrentRelease,
     publishDialogVisible,
     referenceDrawerVisible,
