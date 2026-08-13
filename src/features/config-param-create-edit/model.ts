@@ -5,7 +5,6 @@ import {
   type ParamSetItem,
 } from '@/entities/config'
 
-export type ConfigParamDialogMode = 'create' | 'edit'
 export type ConfigVariableStage = 'COMMON' | 'DEV' | 'TEST' | 'STAGING' | 'PROD' | 'SANDBOX'
 
 export interface WebUiVariableItem {
