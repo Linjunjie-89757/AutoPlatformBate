@@ -12,8 +12,10 @@ export const DEFAULT_SKIP_DIRECTORIES = [
   'target',
   'test-results',
 ]
-export const DEFAULT_MAX_LINES = 800
-export const DEFAULT_MAX_KB = 80
+export const DEFAULT_REVIEW_LINES = 1500
+export const DEFAULT_REVIEW_KB = 100
+export const DEFAULT_CRITICAL_LINES = 3000
+export const DEFAULT_CRITICAL_KB = 150
 
 function parseNumber(value, fallback) {
   const parsed = Number(value)
@@ -43,8 +45,10 @@ function walkFiles(directory, options, files) {
 export function scanLargeFiles(options = {}) {
   const cwd = options.cwd || process.cwd()
   const roots = options.roots || DEFAULT_ROOTS
-  const maxLines = parseNumber(options.maxLines, DEFAULT_MAX_LINES)
-  const maxKb = parseNumber(options.maxKb, DEFAULT_MAX_KB)
+  const reviewLines = parseNumber(options.reviewLines, DEFAULT_REVIEW_LINES)
+  const reviewKb = parseNumber(options.reviewKb, DEFAULT_REVIEW_KB)
+  const criticalLines = parseNumber(options.criticalLines, DEFAULT_CRITICAL_LINES)
+  const criticalKb = parseNumber(options.criticalKb, DEFAULT_CRITICAL_KB)
   const scanOptions = {
     extensions: new Set(options.extensions || DEFAULT_EXTENSIONS),
     skipDirectories: new Set(options.skipDirectories || DEFAULT_SKIP_DIRECTORIES),
@@ -60,34 +64,46 @@ export function scanLargeFiles(options = {}) {
       const text = fs.readFileSync(filePath, 'utf8')
       const bytes = Buffer.byteLength(text)
       const lines = text.length ? text.split(/\r\n|\n|\r/).length : 0
+      const needsReview = lines >= reviewLines || bytes >= reviewKb * 1024
+      const critical = lines >= criticalLines || bytes >= criticalKb * 1024
       return {
         path: normalizePath(path.relative(cwd, filePath)),
         lines,
         kb: Number((bytes / 1024).toFixed(1)),
-        overLines: lines >= maxLines,
-        overKb: bytes >= maxKb * 1024,
+        overLines: lines >= reviewLines,
+        overKb: bytes >= reviewKb * 1024,
+        needsReview,
+        critical,
+        severity: critical ? 'critical' : 'review',
       }
     })
-    .filter(item => item.overLines || item.overKb)
-    .sort((left, right) => right.lines - left.lines || right.kb - left.kb)
+    .filter(item => item.needsReview)
+    .sort((left, right) => Number(right.critical) - Number(left.critical) || right.lines - left.lines || right.kb - left.kb)
 
   return {
     scannedFiles: files.length,
-    threshold: {
-      maxLines,
-      maxKb,
+    reviewSignal: {
+      lines: reviewLines,
+      kb: reviewKb,
+    },
+    criticalSignal: {
+      lines: criticalLines,
+      kb: criticalKb,
     },
     count: large.length,
+    criticalCount: large.filter(item => item.critical).length,
     large,
   }
 }
 
 function printReport(report) {
   console.log(`Scanned files: ${report.scannedFiles}`)
-  console.log(`Large-file threshold: >= ${report.threshold.maxLines} lines OR >= ${report.threshold.maxKb} KB`)
-  console.log(`Large files: ${report.count}`)
+  console.log(`Large-file review: >= ${report.reviewSignal.lines} lines OR >= ${report.reviewSignal.kb} KB`)
+  console.log(`Critical review: >= ${report.criticalSignal.lines} lines OR >= ${report.criticalSignal.kb} KB`)
+  console.log('Size is an advisory signal only. Split files only when doing so improves responsibilities, dependencies, typing, or testability.')
+  console.log(`Review candidates: ${report.count} (${report.criticalCount} critical)`)
   for (const item of report.large) {
-    console.log(`${item.path}\t${item.lines} lines\t${item.kb} KB`)
+    console.log(`[${item.severity}]\t${item.path}\t${item.lines} lines\t${item.kb} KB`)
   }
 }
 
@@ -96,11 +112,10 @@ const isCli = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve
 if (isCli) {
   const report = scanLargeFiles({
     cwd: process.cwd(),
-    maxLines: process.env.MAX_LARGE_FILE_LINES,
-    maxKb: process.env.MAX_LARGE_FILE_KB,
+    reviewLines: process.env.LARGE_FILE_REVIEW_LINES,
+    reviewKb: process.env.LARGE_FILE_REVIEW_KB,
+    criticalLines: process.env.LARGE_FILE_CRITICAL_LINES,
+    criticalKb: process.env.LARGE_FILE_CRITICAL_KB,
   })
   printReport(report)
-  if (process.env.CI_LARGE_FILE_FAIL === '1' && report.count > 0) {
-    process.exitCode = 1
-  }
 }
