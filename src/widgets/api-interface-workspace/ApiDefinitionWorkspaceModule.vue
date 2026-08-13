@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
 
 import {
   type ApiAutomationEnvironmentItem,
@@ -11,7 +10,6 @@ import {
   type SaveApiDefinitionCasePayload,
 } from '@/entities/api-automation'
 import type { WorkspaceItem } from '@/entities/workspace'
-import { confirmDelete } from '@/shared/ui'
 import ApiAiCaseModule from './ApiAiCaseModule.vue'
 import ApiDefinitionWorkspaceOverlays from './ApiDefinitionWorkspaceOverlays.vue'
 import ApiEditorTabBar from './ApiEditorTabBar.vue'
@@ -21,6 +19,7 @@ import type { AiCaseGenerationTabState, ApiAiGeneratedCaseResult, ApiRequestCont
 import {
   type DirectoryNode,
 } from './lib/apiDirectoryTree'
+import { confirmApiAction } from './lib/apiWorkspaceConfirm'
 import {
   pickCaseDetailDefaultRequestTab,
   requestMethodClass,
@@ -173,35 +172,6 @@ const {
   cancel: cancelApiSoftPrompt,
 } = useApiSoftPrompt()
 const caseDetailModuleRef = ref<InstanceType<typeof ApiDefinitionWorkspaceOverlays> | null>(null)
-function confirmApiAction(
-  message: string,
-  title: string,
-  options: { confirmText?: string; cancelText?: string; danger?: boolean } = {},
-) {
-  if (options.danger) {
-    return confirmDelete({
-      title,
-      message,
-      confirmText: options.confirmText || '确认删除',
-      cancelText: options.cancelText || '取消',
-    }).then(
-      () => true,
-      () => false,
-    )
-  }
-
-  return ElMessageBox.confirm(message, title, {
-    type: options.danger ? 'error' : 'warning',
-    confirmButtonText: options.confirmText || '确定',
-    cancelButtonText: options.cancelText || '取消',
-    customClass: `api-soft-message-box${options.danger ? ' is-danger' : ''}`,
-    confirmButtonClass: options.danger ? 'api-soft-message-box__danger' : 'api-soft-message-box__primary',
-    cancelButtonClass: 'api-soft-message-box__cancel',
-  }).then(
-    () => true,
-    () => false,
-  )
-}
 
 let loadCasesForDefinitionDelegate: (definitionId: number, workspaceCode?: string) => Promise<void> = async () => {}
 let syncAiGeneratedCaseFromPayloadDelegate: (
@@ -468,7 +438,7 @@ const contentTabs = computed<ApiRequestContentTabItem[]>(() => [
   { label: '用例', value: 'cases', count: activeDefinitionCases.value.length || undefined },
   { label: '定义', value: 'definition', count: activeSchemaFields.value.length || undefined },
 ])
-
+
 
 const {
   moduleLoading,
