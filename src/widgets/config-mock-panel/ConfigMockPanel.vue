@@ -14,26 +14,23 @@ import { ElMessage } from 'element-plus'
 
 import {
   configApi,
-  type ConfigReferenceSummary,
-  type CreateMockApplicationPayload,
   type CreateMockBusinessScenarioPayload,
-  type CreateMockEndpointPayload,
-  type CreateMockScenarioPayload,
   type ConfigStatus,
   type MockApplicationItem,
   type MockBusinessScenarioItem,
-  type MockCallLogItem,
   type MockEndpointItem,
-  type MockReleaseItem,
   type MockScenarioItem,
 } from '@/entities/config'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { AppFigmaSwitch, confirmAction, confirmDelete } from '@/shared/ui'
+import { AppFigmaSwitch } from '@/shared/ui'
 import ConfigReferenceDrawer from '@/widgets/config-reference-drawer/ConfigReferenceDrawer.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import ApiCodeEditor from '@/widgets/api-interface-workspace/ApiCodeEditor.vue'
 import ConfigMockFigmaWorkspace from './ConfigMockFigmaWorkspace.vue'
+import { useConfigMockApplicationActions } from './useConfigMockApplicationActions'
+import { useConfigMockReleaseActivity } from './useConfigMockReleaseActivity'
+import { useConfigMockScenarioActions } from './useConfigMockScenarioActions'
 
 const props = withDefaults(
   defineProps<{
@@ -61,84 +58,19 @@ interface BusinessScenarioForm {
   items: BusinessScenarioFormItem[]
 }
 
-interface MatchRuleRow {
-  source: string
-  field: string
-  operator: string
-  value: string
-}
-
-interface HeaderRow {
-  key: string
-  value: string
-}
-
 const applications = ref<MockApplicationItem[]>([])
 const endpoints = ref<MockEndpointItem[]>([])
 const scenarios = ref<MockScenarioItem[]>([])
 const businessScenarios = ref<MockBusinessScenarioItem[]>([])
-const releases = ref<MockReleaseItem[]>([])
-const logs = ref<MockCallLogItem[]>([])
 const activeAppId = ref<number | null>(null)
 const activeEndpointId = ref<number | null>(null)
 const activeScenarioId = ref<number | null>(null)
-const activeLog = ref<MockCallLogItem | null>(null)
 const loading = ref(false)
-const releaseLoading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
-const appDialogVisible = ref(false)
-const endpointDialogVisible = ref(false)
-const scenarioDialogVisible = ref(false)
 const businessScenarioDialogVisible = ref(false)
-const referenceDrawerVisible = ref(false)
-const referenceLoading = ref(false)
-const referenceSummary = ref<ConfigReferenceSummary | null>(null)
-const logDrawerVisible = ref(false)
-const publishDialogVisible = ref(false)
-const scenarioEditorTab = ref<'match' | 'response' | 'variables'>('match')
-const matchMode = ref<'simple' | 'advanced'>('advanced')
-const releaseName = ref('')
-const matchRuleRows = ref<MatchRuleRow[]>([])
-const responseHeaderRows = ref<HeaderRow[]>([])
-const appDialogMode = ref<DialogMode>('create')
-const endpointDialogMode = ref<DialogMode>('create')
-const scenarioDialogMode = ref<DialogMode>('create')
 const businessScenarioDialogMode = ref<DialogMode>('create')
-const editingAppId = ref<number | null>(null)
-const editingEndpointId = ref<number | null>(null)
-const editingScenarioId = ref<number | null>(null)
 const editingBusinessScenarioId = ref<number | null>(null)
-
-const appForm = reactive<CreateMockApplicationPayload>({
-  appName: '',
-  appCode: '',
-  description: '',
-  status: 1,
-})
-
-const endpointForm = reactive<CreateMockEndpointPayload>({
-  appId: 0,
-  endpointName: '',
-  httpMethod: 'POST',
-  pathPattern: '/pay/notify',
-  description: '',
-  status: 1,
-})
-
-const scenarioForm = reactive<CreateMockScenarioPayload>({
-  appId: 0,
-  endpointId: 0,
-  scenarioName: '',
-  priority: 100,
-  matchJson: '{}',
-  responseStatus: 200,
-  responseHeadersJson: '{"Content-Type":"application/json;charset=UTF-8"}',
-  responseBody: '{"success":true}',
-  responseDelayMs: 0,
-  variablesJson: '{}',
-  status: 1,
-})
 
 const businessScenarioForm = reactive<BusinessScenarioForm>({
   appId: 0,
@@ -154,169 +86,108 @@ const activeEndpoint = computed(() => endpoints.value.find(item => item.id === a
 const appEndpoints = computed(() => endpoints.value.filter(item => item.appId === activeAppId.value))
 const endpointScenarios = computed(() => scenarios.value.filter(item => item.endpointId === activeEndpointId.value))
 const appScenarios = computed(() => scenarios.value.filter(item => item.appId === activeAppId.value))
-const activeRelease = computed(() => releases.value.find(item => item.active) || null)
-const nextReleaseVersion = computed(() => Math.max(0, ...releases.value.map(item => item.versionNo)) + 1)
-const environmentReferenceCount = computed(() => referenceSummary.value?.items.filter(item => item.sourceType.includes('环境')).length || 0)
-const responseStatusOptions = [
-  { value: '200', label: '200 OK' },
-  { value: '201', label: '201 Created' },
-  { value: '204', label: '204 No Content' },
-  { value: '400', label: '400 Bad Request' },
-  { value: '401', label: '401 Unauthorized' },
-  { value: '403', label: '403 Forbidden' },
-  { value: '404', label: '404 Not Found' },
-  { value: '409', label: '409 Conflict' },
-  { value: '422', label: '422 Unprocessable Entity' },
-  { value: '500', label: '500 Internal Server Error' },
-  { value: '502', label: '502 Bad Gateway' },
-  { value: '503', label: '503 Service Unavailable' },
-]
-const responseStatusModel = computed({
-  get: () => String(scenarioForm.responseStatus),
-  set: (value: string) => {
-    const status = Number(value)
-    if (Number.isInteger(status) && status >= 100 && status <= 599) {
-      scenarioForm.responseStatus = status
-    }
-  },
+const {
+  appDialogMode,
+  appDialogVisible,
+  appForm,
+  endpointDialogMode,
+  endpointDialogVisible,
+  endpointForm,
+  openCopyEndpointDialog,
+  openCreateAppDialog,
+  openCreateEndpointDialog,
+  openEditAppDialog,
+  openEditEndpointDialog,
+  removeEndpoint,
+  submitApplication,
+  submitEndpoint,
+  toggleApplication,
+} = useConfigMockApplicationActions({
+  activeAppId,
+  activeEndpointId,
+  loadAll,
+  saving,
+  workspaceCode: computed(() => props.workspaceCode),
 })
-const responseContentType = computed({
-  get: () => responseHeaderRows.value.find(item => item.key.toLowerCase() === 'content-type')?.value || 'application/json',
-  set: (value: string) => {
-    const row = responseHeaderRows.value.find(item => item.key.toLowerCase() === 'content-type')
-    if (row) {
-      row.value = value
-    } else {
-      responseHeaderRows.value.unshift({ key: 'Content-Type', value })
-    }
-  },
+const {
+  addMatchRule,
+  addResponseHeader,
+  matchMode,
+  matchRuleRows,
+  openCopyScenarioDialog,
+  openCreateScenarioDialog,
+  openEditScenarioDialog,
+  removeMatchRule,
+  removeResponseHeader,
+  removeScenario,
+  responseContentType,
+  responseHeaderRows,
+  responseStatusModel,
+  responseStatusOptions,
+  scenarioDialogMode,
+  scenarioDialogVisible,
+  scenarioEditorTab,
+  scenarioForm,
+  scenarioVariableRows,
+  submitScenario,
+} = useConfigMockScenarioActions({
+  activeAppId,
+  activeEndpointId,
+  activeScenarioId,
+  loadAll,
+  saving,
+  workspaceCode: computed(() => props.workspaceCode),
 })
-const scenarioVariableRows = computed(() => {
-  const rows = new Map<string, { name: string; source: string; value: string; description: string }>()
-  try {
-    const variables = JSON.parse(scenarioForm.variablesJson || '{}') as Record<string, unknown>
-    Object.entries(variables).forEach(([name, value]) => {
-      rows.set(name, { name: `{{${name}}}`, source: '场景变量', value: String(value ?? ''), description: '当前场景配置' })
-    })
-  } catch {
-    // JSON 校验由保存流程统一处理。
-  }
-  const sourceText = `${scenarioForm.matchJson || ''}\n${scenarioForm.responseBody || ''}`
-  const matches = sourceText.matchAll(/\{\{\s*([^{}]+?)\s*\}\}|\$\{\s*([^{}]+?)\s*\}/g)
-  for (const match of matches) {
-    const name = (match[1] || match[2] || '').trim()
-    if (!name || rows.has(name)) continue
-    const source = name.startsWith('env.') ? '环境变量' : name.startsWith('request.') ? '请求上下文' : name.startsWith('ws.') ? '工作区变量' : '系统内置'
-    rows.set(name, { name: match[0], source, value: '运行时解析', description: '响应模板引用' })
-  }
-  return Array.from(rows.values())
+const {
+  activateRelease,
+  activeLog,
+  activeRelease,
+  confirmPublishRelease,
+  environmentReferenceCount,
+  loadApplicationReferences,
+  loadLogs,
+  loadReleases,
+  logDrawerVisible,
+  logs,
+  nextReleaseVersion,
+  openLog,
+  prettyJson,
+  publishCurrentRelease,
+  publishDialogVisible,
+  referenceDrawerVisible,
+  referenceLoading,
+  referenceSummary,
+  releaseLoading,
+  releaseName,
+  releases,
+} = useConfigMockReleaseActivity({
+  activeApp,
+  activeAppId,
+  workspaceCode: computed(() => props.workspaceCode),
 })
-
-function formatJsonSource(value: string, fallback: string) {
-  const source = value || fallback
-  try {
-    return JSON.stringify(JSON.parse(source), null, 2)
-  } catch {
-    return source
-  }
-}
-
-function hydrateScenarioEditor() {
-  matchRuleRows.value = []
-  try {
-    const parsed = JSON.parse(scenarioForm.matchJson || '{}') as { conditions?: MatchRuleRow[] }
-    if (Array.isArray(parsed.conditions)) {
-      matchRuleRows.value = parsed.conditions.map(item => ({
-        source: item.source || 'Query',
-        field: item.field || '',
-        operator: item.operator || 'equals',
-        value: item.value || '',
-      }))
-      matchMode.value = 'simple'
-    } else {
-      matchMode.value = 'advanced'
-    }
-  } catch {
-    matchMode.value = 'advanced'
-  }
-  responseHeaderRows.value = []
-  try {
-    const parsedHeaders = JSON.parse(scenarioForm.responseHeadersJson || '{}') as Record<string, unknown>
-    responseHeaderRows.value = Object.entries(parsedHeaders).map(([key, value]) => ({ key, value: String(value ?? '') }))
-  } catch {
-    responseHeaderRows.value = []
-  }
-  if (!responseHeaderRows.value.length) {
-    responseHeaderRows.value.push({ key: 'Content-Type', value: 'application/json' })
-  }
-}
-
-function addMatchRule() {
-  matchRuleRows.value.push({ source: 'Query', field: '', operator: 'equals', value: '' })
-}
-
-function removeMatchRule(index: number) {
-  matchRuleRows.value.splice(index, 1)
-}
-
-function addResponseHeader() {
-  responseHeaderRows.value.push({ key: '', value: '' })
-}
-
-function removeResponseHeader(index: number) {
-  responseHeaderRows.value.splice(index, 1)
-}
-
-function syncScenarioStructuredFields() {
-  if (matchMode.value === 'simple') {
-    scenarioForm.matchJson = JSON.stringify({ matchMode: 'all', conditions: matchRuleRows.value }, null, 2)
-  }
-  scenarioForm.responseHeadersJson = JSON.stringify(
-    Object.fromEntries(responseHeaderRows.value.filter(item => item.key.trim()).map(item => [item.key.trim(), item.value])),
-    null,
-    2,
-  )
-}
 
 async function loadAll() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [appPage, endpointPage, scenarioPage, businessScenarioPage, logPage] = await Promise.all([
+    const [appPage, endpointPage, scenarioPage, businessScenarioPage] = await Promise.all([
       configApi.getMockApplications(props.workspaceCode),
       configApi.getMockEndpoints(props.workspaceCode),
       configApi.getMockScenarios(props.workspaceCode),
       configApi.getMockBusinessScenarios(props.workspaceCode),
-      configApi.getMockCallLogs(props.workspaceCode),
     ])
     applications.value = appPage.items || []
     endpoints.value = endpointPage.items || []
     scenarios.value = scenarioPage.items || []
     businessScenarios.value = businessScenarioPage.items || []
-    logs.value = logPage.items || []
     normalizeActiveApp()
     normalizeActiveEndpoint()
     normalizeActiveScenario()
-    await loadReleases()
+    await Promise.all([loadReleases(), loadLogs()])
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
     loading.value = false
-  }
-}
-
-async function loadReleases() {
-  if (!activeAppId.value) {
-    releases.value = []
-    return
-  }
-  releaseLoading.value = true
-  try {
-    releases.value = await configApi.getMockReleases(props.workspaceCode, activeAppId.value)
-  } catch {
-    releases.value = []
-  } finally {
-    releaseLoading.value = false
   }
 }
 
@@ -349,109 +220,6 @@ function selectApplication(app: MockApplicationItem) {
 function selectEndpoint(endpoint: MockEndpointItem) {
   activeEndpointId.value = endpoint.id
   normalizeActiveScenario()
-}
-
-function openCreateAppDialog() {
-  appDialogMode.value = 'create'
-  editingAppId.value = null
-  Object.assign(appForm, {
-    appName: '',
-    appCode: '',
-    description: '',
-    status: 1,
-  })
-  appDialogVisible.value = true
-}
-
-function openEditAppDialog(app: MockApplicationItem) {
-  appDialogMode.value = 'edit'
-  editingAppId.value = app.id
-  Object.assign(appForm, {
-    appName: app.appName,
-    appCode: app.appCode,
-    description: app.description || '',
-    status: app.status,
-  })
-  appDialogVisible.value = true
-}
-
-function openCreateEndpointDialog() {
-  if (!activeAppId.value) {
-    ElMessage.warning('请先创建或选择 Mock 应用')
-    return
-  }
-  endpointDialogMode.value = 'create'
-  editingEndpointId.value = null
-  Object.assign(endpointForm, {
-    appId: activeAppId.value,
-    endpointName: '',
-    httpMethod: 'POST',
-    pathPattern: '/pay/notify',
-    description: '',
-    status: 1,
-  })
-  endpointDialogVisible.value = true
-}
-
-function openEditEndpointDialog(endpoint: MockEndpointItem) {
-  endpointDialogMode.value = 'edit'
-  editingEndpointId.value = endpoint.id
-  Object.assign(endpointForm, {
-    appId: endpoint.appId,
-    endpointName: endpoint.endpointName,
-    httpMethod: endpoint.httpMethod,
-    pathPattern: endpoint.pathPattern,
-    description: endpoint.description || '',
-    status: endpoint.status,
-  })
-  endpointDialogVisible.value = true
-}
-
-function openCreateScenarioDialog() {
-  if (!activeAppId.value || !activeEndpointId.value) {
-    ElMessage.warning('请先选择 Mock 接口')
-    return
-  }
-  scenarioDialogMode.value = 'create'
-  editingScenarioId.value = null
-  Object.assign(scenarioForm, {
-    appId: activeAppId.value,
-    endpointId: activeEndpointId.value,
-    scenarioName: '',
-    priority: 100,
-    matchJson: formatJsonSource('{}', '{}'),
-    responseStatus: 200,
-    responseHeadersJson: '{"Content-Type":"application/json;charset=UTF-8"}',
-    responseBody: formatJsonSource('{"success":true}', '{"success":true}'),
-    responseDelayMs: 0,
-    variablesJson: '{}',
-    status: 1,
-  })
-  scenarioEditorTab.value = 'match'
-  hydrateScenarioEditor()
-  matchMode.value = 'simple'
-  scenarioDialogVisible.value = true
-}
-
-function openEditScenarioDialog(scenario: MockScenarioItem) {
-  scenarioDialogMode.value = 'edit'
-  editingScenarioId.value = scenario.id
-  Object.assign(scenarioForm, {
-    appId: scenario.appId,
-    endpointId: scenario.endpointId,
-    scenarioName: scenario.scenarioName,
-    priority: scenario.priority,
-    matchJson: formatJsonSource(scenario.matchJson || '{}', '{}'),
-    responseStatus: scenario.responseStatus || 200,
-    responseHeadersJson: scenario.responseHeadersJson || '{}',
-    responseBody: formatJsonSource(scenario.responseBody || '', ''),
-    responseDelayMs: scenario.responseDelayMs || 0,
-    variablesJson: scenario.variablesJson || '{}',
-    status: scenario.status,
-  })
-  scenarioEditorTab.value = 'match'
-  hydrateScenarioEditor()
-  scenarioDialogVisible.value = true
 }
 
 function addBusinessScenarioItem() {
@@ -488,79 +256,6 @@ function validateJson(text: string, label: string) {
   } catch {
     ElMessage.warning(`${label} 不是合法 JSON`)
     return false
-  }
-}
-
-async function submitApplication() {
-  if (!appForm.appName.trim() || !appForm.appCode.trim()) {
-    ElMessage.warning('请输入应用名称和应用编码')
-    return
-  }
-  saving.value = true
-  try {
-    const saved = appDialogMode.value === 'edit' && editingAppId.value
-      ? await configApi.updateMockApplication(props.workspaceCode, editingAppId.value, appForm)
-      : await configApi.createMockApplication(props.workspaceCode, appForm)
-    ElMessage.success(appDialogMode.value === 'edit' ? 'Mock 应用已更新' : 'Mock 应用已创建')
-    activeAppId.value = saved.id
-    appDialogVisible.value = false
-    await loadAll()
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    saving.value = false
-  }
-}
-
-async function submitEndpoint() {
-  if (!endpointForm.endpointName.trim() || !endpointForm.pathPattern.trim()) {
-    ElMessage.warning('请输入接口名称和匹配路径')
-    return
-  }
-  saving.value = true
-  try {
-    const saved = endpointDialogMode.value === 'edit' && editingEndpointId.value
-      ? await configApi.updateMockEndpoint(props.workspaceCode, editingEndpointId.value, endpointForm)
-      : await configApi.createMockEndpoint(props.workspaceCode, endpointForm)
-    ElMessage.success(endpointDialogMode.value === 'edit' ? 'Mock 接口已更新' : 'Mock 接口已创建')
-    activeEndpointId.value = saved.id
-    endpointDialogVisible.value = false
-    await loadAll()
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    saving.value = false
-  }
-}
-
-async function submitScenario() {
-  if (!scenarioForm.scenarioName.trim()) {
-    ElMessage.warning('请输入场景名称')
-    return
-  }
-  syncScenarioStructuredFields()
-  if (!validateJson(scenarioForm.matchJson || '{}', '匹配规则')) {
-    return
-  }
-  if (!validateJson(scenarioForm.responseHeadersJson || '{}', '响应头')) {
-    return
-  }
-  if (!validateJson(scenarioForm.variablesJson || '{}', '模板变量')) {
-    return
-  }
-  saving.value = true
-  try {
-    const saved = scenarioDialogMode.value === 'edit' && editingScenarioId.value
-      ? await configApi.updateMockScenario(props.workspaceCode, editingScenarioId.value, scenarioForm)
-      : await configApi.createMockScenario(props.workspaceCode, scenarioForm)
-    ElMessage.success(scenarioDialogMode.value === 'edit' ? 'Mock 场景已更新' : 'Mock 场景已创建')
-    activeScenarioId.value = saved.id
-    scenarioDialogVisible.value = false
-    await loadAll()
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    saving.value = false
   }
 }
 
@@ -613,22 +308,6 @@ async function submitBusinessScenario() {
   }
 }
 
-async function loadApplicationReferences(row = activeApp.value) {
-  if (!row) {
-    referenceSummary.value = null
-    return
-  }
-  referenceLoading.value = true
-  referenceSummary.value = null
-  try {
-    referenceSummary.value = await configApi.getMockApplicationReferences(props.workspaceCode, row.id)
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    referenceLoading.value = false
-  }
-}
-
 function selectApplicationById(id: number) {
   const app = applications.value.find(item => item.id === id)
   if (app) {
@@ -639,178 +318,6 @@ function selectApplicationById(id: number) {
 function selectEndpointAndCreateScenario(endpoint: MockEndpointItem) {
   selectEndpoint(endpoint)
   openCreateScenarioDialog()
-}
-
-function openCopyEndpointDialog(endpoint: MockEndpointItem) {
-  endpointDialogMode.value = 'create'
-  editingEndpointId.value = null
-  Object.assign(endpointForm, {
-    appId: endpoint.appId,
-    endpointName: `${endpoint.endpointName} 副本`,
-    httpMethod: endpoint.httpMethod,
-    pathPattern: endpoint.pathPattern,
-    description: endpoint.description || '',
-    status: endpoint.status,
-  })
-  endpointDialogVisible.value = true
-}
-
-function openCopyScenarioDialog(scenario: MockScenarioItem) {
-  scenarioDialogMode.value = 'create'
-  editingScenarioId.value = null
-  Object.assign(scenarioForm, {
-    appId: scenario.appId,
-    endpointId: scenario.endpointId,
-    scenarioName: `${scenario.scenarioName} 副本`,
-    priority: scenario.priority,
-    matchJson: formatJsonSource(scenario.matchJson || '{}', '{}'),
-    responseStatus: scenario.responseStatus || 200,
-    responseHeadersJson: scenario.responseHeadersJson || '{}',
-    responseBody: formatJsonSource(scenario.responseBody || '', ''),
-    responseDelayMs: scenario.responseDelayMs || 0,
-    variablesJson: scenario.variablesJson || '{}',
-    status: scenario.status,
-  })
-  scenarioEditorTab.value = 'match'
-  hydrateScenarioEditor()
-  scenarioDialogVisible.value = true
-}
-
-async function publishCurrentRelease() {
-  if (!activeApp.value) {
-    return
-  }
-  await loadApplicationReferences(activeApp.value)
-  releaseName.value = ''
-  publishDialogVisible.value = true
-}
-
-async function confirmPublishRelease() {
-  if (!activeApp.value) {
-    return
-  }
-  releaseLoading.value = true
-  try {
-    await configApi.publishMockRelease(props.workspaceCode, activeApp.value.id, {
-      releaseName: releaseName.value.trim() || null,
-    })
-    ElMessage.success('当前 Mock 配置已发布为不可变版本，可在环境配置中选择使用')
-    publishDialogVisible.value = false
-    await loadReleases()
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error(getRequestErrorMessage(error))
-    }
-  } finally {
-    releaseLoading.value = false
-  }
-}
-
-async function toggleApplication(row: MockApplicationItem) {
-  const nextStatus: ConfigStatus = row.status === 1 ? 0 : 1
-  try {
-    await confirmAction({
-      title: nextStatus === 1 ? '启用 Mock 应用' : '停用 Mock 应用',
-      message: nextStatus === 1
-        ? `确认启用 Mock 应用「${row.appName}」？`
-        : `确认停用 Mock 应用「${row.appName}」？停用后该应用将不再响应 Mock 请求。`,
-      confirmText: nextStatus === 1 ? '确认启用' : '确认停用',
-      tone: nextStatus === 1 ? 'success' : 'warning',
-    })
-    saving.value = true
-    await configApi.updateMockApplication(props.workspaceCode, row.id, {
-      appName: row.appName,
-      appCode: row.appCode,
-      description: row.description,
-      status: nextStatus,
-    })
-    ElMessage.success(nextStatus === 1 ? 'Mock 应用已启用' : 'Mock 应用已停用')
-    await loadAll()
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error(getRequestErrorMessage(error))
-    }
-  } finally {
-    saving.value = false
-  }
-}
-
-async function activateRelease(release: MockReleaseItem) {
-  if (!activeApp.value || release.active) {
-    return
-  }
-  try {
-    await confirmAction({
-      title: '切换 Mock 运行版本',
-      message: `确认将运行版本切换为 v${release.versionNo}「${release.releaseName}」？后续调用会使用该版本快照。`,
-      confirmText: '确认切换',
-      tone: 'warning',
-    })
-    releaseLoading.value = true
-    await configApi.activateMockRelease(props.workspaceCode, activeApp.value.id, release.id)
-    ElMessage.success(`已切换到 Mock v${release.versionNo}`)
-    await loadReleases()
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error(getRequestErrorMessage(error))
-    }
-  } finally {
-    releaseLoading.value = false
-  }
-}
-
-async function removeEndpoint(row: MockEndpointItem) {
-  await confirmAndRun(
-    `删除 Mock 接口「${row.endpointName}」会同时删除下属场景和调用日志。确认删除？`,
-    async () => {
-      await configApi.deleteMockEndpoint(props.workspaceCode, row.id)
-      if (activeEndpointId.value === row.id) {
-        activeEndpointId.value = null
-      }
-    },
-  )
-}
-
-async function removeScenario(row: MockScenarioItem) {
-  await confirmAndRun(`确认删除 Mock 场景「${row.scenarioName}」？相关调用日志也会清理。`, async () => {
-    await configApi.deleteMockScenario(props.workspaceCode, row.id)
-    if (activeScenarioId.value === row.id) {
-      activeScenarioId.value = null
-    }
-  })
-}
-
-async function confirmAndRun(message: string, action: () => Promise<void>) {
-  try {
-    await confirmDelete({
-      title: '删除确认',
-      message,
-      confirmText: '确认删除',
-    })
-    await action()
-    ElMessage.success('已删除')
-    await loadAll()
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error(getRequestErrorMessage(error))
-    }
-  }
-}
-
-function openLog(row: MockCallLogItem) {
-  activeLog.value = row
-  logDrawerVisible.value = true
-}
-
-function prettyJson(value: string | null) {
-  if (!value) {
-    return '-'
-  }
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2)
-  } catch {
-    return value
-  }
 }
 
 watch(activeAppId, () => {
