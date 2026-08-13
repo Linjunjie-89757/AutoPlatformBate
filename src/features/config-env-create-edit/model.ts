@@ -1,6 +1,5 @@
 import type { ConfigStatus, CreateEnvPayload, EnvConfigItem } from '@/entities/config'
 
-export type ConfigEnvDialogMode = 'create' | 'edit'
 export type ConfigAutomationType = 'API' | 'WEB_UI' | 'API_WEB_UI' | 'APP'
 export type ConfigEnvironmentStage = 'DEV' | 'TEST' | 'STAGING' | 'PROD' | 'SANDBOX'
 
@@ -285,12 +284,6 @@ export function validateConfigEnvForm(form: ConfigEnvForm) {
     }
   }
   return validateLocalVariables(form.localVariables)
-}
-
-export function validateConfigEnvCreateForm(form: ConfigEnvForm) {
-  if (!form.workspaceCode.trim() || form.workspaceCode === 'ALL') return '请选择具体目标空间'
-  if (!form.envName.trim()) return '请输入环境名称'
-  return ''
 }
 
 function parseEnvConfig(configJson: string): WebUiEnvConfig & {
