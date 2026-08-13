@@ -74,7 +74,6 @@ LARGE_FILE_REVIEW_LINES=1800 LARGE_FILE_REVIEW_KB=120 LARGE_FILE_CRITICAL_LINES=
 - `src/widgets/api-interface-workspace/ApiDefinitionWorkspaceModule.vue`
 - `src/widgets/api-scenario-workspace/ApiScenarioWorkspace.vue`
 - `src/widgets/web-ui-case-workspace/WebUiElementLibraryPanel.vue`
-- `src/widgets/api-execution-workspace/ApiExecutionWorkspace.vue`
 
 ## 接口工作区拆分方向
 
@@ -105,3 +104,10 @@ LARGE_FILE_REVIEW_LINES=1800 LARGE_FILE_REVIEW_KB=120 LARGE_FILE_CRITICAL_LINES=
 - `ApiScenarioWorkspace.vue` 当前仍是场景编辑器主容器，后续不应继续新增大块业务逻辑。
 - 下一阶段再评估高级编辑器共享左侧列表和共享样式是否值得抽取，不再对已稳定的响应区和参数表格做低价值再拆。
 - 具体拆分进度以 `设计/接口场景工作台拆分方案.md` 为准。
+
+## 接口执行套件审查结论
+
+- 现行页面由 `ApiAutomationPage.vue` 直接加载 `ApiExecutionSuiteFigmaWorkspace.vue`。
+- 原 `ApiExecutionWorkspace.vue` 及同目录 `index.ts` 没有页面、路由、测试或其他源码消费者，属于旧实现残留，不应继续按大文件拆分。
+- 现行 Figma 工作区覆盖旧实现使用的接口用例、场景、环境和变量集能力；尚未支持的后台字段与交互差异已记录在 `docs/frontend-adjustments-inventory.md`。
+- 本轮删除旧实现和无效导出，不修改现行页面 DOM、样式、交互或业务接口。
