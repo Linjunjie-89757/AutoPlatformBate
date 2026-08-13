@@ -24,73 +24,36 @@ import {
   XCircle,
   Zap,
 } from '@lucide/vue'
-import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
-import { configApi, type ConfigReferenceSummary, type ParamSetItem } from '@/entities/config'
+import { type ParamSetItem } from '@/entities/config'
 import {
-  buildCreateParamPayload,
   createConfigParamFormFromItem,
-  createDefaultConfigParamForm,
-  createDefaultWebUiVariable,
-  type ConfigParamForm,
   type WebUiVariableItem,
 } from '@/features/config-param-create-edit'
-import { getRequestErrorMessage } from '@/shared/api/error'
-import { AppFigmaSwitch, confirmDelete } from '@/shared/ui'
+import { AppFigmaSwitch } from '@/shared/ui'
 
 import ConfigVariableBuiltinPanel from './ConfigVariableBuiltinPanel.vue'
+import { useConfigVariableActions } from './useConfigVariableActions'
+import { useConfigVariableImport, type ConflictAction } from './useConfigVariableImport'
+import { useConfigVariableSetActions } from './useConfigVariableSetActions'
+import { useConfigVariableWorkspaceState } from './useConfigVariableWorkspaceState'
 
 const props = defineProps<{
   workspaceCode: string
 }>()
 
-type ActiveView = 'global' | 'builtin' | number
 type VariableType = NonNullable<WebUiVariableItem['valueType']>
-type ConflictAction = 'skip' | 'overwrite' | 'rename'
-
 interface VariableTypeOption {
   value: VariableType
   label: string
 }
 
-const params = ref<ParamSetItem[]>([])
-const loading = ref(false)
-const saving = ref(false)
-const errorMessage = ref('')
-const activeView = ref<ActiveView>('global')
 const sidebarKeyword = ref('')
 const variableKeyword = ref('')
 const typeFilter = ref('ALL')
 const statusFilter = ref('ALL')
 const setsExpanded = ref(true)
-const revealedVariables = ref(new Set<string>())
-const referenceSummary = ref<ConfigReferenceSummary | null>(null)
-const referenceLoading = ref(false)
-
-const activeForm = reactive<ConfigParamForm>(createDefaultConfigParamForm(props.workspaceCode))
-
-const variableDialogVisible = ref(false)
-const editingVariableIndex = ref(-1)
-const variableError = ref('')
-const variableDraft = reactive<WebUiVariableItem>(createDefaultWebUiVariable())
-
-const variableSetDialogVisible = ref(false)
-const variableSetDialogMode = ref<'create' | 'edit'>('create')
-const variableSetError = ref('')
-const variableSetDraft = reactive<ConfigParamForm>(createDefaultConfigParamForm(props.workspaceCode))
-
-const deleteSetVisible = ref(false)
-const deletingSet = ref(false)
-
-const importVisible = ref(false)
-const importStep = ref(1)
-const importFileName = ref('')
-const importError = ref('')
-const importRows = ref<WebUiVariableItem[]>([])
-const importConflicts = reactive<Record<string, ConflictAction>>({})
-const importResult = reactive({ added: 0, overwritten: 0, skipped: 0 })
-const fileInput = ref<HTMLInputElement | null>(null)
 
 const variableTypeOptions: VariableTypeOption[] = [
   { value: 'TEXT', label: '文本' },
@@ -108,21 +71,32 @@ const variableSetTypeOptions = [
   { value: 'PAYMENT_CHANNEL', label: '支付渠道' },
 ]
 
-const globalParam = computed<ParamSetItem>(() => {
-  const current = params.value.find(item => item.paramType === 'GLOBAL')
-  if (current) return current
-  return {
-    id: -1,
-    workspaceCode: props.workspaceCode,
-    workspaceName: '',
-    paramType: 'GLOBAL',
-    paramName: '全局变量',
-    contentJson: JSON.stringify({ description: '', stageType: 'COMMON', systemBuiltIn: true, variables: [] }),
-    status: 1,
-  }
+let resetVariableRevealState = () => {}
+const {
+  activeForm,
+  activeParam,
+  activeVariables,
+  activeView,
+  cloneVariable,
+  errorMessage,
+  globalParam,
+  isBuiltinView,
+  isGlobalView,
+  loadParams,
+  loading,
+  persistActive,
+  referenceLoading,
+  referenceSummary,
+  resetWorkspace,
+  saving,
+  selectGlobalView,
+  selectView,
+  variableSets,
+} = useConfigVariableWorkspaceState({
+  afterHydrate: () => resetVariableRevealState(),
+  workspaceCode: computed(() => props.workspaceCode),
 })
 
-const variableSets = computed(() => params.value.filter(item => item.paramType !== 'GLOBAL'))
 const filteredVariableSets = computed(() => {
   const keyword = sidebarKeyword.value.trim().toLowerCase()
   if (!keyword) return variableSets.value
@@ -132,14 +106,6 @@ const filteredVariableSets = computed(() => {
   })
 })
 
-const activeParam = computed<ParamSetItem>(() => {
-  if (activeView.value === 'global' || activeView.value === 'builtin') return globalParam.value
-  return params.value.find(item => item.id === activeView.value) || globalParam.value
-})
-
-const isGlobalView = computed(() => activeView.value === 'global')
-const isBuiltinView = computed(() => activeView.value === 'builtin')
-const activeVariables = computed(() => activeForm.variables)
 const sensitiveCount = computed(() => activeVariables.value.filter(item => item.sensitive || item.valueType === 'SECRET').length)
 const filteredVariables = computed(() => {
   const keyword = variableKeyword.value.trim().toLowerCase()
@@ -155,23 +121,6 @@ const filteredVariables = computed(() => {
       return matchesKeyword && matchesType && matchesStatus
     })
 })
-
-const conflictRows = computed(() => {
-  const names = new Set(activeVariables.value.map(item => item.name.toUpperCase()))
-  return importRows.value.filter(item => names.has(item.name.toUpperCase()))
-})
-
-const importTitle = computed(() => [
-  '导入变量 — 选择文件',
-  '导入变量 — 格式校验',
-  '导入变量 — 导入预览',
-  '导入变量 — 冲突处理',
-  '导入变量 — 导入完成',
-][importStep.value - 1])
-
-function cloneVariable(variable: WebUiVariableItem): WebUiVariableItem {
-  return { ...createDefaultWebUiVariable(), ...variable }
-}
 
 function effectiveVariableType(variable: WebUiVariableItem): VariableType {
   if (variable.sensitive || variable.valueType === 'SECRET') return 'SECRET'
@@ -195,253 +144,78 @@ function variableSetSensitiveCount(item: ParamSetItem) {
   return variableSetForm(item).variables.filter(variable => variable.sensitive || variable.valueType === 'SECRET').length
 }
 
-function toggleReveal(variable: WebUiVariableItem) {
-  const next = new Set(revealedVariables.value)
-  if (next.has(variable.name)) next.delete(variable.name)
-  else next.add(variable.name)
-  revealedVariables.value = next
-}
-
-function displayedVariableValue(variable: WebUiVariableItem) {
-  if (effectiveVariableType(variable) === 'SECRET' && !revealedVariables.value.has(variable.name)) {
-    return '••••••••••••'
-  }
-  return variable.value || '—'
-}
-
-function hydrateActiveForm() {
-  const next = createConfigParamFormFromItem(activeParam.value)
-  Object.assign(activeForm, next, {
-    workspaceCode: activeParam.value.workspaceCode || props.workspaceCode,
-    variables: next.variables.map(cloneVariable),
-  })
+const {
+  copyVariable,
+  displayedVariableValue,
+  editingVariableIndex,
+  openAddVariable,
+  openEditVariable,
+  removeVariable,
+  resetRevealedVariables,
+  revealedVariables,
+  selectVariableType,
+  submitVariable,
+  toggleReveal,
+  toggleVariable,
+  variableDialogVisible,
+  variableDraft,
+  variableError,
+} = useConfigVariableActions({
+  activeVariables,
+  cloneVariable,
+  effectiveVariableType,
+  persistActive,
+})
+resetVariableRevealState = () => {
   variableKeyword.value = ''
   typeFilter.value = 'ALL'
   statusFilter.value = 'ALL'
-  revealedVariables.value = new Set()
+  resetRevealedVariables()
 }
 
-async function loadParams(preferredId?: number) {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const page = await configApi.getSettingsParams(props.workspaceCode)
-    params.value = page.items || []
-    if (preferredId && params.value.some(item => item.id === preferredId && item.paramType !== 'GLOBAL')) {
-      activeView.value = preferredId
-    } else if (typeof activeView.value === 'number' && !params.value.some(item => item.id === activeView.value)) {
-      activeView.value = 'global'
-    }
-    hydrateActiveForm()
-    await loadReferences()
-  } catch (error) {
-    errorMessage.value = getRequestErrorMessage(error)
-  } finally {
-    loading.value = false
-  }
-}
+const {
+  commitImport,
+  conflictRows,
+  goToConflictStep,
+  handleFileChange,
+  importConflicts,
+  importError,
+  importFileName,
+  importResult,
+  importRows,
+  importStep,
+  importTitle,
+  importVisible,
+  openImport,
+  setFileInput,
+  triggerFileInput,
+} = useConfigVariableImport({
+  activeVariables,
+  cloneVariable,
+  isSupportedVariableType: value => variableTypeOptions.some(option => option.value === value),
+  persistActive,
+  replaceVariables: variables => { activeForm.variables = variables },
+})
 
-async function loadReferences() {
-  referenceSummary.value = null
-  if (isGlobalView.value || isBuiltinView.value || activeParam.value.id < 0) return
-  referenceLoading.value = true
-  try {
-    referenceSummary.value = await configApi.getSettingsParamReferences(
-      activeParam.value.workspaceCode || props.workspaceCode,
-      activeParam.value.id,
-    )
-  } catch {
-    referenceSummary.value = null
-  } finally {
-    referenceLoading.value = false
-  }
-}
-
-async function selectView(view: ActiveView) {
-  activeView.value = view
-  if (view !== 'builtin') hydrateActiveForm()
-  await loadReferences()
-}
-
-function validateVariable(variable: WebUiVariableItem, editingIndex = -1) {
-  const name = variable.name.trim()
-  if (!name) return '请输入变量名'
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return '变量名只能包含字母、数字、下划线，且不能以数字开头'
-  const duplicate = activeVariables.value.some((item, index) => index !== editingIndex && item.name.toUpperCase() === name.toUpperCase())
-  if (duplicate) return `变量名 ${name} 已存在`
-  if (effectiveVariableType(variable) === 'JSON' && variable.value.trim()) {
-    try {
-      JSON.parse(variable.value)
-    } catch {
-      return 'JSON 值格式不正确'
-    }
-  }
-  return ''
-}
-
-async function persistActive(successMessage?: string) {
-  saving.value = true
-  try {
-    if (isGlobalView.value) {
-      activeForm.paramName = '全局变量'
-      activeForm.paramType = 'GLOBAL'
-      activeForm.status = 1
-    }
-    const payload = buildCreateParamPayload(activeForm)
-    const workspaceCode = activeParam.value.workspaceCode || props.workspaceCode
-    const saved = activeParam.value.id < 0
-      ? await configApi.createSettingsParam(workspaceCode, payload)
-      : await configApi.updateSettingsParam(workspaceCode, activeParam.value.id, payload)
-    const existingIndex = params.value.findIndex(item => item.id === saved.id)
-    if (existingIndex >= 0) params.value.splice(existingIndex, 1, saved)
-    else params.value.push(saved)
-    if (!isGlobalView.value) activeView.value = saved.id
-    hydrateActiveForm()
-    if (successMessage) ElMessage.success(successMessage)
-    return true
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-    return false
-  } finally {
-    saving.value = false
-  }
-}
-
-function openAddVariable() {
-  editingVariableIndex.value = -1
-  variableError.value = ''
-  Object.assign(variableDraft, createDefaultWebUiVariable())
-  variableDialogVisible.value = true
-}
-
-function openEditVariable(index: number) {
-  editingVariableIndex.value = index
-  variableError.value = ''
-  Object.assign(variableDraft, cloneVariable(activeVariables.value[index]!))
-  variableDialogVisible.value = true
-}
-
-function selectVariableType(type: VariableType) {
-  variableDraft.valueType = type
-  variableDraft.sensitive = type === 'SECRET'
-}
-
-async function submitVariable() {
-  const error = validateVariable(variableDraft, editingVariableIndex.value)
-  if (error) {
-    variableError.value = error
-    return
-  }
-  const next = cloneVariable(variableDraft)
-  next.name = next.name.trim()
-  next.description = next.description.trim()
-  if (next.valueType === 'SECRET') next.sensitive = true
-  if (editingVariableIndex.value >= 0) activeForm.variables.splice(editingVariableIndex.value, 1, next)
-  else activeForm.variables.push(next)
-  const saved = await persistActive(editingVariableIndex.value >= 0 ? '变量已更新' : '变量已添加')
-  if (saved) variableDialogVisible.value = false
-}
-
-async function toggleVariable(index: number) {
-  const row = activeVariables.value[index]
-  if (!row) return
-  const previous = row.enabled !== false
-  row.enabled = !previous
-  const saved = await persistActive(row.enabled ? '变量已启用' : '变量已停用')
-  if (!saved) row.enabled = previous
-}
-
-async function copyVariable(index: number) {
-  const source = activeVariables.value[index]
-  if (!source) return
-  const copy = cloneVariable(source)
-  let suffix = 1
-  let nextName = `${source.name}_COPY`
-  while (activeVariables.value.some(item => item.name.toUpperCase() === nextName.toUpperCase())) {
-    suffix += 1
-    nextName = `${source.name}_COPY_${suffix}`
-  }
-  copy.name = nextName
-  activeForm.variables.splice(index + 1, 0, copy)
-  await persistActive('变量已复制')
-}
-
-async function removeVariable(index: number) {
-  const row = activeVariables.value[index]
-  if (!row) return
-  try {
-    await confirmDelete({
-      title: '删除变量',
-      message: `确认删除变量「${row.name}」吗？删除后使用该变量的测试可能受到影响。`,
-      confirmText: '确认删除',
-    })
-    const removed = activeForm.variables.splice(index, 1)[0]
-    const saved = await persistActive('变量已删除')
-    if (!saved && removed) activeForm.variables.splice(index, 0, removed)
-  } catch (error) {
-    if (error !== 'cancel' && error !== 'close') ElMessage.error(getRequestErrorMessage(error))
-  }
-}
-
-function openCreateVariableSet() {
-  variableSetDialogMode.value = 'create'
-  variableSetError.value = ''
-  Object.assign(variableSetDraft, createDefaultConfigParamForm(props.workspaceCode), {
-    workspaceCode: props.workspaceCode,
-    paramType: 'API_VARIABLE_SET',
-    variables: [],
-  })
-  variableSetDialogVisible.value = true
-}
-
-function openEditVariableSet() {
-  variableSetDialogMode.value = 'edit'
-  variableSetError.value = ''
-  const next = createConfigParamFormFromItem(activeParam.value)
-  Object.assign(variableSetDraft, next, { variables: next.variables.map(cloneVariable) })
-  variableSetDialogVisible.value = true
-}
-
-async function submitVariableSet() {
-  if (!variableSetDraft.paramName.trim()) {
-    variableSetError.value = '请输入变量集名称'
-    return
-  }
-  if (!props.workspaceCode || props.workspaceCode === 'ALL') {
-    variableSetError.value = '请先选择具体工作区'
-    return
-  }
-  saving.value = true
-  try {
-    const payload = buildCreateParamPayload(variableSetDraft)
-    const saved = variableSetDialogMode.value === 'create'
-      ? await configApi.createSettingsParam(props.workspaceCode, payload)
-      : await configApi.updateSettingsParam(activeParam.value.workspaceCode || props.workspaceCode, activeParam.value.id, payload)
-    variableSetDialogVisible.value = false
-    await loadParams(saved.id)
-    ElMessage.success(variableSetDialogMode.value === 'create' ? '变量集已创建' : '变量集已更新')
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    saving.value = false
-  }
-}
-
-async function confirmDeleteVariableSet() {
-  if (isGlobalView.value || activeParam.value.id < 0) return
-  deletingSet.value = true
-  try {
-    await configApi.deleteSettingsParam(activeParam.value.workspaceCode || props.workspaceCode, activeParam.value.id)
-    deleteSetVisible.value = false
-    activeView.value = 'global'
-    await loadParams()
-    ElMessage.success('变量集已删除')
-  } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
-  } finally {
-    deletingSet.value = false
-  }
-}
+const {
+  confirmDeleteVariableSet,
+  deleteSetVisible,
+  deletingSet,
+  openCreateVariableSet,
+  openEditVariableSet,
+  submitVariableSet,
+  variableSetDialogMode,
+  variableSetDialogVisible,
+  variableSetDraft,
+  variableSetError,
+} = useConfigVariableSetActions({
+  activeParam,
+  cloneVariable,
+  loadParams,
+  saving,
+  selectGlobalView,
+  workspaceCode: computed(() => props.workspaceCode),
+})
 
 function exportVariables() {
   const data = {
@@ -458,181 +232,10 @@ function exportVariables() {
   URL.revokeObjectURL(url)
 }
 
-function openImport() {
-  importVisible.value = true
-  importStep.value = 1
-  importFileName.value = ''
-  importError.value = ''
-  importRows.value = []
-  Object.keys(importConflicts).forEach(key => delete importConflicts[key])
-  Object.assign(importResult, { added: 0, overwritten: 0, skipped: 0 })
-}
-
-function triggerFileInput() {
-  fileInput.value?.click()
-}
-
-function normalizeImportedVariable(value: unknown): WebUiVariableItem | null {
-  if (!value || typeof value !== 'object') return null
-  const item = value as Record<string, unknown>
-  const name = typeof item.name === 'string' ? item.name.trim() : ''
-  if (!name) return null
-  const rawType = typeof item.valueType === 'string' ? item.valueType.toUpperCase() : 'TEXT'
-  const valueType = variableTypeOptions.some(option => option.value === rawType) ? rawType as VariableType : 'TEXT'
-  return {
-    name,
-    value: item.value == null ? '' : typeof item.value === 'string' ? item.value : JSON.stringify(item.value),
-    description: typeof item.description === 'string' ? item.description : '',
-    sensitive: item.sensitive === true || valueType === 'SECRET',
-    valueType,
-    scopeType: 'ALL',
-    stageType: 'COMMON',
-    enabled: item.enabled !== false,
-  }
-}
-
-function parseCsvLine(line: string) {
-  const values: string[] = []
-  let current = ''
-  let quoted = false
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index]
-    if (char === '"' && line[index + 1] === '"' && quoted) {
-      current += '"'
-      index += 1
-    } else if (char === '"') {
-      quoted = !quoted
-    } else if (char === ',' && !quoted) {
-      values.push(current.trim())
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  values.push(current.trim())
-  return values
-}
-
-function parseCsv(text: string) {
-  const lines = text.split(/\r?\n/).filter(Boolean)
-  const headers = parseCsvLine(lines.shift() || '').map(item => item.toLowerCase())
-  return lines.map(line => {
-    const values = parseCsvLine(line)
-    return Object.fromEntries(headers.map((header, index) => [header, values[index] || '']))
-  })
-}
-
-function parseSimpleYaml(text: string) {
-  const rows: Record<string, unknown>[] = []
-  let current: Record<string, unknown> | null = null
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#') || line === 'variables:') continue
-    if (line.startsWith('- ')) {
-      if (current) rows.push(current)
-      current = {}
-      const pair = line.slice(2).split(/:(.*)/s)
-      if (pair[0]) current[pair[0].trim()] = (pair[1] || '').trim().replace(/^['"]|['"]$/g, '')
-    } else if (current && line.includes(':')) {
-      const pair = line.split(/:(.*)/s)
-      const rawValue = (pair[1] || '').trim().replace(/^['"]|['"]$/g, '')
-      current[pair[0]!.trim()] = rawValue === 'true' ? true : rawValue === 'false' ? false : rawValue
-    }
-  }
-  if (current) rows.push(current)
-  return rows
-}
-
-async function handleFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  importError.value = ''
-  if (file.size > 2 * 1024 * 1024) {
-    importError.value = '文件不能超过 2MB'
-    input.value = ''
-    return
-  }
-  importFileName.value = file.name
-  importStep.value = 2
-  try {
-    const text = await file.text()
-    const extension = file.name.split('.').pop()?.toLowerCase()
-    let source: unknown
-    if (extension === 'csv') source = parseCsv(text)
-    else if (extension === 'yaml' || extension === 'yml') source = parseSimpleYaml(text)
-    else source = JSON.parse(text)
-    const rawRows = Array.isArray(source)
-      ? source
-      : source && typeof source === 'object' && Array.isArray((source as { variables?: unknown[] }).variables)
-        ? (source as { variables: unknown[] }).variables
-        : []
-    const rows = rawRows.map(normalizeImportedVariable).filter((item): item is WebUiVariableItem => Boolean(item))
-    if (!rows.length) throw new Error('文件中没有可导入的变量')
-    importRows.value = rows
-    Object.keys(importConflicts).forEach(key => delete importConflicts[key])
-    conflictRows.value.forEach(row => { importConflicts[row.name] = 'skip' })
-    window.setTimeout(() => { importStep.value = 3 }, 500)
-  } catch (error) {
-    importStep.value = 1
-    importError.value = error instanceof Error ? error.message : '文件解析失败'
-  } finally {
-    input.value = ''
-  }
-}
-
-function goToConflictStep() {
-  if (!conflictRows.value.length) {
-    void commitImport()
-    return
-  }
-  importStep.value = 4
-}
-
-async function commitImport() {
-  const next = activeVariables.value.map(cloneVariable)
-  let added = 0
-  let overwritten = 0
-  let skipped = 0
-  for (const row of importRows.value) {
-    const existingIndex = next.findIndex(item => item.name.toUpperCase() === row.name.toUpperCase())
-    if (existingIndex < 0) {
-      next.push(cloneVariable(row))
-      added += 1
-      continue
-    }
-    const action = importConflicts[row.name] || 'skip'
-    if (action === 'overwrite') {
-      next.splice(existingIndex, 1, cloneVariable(row))
-      overwritten += 1
-    } else if (action === 'rename') {
-      const renamed = cloneVariable(row)
-      let candidate = `${row.name}_IMPORT`
-      let suffix = 1
-      while (next.some(item => item.name.toUpperCase() === candidate.toUpperCase())) {
-        suffix += 1
-        candidate = `${row.name}_IMPORT_${suffix}`
-      }
-      renamed.name = candidate
-      next.push(renamed)
-      added += 1
-    } else {
-      skipped += 1
-    }
-  }
-  activeForm.variables = next
-  const saved = await persistActive()
-  if (saved) {
-    Object.assign(importResult, { added, overwritten, skipped })
-    importStep.value = 5
-  }
-}
-
 onMounted(() => void loadParams())
 
 watch(() => props.workspaceCode, () => {
-  activeView.value = 'global'
-  void loadParams()
+  void resetWorkspace()
 })
 </script>
 
@@ -908,7 +511,7 @@ watch(() => props.workspaceCode, () => {
               <span>支持 .json、.yaml、.yml、.csv 格式，最大 2MB</span>
             </button>
             <button type="button" class="figma-variable__button" @click="triggerFileInput"><Upload :size="13" />{{ importFileName || '选择文件' }}</button>
-            <input ref="fileInput" type="file" accept=".json,.yaml,.yml,.csv" hidden @change="handleFileChange">
+            <input :ref="setFileInput" type="file" accept=".json,.yaml,.yml,.csv" hidden @change="handleFileChange">
             <p v-if="importError" class="figma-variable-modal__error">{{ importError }}</p>
           </div>
 
