@@ -72,7 +72,7 @@ LARGE_FILE_REVIEW_LINES=1800 LARGE_FILE_REVIEW_KB=120 LARGE_FILE_CRITICAL_LINES=
 以下文件因体积、变更频率或职责数量进入审查范围，但必须逐个完成职责分析后才能决定是否拆分，不按行数排序，也不要求全部拆分：
 
 - `src/widgets/api-interface-workspace/ApiDefinitionWorkspaceModule.vue`
-- `src/widgets/api-scenario-workspace/ApiScenarioWorkspace.vue`
+- `src/widgets/api-scenario-workspace/ApiScenarioFigmaWorkspace.vue`
 - `src/widgets/web-ui-case-workspace/WebUiElementLibraryPanel.vue`
 
 ## 接口工作区拆分方向
@@ -85,25 +85,14 @@ LARGE_FILE_REVIEW_LINES=1800 LARGE_FILE_REVIEW_KB=120 LARGE_FILE_CRITICAL_LINES=
 - 后续优先治理外置 CSS 文件和 `ApiRequestEditorMain` 内部结构，避免新增低价值纯透传组件。
 - 具体拆分进度以 `设计/接口定义工作台拆分方案.md` 为准。
 
-## 接口场景工作台拆分方向
+## 接口场景工作台审查结论
 
-接口场景工作台阶段一治理已完成，目标从“先降主文件体积”转为“继续拆模板和状态边界”：
-
-- 已完成表头设置、步骤请求配置、运行结果展示等低耦合逻辑抽取。
-- 已完成 `ApiScenarioWorkspace.vue` 样式外置，主文件已从约 8974 行降到约 4777 行。
-- 已完成导入抽屉、步骤配置抽屉、报告步骤详情抽屉、软输入 / 确认弹窗组件化，主文件已继续降到约 4088 行。
-- 已完成步骤树、场景详情 Tab、当前场景报告列表组件化，主文件已继续降到约 3944 行。
-- 已完成右侧属性面板组件化，主文件已继续降到约 3814 行。
-- 已完成设置页、CI/CD 占位页、独立报告 Tab 页和场景列表页组件化，主文件已继续降到约 3509 行。
-- 已完成 `ApiScenarioStepConfigDrawer.vue` 内部主要视图拆分，脚本步骤、控制器步骤、系统请求只读配置视图和自定义 / 复制请求编辑视图已组件化，抽屉文件已从约 770 行降到约 342 行。
-- 已完成步骤配置抽屉及 4 个子面板的主要 props 类型边界收紧，相关类型集中在 `src/widgets/api-scenario-workspace/lib/apiScenarioStepConfigTypes.ts`。
-- 已抽取步骤调试响应展示组件 `ApiScenarioStepResponsePanel.vue`，系统请求和自定义请求共用响应指标、响应 Tab 和断言结果表格。
-- 已抽取自定义请求 Headers / Params 参数表格组件 `ApiScenarioKeyValueGrid.vue`，Body Form 专用表格组件 `ApiScenarioBodyFormGrid.vue`。
-- 已按处理器类型拆分 `ScenarioProcessorEditor.vue` 右侧详情面板，脚本 / SQL / 等待 / 提取处理器已组件化。
-- 已按断言类型拆分 `ScenarioAssertionEditor.vue` 右侧详情面板，状态码 / 响应头 / 响应体 / 响应时间 / 变量 / 脚本断言已组件化。
-- `ApiScenarioWorkspace.vue` 当前仍是场景编辑器主容器，后续不应继续新增大块业务逻辑。
-- 下一阶段再评估高级编辑器共享左侧列表和共享样式是否值得抽取，不再对已稳定的响应区和参数表格做低价值再拆。
-- 具体拆分进度以 `设计/接口场景工作台拆分方案.md` 为准。
+- 现行页面由 `ApiAutomationPage.vue` 直接加载 `ApiScenarioFigmaWorkspace.vue`。
+- 原 `ApiScenarioWorkspace.vue`、同目录 `index.ts`、误提交的备份文件及其独占的旧视觉组件没有页面、路由、测试或其他源码消费者，属于旧实现残留，不应继续拆分。
+- 现行页面仍使用 `apiScenarioStepRequestUtils.ts` 和 `apiRequestPathTemplate.ts` 处理请求配置与路径规范化，这两个共享工具及其测试继续保留。
+- 旧实现曾覆盖但现行 Figma 交互尚未提供的资源导入、完整步骤编辑和运行历史入口，已记录在 `docs/frontend-adjustments-inventory.md`，应在设计补齐后接入现行页面，不能以保留整套旧 UI 作为兼容方案。
+- 本轮删除旧实现死代码，不修改现行页面 DOM、样式、交互或业务接口。
+- `ApiScenarioFigmaWorkspace.vue` 因体积进入审查范围；后续只有在能形成明确的列表数据、编辑器状态或测试数据集等职责边界时才拆分，不以降低行数为目标。
 
 ## 接口执行套件审查结论
 
