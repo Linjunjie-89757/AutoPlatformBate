@@ -46,6 +46,12 @@ public class GlobalExceptionHandler {
         return ApiResponse.fail("账号已停用，请联系管理员");
     }
 
+    @ExceptionHandler(ServiceUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ApiResponse<Void> handleServiceUnavailable(ServiceUnavailableException exception) {
+        return ApiResponse.fail(exception.getMessage());
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiResponse<Void> handleAccessDenied(AccessDeniedException exception) {

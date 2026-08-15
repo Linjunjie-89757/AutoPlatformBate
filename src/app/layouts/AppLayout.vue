@@ -5,11 +5,12 @@ import {
   KeyRound,
   LogOut,
   Search,
+  ShieldAlert,
   SlidersHorizontal,
   User,
 } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { canManageWorkspace, hasWorkspacePermission, useSession } from '@/entities/session'
@@ -96,6 +97,8 @@ const userRoleText = computed(() => {
   return labels[roleCode] || roleCode || '已登录'
 })
 
+const isSuperAdmin = computed(() => String(currentUser.value?.roleCode || '').toUpperCase() === 'SUPER_ADMIN')
+
 const navigationTargetQuery = computed(() => ({
   workspace: selectedWorkspaceCode.value,
 }))
@@ -115,10 +118,12 @@ const activeSecondaryNavigation = computed(() => {
 interface NavigationItem {
   path: string
   label: string
-  icon: string
+  icon?: string
+  componentIcon?: Component
   color: string
   lightBg: string
   separated?: boolean
+  superAdminOnly?: boolean
   permissionCode?: string
   children?: Array<{
     path: string
@@ -179,9 +184,13 @@ const navigationItems: NavigationItem[] = [
   { path: '/tasks', label: '任务中心', icon: figmaGlobalNavIcons.task, color: '#F59E0B', lightBg: '#FFF7E8', permissionCode: 'tasks.view' },
   { path: '/reports', label: '报告中心', icon: figmaGlobalNavIcons.report, color: '#7816FF', lightBg: '#F5E8FF', separated: true, permissionCode: 'reports.view' },
   { path: '/settings', label: '系统设置', icon: figmaGlobalNavIcons.setting, color: '#4E5969', lightBg: '#F2F3F5' },
+  { path: '/platform-admin', label: '平台管理', componentIcon: ShieldAlert, color: '#DB2777', lightBg: '#FDF2F8', superAdminOnly: true },
 ]
 
 const visibleNavigationItems = computed(() => navigationItems.filter((item) => {
+  if (item.superAdminOnly && !isSuperAdmin.value) {
+    return false
+  }
   if (item.path === '/settings') {
     return canManageWorkspace(currentUser.value, selectedWorkspaceCode.value)
   }
@@ -341,7 +350,12 @@ onBeforeUnmount(() => {
             @click="router.push({ path: item.path, query: navigationTargetQuery })"
           >
             <span class="app-layout__nav-icon-shell">
-              <img class="app-layout__nav-icon" :src="item.icon" alt="">
+              <component
+                :is="item.componentIcon"
+                v-if="item.componentIcon"
+                class="app-layout__nav-icon"
+              />
+              <img v-else class="app-layout__nav-icon" :src="item.icon" alt="">
             </span>
           </button>
           <RouterLink
@@ -352,7 +366,12 @@ onBeforeUnmount(() => {
             :to="{ path: item.path, query: navigationTargetQuery }"
           >
             <span class="app-layout__nav-icon-shell">
-              <img class="app-layout__nav-icon" :src="item.icon" alt="">
+              <component
+                :is="item.componentIcon"
+                v-if="item.componentIcon"
+                class="app-layout__nav-icon"
+              />
+              <img v-else class="app-layout__nav-icon" :src="item.icon" alt="">
             </span>
           </RouterLink>
         </div>

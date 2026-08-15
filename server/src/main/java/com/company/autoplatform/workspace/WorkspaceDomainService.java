@@ -2,6 +2,7 @@ package com.company.autoplatform.workspace;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.auth.CurrentUserContext;
+import com.company.autoplatform.auth.CurrentUserPrincipal;
 import com.company.autoplatform.auth.PlatformRole;
 import com.company.autoplatform.bug.BugMapper;
 import com.company.autoplatform.casecenter.CaseMapper;
@@ -14,6 +15,7 @@ import com.company.autoplatform.settings.ParamSetMapper;
 import com.company.autoplatform.user.UserEntity;
 import com.company.autoplatform.user.UserService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,6 +26,8 @@ public class WorkspaceDomainService {
 
     private static final String WORKSPACE_TYPE_PROJECT = "PROJECT";
     private static final String ROLE_ADMIN = "ADMIN";
+    private static final String INITIALIZATION_BLANK = "BLANK";
+    private static final String INITIALIZATION_SAMPLE = "SAMPLE";
 
     private final WorkspaceMapper workspaceMapper;
     private final WorkspaceMemberMapper workspaceMemberMapper;
@@ -82,9 +86,13 @@ public class WorkspaceDomainService {
         return workspace;
     }
 
+    @Transactional
     public WorkspaceItem createWorkspace(CreateWorkspaceRequest request) {
-        requirePlatformAdmin();
-        String workspaceCode = request.workspaceCode();
+        boolean platformAdmin = isPlatformAdmin();
+        CurrentUserPrincipal currentUser = CurrentUserContext.require();
+        validateSelfServiceCreateRequest(request, platformAdmin, currentUser.userId());
+
+        String workspaceCode = platformAdmin ? request.workspaceCode() : null;
         if (workspaceCode == null || workspaceCode.isBlank()) {
             workspaceCode = generateWorkspaceCode();
         } else {
@@ -97,7 +105,7 @@ public class WorkspaceDomainService {
         }
         WorkspaceEntity entity = new WorkspaceEntity();
         entity.setWorkspaceCode(workspaceCode);
-        applyWorkspaceRequest(entity, request, true);
+        applyWorkspaceRequest(entity, request, true, platformAdmin ? request.ownerUserId() : currentUser.userId());
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         workspaceMapper.insert(entity);
@@ -108,7 +116,7 @@ public class WorkspaceDomainService {
     public WorkspaceItem updateWorkspace(String workspaceCode, CreateWorkspaceRequest request) {
         requirePlatformAdmin();
         WorkspaceEntity entity = requireWorkspace(workspaceCode);
-        applyWorkspaceRequest(entity, request, false);
+        applyWorkspaceRequest(entity, request, false, request.ownerUserId());
         entity.setUpdatedAt(LocalDateTime.now());
         workspaceMapper.updateById(entity);
         ensureOwnerMember(entity);
@@ -118,6 +126,22 @@ public class WorkspaceDomainService {
     public void deleteWorkspace(String workspaceCode) {
         requirePlatformAdmin();
         WorkspaceEntity workspace = requireWorkspace(workspaceCode);
+        deleteWorkspaceInternal(workspace);
+    }
+
+    @Transactional
+    public void deleteWorkspaceForPlatformAdmin(String workspaceCode) {
+        requirePlatformAdmin();
+        WorkspaceEntity workspace = workspaceMapper.selectOne(new LambdaQueryWrapper<WorkspaceEntity>()
+                .eq(WorkspaceEntity::getWorkspaceCode, workspaceCode)
+                .last("limit 1"));
+        if (workspace == null) {
+            throw new BadRequestException("工作区不存在");
+        }
+        deleteWorkspaceInternal(workspace);
+    }
+
+    private void deleteWorkspaceInternal(WorkspaceEntity workspace) {
         validateWorkspaceDeletable(workspace.getId());
         List<Long> memberIds = workspaceMemberMapper.selectList(new LambdaQueryWrapper<WorkspaceMemberEntity>()
                         .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId()))
@@ -147,17 +171,39 @@ public class WorkspaceDomainService {
         throw new BadRequestException("空间编码生成失败，请稍后重试");
     }
 
-    private void applyWorkspaceRequest(WorkspaceEntity entity, CreateWorkspaceRequest request, boolean creating) {
+    private void applyWorkspaceRequest(
+            WorkspaceEntity entity,
+            CreateWorkspaceRequest request,
+            boolean creating,
+            Long ownerUserId
+    ) {
         entity.setWorkspaceName(request.workspaceName().trim());
         entity.setDescription(request.description() == null ? "" : request.description().trim());
         entity.setWorkspaceType(normalizeWorkspaceType(request.workspaceType()));
-        if (request.ownerUserId() != null) {
-            userService.requireAnyUser(request.ownerUserId());
+        if (ownerUserId != null) {
+            userService.requireAnyUser(ownerUserId);
         }
-        entity.setOwnerUserId(request.ownerUserId());
+        entity.setOwnerUserId(ownerUserId);
         entity.setStatus(normalizeWorkspaceStatus(request.status()));
+        entity.setIndustry(normalizeIndustry(request.industry()));
+        entity.setInitializationMode(normalizeInitializationMode(request.initializationMode()));
         if (creating && entity.getStatus() == null) {
             entity.setStatus(1);
+        }
+    }
+
+    private void validateSelfServiceCreateRequest(CreateWorkspaceRequest request, boolean platformAdmin, Long userId) {
+        if (platformAdmin) {
+            return;
+        }
+        if (request.workspaceCode() != null && !request.workspaceCode().isBlank()) {
+            throw new AccessDeniedException("普通用户不能指定工作区编码");
+        }
+        if (request.ownerUserId() != null && !request.ownerUserId().equals(userId)) {
+            throw new AccessDeniedException("普通用户只能创建本人负责的工作区");
+        }
+        if (request.status() != null && request.status() != 1) {
+            throw new AccessDeniedException("普通用户只能创建启用状态的工作区");
         }
     }
 
@@ -178,6 +224,24 @@ public class WorkspaceDomainService {
         String normalized = workspaceType.trim().toUpperCase();
         if (!List.of("PROJECT", "TEAM", "PRODUCT").contains(normalized)) {
             throw new BadRequestException("无效的空间类型");
+        }
+        return normalized;
+    }
+
+    private String normalizeIndustry(String industry) {
+        if (industry == null || industry.isBlank()) {
+            return null;
+        }
+        return industry.trim();
+    }
+
+    private String normalizeInitializationMode(String initializationMode) {
+        if (initializationMode == null || initializationMode.isBlank()) {
+            return INITIALIZATION_BLANK;
+        }
+        String normalized = initializationMode.trim().toUpperCase();
+        if (!List.of(INITIALIZATION_BLANK, INITIALIZATION_SAMPLE).contains(normalized)) {
+            throw new BadRequestException("无效的工作区初始化方式");
         }
         return normalized;
     }
@@ -221,12 +285,16 @@ public class WorkspaceDomainService {
         }
     }
 
-    WorkspaceItem toWorkspaceItem(WorkspaceEntity entity) {
+    public WorkspaceItem toWorkspaceItem(WorkspaceEntity entity) {
         String ownerName = null;
         if (entity.getOwnerUserId() != null) {
             UserEntity owner = userService.findActiveUser(entity.getOwnerUserId());
             ownerName = owner == null ? null : owner.getDisplayName();
         }
+        int memberCount = Math.toIntExact(workspaceMemberMapper.selectCount(
+                new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                        .eq(WorkspaceMemberEntity::getWorkspaceId, entity.getId())
+                        .eq(WorkspaceMemberEntity::getStatus, 1)));
         return new WorkspaceItem(
                 entity.getWorkspaceCode(),
                 entity.getWorkspaceName(),
@@ -237,8 +305,48 @@ public class WorkspaceDomainService {
                 ownerName,
                 entity.getStatus(),
                 entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString(),
-                entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().toString()
+                entity.getUpdatedAt() == null ? null : entity.getUpdatedAt().toString(),
+                entity.getIndustry(),
+                entity.getInitializationMode() == null ? INITIALIZATION_BLANK : entity.getInitializationMode(),
+                memberCount,
+                resolveCurrentUserRoleName(entity)
         );
+    }
+
+    private String resolveCurrentUserRoleName(WorkspaceEntity workspace) {
+        CurrentUserPrincipal currentUser = CurrentUserContext.require();
+        if (isPlatformAdmin()) {
+            return "平台管理员";
+        }
+        if (workspace.getOwnerUserId() != null && workspace.getOwnerUserId().equals(currentUser.userId())) {
+            return "工作区管理员";
+        }
+        WorkspaceMemberEntity member = workspaceMemberMapper.selectOne(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
+                .eq(WorkspaceMemberEntity::getUserId, currentUser.userId())
+                .eq(WorkspaceMemberEntity::getStatus, 1)
+                .last("limit 1"));
+        if (member == null) {
+            return null;
+        }
+        List<Long> roleIds = workspaceMemberRoleMapper.selectList(
+                        new LambdaQueryWrapper<WorkspaceMemberRoleEntity>()
+                                .eq(WorkspaceMemberRoleEntity::getMemberId, member.getId())
+                                .orderByAsc(WorkspaceMemberRoleEntity::getId))
+                .stream()
+                .map(WorkspaceMemberRoleEntity::getRoleId)
+                .toList();
+        if (!roleIds.isEmpty()) {
+            WorkspaceRoleEntity role = workspaceRoleMapper.selectOne(new LambdaQueryWrapper<WorkspaceRoleEntity>()
+                    .in(WorkspaceRoleEntity::getId, roleIds)
+                    .eq(WorkspaceRoleEntity::getStatus, 1)
+                    .orderByAsc(WorkspaceRoleEntity::getId)
+                    .last("limit 1"));
+            if (role != null) {
+                return role.getRoleName();
+            }
+        }
+        return ROLE_ADMIN.equalsIgnoreCase(member.getRoleCode()) ? "工作区管理员" : "普通成员";
     }
 
     private void validateWorkspaceDeletable(Long workspaceId) {

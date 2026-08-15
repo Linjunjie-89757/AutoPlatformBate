@@ -41,6 +41,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/password-reset/**").permitAll()
                         .requestMatchers("/api/automation/web/ci/batches/run").permitAll()
                         .requestMatchers("/api/mock/**").permitAll()
                         .requestMatchers("/api/public/local-runner/**").permitAll()

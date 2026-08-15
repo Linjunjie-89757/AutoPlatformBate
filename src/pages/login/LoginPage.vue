@@ -32,6 +32,20 @@ const passwordVisible = ref(false)
 const usernameError = ref('')
 const passwordError = ref('')
 
+function handleUsernameInput() {
+  usernameError.value = ''
+  errorMessage.value = ''
+}
+
+function handlePasswordInput() {
+  passwordError.value = ''
+  errorMessage.value = ''
+}
+
+function handleForgotPassword() {
+  void router.push('/forgot-password')
+}
+
 const featureItems: Array<{
   icon: LucideIcon
   label: string
@@ -82,7 +96,12 @@ async function handleSubmit() {
     return
   }
 
-  usernameError.value = form.username.trim() ? '' : '请输入账号'
+  const normalizedUsername = form.username.trim()
+  usernameError.value = !normalizedUsername
+    ? '请输入账号'
+    : normalizedUsername !== form.username
+      ? '账号前后不能有空格'
+      : ''
   passwordError.value = form.password ? '' : '请输入密码'
 
   if (usernameError.value || passwordError.value) {
@@ -91,7 +110,7 @@ async function handleSubmit() {
 
   try {
     await login({
-      username: form.username.trim(),
+      username: form.username,
       password: form.password,
     })
     await router.replace({
@@ -206,7 +225,7 @@ async function handleSubmit() {
             autocomplete="username"
             placeholder="请输入邮箱或用户名"
             type="text"
-            @input="usernameError = ''"
+            @input="handleUsernameInput"
           >
           <span v-if="usernameError" class="login-page__field-error">{{ usernameError }}</span>
         </label>
@@ -221,7 +240,7 @@ async function handleSubmit() {
               autocomplete="current-password"
               placeholder="请输入密码"
               :type="passwordVisible ? 'text' : 'password'"
-              @input="passwordError = ''"
+              @input="handlePasswordInput"
               @keyup.enter="handleSubmit"
             >
             <button
@@ -243,7 +262,7 @@ async function handleSubmit() {
             <span class="login-page__checkbox" aria-hidden="true" />
             <span>记住账号</span>
           </label>
-          <button class="login-page__link-button" type="button">忘记密码</button>
+          <button class="login-page__link-button" type="button" @click="handleForgotPassword">忘记密码</button>
         </div>
 
         <button
@@ -255,7 +274,6 @@ async function handleSubmit() {
           <span>{{ loading ? '登录中...' : '登录' }}</span>
         </button>
 
-        <p class="login-page__demo-hint">输入密码 “wrong” 可演示错误状态</p>
         <p class="login-page__hint">如需账号，请联系管理员邀请 · AutoTest v2.4.1</p>
       </form>
     </section>
@@ -297,6 +315,7 @@ async function handleSubmit() {
 .login-page__brand--light {
   height: 24.5px;
   margin-bottom: 35px;
+  gap: 7px;
 }
 
 .login-page__brand-mark {
@@ -340,17 +359,26 @@ async function handleSubmit() {
 }
 
 .login-page__brand--light .login-page__brand-name {
-  margin-top: 2.25px;
+  margin-top: 0;
   color: #1d2129;
   font-size: 13px;
   font-weight: 600;
-  line-height: 19.5px;
+  line-height: 20px;
+}
+
+.login-page__brand--dark .login-page__brand-name {
+  width: 81px;
 }
 
 .login-page__version {
   margin-top: 5.5px;
-  margin-left: 0;
-  padding: 2.75px 8px;
+  margin-left: 3.5px;
+  display: inline-flex;
+  width: 52px;
+  height: 20.5px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 1px solid #30363d;
   border-radius: 3.5px;
   background: #21262d;
@@ -384,6 +412,8 @@ async function handleSubmit() {
 .login-page__features {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 58px;
+  align-content: start;
   gap: 8.25px 8.75px;
   height: 214.5px;
   margin-bottom: 0;
@@ -395,7 +425,7 @@ async function handleSubmit() {
   gap: 10.5px;
   height: 58px;
   min-width: 0;
-  padding: 11.5px;
+  padding: 11.5px 10.5px;
   border: 1px solid #21262d;
   border-radius: 11px;
   background: #161b22;
@@ -422,7 +452,7 @@ async function handleSubmit() {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .login-page__feature-copy strong {
@@ -439,7 +469,7 @@ async function handleSubmit() {
   overflow: hidden;
   color: #7d8590;
   font-size: 11px;
-  line-height: 16px;
+  line-height: 17px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -459,7 +489,7 @@ async function handleSubmit() {
   align-items: center;
   gap: 5.25px;
   height: 39px;
-  padding: 8.75px 14px 9.75px;
+  padding: 9.25px 14px;
   border-bottom: 1px solid #21262d;
   background: #161b22;
 }
@@ -492,8 +522,13 @@ async function handleSubmit() {
 }
 
 .login-page__terminal-live {
+  display: inline-flex;
+  width: 52px;
+  height: 20.5px;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 0;
   border: 1px solid #2ea043;
   border-radius: 4px;
   background: #1b2a1b;
@@ -512,7 +547,7 @@ async function handleSubmit() {
   padding: 14px;
   font-family: var(--app-font-family-mono);
   font-size: 11px;
-  line-height: 16.5px;
+  line-height: 17px;
 }
 
 .login-page__log-line {
@@ -557,14 +592,30 @@ async function handleSubmit() {
 
 .login-page__stat {
   display: flex;
+  height: 42.75px;
+  min-width: 0;
   flex-direction: column-reverse;
-  gap: 2px;
+  gap: 0;
+}
+
+.login-page__stat:nth-child(1) {
+  flex: 0 0 53.578125px;
+}
+
+.login-page__stat:nth-child(2) {
+  flex: 0 0 54.234375px;
+}
+
+.login-page__stat:nth-child(3) {
+  flex: 0 0 56.578125px;
 }
 
 .login-page__stat dt {
+  height: 16.75px;
+  padding-top: 1.75px;
   color: #7d8590;
   font-size: 10px;
-  line-height: 16px;
+  line-height: 15px;
 }
 
 .login-page__stat dd {
@@ -572,7 +623,8 @@ async function handleSubmit() {
   color: #e6edf3;
   font-size: 17px;
   font-weight: 700;
-  line-height: 24px;
+  line-height: 26px;
+  white-space: nowrap;
 }
 
 .login-page__stat.is-success dd {
@@ -647,6 +699,10 @@ async function handleSubmit() {
 
 .login-page__field + .login-page__field {
   margin-bottom: 0;
+}
+
+.login-page__field + .login-page__field .login-page__field-label {
+  margin-bottom: 5.75px;
 }
 
 .login-page__field-label {
@@ -738,7 +794,7 @@ async function handleSubmit() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 14px 0 21.5px;
+  margin: 14px 0 21px;
 }
 
 .login-page__remember {
@@ -832,14 +888,6 @@ async function handleSubmit() {
 }
 
 .login-page__hint {
-  margin: 24.5px 0 0;
-  color: #c9cdd4;
-  font-size: 11px;
-  line-height: 16.5px;
-  text-align: center;
-}
-
-.login-page__demo-hint {
   margin: 14px 0 0;
   color: #c9cdd4;
   font-size: 11px;

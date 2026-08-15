@@ -51,6 +51,23 @@ VITE_API_BASE_URL=http://localhost:8080/api
 `http://localhost:8080/api`。不要混用 `127.0.0.1` 和 `localhost`，否则浏览器可能因为
 cookie 域不同导致 `/auth/me` 无法识别登录态。
 
+### 密码找回邮件配置
+
+忘记密码使用真实邮件重置链接。测试或生产环境启用前，需要为后端配置 SMTP 和对外可访问的前端地址：
+
+```text
+SPRING_MAIL_HOST=smtp.example.com
+SPRING_MAIL_PORT=587
+SPRING_MAIL_USERNAME=your-account
+SPRING_MAIL_PASSWORD=your-password-or-app-token
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
+SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
+PASSWORD_RESET_MAIL_FROM=no-reply@example.com
+PASSWORD_RESET_FRONTEND_BASE_URL=https://autotest.example.com
+```
+
+`PASSWORD_RESET_MAIL_FROM` 必须使用邮件服务商允许的发件地址。未配置邮件服务或发送失败时，接口会返回明确错误，不会伪造邮件已发送。重置链接默认 30 分钟有效，60 秒内不能重复发送，可分别通过 `PASSWORD_RESET_TOKEN_VALID_MINUTES` 和 `PASSWORD_RESET_RESEND_COOLDOWN_SECONDS` 调整。
+
 ## 构建与检查
 
 ```bash

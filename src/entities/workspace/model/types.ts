@@ -16,6 +16,10 @@ export interface WorkspaceItem {
   isDefault?: boolean
   createdAt?: string | null
   updatedAt?: string | null
+  industry?: string | null
+  initializationMode?: 'BLANK' | 'SAMPLE' | string | null
+  memberCount?: number | null
+  roleName?: string | null
 }
 
 export interface SaveWorkspacePayload {
@@ -25,6 +29,40 @@ export interface SaveWorkspacePayload {
   workspaceType?: string | null
   ownerUserId?: number | null
   status?: number | null
+  industry?: string | null
+  initializationMode?: 'BLANK' | 'SAMPLE' | string | null
+}
+
+export interface WorkspaceJoinCandidateItem {
+  workspaceCode: string
+  workspaceName: string
+  description?: string | null
+  memberCount: number
+  ownerName: string
+}
+
+export interface WorkspaceJoinApplicationItem {
+  id: number
+  workspaceCode: string
+  workspaceName: string
+  description?: string | null
+  applicantUserId: number
+  applicantName: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | string
+  submittedAt?: string | null
+}
+
+export interface WorkspaceInvitationItem {
+  id: number
+  workspaceCode: string
+  invitationCode: string
+  expiresAt: string
+  maxUses: number
+}
+
+export interface CreateWorkspaceInvitationPayload {
+  validDays?: number
+  maxUses?: number
 }
 
 export interface WorkspaceMemberItem {

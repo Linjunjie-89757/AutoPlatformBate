@@ -10,6 +10,10 @@ public record WorkspaceItem(
         String ownerName,
         Integer status,
         String createdAt,
-        String updatedAt
+        String updatedAt,
+        String industry,
+        String initializationMode,
+        Integer memberCount,
+        String roleName
 ) {
 }

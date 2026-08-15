@@ -17,6 +17,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.LocalDateTime;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasItem;
@@ -43,6 +45,9 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private WorkspaceInvitationMapper workspaceInvitationMapper;
 
     @Test
     void listAndSwitchableKeepResponseShape() throws Exception {
@@ -122,15 +127,102 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
-    void nonPlatformAdminCannotCreateUpdateOrDeleteWorkspace() throws Exception {
-        String code = "ws_deny_" + System.nanoTime();
-        setMemberUser();
+    void authenticatedMemberCanCreateOwnWorkspaceWithAdminAccess() throws Exception {
+        Authentication lipingAuthentication = authenticationFor(13L, "liping", "Li Ping", PlatformRole.MEMBER);
+
+        MvcResult createResult = mockMvc.perform(post("/api/workspaces")
+                        .with(authentication(lipingAuthentication))
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "workspaceName": "member created workspace",
+                                  "description": "created from workspace selection",
+                                  "workspaceType": "PROJECT",
+                                  "industry": "企业服务 / SaaS",
+                                  "initializationMode": "SAMPLE"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.code", org.hamcrest.Matchers.startsWith("ws_")))
+                .andExpect(jsonPath("$.data.ownerUserId").value(13))
+                .andExpect(jsonPath("$.data.status").value(1))
+                .andExpect(jsonPath("$.data.industry").value("企业服务 / SaaS"))
+                .andExpect(jsonPath("$.data.initializationMode").value("SAMPLE"))
+                .andReturn();
+        String code = data(createResult).path("code").asText();
+
+        mockMvc.perform(get("/api/workspaces/switchable")
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].code", hasItem(code)));
+        mockMvc.perform(get("/api/auth/me")
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workspaceCodes", hasItem(code)))
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].memberType".formatted(code), hasItem("OWNER")))
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].canManage".formatted(code), hasItem(true)));
+
+        MvcResult membersResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", code)
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.userId == 13)].memberType", hasItem("OWNER")))
+                .andExpect(jsonPath("$.data[?(@.userId == 13)].roleCode", hasItem("ADMIN")))
+                .andReturn();
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/roles", code)
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(4))
+                .andExpect(jsonPath("$.data[?(@.roleCode == 'SYSTEM_TEST_LEAD')].name", hasItem("项目负责人")));
+
+        setPlatformAdminUser();
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}", code)
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "member created workspace", "PROJECT", 1, 11L)))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberIdForUser(membersResult, 13L)))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void memberCannotSpoofWorkspaceOwnerStatusOrCodeDuringCreate() throws Exception {
+        Authentication lipingAuthentication = authenticationFor(13L, "liping", "Li Ping", PlatformRole.MEMBER);
 
         mockMvc.perform(post("/api/workspaces")
+                        .with(authentication(lipingAuthentication))
                         .contentType("application/json")
-                        .content(workspaceRequest(code, "denied", "PROJECT", 1)))
+                        .content(workspaceRequest("ws_spoof_" + System.nanoTime(), "spoof code", "PROJECT", 1)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
+        mockMvc.perform(post("/api/workspaces")
+                        .with(authentication(lipingAuthentication))
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "workspaceName": "spoof owner",
+                                  "ownerUserId": 12
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+        mockMvc.perform(post("/api/workspaces")
+                        .with(authentication(lipingAuthentication))
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "workspaceName": "spoof status",
+                                  "status": 0
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void nonPlatformAdminCannotUpdateOrDeleteWorkspace() throws Exception {
+        setMemberUser();
 
         mockMvc.perform(put("/api/workspaces/{workspaceCode}", WORKSPACE_CODE)
                         .contentType("application/json")
@@ -595,6 +687,188 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
         setPlatformAdminUser();
         settingsService.deleteEnv(data(envResult).path("id").asLong(), code);
         mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, data(memberResult).path("id").asLong()))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void workspaceJoinApplicationCanBeSubmittedRestoredAndCancelled() throws Exception {
+        String code = "ws_join_cancel_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "join cancel", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        Authentication lipingAuthentication = authenticationFor(13L, "liping", "Li Ping", PlatformRole.MEMBER);
+        mockMvc.perform(get("/api/workspaces/join/candidates")
+                        .with(authentication(lipingAuthentication))
+                        .param("query", "join cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].workspaceCode", hasItem(code)));
+
+        MvcResult createResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/join-applications", code)
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workspaceCode").value(code))
+                .andExpect(jsonPath("$.data.applicantUserId").value(13))
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andReturn();
+        long applicationId = data(createResult).path("id").asLong();
+
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/join-applications", code)
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(applicationId));
+
+        mockMvc.perform(get("/api/workspaces/join-applications/pending")
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(applicationId))
+                .andExpect(jsonPath("$.data.workspaceCode").value(code));
+
+        mockMvc.perform(delete("/api/workspaces/join-applications/{applicationId}", applicationId)
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        MvcResult pendingResult = mockMvc.perform(get("/api/workspaces/join-applications/pending")
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(data(pendingResult).isNull()).isTrue();
+
+        mockMvc.perform(get("/api/workspaces/join/candidates")
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].workspaceCode", hasItem(code)));
+
+        setPlatformAdminUser();
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void approvingWorkspaceJoinApplicationCreatesMemberAndDefaultRole() throws Exception {
+        String code = "ws_join_approve_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "join approve", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        Authentication lipingAuthentication = authenticationFor(13L, "liping", "Li Ping", PlatformRole.MEMBER);
+        MvcResult createResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/join-applications", code)
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andReturn();
+        long applicationId = data(createResult).path("id").asLong();
+
+        Authentication zhaofengAuthentication = authenticationFor(14L, "zhaofeng", "Zhao Feng", PlatformRole.MEMBER);
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/join-applications", code)
+                        .with(authentication(zhaofengAuthentication)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/join-applications/{applicationId}/approve", code, applicationId)
+                        .with(authentication(zhaofengAuthentication)))
+                .andExpect(status().isForbidden());
+
+        setPlatformAdminUser();
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/join-applications", code)
+                        .param("status", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].id", hasItem((int) applicationId)));
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/join-applications/{applicationId}/approve", code, applicationId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
+
+        MvcResult membersResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.userId == 13)].memberType", hasItem("MEMBER")))
+                .andExpect(jsonPath("$.data[?(@.userId == 13)].roles[0].roleCode", hasItem("SYSTEM_TEST_ENGINEER")))
+                .andReturn();
+
+        mockMvc.perform(get("/api/workspaces/switchable")
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].code", hasItem(code)));
+        MvcResult pendingResult = mockMvc.perform(get("/api/workspaces/join-applications/pending")
+                        .with(authentication(lipingAuthentication)))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(data(pendingResult).isNull()).isTrue();
+
+        setPlatformAdminUser();
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberIdForUser(membersResult, 13L)))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void workspaceInvitationIsHashedAndEnforcesPermissionExpiryAndUsageLimit() throws Exception {
+        String code = "ws_invite_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "invitation", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        Authentication lipingAuthentication = authenticationFor(13L, "liping", "Li Ping", PlatformRole.MEMBER);
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/invitations", code)
+                        .with(authentication(lipingAuthentication))
+                        .contentType("application/json")
+                        .content("{\"validDays\": 7, \"maxUses\": 1}"))
+                .andExpect(status().isForbidden());
+
+        setPlatformAdminUser();
+        MvcResult invitationResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/invitations", code)
+                        .contentType("application/json")
+                        .content("{\"validDays\": 7, \"maxUses\": 1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.workspaceCode").value(code))
+                .andReturn();
+        JsonNode invitationData = data(invitationResult);
+        long invitationId = invitationData.path("id").asLong();
+        String invitationCode = invitationData.path("invitationCode").asText();
+        WorkspaceInvitationEntity storedInvitation = workspaceInvitationMapper.selectById(invitationId);
+        assertThat(storedInvitation.getInviteCodeHash())
+                .hasSize(64)
+                .isNotEqualToIgnoringCase(invitationCode.replace("-", ""));
+
+        Authentication chennanAuthentication = authenticationFor(12L, "chennan", "Chen Nan", PlatformRole.MEMBER);
+        mockMvc.perform(post("/api/workspaces/join-by-invitation")
+                        .with(authentication(chennanAuthentication))
+                        .contentType("application/json")
+                        .content("{\"invitationCode\": \"" + invitationCode.toLowerCase() + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.code").value(code));
+
+        mockMvc.perform(post("/api/workspaces/join-by-invitation")
+                        .with(authentication(lipingAuthentication))
+                        .contentType("application/json")
+                        .content("{\"invitationCode\": \"" + invitationCode + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        setPlatformAdminUser();
+        MvcResult expiredResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/invitations", code)
+                        .contentType("application/json")
+                        .content("{\"validDays\": 1, \"maxUses\": 5}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode expiredData = data(expiredResult);
+        WorkspaceInvitationEntity expiredInvitation = workspaceInvitationMapper.selectById(expiredData.path("id").asLong());
+        expiredInvitation.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+        workspaceInvitationMapper.updateById(expiredInvitation);
+
+        mockMvc.perform(post("/api/workspaces/join-by-invitation")
+                        .with(authentication(lipingAuthentication))
+                        .contentType("application/json")
+                        .content("{\"invitationCode\": \"" + expiredData.path("invitationCode").asText() + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        setPlatformAdminUser();
+        MvcResult membersResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", code))
+                .andExpect(status().isOk())
+                .andReturn();
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberIdForUser(membersResult, 12L)))
                 .andExpect(status().isOk());
         mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
                 .andExpect(status().isOk());

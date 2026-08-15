@@ -35,7 +35,7 @@ public class WorkspaceService {
         List<WorkspaceItem> result = new ArrayList<>();
         if (isPlatformAdmin()) {
             result.add(new WorkspaceItem(WorkspaceScope.ALL, "全部", "查看当前账号可见的全部空间数据", true,
-                    null, null, null, 1, null, null));
+                    null, null, null, 1, null, null, null, null, null, "平台管理员"));
         }
         result.addAll(listAll());
         return result;

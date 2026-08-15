@@ -286,10 +286,12 @@ class ApiAutomationListControllerIntegrationTests extends IntegrationTestSupport
                 otherWorkspaceCode,
                 "Directory tree isolation",
                 "Integration test workspace",
-                null,
-                11L,
-                1
-        ));
+            null,
+            11L,
+            1,
+            null,
+            null
+    ));
         ApiDefinitionModuleItem currentModule = apiAutomationService.createDefinitionModule(
                 WORKSPACE_CODE,
                 new ApiDefinitionModuleRequest(WORKSPACE_CODE, null, unique + "-current")

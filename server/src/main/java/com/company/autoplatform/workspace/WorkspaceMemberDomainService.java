@@ -99,11 +99,32 @@ public class WorkspaceMemberDomainService {
     @Transactional
     public WorkspaceMemberItem createMember(String workspaceCode, CreateWorkspaceMemberRequest request) {
         WorkspaceEntity workspace = workspaceAccessSupport.requireWorkspaceAdmin(workspaceCode);
-        UserEntity user = userService.requireAnyUser(request.userId());
+        return upsertMember(
+                workspace,
+                request.userId(),
+                request.memberType(),
+                request.roleCode(),
+                request.roleIds()
+        );
+    }
+
+    @Transactional
+    WorkspaceMemberItem addApprovedMember(WorkspaceEntity workspace, Long userId) {
+        return upsertMember(workspace, userId, ROLE_MEMBER, null, null);
+    }
+
+    private WorkspaceMemberItem upsertMember(
+            WorkspaceEntity workspace,
+            Long userId,
+            String requestedMemberType,
+            String legacyRoleCode,
+            List<Long> requestedRoleIds
+    ) {
+        UserEntity user = userService.requireAnyUser(userId);
         if (userService.isPlatformAdmin(user.getId())) {
             throw new BadRequestException("管理员默认拥有全部空间，无需单独加入空间");
         }
-        String memberType = normalizeMemberType(request.memberType(), request.roleCode());
+        String memberType = normalizeMemberType(requestedMemberType, legacyRoleCode);
 
         WorkspaceMemberEntity entity = workspaceMemberMapper.selectOne(new LambdaQueryWrapper<WorkspaceMemberEntity>()
                 .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
@@ -124,7 +145,7 @@ public class WorkspaceMemberDomainService {
             entity.setUpdatedAt(LocalDateTime.now());
             workspaceMemberMapper.updateById(entity);
         }
-        replaceMemberRoles(entity, workspace.getId(), memberType, request.roleIds());
+        replaceMemberRoles(entity, workspace.getId(), memberType, requestedRoleIds);
         return toMemberItem(entity, workspace);
     }
 

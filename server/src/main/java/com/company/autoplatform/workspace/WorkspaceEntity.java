@@ -23,6 +23,11 @@ public class WorkspaceEntity extends BaseEntity {
     @TableField("owner_user_id")
     private Long ownerUserId;
 
+    private String industry;
+
+    @TableField("initialization_mode")
+    private String initializationMode;
+
     private String description;
 
     private Integer status;

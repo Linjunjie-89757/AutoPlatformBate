@@ -19,9 +19,11 @@ import java.util.List;
 public class WorkspaceController {
 
     private final WorkspaceService workspaceService;
+    private final WorkspaceJoinService workspaceJoinService;
 
-    public WorkspaceController(WorkspaceService workspaceService) {
+    public WorkspaceController(WorkspaceService workspaceService, WorkspaceJoinService workspaceJoinService) {
         this.workspaceService = workspaceService;
+        this.workspaceJoinService = workspaceJoinService;
     }
 
     @GetMapping
@@ -32,6 +34,79 @@ public class WorkspaceController {
     @GetMapping("/switchable")
     public ApiResponse<List<WorkspaceItem>> listSwitchable() {
         return ApiResponse.ok(workspaceService.listSwitchable());
+    }
+
+    @GetMapping("/join/candidates")
+    public ApiResponse<List<WorkspaceJoinCandidateItem>> listJoinCandidates(
+            @RequestParam(required = false) String query
+    ) {
+        return ApiResponse.ok(workspaceJoinService.listCandidates(query));
+    }
+
+    @GetMapping("/join-applications/pending")
+    public ApiResponse<WorkspaceJoinApplicationItem> getCurrentPendingApplication() {
+        return ApiResponse.ok(workspaceJoinService.getCurrentPendingApplication());
+    }
+
+    @PostMapping("/{workspaceCode}/join-applications")
+    public ApiResponse<WorkspaceJoinApplicationItem> createJoinApplication(
+            @PathVariable String workspaceCode
+    ) {
+        return ApiResponse.ok(workspaceJoinService.createApplication(workspaceCode), "工作区申请已提交");
+    }
+
+    @DeleteMapping("/join-applications/{applicationId}")
+    public ApiResponse<Void> cancelJoinApplication(@PathVariable Long applicationId) {
+        workspaceJoinService.cancelApplication(applicationId);
+        return ApiResponse.ok(null, "工作区申请已撤销");
+    }
+
+    @PostMapping("/join-by-invitation")
+    public ApiResponse<WorkspaceItem> joinByInvitation(
+            @Valid @RequestBody JoinWorkspaceByInvitationRequest request
+    ) {
+        return ApiResponse.ok(workspaceJoinService.joinByInvitation(request), "已加入工作区");
+    }
+
+    @GetMapping("/{workspaceCode}/join-applications")
+    public ApiResponse<List<WorkspaceJoinApplicationItem>> listJoinApplications(
+            @PathVariable String workspaceCode,
+            @RequestParam(required = false) String status
+    ) {
+        return ApiResponse.ok(workspaceJoinService.listApplications(workspaceCode, status));
+    }
+
+    @PostMapping("/{workspaceCode}/join-applications/{applicationId}/approve")
+    public ApiResponse<WorkspaceJoinApplicationItem> approveJoinApplication(
+            @PathVariable String workspaceCode,
+            @PathVariable Long applicationId
+    ) {
+        return ApiResponse.ok(
+                workspaceJoinService.approveApplication(workspaceCode, applicationId),
+                "工作区申请已通过"
+        );
+    }
+
+    @PostMapping("/{workspaceCode}/join-applications/{applicationId}/reject")
+    public ApiResponse<WorkspaceJoinApplicationItem> rejectJoinApplication(
+            @PathVariable String workspaceCode,
+            @PathVariable Long applicationId
+    ) {
+        return ApiResponse.ok(
+                workspaceJoinService.rejectApplication(workspaceCode, applicationId),
+                "工作区申请已拒绝"
+        );
+    }
+
+    @PostMapping("/{workspaceCode}/invitations")
+    public ApiResponse<WorkspaceInvitationItem> createInvitation(
+            @PathVariable String workspaceCode,
+            @Valid @RequestBody CreateWorkspaceInvitationRequest request
+    ) {
+        return ApiResponse.ok(
+                workspaceJoinService.createInvitation(workspaceCode, request),
+                "工作区邀请码已生成"
+        );
     }
 
     @PostMapping

@@ -1,12 +1,16 @@
 import { httpDelete, httpGet, httpPost, httpPut, type ApiResponse } from '@/shared/api/request'
 
 import type {
+  CreateWorkspaceInvitationPayload,
   CreateWorkspaceMemberPayload,
   CreateWorkspaceRolePayload,
   SaveWorkspacePayload,
   UpdateWorkspaceRolePermissionsPayload,
   UpdateWorkspaceMemberPayload,
   WorkspaceItem,
+  WorkspaceInvitationItem,
+  WorkspaceJoinApplicationItem,
+  WorkspaceJoinCandidateItem,
   WorkspaceMemberItem,
   WorkspaceMemberCandidateItem,
   WorkspacePermissionModuleItem,
@@ -61,6 +65,112 @@ export const workspaceApi = {
       headers: workspaceHeaders('ALL'),
     })
     return unwrapWorkspaceResponse(payload)
+  },
+
+  async getJoinCandidates(query = '') {
+    const response = await httpGet<ApiResponse<WorkspaceJoinCandidateItem[]>>('/workspaces/join/candidates', {
+      headers: workspaceHeaders('ALL'),
+      params: query.trim() ? { query: query.trim() } : undefined,
+    })
+    if (response.success === false) {
+      throw new Error(response.message || '可加入工作区加载失败')
+    }
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  async getPendingJoinApplication() {
+    const response = await httpGet<ApiResponse<WorkspaceJoinApplicationItem | null>>(
+      '/workspaces/join-applications/pending',
+      { headers: workspaceHeaders('ALL') },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '工作区申请状态加载失败')
+    }
+    return response.data || null
+  },
+
+  async createJoinApplication(workspaceCode: string) {
+    const response = await httpPost<ApiResponse<WorkspaceJoinApplicationItem>, Record<string, never>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/join-applications`,
+      {},
+      { headers: workspaceHeaders('ALL') },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '工作区申请提交失败')
+    }
+    return response.data
+  },
+
+  async cancelJoinApplication(applicationId: number) {
+    const response = await httpDelete<ApiResponse<null>>(
+      `/workspaces/join-applications/${applicationId}`,
+      { headers: workspaceHeaders('ALL') },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '工作区申请撤销失败')
+    }
+  },
+
+  async joinByInvitation(invitationCode: string) {
+    const response = await httpPost<ApiResponse<WorkspaceItem>, { invitationCode: string }>(
+      '/workspaces/join-by-invitation',
+      { invitationCode },
+      { headers: workspaceHeaders('ALL') },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '邀请码验证失败')
+    }
+    return normalizeWorkspaceItem(response.data)
+  },
+
+  async getJoinApplications(workspaceCode: string, status = 'PENDING') {
+    const response = await httpGet<ApiResponse<WorkspaceJoinApplicationItem[]>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/join-applications`,
+      {
+        headers: workspaceHeaders(workspaceCode),
+        params: status ? { status } : undefined,
+      },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '工作区申请列表加载失败')
+    }
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  async approveJoinApplication(workspaceCode: string, applicationId: number) {
+    const response = await httpPost<ApiResponse<WorkspaceJoinApplicationItem>, Record<string, never>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/join-applications/${applicationId}/approve`,
+      {},
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '工作区申请审批失败')
+    }
+    return response.data
+  },
+
+  async rejectJoinApplication(workspaceCode: string, applicationId: number) {
+    const response = await httpPost<ApiResponse<WorkspaceJoinApplicationItem>, Record<string, never>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/join-applications/${applicationId}/reject`,
+      {},
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '工作区申请拒绝失败')
+    }
+    return response.data
+  },
+
+  async createInvitation(workspaceCode: string, payload: CreateWorkspaceInvitationPayload = {}) {
+    const response = await httpPost<ApiResponse<WorkspaceInvitationItem>, CreateWorkspaceInvitationPayload>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/invitations`,
+      payload,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    if (response.success === false) {
+      throw new Error(response.message || '工作区邀请码生成失败')
+    }
+    return response.data
   },
 
   async createWorkspace(payload: SaveWorkspacePayload) {

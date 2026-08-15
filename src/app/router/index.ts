@@ -23,8 +23,16 @@ const ConfigCenterPage = () => import('@/pages/config-center/ConfigCenterPage.vu
 const DashboardPage = () => import('@/pages/dashboard/DashboardPage.vue')
 const DefectDetailPage = () => import('@/pages/defects/DefectDetailPage.vue')
 const DefectsPage = () => import('@/pages/defects/DefectsPage.vue')
+const ForgotPasswordPage = () => import('@/pages/login/ForgotPasswordPage.vue')
 const LoginPage = () => import('@/pages/login/LoginPage.vue')
+const ResetPasswordPage = () => import('@/pages/login/ResetPasswordPage.vue')
 const PlaceholderPage = () => import('@/pages/placeholder/PlaceholderPage.vue')
+const PlatformAccountsPage = () => import('@/pages/platform-admin/PlatformAccountsPage.vue')
+const PlatformApprovalsPage = () => import('@/pages/platform-admin/PlatformApprovalsPage.vue')
+const PlatformAuditLogsPage = () => import('@/pages/platform-admin/PlatformAuditLogsPage.vue')
+const PlatformNotificationsPage = () => import('@/pages/platform-admin/PlatformNotificationsPage.vue')
+const PlatformOverviewPage = () => import('@/pages/platform-admin/PlatformOverviewPage.vue')
+const PlatformWorkspacesPage = () => import('@/pages/platform-admin/PlatformWorkspacesPage.vue')
 const ProfileSettingsPage = () => import('@/pages/profile/ProfileSettingsPage.vue')
 const ReportCenterPage = () => import('@/pages/reports/ReportCenterPage.vue')
 const ReportSharePage = () => import('@/pages/reports/ReportSharePage.vue')
@@ -38,6 +46,26 @@ const routes: RouteRecordRaw[] = [
     component: LoginPage,
     meta: {
       title: '登录',
+      bare: true,
+      public: true,
+    },
+  },
+  {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: ForgotPasswordPage,
+    meta: {
+      title: '找回密码',
+      bare: true,
+      public: true,
+    },
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: ResetPasswordPage,
+    meta: {
+      title: '设置新密码',
       bare: true,
       public: true,
     },
@@ -82,6 +110,66 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '工作台',
           description: '按 Figma 工作台总览视觉展示执行动态、关注事项、系统健康和 AI 洞察。',
+        },
+      },
+      {
+        path: 'platform-admin',
+        name: 'platform-admin-overview',
+        component: PlatformOverviewPage,
+        meta: {
+          title: '平台管理',
+          description: '查看全平台工作区、账号、活跃用户、待审批申请与最近操作。',
+          requiresSuperAdmin: true,
+        },
+      },
+      {
+        path: 'platform-admin/workspaces',
+        name: 'platform-admin-workspaces',
+        component: PlatformWorkspacesPage,
+        meta: {
+          title: '平台管理',
+          description: '管理平台工作区及其启停状态',
+          requiresSuperAdmin: true,
+        },
+      },
+      {
+        path: 'platform-admin/accounts',
+        name: 'platform-admin-accounts',
+        component: PlatformAccountsPage,
+        meta: {
+          title: '平台管理',
+          description: '管理平台账号、账号状态和批量导入',
+          requiresSuperAdmin: true,
+        },
+      },
+      {
+        path: 'platform-admin/approvals',
+        name: 'platform-admin-approvals',
+        component: PlatformApprovalsPage,
+        meta: {
+          title: '平台管理',
+          description: '审批用户加入工作区的申请并查看已处理记录',
+          requiresSuperAdmin: true,
+        },
+      },
+      {
+        path: 'platform-admin/audit-logs',
+        name: 'platform-admin-audit-logs',
+        component: PlatformAuditLogsPage,
+        meta: {
+          title: '平台管理',
+          description: '查看全平台操作审计记录',
+          requiresSuperAdmin: true,
+        },
+      },
+      {
+        path: 'platform-admin/notifications',
+        name: 'platform-admin-notifications',
+        component: PlatformNotificationsPage,
+        meta: {
+          title: '平台管理',
+          description: '配置平台邮件服务和通知触发规则',
+          requiresSuperAdmin: true,
         },
       },
       {
@@ -444,6 +532,18 @@ router.beforeEach(async (to) => {
     return {
       path: '/login',
       query: to.fullPath === '/' ? undefined : { redirect: to.fullPath },
+      replace: true,
+    }
+  }
+
+  if (
+    to.meta.requiresSuperAdmin === true
+    && String(sessionState.currentUser.value?.roleCode || '').toUpperCase() !== 'SUPER_ADMIN'
+  ) {
+    const readableWorkspace = sessionState.currentUser.value?.workspaceCodes?.[0]
+    return {
+      path: '/',
+      query: readableWorkspace ? { workspace: readableWorkspace } : undefined,
       replace: true,
     }
   }
