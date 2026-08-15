@@ -1,6 +1,7 @@
 import { httpDelete, httpGet, httpPost, httpPut, type ApiResponse } from '@/shared/api/request'
 
 import type {
+  BatchCreateWorkspaceMemberPayload,
   CreateWorkspaceInvitationPayload,
   CreateWorkspaceMemberPayload,
   CreateWorkspaceRolePayload,
@@ -240,6 +241,19 @@ export const workspaceApi = {
     return response.data
   },
 
+  async getWorkspaceMemberCandidates(workspaceCode: string) {
+    const response = await httpGet<ApiResponse<WorkspaceMemberCandidateItem[]>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/member-candidates`,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    if (response.success === false) {
+      throw new Error(response.message || '可添加成员加载失败')
+    }
+
+    return Array.isArray(response.data) ? response.data : []
+  },
+
   async createWorkspaceMember(workspaceCode: string, payload: CreateWorkspaceMemberPayload) {
     const response = await httpPost<ApiResponse<WorkspaceMemberItem>, CreateWorkspaceMemberPayload>(
       `/workspaces/${encodeURIComponent(workspaceCode)}/members`,
@@ -285,6 +299,20 @@ export const workspaceApi = {
     }
 
     return response.data
+  },
+
+  async createWorkspaceMembers(workspaceCode: string, payload: BatchCreateWorkspaceMemberPayload) {
+    const response = await httpPost<ApiResponse<WorkspaceMemberItem[]>, BatchCreateWorkspaceMemberPayload>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/members/batch`,
+      payload,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+
+    if (response.success === false) {
+      throw new Error(response.message || '成员批量添加失败')
+    }
+
+    return Array.isArray(response.data) ? response.data : []
   },
 
   async getWorkspaceRoles(workspaceCode: string) {

@@ -165,7 +165,6 @@ async function toggleAccount(account: AccountRow) {
       displayName: account.displayName,
       roleCode: account.roleCode === 'ADMIN' ? 'ADMIN' : 'MEMBER',
       status: account.status === 1 ? 0 : 1,
-      workspaceCodes: [],
     })
     const index = accounts.value.findIndex(item => item.id === account.id)
     if (index >= 0) {

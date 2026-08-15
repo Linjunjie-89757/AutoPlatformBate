@@ -352,7 +352,8 @@ public class WorkspaceDomainService {
     private void validateWorkspaceDeletable(Long workspaceId) {
         boolean hasDependencies =
                 workspaceMemberMapper.selectCount(new LambdaQueryWrapper<WorkspaceMemberEntity>()
-                        .eq(WorkspaceMemberEntity::getWorkspaceId, workspaceId)) > 0
+                        .eq(WorkspaceMemberEntity::getWorkspaceId, workspaceId)
+                        .ne(WorkspaceMemberEntity::getStatus, -1)) > 0
                         || caseMapper.selectCount(new LambdaQueryWrapper<com.company.autoplatform.casecenter.CaseEntity>()
                         .eq(com.company.autoplatform.casecenter.CaseEntity::getWorkspaceId, workspaceId)) > 0
                         || taskMapper.selectCount(new LambdaQueryWrapper<com.company.autoplatform.execution.TaskEntity>()

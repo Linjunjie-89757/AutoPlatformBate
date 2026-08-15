@@ -109,9 +109,15 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
 
         mockMvc.perform(put("/api/users/{userId}", userId)
                         .contentType("application/json")
-                        .content(updateUserRequest(username + "@demo.local", "Workspace Role", "MEMBER", 0, workspaceCode)))
+                        .content(updateUserRequestWithoutWorkspaceCodes(
+                                username + "@demo.local",
+                                "Workspace Role",
+                                "MEMBER",
+                                0
+                        )))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value(0));
+                .andExpect(jsonPath("$.data.status").value(0))
+                .andExpect(jsonPath("$.data.workspaceCodes", hasItem(workspaceCode)));
 
         MvcResult updatedMembersResult = mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", workspaceCode))
                 .andExpect(status().isOk())
@@ -121,7 +127,8 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
                 .findFirst()
                 .orElseThrow();
         org.assertj.core.api.Assertions.assertThat(updatedMember.path("roleCode").asText()).isEqualTo("ADMIN");
-        org.assertj.core.api.Assertions.assertThat(updatedMember.path("status").asInt()).isZero();
+        org.assertj.core.api.Assertions.assertThat(updatedMember.path("status").asInt()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(updatedMember.path("accountStatus").asInt()).isZero();
 
         mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", workspaceCode, member.path("id").asLong()))
                 .andExpect(status().isOk());
@@ -290,6 +297,22 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
                   "workspaceCodes": ["%s"]
                 }
                 """.formatted(email, displayName, roleCode, status, workspaceCode);
+    }
+
+    private String updateUserRequestWithoutWorkspaceCodes(
+            String email,
+            String displayName,
+            String roleCode,
+            int status
+    ) {
+        return """
+                {
+                  "email": "%s",
+                  "displayName": "%s",
+                  "roleCode": "%s",
+                  "status": %d
+                }
+                """.formatted(email, displayName, roleCode, status);
     }
 
     private String batchCreateRequest(String okUsername, String duplicateUsername) {

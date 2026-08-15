@@ -45,7 +45,7 @@ export interface UpdateUserPayload {
   displayName: string
   roleCode: string
   status: UserStatus | number
-  workspaceCodes: string[]
+  workspaceCodes?: string[] | null
 }
 
 export interface ResetUserPasswordResponse {

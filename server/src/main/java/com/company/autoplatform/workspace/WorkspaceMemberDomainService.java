@@ -19,6 +19,9 @@ public class WorkspaceMemberDomainService {
 
     private static final String ROLE_ADMIN = "ADMIN";
     private static final String ROLE_MEMBER = "MEMBER";
+    private static final int STATUS_REMOVED = -1;
+    private static final int STATUS_DISABLED = 0;
+    private static final int STATUS_ACTIVE = 1;
 
     private final WorkspaceMemberMapper workspaceMemberMapper;
     private final UserService userService;
@@ -59,13 +62,14 @@ public class WorkspaceMemberDomainService {
                     "ADMIN",
                     "ADMIN",
                     List.of(),
+                    STATUS_ACTIVE,
                     admin.getStatus()
             ));
         }
 
         workspaceMemberMapper.selectList(new LambdaQueryWrapper<WorkspaceMemberEntity>()
                         .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
-                        .eq(WorkspaceMemberEntity::getStatus, 1)
+                        .ne(WorkspaceMemberEntity::getStatus, STATUS_REMOVED)
                         .orderByAsc(WorkspaceMemberEntity::getId))
                 .stream()
                 .map(entity -> toMemberItem(entity, workspace))
@@ -85,7 +89,7 @@ public class WorkspaceMemberDomainService {
                 || workspaceMemberMapper.selectCount(new LambdaQueryWrapper<WorkspaceMemberEntity>()
                         .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
                         .eq(WorkspaceMemberEntity::getUserId, user.getId())
-                        .eq(WorkspaceMemberEntity::getStatus, 1)) > 0;
+                        .ne(WorkspaceMemberEntity::getStatus, STATUS_REMOVED)) > 0;
         return new WorkspaceMemberCandidateItem(
                 user.getId(),
                 user.getUsername(),
@@ -94,6 +98,28 @@ public class WorkspaceMemberDomainService {
                 user.getStatus(),
                 alreadyMember
         );
+    }
+
+    public List<WorkspaceMemberCandidateItem> listMemberCandidates(String workspaceCode) {
+        WorkspaceEntity workspace = workspaceAccessSupport.requireWorkspaceAdmin(workspaceCode);
+        var memberUserIds = workspaceMemberMapper.selectList(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                        .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
+                        .ne(WorkspaceMemberEntity::getStatus, STATUS_REMOVED))
+                .stream()
+                .map(WorkspaceMemberEntity::getUserId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        return userService.listWorkspaceAssignableUsers().stream()
+                .filter(user -> !memberUserIds.contains(user.getId()))
+                .map(user -> new WorkspaceMemberCandidateItem(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getEmail(),
+                        user.getDisplayName(),
+                        user.getStatus(),
+                        false
+                ))
+                .toList();
     }
 
     @Transactional
@@ -120,7 +146,7 @@ public class WorkspaceMemberDomainService {
             String legacyRoleCode,
             List<Long> requestedRoleIds
     ) {
-        UserEntity user = userService.requireAnyUser(userId);
+        UserEntity user = userService.requireUser(userId);
         if (userService.isPlatformAdmin(user.getId())) {
             throw new BadRequestException("管理员默认拥有全部空间，无需单独加入空间");
         }
@@ -136,12 +162,12 @@ public class WorkspaceMemberDomainService {
             entity.setUserId(user.getId());
             entity.setCreatedAt(LocalDateTime.now());
             entity.setRoleCode(memberType);
-            entity.setStatus(1);
+            entity.setStatus(STATUS_ACTIVE);
             entity.setUpdatedAt(LocalDateTime.now());
             workspaceMemberMapper.insert(entity);
         } else {
             entity.setRoleCode(memberType);
-            entity.setStatus(1);
+            entity.setStatus(STATUS_ACTIVE);
             entity.setUpdatedAt(LocalDateTime.now());
             workspaceMemberMapper.updateById(entity);
         }
@@ -151,8 +177,15 @@ public class WorkspaceMemberDomainService {
 
     @Transactional
     public List<WorkspaceMemberItem> createMembers(String workspaceCode, BatchWorkspaceMemberRequest request) {
+        var distinctUserIds = new java.util.LinkedHashSet<>(request.userIds());
+        if (distinctUserIds.contains(null)) {
+            throw new BadRequestException("成员不能为空");
+        }
+        if (distinctUserIds.size() != request.userIds().size()) {
+            throw new BadRequestException("批量添加成员不能包含重复账号");
+        }
         List<WorkspaceMemberItem> result = new ArrayList<>();
-        for (Long userId : request.userIds()) {
+        for (Long userId : distinctUserIds) {
             result.add(createMember(workspaceCode, new CreateWorkspaceMemberRequest(
                     userId,
                     request.memberType(),
@@ -174,8 +207,13 @@ public class WorkspaceMemberDomainService {
         if (Objects.equals(workspace.getOwnerUserId(), entity.getUserId()) && !ROLE_ADMIN.equals(memberType)) {
             throw new BadRequestException("负责人不能降级为普通成员，请先转让负责人");
         }
+        if (Objects.equals(workspace.getOwnerUserId(), entity.getUserId())
+                && request.status() != null
+                && request.status() == STATUS_DISABLED) {
+            throw new BadRequestException("负责人不能禁用，请先转让负责人");
+        }
         entity.setRoleCode(memberType);
-        entity.setStatus(1);
+        entity.setStatus(normalizeMemberStatus(request.status(), entity.getStatus()));
         entity.setUpdatedAt(LocalDateTime.now());
         workspaceMemberMapper.updateById(entity);
         replaceMemberRoles(entity, workspace.getId(), memberType, request.roleIds());
@@ -186,8 +224,7 @@ public class WorkspaceMemberDomainService {
     public void deleteMember(String workspaceCode, Long memberId) {
         workspaceAccessSupport.requireWorkspaceAdmin(workspaceCode);
         if (memberId < 0) {
-            userService.removeAdminFromWorkspace(-memberId, workspaceCode);
-            return;
+            throw new BadRequestException("平台管理员默认拥有全部工作区，不能从单个工作区移除");
         }
         WorkspaceEntity workspace = workspaceDomainService.requireWorkspace(workspaceCode);
         WorkspaceMemberEntity entity = requireMember(memberId);
@@ -199,15 +236,27 @@ public class WorkspaceMemberDomainService {
         }
         workspaceMemberRoleMapper.delete(new LambdaQueryWrapper<WorkspaceMemberRoleEntity>()
                 .eq(WorkspaceMemberRoleEntity::getMemberId, memberId));
-        workspaceMemberMapper.deleteById(memberId);
+        entity.setStatus(STATUS_REMOVED);
+        entity.setUpdatedAt(LocalDateTime.now());
+        workspaceMemberMapper.updateById(entity);
     }
 
     private WorkspaceMemberEntity requireMember(Long memberId) {
         WorkspaceMemberEntity entity = workspaceMemberMapper.selectById(memberId);
-        if (entity == null || entity.getStatus() != 1) {
+        if (entity == null || entity.getStatus() == null || entity.getStatus() == STATUS_REMOVED) {
             throw new BadRequestException("成员不存在");
         }
         return entity;
+    }
+
+    private int normalizeMemberStatus(Integer requestedStatus, Integer currentStatus) {
+        if (requestedStatus == null) {
+            return currentStatus == null ? STATUS_ACTIVE : currentStatus;
+        }
+        if (requestedStatus != STATUS_ACTIVE && requestedStatus != STATUS_DISABLED) {
+            throw new BadRequestException("无效的工作区成员状态");
+        }
+        return requestedStatus;
     }
 
     private String normalizeMemberType(String memberType, String legacyRoleCode) {
@@ -234,9 +283,9 @@ public class WorkspaceMemberDomainService {
             roles = defaultRole == null ? List.of() : List.of(defaultRole);
         } else {
             roles = workspaceRoleDomainService.requireRoles(workspaceId, requestedRoleIds);
-            if (ROLE_MEMBER.equals(memberType) && roles.isEmpty()) {
-                throw new BadRequestException("普通成员至少需要分配一个业务角色");
-            }
+        }
+        if (ROLE_MEMBER.equals(memberType) && roles.isEmpty()) {
+            throw new BadRequestException("普通成员至少需要分配一个业务角色");
         }
 
         workspaceMemberRoleMapper.delete(new LambdaQueryWrapper<WorkspaceMemberRoleEntity>()
@@ -258,7 +307,7 @@ public class WorkspaceMemberDomainService {
 
     private WorkspaceMemberItem toMemberItem(WorkspaceMemberEntity entity, WorkspaceEntity workspace) {
         UserEntity user = userService.requireAnyUser(entity.getUserId());
-        if (userService.isSuperAdmin(user.getId())) {
+        if (userService.isPlatformAdmin(user.getId())) {
             return null;
         }
         String storedMemberType = normalizeMemberType(entity.getRoleCode(), null);
@@ -272,6 +321,7 @@ public class WorkspaceMemberDomainService {
                 userService.isPlatformAdmin(user.getId()) ? ROLE_ADMIN : storedMemberType,
                 memberType,
                 ensureAndListMemberRoles(entity),
+                entity.getStatus(),
                 user.getStatus()
         );
     }

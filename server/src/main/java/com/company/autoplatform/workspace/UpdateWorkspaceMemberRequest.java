@@ -5,6 +5,7 @@ import java.util.List;
 public record UpdateWorkspaceMemberRequest(
         String memberType,
         List<Long> roleIds,
-        String roleCode
+        String roleCode,
+        Integer status
 ) {
 }

@@ -141,6 +141,13 @@ public class WorkspaceController {
         return ApiResponse.ok(workspaceService.findMemberCandidate(workspaceCode, account));
     }
 
+    @GetMapping("/{workspaceCode}/member-candidates")
+    public ApiResponse<List<WorkspaceMemberCandidateItem>> listMemberCandidates(
+            @PathVariable String workspaceCode
+    ) {
+        return ApiResponse.ok(workspaceService.listMemberCandidates(workspaceCode));
+    }
+
     @PostMapping("/{workspaceCode}/members")
     public ApiResponse<WorkspaceMemberItem> createMember(
             @PathVariable String workspaceCode,

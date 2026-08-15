@@ -24,7 +24,7 @@ import {
   X,
 } from '@lucide/vue'
 
-import { useSession } from '@/entities/session'
+import { canManageWorkspace, useSession } from '@/entities/session'
 import {
   auditLogApi,
   type OperationAuditCategory,
@@ -36,6 +36,7 @@ import {
   useWorkspaceContext,
   workspaceApi,
   type WorkspaceItem,
+  type WorkspaceMemberCandidateItem,
   type WorkspaceMemberItem,
   type WorkspaceMemberRoleItem,
   type WorkspacePermissionModuleItem,
@@ -56,6 +57,11 @@ import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import { confirmDelete } from '@/shared/ui'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
+
+import AddWorkspaceMembersDialog, {
+  type AddWorkspaceMembersPayload,
+  type AddWorkspaceMembersResult,
+} from './AddWorkspaceMembersDialog.vue'
 
 type SettingsPage = 'home' | 'workspace' | 'users' | 'roles' | 'perms' | 'audit'
 type UserStatus = 'active' | 'disabled'
@@ -86,6 +92,7 @@ interface SettingsUser extends Record<string, unknown> {
   name: string
   account: string
   status: UserStatus
+  accountStatus: UserStatus
   lastLogin: string
   avatar: string
 }
@@ -147,6 +154,10 @@ const canManagePlatformAccounts = computed(() => {
   const roleCode = String(currentUser.value?.roleCode || '').toUpperCase()
   return ['SUPER_ADMIN', 'PLATFORM_ADMIN', 'ADMIN'].includes(roleCode)
 })
+const canManageCurrentWorkspace = computed(() => canManageWorkspace(
+  currentUser.value,
+  selectedWorkspaceCode.value,
+))
 const workspaceForm = reactive({
   name: '',
   description: '',
@@ -163,6 +174,12 @@ const userKeyword = ref('')
 const identityFilter = ref('all')
 const roleFilter = ref('all')
 const statusFilter = ref('all')
+const addMemberDialogVisible = ref(false)
+const addMemberCandidates = ref<WorkspaceMemberCandidateItem[]>([])
+const addMemberCandidatesLoading = ref(false)
+const addMemberCandidatesError = ref('')
+const addMemberSubmitting = ref(false)
+const addMemberCompleted = ref<AddWorkspaceMembersResult | null>(null)
 const inviteDialogVisible = ref(false)
 const editingUser = ref<SettingsUser | null>(null)
 const confirmToggleUser = ref<SettingsUser | null>(null)
@@ -226,6 +243,13 @@ const userOperationColumnWidth = getAppFigmaActionColumnWidth(userOperationActio
 const roles = computed<SettingsRole[]>(() => {
   return customRoles.value
 })
+
+const addMemberRoleOptions = computed(() => roles.value.flatMap(role => role.backendId == null ? [] : [{
+  id: role.backendId,
+  roleCode: role.roleCode,
+  name: role.name,
+  description: role.desc,
+}]))
 
 const roleCreateDisabled = computed(() => roleSaving.value || !roleForm.name.trim())
 
@@ -333,7 +357,7 @@ function roleVisualBackground(roleName: string) {
 }
 
 const quickCards = computed(() => [
-  { key: 'users' as SettingsPage, label: '用户管理', desc: '管理平台成员和访问权限', badge: `${users.value.length} 名成员`, icon: Users, color: palette.primary, bg: '#E8F3FF' },
+  { key: 'users' as SettingsPage, label: '用户管理', desc: '管理工作区成员和访问权限', badge: `${users.value.length} 名成员`, icon: Users, color: palette.primary, bg: '#E8F3FF' },
   { key: 'roles' as SettingsPage, label: '角色管理', desc: '定义角色和分配职责', badge: `${roles.value.length} 个角色`, icon: Crown, color: palette.purple, bg: '#F5E8FF' },
   { key: 'workspace' as SettingsPage, label: '工作区配置', desc: '工作区基础信息和策略', badge: currentWorkspace.value?.workspaceName || (selectedWorkspaceCode.value === 'ALL' ? '全部工作空间' : selectedWorkspaceCode.value), icon: Building2, color: palette.success, bg: '#E8FFEA' },
   { key: 'perms' as SettingsPage, label: '权限配置', desc: '精细化权限树管理', badge: `${permissionModules.length} 个模块`, icon: Key, color: palette.warning, bg: '#FFF3E8' },
@@ -358,6 +382,7 @@ function mapSettingsUser(user: UserItem, member?: WorkspaceMemberItem): Settings
     name,
     account: user.email || user.username,
     status: Number(user.status) === 1 ? 'active' : 'disabled',
+    accountStatus: Number(user.status) === 1 ? 'active' : 'disabled',
     lastLogin: '—',
     avatar: name.slice(0, 1) || user.username.slice(0, 1) || '用',
   }
@@ -382,6 +407,7 @@ function mapSettingsMember(member: WorkspaceMemberItem, workspaceCode: string): 
     name,
     account: member.email || member.username,
     status: Number(member.status) === 1 ? 'active' : 'disabled',
+    accountStatus: Number(member.accountStatus) === 1 ? 'active' : 'disabled',
     lastLogin: '—',
     avatar: name.slice(0, 1) || member.username.slice(0, 1) || '用',
   }
@@ -395,17 +421,17 @@ async function loadUsers() {
   try {
     const members = workspaceCode === 'ALL' ? [] : await workspaceApi.getWorkspaceMembers(workspaceCode)
     if (requestSeq !== usersRequestSeq) return
-    if (!canManagePlatformAccounts.value) {
+    if (workspaceCode !== 'ALL') {
       users.value = members.map(item => mapSettingsMember(item, workspaceCode))
+      return
+    }
+    if (!canManagePlatformAccounts.value) {
+      users.value = []
       return
     }
     const allUsers = await userApi.getUsers()
     if (requestSeq !== usersRequestSeq) return
-    const membersByUserId = new Map(members.map(item => [item.userId, item]))
-    const visibleUsers = workspaceCode === 'ALL'
-      ? allUsers
-      : allUsers.filter(item => (item.workspaceCodes || []).includes(workspaceCode))
-    users.value = visibleUsers.map(item => mapSettingsUser(item, membersByUserId.get(item.id)))
+    users.value = allUsers.map(item => mapSettingsUser(item))
   } catch (error) {
     if (requestSeq !== usersRequestSeq) return
     users.value = []
@@ -577,7 +603,8 @@ const filteredUsers = computed(() => users.value.filter((item) => {
   if (keyword && !item.name.includes(keyword) && !item.account.includes(keyword)) return false
   if (identityFilter.value !== 'all' && item.memberType !== identityFilter.value) return false
   if (roleFilter.value !== 'all' && !item.businessRoles.some(role => role.roleCode === roleFilter.value)) return false
-  if (statusFilter.value !== 'all' && item.status !== statusFilter.value) return false
+  const effectiveStatus = item.status === 'active' && item.accountStatus === 'active' ? 'active' : 'disabled'
+  if (statusFilter.value !== 'all' && effectiveStatus !== statusFilter.value) return false
   return true
 }))
 const {
@@ -593,6 +620,8 @@ const {
 watch([userKeyword, identityFilter, roleFilter, statusFilter], resetUserPage)
 watch(selectedWorkspaceCode, () => {
   resetUserPage()
+  addMemberDialogVisible.value = false
+  addMemberCompleted.value = null
   inviteDialogVisible.value = false
   editingUser.value = null
   confirmToggleUser.value = null
@@ -734,7 +763,7 @@ function getAuditColumnValue(record: AuditRecord, key: string) {
 }
 
 function getUserTableRowClass({ row }: { row: SettingsUser }) {
-  return row.status === 'disabled' ? 'is-muted' : ''
+  return row.status === 'disabled' || row.accountStatus === 'disabled' ? 'is-muted' : ''
 }
 
 function getWorkspaceIdentityLabel(user: SettingsUser) {
@@ -766,10 +795,65 @@ function resetInviteForm(user?: SettingsUser) {
   inviteForm.active = user?.status !== 'disabled'
 }
 
-function openInviteDialog() {
-  editingUser.value = null
-  resetInviteForm()
-  inviteDialogVisible.value = true
+function closeAddMemberDialog() {
+  if (addMemberSubmitting.value) return
+  addMemberDialogVisible.value = false
+  addMemberCompleted.value = null
+  addMemberCandidates.value = []
+  addMemberCandidatesError.value = ''
+}
+
+async function loadAddMemberCandidates() {
+  const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+  if (workspaceCode === 'ALL') return
+  addMemberCandidatesLoading.value = true
+  addMemberCandidatesError.value = ''
+  try {
+    addMemberCandidates.value = await workspaceApi.getWorkspaceMemberCandidates(workspaceCode)
+  } catch (error) {
+    addMemberCandidates.value = []
+    addMemberCandidatesError.value = getRequestErrorMessage(error)
+  } finally {
+    addMemberCandidatesLoading.value = false
+  }
+}
+
+async function openAddMemberDialog() {
+  const workspaceCode = currentConcreteWorkspaceCode()
+  if (!workspaceCode) return
+  addMemberCompleted.value = null
+  addMemberCandidates.value = []
+  addMemberCandidatesError.value = ''
+  addMemberCandidatesLoading.value = true
+  addMemberDialogVisible.value = true
+  await Promise.all([
+    roles.value.length === 0 ? loadRoles() : Promise.resolve(),
+    loadAddMemberCandidates(),
+  ])
+}
+
+async function submitAddWorkspaceMembers(payload: AddWorkspaceMembersPayload) {
+  if (addMemberSubmitting.value) return
+  const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+  if (workspaceCode === 'ALL') return
+  addMemberSubmitting.value = true
+  try {
+    const added = await workspaceApi.createWorkspaceMembers(workspaceCode, {
+      userIds: payload.userIds,
+      memberType: payload.memberType,
+      roleIds: payload.roleIds,
+    })
+    addMemberCompleted.value = {
+      count: added.length,
+      memberType: payload.memberType,
+      roleName: payload.roleName,
+    }
+    await Promise.all([loadUsers(), loadRoles()])
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    addMemberSubmitting.value = false
+  }
 }
 
 function openEditUserDialog(user: SettingsUser) {
@@ -787,7 +871,6 @@ function handleInviteMemberTypeChange() {
 async function submitInviteDialog() {
   if (usersSaving.value) return
   const account = inviteForm.account.trim()
-  const displayName = inviteForm.name.trim()
   if (!account) {
     ElMessage.warning('请输入账号或邮箱')
     return
@@ -806,90 +889,14 @@ async function submitInviteDialog() {
         ElMessage.warning('平台管理员默认拥有全部工作区，不能在单个工作区内调整身份和业务角色')
         return
       }
-      if (canManagePlatformAccounts.value) {
-        await userApi.updateUser(target.userId, {
-          email: account,
-          displayName: displayName || target.name,
-          roleCode: target.platformRoleCode,
-          status: inviteForm.active ? 1 : 0,
-          workspaceCodes: target.workspaceCodes,
-        })
-      }
       if (workspaceCode !== 'ALL' && target.memberId != null && target.memberId > 0) {
         await workspaceApi.updateWorkspaceMember(workspaceCode, target.memberId, {
           memberType: inviteForm.memberType,
           roleIds: [...inviteForm.roleIds],
+          status: inviteForm.active ? 1 : 0,
         })
       }
       ElMessage.success('成员信息已保存')
-    } else {
-      const workspaceCode = currentConcreteWorkspaceCode()
-      if (!workspaceCode) return
-      const normalizedAccount = account.toLowerCase()
-      let target: UserItem | undefined
-      let alreadyMember = false
-      if (canManagePlatformAccounts.value) {
-        const allUsers = await userApi.getUsers()
-        target = allUsers.find(item => item.username.toLowerCase() === normalizedAccount || item.email.toLowerCase() === normalizedAccount)
-        alreadyMember = Boolean(target?.workspaceCodes?.includes(workspaceCode))
-      } else {
-        const candidate = await workspaceApi.findWorkspaceMemberCandidate(workspaceCode, account)
-        if (candidate) {
-          alreadyMember = candidate.alreadyMember
-          target = {
-            id: candidate.userId,
-            username: candidate.username,
-            email: candidate.email,
-            displayName: candidate.displayName,
-            roleCode: 'MEMBER',
-            status: Number(candidate.status) === 1 ? 1 : 0,
-            workspaceCodes: candidate.alreadyMember ? [workspaceCode] : [],
-            workspaceNames: [],
-          }
-        }
-      }
-      if (alreadyMember) {
-        ElMessage.info('该用户已经是当前工作空间成员')
-        return
-      }
-      if (!target) {
-        if (!canManagePlatformAccounts.value) {
-          ElMessage.warning('该账号尚未创建，请联系超级管理员先创建平台账号')
-          return
-        }
-        if (!account.includes('@')) {
-          ElMessage.warning('创建新账号时请输入邮箱；已有账号可直接输入用户名')
-          return
-        }
-        if (!displayName) {
-          ElMessage.warning('创建新账号时请输入姓名')
-          return
-        }
-        target = await userApi.createUser({
-          username: account,
-          email: account,
-          displayName,
-          roleCode: 'MEMBER',
-          workspaceCodes: [workspaceCode],
-        })
-      } else if (!canManagePlatformAccounts.value && Number(target.status) !== 1) {
-        ElMessage.warning('该账号已停用，请联系超级管理员或平台管理员启用后再添加')
-        return
-      } else if (canManagePlatformAccounts.value && !inviteForm.active && Number(target.status) !== 0) {
-        target = await userApi.updateUser(target.id, {
-          email: target.email,
-          displayName: target.displayName,
-          roleCode: target.roleCode,
-          status: 0,
-          workspaceCodes: target.workspaceCodes,
-        })
-      }
-      await workspaceApi.createWorkspaceMember(workspaceCode, {
-        userId: target.id,
-        memberType: inviteForm.memberType,
-        roleIds: [...inviteForm.roleIds],
-      })
-      ElMessage.success('成员已添加；当前后台未提供邀请邮件发送能力')
     }
     inviteDialogVisible.value = false
     await Promise.all([loadUsers(), loadRoles()])
@@ -903,7 +910,7 @@ async function submitInviteDialog() {
 async function removeUser(user: SettingsUser) {
   const workspaceCode = currentConcreteWorkspaceCode()
   if (!workspaceCode) return
-  if (user.memberId == null) {
+  if (user.memberId == null || user.memberId < 0) {
     ElMessage.error('当前成员缺少工作空间成员 ID，无法安全移除')
     return
   }
@@ -926,20 +933,19 @@ async function removeUser(user: SettingsUser) {
 async function confirmToggleUserStatus() {
   const target = confirmToggleUser.value
   if (!target || usersSaving.value) return
-  if (!canManagePlatformAccounts.value) {
-    ElMessage.warning('只有超级管理员或平台管理员可以修改全局账号状态')
+  const workspaceCode = currentConcreteWorkspaceCode()
+  if (!workspaceCode || !canManageCurrentWorkspace.value || target.memberId == null || target.memberId < 0) {
+    ElMessage.warning('当前成员不能在此工作区调整状态')
     return
   }
   usersSaving.value = true
   try {
-    await userApi.updateUser(target.userId, {
-      email: target.email,
-      displayName: target.name,
-      roleCode: target.platformRoleCode,
+    await workspaceApi.updateWorkspaceMember(workspaceCode, target.memberId, {
+      memberType: target.memberType === 'OWNER' ? 'ADMIN' : target.memberType,
+      roleIds: target.businessRoles.map(role => role.id),
       status: target.status === 'active' ? 0 : 1,
-      workspaceCodes: target.workspaceCodes,
     })
-    ElMessage.success(target.status === 'active' ? '账号已禁用' : '账号已启用')
+    ElMessage.success(target.status === 'active' ? '成员已禁用' : '成员已启用')
     confirmToggleUser.value = null
     await loadUsers()
   } catch (error) {
@@ -1302,11 +1308,11 @@ async function savePermissions() {
         <header class="settings-page-toolbar">
           <span>
             <h2>用户管理</h2>
-            <p>管理工作区成员、角色分配和账号状态</p>
+            <p>管理工作区成员、角色分配和成员状态</p>
           </span>
-          <button class="settings-primary-button" type="button" @click="openInviteDialog">
+          <button class="settings-primary-button" type="button" @click="openAddMemberDialog">
             <UserPlus />
-            邀请成员
+            添加成员
           </button>
         </header>
 
@@ -1390,8 +1396,10 @@ async function savePermissions() {
                 <small v-if="user.businessRoles.length === 0" class="settings-role-empty">未分配</small>
               </span>
               <span v-else-if="column.key === 'status'" class="settings-status-cell">
-                <i :class="{ 'is-disabled': user.status === 'disabled' }" />
-                {{ user.status === 'active' ? '已启用' : '已禁用' }}
+                <i :class="{ 'is-disabled': user.status === 'disabled' || user.accountStatus === 'disabled' }" />
+                {{ user.accountStatus === 'disabled'
+                  ? '平台已禁用'
+                  : user.status === 'active' ? '已启用' : '当前工作区已禁用' }}
               </span>
               <span v-else-if="column.key === 'lastLogin'" class="settings-mono">
                 {{ user.lastLogin }}
@@ -1412,19 +1420,19 @@ async function savePermissions() {
               />
             </template>
             <template #default="{ row: user }">
-              <button type="button" title="编辑" aria-label="编辑" :disabled="usersSaving" @click.stop="openEditUserDialog(user)">
+              <button type="button" title="编辑" aria-label="编辑" :disabled="usersSaving || user.memberId == null || user.memberId < 0" @click.stop="openEditUserDialog(user)">
                 <Edit2 />
               </button>
               <button
                 type="button"
-                :title="user.status === 'active' ? '禁用账号' : '启用账号'"
-                :aria-label="user.status === 'active' ? '禁用账号' : '启用账号'"
-                :disabled="usersSaving || !canManagePlatformAccounts"
+                :title="user.status === 'active' ? '禁用成员' : '启用成员'"
+                :aria-label="user.status === 'active' ? '禁用成员' : '启用成员'"
+                :disabled="usersSaving || !canManageCurrentWorkspace || user.memberId == null || user.memberId < 0 || user.memberType === 'OWNER' || user.accountStatus === 'disabled'"
                 @click.stop="confirmToggleUser = user"
               >
                 <Power />
               </button>
-              <button type="button" data-danger="true" title="移除" aria-label="移除" :disabled="usersSaving" @click.stop="removeUser(user)">
+              <button type="button" data-danger="true" title="移除" aria-label="移除" :disabled="usersSaving || user.memberId == null || user.memberId < 0 || user.memberType === 'OWNER'" @click.stop="removeUser(user)">
                 <Trash2 />
               </button>
             </template>
@@ -1743,13 +1751,26 @@ async function savePermissions() {
       @reset="auditColumnSettings.resetDraft"
     />
 
+    <AddWorkspaceMembersDialog
+      v-if="addMemberDialogVisible"
+      :candidates="addMemberCandidates"
+      :roles="addMemberRoleOptions"
+      :loading="addMemberCandidatesLoading"
+      :error="addMemberCandidatesError"
+      :submitting="addMemberSubmitting"
+      :completed="addMemberCompleted"
+      @close="closeAddMemberDialog"
+      @retry="loadAddMemberCandidates"
+      @confirm="submitAddWorkspaceMembers"
+    />
+
     <div v-if="inviteDialogVisible" class="settings-modal-backdrop" @click="inviteDialogVisible = false" />
     <section v-if="inviteDialogVisible" class="settings-modal">
       <div class="settings-modal__panel is-user-modal">
         <header>
           <span>
-            <strong>{{ editingUser ? '编辑成员' : '邀请成员' }}</strong>
-            <small>{{ editingUser ? '修改成员信息和角色分配' : '通过账号邀请新成员加入工作区' }}</small>
+            <strong>编辑成员</strong>
+            <small>修改成员信息和角色分配</small>
           </span>
           <button type="button" @click="inviteDialogVisible = false"><X /></button>
         </header>
@@ -1761,7 +1782,7 @@ async function savePermissions() {
                 v-model="inviteForm.account"
                 placeholder="name@company.com"
                 type="text"
-                :readonly="Boolean(editingUser) && !canManagePlatformAccounts"
+                readonly
               >
             </label>
             <label class="settings-field">
@@ -1770,7 +1791,7 @@ async function savePermissions() {
                 v-model="inviteForm.name"
                 placeholder="显示名称"
                 type="text"
-                :readonly="Boolean(editingUser) && !canManagePlatformAccounts"
+                readonly
               >
             </label>
           </div>
@@ -1813,13 +1834,13 @@ async function savePermissions() {
             <textarea v-model="inviteForm.note" placeholder="可选" rows="3" />
           </label>
           <div class="settings-toggle-card">
-            <span><strong>账号启用</strong></span>
+            <span><strong>成员启用</strong></span>
             <button
               class="settings-switch"
               :class="{ 'is-on': inviteForm.active }"
               type="button"
-              :disabled="!canManagePlatformAccounts"
-              @click="canManagePlatformAccounts && (inviteForm.active = !inviteForm.active)"
+              :disabled="!canManageCurrentWorkspace || editingUser?.memberId == null || editingUser.memberId < 0 || editingUser.memberType === 'OWNER' || editingUser.accountStatus === 'disabled'"
+              @click="canManageCurrentWorkspace && editingUser?.memberId != null && editingUser.memberId > 0 && editingUser.memberType !== 'OWNER' && editingUser.accountStatus === 'active' && (inviteForm.active = !inviteForm.active)"
             >
               <span />
             </button>
@@ -1827,7 +1848,7 @@ async function savePermissions() {
         </div>
         <footer>
           <button type="button" @click="inviteDialogVisible = false">取消</button>
-          <button class="is-primary" type="button" :disabled="usersSaving" @click="submitInviteDialog">{{ usersSaving ? '处理中...' : editingUser ? '保存修改' : '发送邀请' }}</button>
+          <button class="is-primary" type="button" :disabled="usersSaving" @click="submitInviteDialog">{{ usersSaving ? '处理中...' : '保存修改' }}</button>
         </footer>
       </div>
     </section>
@@ -1842,11 +1863,11 @@ async function savePermissions() {
           <Power />
         </span>
         <span>
-          <strong>{{ confirmToggleUser.status === 'active' ? '禁用账号' : '启用账号' }}</strong>
+          <strong>{{ confirmToggleUser.status === 'active' ? '禁用成员' : '启用成员' }}</strong>
           <small>
             {{ confirmToggleUser.status === 'active'
-              ? `禁用后「${confirmToggleUser.name}」将无法登录平台。`
-              : `启用后「${confirmToggleUser.name}」可重新登录平台。` }}
+              ? `禁用后「${confirmToggleUser.name}」将无法进入当前工作区，但不影响其他工作区。`
+              : `启用后「${confirmToggleUser.name}」可重新进入当前工作区。` }}
           </small>
         </span>
         <footer>

@@ -263,6 +263,10 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data[*].id", hasItem(-11)))
                 .andExpect(jsonPath("$.data[*].userId", hasItem(12)));
 
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, -11L))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
         mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", code, memberId)
                         .contentType("application/json")
                         .content(updateMemberRequest("ADMIN")))
@@ -286,12 +290,130 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void workspaceMemberStatusIsIndependentAndCanBeRestored() throws Exception {
+        String firstCode = "ws_status_a_" + System.nanoTime();
+        String secondCode = "ws_status_b_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(firstCode, "status first", "PROJECT", 1)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(secondCode, "status second", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        MvcResult firstMember = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", firstCode)
+                        .contentType("application/json")
+                        .content(memberRequest(12L, "MEMBER")))
+                .andExpect(status().isOk())
+                .andReturn();
+        MvcResult secondMember = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", secondCode)
+                        .contentType("application/json")
+                        .content(memberRequest(12L, "MEMBER")))
+                .andExpect(status().isOk())
+                .andReturn();
+        long firstMemberId = data(firstMember).path("id").asLong();
+
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", firstCode, firstMemberId)
+                        .contentType("application/json")
+                        .content(updateMemberStatusRequest("MEMBER", 0)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(0))
+                .andExpect(jsonPath("$.data.accountStatus").value(1));
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", firstCode))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.userId == 12)].status", hasItem(0)));
+
+        Authentication memberAuthentication = authenticationFor(12L, "chennan", "Chen Nan", PlatformRole.MEMBER);
+        mockMvc.perform(get("/api/workspaces/switchable")
+                        .with(authentication(memberAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].code", not(hasItem(firstCode))))
+                .andExpect(jsonPath("$.data[*].code", hasItem(secondCode)));
+        mockMvc.perform(get("/api/cases")
+                        .with(authentication(memberAuthentication))
+                        .header(WorkspaceScope.HEADER, firstCode))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/cases")
+                        .with(authentication(memberAuthentication))
+                        .header(WorkspaceScope.HEADER, secondCode))
+                .andExpect(status().isOk());
+
+        setPlatformAdminUser();
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", firstCode, firstMemberId)
+                        .contentType("application/json")
+                        .content(updateMemberStatusRequest("MEMBER", 1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value(1));
+        mockMvc.perform(get("/api/workspaces/switchable")
+                        .with(authentication(memberAuthentication)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].code", hasItem(firstCode)));
+
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", firstCode, firstMemberId))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", secondCode, data(secondMember).path("id").asLong()))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", firstCode))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", secondCode))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void removedWorkspaceMemberReturnsToCandidatesAndReusesMembership() throws Exception {
+        String code = "ws_restore_" + System.nanoTime();
+        mockMvc.perform(post("/api/workspaces")
+                        .contentType("application/json")
+                        .content(workspaceRequest(code, "restore member", "PROJECT", 1)))
+                .andExpect(status().isOk());
+
+        MvcResult created = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
+                        .contentType("application/json")
+                        .content(memberRequest(13L, "MEMBER")))
+                .andExpect(status().isOk())
+                .andReturn();
+        long originalMemberId = data(created).path("id").asLong();
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, originalMemberId))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/member-candidates", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].userId", hasItem(13)));
+
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
+                        .contentType("application/json")
+                        .content(memberRequest(13L, "MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(originalMemberId))
+                .andExpect(jsonPath("$.data.status").value(1))
+                .andExpect(jsonPath("$.data.roles[0].roleCode").value("SYSTEM_TEST_ENGINEER"));
+
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}/members/{memberId}", code, originalMemberId))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/workspaces/{workspaceCode}", code))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void batchMembersAndWorkspaceAccessScopeKeepBehavior() throws Exception {
         String code = "ws_scope_" + System.nanoTime();
         mockMvc.perform(post("/api/workspaces")
                         .contentType("application/json")
                         .content(workspaceRequest(code, "scope", "PROJECT", 1)))
                 .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/member-candidates", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[*].userId", hasItem(12)))
+                .andExpect(jsonPath("$.data[*].userId", hasItem(13)))
+                .andExpect(jsonPath("$.data[*].userId", not(hasItem(11))));
+
+        mockMvc.perform(post("/api/workspaces/{workspaceCode}/members/batch", code)
+                        .contentType("application/json")
+                        .content(batchMemberRequest("MEMBER", 12L, 12L)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
 
         MvcResult batchResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members/batch", code)
                         .contentType("application/json")
@@ -301,6 +423,11 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data[*].userId", hasItem(12)))
                 .andExpect(jsonPath("$.data[*].userId", hasItem(13)))
                 .andReturn();
+
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/member-candidates", code))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[*].userId", not(hasItem(12))))
+                .andExpect(jsonPath("$.data[*].userId", not(hasItem(13))));
 
         mockMvc.perform(get("/api/workspaces")
                         .with(authentication(authenticationFor(12L, "chennan", "Chen Nan", PlatformRole.MEMBER))))
@@ -327,6 +454,10 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
         assertThat(workspaceService.requireWritableWorkspace(code).getWorkspaceCode()).isEqualTo(code);
 
         mockMvc.perform(get("/api/workspaces/{workspaceCode}/members", code)
+                        .with(authentication(authenticationFor(14L, "zhaofeng", "Zhao Feng", PlatformRole.MEMBER))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false));
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/member-candidates", code)
                         .with(authentication(authenticationFor(14L, "zhaofeng", "Zhao Feng", PlatformRole.MEMBER))))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
@@ -361,6 +492,12 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
         mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", code, ownerMemberId)
                         .contentType("application/json")
                         .content(updateMemberRequest("MEMBER")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/members/{memberId}", code, ownerMemberId)
+                        .contentType("application/json")
+                        .content(updateMemberStatusRequest("ADMIN", 0)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
@@ -613,9 +750,24 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[?(@.id == %s)].permissionCount".formatted(roleId), hasItem(1)));
 
+        MvcResult defectRoleResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/roles", code)
+                        .contentType("application/json")
+                        .content(roleRequest("缺陷查看角色-" + System.nanoTime(), "验证多角色权限并集")))
+                .andExpect(status().isOk())
+                .andReturn();
+        long defectRoleId = data(defectRoleResult).path("id").asLong();
+        mockMvc.perform(put("/api/workspaces/{workspaceCode}/roles/{roleId}/permissions", code, defectRoleId)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "permissionCodes": ["bugs.view"]
+                                }
+                                """))
+                .andExpect(status().isOk());
+
         MvcResult memberResult = mockMvc.perform(post("/api/workspaces/{workspaceCode}/members", code)
                         .contentType("application/json")
-                        .content(memberRequestWithRoles(12L, "MEMBER", roleId)))
+                        .content(memberRequestWithRoles(12L, "MEMBER", roleId, defectRoleId)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -629,7 +781,8 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
         mockMvc.perform(get("/api/auth/me")
                         .with(authentication(memberAuthentication)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].permissionCodes[*]".formatted(code), hasItem("cases.view")));
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].permissionCodes[*]".formatted(code), hasItem("cases.view")))
+                .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].permissionCodes[*]".formatted(code), hasItem("bugs.view")));
 
         mockMvc.perform(get("/api/cases")
                         .with(authentication(memberAuthentication))
@@ -960,6 +1113,15 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                   "roleIds": [%s]
                 }
                 """.formatted(memberType, ids);
+    }
+
+    private String updateMemberStatusRequest(String memberType, int status) {
+        return """
+                {
+                  "memberType": "%s",
+                  "status": %d
+                }
+                """.formatted(memberType, status);
     }
 
     private JsonNode data(MvcResult result) throws Exception {

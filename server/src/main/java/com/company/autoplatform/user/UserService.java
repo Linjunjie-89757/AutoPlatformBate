@@ -37,6 +37,10 @@ public class UserService {
         return userDomainService.listUsers();
     }
 
+    public List<UserEntity> listWorkspaceAssignableUsers() {
+        return userDomainService.listWorkspaceAssignableUsers();
+    }
+
     public UserItem createUser(CreateUserRequest request) {
         return userDomainService.createUser(request);
     }

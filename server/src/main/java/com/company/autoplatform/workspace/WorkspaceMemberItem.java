@@ -11,6 +11,7 @@ public record WorkspaceMemberItem(
         String roleCode,
         String memberType,
         List<WorkspaceMemberRoleItem> roles,
-        Integer status
+        Integer status,
+        Integer accountStatus
 ) {
 }

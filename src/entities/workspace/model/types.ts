@@ -75,6 +75,7 @@ export interface WorkspaceMemberItem {
   memberType?: 'OWNER' | 'ADMIN' | 'MEMBER' | string
   roles?: WorkspaceMemberRoleItem[]
   status: number | null
+  accountStatus: number | null
 }
 
 export interface WorkspaceMemberRoleItem {
@@ -101,9 +102,18 @@ export interface CreateWorkspaceMemberPayload {
   roleCode?: string | null
 }
 
+export interface BatchCreateWorkspaceMemberPayload {
+  userIds: number[]
+  memberType: 'ADMIN' | 'MEMBER' | string
+  roleIds?: number[] | null
+  /** @deprecated 兼容旧后端字段，新的成员身份使用 memberType。 */
+  roleCode?: string | null
+}
+
 export interface UpdateWorkspaceMemberPayload {
   memberType: 'ADMIN' | 'MEMBER' | string
   roleIds?: number[] | null
+  status?: 0 | 1 | number | null
   /** @deprecated 兼容旧后端字段，新的成员身份使用 memberType。 */
   roleCode?: string | null
 }

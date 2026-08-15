@@ -81,6 +81,10 @@ public class WorkspaceService {
         return workspaceMemberDomainService.findMemberCandidate(workspaceCode, account);
     }
 
+    public List<WorkspaceMemberCandidateItem> listMemberCandidates(String workspaceCode) {
+        return workspaceMemberDomainService.listMemberCandidates(workspaceCode);
+    }
+
     public WorkspaceMemberItem createMember(String workspaceCode, CreateWorkspaceMemberRequest request) {
         return workspaceMemberDomainService.createMember(workspaceCode, request);
     }

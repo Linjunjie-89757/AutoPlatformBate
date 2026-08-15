@@ -44,6 +44,15 @@ public class UserDomainService {
                 .toList();
     }
 
+    public List<UserEntity> listWorkspaceAssignableUsers() {
+        return userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .eq(UserEntity::getStatus, 1)
+                        .orderByAsc(UserEntity::getId))
+                .stream()
+                .filter(user -> !userRoleSupport.isStoredAdminRole(user.getRoleCode()))
+                .toList();
+    }
+
     public UserItem createUser(CreateUserRequest request) {
         userRoleSupport.requirePlatformAdmin();
         String username = request.username().trim();
@@ -96,7 +105,9 @@ public class UserDomainService {
             authenticatedSessionService.expireUserSessions(entity.getId());
         }
 
-        userWorkspaceGrantSupport.replaceWorkspaceCodes(entity, request.workspaceCodes() == null ? List.of() : request.workspaceCodes());
+        if (request.workspaceCodes() != null) {
+            userWorkspaceGrantSupport.replaceWorkspaceCodes(entity, request.workspaceCodes());
+        }
         return toItem(entity, userWorkspaceGrantSupport.findUserWorkspaces(entity.getId()));
     }
 
