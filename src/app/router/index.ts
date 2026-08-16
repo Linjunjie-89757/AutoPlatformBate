@@ -11,6 +11,7 @@ import {
 
 const AppLayout = () => import('@/app/layouts/AppLayout.vue')
 const ApiAutomationPage = () => import('@/pages/automation-api/ApiAutomationPage.vue')
+const AppAutomationPage = () => import('@/pages/automation-app/AppAutomationPage.vue')
 const AutomationTasksPage = () => import('@/pages/automation-tasks/AutomationTasksPage.vue')
 const WebAutomationPage = () => import('@/pages/automation-web/WebAutomationPage.vue')
 const WebUiSharedReportPage = () => import('@/pages/automation-web/WebUiSharedReportPage.vue')
@@ -27,7 +28,6 @@ const ActivateAccountPage = () => import('@/pages/login/ActivateAccountPage.vue'
 const ForgotPasswordPage = () => import('@/pages/login/ForgotPasswordPage.vue')
 const LoginPage = () => import('@/pages/login/LoginPage.vue')
 const ResetPasswordPage = () => import('@/pages/login/ResetPasswordPage.vue')
-const PlaceholderPage = () => import('@/pages/placeholder/PlaceholderPage.vue')
 const PlatformAccountsPage = () => import('@/pages/platform-admin/PlatformAccountsPage.vue')
 const PlatformApprovalsPage = () => import('@/pages/platform-admin/PlatformApprovalsPage.vue')
 const PlatformAuditLogsPage = () => import('@/pages/platform-admin/PlatformAuditLogsPage.vue')
@@ -507,10 +507,9 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'automation/app',
         name: 'automation-app',
-        component: PlaceholderPage,
+        component: AppAutomationPage,
         meta: {
           title: 'APP 自动化',
-          description: '旧项目当前为占位模块，后续确认真实业务边界后再接入。',
         },
       },
     ],

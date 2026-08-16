@@ -27,12 +27,13 @@ import {
   type TestPlanItem,
   type VersionItem,
 } from './testManagementDemoData'
+import VersionManagementPanel from './VersionManagementPanel.vue'
 import './test-management-page.css'
 
 type ActiveTab = 'requirements' | 'versions' | 'plans'
 type DetailRecord = RequirementItem | VersionItem | TestPlanItem
 
-const activeTab = ref<ActiveTab>('requirements')
+const activeTab = ref<ActiveTab>('versions')
 const keyword = ref('')
 const versionFilter = ref('全部版本')
 const statusFilter = ref('全部状态')
@@ -175,7 +176,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="test-management-page">
+  <VersionManagementPanel v-if="activeTab === 'versions'" @change-tab="changeTab" />
+  <main v-else class="test-management-page">
     <header class="test-management-page__header">
       <div>
         <div class="test-management-page__eyebrow">
@@ -277,23 +279,6 @@ onBeforeUnmount(() => {
               <td><span :class="['test-management-page__status', statusClass(item.status)]">{{ item.status }}</span></td>
               <td class="test-management-page__muted-cell">{{ item.updatedAt }}</td>
               <td><button class="test-management-page__row-button" type="button" aria-label="查看需求详情" @click.stop="drawerRecord = item"><ChevronRight :size="15" /></button></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table v-else-if="activeTab === 'versions'" class="test-management-page__table">
-          <thead><tr><th>版本</th><th>负责人</th><th>计划发布日期</th><th>需求 / 计划</th><th>测试进度</th><th>未关闭缺陷</th><th>发布风险</th><th>状态</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="item in filteredVersions" :key="item.id" tabindex="0" @click="drawerRecord = item" @keydown.enter="drawerRecord = item">
-              <td><div class="test-management-page__primary-cell"><strong>{{ item.name }}</strong><small>{{ item.id }}</small></div></td>
-              <td>{{ item.owner }}</td>
-              <td><span class="test-management-page__date"><CalendarDays :size="13" />{{ item.releaseDate }}</span></td>
-              <td>{{ item.requirements }} / {{ item.plans }}</td>
-              <td><div class="test-management-page__coverage is-wide"><span>{{ item.progress }}%</span><div><i :style="{ width: `${item.progress}%` }"></i></div></div></td>
-              <td><span :class="['test-management-page__defect-count', { 'has-defects': item.openDefects }]">{{ item.openDefects }}</span></td>
-              <td><span :class="['test-management-page__risk', `is-${item.risk}`]">{{ item.risk }}风险</span></td>
-              <td><span :class="['test-management-page__status', statusClass(item.status)]">{{ item.status }}</span></td>
-              <td><button class="test-management-page__row-button" type="button" aria-label="查看版本详情" @click.stop="drawerRecord = item"><ChevronRight :size="15" /></button></td>
             </tr>
           </tbody>
         </table>

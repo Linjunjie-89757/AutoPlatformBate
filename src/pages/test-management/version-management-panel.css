@@ -1,0 +1,747 @@
+.version-management {
+  --vm-primary: #0ea5e9;
+  --vm-success: #00b42a;
+  --vm-warning: #ff7d00;
+  --vm-danger: #f53f3f;
+  --vm-purple: #7816ff;
+  --vm-text: #1d2129;
+  --vm-secondary: #4e5969;
+  --vm-muted: #86909c;
+  --vm-placeholder: #c9cdd4;
+  --vm-border: #e5e6eb;
+  width: 100%;
+  min-width: 0;
+  min-height: calc(100dvh - 42px);
+  color: var(--vm-text);
+  background: #f4f6fa;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.version-management *,
+.version-management *::before,
+.version-management *::after {
+  box-sizing: border-box;
+}
+
+.version-management button,
+.version-management input,
+.version-management select,
+.version-management textarea {
+  margin: 0;
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.version-management__module-tabs {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--vm-border);
+  background: #fff;
+}
+
+.version-management__module-tabs button,
+.version-management__detail-tabs button {
+  height: 100%;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--vm-muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+
+.version-management__module-tabs button:hover,
+.version-management__detail-tabs button:hover {
+  color: var(--vm-primary);
+}
+
+.version-management__module-tabs button.is-active,
+.version-management__detail-tabs button.is-active {
+  border-bottom-color: var(--vm-primary);
+  color: var(--vm-primary);
+  font-weight: 600;
+}
+
+.version-management__stats {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  padding-left: 8px;
+  border-bottom: 1px solid var(--vm-border);
+  background: #fff;
+}
+
+.version-management__stats > i,
+.version-management__kpis > i {
+  flex: 0 0 1px;
+  width: 1px;
+  background: var(--vm-border);
+}
+
+.version-management__stats > i {
+  height: 32px;
+  margin: 0 4px;
+}
+
+.version-management__mini-stat {
+  display: flex;
+  min-width: 76px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 20px;
+}
+
+.version-management__mini-stat strong {
+  color: var(--vm-text);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 22px;
+}
+
+.version-management__mini-stat span {
+  margin-top: 1px;
+  color: var(--vm-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.version-management__mini-stat.is-warning strong { color: var(--vm-warning); }
+.version-management__mini-stat.is-purple strong { color: var(--vm-purple); }
+.version-management__mini-stat.is-muted strong { color: var(--vm-muted); }
+.version-management__mini-stat.is-primary strong { color: var(--vm-primary); }
+
+.version-management__button {
+  display: inline-flex;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--vm-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+.version-management__button.is-primary:hover { background: #0288c7; }
+.version-management__button.is-purple { background: var(--vm-purple); }
+.version-management__button.is-purple:hover { background: #5b10c8; }
+.version-management__button.is-danger { background: var(--vm-danger); }
+.version-management__button.is-danger:hover { background: #cb272d; }
+.version-management__button.is-success { background: var(--vm-success); }
+.version-management__button.is-success:hover { background: #009a24; }
+
+.version-management__button.is-ghost {
+  border-color: var(--vm-border);
+  color: var(--vm-secondary);
+  background: #fff;
+}
+
+.version-management__button.is-ghost:hover {
+  color: var(--vm-text);
+  background: #f4f6fa;
+}
+
+.version-management__button.is-small {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.version-management__button.is-link { color: var(--vm-primary); }
+
+.version-management__button:disabled {
+  border-color: transparent;
+  color: #fff;
+  background: var(--vm-placeholder);
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.version-management__create {
+  width: 93px;
+  height: 28px;
+  margin-right: 20px;
+  margin-left: auto;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.version-management__stats .version-management__create { margin-left: auto; }
+
+.version-management__filters {
+  display: flex;
+  height: 53px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--vm-border);
+  background: #fafafa;
+}
+
+.version-management__search {
+  position: relative;
+  width: 240px;
+  height: 32px;
+}
+
+.version-management__search svg {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  z-index: 1;
+  color: var(--vm-placeholder);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.version-management__search input,
+.version-management__filters select,
+.version-management__logs select {
+  height: 32px;
+  border: 1px solid var(--vm-border);
+  border-radius: 7px;
+  outline: none;
+  color: var(--vm-text);
+  background: #fff;
+  font-size: 12px;
+  transition: border-color 150ms ease;
+}
+
+.version-management__search input {
+  width: 100%;
+  padding: 0 10px 0 28px;
+}
+
+.version-management__search input::placeholder { color: var(--vm-placeholder); }
+.version-management__search input:focus,
+.version-management__filters select:focus,
+.version-management__logs select:focus { border-color: var(--vm-primary); }
+
+.version-management__filters select {
+  width: 100px;
+  padding: 0 8px;
+}
+
+.version-management__list-area {
+  min-height: calc(100dvh - 191px);
+  padding: 16px 20px;
+}
+
+.version-management__table-card,
+.version-management__panel,
+.version-management__report,
+.version-management__timeline {
+  border: 1px solid var(--vm-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.version-management__table-card {
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 4%);
+}
+
+.version-management__table-scroll { overflow-x: auto; }
+
+.version-management__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.version-management__table th {
+  height: 37px;
+  padding: 9px 12px;
+  color: var(--vm-muted);
+  background: #fafafa;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.version-management__table thead tr { border-bottom: 1px solid var(--vm-border); }
+
+.version-management__table tbody tr {
+  height: 54px;
+  border-bottom: 1px solid var(--vm-border);
+  outline: none;
+  cursor: default;
+  transition: background-color 120ms ease;
+}
+
+.version-management__table.is-version-list tbody tr {
+  height: 54px;
+  cursor: pointer;
+}
+
+.version-management__table.is-version-list tbody tr.has-description { height: 58px; }
+.version-management__table.is-requirements tbody tr { height: 58px; }
+.version-management__table.is-plans tbody tr { height: 46px; }
+.version-management__table.is-bugs tbody tr { height: 40px; }
+
+.version-management__table tbody tr:last-child { border-bottom: 0; }
+.version-management__table tbody tr:hover,
+.version-management__table tbody tr:focus-visible { background: #fafbff; }
+
+.version-management__table td {
+  padding: 9px 12px;
+  color: var(--vm-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.version-management__table td > strong {
+  display: block;
+  color: var(--vm-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.version-management__table td > small {
+  display: block;
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--vm-placeholder);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+}
+
+.version-management__table code,
+.version-management__detail-header code {
+  color: var(--vm-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.version-management__table .is-muted { color: var(--vm-muted); font-size: 11px; }
+.version-management__table .is-centered { text-align: center; }
+.version-management__table .is-centered b { color: var(--vm-text); font-size: 13px; font-weight: 600; }
+.version-management__table .is-rate { color: var(--vm-primary) !important; font-weight: 700 !important; }
+.version-management__table .is-risk { color: var(--vm-warning) !important; font-size: 12px !important; font-weight: 700 !important; }
+
+.version-management__table.is-version-list th:first-child,
+.version-management__table.is-version-list td:first-child { min-width: 248px; }
+.version-management__table.is-version-list th:nth-child(10),
+.version-management__table.is-version-list td:nth-child(10) { min-width: 128px; }
+
+.version-management__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.version-management__badge.is-plan-running { color: var(--vm-warning); background: #fff3e8; }
+.version-management__badge.is-plan-completed { color: var(--vm-success); background: #e8ffea; }
+.version-management__badge.is-plan-pending { color: var(--vm-primary); background: #e8f3ff; }
+
+.version-management__progress-cell { min-width: 130px; }
+
+.version-management__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-management__progress > i {
+  display: block;
+  min-width: 80px;
+  height: 6px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f2f3f5;
+}
+
+.version-management__progress > i span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--vm-primary);
+  transition: width 300ms ease;
+}
+
+.version-management__progress b {
+  min-width: 28px;
+  color: var(--vm-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.version-management__progress-cell > small { color: var(--vm-muted) !important; font-size: 10px !important; }
+.version-management__gate { font-size: 11px; font-weight: 600; }
+
+.version-management__row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.version-management__row-actions button,
+.version-management__icon-button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vm-placeholder);
+  background: transparent;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.version-management__row-actions button:hover,
+.version-management__icon-button:hover {
+  color: var(--vm-text);
+  background: #f2f3f5;
+}
+
+.version-management__pagination {
+  display: flex;
+  height: 49px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--vm-border);
+}
+
+.version-management__pagination span { color: var(--vm-muted); font-size: 12px; }
+.version-management__pagination button { width: 28px; height: 28px; border: 1px solid var(--vm-primary); border-radius: 6px; color: #fff; background: var(--vm-primary); font-size: 12px; font-weight: 600; }
+
+.version-management__empty {
+  display: flex;
+  min-height: 140px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 36px;
+  color: var(--vm-placeholder);
+  text-align: center;
+}
+
+.version-management__empty strong { color: var(--vm-muted); font-size: 13px; font-weight: 500; }
+.version-management__empty span { font-size: 12px; }
+.version-management__empty button { padding: 6px 16px; border: 1px solid var(--vm-primary); border-radius: 8px; color: var(--vm-primary); background: #fff; cursor: pointer; }
+
+.version-management__detail-header {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--vm-border);
+  background: #fff;
+}
+
+.version-management__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  color: var(--vm-muted);
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 150ms ease;
+}
+
+.version-management__back:hover { color: var(--vm-primary); }
+.version-management__crumb { color: var(--vm-placeholder); }
+.version-management__detail-header > strong { font-size: 13px; font-weight: 600; }
+
+.version-management__detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.version-management__detail-actions > span { color: var(--vm-muted); font-size: 11px; }
+
+.version-management__kpis {
+  display: flex;
+  height: 72px;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--vm-border);
+  background: #fff;
+}
+
+.version-management__kpis > i { height: 36px; margin: 0 24px; }
+.version-management__kpis > div { display: flex; flex-direction: column; justify-content: center; }
+.version-management__kpis strong { font-size: 22px; font-weight: 700; line-height: 22px; }
+.version-management__kpis strong small { margin-left: 2px; color: var(--vm-muted); font-size: 12px; font-weight: 400; }
+.version-management__kpis span { margin-top: 4px; color: var(--vm-muted); font-size: 11px; }
+.version-management__kpis .is-dark strong { color: var(--vm-text); }
+.version-management__kpis .is-purple strong { color: var(--vm-purple); }
+.version-management__kpis .is-warning strong { color: var(--vm-warning); }
+.version-management__kpis .is-primary strong { color: var(--vm-primary); }
+.version-management__kpis .is-success strong { color: var(--vm-success); }
+.version-management__kpis .is-danger strong { color: var(--vm-danger); }
+.version-management__kpis .is-muted strong { color: var(--vm-muted); }
+.version-management__quality-kpi strong { color: var(--vm-danger); font-size: 13px; line-height: 20px; }
+
+.version-management__detail-tabs {
+  display: flex;
+  height: 41px;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--vm-border);
+  background: #fff;
+}
+
+.version-management__detail-tabs button { height: 40px; padding: 0 14px; }
+
+.version-management__detail-body {
+  min-height: calc(100dvh - 207px);
+  padding: 20px;
+  background: #f4f6fa;
+}
+
+.version-management__overview { max-width: 1200px; }
+.version-management__overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.version-management__panel { min-height: 258px; padding: 20px; }
+.version-management__panel h3,
+.version-management__report h3 { margin: 0 0 16px; color: var(--vm-text); font-size: 14px; font-weight: 600; }
+.version-management__panel dl { margin: 0; }
+.version-management__panel dl > div { display: flex; height: 45px; gap: 12px; align-items: flex-start; padding: 0 0 12px; margin: 0; border-bottom: 1px solid var(--vm-border); }
+.version-management__panel dt { width: 72px; flex: 0 0 auto; color: var(--vm-muted); font-size: 12px; }
+.version-management__panel dd { margin: 0; color: var(--vm-text); font-size: 13px; }
+
+.version-management__panel-empty { display: flex; height: 160px; align-items: center; justify-content: center; color: var(--vm-placeholder); font-size: 12px; }
+
+.version-management__quality-panel { min-height: 168px; margin-top: 16px; }
+.version-management__quality-panel header { display: flex; align-items: center; justify-content: space-between; }
+.version-management__quality-panel header span { padding: 4px 10px; border-radius: 14px; color: var(--vm-danger); background: #ffecec; font-size: 11px; font-weight: 600; }
+.version-management__gate-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+.version-management__gate-grid > div { display: flex; min-width: 0; height: 86px; flex-direction: column; padding: 10px 12px; border: 1px solid #c7ebd1; border-radius: 10px; background: #fbfffc; }
+.version-management__gate-grid > div.is-failed { border-color: #ffc9c9; background: #fffafa; }
+.version-management__gate-grid span { display: flex; align-items: center; gap: 4px; color: var(--vm-secondary); font-size: 11px; white-space: nowrap; }
+.version-management__gate-grid .is-passed span svg { color: var(--vm-success); }
+.version-management__gate-grid .is-failed span svg { color: var(--vm-danger); }
+.version-management__gate-grid small { margin-top: 5px; color: var(--vm-muted); font-size: 10px; }
+.version-management__gate-grid strong { margin-top: auto; color: var(--vm-success); font-size: 13px; }
+.version-management__gate-grid .is-failed strong { color: var(--vm-danger); }
+
+.version-management__sub-toolbar {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.version-management__count-pills,
+.version-management__filter-pills { display: flex; gap: 6px; }
+.version-management__count-pills span,
+.version-management__filter-pills button { display: inline-flex; min-height: 28px; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--vm-border); border-radius: 16px; color: var(--vm-secondary); background: #fff; font-size: 12px; }
+.version-management__count-pills b { color: var(--vm-primary); font-size: 13px; }
+.version-management__sub-toolbar > .version-management__button:first-of-type { margin-left: auto; }
+.version-management__filter-pills button { color: var(--vm-muted); background: transparent; cursor: pointer; transition: all 150ms ease; }
+.version-management__filter-pills button:hover,
+.version-management__filter-pills button.is-active { border-color: var(--vm-secondary); color: var(--vm-secondary); background: #f2f3f5; font-weight: 600; }
+.version-management__sub-toolbar > .is-danger { margin-left: auto !important; }
+.version-management__sub-toolbar.is-bugs { min-height: 28px; }
+
+.version-management__card-header { display: flex; height: 53px; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--vm-border); }
+.version-management__card-header strong { font-size: 13px; font-weight: 600; }
+
+.version-management__priority,
+.version-management__source { display: inline-flex; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.version-management__priority.is-p0 { color: var(--vm-danger); background: #ffecec; }
+.version-management__priority.is-p1 { color: var(--vm-warning); background: #fff3e8; }
+.version-management__priority.is-p2 { color: var(--vm-primary); background: #e0f5fe; }
+.version-management__priority.is-p3 { color: var(--vm-muted); background: #f2f3f5; }
+.version-management__source { font-weight: 500; }
+.version-management__source.is-jira { color: #0052cc; background: #deebff; }
+.version-management__source.is-tapd { color: #2563eb; background: #eff6ff; }
+.version-management__source.is-manual { color: var(--vm-muted); background: #f2f3f5; }
+.version-management__plan-type { color: var(--vm-primary); font-size: 11px; font-weight: 500; }
+.version-management__severity { padding: 2px 8px; border: 1.5px solid #ffcf8b; border-radius: 12px; color: var(--vm-warning); background: #fffaf2; font-size: 11px; font-weight: 600; }
+
+.version-management__report { width: 1000px; max-width: 100%; padding: 24px; }
+.version-management__report > header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; }
+.version-management__report h2 { margin: 0 0 4px; font-size: 18px; font-weight: 700; }
+.version-management__report p { margin: 0; color: var(--vm-muted); font-size: 12px; }
+.version-management__report-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; }
+.version-management__report-kpis > div { display: flex; height: 75px; align-items: center; justify-content: center; flex-direction: column; border: 1px solid var(--vm-border); border-radius: 10px; background: #fafbfe; }
+.version-management__report-kpis strong { color: var(--vm-primary); font-size: 22px; font-weight: 700; line-height: 22px; }
+.version-management__report-kpis strong.is-dark { color: var(--vm-text); }
+.version-management__report-kpis strong.is-danger { color: var(--vm-danger); }
+.version-management__report-kpis small { margin-left: 2px; color: var(--vm-muted); font-size: 12px; font-weight: 400; }
+.version-management__report-kpis span { margin-top: 6px; color: var(--vm-muted); font-size: 11px; }
+.version-management__chart { position: relative; display: flex; width: 760px; max-width: 100%; height: 165px; align-items: flex-end; gap: 274px; padding: 0 0 28px 200px; }
+.version-management__chart-grid { position: absolute; inset: 0 20px 28px 45px; display: flex; flex-direction: column; justify-content: space-between; }
+.version-management__chart-grid i { display: block; width: 100%; border-top: 1px dashed #edf0f5; }
+.version-management__chart-column { position: relative; z-index: 1; width: 80px; text-align: center; }
+.version-management__chart-column > div { display: flex; height: 128px; align-items: flex-end; justify-content: center; gap: 8px; }
+.version-management__chart-column span,
+.version-management__chart-column i { display: block; width: 20px; border-radius: 3px 3px 0 0; background: var(--vm-primary); }
+.version-management__chart-column i { background: #73d3f4; }
+.version-management__chart-column small { display: block; margin-top: 5px; overflow: hidden; color: var(--vm-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.version-management__chart-legend { display: flex; justify-content: center; gap: 12px; margin: -8px 0 18px; color: var(--vm-muted); font-size: 11px; }
+.version-management__chart-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.version-management__chart-legend i { width: 12px; height: 8px; background: var(--vm-primary); }
+.version-management__chart-legend span:last-child i { background: #73d3f4; }
+.version-management__report-alert { display: flex; height: 52px; align-items: center; gap: 8px; padding: 0 18px; border: 1px solid #ffc4c4; border-radius: 10px; color: var(--vm-danger); background: #fffafa; }
+.version-management__report-alert strong { font-size: 13px; }
+.version-management__report-alert span { color: var(--vm-muted); font-size: 12px; }
+
+
+.version-management__logs { width: 800px; max-width: 100%; }
+.version-management__logs > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.version-management__logs > header strong { color: var(--vm-secondary); font-size: 13px; font-weight: 600; }
+.version-management__logs select { width: 86px; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--vm-secondary); }
+.version-management__timeline { padding: 20px 20px 36px; }
+.version-management__timeline-item { position: relative; display: flex; min-height: 72px; gap: 14px; }
+.version-management__timeline-item:last-child { min-height: 32px; }
+.version-management__avatar { position: relative; z-index: 1; display: flex; width: 32px; height: 32px; flex: 0 0 auto; align-items: center; justify-content: center; border-radius: 50%; color: var(--vm-primary); background: #e8f8fe; font-size: 13px; font-weight: 700; }
+.version-management__avatar.is-edit { color: var(--vm-muted); background: #f2f3f5; }
+.version-management__timeline-item > i { position: absolute; top: 34px; bottom: 2px; left: 15.5px; width: 1px; background: var(--vm-border); }
+.version-management__timeline-item > div:nth-of-type(2) { min-width: 0; flex: 1; }
+.version-management__timeline-item strong { margin-right: 8px; color: var(--vm-text); font-size: 13px; }
+.version-management__timeline-item span { color: var(--vm-secondary); font-size: 12px; }
+.version-management__timeline-item p { margin: 4px 0 0; color: var(--vm-muted); font-size: 12px; }
+.version-management__timeline-item time { color: var(--vm-placeholder); font-size: 11px; }
+
+.version-management__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(29 33 41 / 40%);
+}
+
+.version-management__drawer {
+  display: flex;
+  width: 520px;
+  max-width: 100vw;
+  height: 100%;
+  flex-direction: column;
+  background: #fff;
+  box-shadow: -4px 0 24px rgb(0 0 0 / 12%);
+}
+
+.version-management__drawer > header {
+  display: flex;
+  height: 52px;
+  flex: 0 0 52px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--vm-border);
+}
+
+.version-management__drawer h2 { margin: 0; font-size: 15px; font-weight: 700; line-height: 22px; }
+.version-management__drawer header p { margin: 1px 0 0; color: var(--vm-muted); font-size: 11px; line-height: 16px; }
+.version-management__drawer header button { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; color: var(--vm-muted); background: transparent; cursor: pointer; transition: color 150ms ease, background-color 150ms ease; }
+.version-management__drawer header button:hover { color: var(--vm-text); background: #f2f3f5; }
+
+.version-management__form {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.version-management__form label { display: block; min-width: 0; }
+.version-management__form label > span,
+.version-management__form legend { display: block; margin-bottom: 6px; color: var(--vm-secondary); font-size: 12px; font-weight: 600; }
+.version-management__form label > span i { color: var(--vm-danger); font-style: normal; }
+.version-management__form input,
+.version-management__form select,
+.version-management__form textarea { width: 100%; height: 34px; padding: 0 12px; border: 1.5px solid var(--vm-border); border-radius: 8px; outline: none; color: var(--vm-text); background: #fff; font-size: 13px; transition: border-color 150ms ease; }
+.version-management__form textarea { height: auto; min-height: 98px; padding: 10px 12px; resize: none; }
+.version-management__form input:focus,
+.version-management__form select:focus,
+.version-management__form textarea:focus { border-color: var(--vm-primary); }
+.version-management__form input::placeholder,
+.version-management__form textarea::placeholder { color: var(--vm-placeholder); }
+.version-management__form input.is-empty-date::-webkit-datetime-edit { color: transparent; }
+.version-management__form input.is-empty-date::-webkit-calendar-picker-indicator { opacity: 0; }
+.version-management__form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.version-management__form fieldset { display: flex; flex-direction: column; gap: 12px; padding: 14px 0 0; border: 0; border-top: 1px solid var(--vm-border); }
+.version-management__form legend { width: 100%; margin-bottom: 0; padding: 0 0 12px; }
+
+.version-management__drawer > footer { display: flex; min-height: 57px; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--vm-border); }
+
+.version-management__toast {
+  position: fixed;
+  z-index: 1100;
+  top: 64px;
+  left: 50%;
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid #b7ebc5;
+  border-radius: 8px;
+  color: #087c28;
+  background: #f0fff4;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 10%);
+  font-size: 13px;
+  transform: translateX(-50%);
+}
+
+.version-management-fade-enter-active,
+.version-management-fade-leave-active,
+.version-management-toast-enter-active,
+.version-management-toast-leave-active { transition: opacity 150ms ease; }
+.version-management-fade-enter-from,
+.version-management-fade-leave-to,
+.version-management-toast-enter-from,
+.version-management-toast-leave-to { opacity: 0; }
+
+@media (max-width: 1280px) {
+  .version-management__kpis > i { margin: 0 14px; }
+  .version-management__kpis > i:last-of-type { display: none; }
+  .version-management__gate-grid { grid-template-columns: repeat(4, 1fr); }
+  .version-management__quality-panel { height: auto; }
+}
+
+@media (max-width: 900px) {
+  .version-management__overview-grid { grid-template-columns: 1fr; }
+  .version-management__kpis { overflow-x: auto; }
+  .version-management__kpis > div { flex: 0 0 auto; }
+  .version-management__detail-actions > span,
+  .version-management__detail-actions .is-ghost { display: none; }
+  .version-management__filters { overflow-x: auto; }
+  .version-management__gate-grid { grid-template-columns: repeat(2, 1fr); }
+  .version-management__sub-toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .version-management__count-pills,
+  .version-management__filter-pills { overflow-x: auto; }
+}

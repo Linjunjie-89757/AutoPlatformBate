@@ -1093,6 +1093,11 @@ async function cancelCurrentTask() {
   }
 }
 
+function continueCurrentTaskInBackground() {
+  processDialogVisible.value = false
+  ElMessage.warning('已切换至后台执行')
+}
+
 watch(
   () => selectedWorkspaceCode.value,
   () => {
@@ -1182,7 +1187,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="figma-ai-case-generation__process-actions">
               <span>耗时 {{ activeProcessElapsed }}</span>
-              <button type="button" class="figma-ai-case-generation__ghost-button" @click="processDialogVisible = false">后台继续</button>
+              <button type="button" class="figma-ai-case-generation__ghost-button" @click="continueCurrentTaskInBackground">后台继续</button>
               <button type="button" class="figma-ai-case-generation__danger-button" :disabled="processPending" @click="cancelCurrentTask">
                 <CircleStop :size="13" />取消
               </button>
@@ -1251,15 +1256,20 @@ onBeforeUnmount(() => {
               <div><dt>输出模式</dt><dd>{{ activeProcessRecord.outputMode === 'STREAM' ? '⚡ 实时流式' : '📋 完整输出' }}</dd></div>
             </dl>
           </section>
-          <section class="figma-ai-case-generation__preview-section">
+          <section v-if="activeProcessRecord.outputMode === 'STREAM'" class="figma-ai-case-generation__preview-section">
             <div class="figma-ai-case-generation__section-caption">实时预览（{{ activeProcessRecord.generatedCases?.length || 0 }} 条）</div>
             <div class="figma-ai-case-generation__preview-list">
-              <article v-for="(item, index) in activeProcessRecord.generatedCases?.slice(-5)" :key="index" class="figma-ai-case-generation__preview-item">
+              <article v-for="(item, index) in activeProcessRecord.generatedCases" :key="index" class="figma-ai-case-generation__preview-item">
                 <span :class="'is-' + String(item.priority || 'P2').toLowerCase()">{{ item.priority || 'P2' }}</span>
                 <p>{{ item.title || '生成用例 #' + (index + 1) }}</p>
               </article>
               <div v-if="!activeProcessRecord.generatedCases?.length" class="figma-ai-case-generation__preview-empty">用例生成后将在这里实时展示</div>
             </div>
+          </section>
+          <section v-else class="figma-ai-case-generation__complete-output">
+            <LoaderCircle :size="28" />
+            <strong>完整输出模式</strong>
+            <span>生成和评审完成后统一展示</span>
           </section>
           <footer>关闭页面后任务将在后台继续执行</footer>
         </aside>
@@ -3295,7 +3305,10 @@ button.figma-ai-case-generation__dropzone:hover {
 }
 
 .figma-ai-case-generation__process-main {
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
   border-right: 1px solid var(--ai-border);
   background: var(--ai-fill);
 }
@@ -3324,8 +3337,10 @@ button.figma-ai-case-generation__dropzone:hover {
 .figma-ai-case-generation__status-dot {
   width: 8px;
   height: 8px;
+  flex: 0 0 auto;
   border-radius: 50%;
-  background: #4cd263;
+  background: var(--ai-success);
+  animation: figma-ai-pulse 1.5s ease-in-out infinite;
 }
 
 .figma-ai-case-generation__process-actions {
@@ -3375,6 +3390,7 @@ button.figma-ai-case-generation__dropzone:hover {
   height: 2px;
   margin: 13px 4px 0;
   background: #dfe2e8;
+  transition: background-color 0.3s;
 }
 
 .figma-ai-case-generation__step-connector.is-finished {
@@ -3392,6 +3408,7 @@ button.figma-ai-case-generation__dropzone:hover {
   color: var(--ai-text-4);
   background: #f7f8fa;
   font-size: 11px;
+  transition: all 0.3s;
 }
 
 .figma-ai-case-generation__step.is-active {
@@ -3470,6 +3487,7 @@ button.figma-ai-case-generation__dropzone:hover {
   height: 100%;
   border-radius: inherit;
   background: var(--ai-primary);
+  transition: width 0.4s;
 }
 
 .figma-ai-case-generation__progress em {
@@ -3480,7 +3498,11 @@ button.figma-ai-case-generation__dropzone:hover {
 }
 
 .figma-ai-case-generation__log-panel {
-  min-height: calc(100% - 168px);
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  overflow: hidden;
   padding: 0;
 }
 
@@ -3494,6 +3516,9 @@ button.figma-ai-case-generation__dropzone:hover {
 }
 
 .figma-ai-case-generation__log-list {
+  min-height: 0;
+  flex: 1 1 0;
+  overflow-y: auto;
   padding: 0 28px 20px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
 }
@@ -3570,74 +3595,112 @@ button.figma-ai-case-generation__dropzone:hover {
 }
 
 .figma-ai-case-generation__process-aside {
-  position: relative;
+  display: flex;
   min-width: 0;
   height: 100%;
-  padding-bottom: 38px;
+  flex-direction: column;
+  overflow: hidden;
   background: #fff;
 }
 
-.figma-ai-case-generation__process-aside > section {
-  padding: 17px 22px 18px;
+.figma-ai-case-generation__process-aside > section:first-child {
+  flex: 0 0 auto;
+  padding: 20px 22px;
   border-bottom: 1px solid var(--ai-border);
+}
+
+.figma-ai-case-generation__process-aside > section:first-child > .figma-ai-case-generation__section-caption {
+  color: var(--ai-text-4);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: 0.5px;
 }
 
 .figma-ai-case-generation__task-info {
   display: grid;
-  gap: 8px;
+  gap: 0;
   margin: 12px 0 0;
 }
 
 .figma-ai-case-generation__task-info > div {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
-  gap: 0;
-}
-
-.figma-ai-case-generation__task-info dt,
-.figma-ai-case-generation__task-info dd {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .figma-ai-case-generation__task-info dt {
+  margin: 0;
+  padding-top: 1px;
   color: var(--ai-text-3);
+  font-size: 11px;
+  line-height: 17px;
 }
 
 .figma-ai-case-generation__task-info dd {
+  margin: 0;
   overflow: hidden;
   color: var(--ai-text-1);
+  font-size: 12px;
+  line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .figma-ai-case-generation__preview-section {
-  min-height: 220px;
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.figma-ai-case-generation__preview-section > .figma-ai-case-generation__section-caption {
+  flex: 0 0 auto;
+  padding: 10px 22px 6px;
+  color: var(--ai-text-4);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: 0.5px;
 }
 
 .figma-ai-case-generation__preview-list {
-  margin-top: 8px;
+  min-height: 0;
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: 0 22px 16px;
+  scrollbar-width: none;
+}
+
+.figma-ai-case-generation__preview-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .figma-ai-case-generation__preview-item {
   display: flex;
-  min-height: 39px;
+  min-height: 0;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
+  padding: 9px 0;
   border-bottom: 1px solid var(--ai-border);
 }
 
 .figma-ai-case-generation__preview-item > span {
   display: inline-flex;
-  min-width: 27px;
-  height: 21px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  padding: 2px 7px;
   border-radius: 3px;
   color: #165dff;
-  background: #e8f3ff;
+  background: #e8f0ff;
   font-size: 11px;
+  font-weight: 600;
+  line-height: 17px;
 }
 
 .figma-ai-case-generation__preview-item > span.is-p0 {
@@ -3656,33 +3719,61 @@ button.figma-ai-case-generation__dropzone:hover {
 }
 
 .figma-ai-case-generation__preview-item p {
+  min-width: 0;
+  flex: 1 1 0;
   margin: 0;
   overflow: hidden;
   color: var(--ai-text-1);
   font-size: 12px;
+  line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .figma-ai-case-generation__preview-empty {
-  padding: 35px 0;
+  padding: 35px 0 19px;
   color: var(--ai-text-4);
   font-size: 12px;
   text-align: center;
 }
 
+.figma-ai-case-generation__complete-output {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--ai-text-3);
+}
+
+.figma-ai-case-generation__complete-output svg {
+  color: var(--ai-text-4);
+  animation: figma-ai-spin 1.5s linear infinite;
+}
+
+.figma-ai-case-generation__complete-output strong {
+  color: var(--ai-text-2);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.figma-ai-case-generation__complete-output span {
+  color: var(--ai-text-3);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .figma-ai-case-generation__process-aside > footer {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 38px;
-  padding: 0 22px;
+  flex: 0 0 auto;
+  padding: 10px 22px;
   border-top: 1px solid #f0f1f2;
   color: var(--ai-text-3);
-  background: #fffbf0;
+  background: #fffdf5;
   font-size: 11px;
-  line-height: 38px;
+  line-height: 17px;
 }
 
 :global(.el-dialog.figma-ai-case-generation-path-dialog),
@@ -3930,6 +4021,17 @@ button.figma-ai-case-generation__dropzone:hover {
 @keyframes figma-ai-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes figma-ai-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
   }
 }
 

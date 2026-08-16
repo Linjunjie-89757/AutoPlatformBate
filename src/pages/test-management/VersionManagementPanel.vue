@@ -1,0 +1,489 @@
+<script setup lang="ts">
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Edit2,
+  ExternalLink,
+  Eye,
+  Link2,
+  Plus,
+  Search,
+  X,
+  XCircle,
+} from '@lucide/vue'
+import { computed, reactive, ref } from 'vue'
+
+import VersionPlanDonutChart from '@/shared/ui/charts/VersionPlanDonutChart.vue'
+
+import {
+  bugStatusConfig,
+  managedVersionDemoData,
+  requirementStatusConfig,
+  versionBugs,
+  versionLogs,
+  versionPlans,
+  versionRequirements,
+  versionStatusConfig,
+  versionTypeConfig,
+  type BugStatus,
+  type ManagedVersion,
+  type VersionDetailTab,
+  type VersionStatus,
+  type VersionType,
+} from './versionManagementDemoData'
+import './version-management-panel.css'
+
+type ManagementTab = 'versions' | 'requirements' | 'plans'
+
+const emit = defineEmits<{
+  'change-tab': [tab: ManagementTab]
+}>()
+
+const versions = ref<ManagedVersion[]>(managedVersionDemoData.map(item => ({ ...item })))
+const selectedVersion = ref<ManagedVersion | null>(null)
+const detailTab = ref<VersionDetailTab>('overview')
+const keyword = ref('')
+const typeFilter = ref<'all' | VersionType>('all')
+const statusFilter = ref<'all' | VersionStatus>('all')
+const ownerFilter = ref('all')
+const bugStatusFilter = ref<'all' | BugStatus>('all')
+const logTypeFilter = ref('all')
+const drawerOpen = ref(false)
+const editingId = ref<string | null>(null)
+const toastMessage = ref('')
+let toastTimer: ReturnType<typeof setTimeout> | undefined
+
+const versionForm = reactive({
+  name: '',
+  type: 'iteration' as VersionType,
+  status: 'planning' as VersionStatus,
+  owner: '',
+  startDate: '',
+  testDate: '',
+  releaseDate: '',
+  goal: '',
+})
+
+const managementTabs: Array<{ key: ManagementTab; label: string }> = [
+  { key: 'versions', label: '版本管理' },
+  { key: 'requirements', label: '需求管理' },
+  { key: 'plans', label: '测试计划' },
+]
+
+const detailTabs: Array<{ key: VersionDetailTab; label: string }> = [
+  { key: 'overview', label: '概览' },
+  { key: 'requirements', label: '需求' },
+  { key: 'plans', label: '测试计划' },
+  { key: 'bugs', label: '缺陷汇总' },
+  { key: 'report', label: '测试报告' },
+  { key: 'logs', label: '操作记录' },
+]
+
+const stats = computed(() => ({
+  testing: versions.value.filter(item => item.status === 'testing').length,
+  pendingRelease: versions.value.filter(item => item.status === 'pending-release').length,
+  p0Blocked: versions.value.filter(item => item.p0Bugs > 0).length,
+  released: versions.value.filter(item => item.status === 'released').length,
+}))
+
+const filteredVersions = computed(() => {
+  const normalizedKeyword = keyword.value.trim().toLowerCase()
+  return versions.value.filter((item) => {
+    const matchesKeyword = !normalizedKeyword || `${item.name}${item.no}`.toLowerCase().includes(normalizedKeyword)
+    const matchesType = typeFilter.value === 'all' || item.type === typeFilter.value
+    const matchesStatus = statusFilter.value === 'all' || item.status === statusFilter.value
+    const matchesOwner = ownerFilter.value === 'all' || item.owner === ownerFilter.value
+    return matchesKeyword && matchesType && matchesStatus && matchesOwner
+  })
+})
+
+const currentPlans = computed(() => selectedVersion.value
+  ? versionPlans.filter(item => item.versionId === selectedVersion.value?.id)
+  : [])
+const currentRequirements = computed(() => selectedVersion.value?.id === 'V1' ? versionRequirements : [])
+const currentBugs = computed(() => versionBugs.filter(item => bugStatusFilter.value === 'all' || item.status === bugStatusFilter.value))
+const currentLogs = computed(() => versionLogs.filter(item => logTypeFilter.value === 'all' || item.type === logTypeFilter.value))
+const executedPlans = computed(() => currentPlans.value.filter(item => item.executed > 0))
+const planDistribution = computed(() => [
+  { name: '进行中', value: currentPlans.value.filter(item => item.status === 'running').length, color: '#FF7D00' },
+  { name: '已完成', value: currentPlans.value.filter(item => item.status === 'completed').length, color: '#00B42A' },
+  { name: '未开始', value: currentPlans.value.filter(item => item.status === 'pending').length, color: '#86909C' },
+].filter(item => item.value > 0))
+
+const passRate = computed(() => {
+  const version = selectedVersion.value
+  return version && version.executed ? Math.round(version.passed / version.executed * 100) : 0
+})
+const executeRate = computed(() => {
+  const version = selectedVersion.value
+  return version && version.scope ? Math.round(version.executed / version.scope * 100) : 0
+})
+const requirementCoverRate = computed(() => {
+  if (!currentRequirements.value.length) return 0
+  const covered = currentRequirements.value.filter(item => item.status === 'covered' || item.status === 'passed').length
+  return Math.round(covered / currentRequirements.value.length * 100)
+})
+const showQualitySummary = computed(() => selectedVersion.value?.status === 'testing' || selectedVersion.value?.status === 'pending-release')
+
+const isEditing = computed(() => Boolean(editingId.value))
+const canSubmit = computed(() => Boolean(versionForm.name.trim() && versionForm.owner))
+
+const statusStyle = (status: VersionStatus) => ({
+  color: versionStatusConfig[status].color,
+  backgroundColor: versionStatusConfig[status].background,
+})
+
+const showToast = (message: string) => {
+  toastMessage.value = message
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => {
+    toastMessage.value = ''
+  }, 2200)
+}
+
+const switchManagementTab = (tab: ManagementTab) => {
+  if (tab !== 'versions') emit('change-tab', tab)
+}
+
+const resetForm = () => {
+  Object.assign(versionForm, {
+    name: '',
+    type: 'iteration',
+    status: 'planning',
+    owner: '',
+    startDate: '',
+    testDate: '',
+    releaseDate: '',
+    goal: '',
+  })
+}
+
+const openCreateDrawer = () => {
+  editingId.value = null
+  resetForm()
+  drawerOpen.value = true
+}
+
+const openEditDrawer = (version: ManagedVersion) => {
+  editingId.value = version.id
+  Object.assign(versionForm, {
+    name: version.name,
+    type: version.type,
+    status: version.status,
+    owner: version.owner,
+    startDate: version.startDate,
+    testDate: version.testDate,
+    releaseDate: version.releaseDate,
+    goal: version.goal,
+  })
+  drawerOpen.value = true
+}
+
+const closeDrawer = () => {
+  drawerOpen.value = false
+  editingId.value = null
+}
+
+const submitVersion = () => {
+  if (!canSubmit.value) return
+  if (editingId.value) {
+    const index = versions.value.findIndex(item => item.id === editingId.value)
+    if (index >= 0) {
+      versions.value[index] = { ...versions.value[index], ...versionForm }
+      if (selectedVersion.value?.id === editingId.value) selectedVersion.value = versions.value[index]
+    }
+    showToast('版本信息已更新（演示数据）')
+  } else {
+    const nextNumber = versions.value.length + 1
+    versions.value.unshift({
+      id: `V${nextNumber}`,
+      no: `VER-${String(nextNumber).padStart(3, '0')}`,
+      ...versionForm,
+      planCount: 0,
+      scope: 0,
+      executed: 0,
+      passed: 0,
+      p0Bugs: 0,
+      p1Bugs: 0,
+    })
+    showToast('版本已创建（演示数据）')
+  }
+  closeDrawer()
+}
+
+const openVersion = (version: ManagedVersion) => {
+  selectedVersion.value = version
+  detailTab.value = 'overview'
+  bugStatusFilter.value = 'all'
+  logTypeFilter.value = 'all'
+}
+
+const closeVersion = () => {
+  selectedVersion.value = null
+  detailTab.value = 'overview'
+}
+
+const unavailable = () => showToast('该操作等待后端业务接口接入')
+
+const gateState = (version: ManagedVersion) => {
+  if (!version.scope) return { label: '—', color: '#c9cdd4' }
+  if (version.status === 'released') return { label: '已发布', color: '#0ea5e9' }
+  const ok = version.p0Bugs === 0 && version.p1Bugs <= 3
+    && Math.round(version.passed / version.executed * 100) >= 85
+    && Math.round(version.executed / version.scope * 100) >= 90
+  return ok ? { label: '可发布', color: '#00b42a' } : { label: '存在风险', color: '#f53f3f' }
+}
+
+const requirementStatusCount = (status: 'all' | keyof typeof requirementStatusConfig) => status === 'all'
+  ? currentRequirements.value.length
+  : currentRequirements.value.filter(item => item.status === status).length
+const bugStatusCount = (status: 'all' | BugStatus) => status === 'all'
+  ? versionBugs.length
+  : versionBugs.filter(item => item.status === status).length
+</script>
+
+<template>
+  <main class="version-management">
+    <template v-if="!selectedVersion">
+      <nav class="version-management__module-tabs" aria-label="测试管理视图">
+        <button
+          v-for="tab in managementTabs"
+          :key="tab.key"
+          type="button"
+          :class="{ 'is-active': tab.key === 'versions' }"
+          @click="switchManagementTab(tab.key)"
+        >{{ tab.label }}</button>
+      </nav>
+
+      <section class="version-management__stats" aria-label="版本状态概览">
+        <div class="version-management__mini-stat is-warning"><strong>{{ stats.testing }}</strong><span>测试中</span></div>
+        <i />
+        <div class="version-management__mini-stat is-purple"><strong>{{ stats.pendingRelease }}</strong><span>待发布</span></div>
+        <i />
+        <div class="version-management__mini-stat is-muted"><strong>{{ stats.p0Blocked }}</strong><span>P0 阻塞</span></div>
+        <i />
+        <div class="version-management__mini-stat is-primary"><strong>{{ stats.released }}</strong><span>本月已发布</span></div>
+        <button class="version-management__button is-primary version-management__create" type="button" @click="openCreateDrawer">
+          <Plus :size="13" />新建版本
+        </button>
+      </section>
+
+      <section class="version-management__filters" aria-label="版本筛选">
+        <label class="version-management__search">
+          <Search :size="13" />
+          <input v-model="keyword" type="search" placeholder="搜索版本名称或编号">
+        </label>
+        <select v-model="typeFilter" aria-label="版本类型">
+          <option value="all">全部类型</option>
+          <option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option>
+        </select>
+        <select v-model="statusFilter" aria-label="版本状态">
+          <option value="all">全部状态</option>
+          <option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option>
+        </select>
+        <select v-model="ownerFilter" aria-label="负责人">
+          <option value="all">全部负责人</option>
+          <option v-for="owner in ['李明', '王芳', '陈伟', '张程远']" :key="owner" :value="owner">{{ owner }}</option>
+        </select>
+      </section>
+
+      <section class="version-management__list-area">
+        <div class="version-management__table-card">
+          <div class="version-management__table-scroll">
+            <table class="version-management__table is-version-list">
+              <thead>
+                <tr>
+                  <th>版本名称</th><th>编号</th><th>类型</th><th>负责人</th><th>状态</th><th>开始日期</th><th>提测日期</th><th>计划发布</th><th>计划数</th><th>测试进度</th><th>通过率</th><th>P0/P1</th><th>准出</th><th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="version in filteredVersions" :key="version.id" :class="{ 'has-description': version.goal }" tabindex="0" @click="openVersion(version)" @keydown.enter="openVersion(version)">
+                  <td><strong>{{ version.name }}</strong><small v-if="version.goal">{{ version.goal.slice(0, 18) }}…</small></td>
+                  <td><code>{{ version.no }}</code></td>
+                  <td>{{ versionTypeConfig[version.type] }}</td>
+                  <td>{{ version.owner }}</td>
+                  <td><span class="version-management__badge" :style="statusStyle(version.status)">{{ versionStatusConfig[version.status].label }}</span></td>
+                  <td class="is-muted">{{ version.startDate }}</td>
+                  <td class="is-muted">{{ version.testDate }}</td>
+                  <td class="is-muted">{{ version.releaseDate }}</td>
+                  <td class="is-centered"><b>{{ version.planCount }}</b></td>
+                  <td class="version-management__progress-cell">
+                    <template v-if="version.scope">
+                      <div class="version-management__progress"><i><span :style="{ width: `${Math.round(version.executed / version.scope * 100)}%` }" /></i><b>{{ Math.round(version.executed / version.scope * 100) }}%</b></div>
+                      <small>{{ version.executed }}/{{ version.scope }} · {{ Math.round(version.executed / version.scope * 100) }}%</small>
+                    </template>
+                    <span v-else class="is-muted">暂无</span>
+                  </td>
+                  <td class="is-centered"><b v-if="version.executed" class="is-rate">{{ Math.round(version.passed / version.executed * 100) }}%</b><span v-else class="is-muted">—</span></td>
+                  <td class="is-centered"><b v-if="version.p0Bugs + version.p1Bugs" class="is-risk">{{ version.p0Bugs ? `P0·${version.p0Bugs} ` : '' }}{{ version.p1Bugs ? `P1·${version.p1Bugs}` : '' }}</b><span v-else class="is-muted">—</span></td>
+                  <td><b class="version-management__gate" :style="{ color: gateState(version).color }">{{ gateState(version).label }}</b></td>
+                  <td @click.stop>
+                    <div class="version-management__row-actions">
+                      <button type="button" title="查看" @click="openVersion(version)"><Eye :size="13" /></button>
+                      <button v-if="version.status !== 'archived'" type="button" title="编辑" @click="openEditDrawer(version)"><Edit2 :size="13" /></button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="filteredVersions.length" class="version-management__pagination"><span>共 {{ filteredVersions.length }} 条</span><button type="button">1</button></div>
+          <div v-else class="version-management__empty"><Search :size="24" /><strong>没有找到匹配的版本</strong><span>请调整搜索词或筛选条件</span></div>
+        </div>
+      </section>
+    </template>
+
+    <template v-else>
+      <header class="version-management__detail-header">
+        <button class="version-management__back" type="button" @click="closeVersion"><ChevronLeft :size="14" />版本管理</button>
+        <ChevronRight :size="12" class="version-management__crumb" />
+        <strong>{{ selectedVersion.name }}</strong>
+        <code>{{ selectedVersion.no }}</code>
+        <span class="version-management__badge" :style="statusStyle(selectedVersion.status)">{{ versionStatusConfig[selectedVersion.status].label }}</span>
+        <div class="version-management__detail-actions">
+          <span>负责人：{{ selectedVersion.owner }}</span>
+          <button class="version-management__icon-button" type="button" title="编辑" @click="openEditDrawer(selectedVersion)"><Edit2 :size="13" /></button>
+          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-ghost is-small" type="button" @click="unavailable"><Plus :size="11" />添加需求</button>
+          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-primary is-small" type="button" @click="unavailable"><Plus :size="11" />新建测试计划</button>
+          <button v-if="selectedVersion.status === 'testing'" class="version-management__button is-purple is-small" type="button" @click="unavailable">标记待发布</button>
+          <button v-if="selectedVersion.status === 'pending-release'" class="version-management__button is-success is-small" type="button" @click="unavailable"><CheckCircle2 :size="12" />标记已发布</button>
+        </div>
+      </header>
+
+      <section class="version-management__kpis">
+        <template v-for="(item, index) in [
+          { value: selectedVersion.planCount, unit: '个', label: '测试计划', tone: 'dark' },
+          { value: currentRequirements.length, unit: '项', label: '版本需求', tone: 'purple' },
+          { value: currentRequirements.length ? `${requirementCoverRate}%` : '—', unit: '', label: '需求覆盖率', tone: !currentRequirements.length ? 'muted' : requirementCoverRate === 100 ? 'success' : 'warning' },
+          { value: selectedVersion.scope, unit: '项', label: '测试用例', tone: 'primary' },
+          { value: selectedVersion.executed, unit: '项', label: '已执行', tone: 'primary' },
+          { value: selectedVersion.executed ? `${passRate}%` : '—', unit: '', label: '用例通过率', tone: !selectedVersion.executed ? 'muted' : passRate >= 85 ? 'primary' : 'warning' },
+          { value: selectedVersion.p0Bugs + selectedVersion.p1Bugs, unit: '个', label: 'P0/P1 缺陷', tone: selectedVersion.p0Bugs + selectedVersion.p1Bugs > 0 ? 'danger' : 'muted' },
+        ]" :key="item.label">
+          <i v-if="index" />
+          <div :class="`is-${item.tone}`"><strong>{{ item.value }}<small>{{ item.unit }}</small></strong><span>{{ item.label }}</span></div>
+        </template>
+        <template v-if="showQualitySummary">
+          <i />
+          <div class="version-management__quality-kpi"><strong>未达到准出标准</strong><span>质量准出</span></div>
+        </template>
+      </section>
+
+      <nav class="version-management__detail-tabs" aria-label="版本详情视图">
+        <button v-for="tab in detailTabs" :key="tab.key" type="button" :class="{ 'is-active': detailTab === tab.key }" @click="detailTab = tab.key">
+          {{ tab.label }}<template v-if="tab.key === 'requirements'">（{{ currentRequirements.length }}）</template><template v-else-if="tab.key === 'plans'">（{{ currentPlans.length }}）</template><template v-else-if="tab.key === 'bugs'">（{{ selectedVersion.p0Bugs + selectedVersion.p1Bugs }}）</template>
+        </button>
+      </nav>
+
+      <section class="version-management__detail-body">
+        <div v-if="detailTab === 'overview'" class="version-management__overview">
+          <div class="version-management__overview-grid">
+            <article class="version-management__panel">
+              <h3>版本信息</h3>
+              <dl>
+                <div><dt>版本目标</dt><dd>{{ selectedVersion.goal || '—' }}</dd></div>
+                <div><dt>开始日期</dt><dd>{{ selectedVersion.startDate }}</dd></div>
+                <div><dt>计划提测</dt><dd>{{ selectedVersion.testDate }}</dd></div>
+                <div><dt>计划发布</dt><dd>{{ selectedVersion.releaseDate }}</dd></div>
+              </dl>
+            </article>
+            <article class="version-management__panel">
+              <h3>测试计划状态</h3>
+              <VersionPlanDonutChart v-if="currentPlans.length" :items="planDistribution" />
+              <div v-else class="version-management__panel-empty">暂无测试计划</div>
+            </article>
+          </div>
+          <article v-if="showQualitySummary" class="version-management__panel version-management__quality-panel">
+            <header><h3>质量准出概览</h3><span>未达到准出标准</span></header>
+            <div class="version-management__gate-grid">
+              <div class="is-failed"><span><XCircle :size="12" />用例执行率</span><small>目标：≥ 90%</small><strong>{{ executeRate }}%</strong></div>
+              <div class="is-passed"><span><CheckCircle2 :size="12" />用例通过率</span><small>目标：≥ 85%</small><strong>{{ passRate }}%</strong></div>
+              <div class="is-failed"><span><XCircle :size="12" />需求覆盖率</span><small>目标：100%</small><strong>{{ requirementCoverRate }}%</strong></div>
+              <div class="is-passed"><span><CheckCircle2 :size="12" />P0 缺陷</span><small>目标：0 个</small><strong>{{ selectedVersion.p0Bugs }} 个</strong></div>
+              <div class="is-passed"><span><CheckCircle2 :size="12" />P1 缺陷</span><small>目标：≤ 3 个</small><strong>{{ selectedVersion.p1Bugs }} 个</strong></div>
+              <div class="is-failed"><span><XCircle :size="12" />计划全部完成</span><small>目标：是</small><strong>否</strong></div>
+              <div class="is-failed"><span><XCircle :size="12" />负责人确认</span><small>目标：已确认</small><strong>待确认</strong></div>
+            </div>
+          </article>
+        </div>
+
+        <div v-else-if="detailTab === 'requirements'">
+          <div class="version-management__sub-toolbar">
+            <div class="version-management__count-pills">
+              <span v-for="status in ['all', 'uncovered', 'partial', 'covered', 'passed'] as const" :key="status"><b>{{ requirementStatusCount(status) }}</b>{{ status === 'all' ? '全部' : requirementStatusConfig[status].label }}</span>
+            </div>
+            <button class="version-management__button is-ghost is-small is-link" type="button" @click="emit('change-tab', 'requirements')"><ExternalLink :size="12" />在需求管理中查看全部</button>
+            <button class="version-management__button is-primary is-small" type="button" @click="unavailable"><Plus :size="11" />添加需求</button>
+          </div>
+          <div class="version-management__table-card">
+            <table v-if="currentRequirements.length" class="version-management__table is-requirements">
+              <thead><tr><th>需求ID</th><th>标题</th><th>优先级</th><th>来源</th><th>用例覆盖</th><th>状态</th><th>负责人</th><th>操作</th></tr></thead>
+              <tbody><tr v-for="item in currentRequirements" :key="item.id"><td><code>{{ item.id }}</code></td><td><strong>{{ item.title }}</strong><small v-if="item.sourceRef">{{ item.sourceRef }}</small></td><td><span :class="['version-management__priority', `is-${item.priority.toLowerCase()}`]">{{ item.priority }}</span></td><td><span :class="['version-management__source', `is-${item.source === 'Jira' ? 'jira' : item.source === '禅道' ? 'tapd' : 'manual'}`]">{{ item.source }}</span></td><td class="version-management__progress-cell"><small>{{ item.coveredCases }}/{{ item.totalCases }} 用例 · {{ Math.round(item.coveredCases / item.totalCases * 100) }}%</small><div class="version-management__progress"><i><span :style="{ width: `${Math.round(item.coveredCases / item.totalCases * 100)}%` }" /></i><b>{{ Math.round(item.coveredCases / item.totalCases * 100) }}%</b></div></td><td><span class="version-management__badge" :style="{ color: requirementStatusConfig[item.status].color, backgroundColor: requirementStatusConfig[item.status].background }">{{ requirementStatusConfig[item.status].label }}</span></td><td>{{ item.owner }}</td><td><div class="version-management__row-actions"><button type="button" title="查看需求" @click="unavailable"><Eye :size="13" /></button><button type="button" title="关联用例" @click="unavailable"><Link2 :size="13" /></button></div></td></tr></tbody>
+            </table>
+            <div v-else class="version-management__empty"><strong>该版本下暂无需求</strong><button type="button" @click="emit('change-tab', 'requirements')">前往添加需求</button></div>
+          </div>
+        </div>
+
+        <div v-else-if="detailTab === 'plans'" class="version-management__table-card">
+          <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button class="version-management__button is-primary is-small" type="button" @click="unavailable"><Plus :size="11" />新建计划</button></header>
+          <table v-if="currentPlans.length" class="version-management__table is-plans">
+            <thead><tr><th>计划名称</th><th>类型</th><th>负责人</th><th>周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>P0/P1</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody><tr v-for="item in currentPlans" :key="item.id"><td><strong>{{ item.name }}</strong></td><td><span class="version-management__plan-type">{{ item.type }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.startDate }}—{{ item.endDate }}</td><td class="is-centered"><b>{{ item.scope }}</b></td><td class="version-management__progress-cell"><div class="version-management__progress"><i><span :style="{ width: `${Math.round(item.executed / item.scope * 100)}%` }" /></i><b>{{ Math.round(item.executed / item.scope * 100) }}%</b></div></td><td class="is-centered"><b class="is-rate">{{ item.executed ? Math.round(item.passed / item.executed * 100) : '—' }}{{ item.executed ? '%' : '' }}</b></td><td class="is-centered"><b v-if="item.highBugs" class="is-risk">{{ item.highBugs }}</b><span v-else class="is-muted">—</span></td><td><span :class="['version-management__badge', `is-plan-${item.status}`]">{{ item.status === 'running' ? '进行中' : item.status === 'completed' ? '已完成' : '待开始' }}</span></td><td><div class="version-management__row-actions"><button type="button" title="查看计划" @click="unavailable"><Eye :size="13" /></button></div></td></tr></tbody>
+          </table>
+          <div v-else class="version-management__empty"><strong>该版本下暂无测试计划，点击右上角新建</strong></div>
+        </div>
+
+        <div v-else-if="detailTab === 'bugs'">
+          <div class="version-management__sub-toolbar is-bugs">
+            <div class="version-management__filter-pills">
+              <button v-for="status in ['all', 'open', 'fixing', 'fixed', 'closed', 'rejected'] as const" :key="status" type="button" :class="{ 'is-active': bugStatusFilter === status }" @click="bugStatusFilter = status">{{ status === 'all' ? '全部' : bugStatusConfig[status].label }} {{ bugStatusCount(status) }}</button>
+            </div>
+            <button class="version-management__button is-danger is-small" type="button" @click="unavailable"><Plus :size="11" />新建缺陷</button>
+          </div>
+          <div class="version-management__table-card"><table v-if="currentBugs.length" class="version-management__table is-bugs"><thead><tr><th>缺陷编号</th><th>标题</th><th>严重程度</th><th>优先级</th><th>状态</th><th>负责人</th><th>所属计划</th><th>发现时间</th></tr></thead><tbody><tr v-for="item in currentBugs" :key="item.no"><td><code>{{ item.no }}</code></td><td>{{ item.title }}</td><td><span :class="['version-management__severity', { 'is-major': item.severity === '严重' }]">{{ item.severity }}</span></td><td><span :class="['version-management__priority', `is-${item.priority.toLowerCase()}`]">{{ item.priority }}</span></td><td><span class="version-management__badge" :style="{ color: bugStatusConfig[item.status].color, backgroundColor: bugStatusConfig[item.status].background }">{{ bugStatusConfig[item.status].label }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.plan }}</td><td class="is-muted">{{ item.foundAt }}</td></tr></tbody></table><div v-else class="version-management__empty"><strong>当前筛选下暂无缺陷</strong></div></div>
+        </div>
+
+        <article v-else-if="detailTab === 'report'" class="version-management__report">
+          <header><div><h2>{{ selectedVersion.name }} 版本测试汇总报告</h2><p>汇总 {{ currentPlans.length }} 个测试计划 · 负责人：{{ selectedVersion.owner }} · 生成：2026-07-07 18:00</p></div><button class="version-management__button is-ghost" type="button" @click="unavailable"><Download :size="13" />导出报告</button></header>
+          <div class="version-management__report-kpis"><div><strong class="is-dark">{{ currentPlans.length }}<small>个</small></strong><span>测试计划</span></div><div><strong>{{ selectedVersion.scope }}<small>项</small></strong><span>测试用例</span></div><div><strong>{{ selectedVersion.executed }}<small>项</small></strong><span>已执行</span></div><div><strong>{{ passRate }}%</strong><span>用例通过率</span></div><div><strong class="is-danger">{{ versionBugs.length }}<small>个</small></strong><span>发现缺陷</span></div></div>
+          <template v-if="executedPlans.length">
+            <h3>各计划通过率对比</h3>
+            <div class="version-management__chart"><div class="version-management__chart-grid"><i v-for="n in 5" :key="n" /></div><div v-for="item in executedPlans" :key="item.id" class="version-management__chart-column"><div><span :style="{ height: `${Math.round(item.passed / item.executed * 100)}%` }" /><i :style="{ height: `${Math.round(item.executed / item.scope * 100)}%` }" /></div><small>{{ item.name.slice(0, 7) }}…</small></div></div>
+            <div class="version-management__chart-legend"><span><i />通过率</span><span><i />执行率</span></div>
+            <div class="version-management__report-alert"><AlertTriangle :size="14" /><strong>未达到准出标准</strong><span>— 3/7 项质量标准达标</span></div>
+          </template>
+        </article>
+
+        <div v-else class="version-management__logs">
+          <header><strong>版本操作记录</strong><select v-model="logTypeFilter"><option value="all">全部类型</option><option value="status">状态变更</option><option value="edit">内容修改</option><option value="create">创建</option></select></header>
+          <div class="version-management__timeline">
+            <div v-for="(item, index) in currentLogs" :key="item.id" class="version-management__timeline-item"><div :class="['version-management__avatar', `is-${item.type}`]">{{ item.actor.slice(0, 1) }}</div><i v-if="index < currentLogs.length - 1" /><div><strong>{{ item.actor }}</strong><span>{{ item.action }}</span><p>{{ item.detail }}</p></div><time>{{ item.time }}</time></div>
+            <div v-if="!currentLogs.length" class="version-management__empty"><strong>暂无操作记录</strong></div>
+          </div>
+        </div>
+      </section>
+    </template>
+
+    <Transition name="version-management-fade">
+      <div v-if="drawerOpen" class="version-management__overlay" @click.self="closeDrawer">
+        <aside class="version-management__drawer" role="dialog" aria-modal="true" :aria-label="isEditing ? '编辑版本' : '新建版本'">
+          <header><div><h2>{{ isEditing ? '编辑版本' : '新建版本' }}</h2><p>{{ isEditing ? '修改版本基本信息' : '在当前工作区创建一个新版本' }}</p></div><button type="button" aria-label="关闭" @click="closeDrawer"><X :size="16" /></button></header>
+          <div class="version-management__form">
+            <label><span>版本名称 <i>*</i></span><input v-model="versionForm.name" type="text" placeholder="例：v2.5.0"></label>
+            <div class="version-management__form-row"><label><span>版本类型 <i>*</i></span><select v-model="versionForm.type"><option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option></select></label><label><span>负责人 <i>*</i></span><select v-model="versionForm.owner"><option value="">请选择负责人</option><option v-for="owner in ['李明', '王芳', '陈伟', '张程远']" :key="owner">{{ owner }}</option></select></label></div>
+            <label v-if="isEditing"><span>当前状态</span><select v-model="versionForm.status"><option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option></select></label>
+            <fieldset><legend>时间节点</legend><label><span>开始日期</span><input v-model="versionForm.startDate" type="date" :class="{ 'is-empty-date': !versionForm.startDate }"></label><label><span>计划提测日期</span><input v-model="versionForm.testDate" type="date" :class="{ 'is-empty-date': !versionForm.testDate }"></label><label><span>计划发布日期</span><input v-model="versionForm.releaseDate" type="date" :class="{ 'is-empty-date': !versionForm.releaseDate }"></label></fieldset>
+            <label><span>版本目标</span><textarea v-model="versionForm.goal" rows="4" placeholder="描述本版本的核心目标和验收标准…" /></label>
+          </div>
+          <footer><button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button><button class="version-management__button is-primary" type="button" :disabled="!canSubmit" @click="submitVersion">{{ isEditing ? '保存修改' : '创建版本' }}</button></footer>
+        </aside>
+      </div>
+    </Transition>
+
+    <Transition name="version-management-toast"><div v-if="toastMessage" class="version-management__toast"><Check :size="15" />{{ toastMessage }}</div></Transition>
+  </main>
+</template>
