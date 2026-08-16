@@ -217,12 +217,27 @@
   background: #fff;
   color: #4e5969;
   cursor: pointer;
+  transition: border-color 150ms, color 150ms, filter 150ms, transform 150ms;
 }
 
 .figma-mock-scene-btn.is-primary {
   border-color: #165dff;
   background: #165dff;
   color: #fff;
+}
+
+.figma-mock-scene-btn:not(.is-primary):hover:not(:disabled) {
+  border-color: #165dff;
+  color: #165dff;
+}
+
+.figma-mock-scene-btn.is-primary:hover:not(:disabled) {
+  color: #fff;
+  filter: brightness(1.1);
+}
+
+.figma-mock-scene-btn.is-primary:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .figma-mock-scene-btn:disabled {

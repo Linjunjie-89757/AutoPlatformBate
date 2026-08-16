@@ -5,10 +5,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
+import com.company.autoplatform.auth.CurrentUserContext;
+import com.company.autoplatform.platformadmin.PlatformTaskCompletionNotificationService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,15 +28,27 @@ public class ExecutionTaskDomainService {
     private final TaskMapper taskMapper;
     private final ReportMapper reportMapper;
     private final WorkspaceService workspaceService;
+    private final PlatformTaskCompletionNotificationService taskNotificationService;
 
+    @Autowired
     public ExecutionTaskDomainService(
             TaskMapper taskMapper,
             ReportMapper reportMapper,
-            WorkspaceService workspaceService
+            WorkspaceService workspaceService,
+            PlatformTaskCompletionNotificationService taskNotificationService
     ) {
         this.taskMapper = taskMapper;
         this.reportMapper = reportMapper;
         this.workspaceService = workspaceService;
+        this.taskNotificationService = taskNotificationService;
+    }
+
+    ExecutionTaskDomainService(
+            TaskMapper taskMapper,
+            ReportMapper reportMapper,
+            WorkspaceService workspaceService
+    ) {
+        this(taskMapper, reportMapper, workspaceService, null);
     }
 
     public PageResponse<TaskSummaryResponse> listTasks(
@@ -102,6 +117,7 @@ public class ExecutionTaskDomainService {
                 workspaceService.resolveTargetWorkspace(headerWorkspaceCode, request.workspaceCode()));
         TaskEntity entity = new TaskEntity();
         entity.setWorkspaceId(workspace.getId());
+        entity.setCreatorUserId(CurrentUserContext.get());
         entity.setTaskName(request.taskName().trim());
         entity.setEngineType(normalizeEngineType(request.engineType()));
         entity.setTaskStatus(normalizeTaskStatus(request.status()));
@@ -150,6 +166,9 @@ public class ExecutionTaskDomainService {
         entity.setTaskStatus(targetStatus);
         entity.setUpdatedAt(LocalDateTime.now());
         taskMapper.updateById(entity);
+        if (taskNotificationService != null && Set.of("SUCCESS", "FAILED", "CANCELED").contains(targetStatus)) {
+            taskNotificationService.notifyCompleted(entity);
+        }
         return toTaskDetail(entity);
     }
 

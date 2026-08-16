@@ -23,7 +23,6 @@ import { computed, onMounted, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { platformAdminApi } from '@/entities/platform-admin'
-import { useSession } from '@/entities/session'
 import { userApi, type UserItem } from '@/entities/user'
 import { getRequestErrorMessage } from '@/shared/api/error'
 
@@ -36,6 +35,7 @@ interface AccountRow {
   email: string
   roleCode: AccountRole | string
   status: number
+  activationStatus: 'PENDING' | 'ACTIVE' | string
   workspaceCount: number
   lastLogin: string | null
 }
@@ -49,7 +49,6 @@ interface NavigationItem {
 }
 
 const router = useRouter()
-const { currentUser } = useSession()
 const loading = ref(true)
 const errorMessage = ref('')
 const query = ref('')
@@ -71,7 +70,7 @@ const navigationItems: NavigationItem[] = [
 const filteredAccounts = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase()
   return accounts.value.filter((account) => {
-    if (filter.value === 'active' && account.status !== 1) return false
+    if (filter.value === 'active' && (account.status !== 1 || account.activationStatus === 'PENDING')) return false
     if (filter.value === 'disabled' && account.status === 1) return false
     if (!normalizedQuery) return true
     return account.displayName.toLowerCase().includes(normalizedQuery)
@@ -86,6 +85,7 @@ function toAccountRow(user: UserItem, workspaceCountOverride?: number): AccountR
     email: user.email,
     roleCode: user.roleCode,
     status: Number(user.status),
+    activationStatus: user.activationStatus || 'ACTIVE',
     workspaceCount: workspaceCountOverride ?? user.workspaceCodes.length,
     lastLogin: null,
   }
@@ -100,20 +100,10 @@ async function loadAccounts() {
       platformAdminApi.getWorkspaces(),
       platformAdminApi.getOverview(),
     ])
-    const rows = users.map(user => toAccountRow(user))
-    const isSuperAdmin = String(currentUser.value?.roleCode || '').toUpperCase() === 'SUPER_ADMIN'
-    if (isSuperAdmin && currentUser.value) {
-      rows.unshift({
-        id: currentUser.value.id,
-        displayName: currentUser.value.displayName || currentUser.value.username,
-        email: '',
-        roleCode: 'SUPER_ADMIN',
-        status: 1,
-        workspaceCount: workspaces.length,
-        lastLogin: null,
-      })
-    }
-    accounts.value = rows
+    accounts.value = users.map(user => toAccountRow(
+      user,
+      String(user.roleCode).toUpperCase() === 'SUPER_ADMIN' ? workspaces.length : undefined,
+    ))
     pendingApprovalTotal.value = overview.pendingApprovalTotal
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
@@ -158,7 +148,7 @@ function handleNavigation(item: NavigationItem) {
 }
 
 async function toggleAccount(account: AccountRow) {
-  if (isSuperAdmin(account)) return
+  if (isSuperAdmin(account) || account.activationStatus === 'PENDING') return
   try {
     const updated = await userApi.updateUser(account.id, {
       email: account.email,
@@ -177,7 +167,7 @@ async function toggleAccount(account: AccountRow) {
 }
 
 async function resetPassword(account: AccountRow) {
-  if (isSuperAdmin(account)) return
+  if (isSuperAdmin(account) || account.activationStatus === 'PENDING') return
   try {
     await userApi.resetUserPassword(account.id)
     ElMessage.success('密码已重置')
@@ -310,8 +300,11 @@ onMounted(() => {
               </div>
               <div class="platform-accounts-page__email" role="cell">{{ account.email || '-' }}</div>
               <div role="cell">
-                <span class="platform-accounts-page__status" :class="account.status === 1 ? 'is-active' : 'is-disabled'">
-                  {{ account.status === 1 ? '正常' : '已禁用' }}
+                <span
+                  class="platform-accounts-page__status"
+                  :class="account.activationStatus === 'PENDING' ? 'is-pending' : (account.status === 1 ? 'is-active' : 'is-disabled')"
+                >
+                  {{ account.activationStatus === 'PENDING' ? '待激活' : (account.status === 1 ? '正常' : '已禁用') }}
                 </span>
               </div>
               <div class="platform-accounts-page__workspace-count" role="cell">{{ account.workspaceCount }} 个</div>
@@ -320,8 +313,8 @@ onMounted(() => {
                 <button
                   type="button"
                   class="platform-accounts-page__action-button is-reset"
-                  :class="{ 'is-disabled': isSuperAdmin(account) }"
-                  :disabled="isSuperAdmin(account)"
+                  :class="{ 'is-disabled': isSuperAdmin(account) || account.activationStatus === 'PENDING' }"
+                  :disabled="isSuperAdmin(account) || account.activationStatus === 'PENDING'"
                   title="重置密码"
                   aria-label="重置密码"
                   @click="resetPassword(account)"
@@ -332,7 +325,7 @@ onMounted(() => {
                   type="button"
                   class="platform-accounts-page__action-button is-status"
                   :class="account.status === 1 ? 'is-disable' : 'is-enable'"
-                  :disabled="isSuperAdmin(account)"
+                  :disabled="isSuperAdmin(account) || account.activationStatus === 'PENDING'"
                   @click="toggleAccount(account)"
                 >
                   {{ account.status === 1 ? '禁用' : '启用' }}
@@ -358,6 +351,7 @@ onMounted(() => {
 <script lang="ts">
 import { defineComponent, h, ref as vueRef } from 'vue'
 
+import { platformAdminApi as modalPlatformAdminApi } from '@/entities/platform-admin'
 import { userApi as modalUserApi } from '@/entities/user'
 import { getRequestErrorMessage as getModalRequestErrorMessage } from '@/shared/api/error'
 
@@ -406,13 +400,11 @@ const InviteAccountModal = defineComponent({
       if (Object.keys(nextErrors).length) return
       submitting.value = true
       try {
-        const username = email.value.trim().split('@')[0]
-        await modalUserApi.createUser({
-          username,
+        await modalPlatformAdminApi.createAccountInvitation({
           email: email.value.trim(),
           displayName: name.value.trim(),
+          department: department.value.trim() || undefined,
           roleCode: role.value,
-          workspaceCodes: [],
         })
         emit('done')
         step.value = 'success'
@@ -435,9 +427,9 @@ const InviteAccountModal = defineComponent({
         step.value === 'success'
           ? h('div', { class: 'platform-accounts-page__success-body' }, [
               h('div', { class: 'platform-accounts-page__success-icon' }, [h(CheckCircle2, { size: 28 })]),
-              h('strong', '账号已创建'),
-              h('span', ['已为 ', h('b', email.value), ' 创建账号']),
-              h('small', '用户可使用管理员分配的初始密码登录平台'),
+              h('strong', '邀请邮件已发送'),
+              h('span', ['激活链接已发送至 ', h('b', email.value)]),
+              h('small', '用户需在 24 小时内打开链接设置密码并激活账号'),
               h('button', { type: 'button', class: 'platform-accounts-page__success-button', onClick: () => emit('close') }, '完成'),
             ])
           : h('div', { class: 'platform-accounts-page__modal-body' }, [
@@ -456,7 +448,7 @@ const InviteAccountModal = defineComponent({
                 roleOption('MEMBER', '普通用户', '拥有工作区成员权限，由工作区管理员分配具体角色', role, value => { role.value = value }),
                 roleOption('SUPER_ADMIN', '超级管理员', '可访问平台管理后台，管理所有工作区和账号', role, value => { role.value = value }),
               ])]),
-              h('div', { class: 'platform-accounts-page__invite-notice' }, [h(Mail, { size: 13 }), h('span', ['系统将创建账号 ', h('b', email.value || '填写的邮箱'), '，初始密码由管理员分配'])]),
+              h('div', { class: 'platform-accounts-page__invite-notice' }, [h(Mail, { size: 13 }), h('span', ['系统将向 ', h('b', email.value || '填写的邮箱'), ' 发送一次性激活链接'])]),
               h('div', { class: 'platform-accounts-page__modal-footer' }, [
                 h('button', { type: 'button', class: 'platform-accounts-page__modal-cancel', onClick: () => emit('close') }, '取消'),
                 h('button', { type: 'button', class: 'platform-accounts-page__modal-submit', disabled: submitting.value, onClick: submit }, submitting.value ? '创建中…' : '发送邀请'),
@@ -683,6 +675,7 @@ const BatchImportModal = defineComponent({
 .platform-accounts-page__status { display:inline-flex; height:16px; align-items:center; padding:0 7px; border-radius:10px; font-size:10px; font-weight:600; line-height:15px; white-space:nowrap; }
 .platform-accounts-page__status.is-active { background:#e8ffea; color:#00b42a; }
 .platform-accounts-page__status.is-disabled { background:#f2f3f5; color:#86909c; }
+.platform-accounts-page__status.is-pending { background:#fff7e8; color:#ff7d00; }
 .platform-accounts-page__actions { display:flex; gap:5px; align-items:center; }
 .platform-accounts-page__action-button { display:inline-flex; height:30px; align-items:center; justify-content:center; padding:0 12px; border:1px solid transparent; border-radius:7px; cursor:pointer; font-size:12px; font-weight:500; line-height:18px; white-space:nowrap; transition:background-color 120ms ease,border-color 120ms ease,color 120ms ease; }
 .platform-accounts-page__action-button.is-reset { width:37px; color:#ff7d00; background:rgba(255,125,0,.08); border-color:rgba(255,125,0,.25); }

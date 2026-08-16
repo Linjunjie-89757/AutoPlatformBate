@@ -14,6 +14,9 @@ public class TaskEntity extends BaseEntity {
     @TableField("workspace_id")
     private Long workspaceId;
 
+    @TableField("creator_user_id")
+    private Long creatorUserId;
+
     @TableField("task_name")
     private String taskName;
 

@@ -1,10 +1,15 @@
 import { httpDelete, httpGet, httpPost, httpPut, type ApiResponse } from '@/shared/api/request'
 
 import type {
+  CreatePlatformAccountInvitationPayload,
   CreatePlatformWorkspacePayload,
+  PlatformAccountInvitationItem,
   PlatformJoinApplicationItem,
+  PlatformNotificationSettings,
   PlatformOverviewData,
   PlatformWorkspaceItem,
+  SavePlatformNotificationSettingsPayload,
+  TestPlatformMailPayload,
 } from '../model/types'
 
 const platformHeaders = {
@@ -12,6 +17,44 @@ const platformHeaders = {
 }
 
 export const platformAdminApi = {
+  async createAccountInvitation(payload: CreatePlatformAccountInvitationPayload) {
+    const response = await httpPost<ApiResponse<PlatformAccountInvitationItem>, CreatePlatformAccountInvitationPayload>(
+      '/platform-admin/account-invitations',
+      payload,
+      { headers: platformHeaders },
+    )
+    if (response.success === false) throw new Error(response.message || '账号邀请发送失败')
+    return response.data
+  },
+
+  async getNotificationSettings() {
+    const response = await httpGet<ApiResponse<PlatformNotificationSettings>>(
+      '/platform-admin/notifications',
+      { headers: platformHeaders },
+    )
+    if (response.success === false) throw new Error(response.message || '通知配置加载失败')
+    return response.data
+  },
+
+  async saveNotificationSettings(payload: SavePlatformNotificationSettingsPayload) {
+    const response = await httpPut<ApiResponse<PlatformNotificationSettings>, SavePlatformNotificationSettingsPayload>(
+      '/platform-admin/notifications',
+      payload,
+      { headers: platformHeaders },
+    )
+    if (response.success === false) throw new Error(response.message || '通知配置保存失败')
+    return response.data
+  },
+
+  async sendTestMail(payload: TestPlatformMailPayload) {
+    const response = await httpPost<ApiResponse<null>, TestPlatformMailPayload>(
+      '/platform-admin/notifications/test-email',
+      payload,
+      { headers: platformHeaders },
+    )
+    if (response.success === false) throw new Error(response.message || '测试邮件发送失败')
+  },
+
   async getOverview() {
     const response = await httpGet<ApiResponse<PlatformOverviewData>>('/platform-admin/overview', {
       headers: platformHeaders,

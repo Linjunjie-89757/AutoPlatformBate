@@ -1732,6 +1732,15 @@ onBeforeUnmount(() => {
   border: 0;
   background: #f59e0b;
   color: #ffffff;
+  transition: filter 150ms, transform 150ms;
+}
+
+.task-edit-save-button:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.task-edit-save-button:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .task-module-layout {
@@ -1960,6 +1969,15 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
+  transition: filter 150ms, transform 150ms;
+}
+
+.task-create-button:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.task-create-button:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .task-create-button__icon {

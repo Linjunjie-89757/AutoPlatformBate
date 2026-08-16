@@ -27,7 +27,7 @@ public class PlatformUserDetailsSupport {
             throw new UsernameNotFoundException("用户不存在");
         }
         if (user.getPassword() == null || user.getPassword().isBlank()) {
-            throw new BadRequestException("当前账号未设置密码");
+            throw new BadRequestException("账号尚未激活，请先通过邀请邮件设置密码");
         }
         return new CurrentUserPrincipal(
                 user.getId(),

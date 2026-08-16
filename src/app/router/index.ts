@@ -23,6 +23,7 @@ const ConfigCenterPage = () => import('@/pages/config-center/ConfigCenterPage.vu
 const DashboardPage = () => import('@/pages/dashboard/DashboardPage.vue')
 const DefectDetailPage = () => import('@/pages/defects/DefectDetailPage.vue')
 const DefectsPage = () => import('@/pages/defects/DefectsPage.vue')
+const ActivateAccountPage = () => import('@/pages/login/ActivateAccountPage.vue')
 const ForgotPasswordPage = () => import('@/pages/login/ForgotPasswordPage.vue')
 const LoginPage = () => import('@/pages/login/LoginPage.vue')
 const ResetPasswordPage = () => import('@/pages/login/ResetPasswordPage.vue')
@@ -37,6 +38,7 @@ const ProfileSettingsPage = () => import('@/pages/profile/ProfileSettingsPage.vu
 const ReportCenterPage = () => import('@/pages/reports/ReportCenterPage.vue')
 const ReportSharePage = () => import('@/pages/reports/ReportSharePage.vue')
 const SystemSettingsPage = () => import('@/pages/system-settings/SystemSettingsPage.vue')
+const TestManagementPage = () => import('@/pages/test-management/TestManagementPage.vue')
 const WorkspaceSelectPage = () => import('@/pages/workspace-select/WorkspaceSelectPage.vue')
 
 const routes: RouteRecordRaw[] = [
@@ -46,6 +48,16 @@ const routes: RouteRecordRaw[] = [
     component: LoginPage,
     meta: {
       title: '登录',
+      bare: true,
+      public: true,
+    },
+  },
+  {
+    path: '/activate-account',
+    name: 'activate-account',
+    component: ActivateAccountPage,
+    meta: {
+      title: '激活账号',
       bare: true,
       public: true,
     },
@@ -316,6 +328,15 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '缺陷详情',
           description: '通过分享链接直接查看缺陷详情。',
+        },
+      },
+      {
+        path: 'test-management',
+        name: 'test-management',
+        component: TestManagementPage,
+        meta: {
+          title: '测试管理',
+          description: '以需求为核心组织版本、测试计划、用例执行和缺陷追踪。',
         },
       },
       {

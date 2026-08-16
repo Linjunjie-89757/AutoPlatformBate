@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.auth.AuthenticatedSessionService;
 import com.company.autoplatform.auth.PlatformRole;
 import com.company.autoplatform.common.BadRequestException;
+import com.company.autoplatform.platformadmin.PlatformNotificationSettingsService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import org.springframework.stereotype.Service;
 
@@ -19,19 +20,22 @@ public class UserDomainService {
     private final UserRoleSupport userRoleSupport;
     private final UserWorkspaceGrantSupport userWorkspaceGrantSupport;
     private final AuthenticatedSessionService authenticatedSessionService;
+    private final PlatformNotificationSettingsService notificationSettingsService;
 
     public UserDomainService(
             UserMapper userMapper,
             UserCredentialSupport userCredentialSupport,
             UserRoleSupport userRoleSupport,
             UserWorkspaceGrantSupport userWorkspaceGrantSupport,
-            AuthenticatedSessionService authenticatedSessionService
+            AuthenticatedSessionService authenticatedSessionService,
+            PlatformNotificationSettingsService notificationSettingsService
     ) {
         this.userMapper = userMapper;
         this.userCredentialSupport = userCredentialSupport;
         this.userRoleSupport = userRoleSupport;
         this.userWorkspaceGrantSupport = userWorkspaceGrantSupport;
         this.authenticatedSessionService = authenticatedSessionService;
+        this.notificationSettingsService = notificationSettingsService;
     }
 
     public List<UserItem> listUsers() {
@@ -39,7 +43,6 @@ public class UserDomainService {
         List<UserEntity> users = userMapper.selectList(new LambdaQueryWrapper<UserEntity>().orderByAsc(UserEntity::getId));
         Map<Long, List<WorkspaceEntity>> workspaceMap = userWorkspaceGrantSupport.buildUserWorkspaceMap();
         return users.stream()
-                .filter(user -> !userRoleSupport.isSuperAdminRole(user.getRoleCode()))
                 .map(user -> toItem(user, workspaceMap.getOrDefault(user.getId(), List.of())))
                 .toList();
     }
@@ -103,6 +106,13 @@ public class UserDomainService {
         userMapper.updateById(entity);
         if (previousStatus != null && previousStatus == 1 && request.status() == 0) {
             authenticatedSessionService.expireUserSessions(entity.getId());
+            notificationSettingsService.sendOptional(
+                    "disable",
+                    entity.getEmail(),
+                    "AutoTest 平台账号已禁用",
+                    "您好，%s：\n\n你的 AutoTest 平台账号已被管理员禁用。如需恢复访问，请联系平台超级管理员。"
+                            .formatted(entity.getDisplayName())
+            );
         }
 
         if (request.workspaceCodes() != null) {
@@ -155,6 +165,7 @@ public class UserDomainService {
                 user.getDisplayName(),
                 userRoleSupport.isSuperAdminRole(user.getRoleCode()) ? "SUPER_ADMIN" : (PlatformRole.PLATFORM_ADMIN.equalsIgnoreCase(user.getRoleCode()) ? "ADMIN" : "MEMBER"),
                 user.getStatus(),
+                user.getPassword() == null || user.getPassword().isBlank() ? "PENDING" : "ACTIVE",
                 workspaces.stream().map(WorkspaceEntity::getWorkspaceCode).toList(),
                 workspaces.stream().map(WorkspaceEntity::getWorkspaceName).toList()
         );

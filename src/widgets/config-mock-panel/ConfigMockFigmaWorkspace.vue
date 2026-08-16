@@ -371,6 +371,24 @@ const {
 .figma-mock-table:not(.is-log-table) th:nth-child(6),.figma-mock-table:not(.is-log-table) td:nth-child(6){width:10%}
 .figma-mock-table:not(.is-log-table) th:nth-child(7),.figma-mock-table:not(.is-log-table) td:nth-child(7){width:10%}
 
+.figma-mock-btn {
+  transition: border-color 150ms, color 150ms, filter 150ms, transform 150ms;
+}
+
+.figma-mock-btn:not(.is-primary):hover:not(:disabled) {
+  border-color: #165dff;
+  color: #165dff;
+}
+
+.figma-mock-btn.is-primary:hover:not(:disabled) {
+  color: #fff !important;
+  filter: brightness(1.1);
+}
+
+.figma-mock-btn.is-primary:active:not(:disabled) {
+  transform: scale(.98);
+}
+
 /* Mock typography restoration: Figma 342:18262 / 18977 / 25327 / 25890 / 26394. */
 .figma-mock-workspace {
   font-family: var(--app-font-family);

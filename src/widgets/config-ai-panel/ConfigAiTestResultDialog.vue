@@ -214,5 +214,14 @@ defineEmits<{
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
+  transition: filter 150ms, transform 150ms;
+}
+
+.config-ai-test-dialog__confirm:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.config-ai-test-dialog__confirm:active:not(:disabled) {
+  transform: scale(.98);
 }
 </style>

@@ -9,6 +9,7 @@ public record UserItem(
         String displayName,
         String roleCode,
         Integer status,
+        String activationStatus,
         List<String> workspaceCodes,
         List<String> workspaceNames
 ) {

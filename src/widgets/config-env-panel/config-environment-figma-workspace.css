@@ -67,6 +67,7 @@
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
+  transition: border-color 150ms, background-color 150ms, color 150ms, filter 150ms, transform 150ms;
 }
 
 .figma-env__primary-button,
@@ -84,6 +85,31 @@
   padding: 0 10px;
   font-size: 12px;
   line-height: 18px;
+}
+
+.figma-env__primary-button:hover:not(:disabled),
+.figma-env__service-toolbar button.is-primary:hover:not(:disabled),
+.figma-env-modal button.is-primary:hover:not(:disabled),
+.figma-env-modal button.is-danger:hover:not(:disabled),
+.figma-env-modal button.is-warning-action:hover:not(:disabled) {
+  color: #fff;
+  filter: brightness(1.1);
+}
+
+.figma-env__primary-button:active:not(:disabled),
+.figma-env__service-toolbar button.is-primary:active:not(:disabled),
+.figma-env-modal button.is-primary:active:not(:disabled),
+.figma-env-modal button.is-danger:active:not(:disabled),
+.figma-env-modal button.is-warning-action:active:not(:disabled) {
+  transform: scale(.98);
+}
+
+.figma-env__detail-actions > button:not(.figma-env__icon-button):hover:not(:disabled),
+.figma-env__service-toolbar button:not(.is-primary):hover:not(:disabled),
+.figma-env__service-actions > button:hover:not(:disabled),
+.figma-env-modal button:not(.is-primary):not(.is-danger):not(.is-warning-action):not(.is-disabled-action):hover:not(:disabled) {
+  border-color: #165dff;
+  color: #165dff;
 }
 
 .figma-env__search {
@@ -457,6 +483,12 @@
   color: #c9cdd4;
 }
 
+.figma-env__detail-actions > button.figma-env__icon-button:hover:not(:disabled) {
+  border-color: #ffe8e8;
+  background: #ffe8e8;
+  color: #f53f3f;
+}
+
 .figma-env__tabs {
   display: flex;
   height: 37px;
@@ -677,11 +709,17 @@
   background: transparent;
   color: #c9cdd4;
   cursor: pointer;
+  transition: background-color 150ms, color 150ms;
 }
 
 .figma-env__row-actions button:hover {
   background: #f2f3f5;
   color: #1d2129;
+}
+
+.figma-env__row-actions button:last-child:hover {
+  background: #ffe8e8;
+  color: #f53f3f;
 }
 
 .figma-env__row-actions .el-icon {

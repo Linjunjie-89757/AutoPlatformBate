@@ -39,7 +39,7 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
     private ObjectMapper objectMapper;
 
     @Test
-    void listUsersKeepsResponseShapeAndHidesSuperAdmin() throws Exception {
+    void listUsersKeepsResponseShapeAndShowsPlatformIdentities() throws Exception {
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -47,7 +47,8 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data[*].username", hasItem("chennan")))
                 .andExpect(jsonPath("$.data[*].roleCode", hasItem("ADMIN")))
                 .andExpect(jsonPath("$.data[*].workspaceCodes").isArray())
-                .andExpect(jsonPath("$.data[*].username", not(hasItem("superadmin"))));
+                .andExpect(jsonPath("$.data[*].username", hasItem("superadmin")))
+                .andExpect(jsonPath("$.data[*].roleCode", hasItem("SUPER_ADMIN")));
     }
 
     @Test

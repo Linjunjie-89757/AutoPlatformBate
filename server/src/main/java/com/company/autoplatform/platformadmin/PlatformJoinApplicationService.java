@@ -29,19 +29,22 @@ public class PlatformJoinApplicationService {
     private final WorkspaceMapper workspaceMapper;
     private final UserService userService;
     private final WorkspaceJoinService workspaceJoinService;
+    private final PlatformNotificationSettingsService notificationSettingsService;
 
     public PlatformJoinApplicationService(
             WorkspaceAccessSupport workspaceAccessSupport,
             WorkspaceJoinApplicationMapper applicationMapper,
             WorkspaceMapper workspaceMapper,
             UserService userService,
-            WorkspaceJoinService workspaceJoinService
+            WorkspaceJoinService workspaceJoinService,
+            PlatformNotificationSettingsService notificationSettingsService
     ) {
         this.workspaceAccessSupport = workspaceAccessSupport;
         this.applicationMapper = applicationMapper;
         this.workspaceMapper = workspaceMapper;
         this.userService = userService;
         this.workspaceJoinService = workspaceJoinService;
+        this.notificationSettingsService = notificationSettingsService;
     }
 
     public List<PlatformJoinApplicationItem> listApplications(String status) {
@@ -69,7 +72,15 @@ public class PlatformJoinApplicationService {
         WorkspaceJoinApplicationEntity application = requireApplication(applicationId);
         WorkspaceEntity workspace = requireWorkspace(application.getWorkspaceId());
         workspaceJoinService.approveApplication(workspace.getWorkspaceCode(), applicationId);
-        return toItem(requireApplication(applicationId));
+        PlatformJoinApplicationItem item = toItem(requireApplication(applicationId));
+        notificationSettingsService.sendOptional(
+                "approve",
+                item.applicantEmail(),
+                "AutoTest 工作区申请已通过",
+                "您好，%s：\n\n你加入工作区“%s”的申请已通过，现在可以进入该工作区。"
+                        .formatted(item.applicantName(), item.workspaceName())
+        );
+        return item;
     }
 
     @Transactional
@@ -78,7 +89,15 @@ public class PlatformJoinApplicationService {
         WorkspaceJoinApplicationEntity application = requireApplication(applicationId);
         WorkspaceEntity workspace = requireWorkspace(application.getWorkspaceId());
         workspaceJoinService.rejectApplication(workspace.getWorkspaceCode(), applicationId, reason);
-        return toItem(requireApplication(applicationId));
+        PlatformJoinApplicationItem item = toItem(requireApplication(applicationId));
+        notificationSettingsService.sendOptional(
+                "approve",
+                item.applicantEmail(),
+                "AutoTest 工作区申请未通过",
+                "您好，%s：\n\n你加入工作区“%s”的申请未通过。原因：%s"
+                        .formatted(item.applicantName(), item.workspaceName(), item.rejectReason())
+        );
+        return item;
     }
 
     private PlatformJoinApplicationItem toItem(WorkspaceJoinApplicationEntity application) {

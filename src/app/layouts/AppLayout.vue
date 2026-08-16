@@ -2,6 +2,7 @@
 import {
   ChevronDown,
   ChevronRight,
+  ClipboardCheck,
   KeyRound,
   LogOut,
   Search,
@@ -149,6 +150,7 @@ const navigationItems: NavigationItem[] = [
     ],
   },
   { path: '/bugs', label: '缺陷管理', icon: figmaGlobalNavIcons.bug, color: '#F53F3F', lightBg: '#FFE8E8', permissionCode: 'bugs.view' },
+  { path: '/test-management', label: '测试管理', componentIcon: ClipboardCheck, color: '#0E7490', lightBg: '#ECFEFF' },
   {
     path: '/automation/api',
     label: '接口自动化',

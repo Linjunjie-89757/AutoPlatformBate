@@ -46,6 +46,7 @@ const workspaceColorMap = ref<Record<string, string>>({})
 const pendingApprovalTotal = ref(0)
 const savingCodes = ref<string[]>([])
 const createDialogOpen = ref(false)
+const detailWorkspace = ref<PlatformWorkspaceItem | null>(null)
 const createSubmitting = ref(false)
 const createForm = reactive<CreatePlatformWorkspacePayload>({
   workspaceName: '',
@@ -147,7 +148,7 @@ async function toggleWorkspace(workspace: PlatformWorkspaceItem) {
 }
 
 function viewWorkspace(workspace: PlatformWorkspaceItem) {
-  ElMessage.info(`工作区“${workspace.workspaceName}”详情页后续接入`)
+  detailWorkspace.value = workspace
 }
 
 async function deleteWorkspace(workspace: PlatformWorkspaceItem) {
@@ -434,6 +435,34 @@ onMounted(() => {
         </footer>
       </section>
     </div>
+
+    <div v-if="detailWorkspace" class="platform-workspaces-page__dialog-mask" @click.self="detailWorkspace = null">
+      <section class="platform-workspaces-page__dialog is-detail" role="dialog" aria-modal="true" aria-labelledby="workspace-detail-title">
+        <header>
+          <div>
+            <h2 id="workspace-detail-title">工作区详情</h2>
+            <p>查看平台工作区的基础信息和当前状态</p>
+          </div>
+          <button type="button" aria-label="关闭" @click="detailWorkspace = null">×</button>
+        </header>
+        <div class="platform-workspaces-page__detail-body">
+          <div class="platform-workspaces-page__detail-identity">
+            <span :style="{ background: workspaceColor(detailWorkspace) }">{{ workspaceInitial(detailWorkspace) }}</span>
+            <div><strong>{{ detailWorkspace.workspaceName }}</strong><small>{{ detailWorkspace.workspaceCode }}</small></div>
+            <em :class="isActive(detailWorkspace) ? 'is-active' : 'is-disabled'">{{ isActive(detailWorkspace) ? '正常' : '已停用' }}</em>
+          </div>
+          <dl>
+            <div><dt>负责人</dt><dd>{{ detailWorkspace.ownerName || '未设置' }}</dd></div>
+            <div><dt>成员数量</dt><dd>{{ detailWorkspace.memberCount }} 人</dd></div>
+            <div><dt>创建时间</dt><dd>{{ formatCreatedAt(detailWorkspace.createdAt) }}</dd></div>
+            <div class="is-wide"><dt>工作区描述</dt><dd>{{ detailWorkspace.description || '暂无描述' }}</dd></div>
+          </dl>
+        </div>
+        <footer>
+          <button type="button" class="platform-workspaces-page__dialog-submit" @click="detailWorkspace = null">关闭</button>
+        </footer>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -457,6 +486,22 @@ onMounted(() => {
 .platform-workspaces-page textarea {
   font-family: inherit;
 }
+
+.platform-workspaces-page__dialog.is-detail { width: 520px; }
+.platform-workspaces-page__detail-body { padding: 20px 24px; }
+.platform-workspaces-page__detail-identity { display:flex; align-items:center; gap:12px; padding:14px; border:1px solid #e5e6eb; border-radius:8px; background:#f7f8fa; }
+.platform-workspaces-page__detail-identity > span { display:grid; width:40px; height:40px; flex:0 0 40px; place-items:center; border-radius:8px; color:#fff; font-size:15px; font-weight:600; }
+.platform-workspaces-page__detail-identity > div { display:grid; min-width:0; flex:1; gap:2px; }
+.platform-workspaces-page__detail-identity strong { color:#1d2129; font-size:14px; font-weight:600; }
+.platform-workspaces-page__detail-identity small { color:#86909c; font-size:11px; }
+.platform-workspaces-page__detail-identity em { padding:2px 8px; border-radius:10px; font-size:10px; font-style:normal; font-weight:600; }
+.platform-workspaces-page__detail-identity em.is-active { background:#e8ffea; color:#00b42a; }
+.platform-workspaces-page__detail-identity em.is-disabled { background:#f2f3f5; color:#86909c; }
+.platform-workspaces-page__detail-body dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 24px; margin:20px 0 0; }
+.platform-workspaces-page__detail-body dl > div { display:grid; gap:5px; }
+.platform-workspaces-page__detail-body dl > div.is-wide { grid-column:1 / -1; }
+.platform-workspaces-page__detail-body dt { color:#86909c; font-size:11px; }
+.platform-workspaces-page__detail-body dd { margin:0; color:#1d2129; font-size:13px; line-height:20px; }
 
 .platform-workspaces-page__sidebar {
   display: flex;

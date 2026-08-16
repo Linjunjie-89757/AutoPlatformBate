@@ -97,6 +97,9 @@ public class UserService {
         UserEntity entity = requireAnyUser(userId);
         userRoleSupport.ensureVisibleTarget(entity);
         userRoleSupport.ensureAdminMutationAllowed(entity);
+        if (entity.getPassword() == null || entity.getPassword().isBlank()) {
+            throw new BadRequestException("待激活账号不能重置密码，请重新发送邀请邮件");
+        }
         entity.setPassword(userCredentialSupport.encodeDefaultPassword());
         entity.setUpdatedAt(LocalDateTime.now());
         userMapper.updateById(entity);

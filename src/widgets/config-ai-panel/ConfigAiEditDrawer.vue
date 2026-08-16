@@ -627,6 +627,15 @@ function testConnection() {
   border: 0;
   background: #7816ff;
   color: #ffffff;
+  transition: filter 150ms, transform 150ms;
+}
+
+.config-ai-edit__save:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.config-ai-edit__save:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .config-ai-edit__save img {

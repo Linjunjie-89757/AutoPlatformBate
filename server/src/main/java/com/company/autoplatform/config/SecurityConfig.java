@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/password-reset/**").permitAll()
+                        .requestMatchers("/api/auth/account-activation/**").permitAll()
                         .requestMatchers("/api/automation/web/ci/batches/run").permitAll()
                         .requestMatchers("/api/mock/**").permitAll()
                         .requestMatchers("/api/public/local-runner/**").permitAll()

@@ -1,0 +1,1135 @@
+.test-management-page {
+  --tm-primary: #165dff;
+  --tm-text: #1d2129;
+  --tm-secondary: #4e5969;
+  --tm-muted: #86909c;
+  --tm-border: #e5e6eb;
+  --tm-soft: #f7f8fa;
+  min-height: calc(100vh - 48px);
+  width: 100%;
+  min-width: 0;
+  padding: 24px;
+  color: var(--tm-text);
+  background: #f4f6fa;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+.test-management-page *,
+.test-management-page *::before,
+.test-management-page *::after {
+  box-sizing: border-box;
+}
+
+.test-management-page button,
+.test-management-page input,
+.test-management-page select,
+.test-management-page textarea {
+  font: inherit;
+}
+
+.test-management-page button {
+  letter-spacing: 0;
+}
+
+.test-management-page__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1600px;
+  min-width: 0;
+  margin: 0 auto 20px;
+}
+
+.test-management-page__header > div {
+  min-width: 0;
+}
+
+.test-management-page__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  color: #0e7490;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.test-management-page__header h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 30px;
+  letter-spacing: 0;
+}
+
+.test-management-page__header p {
+  margin: 5px 0 0;
+  color: var(--tm-muted);
+  font-size: 13px;
+}
+
+.test-management-page__primary-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--tm-primary);
+  border-radius: 4px;
+  color: #fff;
+  background: var(--tm-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.test-management-page__primary-button:hover {
+  border-color: #4080ff;
+  background: #4080ff;
+  box-shadow: 0 3px 10px rgb(22 93 255 / 18%);
+}
+
+.test-management-page__primary-button:active {
+  border-color: #0e42d2;
+  background: #0e42d2;
+}
+
+.test-management-page__tabs {
+  display: flex;
+  max-width: 1600px;
+  min-width: 0;
+  height: 43px;
+  margin: 0 auto;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--tm-border);
+  background: #fff;
+}
+
+.test-management-page__tabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 108px;
+  height: 43px;
+  padding: 0 16px;
+  border: 0;
+  color: var(--tm-secondary);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.test-management-page__tabs button:hover {
+  color: var(--tm-primary);
+  background: #f7faff;
+}
+
+.test-management-page__tabs button::after {
+  position: absolute;
+  right: 16px;
+  bottom: -1px;
+  left: 16px;
+  height: 2px;
+  background: transparent;
+  content: '';
+}
+
+.test-management-page__tabs button.is-active {
+  color: var(--tm-primary);
+  font-weight: 600;
+}
+
+.test-management-page__tabs button.is-active::after {
+  background: var(--tm-primary);
+}
+
+.test-management-page__tabs button span {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  color: var(--tm-muted);
+  background: #f2f3f5;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+}
+
+.test-management-page__tabs button.is-active span {
+  color: var(--tm-primary);
+  background: #e8f3ff;
+}
+
+.test-management-page__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 1600px;
+  min-width: 0;
+  margin: 0 auto;
+  border-right: 1px solid var(--tm-border);
+  border-bottom: 1px solid var(--tm-border);
+  border-left: 1px solid var(--tm-border);
+  background: #fff;
+}
+
+.test-management-page__metric {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  min-width: 0;
+  min-height: 92px;
+  padding: 16px 20px;
+  border-right: 1px solid #f0f1f2;
+}
+
+.test-management-page__metric:last-child {
+  border-right: 0;
+}
+
+.test-management-page__metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+.test-management-page__metric-icon.is-blue { color: #165dff; background: #e8f3ff; }
+.test-management-page__metric-icon.is-green { color: #00b42a; background: #e8ffea; }
+.test-management-page__metric-icon.is-orange { color: #ff7d00; background: #fff3e8; }
+.test-management-page__metric-icon.is-red { color: #f53f3f; background: #ffe8e8; }
+
+.test-management-page__metric > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 11px;
+}
+
+.test-management-page__metric strong {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.test-management-page__metric > div span {
+  color: var(--tm-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.test-management-page__metric small {
+  grid-column: 2;
+  padding-left: 11px;
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__trace {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.75fr) minmax(420px, 1.7fr) auto;
+  align-items: center;
+  gap: 20px;
+  max-width: 1600px;
+  min-width: 0;
+  min-height: 62px;
+  margin: 12px auto;
+  padding: 10px 16px;
+  border: 1px solid #dbe8ff;
+  border-radius: 6px;
+  background: #f7faff;
+}
+
+.test-management-page__trace-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--tm-primary);
+}
+
+.test-management-page__trace-title > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.test-management-page__trace-title strong {
+  color: var(--tm-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.test-management-page__trace-title small {
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__trace-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  color: #94a3b8;
+}
+
+.test-management-page__trace-flow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid #dbe8ff;
+  border-radius: 4px;
+  color: var(--tm-secondary);
+  background: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.test-management-page__trace > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 4px;
+  border: 0;
+  color: var(--tm-primary);
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.test-management-page__trace > button:hover {
+  color: #0e42d2;
+}
+
+.test-management-page__content {
+  width: 100%;
+  max-width: 1600px;
+  min-width: 0;
+  margin: 0 auto;
+  border: 1px solid var(--tm-border);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.test-management-page__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 57px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--tm-border);
+}
+
+.test-management-page__search {
+  position: relative;
+  width: min(330px, 38vw);
+}
+
+.test-management-page__search svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  color: #c9cdd4;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.test-management-page__search input,
+.test-management-page__toolbar select,
+.test-management-page__form input,
+.test-management-page__form select,
+.test-management-page__form textarea {
+  border: 1px solid #c9cdd4;
+  border-radius: 4px;
+  color: var(--tm-text);
+  background: #fff;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.test-management-page__search input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px 0 32px;
+  font-size: 12px;
+}
+
+.test-management-page__toolbar select {
+  width: 126px;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  color: var(--tm-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.test-management-page__search input:hover,
+.test-management-page__toolbar select:hover,
+.test-management-page__form input:hover,
+.test-management-page__form select:hover,
+.test-management-page__form textarea:hover {
+  border-color: #94bfff;
+}
+
+.test-management-page__search input:focus,
+.test-management-page__toolbar select:focus,
+.test-management-page__form input:focus,
+.test-management-page__form select:focus,
+.test-management-page__form textarea:focus {
+  border-color: var(--tm-primary);
+  box-shadow: 0 0 0 2px rgb(22 93 255 / 10%);
+}
+
+.test-management-page__result-count {
+  margin-left: auto;
+  color: var(--tm-muted);
+  font-size: 12px;
+}
+
+.test-management-page__table-wrap {
+  min-height: 316px;
+  overflow-x: auto;
+}
+
+.test-management-page__table {
+  width: 100%;
+  min-width: 1020px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.test-management-page__table th {
+  height: 40px;
+  padding: 0 14px;
+  color: var(--tm-secondary);
+  background: #f7f8fa;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.test-management-page__table th:first-child,
+.test-management-page__table td:first-child {
+  width: 26%;
+  padding-left: 18px;
+}
+
+.test-management-page__table td {
+  height: 62px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f0f1f2;
+  color: var(--tm-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.test-management-page__table tbody tr {
+  cursor: pointer;
+  outline: none;
+  transition: background-color 120ms ease;
+}
+
+.test-management-page__table tbody tr:hover,
+.test-management-page__table tbody tr:focus-visible {
+  background: #f7faff;
+}
+
+.test-management-page__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.test-management-page__primary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  max-width: 360px;
+}
+
+.test-management-page__primary-cell strong {
+  overflow: hidden;
+  color: var(--tm-text);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.test-management-page__primary-cell small {
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__version-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid #dbe8ff;
+  border-radius: 3px;
+  color: #0e42d2;
+  background: #f2f7ff;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.test-management-page__coverage {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 72px;
+}
+
+.test-management-page__coverage.is-wide {
+  width: 92px;
+}
+
+.test-management-page__coverage > span {
+  color: var(--tm-secondary);
+  font-size: 11px;
+}
+
+.test-management-page__coverage > div,
+.test-management-page__plan-progress > div:last-child {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #e5e6eb;
+  overflow: hidden;
+}
+
+.test-management-page__coverage i,
+.test-management-page__plan-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #165dff;
+}
+
+.test-management-page__defect-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  color: var(--tm-muted);
+  background: #f2f3f5;
+  font-size: 11px;
+}
+
+.test-management-page__defect-count.has-defects {
+  color: #cb2634;
+  background: #ffe8e8;
+}
+
+.test-management-page__status,
+.test-management-page__risk {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.test-management-page__status.is-review { color: #4e5969; background: #f2f3f5; }
+.test-management-page__status.is-developing { color: #d25f00; background: #fff3e8; }
+.test-management-page__status.is-testing { color: #0e42d2; background: #e8f3ff; }
+.test-management-page__status.is-pending { color: #a74800; background: #fff7e8; }
+.test-management-page__status.is-complete { color: #008a22; background: #e8ffea; }
+.test-management-page__status.is-muted { color: #86909c; background: #f2f3f5; }
+.test-management-page__risk.is-低 { color: #008a22; background: #e8ffea; }
+.test-management-page__risk.is-中 { color: #d25f00; background: #fff3e8; }
+.test-management-page__risk.is-高 { color: #cb2634; background: #ffe8e8; }
+
+.test-management-page__date {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--tm-secondary);
+}
+
+.test-management-page__muted-cell {
+  color: var(--tm-muted) !important;
+}
+
+.test-management-page__row-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: #86909c;
+  background: transparent;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.test-management-page__row-button:hover {
+  color: var(--tm-primary);
+  background: #e8f3ff;
+}
+
+.test-management-page__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 270px;
+  color: #c9cdd4;
+}
+
+.test-management-page__empty strong {
+  margin-top: 10px;
+  color: var(--tm-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.test-management-page__empty span {
+  margin-top: 3px;
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__overlay {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(29 33 41 / 34%);
+}
+
+.test-management-page__overlay.is-dialog {
+  align-items: center;
+  justify-content: center;
+}
+
+.test-management-page__drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, calc(100vw - 56px));
+  height: 100%;
+  background: #fff;
+  box-shadow: -8px 0 24px rgb(29 33 41 / 12%);
+}
+
+.test-management-page__drawer > header,
+.test-management-page__dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--tm-border);
+}
+
+.test-management-page__drawer > header span {
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__drawer h2,
+.test-management-page__dialog h2 {
+  margin: 3px 0 0;
+  color: var(--tm-text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 24px;
+  letter-spacing: 0;
+}
+
+.test-management-page__drawer > header button,
+.test-management-page__dialog > header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--tm-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.test-management-page__drawer > header button:hover,
+.test-management-page__dialog > header button:hover {
+  color: var(--tm-text);
+  background: #f2f3f5;
+}
+
+.test-management-page__drawer-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 22px;
+  border-bottom: 1px solid #f0f1f2;
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__drawer-section {
+  padding: 18px 22px;
+  border-bottom: 1px solid #f0f1f2;
+}
+
+.test-management-page__drawer-section h3 {
+  margin: 0 0 11px;
+  color: var(--tm-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.test-management-page__drawer-section p {
+  margin: 0;
+  color: var(--tm-secondary);
+  font-size: 12px;
+  line-height: 21px;
+}
+
+.test-management-page__drawer-trace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.test-management-page__drawer-trace button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--tm-border);
+  border-radius: 5px;
+  color: var(--tm-primary);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.test-management-page__drawer-trace button:hover {
+  border-color: #94bfff;
+  background: #f7faff;
+}
+
+.test-management-page__drawer-trace button > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.test-management-page__drawer-trace strong {
+  color: var(--tm-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.test-management-page__drawer-trace small {
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__drawer-section dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px 20px;
+  margin: 0;
+}
+
+.test-management-page__drawer-section dl > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.test-management-page__drawer-section dt {
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__drawer-section dd {
+  margin: 0;
+  color: var(--tm-text);
+  font-size: 12px;
+}
+
+.test-management-page__quality-gate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 22px 2px;
+  padding: 14px;
+  border: 1px solid #b7ebc2;
+  border-radius: 6px;
+  color: #00b42a;
+  background: #f2fff4;
+}
+
+.test-management-page__quality-gate > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.test-management-page__quality-gate span {
+  display: flex;
+  flex-direction: column;
+}
+
+.test-management-page__quality-gate span strong {
+  color: var(--tm-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.test-management-page__quality-gate small {
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__quality-gate > strong {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.test-management-page__plan-progress {
+  margin: 18px 22px 2px;
+  padding: 14px;
+  border: 1px solid #dbe8ff;
+  border-radius: 6px;
+  background: #f7faff;
+}
+
+.test-management-page__plan-progress > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: var(--tm-secondary);
+  font-size: 12px;
+}
+
+.test-management-page__plan-progress strong {
+  color: var(--tm-text);
+  font-weight: 600;
+}
+
+.test-management-page__drawer > footer,
+.test-management-page__dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+  padding: 14px 22px;
+  border-top: 1px solid var(--tm-border);
+}
+
+.test-management-page__drawer > footer button,
+.test-management-page__dialog > footer button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #c9cdd4;
+  border-radius: 4px;
+  color: var(--tm-secondary);
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+
+.test-management-page__drawer > footer button:hover,
+.test-management-page__dialog > footer button:hover {
+  border-color: #94bfff;
+  color: var(--tm-primary);
+}
+
+.test-management-page__drawer > footer button.is-primary,
+.test-management-page__dialog > footer button.is-primary {
+  border-color: var(--tm-primary);
+  color: #fff;
+  background: var(--tm-primary);
+}
+
+.test-management-page__drawer > footer button.is-primary:hover,
+.test-management-page__dialog > footer button.is-primary:hover {
+  border-color: #4080ff;
+  color: #fff;
+  background: #4080ff;
+}
+
+.test-management-page__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 16%);
+  overflow: hidden;
+}
+
+.test-management-page__dialog > header p {
+  margin: 4px 0 0;
+  color: var(--tm-muted);
+  font-size: 11px;
+}
+
+.test-management-page__form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 20px 22px;
+  overflow-y: auto;
+}
+
+.test-management-page__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.test-management-page__form label > span {
+  color: var(--tm-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.test-management-page__form label i {
+  color: #f53f3f;
+  font-style: normal;
+}
+
+.test-management-page__form input,
+.test-management-page__form select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.test-management-page__form textarea {
+  width: 100%;
+  min-height: 92px;
+  padding: 8px 10px;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.test-management-page__form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.test-management-page__form-error {
+  margin: -6px 0 0;
+  color: #f53f3f;
+  font-size: 11px;
+}
+
+.test-management-page__toast {
+  position: fixed;
+  z-index: 1300;
+  top: 66px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid #b7ebc2;
+  border-radius: 5px;
+  color: #008a22;
+  background: #f2fff4;
+  box-shadow: 0 6px 18px rgb(29 33 41 / 12%);
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.test-management-fade-enter-active,
+.test-management-fade-leave-active {
+  transition: opacity 160ms ease;
+}
+
+.test-management-fade-enter-active .test-management-page__drawer,
+.test-management-fade-leave-active .test-management-page__drawer {
+  transition: transform 180ms ease;
+}
+
+.test-management-fade-enter-from,
+.test-management-fade-leave-to {
+  opacity: 0;
+}
+
+.test-management-fade-enter-from .test-management-page__drawer,
+.test-management-fade-leave-to .test-management-page__drawer {
+  transform: translateX(24px);
+}
+
+.test-management-toast-enter-active,
+.test-management-toast-leave-active {
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.test-management-toast-enter-from,
+.test-management-toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
+@media (max-width: 1100px) {
+  .test-management-page__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .test-management-page__metric:nth-child(2) {
+    border-right: 0;
+  }
+
+  .test-management-page__metric:nth-child(-n + 2) {
+    border-bottom: 1px solid #f0f1f2;
+  }
+
+  .test-management-page__trace {
+    grid-template-columns: 1fr auto;
+  }
+
+  .test-management-page__trace-flow {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .test-management-page {
+    flex: 0 0 calc(100vw - 56px);
+    width: calc(100vw - 56px);
+    max-width: calc(100vw - 56px);
+    padding: 16px 12px;
+  }
+
+  .test-management-page__header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .test-management-page__header > div {
+    flex: 1 1 auto;
+  }
+
+  .test-management-page__header h1 {
+    font-size: 20px;
+  }
+
+  .test-management-page__header p {
+    max-width: 360px;
+  }
+
+  .test-management-page__primary-button {
+    width: 34px;
+    padding: 0;
+    font-size: 0 !important;
+    overflow: hidden;
+  }
+
+  .test-management-page__primary-button svg {
+    flex: 0 0 15px;
+    width: 15px;
+    height: 15px;
+  }
+
+  .test-management-page__tabs {
+    overflow-x: auto;
+  }
+
+  .test-management-page__tabs button {
+    flex: 0 0 auto;
+    min-width: 100px;
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .test-management-page__tabs button::after {
+    right: 10px;
+    left: 10px;
+  }
+
+  .test-management-page__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .test-management-page__metric {
+    min-height: 76px;
+    border-right: 0;
+    border-bottom: 1px solid #f0f1f2;
+  }
+
+  .test-management-page__metric:last-child {
+    border-bottom: 0;
+  }
+
+  .test-management-page__trace {
+    grid-template-columns: 1fr auto;
+  }
+
+  .test-management-page__toolbar {
+    flex-wrap: wrap;
+  }
+
+  .test-management-page__search {
+    width: 100%;
+  }
+
+  .test-management-page__toolbar select {
+    flex: 1 1 120px;
+    width: auto;
+  }
+
+  .test-management-page__result-count {
+    display: none;
+  }
+
+  .test-management-page__form-row,
+  .test-management-page__drawer-section dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .test-management-page *,
+  .test-management-page *::before,
+  .test-management-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

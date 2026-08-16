@@ -42,6 +42,7 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
+  transition: filter 150ms, transform 150ms;
 }
 
 .config-ai-btn img {
@@ -63,6 +64,15 @@
   border: 0;
   background: #7816ff;
   color: #ffffff;
+}
+
+.config-ai-btn--primary:hover:not(:disabled) {
+  color: #ffffff;
+  filter: brightness(1.1);
+}
+
+.config-ai-btn--primary:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .config-ai-panel__error {

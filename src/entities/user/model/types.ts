@@ -7,6 +7,7 @@ export interface UserItem {
   displayName: string
   roleCode: string
   status: UserStatus | number
+  activationStatus?: 'PENDING' | 'ACTIVE' | string
   workspaceCodes: string[]
   workspaceNames: string[]
 }

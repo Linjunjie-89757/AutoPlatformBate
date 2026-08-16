@@ -182,7 +182,7 @@ onMounted(() => {
             <span class="platform-audit-page__target" role="cell" :title="item.target || '-'">
               {{ item.target || '-' }}
             </span>
-            <code role="cell">{{ item.sourceIp || '-' }}</code>
+            <code role="cell" :title="item.sourceIp || '-'">{{ item.sourceIp || '-' }}</code>
             <span role="cell">
               <small class="platform-audit-page__result" :class="item.result === 'SUCCESS' ? 'is-success' : 'is-failed'">
                 {{ item.result === 'SUCCESS' ? '成功' : '失败' }}
@@ -476,8 +476,12 @@ button.platform-audit-page__nav-item.is-active {
 }
 
 .platform-audit-page__row code {
+  min-width: 0;
+  overflow: hidden;
   color: #c9cdd4;
   background: transparent;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .platform-audit-page__row > strong {

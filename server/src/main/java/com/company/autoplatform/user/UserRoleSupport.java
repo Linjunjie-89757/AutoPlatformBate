@@ -58,8 +58,8 @@ public class UserRoleSupport {
     }
 
     public void requireAssignableRole(String storedRole) {
-        if (PlatformRole.SUPER_ADMIN.equals(storedRole)) {
-            throw new BadRequestException("超级管理员仅允许系统初始化创建");
+        if (PlatformRole.SUPER_ADMIN.equals(storedRole) && !isCurrentSuperAdmin()) {
+            throw new AccessDeniedException("只有超级管理员可以创建超级管理员");
         }
         if (PlatformRole.PLATFORM_ADMIN.equals(storedRole) && !isCurrentSuperAdmin()) {
             throw new AccessDeniedException("只有超级管理员可以创建或调整管理员");

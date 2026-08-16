@@ -57,3 +57,49 @@ export interface PlatformJoinApplicationItem {
   submittedAt?: string | null
   handledAt?: string | null
 }
+
+export interface CreatePlatformAccountInvitationPayload {
+  displayName: string
+  email: string
+  department?: string
+  roleCode: 'MEMBER' | 'SUPER_ADMIN' | string
+}
+
+export interface PlatformAccountInvitationItem {
+  id: number
+  userId: number
+  email: string
+  displayName: string
+  roleCode: string
+  status: string
+  expiresAt: string
+}
+
+export interface PlatformNotificationRuleItem {
+  code: string
+  label: string
+  description: string
+  enabled: boolean
+}
+
+export interface PlatformNotificationSettings {
+  host: string
+  port: number
+  username: string
+  passwordConfigured: boolean
+  encryption: string
+  senderName: string
+  rules: PlatformNotificationRuleItem[]
+}
+
+export interface SavePlatformNotificationSettingsPayload {
+  host: string
+  port: number
+  username: string
+  password?: string
+  encryption: string
+  senderName: string
+  rules: Array<{ code: string; enabled: boolean }>
+}
+
+export type TestPlatformMailPayload = Omit<SavePlatformNotificationSettingsPayload, 'rules'>

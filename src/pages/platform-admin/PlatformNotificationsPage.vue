@@ -7,20 +7,22 @@ import {
   ClipboardCheck,
   Eye,
   LayoutDashboard,
+  Loader2,
   Lock,
   ScrollText,
   Send,
   Server,
   ShieldAlert,
-  ToggleLeft,
-  ToggleRight,
   Users,
 } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref, type Component } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { platformAdminApi } from '@/entities/platform-admin'
+import { getRequestErrorMessage } from '@/shared/api/error'
+import notificationToggleOff from '@/shared/assets/figma-icons/platform-admin/notification-toggle-off.svg'
+import notificationToggleOn from '@/shared/assets/figma-icons/platform-admin/notification-toggle-on.svg'
 
 interface NavigationItem {
   key: 'overview' | 'workspaces' | 'accounts' | 'requests' | 'audit' | 'notify'
@@ -37,27 +39,36 @@ interface NotificationRule {
   enabled: boolean
 }
 
+const rulePresentation: Record<string, Pick<NotificationRule, 'label' | 'description'>> = {
+  invite: { label: '邀请成员', description: '管理员通过平台邀请新账号时发送确认邮件给被邀请人' },
+  welcome: { label: '账号激活', description: '新账号首次设置密码后，发送欢迎邮件及平台使用指引' },
+  reset: { label: '密码重置', description: '用户发起忘记密码请求时，发送重置链接邮件' },
+  approve: { label: '申请审批通知', description: '工作区加入申请被审批通过或拒绝时，通知申请人结果' },
+  disable: { label: '账号禁用告警', description: '账号被管理员手动禁用时，发送告警邮件给该账号' },
+  'login-fail': { label: '连续登录失败', description: '同一账号 5 次密码错误后，发送安全告警给账号及超级管理员' },
+  'task-done': { label: '自动化任务完成', description: '执行任务完成时（不论成功失败），通知任务创建人' },
+  daily: { label: '每日质量报告', description: '每天早 9 点，向所有工作区管理员发送前一日测试质量摘要' },
+}
+
 const router = useRouter()
 const pendingApprovalTotal = ref(0)
 const showPassword = ref(false)
+const loading = ref(true)
+const saving = ref(false)
+const testing = ref(false)
+const saved = ref(false)
+const testSucceeded = ref(false)
+const passwordConfigured = ref(false)
+let savedStatusTimer: number | undefined
 const smtp = reactive({
-  host: 'smtp.company.com',
+  host: '',
   port: '465',
-  username: 'autotest-notify@company.com',
-  password: '••••••••••••',
+  username: '',
+  password: '',
   encryption: 'SSL/TLS',
   senderName: 'AutoTest 平台通知',
 })
-const rules = reactive<NotificationRule[]>([
-  { id: 'invite', label: '邀请成员', description: '管理员通过平台邀请新账号时发送确认邮件给被邀请人', enabled: true },
-  { id: 'welcome', label: '账号激活', description: '新账号首次设置密码后，发送欢迎邮件及平台使用指引', enabled: true },
-  { id: 'reset', label: '密码重置', description: '用户发起忘记密码请求时，发送重置链接邮件', enabled: true },
-  { id: 'approve', label: '申请审批通知', description: '工作区加入申请被审批通过或拒绝时，通知申请人结果', enabled: true },
-  { id: 'disable', label: '账号禁用告警', description: '账号被管理员手动禁用时，发送告警邮件给该账号', enabled: false },
-  { id: 'login-fail', label: '连续登录失败', description: '同一账号 5 次密码错误后，发送安全告警给账号及超级管理员', enabled: true },
-  { id: 'task-done', label: '自动化任务完成', description: '执行任务完成时（不论成功失败），通知任务创建人', enabled: false },
-  { id: 'daily', label: '每日质量报告', description: '每天早 9 点，向所有工作区管理员发送前一日测试质量摘要', enabled: false },
-])
+const rules = reactive<NotificationRule[]>([])
 
 const navigationItems = computed<NavigationItem[]>(() => [
   { key: 'overview', label: '平台概览', icon: LayoutDashboard },
@@ -86,20 +97,90 @@ function enableAllRules() {
   rules.forEach(rule => { rule.enabled = true })
 }
 
-function sendTestEmail() {
-  ElMessage.warning('平台 SMTP 测试邮件接口尚未接入，当前配置未发送')
+function mailPayload() {
+  return {
+    host: smtp.host.trim(),
+    port: Number(smtp.port),
+    username: smtp.username.trim(),
+    password: smtp.password || undefined,
+    encryption: smtp.encryption,
+    senderName: smtp.senderName.trim(),
+  }
 }
 
-function saveConfiguration() {
-  ElMessage.warning('平台通知配置保存接口尚未接入，当前修改仅保留在本页面')
+async function sendTestEmail() {
+  if (testing.value) return
+  testSucceeded.value = false
+  testing.value = true
+  try {
+    await platformAdminApi.sendTestMail(mailPayload())
+    testSucceeded.value = true
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    testing.value = false
+  }
+}
+
+async function saveConfiguration() {
+  if (saving.value) return
+  saved.value = false
+  saving.value = true
+  try {
+    const updatedSettings = await platformAdminApi.saveNotificationSettings({
+      ...mailPayload(),
+      rules: rules.map(rule => ({ code: rule.id, enabled: rule.enabled })),
+    })
+    passwordConfigured.value = updatedSettings.passwordConfigured
+    smtp.password = ''
+    window.clearTimeout(savedStatusTimer)
+    savedStatusTimer = window.setTimeout(() => { saved.value = false }, 2500)
+    saved.value = true
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function loadConfiguration() {
+  loading.value = true
+  try {
+    const settings = await platformAdminApi.getNotificationSettings()
+    smtp.host = settings.host || ''
+    smtp.port = String(settings.port || 465)
+    smtp.username = settings.username || ''
+    smtp.password = ''
+    smtp.encryption = settings.encryption || 'SSL/TLS'
+    smtp.senderName = settings.senderName || 'AutoTest 平台通知'
+    passwordConfigured.value = settings.passwordConfigured
+    rules.splice(0, rules.length, ...settings.rules.map(rule => {
+      const presentation = rulePresentation[rule.code]
+      return {
+        id: rule.code,
+        label: presentation?.label || rule.label,
+        description: presentation?.description || rule.description,
+        enabled: rule.enabled,
+      }
+    }))
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(async () => {
+  void loadConfiguration()
   try {
     pendingApprovalTotal.value = (await platformAdminApi.getOverview()).pendingApprovalTotal || 0
   } catch {
     pendingApprovalTotal.value = 0
   }
+})
+
+onBeforeUnmount(() => {
+  window.clearTimeout(savedStatusTimer)
 })
 </script>
 
@@ -139,14 +220,23 @@ onMounted(async () => {
           <h1>消息与通知</h1>
           <p>配置邮件服务和系统通知的触发规则</p>
         </div>
-        <button type="button" class="platform-notify-page__save-button" @click="saveConfiguration">
-          <CheckCircle aria-hidden="true" />
-          <span>保存配置</span>
-        </button>
+        <div class="platform-notify-page__header-actions">
+          <span v-if="saved" class="platform-notify-page__saved-status">
+            <CheckCircle aria-hidden="true" />
+            已保存
+          </span>
+          <button type="button" class="platform-notify-page__save-button" :disabled="saving || loading" @click="saveConfiguration">
+            <CheckCircle aria-hidden="true" />
+            <span>{{ saving ? '保存中...' : '保存配置' }}</span>
+          </button>
+        </div>
       </header>
 
       <div class="platform-notify-page__grid">
-        <section class="platform-notify-page__card platform-notify-page__smtp-card">
+        <section
+          class="platform-notify-page__card platform-notify-page__smtp-card"
+          :class="{ 'has-test-success': testSucceeded }"
+        >
           <header class="platform-notify-page__card-header">
             <span class="platform-notify-page__card-icon is-smtp"><Server /></span>
             <span class="platform-notify-page__card-title">
@@ -183,7 +273,12 @@ onMounted(async () => {
             <label class="platform-notify-page__field">
               <span>授权密码 / SMTP 密钥</span>
               <span class="platform-notify-page__password-wrap">
-                <input v-model="smtp.password" :type="showPassword ? 'text' : 'password'" />
+                <input
+                  v-model="smtp.password"
+                  :type="showPassword ? 'text' : 'password'"
+                  autocomplete="new-password"
+                  :placeholder="passwordConfigured ? '留空表示使用已保存密钥' : '请输入 SMTP 授权密码'"
+                />
                 <button
                   type="button"
                   :aria-label="showPassword ? '隐藏密码' : '显示密码'"
@@ -215,10 +310,20 @@ onMounted(async () => {
 
             <div class="platform-notify-page__test-row">
               <span>向当前登录账号发送测试邮件</span>
-              <button type="button" @click="sendTestEmail">
-                <Send />
-                <span>发送测试邮件</span>
+              <button
+                type="button"
+                :class="{ 'is-testing': testing }"
+                :disabled="testing || loading"
+                @click="sendTestEmail"
+              >
+                <Loader2 v-if="testing" :size="13" class="is-spinning" />
+                <Send v-else :size="13" />
+                <span>{{ testing ? '发送中…' : '发送测试邮件' }}</span>
               </button>
+            </div>
+            <div v-if="testSucceeded" class="platform-notify-page__test-success">
+              <CheckCircle aria-hidden="true" />
+              <span>测试邮件已发送，请检查收件箱</span>
             </div>
           </div>
         </section>
@@ -253,8 +358,11 @@ onMounted(async () => {
                 :aria-label="`${rule.label}${rule.enabled ? '已开启' : '已关闭'}`"
                 @click="rule.enabled = !rule.enabled"
               >
-                <ToggleRight v-if="rule.enabled" />
-                <ToggleLeft v-else />
+                <img
+                  :src="rule.enabled ? notificationToggleOn : notificationToggleOff"
+                  alt=""
+                  aria-hidden="true"
+                />
               </button>
             </div>
           </div>
@@ -449,6 +557,31 @@ button.platform-notify-page__nav-item.is-active {
   line-height: 19.5px;
 }
 
+.platform-notify-page__header-actions {
+  display: flex;
+  height: 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.platform-notify-page__saved-status {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 5px;
+  color: #00b42a;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 19.5px;
+  white-space: nowrap;
+}
+
+.platform-notify-page__saved-status svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
 .platform-notify-page__save-button {
   display: inline-flex;
   height: 34px;
@@ -492,7 +625,11 @@ button.platform-notify-page__save-button:hover {
 }
 
 .platform-notify-page__smtp-card {
-  height: 444.5px;
+  height: 445.5px;
+}
+
+.platform-notify-page__smtp-card.has-test-success {
+  height: 471.5px;
 }
 
 .platform-notify-page__rules-card {
@@ -696,13 +833,51 @@ button.platform-notify-page__save-button:hover {
   font-size: 13px;
   font-weight: 400;
   line-height: 19.5px;
+  white-space: nowrap;
   transition: none;
 }
 
 .platform-notify-page__test-row button svg {
   width: 13px;
   height: 13px;
+  flex: 0 0 13px;
   stroke-width: 2;
+}
+
+.platform-notify-page__test-row button:disabled {
+  cursor: not-allowed;
+}
+
+.platform-notify-page__test-row button.is-testing {
+  width: 99px;
+}
+
+.platform-notify-page__test-row button .is-spinning {
+  animation: platform-notify-spin 1s linear infinite;
+}
+
+.platform-notify-page__test-success {
+  display: flex;
+  height: 26px;
+  flex: 0 0 26px;
+  align-items: center;
+  gap: 5px;
+  padding-top: 8px;
+  color: #00b42a;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.platform-notify-page__test-success svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  stroke-width: 2;
+}
+
+@keyframes platform-notify-spin {
+  to { transform: rotate(360deg); }
 }
 
 .platform-notify-page__enable-all {
@@ -791,11 +966,10 @@ button.platform-notify-page__save-button:hover {
   color: #db2777;
 }
 
-.platform-notify-page__toggle svg {
+.platform-notify-page__toggle img {
   display: block;
   width: 26px;
   height: 26px;
-  stroke-width: 2;
 }
 
 @media (max-width: 1100px) {

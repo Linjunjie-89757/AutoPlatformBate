@@ -641,9 +641,11 @@ button { cursor: pointer; }
 .figma-variable__title-block h2, .figma-variable__set-title-row h2 { margin: 0; color: #1d2129; font-size: 15px; font-weight: 600; line-height: 22.5px; }
 .figma-variable__title-block p { margin: 1.75px 0 0; color: #86909c; font-size: 12px; line-height: 18px; }
 .figma-variable__head-actions { display: flex; align-items: flex-start; gap: 8px; }
-.figma-variable__button { display: inline-flex; height: 32px; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 13px; font-weight: 500; }
-.figma-variable__button:hover { border-color: #b8c9ef; color: var(--variable-primary); }
+.figma-variable__button { display: inline-flex; height: 32px; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 13px; font-weight: 500; transition: border-color 150ms, color 150ms, filter 150ms, transform 150ms; }
+.figma-variable__button:not(.is-primary):hover:not(:disabled) { border-color: #b8c9ef; color: var(--variable-primary); }
 .figma-variable__button.is-primary { height: 32px; padding: 0 14px; border-color: var(--variable-primary); background: var(--variable-primary); color: #fff; }
+.figma-variable__button.is-primary:hover:not(:disabled) { color: #fff; filter: brightness(1.1); }
+.figma-variable__button.is-primary:active:not(:disabled) { transform: scale(.98); }
 .figma-variable__icon-button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #86909c; }
 .figma-variable__icon-button:hover { background: #f2f3f5; }
 .figma-variable__icon-button.is-danger:hover { background: #ffe8e8; color: var(--variable-danger); }
@@ -741,9 +743,12 @@ button { cursor: pointer; }
 .figma-variable-modal__warning svg { flex: 0 0 auto; margin-top: 1px; }
 .figma-variable-modal__error { margin: 0; color: #f53f3f; font-size: 11px; line-height: 16.5px; }
 .figma-variable-modal__card > footer { display: flex; min-height: 64px; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid #e5e6eb; background: #fafafa; }
-.figma-variable-modal__card > footer button, .figma-variable-import__actions button { height: 32px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 13px; font-weight: 500; }
+.figma-variable-modal__card > footer button, .figma-variable-import__actions button { height: 32px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 13px; font-weight: 500; transition: border-color 150ms, color 150ms, filter 150ms, transform 150ms; }
 .figma-variable-modal__card > footer button.is-primary, .figma-variable-import__actions button.is-primary { height: 32px; padding: 0 14px; border-color: #165dff; background: #165dff; color: #fff; }
 .figma-variable-modal__card > footer button.is-danger { height: 32px; padding: 0 14px; border-color: #f53f3f; background: #f53f3f; color: #fff; }
+.figma-variable-modal__card > footer button:not(.is-primary):not(.is-danger):hover:not(:disabled), .figma-variable-import__actions button:not(.is-primary):hover:not(:disabled) { border-color: #b8c9ef; color: #165dff; }
+.figma-variable-modal__card > footer button.is-primary:hover:not(:disabled), .figma-variable-modal__card > footer button.is-danger:hover:not(:disabled), .figma-variable-import__actions button.is-primary:hover:not(:disabled) { color: #fff; filter: brightness(1.1); }
+.figma-variable-modal__card > footer button.is-primary:active:not(:disabled), .figma-variable-modal__card > footer button.is-danger:active:not(:disabled), .figma-variable-import__actions button.is-primary:active:not(:disabled) { transform: scale(.98); }
 .figma-variable-modal__card button:disabled { cursor: not-allowed; opacity: .55; }
 .figma-variable-modal__danger-box { display: flex; gap: 12px; padding: 16px; border: 1px solid rgba(245, 63, 63, .25); border-radius: 12px; background: #ffe8e8; color: #f53f3f; }
 .figma-variable-modal__danger-box > svg { flex: 0 0 auto; margin-top: 2px; }
