@@ -38,7 +38,17 @@ request.interceptors.response.use(
       && !requestUrl.includes('/auth/login')
       && !requestUrl.includes('/auth/me')
     ) {
-      window.dispatchEvent(new CustomEvent('autotest:unauthorized'))
+      const responseData = error.response.data
+      const responseMessage = typeof responseData === 'object'
+        && responseData !== null
+        && 'message' in responseData
+        && typeof responseData.message === 'string'
+        ? responseData.message
+        : ''
+      const reason = /停用|禁用|disabled/i.test(responseMessage)
+        ? 'account-disabled'
+        : 'session-expired'
+      window.dispatchEvent(new CustomEvent('autotest:unauthorized', { detail: { reason } }))
     }
     const requestError: RequestError = {
       status: error.response?.status,

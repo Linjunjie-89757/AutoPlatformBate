@@ -1,5 +1,7 @@
 package com.company.autoplatform.common;
 
+import com.company.autoplatform.auth.LoginRateLimitException;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.DisabledException;
@@ -44,6 +46,16 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiResponse<Void> handleDisabled(DisabledException exception) {
         return ApiResponse.fail("账号已停用，请联系管理员");
+    }
+
+    @ExceptionHandler(LoginRateLimitException.class)
+    @ResponseStatus(HttpStatus.TOO_MANY_REQUESTS)
+    public ApiResponse<Void> handleLoginRateLimit(
+            LoginRateLimitException exception,
+            HttpServletResponse response
+    ) {
+        response.setHeader("Retry-After", String.valueOf(exception.retryAfterSeconds()));
+        return ApiResponse.fail(exception.getMessage());
     }
 
     @ExceptionHandler(ServiceUnavailableException.class)

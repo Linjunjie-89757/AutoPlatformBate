@@ -20,6 +20,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -56,11 +57,113 @@ class AuthControllerIntegrationTests extends IntegrationTestSupport {
     @Test
     void loginFailureKeepsUnauthorizedResponse() throws Exception {
         mockMvc.perform(post("/api/auth/login")
+                        .with(request -> {
+                            request.setRemoteAddr("198.51.100.1");
+                            return request;
+                        })
                         .contentType("application/json")
                         .content(loginRequest("zhangli", "wrong-password")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void loginRejectsOversizedCredentialsBeforeAuthentication() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType("application/json")
+                        .content(loginRequest("a".repeat(129), "12345678")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("username 账号长度不能超过128个字符"));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType("application/json")
+                        .content(loginRequest("zhangli", "a".repeat(129))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("password 密码长度不能超过128个字符"));
+    }
+
+    @Test
+    void pendingAccountGetsActivationGuidance() throws Exception {
+        String username = "pending_auth_" + System.nanoTime();
+        UserEntity user = createUser(username, null, 1);
+
+        try {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType("application/json")
+                            .content(loginRequest(username, "12345678")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("账号尚未激活，请先通过邀请邮件设置密码"));
+        } finally {
+            userMapper.deleteById(user.getId());
+        }
+    }
+
+    @Test
+    void accountLockAlsoAppliesWhenSwitchingFromUsernameToEmail() throws Exception {
+        String username = "locked_auth_" + System.nanoTime();
+        UserEntity user = createUser(username, passwordEncoder.encode("valid-password-1"), 1);
+
+        try {
+            for (int attempt = 1; attempt < 5; attempt++) {
+                mockMvc.perform(post("/api/auth/login")
+                                .with(request -> {
+                                    request.setRemoteAddr("198.51.100.10");
+                                    return request;
+                                })
+                                .contentType("application/json")
+                                .content(loginRequest(username, "wrong-password")))
+                        .andExpect(status().isUnauthorized());
+            }
+
+            mockMvc.perform(post("/api/auth/login")
+                            .with(request -> {
+                                request.setRemoteAddr("198.51.100.10");
+                                return request;
+                            })
+                            .contentType("application/json")
+                            .content(loginRequest(username, "wrong-password")))
+                    .andExpect(status().isTooManyRequests())
+                    .andExpect(header().exists("Retry-After"))
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("该账户已被临时锁定")));
+
+            mockMvc.perform(post("/api/auth/login")
+                            .with(request -> {
+                                request.setRemoteAddr("198.51.100.11");
+                                return request;
+                            })
+                            .contentType("application/json")
+                            .content(loginRequest(user.getEmail(), "valid-password-1")))
+                    .andExpect(status().isTooManyRequests())
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("该账户已被临时锁定")));
+        } finally {
+            userMapper.deleteById(user.getId());
+        }
+    }
+
+    @Test
+    void repeatedFailuresFromOneAddressAreRateLimited() throws Exception {
+        for (int attempt = 1; attempt < 20; attempt++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .with(request -> {
+                                request.setRemoteAddr("198.51.100.20");
+                                return request;
+                            })
+                            .contentType("application/json")
+                            .content(loginRequest("unknown_" + attempt, "wrong-password")))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        mockMvc.perform(post("/api/auth/login")
+                        .with(request -> {
+                            request.setRemoteAddr("198.51.100.20");
+                            return request;
+                        })
+                        .contentType("application/json")
+                        .content(loginRequest("unknown_20", "wrong-password")))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("操作过于频繁")));
     }
 
     @Test
@@ -170,6 +273,20 @@ class AuthControllerIntegrationTests extends IntegrationTestSupport {
                   "password": "%s"
                 }
                 """.formatted(username, password);
+    }
+
+    private UserEntity createUser(String username, String encodedPassword, int status) {
+        UserEntity user = new UserEntity();
+        user.setUsername(username);
+        user.setEmail(username + "@demo.local");
+        user.setDisplayName("Auth Test User");
+        user.setRoleCode(PlatformRole.MEMBER);
+        user.setPassword(encodedPassword);
+        user.setStatus(status);
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        userMapper.insert(user);
+        return user;
     }
 
     private String updateUserRequest(String username) {

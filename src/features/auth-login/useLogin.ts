@@ -7,6 +7,12 @@ export function getLoginErrorMessage(error: unknown) {
   const normalized = normalizeRequestError(error)
   const message = normalized.message.trim()
 
+  if (/尚未激活|未激活|activate/i.test(message)) {
+    return '账号尚未激活，请先通过邀请邮件设置密码'
+  }
+  if (normalized.status === 429) {
+    return message || '操作过于频繁，请稍后重试'
+  }
   if (/停用|禁用|disabled/i.test(message)) {
     return '该账户已被停用，请联系管理员处理'
   }

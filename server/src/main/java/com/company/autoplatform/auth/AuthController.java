@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,14 +46,24 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpServletRequest
     ) {
+        String clientAddress = httpServletRequest.getRemoteAddr();
+        loginFailureNotificationService.assertAllowed(request.username(), clientAddress);
         Authentication authentication;
         try {
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.username(), request.password())
             );
         } catch (AuthenticationException exception) {
+            if (exception instanceof InternalAuthenticationServiceException
+                    && exception.getCause() instanceof AccountNotActivatedException notActivatedException) {
+                throw notActivatedException;
+            }
             if (exception instanceof BadCredentialsException) {
-                loginFailureNotificationService.recordFailure(request.username());
+                PlatformLoginFailureNotificationService.LoginRestriction restriction =
+                        loginFailureNotificationService.recordFailure(request.username(), clientAddress);
+                if (restriction != null) {
+                    throw restriction.toException();
+                }
             }
             throw exception;
         }

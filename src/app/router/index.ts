@@ -522,13 +522,19 @@ export const router = createRouter({
   routes,
 })
 
-window.addEventListener('autotest:unauthorized', () => {
+window.addEventListener('autotest:unauthorized', (event) => {
   const currentRoute = router.currentRoute.value
   if (currentRoute.name === 'login') return
+  const reason = event instanceof CustomEvent && event.detail?.reason === 'account-disabled'
+    ? 'account-disabled'
+    : 'session-expired'
   clearCurrentUser()
   void router.replace({
     path: '/login',
-    query: currentRoute.fullPath === '/' ? undefined : { redirect: currentRoute.fullPath },
+    query: {
+      ...(currentRoute.fullPath === '/' ? {} : { redirect: currentRoute.fullPath }),
+      reason,
+    },
   })
 })
 

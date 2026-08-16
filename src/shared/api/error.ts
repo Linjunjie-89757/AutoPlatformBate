@@ -38,6 +38,9 @@ function getStatusMessage(status?: number) {
   if (status === 404) {
     return '请求的资源不存在'
   }
+  if (status === 429) {
+    return '操作过于频繁，请稍后重试'
+  }
   if (status && status >= 500) {
     return '服务暂时不可用，请稍后重试'
   }

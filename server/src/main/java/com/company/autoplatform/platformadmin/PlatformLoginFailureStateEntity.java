@@ -27,4 +27,7 @@ public class PlatformLoginFailureStateEntity extends BaseEntity {
 
     @TableField("alerted_at")
     private LocalDateTime alertedAt;
+
+    @TableField("locked_until")
+    private LocalDateTime lockedUntil;
 }

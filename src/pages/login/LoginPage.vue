@@ -18,19 +18,39 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { useLogin } from '@/features/auth-login'
 
+const REMEMBERED_ACCOUNT_KEY = 'autotest:remembered-account'
+const LOGIN_FIELD_MAX_LENGTH = 128
+
 const router = useRouter()
 const route = useRoute()
 const { loading, errorMessage, login } = useLogin()
 
+function readRememberedAccount() {
+  try {
+    return window.localStorage.getItem(REMEMBERED_ACCOUNT_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+const rememberedAccount = readRememberedAccount()
+
 const form = reactive({
-  username: '',
+  username: rememberedAccount,
   password: '',
 })
 
-const rememberAccount = ref(false)
+const rememberAccount = ref(Boolean(rememberedAccount))
 const passwordVisible = ref(false)
 const usernameError = ref('')
 const passwordError = ref('')
+
+const loginReason = Array.isArray(route.query.reason) ? route.query.reason[0] : route.query.reason
+if (loginReason === 'account-disabled') {
+  errorMessage.value = '该账户已被停用，请联系管理员处理'
+} else if (loginReason === 'session-expired') {
+  errorMessage.value = '登录状态已失效，请重新登录'
+}
 
 function handleUsernameInput() {
   usernameError.value = ''
@@ -40,6 +60,27 @@ function handleUsernameInput() {
 function handlePasswordInput() {
   passwordError.value = ''
   errorMessage.value = ''
+}
+
+function handleRememberAccountChange() {
+  if (rememberAccount.value) return
+  try {
+    window.localStorage.removeItem(REMEMBERED_ACCOUNT_KEY)
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function persistRememberedAccount() {
+  try {
+    if (rememberAccount.value) {
+      window.localStorage.setItem(REMEMBERED_ACCOUNT_KEY, form.username)
+    } else {
+      window.localStorage.removeItem(REMEMBERED_ACCOUNT_KEY)
+    }
+  } catch {
+    // Login must remain available when browser storage is unavailable.
+  }
 }
 
 function handleForgotPassword() {
@@ -101,8 +142,14 @@ async function handleSubmit() {
     ? '请输入账号'
     : normalizedUsername !== form.username
       ? '账号前后不能有空格'
+      : form.username.length > LOGIN_FIELD_MAX_LENGTH
+        ? '账号长度不能超过128个字符'
       : ''
-  passwordError.value = form.password ? '' : '请输入密码'
+  passwordError.value = !form.password
+    ? '请输入密码'
+    : form.password.length > LOGIN_FIELD_MAX_LENGTH
+      ? '密码长度不能超过128个字符'
+      : ''
 
   if (usernameError.value || passwordError.value) {
     return
@@ -113,6 +160,7 @@ async function handleSubmit() {
       username: form.username,
       password: form.password,
     })
+    persistRememberedAccount()
     await router.replace({
       path: '/workspaces/select',
       query: {
@@ -258,7 +306,7 @@ async function handleSubmit() {
 
         <div class="login-page__form-options">
           <label class="login-page__remember">
-            <input v-model="rememberAccount" type="checkbox">
+            <input v-model="rememberAccount" type="checkbox" @change="handleRememberAccountChange">
             <span class="login-page__checkbox" aria-hidden="true" />
             <span>记住账号</span>
           </label>
