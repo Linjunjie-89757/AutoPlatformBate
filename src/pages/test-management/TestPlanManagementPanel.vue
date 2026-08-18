@@ -67,10 +67,13 @@ type DetailTab = 'overview' | 'cases' | 'bugs' | 'report' | 'logs'
 const props = defineProps<{
   initialDetailId?: string | null
   initialDetailTab?: string | null
+  initialAction?: string | null
+  initialVersionId?: string | null
 }>()
 const emit = defineEmits<{
   'change-tab': [tab: ManagementTab]
   'detail-state-change': [state: { id: string | null; tab: string | null }]
+  'action-consumed': []
 }>()
 
 const { selectedWorkspaceCode } = useWorkspaceContext()
@@ -303,6 +306,7 @@ const loadPlans = async () => {
     }]
     if (!form.versionId) form.versionId = result.items.find(item => item.versionId)?.versionId ? String(result.items.find(item => item.versionId)?.versionId) : ''
     restoreInitialDetail()
+    restoreInitialAction()
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : '测试计划列表加载失败'
     showToast(loadError.value)
@@ -495,8 +499,12 @@ const resetWizard = () => {
   editReturnToDetail.value = false
 }
 
-const openWizard = () => {
+const openWizard = (versionId?: string | null) => {
   resetWizard()
+  if (versionId) {
+    form.purpose = 'version'
+    form.versionId = versionId
+  }
   view.value = 'new'
 }
 
@@ -845,6 +853,12 @@ const restoreInitialDetail = () => {
   void openPlan(plan, tab)
 }
 
+const restoreInitialAction = () => {
+  if (props.initialAction !== 'create') return
+  openWizard(props.initialVersionId)
+  emit('action-consumed')
+}
+
 const selectedCountForDirectory = (directory: CaseDirectory) => {
   const directoryIds = new Set(collectDirectoryIds(directory))
   return planCaseLibrary.value.filter(item => directoryIds.has(item.directoryId) && pickerCheckedIds.value.has(item.id)).length
@@ -1130,6 +1144,7 @@ watch(selectedWorkspaceCode, () => {
 })
 
 watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetail)
+watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
 </script>
 
 <template>
@@ -1144,7 +1159,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         <div class="test-plan-management__mini-stat is-warning"><strong>{{ stats.running }}</strong><span>进行中</span></div><i />
         <div class="test-plan-management__mini-stat is-danger"><strong>{{ stats.blocked }}</strong><span>已阻塞</span></div><i />
         <div class="test-plan-management__mini-stat is-cyan is-wide"><strong>{{ stats.avgPass }}%</strong><span>本期平均通过率</span></div>
-        <button class="test-plan-management__button test-plan-management__create" type="button" @click="openWizard"><Plus :size="13" />新建测试计划</button>
+        <button class="test-plan-management__button test-plan-management__create" type="button" @click="openWizard()"><Plus :size="13" />新建测试计划</button>
       </section>
 
       <section class="test-plan-management__filters">

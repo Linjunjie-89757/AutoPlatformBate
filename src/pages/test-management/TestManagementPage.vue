@@ -8,6 +8,11 @@ import VersionManagementPanel from './VersionManagementPanel.vue'
 
 type ActiveTab = 'requirements' | 'versions' | 'plans'
 type DetailState = { id: string | null; tab: string | null }
+type NavigationTarget = DetailState & {
+  view: ActiveTab
+  action?: 'create'
+  versionId?: string | null
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -20,8 +25,10 @@ const normalizeTab = (value: unknown): ActiveTab => {
 const activeTab = ref<ActiveTab>(normalizeTab(route.query.tmView))
 const initialDetailId = computed(() => queryValue(route.query.tmId) || null)
 const initialDetailTab = computed(() => queryValue(route.query.tmTab) || null)
+const initialAction = computed(() => queryValue(route.query.tmAction) || null)
+const initialVersionId = computed(() => queryValue(route.query.tmVersionId) || null)
 
-const replaceRouteState = (tab: ActiveTab, state?: DetailState) => {
+const replaceRouteState = (tab: ActiveTab, state?: DetailState & { action?: string; versionId?: string | null }) => {
   const query: LocationQueryRaw = { ...route.query, tmView: tab }
   if (state?.id) {
     query.tmId = state.id
@@ -31,6 +38,10 @@ const replaceRouteState = (tab: ActiveTab, state?: DetailState) => {
     delete query.tmId
     delete query.tmTab
   }
+  if (state?.action) query.tmAction = state.action
+  else delete query.tmAction
+  if (state?.versionId) query.tmVersionId = state.versionId
+  else delete query.tmVersionId
   void router.replace({ query })
 }
 
@@ -40,6 +51,14 @@ const changeTab = (tab: ActiveTab) => {
 }
 
 const changeDetailState = (state: DetailState) => replaceRouteState(activeTab.value, state)
+const navigateTo = (target: NavigationTarget) => {
+  activeTab.value = target.view
+  replaceRouteState(target.view, target)
+}
+const consumeAction = () => replaceRouteState(activeTab.value, {
+  id: initialDetailId.value,
+  tab: initialDetailTab.value,
+})
 
 watch(() => route.query.tmView, value => {
   activeTab.value = normalizeTab(value)
@@ -53,20 +72,27 @@ watch(() => route.query.tmView, value => {
     :initial-detail-tab="initialDetailTab"
     @change-tab="changeTab"
     @detail-state-change="changeDetailState"
+    @navigate="navigateTo"
   />
   <RequirementManagementPanel
     v-else-if="activeTab === 'requirements'"
     :initial-detail-id="initialDetailId"
     :initial-detail-tab="initialDetailTab"
+    :initial-action="initialAction"
+    :initial-version-id="initialVersionId"
     @change-tab="changeTab"
     @detail-state-change="changeDetailState"
+    @action-consumed="consumeAction"
   />
   <TestPlanManagementPanel
     v-else
     :initial-detail-id="initialDetailId"
     :initial-detail-tab="initialDetailTab"
+    :initial-action="initialAction"
+    :initial-version-id="initialVersionId"
     @change-tab="changeTab"
     @detail-state-change="changeDetailState"
+    @action-consumed="consumeAction"
   />
   <!-- Legacy generic test-management template retained temporarily for source comparison.
   <main class="test-management-page">

@@ -69,6 +69,23 @@ public class TestManagementController {
         return ApiResponse.ok(versionService.get(id, workspaceCode));
     }
 
+    @GetMapping(value = "/versions/{id}/report/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportVersionReportPdf(
+            @PathVariable Long id,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        GeneratedTestPlanPdf pdf = versionService.exportReportPdf(id, workspaceCode);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(pdf.fileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .contentLength(pdf.content().length)
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf.content());
+    }
+
     @PutMapping("/versions/{id}")
     public ApiResponse<TestVersionResponse> updateVersion(
             @PathVariable Long id,

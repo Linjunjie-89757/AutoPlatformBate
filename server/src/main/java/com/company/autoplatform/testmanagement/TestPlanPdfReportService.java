@@ -58,6 +58,104 @@ public class TestPlanPdfReportService {
         }
     }
 
+    public GeneratedTestPlanPdf renderVersion(TestVersionReportData report) {
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDFont font = PDType0Font.load(document, resolveFont().toFile());
+            try (ReportCanvas canvas = new ReportCanvas(document, font)) {
+                drawVersionHeader(canvas, report);
+                drawVersionSummary(canvas, report);
+                drawVersionQuality(canvas, report);
+                drawVersionPlans(canvas, report.plans());
+                drawVersionRequirements(canvas, report.requirements());
+                drawDefects(canvas, report.defects());
+            }
+            document.save(output);
+            return new GeneratedTestPlanPdf(output.toByteArray(), safeFileName(report.version()));
+        } catch (IOException exception) {
+            throw TestManagementException.reportExportFailed("版本汇总报告 PDF 生成失败，请稍后重试");
+        }
+    }
+
+    private void drawVersionHeader(ReportCanvas canvas, TestVersionReportData report) throws IOException {
+        TestVersionResponse version = report.version();
+        canvas.text("版本测试汇总报告", 22, 0x1D2129, 0, 28);
+        canvas.text(version.name(), 14, 0x1D2129, 0, 24);
+        canvas.text("版本编号：" + display(version.versionNo()) + "    报告生成：" + format(report.generatedAt()), 9, 0x86909C, 0, 15);
+        canvas.rule(0xE5E6EB, 14);
+        canvas.keyValueGrid(List.of(
+                new String[]{"工作区", display(version.workspaceName()), "负责人", display(version.ownerName())},
+                new String[]{"版本类型", versionType(version.versionType()), "版本状态", versionStatus(version.status())},
+                new String[]{"测试周期", format(version.startDate()) + " 至 " + format(version.releaseDate()), "计划提测", format(version.testDate())},
+                new String[]{"版本目标", display(version.goal()), "测试计划", report.plans().size() + " 个"}
+        ));
+        canvas.space(18);
+    }
+
+    private void drawVersionSummary(ReportCanvas canvas, TestVersionReportData report) throws IOException {
+        canvas.sectionTitle("版本质量概览");
+        canvas.metrics(List.of(
+                new Metric("测试计划", String.valueOf(report.plans().size()), 0x1D2129),
+                new Metric("测试用例", String.valueOf(report.caseCount()), 0x1D2129),
+                new Metric("已执行", String.valueOf(report.executedCount()), 0x165DFF),
+                new Metric("用例通过率", percent(report.passRate()), 0x00B42A),
+                new Metric("发现缺陷", String.valueOf(report.defects().size()), 0xF53F3F)
+        ));
+        canvas.space(18);
+    }
+
+    private void drawVersionQuality(ReportCanvas canvas, TestVersionReportData report) throws IOException {
+        boolean allPassed = report.qualityPassedCount() == 7;
+        canvas.callout(
+                allPassed ? "版本已达到质量准出标准" : "版本仍有质量标准未达成",
+                "执行率 " + percent(report.executeRate()) + "，通过率 " + percent(report.passRate())
+                        + "，需求覆盖率 " + percent(report.requirementCoverRate())
+                        + "，未关闭 P0/P1 缺陷 " + report.openP0Count() + "/" + report.openP1Count()
+                        + "；当前 " + report.qualityPassedCount() + "/7 项达标。",
+                allPassed
+        );
+        canvas.space(18);
+    }
+
+    private void drawVersionPlans(ReportCanvas canvas, List<TestVersionReportData.PlanItem> plans) throws IOException {
+        canvas.sectionTitle("测试计划（" + plans.size() + "）");
+        if (plans.isEmpty()) {
+            canvas.empty("该版本尚未创建测试计划");
+            return;
+        }
+        List<List<String>> rows = new ArrayList<>();
+        for (TestVersionReportData.PlanItem item : plans) {
+            rows.add(List.of(
+                    display(item.planNo()), display(item.name()), planType(item.type()), planStatus(item.status()),
+                    item.executedCount() + "/" + item.caseCount(), percent(item.passRate()), String.valueOf(item.defectCount())
+            ));
+        }
+        canvas.table(
+                List.of("计划编号", "计划名称", "类型", "状态", "执行", "通过率", "缺陷"),
+                new float[]{66, 150, 60, 54, 48, 54, 50}, rows
+        );
+        canvas.space(14);
+    }
+
+    private void drawVersionRequirements(ReportCanvas canvas, List<TestVersionReportData.RequirementItem> requirements) throws IOException {
+        canvas.sectionTitle("版本需求（" + requirements.size() + "）");
+        if (requirements.isEmpty()) {
+            canvas.empty("该版本尚未关联需求");
+            return;
+        }
+        List<List<String>> rows = new ArrayList<>();
+        for (TestVersionReportData.RequirementItem item : requirements) {
+            rows.add(List.of(
+                    display(item.requirementNo()), display(item.title()), item.priority() == null ? "—" : item.priority().name(),
+                    requirementQuality(item.qualityStatus()), item.caseReviewed() + "/" + item.caseTotal()
+            ));
+        }
+        canvas.table(
+                List.of("需求编号", "需求名称", "优先级", "覆盖状态", "评审用例"),
+                new float[]{78, 240, 50, 64, 50}, rows
+        );
+        canvas.space(14);
+    }
+
     private void drawHeader(ReportCanvas canvas, TestPlanResponse plan, TestPlanReportResponse report) throws IOException {
         canvas.text("测试计划报告", 22, 0x1D2129, 0, 28);
         canvas.text(plan.name(), 14, 0x1D2129, 0, 24);
@@ -231,6 +329,11 @@ public class TestPlanPdfReportService {
         return source.replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_");
     }
 
+    private String safeFileName(TestVersionResponse version) {
+        String source = display(version.versionNo()) + "-" + display(version.name()) + "-版本测试汇总报告.pdf";
+        return source.replaceAll("[\\\\/:*?\"<>|\\r\\n]", "_");
+    }
+
     private long openDefectCount(List<BugEntity> defects, String priority) {
         return defects.stream()
                 .filter(item -> priority.equalsIgnoreCase(item.getPriority()))
@@ -264,6 +367,51 @@ public class TestPlanPdfReportService {
             case REGRESSION -> "回归测试";
             case RELEASE -> "发布验收";
             case MIXED -> "混合测试";
+        };
+    }
+
+    private String planStatus(PlanStatus value) {
+        if (value == null) return "—";
+        return switch (value) {
+            case DRAFT -> "草稿";
+            case PENDING -> "待开始";
+            case RUNNING -> "进行中";
+            case BLOCKED -> "已阻塞";
+            case COMPLETED -> "已完成";
+            case CANCELLED -> "已取消";
+        };
+    }
+
+    private String versionType(VersionType value) {
+        if (value == null) return "—";
+        return switch (value) {
+            case ITERATION -> "迭代版本";
+            case RELEASE -> "正式版本";
+            case PATCH -> "补丁版本";
+            case HOTFIX -> "紧急修复";
+        };
+    }
+
+    private String versionStatus(VersionStatus value) {
+        if (value == null) return "—";
+        return switch (value) {
+            case PLANNING -> "规划中";
+            case DEVELOPING -> "开发中";
+            case TESTING -> "测试中";
+            case PENDING_RELEASE -> "待发布";
+            case RELEASED -> "已发布";
+            case ARCHIVED -> "已归档";
+        };
+    }
+
+    private String requirementQuality(String value) {
+        if (value == null) return "—";
+        return switch (value.toUpperCase(Locale.ROOT)) {
+            case "UNCOVERED" -> "未覆盖";
+            case "PARTIAL" -> "部分覆盖";
+            case "COVERED" -> "已覆盖";
+            case "PASSED" -> "测试通过";
+            default -> value;
         };
     }
 
@@ -397,7 +545,7 @@ public class TestPlanPdfReportService {
 
         private void metrics(List<Metric> metrics) throws IOException {
             float gap = 8;
-            float width = (CONTENT_WIDTH - gap * 3) / 4;
+            float width = (CONTENT_WIDTH - gap * Math.max(0, metrics.size() - 1)) / Math.max(1, metrics.size());
             float height = 64;
             ensure(height);
             for (int index = 0; index < metrics.size(); index++) {

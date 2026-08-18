@@ -31,6 +31,11 @@ export interface TestVersionItem {
   goal: string | null
   requirementCount: number
   planCount: number
+  caseCount: number
+  executedCount: number
+  passedCount: number
+  openP0Count: number
+  openP1Count: number
   lockVersion: number
   workspaceCode: string
   workspaceName: string

@@ -44,6 +44,9 @@ public class TestVersionService {
     private final UserService userService;
     private final TestManagementWorkspaceSupport workspaceSupport;
     private final TestActivityLogService activityLogService;
+    private final TestRequirementService requirementService;
+    private final TestPlanService planService;
+    private final TestPlanPdfReportService pdfReportService;
 
     public TestVersionService(
             TestVersionMapper versionMapper,
@@ -55,7 +58,10 @@ public class TestVersionService {
             UserMapper userMapper,
             UserService userService,
             TestManagementWorkspaceSupport workspaceSupport,
-            TestActivityLogService activityLogService
+            TestActivityLogService activityLogService,
+            TestRequirementService requirementService,
+            TestPlanService planService,
+            TestPlanPdfReportService pdfReportService
     ) {
         this.versionMapper = versionMapper;
         this.requirementMapper = requirementMapper;
@@ -67,6 +73,9 @@ public class TestVersionService {
         this.userService = userService;
         this.workspaceSupport = workspaceSupport;
         this.activityLogService = activityLogService;
+        this.requirementService = requirementService;
+        this.planService = planService;
+        this.pdfReportService = pdfReportService;
     }
 
     public PageResponse<TestVersionResponse> list(
@@ -114,6 +123,51 @@ public class TestVersionService {
         TestVersionEntity entity = requireReadable(id, workspaceCode);
         WorkspaceEntity workspace = workspaceSupport.requireReadableEntityWorkspace(workspaceCode, entity.getWorkspaceId());
         return assemble(List.of(entity), Map.of(workspace.getId(), workspace)).getFirst();
+    }
+
+    public GeneratedTestPlanPdf exportReportPdf(Long id, String workspaceCode) {
+        TestVersionResponse version = get(id, workspaceCode);
+        List<TestPlanResponse> plans = planService.list(workspaceCode, null, null, null, id, null, 1, MAX_PAGE_SIZE).items();
+        List<TestRequirementResponse> requirements = requirementService.list(
+                workspaceCode, id, null, null, null, null, null, null, 1, MAX_PAGE_SIZE).items();
+        List<BugEntity> defects = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+                .eq(BugEntity::getTestVersionId, id));
+
+        long caseCount = plans.stream().mapToLong(TestPlanResponse::caseCount).sum();
+        long executedCount = plans.stream().mapToLong(TestPlanResponse::executedCount).sum();
+        long passedCount = plans.stream().mapToLong(TestPlanResponse::passedCount).sum();
+        long coveredRequirements = requirements.stream()
+                .filter(item -> "COVERED".equals(item.qualityStatus()) || "PASSED".equals(item.qualityStatus()))
+                .count();
+        long openP0 = defects.stream().filter(item -> isOpenPriority(item, "P0")).count();
+        long openP1 = defects.stream().filter(item -> isOpenPriority(item, "P1")).count();
+        boolean allPlansCompleted = !plans.isEmpty() && plans.stream().allMatch(item -> item.status() == PlanStatus.COMPLETED);
+        boolean ownerConfirmed = !plans.isEmpty() && plans.stream().allMatch(item -> !item.ownerConfirmRequired()
+                || item.report() != null && item.report().status() == PlanReportStatus.SIGNED);
+        BigDecimal executeRate = rate(executedCount, caseCount);
+        BigDecimal passRate = rate(passedCount, executedCount);
+        BigDecimal requirementCoverRate = rate(coveredRequirements, requirements.size());
+        int qualityPassedCount = (executeRate.compareTo(BigDecimal.valueOf(90)) >= 0 ? 1 : 0)
+                + (passRate.compareTo(BigDecimal.valueOf(85)) >= 0 ? 1 : 0)
+                + (requirementCoverRate.compareTo(BigDecimal.valueOf(100)) >= 0 ? 1 : 0)
+                + (openP0 == 0 ? 1 : 0)
+                + (openP1 <= 3 ? 1 : 0)
+                + (allPlansCompleted ? 1 : 0)
+                + (ownerConfirmed ? 1 : 0);
+
+        List<TestVersionReportData.PlanItem> planItems = plans.stream().map(item -> new TestVersionReportData.PlanItem(
+                item.planNo(), item.name(), item.planType(), item.status(), item.ownerName(), item.caseCount(),
+                item.executedCount(), item.passedCount(), item.executeRate(), item.passRate(), item.defectCount()
+        )).toList();
+        List<TestVersionReportData.RequirementItem> requirementItems = requirements.stream().map(item -> new TestVersionReportData.RequirementItem(
+                item.requirementNo(), item.title(), item.priority(), item.qualityStatus(), item.caseTotal(), item.caseReviewed()
+        )).toList();
+        TestVersionReportData report = new TestVersionReportData(
+                version, LocalDateTime.now(), caseCount, executedCount, passedCount, executeRate, passRate,
+                coveredRequirements, requirementCoverRate, openP0, openP1, allPlansCompleted, ownerConfirmed,
+                qualityPassedCount, planItems, requirementItems, defects
+        );
+        return pdfReportService.renderVersion(report);
     }
 
     @Transactional
@@ -259,26 +313,53 @@ public class TestVersionService {
         if (entities.isEmpty()) return List.of();
         Map<Long, UserEntity> users = loadUsers(entities.stream().map(TestVersionEntity::getOwnerId).toList());
         List<Long> versionIds = entities.stream().map(TestVersionEntity::getId).toList();
-        Map<Long, Long> requirementCounts = requirementMapper.selectList(
-                        new LambdaQueryWrapper<TestRequirementEntity>()
-                                .in(TestRequirementEntity::getVersionId, versionIds)
-                                .isNull(TestRequirementEntity::getDeletedAt))
-                .stream().collect(Collectors.groupingBy(TestRequirementEntity::getVersionId, Collectors.counting()));
-        Map<Long, Long> planCounts = planMapper.selectList(
-                        new LambdaQueryWrapper<TestPlanEntity>()
-                                .in(TestPlanEntity::getVersionId, versionIds)
-                                .isNull(TestPlanEntity::getDeletedAt))
-                .stream().collect(Collectors.groupingBy(TestPlanEntity::getVersionId, Collectors.counting()));
+        List<TestRequirementEntity> requirements = requirementMapper.selectList(
+                new LambdaQueryWrapper<TestRequirementEntity>()
+                        .in(TestRequirementEntity::getVersionId, versionIds)
+                        .isNull(TestRequirementEntity::getDeletedAt));
+        Map<Long, Long> requirementCounts = requirements.stream()
+                .collect(Collectors.groupingBy(TestRequirementEntity::getVersionId, Collectors.counting()));
+        List<TestPlanEntity> plans = planMapper.selectList(
+                new LambdaQueryWrapper<TestPlanEntity>()
+                        .in(TestPlanEntity::getVersionId, versionIds)
+                        .isNull(TestPlanEntity::getDeletedAt));
+        Map<Long, List<TestPlanEntity>> plansByVersion = plans.stream()
+                .collect(Collectors.groupingBy(TestPlanEntity::getVersionId));
+        Map<Long, Long> planCounts = plans.stream()
+                .collect(Collectors.groupingBy(TestPlanEntity::getVersionId, Collectors.counting()));
+        List<Long> planIds = plans.stream().map(TestPlanEntity::getId).toList();
+        Map<Long, List<TestPlanCaseEntity>> casesByPlan = planIds.isEmpty()
+                ? Map.of()
+                : planCaseMapper.selectList(new LambdaQueryWrapper<TestPlanCaseEntity>()
+                        .in(TestPlanCaseEntity::getPlanId, planIds))
+                .stream().collect(Collectors.groupingBy(TestPlanCaseEntity::getPlanId));
+        Map<Long, List<BugEntity>> bugsByVersion = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+                        .in(BugEntity::getTestVersionId, versionIds))
+                .stream().collect(Collectors.groupingBy(BugEntity::getTestVersionId));
 
         return entities.stream().map(entity -> {
             WorkspaceEntity workspace = workspaceMap.get(entity.getWorkspaceId());
             if (workspace == null) workspace = workspaceSupport.requireReadableEntityWorkspace(null, entity.getWorkspaceId());
             UserEntity owner = users.get(entity.getOwnerId());
+            List<TestPlanEntity> versionPlans = plansByVersion.getOrDefault(entity.getId(), List.of());
+            List<TestPlanCaseEntity> versionCases = versionPlans.stream()
+                    .flatMap(plan -> casesByPlan.getOrDefault(plan.getId(), List.of()).stream())
+                    .toList();
+            List<BugEntity> versionBugs = bugsByVersion.getOrDefault(entity.getId(), List.of());
+            long executedCount = versionCases.stream()
+                    .filter(item -> item.getExecutionStatus() != PlanCaseExecutionStatus.PENDING)
+                    .count();
+            long passedCount = versionCases.stream()
+                    .filter(item -> item.getExecutionStatus() == PlanCaseExecutionStatus.PASSED)
+                    .count();
             return new TestVersionResponse(
                     entity.getId(), entity.getVersionNo(), entity.getName(), entity.getVersionType(), entity.getStatus(),
                     entity.getOwnerId(), owner == null ? null : owner.getDisplayName(),
                     entity.getStartDate(), entity.getTestDate(), entity.getReleaseDate(), entity.getGoal(),
                     requirementCounts.getOrDefault(entity.getId(), 0L), planCounts.getOrDefault(entity.getId(), 0L),
+                    versionCases.size(), executedCount, passedCount,
+                    versionBugs.stream().filter(item -> isOpenPriority(item, "P0")).count(),
+                    versionBugs.stream().filter(item -> isOpenPriority(item, "P1")).count(),
                     entity.getLockVersion(),
                     workspace == null ? null : workspace.getWorkspaceCode(),
                     workspace == null ? null : workspace.getWorkspaceName(),
@@ -411,6 +492,12 @@ public class TestVersionService {
         return BigDecimal.valueOf(numerator)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(denominator), 2, RoundingMode.HALF_UP);
+    }
+
+    private boolean isOpenPriority(BugEntity defect, String priority) {
+        return priority.equalsIgnoreCase(defect.getPriority())
+                && !"CLOSED".equalsIgnoreCase(defect.getStatus())
+                && !"REJECTED".equalsIgnoreCase(defect.getStatus());
     }
 
     private <E extends Enum<E>> E parseEnum(String value, Class<E> type, String fieldName) {

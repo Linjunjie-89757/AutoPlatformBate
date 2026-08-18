@@ -51,10 +51,13 @@ type ImportStep = 'config' | 'preview'
 const props = defineProps<{
   initialDetailId?: string | null
   initialDetailTab?: string | null
+  initialAction?: string | null
+  initialVersionId?: string | null
 }>()
 const emit = defineEmits<{
   'change-tab': [tab: ManagementTab]
   'detail-state-change': [state: { id: string | null; tab: string | null }]
+  'action-consumed': []
 }>()
 
 const { selectedWorkspaceCode } = useWorkspaceContext()
@@ -175,6 +178,7 @@ const loadRequirements = async () => {
       createForm.versionId = requirementVersions.value[0]?.id || ''
     }
     restoreInitialDetail()
+    restoreInitialAction()
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : '需求列表加载失败'
     showToast(loadError.value)
@@ -374,6 +378,20 @@ const restoreInitialDetail = () => {
     return
   }
   openRequirement(requirement, tab)
+}
+
+const openCreateDialog = (versionId?: string | null) => {
+  resetCreateForm()
+  if (versionId && requirementVersions.value.some(item => item.id === versionId)) {
+    createForm.versionId = versionId
+  }
+  createDialogOpen.value = true
+}
+
+const restoreInitialAction = () => {
+  if (props.initialAction !== 'create') return
+  openCreateDialog(props.initialVersionId)
+  emit('action-consumed')
 }
 
 const openImportDialog = (source: RequirementSource) => {
@@ -584,6 +602,7 @@ watch(selectedWorkspaceCode, () => {
 })
 
 watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetail)
+watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
 </script>
 
 <template>
@@ -638,7 +657,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
             </div>
           </Transition>
         </div>
-        <button class="requirement-management__button is-create-trigger" type="button" @click="createDialogOpen = true">
+        <button class="requirement-management__button is-create-trigger" type="button" @click="openCreateDialog()">
           <Plus :size="12" />新建需求
         </button>
       </div>

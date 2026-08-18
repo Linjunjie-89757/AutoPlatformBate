@@ -79,6 +79,23 @@ export const testManagementApi = {
     }), '版本操作记录加载失败')
   },
 
+  async exportVersionReportPdf(workspaceCode: string, id: number) {
+    const response = await request.get<Blob>(`/test-management/versions/${id}/report/pdf`, {
+      headers: workspaceHeaders(workspaceCode),
+      responseType: 'blob',
+    })
+    const disposition = String(response.headers['content-disposition'] || '')
+    const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+    let fileName = '版本测试汇总报告.pdf'
+    try {
+      fileName = decodeURIComponent(utf8Name || plainName || fileName)
+    } catch {
+      fileName = plainName || fileName
+    }
+    return { blob: response.data, fileName }
+  },
+
   async listRequirements(workspaceCode: string, params?: Record<string, string | number | undefined>) {
     return page(await httpGet<ApiResponse<TestPage<TestRequirementItem>>>('/test-management/requirements', {
       headers: workspaceHeaders(workspaceCode), params,

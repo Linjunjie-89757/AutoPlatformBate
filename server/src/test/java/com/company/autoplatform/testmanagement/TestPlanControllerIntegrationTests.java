@@ -154,6 +154,21 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
             assertThat(text).contains("测试计划报告", "regression-plan-" + suffix, "已确认签字");
         }
 
+        byte[] versionPdf = mockMvc.perform(get("/api/test-management/versions/{id}/report/pdf", versionId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentType()).isEqualTo("application/pdf"))
+                .andExpect(result -> assertThat(result.getResponse().getHeader("Content-Disposition"))
+                        .contains("attachment"))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        assertThat(versionPdf).startsWith("%PDF-".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        try (PDDocument document = Loader.loadPDF(versionPdf)) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("版本测试汇总报告", "plan-version-" + suffix, "regression-plan-" + suffix);
+        }
+
         mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/results", planId, planCaseId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)
                         .contentType("application/json")

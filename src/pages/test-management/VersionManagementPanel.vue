@@ -49,6 +49,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'change-tab': [tab: ManagementTab]
   'detail-state-change': [state: { id: string | null; tab: string | null }]
+  'navigate': [target: { view: 'requirements' | 'plans'; id: string | null; tab: string | null; action?: 'create'; versionId?: string | null }]
 }>()
 
 const { selectedWorkspaceCode } = useWorkspaceContext()
@@ -61,9 +62,11 @@ const versionLogs = ref<VersionLog[]>([])
 const versionOwners = ref<UserItem[]>([])
 const versionLockVersions = ref(new Map<string, number>())
 const versionOwnerIds = ref(new Map<string, number>())
+const reportGeneratedAt = ref('')
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
 const isSubmitting = ref(false)
+const isExportingReport = ref(false)
 const loadError = ref('')
 const detailTab = ref<VersionDetailTab>('overview')
 const keyword = ref('')
@@ -107,11 +110,11 @@ const mapVersion = (item: Awaited<ReturnType<typeof testManagementApi.getVersion
   testDate: item.testDate || '—',
   releaseDate: item.releaseDate || '—',
   planCount: item.planCount,
-  scope: 0,
-  executed: 0,
-  passed: 0,
-  p0Bugs: 0,
-  p1Bugs: 0,
+  scope: item.caseCount,
+  executed: item.executedCount,
+  passed: item.passedCount,
+  p0Bugs: item.openP0Count,
+  p1Bugs: item.openP1Count,
   goal: item.goal || '',
 })
 
@@ -128,6 +131,8 @@ const mapPlan = (item: Awaited<ReturnType<typeof testManagementApi.listPlans>>['
   passed: item.passedCount,
   highBugs: item.defectCount,
   status: normalizePlanStatus(item.status),
+  ownerConfirmRequired: item.ownerConfirmRequired,
+  reportSigned: item.report?.status === 'SIGNED',
 })
 
 const mapRequirement = (item: Awaited<ReturnType<typeof testManagementApi.listRequirements>>['items'][number]): VersionRequirement => ({
@@ -150,15 +155,24 @@ const mapBugStatus = (value: string): BugStatus => {
   return 'open'
 }
 
-const mapPlanDefect = (item: TestPlanDefectItem): VersionBug => ({
+const mapPlanDefect = (item: TestPlanDefectItem, plan = ''): VersionBug => ({
   no: item.bugNo,
   title: item.title,
   severity: item.severity === 'CRITICAL' || item.severity === 'HIGH' ? '严重' : '一般',
   priority: item.priority === 'P0' ? 'P0' : item.priority === 'P1' ? 'P1' : 'P2',
   status: mapBugStatus(item.status),
   owner: item.assigneeName || '—',
-  plan: '',
+  plan,
   foundAt: formatTestManagementDateTime(item.updatedAt),
+})
+
+const withVersionMetrics = (version: ManagedVersion, plans: VersionPlan[], bugs: VersionBug[]): ManagedVersion => ({
+  ...version,
+  scope: plans.reduce((total, item) => total + item.scope, 0),
+  executed: plans.reduce((total, item) => total + item.executed, 0),
+  passed: plans.reduce((total, item) => total + item.passed, 0),
+  p0Bugs: bugs.filter(item => item.priority === 'P0' && item.status !== 'closed' && item.status !== 'rejected').length,
+  p1Bugs: bugs.filter(item => item.priority === 'P1' && item.status !== 'closed' && item.status !== 'rejected').length,
 })
 
 const loadVersions = async () => {
@@ -205,9 +219,10 @@ const loadVersionDetail = async (version: ManagedVersion) => {
       id: String(item.id), actor: item.actorName || '系统', action: item.actionName, detail: item.detail || '', time: formatTestManagementDateTime(item.createdAt), type: 'edit',
     }))
     const defects = await Promise.all(plans.items.map(item => testManagementApi.listPlanDefects(selectedWorkspaceCode.value, item.id)))
-    versionBugs.value = defects.flatMap(items => items.map(mapPlanDefect))
+    versionBugs.value = defects.flatMap((items, index) => items.map(item => mapPlanDefect(item, plans.items[index]?.name || '')))
     const summary = await testManagementApi.getVersion(selectedWorkspaceCode.value, versionId)
-    const mapped = mapVersion(summary)
+    const mapped = withVersionMetrics(mapVersion(summary), versionPlans.value, versionBugs.value)
+    reportGeneratedAt.value = formatTestManagementDateTime(summary.updatedAt)
     versions.value = versions.value.map(item => item.id === version.id ? mapped : item)
     selectedVersion.value = mapped
     versionLockVersions.value.set(version.id, summary.lockVersion)
@@ -279,6 +294,23 @@ const requirementCoverRate = computed(() => {
   return Math.round(covered / currentRequirements.value.length * 100)
 })
 const showQualitySummary = computed(() => selectedVersion.value?.status === 'testing' || selectedVersion.value?.status === 'pending-release')
+const allPlansCompleted = computed(() => currentPlans.value.length > 0 && currentPlans.value.every(item => item.status === 'completed'))
+const ownersConfirmed = computed(() => currentPlans.value.length > 0
+  && currentPlans.value.every(item => !item.ownerConfirmRequired || item.reportSigned))
+const qualityChecks = computed(() => {
+  const version = selectedVersion.value
+  return [
+    { label: '用例执行率', target: '目标：≥ 90%', value: `${executeRate.value}%`, passed: executeRate.value >= 90 },
+    { label: '用例通过率', target: '目标：≥ 85%', value: `${passRate.value}%`, passed: passRate.value >= 85 },
+    { label: '需求覆盖率', target: '目标：100%', value: `${requirementCoverRate.value}%`, passed: requirementCoverRate.value >= 100 },
+    { label: 'P0 缺陷', target: '目标：0 个', value: `${version?.p0Bugs || 0} 个`, passed: (version?.p0Bugs || 0) === 0 },
+    { label: 'P1 缺陷', target: '目标：≤ 3 个', value: `${version?.p1Bugs || 0} 个`, passed: (version?.p1Bugs || 0) <= 3 },
+    { label: '计划全部完成', target: '目标：是', value: allPlansCompleted.value ? '是' : '否', passed: allPlansCompleted.value },
+    { label: '负责人确认', target: '目标：已确认', value: ownersConfirmed.value ? '已确认' : '待确认', passed: ownersConfirmed.value },
+  ]
+})
+const qualityPassedCount = computed(() => qualityChecks.value.filter(item => item.passed).length)
+const qualityPassed = computed(() => qualityPassedCount.value === qualityChecks.value.length)
 
 const isEditing = computed(() => Boolean(editingId.value))
 const canSubmit = computed(() => Boolean(versionForm.name.trim() && versionForm.owner && versionOwners.value.some(item => item.displayName === versionForm.owner)))
@@ -431,12 +463,63 @@ const transitionVersion = async (targetStatus: 'PENDING_RELEASE' | 'RELEASED') =
   }
 }
 
-const unavailable = () => showToast('该操作尚未接入后端')
+const createRequirementForVersion = () => {
+  if (!selectedVersion.value) return
+  emit('navigate', { view: 'requirements', id: null, tab: null, action: 'create', versionId: selectedVersion.value.id })
+}
+
+const createPlanForVersion = () => {
+  if (!selectedVersion.value) return
+  emit('navigate', { view: 'plans', id: null, tab: null, action: 'create', versionId: selectedVersion.value.id })
+}
+
+const viewRequirement = (requirement: VersionRequirement, tab: 'info' | 'cases' = 'info') => {
+  emit('navigate', { view: 'requirements', id: requirement.id, tab })
+}
+
+const viewPlan = (plan: VersionPlan, tab = 'overview') => {
+  emit('navigate', { view: 'plans', id: plan.id, tab })
+}
+
+const startVersionDefectFlow = () => {
+  const plan = currentPlans.value.find(item => item.status === 'running' && item.scope > 0)
+    || currentPlans.value.find(item => item.scope > 0)
+  if (!plan) {
+    showToast('请先为该版本创建包含测试用例的测试计划')
+    return
+  }
+  viewPlan(plan, 'bugs')
+}
+
+const exportVersionReport = async () => {
+  if (!selectedVersion.value || isExportingReport.value) return
+  isExportingReport.value = true
+  try {
+    const { blob, fileName } = await testManagementApi.exportVersionReportPdf(
+      selectedWorkspaceCode.value,
+      Number(selectedVersion.value.id),
+    )
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    showToast('版本汇总报告 PDF 已导出')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '版本汇总报告 PDF 导出失败')
+  } finally {
+    isExportingReport.value = false
+  }
+}
 
 const gateState = (version: ManagedVersion) => {
   if (!version.scope) return { label: '—', color: '#c9cdd4' }
   if (version.status === 'released') return { label: '已发布', color: '#0ea5e9' }
-  const ok = version.p0Bugs === 0 && version.p1Bugs <= 3
+  const ok = version.executed > 0
+    && version.p0Bugs === 0 && version.p1Bugs <= 3
     && Math.round(version.passed / version.executed * 100) >= 85
     && Math.round(version.executed / version.scope * 100) >= 90
   return ok ? { label: '可发布', color: '#00b42a' } : { label: '存在风险', color: '#f53f3f' }
@@ -566,8 +649,8 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         <div class="version-management__detail-actions">
           <span>负责人：{{ selectedVersion.owner }}</span>
           <button class="version-management__icon-button" type="button" title="编辑" @click="openEditDrawer(selectedVersion)"><Edit2 :size="13" /></button>
-          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-ghost is-small" type="button" @click="unavailable"><Plus :size="11" />添加需求</button>
-          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-primary is-small" type="button" @click="unavailable"><Plus :size="11" />新建测试计划</button>
+          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-ghost is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
+          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建测试计划</button>
           <button v-if="selectedVersion.status === 'testing'" class="version-management__button is-purple is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('PENDING_RELEASE')">标记待发布</button>
           <button v-if="selectedVersion.status === 'pending-release'" class="version-management__button is-success is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('RELEASED')"><CheckCircle2 :size="12" />标记已发布</button>
         </div>
@@ -618,15 +701,12 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
             </article>
           </div>
           <article v-if="showQualitySummary" class="version-management__panel version-management__quality-panel">
-            <header><h3>质量准出概览</h3><span>未达到准出标准</span></header>
+            <header><h3>质量准出概览</h3><span>{{ qualityPassed ? '已达到准出标准' : '未达到准出标准' }}</span></header>
             <div class="version-management__gate-grid">
-              <div class="is-failed"><span><XCircle :size="12" />用例执行率</span><small>目标：≥ 90%</small><strong>{{ executeRate }}%</strong></div>
-              <div class="is-passed"><span><CheckCircle2 :size="12" />用例通过率</span><small>目标：≥ 85%</small><strong>{{ passRate }}%</strong></div>
-              <div class="is-failed"><span><XCircle :size="12" />需求覆盖率</span><small>目标：100%</small><strong>{{ requirementCoverRate }}%</strong></div>
-              <div class="is-passed"><span><CheckCircle2 :size="12" />P0 缺陷</span><small>目标：0 个</small><strong>{{ selectedVersion.p0Bugs }} 个</strong></div>
-              <div class="is-passed"><span><CheckCircle2 :size="12" />P1 缺陷</span><small>目标：≤ 3 个</small><strong>{{ selectedVersion.p1Bugs }} 个</strong></div>
-              <div class="is-failed"><span><XCircle :size="12" />计划全部完成</span><small>目标：是</small><strong>否</strong></div>
-              <div class="is-failed"><span><XCircle :size="12" />负责人确认</span><small>目标：已确认</small><strong>待确认</strong></div>
+              <div v-for="item in qualityChecks" :key="item.label" :class="item.passed ? 'is-passed' : 'is-failed'">
+                <span><component :is="item.passed ? CheckCircle2 : XCircle" :size="12" />{{ item.label }}</span>
+                <small>{{ item.target }}</small><strong>{{ item.value }}</strong>
+              </div>
             </div>
           </article>
         </div>
@@ -637,22 +717,22 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
               <span v-for="status in ['all', 'uncovered', 'partial', 'covered', 'passed'] as const" :key="status"><b>{{ requirementStatusCount(status) }}</b>{{ status === 'all' ? '全部' : requirementStatusConfig[status].label }}</span>
             </div>
             <button class="version-management__button is-ghost is-small is-link" type="button" @click="emit('change-tab', 'requirements')"><ExternalLink :size="12" />在需求管理中查看全部</button>
-            <button class="version-management__button is-primary is-small" type="button" @click="unavailable"><Plus :size="11" />添加需求</button>
+            <button class="version-management__button is-primary is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
           </div>
           <div class="version-management__table-card">
             <table v-if="currentRequirements.length" class="version-management__table is-requirements">
               <thead><tr><th>需求ID</th><th>标题</th><th>优先级</th><th>来源</th><th>用例覆盖</th><th>状态</th><th>负责人</th><th>操作</th></tr></thead>
-              <tbody><tr v-for="item in currentRequirements" :key="item.id"><td><code>{{ item.id }}</code></td><td><strong>{{ item.title }}</strong><small v-if="item.sourceRef">{{ item.sourceRef }}</small></td><td><span :class="['version-management__priority', `is-${item.priority.toLowerCase()}`]">{{ item.priority }}</span></td><td><span :class="['version-management__source', `is-${item.source === 'Jira' ? 'jira' : item.source === '禅道' ? 'tapd' : 'manual'}`]">{{ item.source }}</span></td><td class="version-management__progress-cell"><small>{{ item.coveredCases }}/{{ item.totalCases }} 用例 · {{ Math.round(item.coveredCases / item.totalCases * 100) }}%</small><div class="version-management__progress"><i><span :style="{ width: `${Math.round(item.coveredCases / item.totalCases * 100)}%` }" /></i><b>{{ Math.round(item.coveredCases / item.totalCases * 100) }}%</b></div></td><td><span class="version-management__badge" :style="{ color: requirementStatusConfig[item.status].color, backgroundColor: requirementStatusConfig[item.status].background }">{{ requirementStatusConfig[item.status].label }}</span></td><td>{{ item.owner }}</td><td><div class="version-management__row-actions"><button type="button" title="查看需求" @click="unavailable"><Eye :size="13" /></button><button type="button" title="关联用例" @click="unavailable"><Link2 :size="13" /></button></div></td></tr></tbody>
+              <tbody><tr v-for="item in currentRequirements" :key="item.id"><td><code>{{ item.id }}</code></td><td><strong>{{ item.title }}</strong><small v-if="item.sourceRef">{{ item.sourceRef }}</small></td><td><span :class="['version-management__priority', `is-${item.priority.toLowerCase()}`]">{{ item.priority }}</span></td><td><span :class="['version-management__source', `is-${item.source === 'Jira' ? 'jira' : item.source === '禅道' ? 'tapd' : 'manual'}`]">{{ item.source }}</span></td><td class="version-management__progress-cell"><small>{{ item.coveredCases }}/{{ item.totalCases }} 用例 · {{ item.totalCases ? Math.round(item.coveredCases / item.totalCases * 100) : 0 }}%</small><div class="version-management__progress"><i><span :style="{ width: `${item.totalCases ? Math.round(item.coveredCases / item.totalCases * 100) : 0}%` }" /></i><b>{{ item.totalCases ? Math.round(item.coveredCases / item.totalCases * 100) : 0 }}%</b></div></td><td><span class="version-management__badge" :style="{ color: requirementStatusConfig[item.status].color, backgroundColor: requirementStatusConfig[item.status].background }">{{ requirementStatusConfig[item.status].label }}</span></td><td>{{ item.owner }}</td><td><div class="version-management__row-actions"><button type="button" title="查看需求" @click="viewRequirement(item)"><Eye :size="13" /></button><button type="button" title="关联用例" @click="viewRequirement(item, 'cases')"><Link2 :size="13" /></button></div></td></tr></tbody>
             </table>
             <div v-else class="version-management__empty"><strong>该版本下暂无需求</strong><button type="button" @click="emit('change-tab', 'requirements')">前往添加需求</button></div>
           </div>
         </div>
 
         <div v-else-if="detailTab === 'plans'" class="version-management__table-card">
-          <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button class="version-management__button is-primary is-small" type="button" @click="unavailable"><Plus :size="11" />新建计划</button></header>
+          <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建计划</button></header>
           <table v-if="currentPlans.length" class="version-management__table is-plans">
             <thead><tr><th>计划名称</th><th>类型</th><th>负责人</th><th>周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>P0/P1</th><th>状态</th><th>操作</th></tr></thead>
-            <tbody><tr v-for="item in currentPlans" :key="item.id"><td><strong>{{ item.name }}</strong></td><td><span class="version-management__plan-type">{{ item.type }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.startDate }}—{{ item.endDate }}</td><td class="is-centered"><b>{{ item.scope }}</b></td><td class="version-management__progress-cell"><div class="version-management__progress"><i><span :style="{ width: `${Math.round(item.executed / item.scope * 100)}%` }" /></i><b>{{ Math.round(item.executed / item.scope * 100) }}%</b></div></td><td class="is-centered"><b class="is-rate">{{ item.executed ? Math.round(item.passed / item.executed * 100) : '—' }}{{ item.executed ? '%' : '' }}</b></td><td class="is-centered"><b v-if="item.highBugs" class="is-risk">{{ item.highBugs }}</b><span v-else class="is-muted">—</span></td><td><span :class="['version-management__badge', `is-plan-${item.status}`]">{{ item.status === 'running' ? '进行中' : item.status === 'completed' ? '已完成' : '待开始' }}</span></td><td><div class="version-management__row-actions"><button type="button" title="查看计划" @click="unavailable"><Eye :size="13" /></button></div></td></tr></tbody>
+            <tbody><tr v-for="item in currentPlans" :key="item.id"><td><strong>{{ item.name }}</strong></td><td><span class="version-management__plan-type">{{ item.type }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.startDate }}—{{ item.endDate }}</td><td class="is-centered"><b>{{ item.scope }}</b></td><td class="version-management__progress-cell"><div class="version-management__progress"><i><span :style="{ width: `${item.scope ? Math.round(item.executed / item.scope * 100) : 0}%` }" /></i><b>{{ item.scope ? Math.round(item.executed / item.scope * 100) : 0 }}%</b></div></td><td class="is-centered"><b class="is-rate">{{ item.executed ? Math.round(item.passed / item.executed * 100) : '—' }}{{ item.executed ? '%' : '' }}</b></td><td class="is-centered"><b v-if="item.highBugs" class="is-risk">{{ item.highBugs }}</b><span v-else class="is-muted">—</span></td><td><span :class="['version-management__badge', `is-plan-${item.status}`]">{{ item.status === 'running' ? '进行中' : item.status === 'completed' ? '已完成' : '待开始' }}</span></td><td><div class="version-management__row-actions"><button type="button" title="查看计划" @click="viewPlan(item)"><Eye :size="13" /></button></div></td></tr></tbody>
           </table>
           <div v-else class="version-management__empty"><strong>该版本下暂无测试计划，点击右上角新建</strong></div>
         </div>
@@ -662,19 +742,19 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
             <div class="version-management__filter-pills">
               <button v-for="status in ['all', 'open', 'fixing', 'fixed', 'closed', 'rejected'] as const" :key="status" type="button" :class="{ 'is-active': bugStatusFilter === status }" @click="bugStatusFilter = status">{{ status === 'all' ? '全部' : bugStatusConfig[status].label }} {{ bugStatusCount(status) }}</button>
             </div>
-            <button class="version-management__button is-danger is-small" type="button" @click="unavailable"><Plus :size="11" />新建缺陷</button>
+            <button class="version-management__button is-danger is-small" type="button" @click="startVersionDefectFlow"><Plus :size="11" />新建缺陷</button>
           </div>
           <div class="version-management__table-card"><table v-if="currentBugs.length" class="version-management__table is-bugs"><thead><tr><th>缺陷编号</th><th>标题</th><th>严重程度</th><th>优先级</th><th>状态</th><th>负责人</th><th>所属计划</th><th>发现时间</th></tr></thead><tbody><tr v-for="item in currentBugs" :key="item.no"><td><code>{{ item.no }}</code></td><td>{{ item.title }}</td><td><span :class="['version-management__severity', { 'is-major': item.severity === '严重' }]">{{ item.severity }}</span></td><td><span :class="['version-management__priority', `is-${item.priority.toLowerCase()}`]">{{ item.priority }}</span></td><td><span class="version-management__badge" :style="{ color: bugStatusConfig[item.status].color, backgroundColor: bugStatusConfig[item.status].background }">{{ bugStatusConfig[item.status].label }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.plan }}</td><td class="is-muted">{{ item.foundAt }}</td></tr></tbody></table><div v-else class="version-management__empty"><strong>当前筛选下暂无缺陷</strong></div></div>
         </div>
 
         <article v-else-if="detailTab === 'report'" class="version-management__report">
-          <header><div><h2>{{ selectedVersion.name }} 版本测试汇总报告</h2><p>汇总 {{ currentPlans.length }} 个测试计划 · 负责人：{{ selectedVersion.owner }} · 生成：2026-07-07 18:00</p></div><button class="version-management__button is-ghost" type="button" @click="unavailable"><Download :size="13" />导出报告</button></header>
+          <header><div><h2>{{ selectedVersion.name }} 版本测试汇总报告</h2><p>汇总 {{ currentPlans.length }} 个测试计划 · 负责人：{{ selectedVersion.owner }} · 生成：{{ reportGeneratedAt || '—' }}</p></div><button class="version-management__button is-ghost" type="button" :disabled="isExportingReport" @click="exportVersionReport"><Download :size="13" />{{ isExportingReport ? '导出中...' : '导出报告' }}</button></header>
           <div class="version-management__report-kpis"><div><strong class="is-dark">{{ currentPlans.length }}<small>个</small></strong><span>测试计划</span></div><div><strong>{{ selectedVersion.scope }}<small>项</small></strong><span>测试用例</span></div><div><strong>{{ selectedVersion.executed }}<small>项</small></strong><span>已执行</span></div><div><strong>{{ passRate }}%</strong><span>用例通过率</span></div><div><strong class="is-danger">{{ versionBugs.length }}<small>个</small></strong><span>发现缺陷</span></div></div>
           <template v-if="executedPlans.length">
             <h3>各计划通过率对比</h3>
             <div class="version-management__chart"><div class="version-management__chart-grid"><i v-for="n in 5" :key="n" /></div><div v-for="item in executedPlans" :key="item.id" class="version-management__chart-column"><div><span :style="{ height: `${Math.round(item.passed / item.executed * 100)}%` }" /><i :style="{ height: `${Math.round(item.executed / item.scope * 100)}%` }" /></div><small>{{ item.name.slice(0, 7) }}…</small></div></div>
             <div class="version-management__chart-legend"><span><i />通过率</span><span><i />执行率</span></div>
-            <div class="version-management__report-alert"><AlertTriangle :size="14" /><strong>未达到准出标准</strong><span>— 3/7 项质量标准达标</span></div>
+            <div class="version-management__report-alert"><AlertTriangle :size="14" /><strong>{{ qualityPassed ? '已达到准出标准' : '未达到准出标准' }}</strong><span>— {{ qualityPassedCount }}/{{ qualityChecks.length }} 项质量标准达标</span></div>
           </template>
         </article>
 
