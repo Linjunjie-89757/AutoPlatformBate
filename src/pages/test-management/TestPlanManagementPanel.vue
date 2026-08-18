@@ -96,6 +96,7 @@ const planRequirements = ref<PlanRequirementOption[]>([])
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
 const isSubmitting = ref(false)
+const isExportingReport = ref(false)
 const loadError = ref('')
 const detailError = ref('')
 const detailTab = ref<DetailTab>('overview')
@@ -984,6 +985,30 @@ const generateReport = async () => {
   }
 }
 
+const exportReportPdf = async () => {
+  if (!selectedPlan.value || !planReport.value || isExportingReport.value) return
+  isExportingReport.value = true
+  try {
+    const { blob, fileName } = await testManagementApi.exportPlanReportPdf(
+      selectedWorkspaceCode.value,
+      Number(selectedPlan.value.id),
+    )
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    showToast('测试报告 PDF 已导出')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '测试报告 PDF 导出失败')
+  } finally {
+    isExportingReport.value = false
+  }
+}
+
 const toggleReportSignature = async () => {
   if (!selectedPlan.value || !planReport.value) return
   isSubmitting.value = true
@@ -1302,7 +1327,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         <div v-else-if="detailTab === 'report'" class="test-plan-management__report-card">
           <div v-if="!planReport" class="test-plan-management__empty">尚未生成测试报告 <button v-if="selectedPlan.status === 'completed'" type="button" :disabled="isSubmitting" @click="generateReport">立即生成</button></div>
           <template v-else>
-            <header><div><h2>{{ selectedPlan.name }}</h2><p>报告生成时间：{{ formatTestManagementDateTime(planReport.generatedAt) }}&nbsp; | &nbsp;负责人：{{ selectedPlan.owner }}</p></div><button class="test-plan-management__ghost-button" type="button" @click="showToast('当前后端尚未提供 PDF 导出接口')"><Download :size="13" />导出 PDF</button></header>
+            <header><div><h2>{{ selectedPlan.name }}</h2><p>报告生成时间：{{ formatTestManagementDateTime(planReport.generatedAt) }}&nbsp; | &nbsp;负责人：{{ selectedPlan.owner }}</p></div><button class="test-plan-management__ghost-button" type="button" :disabled="isExportingReport" @click="exportReportPdf"><Download :size="13" />{{ isExportingReport ? '导出中...' : '导出 PDF' }}</button></header>
             <div class="test-plan-management__report-stats"><div><strong>{{ planCases.length }}<small>项</small></strong><span>测试用例</span></div><div><strong class="is-primary">{{ detailExecutedCount }}<small>项</small></strong><span>已执行</span></div><div><strong class="is-primary">{{ passRate(selectedPlan) }}%</strong><span>用例通过率</span></div><div><strong class="is-danger">{{ planBugs.length }}<small>个</small></strong><span>发现缺陷</span></div></div>
             <section class="test-plan-management__report-conclusion"><p><CheckCircle2 :size="16" /><strong>{{ passedQualityCheckCount === qualityChecks.length ? '测试通过，可进入下一环节' : '仍有质量标准未达成' }}</strong></p><span>用例通过率 {{ passRate(selectedPlan) }}%，P1 缺陷 {{ selectedPlan.p1Bugs }} 个，P0 缺陷 {{ selectedPlan.p0Bugs }} 个。当前 {{ passedQualityCheckCount }}/{{ qualityChecks.length }} 项质量标准达标。</span></section>
             <section class="test-plan-management__signature"><h3>负责人签字确认</h3><div v-if="!reportSigned"><span>{{ selectedPlan.owner }} 尚未确认本次测试报告</span><button class="test-plan-management__button" type="button" :disabled="isSubmitting" @click="toggleReportSignature"><Check :size="13" />确认并签字</button></div><div v-else class="is-signed"><CheckCircle2 :size="16" /><strong>{{ planReport.signerName || selectedPlan.owner }} 已于 {{ formatTestManagementDateTime(planReport.signedAt) }} 确认签字</strong><button type="button" :disabled="isSubmitting" @click="toggleReportSignature">撤回</button></div></section>

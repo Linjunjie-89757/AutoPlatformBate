@@ -7,6 +7,11 @@ import com.company.autoplatform.bug.BugDetailResponse;
 import com.company.autoplatform.bug.CreateBugRequest;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import jakarta.validation.Valid;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/test-management")
@@ -387,6 +393,23 @@ public class TestManagementController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
     ) {
         return ApiResponse.ok(planService.getReport(id, workspaceCode));
+    }
+
+    @GetMapping(value = "/plans/{id}/report/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> exportPlanReportPdf(
+            @PathVariable Long id,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        GeneratedTestPlanPdf pdf = planService.exportReportPdf(id, workspaceCode);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(pdf.fileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .contentLength(pdf.content().length)
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf.content());
     }
 
     @PostMapping("/plans/{id}/report/generate")

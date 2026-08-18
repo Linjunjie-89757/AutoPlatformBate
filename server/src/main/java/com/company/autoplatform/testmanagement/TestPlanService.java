@@ -67,6 +67,7 @@ public class TestPlanService {
     private final TestManagementWorkspaceSupport workspaceSupport;
     private final WorkspaceAccessSupport workspaceAccessSupport;
     private final TestActivityLogService activityLogService;
+    private final TestPlanPdfReportService pdfReportService;
 
     public TestPlanService(
             TestPlanMapper planMapper,
@@ -86,7 +87,8 @@ public class TestPlanService {
             ObjectMapper objectMapper,
             TestManagementWorkspaceSupport workspaceSupport,
             WorkspaceAccessSupport workspaceAccessSupport,
-            TestActivityLogService activityLogService
+            TestActivityLogService activityLogService,
+            TestPlanPdfReportService pdfReportService
     ) {
         this.planMapper = planMapper;
         this.planRequirementMapper = planRequirementMapper;
@@ -106,6 +108,7 @@ public class TestPlanService {
         this.workspaceSupport = workspaceSupport;
         this.workspaceAccessSupport = workspaceAccessSupport;
         this.activityLogService = activityLogService;
+        this.pdfReportService = pdfReportService;
     }
 
     public PageResponse<TestPlanResponse> list(
@@ -508,6 +511,16 @@ public class TestPlanService {
         TestPlanReportEntity report = reportMapper.selectOne(new LambdaQueryWrapper<TestPlanReportEntity>().eq(TestPlanReportEntity::getPlanId, id));
         if (report == null) throw TestManagementException.notFound("测试报告", id);
         return toReportResponse(report);
+    }
+
+    public GeneratedTestPlanPdf exportReportPdf(Long id, String workspaceCode) {
+        requireReadable(id, workspaceCode);
+        TestPlanReportEntity report = requireReport(id);
+        TestPlanResponse plan = get(id, workspaceCode);
+        List<BugEntity> defects = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+                .eq(BugEntity::getTestPlanId, id)
+                .orderByAsc(BugEntity::getId));
+        return pdfReportService.render(plan, toReportResponse(report), defects);
     }
 
     @Transactional

@@ -1,4 +1,4 @@
-import { httpDelete, httpGet, httpPost, httpPut, type ApiResponse } from '@/shared/api/request'
+import { httpDelete, httpGet, httpPost, httpPut, request, type ApiResponse } from '@/shared/api/request'
 
 import type {
   TestActivityItem,
@@ -234,6 +234,23 @@ export const testManagementApi = {
     return unwrap(await httpGet<ApiResponse<TestPlanReportItem | null>>(`/test-management/plans/${id}/report`, {
       headers: workspaceHeaders(workspaceCode),
     }), '测试报告加载失败')
+  },
+
+  async exportPlanReportPdf(workspaceCode: string, id: number) {
+    const response = await request.get<Blob>(`/test-management/plans/${id}/report/pdf`, {
+      headers: workspaceHeaders(workspaceCode),
+      responseType: 'blob',
+    })
+    const disposition = String(response.headers['content-disposition'] || '')
+    const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+    let fileName = '测试计划报告.pdf'
+    try {
+      fileName = decodeURIComponent(utf8Name || plainName || fileName)
+    } catch {
+      fileName = plainName || fileName
+    }
+    return { blob: response.data, fileName }
   },
 
   async generatePlanReport(workspaceCode: string, id: number) {

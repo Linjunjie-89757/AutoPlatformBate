@@ -6,6 +6,9 @@ import com.company.autoplatform.casecenter.CaseEntity;
 import com.company.autoplatform.casecenter.CaseMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -135,6 +138,21 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
                         .content(json(Map.of("expectedVersion", reportVersion, "force", false))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SIGNED"));
+
+        byte[] pdf = mockMvc.perform(get("/api/test-management/plans/{id}/report/pdf", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentType()).isEqualTo("application/pdf"))
+                .andExpect(result -> assertThat(result.getResponse().getHeader("Content-Disposition"))
+                        .contains("attachment"))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        assertThat(pdf).startsWith("%PDF-".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        try (PDDocument document = Loader.loadPDF(pdf)) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("测试计划报告", "regression-plan-" + suffix, "已确认签字");
+        }
 
         mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/results", planId, planCaseId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)

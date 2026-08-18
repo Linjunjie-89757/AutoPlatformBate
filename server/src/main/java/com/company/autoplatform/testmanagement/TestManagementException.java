@@ -72,6 +72,10 @@ public class TestManagementException extends BusinessException {
         return new TestManagementException(HttpStatus.UNPROCESSABLE_ENTITY, "TM_REVIEW_REQUIRED", message, details);
     }
 
+    public static TestManagementException reportExportFailed(String message) {
+        return new TestManagementException(HttpStatus.INTERNAL_SERVER_ERROR, "TM_REPORT_EXPORT_FAILED", message, null);
+    }
+
     private static Map<String, Object> details(String firstKey, Object firstValue, String secondKey, Object secondValue) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(firstKey, firstValue);
