@@ -1,183 +1,75 @@
 <script setup lang="ts">
-import {
-  AlertTriangle,
-  ArrowRight,
-  Bot,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  ClipboardCheck,
-  FileCheck2,
-  FileText,
-  ListChecks,
-  Plus,
-  Search,
-  Sparkles,
-  Target,
-  TestTube2,
-  X,
-} from '@lucide/vue'
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
-import {
-  planDemoData,
-  requirementDemoData,
-  versionDemoData,
-  type RequirementItem,
-  type TestPlanItem,
-  type VersionItem,
-} from './testManagementDemoData'
+import RequirementManagementPanel from './RequirementManagementPanel.vue'
+import TestPlanManagementPanel from './TestPlanManagementPanel.vue'
 import VersionManagementPanel from './VersionManagementPanel.vue'
-import './test-management-page.css'
 
 type ActiveTab = 'requirements' | 'versions' | 'plans'
-type DetailRecord = RequirementItem | VersionItem | TestPlanItem
+type DetailState = { id: string | null; tab: string | null }
 
-const activeTab = ref<ActiveTab>('versions')
-const keyword = ref('')
-const versionFilter = ref('全部版本')
-const statusFilter = ref('全部状态')
-const requirements = ref<RequirementItem[]>([...requirementDemoData])
-const drawerRecord = ref<DetailRecord | null>(null)
-const createDialogOpen = ref(false)
-const formError = ref('')
-const toastMessage = ref('')
-let toastTimer: ReturnType<typeof setTimeout> | undefined
+const route = useRoute()
+const router = useRouter()
+const queryValue = (value: unknown) => Array.isArray(value) ? String(value[0] || '') : typeof value === 'string' ? value : ''
+const normalizeTab = (value: unknown): ActiveTab => {
+  const tab = queryValue(value)
+  return tab === 'requirements' || tab === 'plans' ? tab : 'versions'
+}
 
-const createForm = reactive({
-  title: '',
-  version: 'v2.6.0',
-  owner: '',
-  description: '',
-})
+const activeTab = ref<ActiveTab>(normalizeTab(route.query.tmView))
+const initialDetailId = computed(() => queryValue(route.query.tmId) || null)
+const initialDetailTab = computed(() => queryValue(route.query.tmTab) || null)
 
-const tabs: Array<{ key: ActiveTab; label: string; count: number }> = [
-  { key: 'requirements', label: '需求管理', count: requirements.value.length },
-  { key: 'versions', label: '版本管理', count: versionDemoData.length },
-  { key: 'plans', label: '测试计划', count: planDemoData.length },
-]
-
-const statusOptions = computed(() => {
-  if (activeTab.value === 'requirements') return ['全部状态', '评审中', '开发中', '测试中', '已完成']
-  if (activeTab.value === 'versions') return ['全部状态', '规划中', '测试中', '待发布', '已发布']
-  return ['全部状态', '未开始', '进行中', '已完成']
-})
-
-const pageDescription = computed(() => {
-  if (activeTab.value === 'requirements') return '从业务需求追溯 AI 生成、测试用例、执行结果和缺陷。'
-  if (activeTab.value === 'versions') return '聚合版本范围、测试进度与发布风险，辅助质量准出判断。'
-  return '按测试目标组织用例范围、执行进度和缺陷闭环。'
-})
-
-const filteredRequirements = computed(() => requirements.value.filter((item) => {
-  const matchesKeyword = !keyword.value || `${item.id}${item.title}${item.owner}`.toLowerCase().includes(keyword.value.toLowerCase())
-  const matchesVersion = versionFilter.value === '全部版本' || item.version === versionFilter.value
-  const matchesStatus = statusFilter.value === '全部状态' || item.status === statusFilter.value
-  return matchesKeyword && matchesVersion && matchesStatus
-}))
-
-const filteredVersions = computed(() => versionDemoData.filter((item) => {
-  const matchesKeyword = !keyword.value || `${item.id}${item.name}${item.owner}`.toLowerCase().includes(keyword.value.toLowerCase())
-  const matchesVersion = versionFilter.value === '全部版本' || item.name === versionFilter.value
-  const matchesStatus = statusFilter.value === '全部状态' || item.status === statusFilter.value
-  return matchesKeyword && matchesVersion && matchesStatus
-}))
-
-const filteredPlans = computed(() => planDemoData.filter((item) => {
-  const matchesKeyword = !keyword.value || `${item.id}${item.name}${item.owner}`.toLowerCase().includes(keyword.value.toLowerCase())
-  const matchesVersion = versionFilter.value === '全部版本' || item.version === versionFilter.value
-  const matchesStatus = statusFilter.value === '全部状态' || item.status === statusFilter.value
-  return matchesKeyword && matchesVersion && matchesStatus
-}))
-
-const resultCount = computed(() => {
-  if (activeTab.value === 'requirements') return filteredRequirements.value.length
-  if (activeTab.value === 'versions') return filteredVersions.value.length
-  return filteredPlans.value.length
-})
-
-const currentTabLabel = computed(() => tabs.find(item => item.key === activeTab.value)?.label || '')
-
-const isRequirement = (record: DetailRecord): record is RequirementItem => 'title' in record
-const isVersion = (record: DetailRecord): record is VersionItem => 'releaseDate' in record
-const isPlan = (record: DetailRecord): record is TestPlanItem => 'scope' in record
-
-const statusClass = (status: string) => ({
-  '评审中': 'is-review',
-  '规划中': 'is-review',
-  '开发中': 'is-developing',
-  '测试中': 'is-testing',
-  '进行中': 'is-testing',
-  '待发布': 'is-pending',
-  '已完成': 'is-complete',
-  '已发布': 'is-complete',
-  '未开始': 'is-muted',
-}[status] || 'is-muted')
+const replaceRouteState = (tab: ActiveTab, state?: DetailState) => {
+  const query: LocationQueryRaw = { ...route.query, tmView: tab }
+  if (state?.id) {
+    query.tmId = state.id
+    if (state.tab) query.tmTab = state.tab
+    else delete query.tmTab
+  } else {
+    delete query.tmId
+    delete query.tmTab
+  }
+  void router.replace({ query })
+}
 
 const changeTab = (tab: ActiveTab) => {
   activeTab.value = tab
-  keyword.value = ''
-  versionFilter.value = '全部版本'
-  statusFilter.value = '全部状态'
+  replaceRouteState(tab)
 }
 
-const showToast = (message: string) => {
-  toastMessage.value = message
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => {
-    toastMessage.value = ''
-  }, 2400)
-}
+const changeDetailState = (state: DetailState) => replaceRouteState(activeTab.value, state)
 
-const openCreateDialog = () => {
-  formError.value = ''
-  createDialogOpen.value = true
-}
-
-const closeCreateDialog = () => {
-  createDialogOpen.value = false
-  formError.value = ''
-}
-
-const createRequirement = () => {
-  if (!createForm.title.trim()) {
-    formError.value = '请输入需求标题'
-    return
-  }
-  if (!createForm.owner.trim()) {
-    formError.value = '请输入负责人'
-    return
-  }
-
-  requirements.value.unshift({
-    id: `REQ-2026-${String(Math.floor(Math.random() * 9000) + 1000)}`,
-    title: createForm.title.trim(),
-    version: createForm.version,
-    owner: createForm.owner.trim(),
-    status: '评审中',
-    cases: 0,
-    passed: 0,
-    defects: 0,
-    aiRecords: 0,
-    updatedAt: '刚刚',
-    description: createForm.description.trim() || '暂未填写需求说明。',
-  })
-  createForm.title = ''
-  createForm.owner = ''
-  createForm.description = ''
-  closeCreateDialog()
-  activeTab.value = 'requirements'
-  showToast('需求已添加到演示列表')
-}
-
-onBeforeUnmount(() => {
-  if (toastTimer) clearTimeout(toastTimer)
+watch(() => route.query.tmView, value => {
+  activeTab.value = normalizeTab(value)
 })
 </script>
 
 <template>
-  <VersionManagementPanel v-if="activeTab === 'versions'" @change-tab="changeTab" />
-  <main v-else class="test-management-page">
+  <VersionManagementPanel
+    v-if="activeTab === 'versions'"
+    :initial-detail-id="initialDetailId"
+    :initial-detail-tab="initialDetailTab"
+    @change-tab="changeTab"
+    @detail-state-change="changeDetailState"
+  />
+  <RequirementManagementPanel
+    v-else-if="activeTab === 'requirements'"
+    :initial-detail-id="initialDetailId"
+    :initial-detail-tab="initialDetailTab"
+    @change-tab="changeTab"
+    @detail-state-change="changeDetailState"
+  />
+  <TestPlanManagementPanel
+    v-else
+    :initial-detail-id="initialDetailId"
+    :initial-detail-tab="initialDetailTab"
+    @change-tab="changeTab"
+    @detail-state-change="changeDetailState"
+  />
+  <!-- Legacy generic test-management template retained temporarily for source comparison.
+  <main class="test-management-page">
     <header class="test-management-page__header">
       <div>
         <div class="test-management-page__eyebrow">
@@ -267,23 +159,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="test-management-page__table-wrap">
-        <table v-if="activeTab === 'requirements'" class="test-management-page__table">
-          <thead><tr><th>需求</th><th>所属版本</th><th>负责人</th><th>覆盖情况</th><th>缺陷</th><th>状态</th><th>更新时间</th><th></th></tr></thead>
-          <tbody>
-            <tr v-for="item in filteredRequirements" :key="item.id" tabindex="0" @click="drawerRecord = item" @keydown.enter="drawerRecord = item">
-              <td><div class="test-management-page__primary-cell"><strong>{{ item.title }}</strong><small>{{ item.id }}</small></div></td>
-              <td><span class="test-management-page__version-tag">{{ item.version }}</span></td>
-              <td>{{ item.owner }}</td>
-              <td><div class="test-management-page__coverage"><span>{{ item.cases ? `${item.passed}/${item.cases}` : '-' }}</span><div><i :style="{ width: item.cases ? `${item.passed / item.cases * 100}%` : '0%' }"></i></div></div></td>
-              <td><span :class="['test-management-page__defect-count', { 'has-defects': item.defects }]">{{ item.defects }}</span></td>
-              <td><span :class="['test-management-page__status', statusClass(item.status)]">{{ item.status }}</span></td>
-              <td class="test-management-page__muted-cell">{{ item.updatedAt }}</td>
-              <td><button class="test-management-page__row-button" type="button" aria-label="查看需求详情" @click.stop="drawerRecord = item"><ChevronRight :size="15" /></button></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table v-else class="test-management-page__table">
+        <table class="test-management-page__table">
           <thead><tr><th>测试计划</th><th>所属版本</th><th>负责人</th><th>测试范围</th><th>执行进度</th><th>通过率</th><th>计划结束</th><th>状态</th><th></th></tr></thead>
           <tbody>
             <tr v-for="item in filteredPlans" :key="item.id" tabindex="0" @click="drawerRecord = item" @keydown.enter="drawerRecord = item">
@@ -409,4 +285,5 @@ onBeforeUnmount(() => {
       <div v-if="toastMessage" class="test-management-page__toast"><CheckCircle2 :size="16" />{{ toastMessage }}</div>
     </Transition>
   </main>
+  -->
 </template>

@@ -14,6 +14,15 @@ public final class WorkspacePermissionCatalog {
                     permission("cases.delete", "delete", "删除", true),
                     permission("cases.execute", "execute", "执行", false),
                     permission("cases.export", "export", "导出", false)),
+            module("test_management", "测试管理",
+                    permission("test_management.view", "view", "查看", false),
+                    permission("test_management.create", "create", "新建", false),
+                    permission("test_management.edit", "edit", "编辑", false),
+                    permission("test_management.delete", "delete", "删除", true),
+                    permission("test_management.review", "review", "评审", true),
+                    permission("test_management.execute", "execute", "执行", false),
+                    permission("test_management.release", "release", "发布与强制准出", true),
+                    permission("test_management.export", "export", "导出", false)),
             module("api", "接口自动化",
                     permission("api.view", "view", "查看", false),
                     permission("api.create", "create", "新建", false),
@@ -57,6 +66,8 @@ public final class WorkspacePermissionCatalog {
 
     private static final Set<String> TEST_ENGINEER_CODES = Set.of(
             "cases.view", "cases.create", "cases.edit", "cases.execute",
+            "test_management.view", "test_management.create", "test_management.edit",
+            "test_management.execute", "test_management.export",
             "api.view", "api.create", "api.edit", "api.execute",
             "webui.view", "webui.create", "webui.edit", "webui.execute",
             "bugs.view", "bugs.create", "bugs.edit",
@@ -67,6 +78,7 @@ public final class WorkspacePermissionCatalog {
 
     private static final Set<String> DEVELOPER_CODES = Set.of(
             "cases.view",
+            "test_management.view",
             "api.view", "api.execute",
             "webui.view",
             "bugs.view", "bugs.edit",
@@ -76,6 +88,7 @@ public final class WorkspacePermissionCatalog {
 
     private static final Set<String> READ_ONLY_CODES = Set.of(
             "cases.view",
+            "test_management.view",
             "api.view",
             "webui.view",
             "reports.view"

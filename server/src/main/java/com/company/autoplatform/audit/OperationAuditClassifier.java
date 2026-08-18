@@ -21,9 +21,11 @@ public class OperationAuditClassifier {
         if (path.startsWith("/api/auth/")) return "AUTH";
         if (path.startsWith("/api/workspaces") || path.startsWith("/api/users")) return "WORKSPACE";
         if (path.startsWith("/api/settings") || path.startsWith("/api/ai-provider")) return "CONFIG";
+        if (path.startsWith("/api/test-management/plans") && containsTestPlanAction(path)) return "EXECUTION";
         if (path.startsWith("/api/tasks") || path.startsWith("/api/reports")
                 || path.startsWith("/api/report-shares") || containsExecutionAction(path)) return "EXECUTION";
         if (path.startsWith("/api/cases") || path.startsWith("/api/bugs")
+                || path.startsWith("/api/test-management")
                 || path.startsWith("/api/automation/api") || path.startsWith("/api/automation/web")
                 || path.startsWith("/api/ai-case")) return "TEST_ASSET";
         return "OTHER";
@@ -34,6 +36,12 @@ public class OperationAuditClassifier {
                 || path.contains("/reports") || path.contains("/report-shares");
     }
 
+    private boolean containsTestPlanAction(String path) {
+        return path.contains("/start") || path.contains("/block") || path.contains("/resume")
+                || path.contains("/complete") || path.contains("/cancel") || path.contains("/results")
+                || path.contains("/report");
+    }
+
     private String resolveResource(String path) {
         if (path.equals("/api/auth/login")) return "系统登录";
         if (path.equals("/api/auth/logout")) return "系统登录态";
@@ -41,6 +49,9 @@ public class OperationAuditClassifier {
         if (path.startsWith("/api/workspaces")) return "工作区";
         if (path.startsWith("/api/users")) return "用户";
         if (path.startsWith("/api/bugs")) return "缺陷";
+        if (path.startsWith("/api/test-management/versions")) return "测试版本";
+        if (path.startsWith("/api/test-management/requirements")) return "测试需求";
+        if (path.startsWith("/api/test-management/plans")) return "测试计划";
         if (path.startsWith("/api/cases")) return "用例";
         if (path.startsWith("/api/tasks")) return "任务";
         if (path.startsWith("/api/reports") || path.startsWith("/api/report-shares")) return "报告";

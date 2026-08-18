@@ -15,36 +15,56 @@ import {
   X,
   XCircle,
 } from '@lucide/vue'
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
+import { testManagementApi, type TestPlanDefectItem } from '@/entities/test-management'
+import { userApi, type UserItem } from '@/entities/user'
+import { useWorkspaceContext } from '@/entities/workspace'
 import VersionPlanDonutChart from '@/shared/ui/charts/VersionPlanDonutChart.vue'
 
 import {
   bugStatusConfig,
-  managedVersionDemoData,
   requirementStatusConfig,
-  versionBugs,
-  versionLogs,
-  versionPlans,
-  versionRequirements,
   versionStatusConfig,
   versionTypeConfig,
   type BugStatus,
   type ManagedVersion,
+  type VersionBug,
   type VersionDetailTab,
+  type VersionLog,
+  type VersionPlan,
+  type VersionRequirement,
   type VersionStatus,
   type VersionType,
 } from './versionManagementDemoData'
+import { formatTestManagementDateTime } from './testManagementFormatters'
 import './version-management-panel.css'
 
 type ManagementTab = 'versions' | 'requirements' | 'plans'
 
+const props = defineProps<{
+  initialDetailId?: string | null
+  initialDetailTab?: string | null
+}>()
 const emit = defineEmits<{
   'change-tab': [tab: ManagementTab]
+  'detail-state-change': [state: { id: string | null; tab: string | null }]
 }>()
 
-const versions = ref<ManagedVersion[]>(managedVersionDemoData.map(item => ({ ...item })))
+const { selectedWorkspaceCode } = useWorkspaceContext()
+const versions = ref<ManagedVersion[]>([])
 const selectedVersion = ref<ManagedVersion | null>(null)
+const versionRequirements = ref<VersionRequirement[]>([])
+const versionPlans = ref<VersionPlan[]>([])
+const versionBugs = ref<VersionBug[]>([])
+const versionLogs = ref<VersionLog[]>([])
+const versionOwners = ref<UserItem[]>([])
+const versionLockVersions = ref(new Map<string, number>())
+const versionOwnerIds = ref(new Map<string, number>())
+const isLoading = ref(false)
+const isDetailLoading = ref(false)
+const isSubmitting = ref(false)
+const loadError = ref('')
 const detailTab = ref<VersionDetailTab>('overview')
 const keyword = ref('')
 const typeFilter = ref<'all' | VersionType>('all')
@@ -67,6 +87,137 @@ const versionForm = reactive({
   releaseDate: '',
   goal: '',
 })
+
+const normalizeVersionType = (value: string): VersionType => value.toLowerCase() as VersionType
+const normalizeVersionStatus = (value: string): VersionStatus => value.toLowerCase().replace('_', '-') as VersionStatus
+const normalizePlanStatus = (value: string): VersionPlan['status'] => {
+  if (value === 'RUNNING') return 'running'
+  if (value === 'COMPLETED') return 'completed'
+  return 'pending'
+}
+
+const mapVersion = (item: Awaited<ReturnType<typeof testManagementApi.getVersion>>): ManagedVersion => ({
+  id: String(item.id),
+  no: item.versionNo,
+  name: item.name,
+  type: normalizeVersionType(item.versionType),
+  status: normalizeVersionStatus(item.status),
+  owner: item.ownerName || '—',
+  startDate: item.startDate || '—',
+  testDate: item.testDate || '—',
+  releaseDate: item.releaseDate || '—',
+  planCount: item.planCount,
+  scope: 0,
+  executed: 0,
+  passed: 0,
+  p0Bugs: 0,
+  p1Bugs: 0,
+  goal: item.goal || '',
+})
+
+const mapPlan = (item: Awaited<ReturnType<typeof testManagementApi.listPlans>>['items'][number]): VersionPlan => ({
+  id: String(item.id),
+  versionId: item.versionId ? String(item.versionId) : '',
+  name: item.name,
+  type: item.planType === 'SMOKE' ? '冒烟测试' : item.planType === 'RELEASE' ? '发布验证' : '回归测试',
+  owner: item.ownerName || '—',
+  startDate: item.startDate || '—',
+  endDate: item.endDate || '—',
+  scope: item.caseCount,
+  executed: item.executedCount,
+  passed: item.passedCount,
+  highBugs: item.defectCount,
+  status: normalizePlanStatus(item.status),
+})
+
+const mapRequirement = (item: Awaited<ReturnType<typeof testManagementApi.listRequirements>>['items'][number]): VersionRequirement => ({
+  id: String(item.id),
+  title: item.title,
+  sourceRef: item.sourceRef || '',
+  priority: item.priority,
+  source: item.sourceType === 'JIRA' ? 'Jira' : item.sourceType === 'TAPD' ? '禅道' : '手动',
+  coveredCases: item.caseReviewed,
+  totalCases: item.caseTotal,
+  status: item.qualityStatus.toLowerCase() as VersionRequirement['status'],
+  owner: item.assigneeName || '—',
+})
+
+const mapBugStatus = (value: string): BugStatus => {
+  if (value === 'IN_PROGRESS') return 'fixing'
+  if (value === 'CLOSED') return 'closed'
+  if (value === 'PENDING_VERIFY') return 'fixed'
+  if (value === 'REJECTED') return 'rejected'
+  return 'open'
+}
+
+const mapPlanDefect = (item: TestPlanDefectItem): VersionBug => ({
+  no: item.bugNo,
+  title: item.title,
+  severity: item.severity === 'CRITICAL' || item.severity === 'HIGH' ? '严重' : '一般',
+  priority: item.priority === 'P0' ? 'P0' : item.priority === 'P1' ? 'P1' : 'P2',
+  status: mapBugStatus(item.status),
+  owner: item.assigneeName || '—',
+  plan: '',
+  foundAt: formatTestManagementDateTime(item.updatedAt),
+})
+
+const loadVersions = async () => {
+  isLoading.value = true
+  loadError.value = ''
+  try {
+    const result = await testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 })
+    const items = result.items.map(item => mapVersion(item))
+    versions.value = items
+    versionLockVersions.value = new Map(result.items.map(item => [String(item.id), item.lockVersion]))
+    versionOwnerIds.value = new Map(result.items.filter(item => item.ownerId !== null).map(item => [String(item.id), item.ownerId as number]))
+    if (selectedVersion.value) {
+      selectedVersion.value = items.find(item => item.id === selectedVersion.value?.id) || null
+    }
+    restoreInitialDetail()
+  } catch (error) {
+    loadError.value = error instanceof Error ? error.message : '版本列表加载失败'
+    showToast(loadError.value)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const loadOwners = async () => {
+  try {
+    versionOwners.value = await userApi.getUsers()
+  } catch {
+    versionOwners.value = []
+  }
+}
+
+const loadVersionDetail = async (version: ManagedVersion) => {
+  isDetailLoading.value = true
+  try {
+    const versionId = Number(version.id)
+    const [requirements, plans, activities] = await Promise.all([
+      testManagementApi.listVersionRequirements(selectedWorkspaceCode.value, versionId),
+      testManagementApi.listPlans(selectedWorkspaceCode.value, { versionId, pageNo: 1, pageSize: 100 }),
+      testManagementApi.listVersionActivities(selectedWorkspaceCode.value, versionId),
+    ])
+    versionRequirements.value = requirements.items.map(mapRequirement)
+    versionPlans.value = plans.items.map(mapPlan)
+    versionLogs.value = activities.items.map(item => ({
+      id: String(item.id), actor: item.actorName || '系统', action: item.actionName, detail: item.detail || '', time: formatTestManagementDateTime(item.createdAt), type: 'edit',
+    }))
+    const defects = await Promise.all(plans.items.map(item => testManagementApi.listPlanDefects(selectedWorkspaceCode.value, item.id)))
+    versionBugs.value = defects.flatMap(items => items.map(mapPlanDefect))
+    const summary = await testManagementApi.getVersion(selectedWorkspaceCode.value, versionId)
+    const mapped = mapVersion(summary)
+    versions.value = versions.value.map(item => item.id === version.id ? mapped : item)
+    selectedVersion.value = mapped
+    versionLockVersions.value.set(version.id, summary.lockVersion)
+    if (summary.ownerId !== null) versionOwnerIds.value.set(version.id, summary.ownerId)
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '版本详情加载失败')
+  } finally {
+    isDetailLoading.value = false
+  }
+}
 
 const managementTabs: Array<{ key: ManagementTab; label: string }> = [
   { key: 'versions', label: '版本管理' },
@@ -102,11 +253,11 @@ const filteredVersions = computed(() => {
 })
 
 const currentPlans = computed(() => selectedVersion.value
-  ? versionPlans.filter(item => item.versionId === selectedVersion.value?.id)
+  ? versionPlans.value.filter(item => item.versionId === selectedVersion.value?.id)
   : [])
-const currentRequirements = computed(() => selectedVersion.value?.id === 'V1' ? versionRequirements : [])
-const currentBugs = computed(() => versionBugs.filter(item => bugStatusFilter.value === 'all' || item.status === bugStatusFilter.value))
-const currentLogs = computed(() => versionLogs.filter(item => logTypeFilter.value === 'all' || item.type === logTypeFilter.value))
+const currentRequirements = computed(() => selectedVersion.value ? versionRequirements.value : [])
+const currentBugs = computed(() => versionBugs.value.filter(item => bugStatusFilter.value === 'all' || item.status === bugStatusFilter.value))
+const currentLogs = computed(() => versionLogs.value.filter(item => logTypeFilter.value === 'all' || item.type === logTypeFilter.value))
 const executedPlans = computed(() => currentPlans.value.filter(item => item.executed > 0))
 const planDistribution = computed(() => [
   { name: '进行中', value: currentPlans.value.filter(item => item.status === 'running').length, color: '#FF7D00' },
@@ -130,7 +281,7 @@ const requirementCoverRate = computed(() => {
 const showQualitySummary = computed(() => selectedVersion.value?.status === 'testing' || selectedVersion.value?.status === 'pending-release')
 
 const isEditing = computed(() => Boolean(editingId.value))
-const canSubmit = computed(() => Boolean(versionForm.name.trim() && versionForm.owner))
+const canSubmit = computed(() => Boolean(versionForm.name.trim() && versionForm.owner && versionOwners.value.some(item => item.displayName === versionForm.owner)))
 
 const statusStyle = (status: VersionStatus) => ({
   color: versionStatusConfig[status].color,
@@ -188,46 +339,99 @@ const closeDrawer = () => {
   editingId.value = null
 }
 
-const submitVersion = () => {
+const submitVersion = async () => {
   if (!canSubmit.value) return
-  if (editingId.value) {
-    const index = versions.value.findIndex(item => item.id === editingId.value)
-    if (index >= 0) {
-      versions.value[index] = { ...versions.value[index], ...versionForm }
-      if (selectedVersion.value?.id === editingId.value) selectedVersion.value = versions.value[index]
+  const owner = versionOwners.value.find(item => item.displayName === versionForm.owner)
+  if (!owner) return
+  isSubmitting.value = true
+  try {
+    const payload = {
+      name: versionForm.name.trim(),
+      versionType: versionForm.type.toUpperCase() as 'ITERATION' | 'RELEASE' | 'PATCH' | 'HOTFIX',
+      ownerId: owner.id,
+      startDate: versionForm.startDate || null,
+      testDate: versionForm.testDate || null,
+      releaseDate: versionForm.releaseDate || null,
+      goal: versionForm.goal.trim() || null,
     }
-    showToast('版本信息已更新（演示数据）')
-  } else {
-    const nextNumber = versions.value.length + 1
-    versions.value.unshift({
-      id: `V${nextNumber}`,
-      no: `VER-${String(nextNumber).padStart(3, '0')}`,
-      ...versionForm,
-      planCount: 0,
-      scope: 0,
-      executed: 0,
-      passed: 0,
-      p0Bugs: 0,
-      p1Bugs: 0,
-    })
-    showToast('版本已创建（演示数据）')
+    const result = editingId.value
+      ? await testManagementApi.updateVersion(selectedWorkspaceCode.value, Number(editingId.value), { ...payload, expectedVersion: versionLockVersions.value.get(editingId.value) || 0 })
+      : await testManagementApi.createVersion(selectedWorkspaceCode.value, payload)
+    const mapped = mapVersion(result)
+    if (editingId.value) {
+      versions.value = versions.value.map(item => item.id === editingId.value ? mapped : item)
+    } else {
+      versions.value = [mapped, ...versions.value]
+    }
+    versionLockVersions.value.set(String(result.id), result.lockVersion)
+    versionOwnerIds.value.set(String(result.id), owner.id)
+    if (selectedVersion.value?.id === String(result.id)) selectedVersion.value = mapped
+    showToast(editingId.value ? '版本信息已更新' : '版本已创建')
+    closeDrawer()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '版本保存失败')
+  } finally {
+    isSubmitting.value = false
   }
-  closeDrawer()
 }
 
-const openVersion = (version: ManagedVersion) => {
+const isVersionDetailTab = (value?: string | null): value is VersionDetailTab =>
+  ['overview', 'requirements', 'plans', 'bugs', 'report', 'logs'].includes(value || '')
+
+const openVersion = (version: ManagedVersion, tab: VersionDetailTab = 'overview') => {
   selectedVersion.value = version
-  detailTab.value = 'overview'
+  detailTab.value = tab
   bugStatusFilter.value = 'all'
   logTypeFilter.value = 'all'
+  emit('detail-state-change', { id: version.id, tab })
+  void loadVersionDetail(version)
 }
 
 const closeVersion = () => {
   selectedVersion.value = null
   detailTab.value = 'overview'
+  emit('detail-state-change', { id: null, tab: null })
 }
 
-const unavailable = () => showToast('该操作等待后端业务接口接入')
+const setDetailTab = (tab: VersionDetailTab) => {
+  detailTab.value = tab
+  emit('detail-state-change', { id: selectedVersion.value?.id || null, tab })
+}
+
+const restoreInitialDetail = () => {
+  const id = props.initialDetailId
+  if (!id) return
+  const version = versions.value.find(item => item.id === id)
+  if (!version) return
+  const tab = isVersionDetailTab(props.initialDetailTab) ? props.initialDetailTab : 'overview'
+  if (selectedVersion.value?.id === id) {
+    detailTab.value = tab
+    return
+  }
+  openVersion(version, tab)
+}
+
+const transitionVersion = async (targetStatus: 'PENDING_RELEASE' | 'RELEASED') => {
+  if (!selectedVersion.value) return
+  isSubmitting.value = true
+  try {
+    const result = await testManagementApi.transitionVersion(selectedWorkspaceCode.value, Number(selectedVersion.value.id), {
+      targetStatus,
+      expectedVersion: versionLockVersions.value.get(selectedVersion.value.id) || 0,
+    })
+    const mapped = mapVersion(result)
+    versions.value = versions.value.map(item => item.id === mapped.id ? mapped : item)
+    selectedVersion.value = mapped
+    versionLockVersions.value.set(mapped.id, result.lockVersion)
+    showToast('版本状态已更新')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '版本状态更新失败')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const unavailable = () => showToast('该操作尚未接入后端')
 
 const gateState = (version: ManagedVersion) => {
   if (!version.scope) return { label: '—', color: '#c9cdd4' }
@@ -242,8 +446,20 @@ const requirementStatusCount = (status: 'all' | keyof typeof requirementStatusCo
   ? currentRequirements.value.length
   : currentRequirements.value.filter(item => item.status === status).length
 const bugStatusCount = (status: 'all' | BugStatus) => status === 'all'
-  ? versionBugs.length
-  : versionBugs.filter(item => item.status === status).length
+  ? versionBugs.value.length
+  : versionBugs.value.filter(item => item.status === status).length
+
+onMounted(() => {
+  void loadVersions()
+  void loadOwners()
+})
+
+watch(selectedWorkspaceCode, () => {
+  selectedVersion.value = null
+  void loadVersions()
+})
+
+watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetail)
 </script>
 
 <template>
@@ -287,11 +503,14 @@ const bugStatusCount = (status: 'all' | BugStatus) => status === 'all'
         </select>
         <select v-model="ownerFilter" aria-label="负责人">
           <option value="all">全部负责人</option>
-          <option v-for="owner in ['李明', '王芳', '陈伟', '张程远']" :key="owner" :value="owner">{{ owner }}</option>
+          <option v-for="owner in versionOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option>
         </select>
       </section>
 
-      <section class="version-management__list-area">
+      <div v-if="isLoading" class="version-management__empty"><span>正在加载版本数据...</span></div>
+      <div v-else-if="loadError" class="version-management__empty"><strong>{{ loadError }}</strong><button type="button" @click="loadVersions">重新加载</button></div>
+
+      <section v-else class="version-management__list-area">
         <div class="version-management__table-card">
           <div class="version-management__table-scroll">
             <table class="version-management__table is-version-list">
@@ -349,8 +568,8 @@ const bugStatusCount = (status: 'all' | BugStatus) => status === 'all'
           <button class="version-management__icon-button" type="button" title="编辑" @click="openEditDrawer(selectedVersion)"><Edit2 :size="13" /></button>
           <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-ghost is-small" type="button" @click="unavailable"><Plus :size="11" />添加需求</button>
           <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-primary is-small" type="button" @click="unavailable"><Plus :size="11" />新建测试计划</button>
-          <button v-if="selectedVersion.status === 'testing'" class="version-management__button is-purple is-small" type="button" @click="unavailable">标记待发布</button>
-          <button v-if="selectedVersion.status === 'pending-release'" class="version-management__button is-success is-small" type="button" @click="unavailable"><CheckCircle2 :size="12" />标记已发布</button>
+          <button v-if="selectedVersion.status === 'testing'" class="version-management__button is-purple is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('PENDING_RELEASE')">标记待发布</button>
+          <button v-if="selectedVersion.status === 'pending-release'" class="version-management__button is-success is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('RELEASED')"><CheckCircle2 :size="12" />标记已发布</button>
         </div>
       </header>
 
@@ -374,12 +593,13 @@ const bugStatusCount = (status: 'all' | BugStatus) => status === 'all'
       </section>
 
       <nav class="version-management__detail-tabs" aria-label="版本详情视图">
-        <button v-for="tab in detailTabs" :key="tab.key" type="button" :class="{ 'is-active': detailTab === tab.key }" @click="detailTab = tab.key">
+        <button v-for="tab in detailTabs" :key="tab.key" type="button" :class="{ 'is-active': detailTab === tab.key }" @click="setDetailTab(tab.key)">
           {{ tab.label }}<template v-if="tab.key === 'requirements'">（{{ currentRequirements.length }}）</template><template v-else-if="tab.key === 'plans'">（{{ currentPlans.length }}）</template><template v-else-if="tab.key === 'bugs'">（{{ selectedVersion.p0Bugs + selectedVersion.p1Bugs }}）</template>
         </button>
       </nav>
 
       <section class="version-management__detail-body">
+        <div v-if="isDetailLoading" class="version-management__panel-empty">正在加载版本详情...</div>
         <div v-if="detailTab === 'overview'" class="version-management__overview">
           <div class="version-management__overview-grid">
             <article class="version-management__panel">
@@ -474,12 +694,12 @@ const bugStatusCount = (status: 'all' | BugStatus) => status === 'all'
           <header><div><h2>{{ isEditing ? '编辑版本' : '新建版本' }}</h2><p>{{ isEditing ? '修改版本基本信息' : '在当前工作区创建一个新版本' }}</p></div><button type="button" aria-label="关闭" @click="closeDrawer"><X :size="16" /></button></header>
           <div class="version-management__form">
             <label><span>版本名称 <i>*</i></span><input v-model="versionForm.name" type="text" placeholder="例：v2.5.0"></label>
-            <div class="version-management__form-row"><label><span>版本类型 <i>*</i></span><select v-model="versionForm.type"><option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option></select></label><label><span>负责人 <i>*</i></span><select v-model="versionForm.owner"><option value="">请选择负责人</option><option v-for="owner in ['李明', '王芳', '陈伟', '张程远']" :key="owner">{{ owner }}</option></select></label></div>
+            <div class="version-management__form-row"><label><span>版本类型 <i>*</i></span><select v-model="versionForm.type"><option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option></select></label><label><span>负责人 <i>*</i></span><select v-model="versionForm.owner"><option value="">请选择负责人</option><option v-for="owner in versionOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
             <label v-if="isEditing"><span>当前状态</span><select v-model="versionForm.status"><option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option></select></label>
             <fieldset><legend>时间节点</legend><label><span>开始日期</span><input v-model="versionForm.startDate" type="date" :class="{ 'is-empty-date': !versionForm.startDate }"></label><label><span>计划提测日期</span><input v-model="versionForm.testDate" type="date" :class="{ 'is-empty-date': !versionForm.testDate }"></label><label><span>计划发布日期</span><input v-model="versionForm.releaseDate" type="date" :class="{ 'is-empty-date': !versionForm.releaseDate }"></label></fieldset>
             <label><span>版本目标</span><textarea v-model="versionForm.goal" rows="4" placeholder="描述本版本的核心目标和验收标准…" /></label>
           </div>
-          <footer><button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button><button class="version-management__button is-primary" type="button" :disabled="!canSubmit" @click="submitVersion">{{ isEditing ? '保存修改' : '创建版本' }}</button></footer>
+          <footer><button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button><button class="version-management__button is-primary" type="button" :disabled="!canSubmit || isSubmitting" @click="submitVersion">{{ isSubmitting ? '保存中...' : isEditing ? '保存修改' : '创建版本' }}</button></footer>
         </aside>
       </div>
     </Transition>

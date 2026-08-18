@@ -48,6 +48,7 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
         registry.addInterceptor(this)
                 .addPathPatterns(
                         "/api/cases/**",
+                        "/api/test-management/**",
                         "/api/automation/api/**",
                         "/api/automation/web/**",
                         "/api/bugs/**",
@@ -73,6 +74,9 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
         }
         if (uri.startsWith("/api/automation/api/")) {
             return "api";
+        }
+        if (uri.startsWith("/api/test-management/")) {
+            return "test_management";
         }
         if (uri.startsWith("/api/automation/web/")) {
             return "webui";
@@ -100,6 +104,9 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
             return "view";
         }
         if (HttpMethod.DELETE.matches(method)) {
+            if ("test_management".equals(module) && uri.matches("^/api/test-management/plans/[^/]+/cases/[^/]+$")) {
+                return "edit";
+            }
             if (uri.contains("/attachments/")
                     || uri.contains("/comments/")
                     || ("bugs".equals(module) && uri.matches("^/api/bugs/[^/]+/cases/[^/]+$"))) {
@@ -114,6 +121,18 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
             return "config".equals(module) ? "manage" : "edit";
         }
         if (HttpMethod.POST.matches(method)) {
+            if ("test_management".equals(module)) {
+                if (uri.matches("^/api/test-management/versions/[^/]+/transition$")) {
+                    return "release";
+                }
+                if (uri.contains("/review") || uri.contains("/report/sign") || uri.contains("/report/revoke-signature")) {
+                    return "review";
+                }
+                if (uri.endsWith("/start") || uri.endsWith("/block") || uri.endsWith("/resume")
+                        || uri.endsWith("/complete") || uri.endsWith("/cancel") || uri.endsWith("/results")) {
+                    return "execute";
+                }
+            }
             if ("reports".equals(module) && uri.contains("share")) {
                 return "share";
             }

@@ -1,0 +1,451 @@
+.requirement-management {
+  --rm-primary: #0ea5e9;
+  --rm-success: #00b42a;
+  --rm-warning: #ff7d00;
+  --rm-danger: #f53f3f;
+  --rm-text: #1d2129;
+  --rm-secondary: #4e5969;
+  --rm-muted: #86909c;
+  --rm-placeholder: #c9cdd4;
+  --rm-border: #e5e6eb;
+  width: 100%;
+  min-width: 0;
+  min-height: calc(100dvh - 42px);
+  color: var(--rm-text);
+  background: #f4f6fa;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.requirement-management *,
+.requirement-management *::before,
+.requirement-management *::after { box-sizing: border-box; }
+
+.requirement-management input,
+.requirement-management select,
+.requirement-management textarea { margin: 0; font: inherit; letter-spacing: 0; }
+
+.requirement-management button { margin: 0; color: inherit; font-family: inherit; letter-spacing: 0; }
+
+.requirement-management__module-tabs {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--rm-border);
+  background: #fff;
+}
+
+.requirement-management__module-tabs button,
+.requirement-management__detail-tabs button,
+.requirement-management__import-tabs button {
+  height: 100%;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--rm-muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease;
+}
+
+.requirement-management__module-tabs button:hover,
+.requirement-management__detail-tabs button:hover { color: var(--rm-primary); }
+
+.requirement-management__module-tabs button.is-active,
+.requirement-management__detail-tabs button.is-active,
+.requirement-management__import-tabs button.is-active {
+  border-bottom-color: var(--rm-primary);
+  color: var(--rm-primary);
+  font-weight: 600;
+}
+
+.requirement-management__stats {
+  display: flex;
+  height: 50px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--rm-border);
+  background: #fff;
+}
+
+.requirement-management__stats > div {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  border-radius: 20px;
+  color: var(--rm-secondary);
+  background: #f4f6fa;
+  font-size: 12px;
+}
+
+.requirement-management__stats > div strong { color: var(--rm-text); font-size: 14px; font-weight: 700; }
+.requirement-management__stats strong.is-muted { color: var(--rm-muted); }
+.requirement-management__stats strong.is-warning { color: var(--rm-warning); }
+.requirement-management__stats strong.is-primary { color: var(--rm-primary); }
+.requirement-management__stats strong.is-success { color: var(--rm-success); }
+.requirement-management__stats > p { margin: 0 0 0 auto; color: var(--rm-muted); font-size: 12px; }
+.requirement-management__stats > p strong { margin-left: 4px; color: var(--rm-primary); font-weight: 700; }
+
+.requirement-management__toolbar {
+  display: flex;
+  height: 47px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--rm-border);
+  background: #fff;
+}
+
+.requirement-management__toolbar-spacer { flex: 1; }
+
+.requirement-management__search { position: relative; display: flex; align-items: center; }
+.requirement-management__search svg { position: absolute; left: 8px; color: var(--rm-placeholder); pointer-events: none; }
+.requirement-management__search input { width: 200px; height: 30px; padding: 0 8px 0 26px; border: 1px solid var(--rm-border); border-radius: 8px; outline: none; color: var(--rm-text); background: #fff; font-size: 12px; transition: border-color 150ms ease, box-shadow 150ms ease; }
+.requirement-management__search input:focus { border-color: var(--rm-primary); box-shadow: 0 0 0 2px rgba(14, 165, 233, .1); }
+.requirement-management__search input::placeholder { color: var(--rm-placeholder); }
+
+.requirement-management__toolbar > select,
+.requirement-management__picker-toolbar select {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--rm-border);
+  border-radius: 8px;
+  outline: none;
+  color: var(--rm-secondary);
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+.requirement-management__toolbar > select:focus,
+.requirement-management__picker-toolbar select:focus { border-color: var(--rm-primary); }
+
+.requirement-management__button {
+  display: inline-flex;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--rm-primary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+}
+
+.requirement-management__button.is-ghost { border-color: var(--rm-border); color: var(--rm-secondary); background: #fff; }
+.requirement-management__button.is-ghost:hover { color: var(--rm-text); background: #f4f6fa; }
+.requirement-management__button.is-small { height: 28px; padding: 0 10px; font-size: 12px; }
+.requirement-management__button.is-danger { background: var(--rm-danger); }
+.requirement-management__button.is-success { background: var(--rm-success); }
+.requirement-management__button.is-reject { border-color: var(--rm-danger); color: var(--rm-danger); background: rgba(245, 63, 63, .03); }
+.requirement-management__button:disabled { border-color: transparent; color: #fff; background: var(--rm-placeholder); cursor: not-allowed; opacity: .5; }
+.requirement-management__button.is-import-trigger { width: 83px; font-size: 12px; }
+.requirement-management__button.is-create-trigger { width: 93.25px; height: 28px; font-size: 13px; font-weight: 500; }
+
+.requirement-management__import-menu { position: relative; }
+.requirement-management__import-options { position: absolute; z-index: 210; top: 34px; right: 0; width: 132px; overflow: hidden; border: 1px solid var(--rm-border); border-radius: 10px; background: #fff; box-shadow: 0 6px 18px rgba(0, 0, 0, .1); }
+.requirement-management__import-options button { display: block; width: 100%; padding: 9px 14px; border: 0; background: transparent; text-align: left; font-size: 13px; cursor: pointer; transition: background-color 120ms ease; }
+.requirement-management__import-options button:hover { background: #f4f6fa; }
+
+.requirement-management__table-wrap { height: calc(100dvh - 183px); overflow: auto; background: #fff; }
+.requirement-management__table { width: 100%; min-width: 1724px; border-collapse: collapse; table-layout: fixed; }
+.requirement-management__table thead { position: sticky; z-index: 10; top: 0; }
+.requirement-management__table thead tr { height: 36.5px; border-bottom: 1px solid var(--rm-border); background: #f7f8fa; }
+.requirement-management__table th { padding: 0 14px; color: var(--rm-muted); font-size: 12px; font-weight: 500; text-align: left; white-space: nowrap; }
+.requirement-management__table th:nth-child(1) { width: 131.17px; }
+.requirement-management__table th:nth-child(2) { width: 324.16px; }
+.requirement-management__table th:nth-child(3) { width: 163.3px; }
+.requirement-management__table th:nth-child(4) { width: 131.3px; }
+.requirement-management__table th:nth-child(5) { width: 135.41px; }
+.requirement-management__table th:nth-child(6) { width: 246.19px; }
+.requirement-management__table th:nth-child(7) { width: 153.86px; }
+.requirement-management__table th:nth-child(8) { width: 176.44px; }
+.requirement-management__table th:nth-child(9) { width: 131.3px; }
+.requirement-management__table th:nth-child(10) { width: auto; }
+.requirement-management__table tbody tr { height: 47.5px; border-bottom: 1px solid var(--rm-border); background: #fff; cursor: pointer; transition: background-color 150ms ease; }
+.requirement-management__table tbody tr:has(.requirement-management__title-cell small) { height: 61px; }
+.requirement-management__table tbody tr:hover { background: #f7f8fa; }
+.requirement-management__table td { padding: 0 14px; overflow: hidden; color: var(--rm-secondary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.requirement-management__mono, .requirement-management code { color: var(--rm-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.requirement-management__title-cell strong { display: block; overflow: hidden; color: var(--rm-text); font-size: 13px; font-weight: 500; text-overflow: ellipsis; }
+.requirement-management__title-cell small { display: block; margin-top: 2px; color: var(--rm-placeholder); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
+.requirement-management__version-tag { display: inline-flex; align-items: center; min-height: 20px; padding: 1px 8px; border-radius: 6px; color: var(--rm-secondary); background: #f4f6fa; font-size: 12px; white-space: nowrap; }
+.requirement-management__badge { display: inline-flex; min-height: 20px; align-items: center; padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 18px; white-space: nowrap; }
+.requirement-management__badge.is-priority { font-weight: 700; }
+.requirement-management__coverage-cell small { display: block; margin-bottom: 4px; color: var(--rm-muted); font-size: 11px; line-height: 14px; }
+.requirement-management__coverage-cell small.is-empty { margin: 0; color: var(--rm-placeholder); font-size: 12px; }
+.requirement-management__coverage-progress { display: flex; align-items: center; gap: 8px; }
+.requirement-management__coverage-progress > span { display: block; height: 4px; flex: 1; overflow: hidden; border-radius: 4px; background: #f2f3f5; }
+.requirement-management__coverage-progress > span i { display: block; height: 100%; border-radius: inherit; background: var(--rm-primary); }
+.requirement-management__coverage-progress > b { min-width: 28px; color: var(--rm-secondary); font-size: 11px; font-weight: 500; text-align: right; }
+.requirement-management__assignee { color: var(--rm-secondary); }
+.requirement-management__row-actions { display: flex; gap: 2px; }
+.requirement-management__row-actions button,
+.requirement-management__icon-button { display: inline-flex; width: 24.5px; height: 24.5px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; color: var(--rm-placeholder); background: transparent; cursor: pointer; transition: color 120ms ease, background-color 120ms ease; }
+.requirement-management__row-actions button:hover { color: var(--rm-text); background: #f2f3f5; }
+.requirement-management__row-actions button.is-danger:hover,
+.requirement-management__icon-button.is-danger:hover { color: var(--rm-danger); background: #fff0f0; }
+.requirement-management__empty-row { height: 96px; color: var(--rm-placeholder) !important; text-align: center; }
+
+.requirement-management__detail-header { display: flex; height: 52px; align-items: center; gap: 8px; padding: 0 20px; border-bottom: 1px solid var(--rm-border); background: #fff; }
+.requirement-management__detail-header > button:first-child { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 0; border-radius: 6px; color: var(--rm-muted); background: transparent; font-size: 13px; cursor: pointer; transition: color 150ms ease, background-color 150ms ease; }
+.requirement-management__detail-header > button:first-child:hover { color: var(--rm-primary); }
+.requirement-management__detail-header > i { width: 1px; height: 14px; background: var(--rm-border); }
+.requirement-management__detail-header > code { flex: 0 0 auto; font-size: 12px; }
+.requirement-management__detail-header > strong { min-width: 0; overflow: hidden; color: var(--rm-text); font-size: 15px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.requirement-management__detail-header > .requirement-management__button { margin-left: auto; }
+.requirement-management__detail-tabs { display: flex; height: 41px; padding: 0 20px; border-bottom: 1px solid var(--rm-border); background: #fff; }
+.requirement-management__detail-body { height: calc(100dvh - 135px); overflow-y: auto; padding: 20px; }
+
+.requirement-management__review-summary { position: relative; display: flex; min-height: 103px; align-items: flex-start; gap: 8px; padding: 16px 20px 32px; overflow: hidden; border: 1px solid var(--rm-border); border-radius: 12px; background: #fff; }
+.requirement-management__review-summary.is-complete { border-color: rgba(0, 180, 42, .25); }
+.requirement-management__review-summary > div:first-child > strong { display: flex; align-items: center; gap: 5px; color: var(--rm-text); font-size: 14px; font-weight: 600; }
+.requirement-management__review-summary > div:first-child > p { display: flex; gap: 14px; margin: 4px 0 0; font-size: 12px; font-weight: 600; }
+.requirement-management__review-summary .is-success { color: var(--rm-success); }
+.requirement-management__review-summary .is-warning { color: var(--rm-warning); }
+.requirement-management__review-summary .is-danger { color: var(--rm-danger); }
+.requirement-management__review-summary .is-muted { color: var(--rm-placeholder); }
+.requirement-management__review-progress { position: absolute; right: 20px; bottom: 16px; left: 20px; display: flex; height: 6px; align-items: center; gap: 8px; }
+.requirement-management__review-progress > span { height: 6px; flex: 1; overflow: hidden; border-radius: 6px; background: #f2f3f5; }
+.requirement-management__review-progress i { display: block; height: 100%; border-radius: inherit; background: var(--rm-success); transition: width 300ms ease; }
+.requirement-management__review-progress b { min-width: 28px; color: var(--rm-secondary); font-size: 11px; font-weight: 500; line-height: 1; text-align: right; }
+
+.requirement-management__case-list { margin-top: 16px; overflow: hidden; border: 1px solid var(--rm-border); border-radius: 12px; background: #fff; }
+.requirement-management__case-list article { display: flex; min-height: 65px; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--rm-border); background: #fff; transition: background-color 120ms ease; }
+.requirement-management__case-list article:last-child { border-bottom: 0; }
+.requirement-management__case-list article:hover { background: #fafbfe; }
+.requirement-management__case-list article.is-rejected { background: rgba(245, 63, 63, .015); }
+.requirement-management__case-list article.is-active { background: rgba(14, 165, 233, .025); }
+.requirement-management__case-list article > i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--rm-placeholder); }
+.requirement-management__case-list article.is-passed > i { background: var(--rm-success); }
+.requirement-management__case-list article.is-reviewing > i { background: var(--rm-warning); }
+.requirement-management__case-list article.is-rejected > i { background: var(--rm-danger); }
+.requirement-management__case-list article > div { flex: 1; min-width: 0; }
+.requirement-management__case-list article > div p { display: flex; align-items: center; gap: 7px; margin: 0 0 3px; }
+.requirement-management__case-list article > div p .requirement-management__badge { min-height: 16px; padding: 0 6px; font-size: 10px; line-height: 16px; }
+.requirement-management__case-list article > div p small { color: var(--rm-placeholder); font-size: 11px; }
+.requirement-management__case-list article > div > strong { display: block; overflow: hidden; color: var(--rm-text); font-size: 13px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.requirement-management__rejection-preview { max-width: 200px; overflow: hidden; color: var(--rm-danger); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.requirement-management__mini-button { height: 26px; padding: 0 10px; border: 1px solid var(--rm-border); border-radius: 6px; color: var(--rm-secondary); background: #f7f8fa; font-size: 11px; cursor: pointer; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease; }
+.requirement-management__mini-button.is-primary { border-color: var(--rm-primary); color: var(--rm-primary); background: rgba(14, 165, 233, .04); font-weight: 600; }
+
+.requirement-management__empty-card { display: flex; min-height: 145px; margin-top: 16px; align-items: center; justify-content: center; flex-direction: column; border: 1.5px dashed var(--rm-border); border-radius: 12px; color: var(--rm-placeholder); background: #fff; }
+.requirement-management__empty-card strong { margin-top: 8px; color: var(--rm-muted); font-size: 13px; font-weight: 500; }
+.requirement-management__empty-card span { margin-top: 4px; font-size: 12px; }
+
+.requirement-management__info-column { display: flex; max-width: 880px; flex-direction: column; gap: 16px; }
+.requirement-management__info-card { padding: 20px; border: 1px solid var(--rm-border); border-radius: 12px; background: #fff; }
+.requirement-management__info-card h3 { margin: 0 0 14px; color: var(--rm-text); font-size: 14px; font-weight: 600; }
+.requirement-management__info-card > p { margin: 0; color: var(--rm-secondary); font-size: 13px; line-height: 1.8; }
+.requirement-management__info-card dl { overflow: hidden; margin: 0; border: 1px solid var(--rm-border); border-radius: 10px; }
+.requirement-management__info-card dl > div { display: flex; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__info-card dl > div:last-child { border-bottom: 0; }
+.requirement-management__info-card dt { width: 120px; flex: 0 0 auto; color: var(--rm-muted); font-size: 13px; }
+.requirement-management__info-card dd { margin: 0; color: var(--rm-text); font-size: 13px; font-weight: 500; }
+.requirement-management .requirement-management__source-link,
+.requirement-management .requirement-management__template-button { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; margin-top: 12px; padding: 0 12px; border: 1px solid var(--rm-border); border-radius: 8px; color: var(--rm-primary); background: #f7f8fa; font-size: 12px; font-weight: 400; cursor: pointer; }
+.requirement-management .requirement-management__source-link { min-height: 34px; padding: 7px 12px; }
+.requirement-management .requirement-management__template-button:hover { background: #eef9fe; }
+.requirement-management__empty-inline { color: var(--rm-placeholder); font-size: 12px; }
+.requirement-management__plan-list { overflow: hidden; border: 1px solid var(--rm-border); border-radius: 10px; }
+.requirement-management__plan-list > div { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__plan-list > div:last-child { border-bottom: 0; }
+.requirement-management__plan-list svg { flex: 0 0 auto; color: var(--rm-muted); }
+.requirement-management__plan-list span { flex: 1; color: var(--rm-text); font-size: 13px; }
+.requirement-management__plan-list em { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-style: normal; font-weight: 500; }
+.requirement-management__plan-list em.is-in-progress { color: #ff7d00; background: #fff3e8; }
+.requirement-management__plan-list em.is-completed { color: #00b42a; background: #e8ffea; }
+
+.requirement-management__defect-list { display: flex; width: 100%; flex-direction: column; gap: 8px; }
+.requirement-management__defect-list article { padding: 12px 16px; border: 1px solid var(--rm-border); border-radius: 10px; background: #fff; }
+.requirement-management__defect-list article p { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; }
+.requirement-management__defect-list article p > span:last-child { margin-left: auto; font-size: 12px; font-weight: 500; }
+.requirement-management__defect-list article > strong { color: var(--rm-text); font-size: 14px; font-weight: 500; }
+
+.requirement-management__overlay { position: fixed; z-index: 1000; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .45); }
+.requirement-management__overlay.is-picker { z-index: 3000; background: rgba(29, 33, 41, .5); }
+.requirement-management__dialog { display: flex; width: 520px; max-height: 90vh; flex-direction: column; padding: 28px 32px; border-radius: 16px; background: #fff; box-shadow: 0 20px 48px rgba(0, 0, 0, .18); }
+.requirement-management__dialog.is-import { width: 560px; }
+.requirement-management__dialog > header { display: flex; height: 28px; flex: 0 0 auto; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.requirement-management__dialog > header h2 { margin: 0; color: var(--rm-text); font-size: 16px; font-weight: 700; }
+.requirement-management__dialog > header button,
+.requirement-management__case-picker > header button,
+.requirement-management__review-drawer > header > button { display: flex; width: 28px; height: 28px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; color: var(--rm-muted); background: transparent; cursor: pointer; transition: color 120ms ease, background-color 120ms ease; }
+.requirement-management__dialog > header button:hover,
+.requirement-management__case-picker > header button:hover,
+.requirement-management__review-drawer > header > button:hover { color: var(--rm-text); background: #f4f6fa; }
+.requirement-management__dialog > footer { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rm-border); }
+.requirement-management__dialog.is-create > footer { padding-top: 0; border-top: 0; }
+.requirement-management__dialog.is-create > footer .requirement-management__button { height: 28px; font-size: 13px; font-weight: 500; }
+
+.requirement-management__form { display: flex; flex-direction: column; gap: 14px; }
+.requirement-management__form > div { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.requirement-management__form label { display: block; min-width: 0; }
+.requirement-management__form label > span,
+.requirement-management__form legend { display: block; margin-bottom: 5px; color: var(--rm-secondary); font-size: 12px; font-weight: 500; }
+.requirement-management__form label > span i { color: var(--rm-danger); font-style: normal; }
+.requirement-management__form input,
+.requirement-management__form select,
+.requirement-management__form textarea { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--rm-border); border-radius: 8px; outline: none; color: var(--rm-text); background: #fff; font-size: 13px; transition: border-color 150ms ease, box-shadow 150ms ease; }
+.requirement-management__form textarea { height: 88px; padding: 8px 10px; resize: none; }
+.requirement-management__form input:focus,
+.requirement-management__form select:focus,
+.requirement-management__form textarea:focus { border-color: var(--rm-primary); box-shadow: 0 0 0 2px rgba(14, 165, 233, .1); }
+.requirement-management__form input::placeholder,
+.requirement-management__form textarea::placeholder { color: var(--rm-placeholder); }
+.requirement-management__form fieldset { display: flex; gap: 8px; margin: 0; padding: 0; border: 0; }
+.requirement-management__form fieldset legend { width: 100%; }
+.requirement-management__form fieldset button { height: 32px; padding: 0 14px; border: 1.5px solid var(--rm-border); border-radius: 8px; color: var(--rm-secondary); background: #fff; font-size: 13px; cursor: pointer; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease; }
+.requirement-management__form fieldset button:hover { border-color: var(--rm-primary); }
+.requirement-management__form fieldset button.is-active { border-color: currentColor; font-weight: 700; }
+
+.requirement-management__import-tabs { display: flex; height: 37px; flex: 0 0 auto; margin-bottom: 20px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__import-body { overflow: auto; }
+.requirement-management__notice { margin: 0; padding: 10px 14px; border: 1px solid #ffd666; border-radius: 8px; color: #7d6608; background: #fffbe6; font-size: 12px; line-height: 1.5; }
+.requirement-management__excel-config { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.requirement-management__excel-config > label { display: flex; width: 100%; min-height: 145px; align-items: center; justify-content: center; flex-direction: column; border: 2px dashed var(--rm-border); border-radius: 12px; color: var(--rm-placeholder); background: #f7f8fa; cursor: pointer; transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease; }
+.requirement-management__excel-config > label.is-dragging { border-color: var(--rm-primary); color: var(--rm-primary); background: rgba(14, 165, 233, .025); }
+.requirement-management__excel-config > label strong { margin-top: 10px; color: var(--rm-text); font-size: 14px; font-weight: 500; }
+.requirement-management__excel-config > label span { margin-top: 4px; color: var(--rm-muted); font-size: 12px; }
+.requirement-management__excel-config > label input { display: none; }
+.requirement-management .requirement-management__template-button { margin-top: 0; background: #fff; }
+.requirement-management__preview > p { margin: 0 0 12px; color: var(--rm-secondary); font-size: 13px; }
+.requirement-management__preview > p strong { color: var(--rm-primary); font-weight: 600; }
+.requirement-management__preview table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.requirement-management__preview th { padding: 8px 10px; border-bottom: 1px solid var(--rm-border); color: var(--rm-muted); background: #f7f8fa; font-weight: 500; text-align: left; }
+.requirement-management__preview td { padding: 8px 10px; border-bottom: 1px solid var(--rm-border); color: var(--rm-secondary); }
+
+.requirement-management__case-picker { display: flex; width: 840px; height: 580px; overflow: hidden; flex-direction: column; border-radius: 14px; background: #fff; box-shadow: 0 24px 64px rgba(0, 0, 0, .2); }
+.requirement-management__case-picker > header { display: flex; height: 52px; flex: 0 0 auto; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__case-picker > header > i { width: 4px; height: 18px; margin-right: 10px; border-radius: 2px; background: var(--rm-primary); }
+.requirement-management__case-picker > header h2 { margin: 0; color: var(--rm-text); font-size: 15px; font-weight: 700; }
+.requirement-management__case-picker > header > span { margin-left: auto; color: var(--rm-primary); font-size: 12px; font-weight: 600; }
+.requirement-management__case-picker > header button { margin-left: 12px; }
+.requirement-management__picker-content { display: flex; flex: 1; min-height: 0; }
+.requirement-management__picker-content > aside { width: 196px; flex: 0 0 auto; overflow-y: auto; padding: 8px 6px; border-right: 1px solid var(--rm-border); background: #fafbfe; }
+.requirement-management__picker-content > aside > strong { display: block; padding: 4px 8px 8px; color: var(--rm-placeholder); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.requirement-management__picker-content > aside > button { display: flex; width: 100%; height: 30px; align-items: center; gap: 5px; margin-bottom: 1px; padding-right: 8px; border: 0; border-radius: 6px; color: var(--rm-text); background: transparent; cursor: pointer; transition: background-color 100ms ease; }
+.requirement-management__picker-content > aside > button:hover { background: #eff0f5; }
+.requirement-management__picker-content > aside > button.is-active { color: var(--rm-primary); background: rgba(14, 165, 233, .07); font-weight: 600; }
+.requirement-management__picker-content > aside > button svg { flex: 0 0 auto; color: #ff7d00; }
+.requirement-management__tree-toggle { display: flex; width: 13px; flex: 0 0 auto; align-items: center; }
+.requirement-management__tree-toggle svg { color: var(--rm-placeholder) !important; transition: transform 150ms ease; }
+.requirement-management__tree-toggle svg.is-expanded { transform: rotate(90deg); }
+.requirement-management__picker-content > aside > button em { min-width: 0; flex: 1; overflow: hidden; font-size: 12px; font-style: normal; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.requirement-management__picker-content > aside > button small { color: var(--rm-placeholder); font-size: 10px; }
+.requirement-management__picker-content > aside > button small b { color: var(--rm-primary); font-weight: 700; }
+.requirement-management__picker-content > aside > button.is-active small { color: var(--rm-primary); }
+.requirement-management__picker-content > main { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.requirement-management__picker-toolbar { display: flex; height: 53px; flex: 0 0 auto; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__picker-toolbar label { position: relative; display: flex; flex: 1; align-items: center; }
+.requirement-management__picker-toolbar label svg { position: absolute; left: 10px; color: var(--rm-placeholder); pointer-events: none; }
+.requirement-management__picker-toolbar input { width: 100%; height: 32px; padding: 0 10px 0 30px; border: 1px solid var(--rm-border); border-radius: 7px; outline: none; color: var(--rm-text); font-size: 12px; }
+.requirement-management__picker-toolbar input:focus { border-color: var(--rm-primary); }
+.requirement-management__picker-toolbar select { height: 32px; max-width: 200px; border-radius: 7px; }
+.requirement-management__picker-breadcrumb { display: flex; min-height: 28px; flex: 0 0 auto; align-items: center; gap: 5px; padding: 5px 14px; border-bottom: 1px solid var(--rm-border); background: #fafbfe; }
+.requirement-management__picker-breadcrumb svg { color: #ff7d00; }
+.requirement-management__picker-breadcrumb span { color: var(--rm-secondary); font-size: 11px; }
+.requirement-management__picker-breadcrumb small { color: var(--rm-placeholder); font-size: 11px; }
+.requirement-management__picker-table-wrap { flex: 1; overflow-y: auto; }
+.requirement-management__picker-content > aside,
+.requirement-management__picker-table-wrap { scrollbar-color: rgba(134, 144, 156, .45) transparent; scrollbar-width: thin; }
+.requirement-management__picker-content > aside::-webkit-scrollbar,
+.requirement-management__picker-table-wrap::-webkit-scrollbar { width: 6px; }
+.requirement-management__picker-content > aside::-webkit-scrollbar-track,
+.requirement-management__picker-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.requirement-management__picker-content > aside::-webkit-scrollbar-thumb,
+.requirement-management__picker-table-wrap::-webkit-scrollbar-thumb { border-radius: 6px; background: rgba(134, 144, 156, .45); }
+.requirement-management__picker-content > aside::-webkit-scrollbar-button,
+.requirement-management__picker-table-wrap::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+.requirement-management__picker-table-wrap table { width: 100%; border-collapse: collapse; }
+.requirement-management__picker-table-wrap thead { position: sticky; z-index: 2; top: 0; }
+.requirement-management__picker-table-wrap th { height: 34px; padding: 0 12px; border-bottom: 1px solid var(--rm-border); color: var(--rm-muted); background: #fafafa; font-size: 11px; font-weight: 700; text-align: left; }
+.requirement-management__picker-table-wrap th:first-child,
+.requirement-management__picker-table-wrap td:first-child { width: 44px; padding-left: 14px; text-align: center; }
+.requirement-management__picker-table-wrap td { height: 38px; padding: 0 12px; border-bottom: 1px solid var(--rm-border); color: var(--rm-text); font-size: 12px; }
+.requirement-management__picker-table-wrap tbody tr { cursor: pointer; transition: background-color 100ms ease; }
+.requirement-management__picker-table-wrap tbody tr:hover { background: #fafbff; }
+.requirement-management__picker-table-wrap tbody tr.is-checked { background: rgba(14, 165, 233, .025); }
+.requirement-management__picker-table-wrap input { accent-color: var(--rm-primary); cursor: pointer; }
+.requirement-management__picker-table-wrap td span { display: inline-flex; align-items: center; gap: 4px; color: var(--rm-muted); font-size: 11px; }
+.requirement-management__picker-table-wrap td span svg { color: #faad14; }
+.requirement-management__case-picker > footer { display: flex; height: 53px; flex: 0 0 auto; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--rm-border); }
+.requirement-management__case-picker > footer > span { flex: 1; color: var(--rm-muted); font-size: 12px; }
+.requirement-management__case-picker > footer > span strong { color: var(--rm-primary); font-weight: 700; }
+
+.requirement-management__review-drawer { position: fixed; z-index: 3200; top: 0; right: 0; bottom: 0; display: flex; width: 480px; flex-direction: column; background: #fff; box-shadow: -4px 0 24px rgba(0, 0, 0, .12); }
+.requirement-management__review-drawer > header { display: flex; flex: 0 0 auto; align-items: flex-start; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__review-drawer > header > div { flex: 1; min-width: 0; }
+.requirement-management__review-drawer > header p { display: flex; align-items: center; gap: 8px; margin: 0 0 5px; }
+.requirement-management__review-drawer > header p .requirement-management__badge { min-height: 18px; padding: 0 7px; }
+.requirement-management__review-drawer > header p small { color: var(--rm-muted); font-size: 11px; }
+.requirement-management__review-drawer > header h2 { margin: 0; color: var(--rm-text); font-size: 15px; font-weight: 600; line-height: 1.4; }
+.requirement-management__review-content { flex: 1; overflow-y: auto; padding: 20px; }
+.requirement-management__review-content > section { margin-bottom: 20px; }
+.requirement-management__review-content > section > h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: var(--rm-secondary); font-size: 12px; font-weight: 600; }
+.requirement-management__review-content > section > h3 i { width: 3px; height: 12px; border-radius: 2px; background: var(--rm-primary); }
+.requirement-management__review-content > section > p { margin: 0; padding: 10px 14px; border-radius: 8px; color: var(--rm-secondary); background: #f7f8fa; font-size: 13px; line-height: 1.7; }
+.requirement-management__steps { overflow: hidden; border: 1px solid var(--rm-border); border-radius: 10px; }
+.requirement-management__steps > div { display: grid; grid-template-columns: 32px 1fr 1fr; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__steps > div:last-child { border-bottom: 0; }
+.requirement-management__steps > div:first-child { background: #f7f8fa; }
+.requirement-management__steps > div:nth-child(odd):not(:first-child) { background: #fafbfe; }
+.requirement-management__steps strong { padding: 8px 12px; color: var(--rm-muted); font-size: 11px; font-weight: 600; }
+.requirement-management__steps b,
+.requirement-management__steps span { padding: 10px 12px; border-right: 1px solid var(--rm-border); color: var(--rm-text); font-size: 13px; font-weight: 400; line-height: 1.6; }
+.requirement-management__steps b { color: var(--rm-placeholder); font-size: 12px; font-weight: 600; }
+.requirement-management__steps span:last-child { border-right: 0; color: var(--rm-secondary); }
+.requirement-management__rejection-note { display: flex; gap: 8px; margin: 16px 0 0; padding: 10px 14px; border: 1px solid rgba(245, 63, 63, .18); border-radius: 8px; color: var(--rm-danger); background: rgba(245, 63, 63, .02); font-size: 12px; line-height: 1.6; }
+.requirement-management__reject-editor { margin-top: 16px; padding: 14px; border: 1px solid rgba(245, 63, 63, .18); border-radius: 10px; background: rgba(245, 63, 63, .01); }
+.requirement-management__reject-editor h3 { color: var(--rm-danger) !important; }
+.requirement-management__reject-editor textarea { width: 100%; padding: 8px 10px; border: 1px solid rgba(245, 63, 63, .25); border-radius: 8px; outline: none; color: var(--rm-text); resize: none; font-size: 12px; }
+.requirement-management__reject-editor > div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.requirement-management__review-drawer > footer { flex: 0 0 auto; border-top: 1px solid var(--rm-border); background: #fff; }
+.requirement-management__drawer-nav { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__drawer-nav button { display: inline-flex; height: 30px; align-items: center; gap: 4px; padding: 0 12px; border: 1px solid var(--rm-border); border-radius: 8px; color: var(--rm-secondary); background: #fff; font-size: 12px; cursor: pointer; }
+.requirement-management__drawer-nav button:disabled { color: var(--rm-placeholder); cursor: not-allowed; opacity: .4; }
+.requirement-management__drawer-nav span { flex: 1; color: var(--rm-muted); font-size: 12px; font-weight: 500; text-align: center; }
+.requirement-management__drawer-actions { display: flex; min-height: 57px; align-items: center; gap: 10px; padding: 12px 20px; }
+.requirement-management__drawer-actions p { display: flex; flex: 1; align-items: center; gap: 6px; margin: 0; color: var(--rm-muted); font-size: 12px; }
+.requirement-management__drawer-actions.is-passed p { color: var(--rm-success); font-size: 13px; font-weight: 600; }
+.requirement-management__drawer-actions.is-rejected p { color: var(--rm-danger); font-size: 13px; font-weight: 600; }
+
+.requirement-management__toast { position: fixed; z-index: 4000; top: 58px; left: 50%; display: flex; min-height: 36px; align-items: center; gap: 7px; padding: 0 14px; border: 1px solid rgba(0, 180, 42, .18); border-radius: 8px; color: #008f24; background: #f0fff3; box-shadow: 0 8px 24px rgba(0, 0, 0, .12); font-size: 13px; transform: translateX(-50%); }
+
+.requirement-fade-enter-active,
+.requirement-fade-leave-active { transition: opacity 150ms ease; }
+.requirement-fade-enter-from,
+.requirement-fade-leave-to { opacity: 0; }
+.requirement-popover-enter-active,
+.requirement-popover-leave-active { transition: opacity 120ms ease, transform 120ms ease; transform-origin: top right; }
+.requirement-popover-enter-from,
+.requirement-popover-leave-to { opacity: 0; transform: translateY(-4px) scale(.98); }
+.requirement-drawer-enter-active,
+.requirement-drawer-leave-active { transition: transform 180ms ease; }
+.requirement-drawer-enter-from,
+.requirement-drawer-leave-to { transform: translateX(100%); }
+.requirement-toast-enter-active,
+.requirement-toast-leave-active { transition: opacity 150ms ease, transform 150ms ease; }
+.requirement-toast-enter-from,
+.requirement-toast-leave-to { opacity: 0; transform: translate(-50%, -6px); }
+
+@media (max-width: 1100px) {
+  .requirement-management__table-wrap { overflow: auto; }
+  .requirement-management__review-drawer { width: min(480px, 100vw); }
+  .requirement-management__case-picker { width: calc(100vw - 40px); }
+}

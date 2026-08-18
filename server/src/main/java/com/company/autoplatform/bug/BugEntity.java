@@ -60,6 +60,18 @@ public class BugEntity extends BaseEntity {
     @TableField("related_task_id")
     private Long relatedTaskId;
 
+    @TableField("test_version_id")
+    private Long testVersionId;
+
+    @TableField("test_requirement_id")
+    private Long testRequirementId;
+
+    @TableField("test_plan_id")
+    private Long testPlanId;
+
+    @TableField("test_plan_case_id")
+    private Long testPlanCaseId;
+
     @TableField("tags_json")
     private String tagsJson;
 }

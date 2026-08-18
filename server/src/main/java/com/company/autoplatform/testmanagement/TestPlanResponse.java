@@ -1,0 +1,49 @@
+package com.company.autoplatform.testmanagement;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+
+public record TestPlanResponse(
+        Long id,
+        String planNo,
+        PlanPurpose purpose,
+        PlanType planType,
+        PlanStatus status,
+        Long versionId,
+        String versionName,
+        String name,
+        Long ownerId,
+        String ownerName,
+        LocalDate startDate,
+        LocalDate endDate,
+        String goal,
+        BigDecimal minExecuteRate,
+        BigDecimal minPassRate,
+        boolean allowP0,
+        int maxP1,
+        boolean autoReport,
+        boolean ownerConfirmRequired,
+        long requirementCount,
+        long caseCount,
+        long executedCount,
+        long passedCount,
+        BigDecimal executeRate,
+        BigDecimal passRate,
+        long defectCount,
+        Integer lockVersion,
+        String workspaceCode,
+        String workspaceName,
+        LocalDateTime snapshotFrozenAt,
+        LocalDateTime startedAt,
+        LocalDateTime completedAt,
+        LocalDateTime cancelledAt,
+        String cancelReason,
+        List<TestPlanRequirementItem> requirements,
+        List<TestPlanCaseItem> cases,
+        TestPlanReportResponse report,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
+) {
+}

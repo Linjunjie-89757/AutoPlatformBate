@@ -94,12 +94,13 @@ const option = computed<ChartOption>(() => ({
 
 .defect-status-chart__plot {
   width: 400px;
-  height: 168px;
+  height: 172px;
 }
 
 .defect-status-chart__legend {
   display: flex;
   width: 400px;
+  margin-top: 4px;
   align-items: center;
   justify-content: center;
   gap: 7px;
