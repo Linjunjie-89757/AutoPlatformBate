@@ -1475,6 +1475,7 @@ const confirmPlanAction = async (payload: { reason?: string; force?: boolean }) 
     )
     const mapped = mapPlan(result)
     plans.value = plans.value.map(item => item.id === mapped.id ? mapped : item)
+    planLockVersions.value.set(mapped.id, result.lockVersion)
     if (selectedPlan.value?.id === mapped.id) {
       applyPlanDetail(result)
       await refreshPlanActivities()
@@ -1605,7 +1606,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
          :can-execute="canExecute"
          :can-edit-snapshot="canEdit"
          :can-create-defect="canCreateDefect"
-         :can-link-defect="canEdit"
+         :can-link-defect="canExecute"
          :can-manage-evidence="canExecute"
         @back="closeExecution"
         @create-defect="openDefectModal"

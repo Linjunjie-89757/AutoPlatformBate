@@ -62,7 +62,13 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
     private TestPlanCaseMapper planCaseMapper;
 
     @Autowired
+    private TestPlanRequirementMapper planRequirementMapper;
+
+    @Autowired
     private TestPlanCaseRequirementMapper planCaseRequirementMapper;
+
+    @Autowired
+    private TestPlanCaseExecutionMapper planCaseExecutionMapper;
 
     @Autowired
     private TestRequirementMapper requirementMapper;
@@ -228,6 +234,126 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void deletingDraftPlanRemovesItsRequirementAndCaseConfiguration() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode version = data(mockMvc.perform(post("/api/test-management/versions")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "name", "draft-delete-version-" + suffix,
+                                "versionType", "ITERATION",
+                                "ownerId", 11
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+        long versionId = version.path("id").asLong();
+
+        JsonNode requirement = data(mockMvc.perform(post("/api/test-management/requirements")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "versionId", versionId,
+                                "title", "draft-delete-requirement-" + suffix,
+                                "priority", "P2",
+                                "sourceType", "MANUAL"
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+        long requirementId = requirement.path("id").asLong();
+        CaseEntity testCase = firstCaseInRiskWorkspace();
+
+        requirement = data(mockMvc.perform(put("/api/test-management/requirements/{id}/cases", requirementId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("caseIds", List.of(testCase.getId()), "expectedVersion", 0))))
+                .andExpect(status().isOk())
+                .andReturn());
+        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/review/start", requirementId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("expectedVersion", requirement.path("lockVersion").asInt()))))
+                .andExpect(status().isOk())
+                .andReturn());
+        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/cases/{caseId}/review", requirementId, testCase.getId())
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "decision", "PASSED",
+                                "expectedVersion", requirement.path("lockVersion").asInt()
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(requirement.path("reviewStatus").asText()).isEqualTo("PASSED");
+
+        JsonNode plan = data(mockMvc.perform(post("/api/test-management/plans")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "purpose", "VERSION",
+                                "versionId", versionId,
+                                "name", "draft-delete-plan-" + suffix,
+                                "requirementIds", List.of(requirementId),
+                                "draft", true
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.caseCount").value(1))
+                .andReturn());
+        long planId = plan.path("id").asLong();
+        List<Long> planCaseIds = planCaseMapper.selectList(new LambdaQueryWrapper<TestPlanCaseEntity>()
+                        .eq(TestPlanCaseEntity::getPlanId, planId))
+                .stream().map(TestPlanCaseEntity::getId).toList();
+        assertThat(planCaseIds).hasSize(1);
+
+        mockMvc.perform(delete("/api/test-management/plans/{id}", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .param("expectedVersion", String.valueOf(plan.path("lockVersion").asInt())))
+                .andExpect(status().isOk());
+
+        assertThat(planMapper.selectById(planId)).isNull();
+        assertThat(planRequirementMapper.selectCount(new LambdaQueryWrapper<TestPlanRequirementEntity>()
+                .eq(TestPlanRequirementEntity::getPlanId, planId))).isZero();
+        assertThat(planCaseMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseEntity>()
+                .eq(TestPlanCaseEntity::getPlanId, planId))).isZero();
+        assertThat(planCaseRequirementMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseRequirementEntity>()
+                .in(TestPlanCaseRequirementEntity::getPlanCaseId, planCaseIds))).isZero();
+
+        JsonNode protectedPlan = data(mockMvc.perform(post("/api/test-management/plans")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "purpose", "TEMP",
+                                "name", "draft-with-execution-" + suffix,
+                                "manualCaseIds", List.of(testCase.getId()),
+                                "draft", true
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+        long protectedPlanId = protectedPlan.path("id").asLong();
+        TestPlanCaseEntity protectedPlanCase = planCaseMapper.selectOne(new LambdaQueryWrapper<TestPlanCaseEntity>()
+                .eq(TestPlanCaseEntity::getPlanId, protectedPlanId));
+        LocalDateTime now = LocalDateTime.now();
+        TestPlanCaseExecutionEntity execution = new TestPlanCaseExecutionEntity();
+        execution.setWorkspaceId(protectedPlanCase.getWorkspaceId());
+        execution.setPlanId(protectedPlanId);
+        execution.setPlanCaseId(protectedPlanCase.getId());
+        execution.setPreviousStatus(PlanCaseExecutionStatus.PENDING);
+        execution.setExecutionStatus(PlanCaseExecutionStatus.PASSED);
+        execution.setExecutorId(11L);
+        execution.setExecutedAt(now);
+        execution.setCreatedAt(now);
+        execution.setUpdatedAt(now);
+        planCaseExecutionMapper.insert(execution);
+
+        mockMvc.perform(delete("/api/test-management/plans/{id}", protectedPlanId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .param("expectedVersion", String.valueOf(protectedPlan.path("lockVersion").asInt())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+        assertThat(planMapper.selectById(protectedPlanId)).isNotNull();
+    }
+
+    @Test
     void allWorkspaceScopeIsReadOnly() throws Exception {
         mockMvc.perform(post("/api/test-management/versions")
                         .header("X-Workspace-Code", "ALL")
@@ -281,6 +407,14 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
                                 "force", false
                         ))))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/test-management/plans/{id}/cases/{planCaseId}/evidence/{attachmentId}", 999999L, 999999L, 999999L)
+                        .with(authentication(engineer))
+                        .header("X-Workspace-Code", "retail-onboarding"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(delete("/api/test-management/plans/{id}/cases/{planCaseId}/defects/{defectId}", 999999L, 999999L, 999999L)
+                        .with(authentication(engineer))
+                        .header("X-Workspace-Code", "retail-onboarding"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

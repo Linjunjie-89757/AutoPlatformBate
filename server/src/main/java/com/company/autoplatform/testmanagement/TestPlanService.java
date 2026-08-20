@@ -328,7 +328,10 @@ public class TestPlanService {
         TestPlanEntity plan = requireWritable(id, workspaceCode);
         requireExpectedVersion(plan.getLockVersion(), expectedVersion, "测试计划");
         if (plan.getStatus() != PlanStatus.DRAFT) throw TestManagementException.snapshotLocked("只有草稿测试计划可以删除");
-        if (planCaseMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseEntity>().eq(TestPlanCaseEntity::getPlanId, id)) > 0
+        // Pending snapshot cases are draft configuration and are removed by deleteScope.
+        // Execution facts and downstream records must remain protected for traceability.
+        if (executionMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseExecutionEntity>().eq(TestPlanCaseExecutionEntity::getPlanId, id)) > 0
+                || executionAttachmentMapper.selectCount(new LambdaQueryWrapper<TestPlanExecutionAttachmentEntity>().eq(TestPlanExecutionAttachmentEntity::getPlanId, id)) > 0
                 || reportMapper.selectCount(new LambdaQueryWrapper<TestPlanReportEntity>().eq(TestPlanReportEntity::getPlanId, id)) > 0
                 || bugMapper.selectCount(new LambdaQueryWrapper<BugEntity>().eq(BugEntity::getTestPlanId, id)) > 0
                 || planCaseDefectRelationMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>().eq(TestPlanCaseDefectRelationEntity::getPlanId, id)) > 0) {

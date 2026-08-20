@@ -108,6 +108,11 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
             if ("test_management".equals(module) && uri.matches("^/api/test-management/plans/[^/]+/cases/[^/]+$")) {
                 return "edit";
             }
+            if ("test_management".equals(module)
+                    && (uri.matches("^/api/test-management/plans/[^/]+/cases/[^/]+/evidence/[^/]+$")
+                    || uri.matches("^/api/test-management/plans/[^/]+/cases/[^/]+/defects/[^/]+$"))) {
+                return "execute";
+            }
             if (uri.contains("/attachments/")
                     || uri.contains("/comments/")
                     || ("bugs".equals(module) && uri.matches("^/api/bugs/[^/]+/cases/[^/]+$"))) {
@@ -123,6 +128,9 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
         }
         if (HttpMethod.POST.matches(method)) {
             if ("test_management".equals(module)) {
+                if (uri.matches("^/api/test-management/plans/[^/]+/cases/[^/]+/(evidence|defects/link)$")) {
+                    return "execute";
+                }
                 if (uri.matches("^/api/test-management/versions/[^/]+/transition$")) {
                     return "release";
                 }
