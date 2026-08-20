@@ -11,6 +11,7 @@ import type {
   TestPlanReportItem,
   TestPlanSavePayload,
   TestRequirementItem,
+  TestRequirementImportResult,
   TestRequirementSavePayload,
   TestVersionItem,
   TestVersionSavePayload,
@@ -126,6 +127,34 @@ export const testManagementApi = {
     unwrap(await httpDelete<ApiResponse<null>>(`/test-management/requirements/${id}`, {
       headers: workspaceHeaders(workspaceCode), params: { expectedVersion },
     }), '需求删除失败')
+  },
+
+  async downloadRequirementImportTemplate(workspaceCode: string) {
+    const response = await request.get<Blob>('/test-management/requirements/import-template', {
+      headers: workspaceHeaders(workspaceCode),
+      responseType: 'blob',
+    })
+    const disposition = String(response.headers['content-disposition'] || '')
+    const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+    let fileName = '需求导入模板.xlsx'
+    try {
+      fileName = decodeURIComponent(utf8Name || plainName || fileName)
+    } catch {
+      fileName = plainName || fileName
+    }
+    return { blob: response.data, fileName }
+  },
+
+  async importRequirements(workspaceCode: string, defaultVersionId: number, file: File, duplicateStrategy = 'SKIP') {
+    const form = new FormData()
+    form.append('defaultVersionId', String(defaultVersionId))
+    form.append('duplicateStrategy', duplicateStrategy)
+    form.append('file', file)
+    const response = await request.post<ApiResponse<TestRequirementImportResult>>('/test-management/requirements/import', form, {
+      headers: { ...workspaceHeaders(workspaceCode), 'Content-Type': 'multipart/form-data' },
+    })
+    return unwrap(response.data, '需求导入失败')
   },
 
   async replaceRequirementCases(workspaceCode: string, id: number, caseIds: number[], expectedVersion: number) {

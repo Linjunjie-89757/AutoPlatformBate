@@ -33,6 +33,11 @@ const props = defineProps<{
   history?: TestPlanExecutionHistoryItem[]
   evidence?: TestPlanExecutionAttachmentItem[]
   uploadingEvidence?: boolean
+  canExecute?: boolean
+  canEditSnapshot?: boolean
+  canCreateDefect?: boolean
+  canLinkDefect?: boolean
+  canManageEvidence?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -76,8 +81,11 @@ const parseExecutionNote = (note?: string | null) => {
 const activeCase = computed(() => props.cases.find(item => String(item.id) === activeId.value) || props.cases[0] || null)
 const activeIndex = computed(() => props.cases.findIndex(item => String(item.id) === activeId.value))
 const activeStatus = computed(() => activeCase.value ? statusConfig[normalizeStatus(activeCase.value.executionStatus)] : statusConfig.PENDING)
-const canExecute = computed(() => ['RUNNING', 'running'].includes(props.planStatus))
-const canEditSnapshot = computed(() => ['DRAFT', 'PENDING', 'draft', 'pending'].includes(props.planStatus))
+const canExecute = computed(() => props.canExecute !== false && ['RUNNING', 'running'].includes(props.planStatus))
+const canEditSnapshot = computed(() => props.canEditSnapshot !== false && ['DRAFT', 'PENDING', 'draft', 'pending'].includes(props.planStatus))
+const canCreateDefect = computed(() => props.canCreateDefect !== false)
+const canLinkDefect = computed(() => props.canLinkDefect !== false)
+const canManageEvidence = computed(() => props.canManageEvidence !== false)
 const activeDraft = computed(() => {
   if (!activeCase.value) return { actual: '', remark: '' }
   const key = String(activeCase.value.id)
@@ -204,15 +212,15 @@ const defectAssignee = (item: TestPlanDefectItem) => item.assigneeName
               <article><h3>前置条件</h3><p>{{ activeCase.precondition || '—' }}</p></article>
               <article><h3>测试步骤</h3><ol><li v-for="(step, index) in steps" :key="`${index}-${step}`"><b>{{ index + 1 }}</b><span>{{ step }}</span></li></ol><p v-if="!steps.length">—</p></article>
               <article><h3>预期结果</h3><p>{{ activeCase.expectedResult || '—' }}</p></article>
-              <article class="is-editable"><h3>实际结果</h3><textarea v-model="activeDraft.actual" placeholder="请填写本次执行的实际结果…" /></article>
+              <article class="is-editable"><h3>实际结果</h3><textarea v-model="activeDraft.actual" :disabled="!canExecute" placeholder="请填写本次执行的实际结果…" /></article>
             </div>
-            <article class="tp-execution__wide-card"><h3>执行备注</h3><textarea v-model="activeDraft.remark" rows="3" placeholder="补充执行说明（选填）…" /></article>
-            <article class="tp-execution__wide-card is-evidence"><h3>执行证据</h3><input ref="evidenceInput" type="file" multiple hidden @change="emit('uploadEvidence', { caseId: activeId, files: Array.from(($event.target as HTMLInputElement).files || []) })"><button type="button" :disabled="uploadingEvidence" @click="evidenceInput?.click()"><Upload :size="20" /><strong>{{ uploadingEvidence ? '上传中…' : '点击上传，或将文件拖拽至此处' }}</strong><small>支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB</small></button><div v-if="evidence?.length" class="tp-execution__evidence-list"><span v-for="file in evidence" :key="file.id"><a :href="file.downloadUrl" target="_blank" rel="noreferrer">{{ file.fileName }}</a><button type="button" :disabled="uploadingEvidence" aria-label="删除证据" title="删除证据" @click="emit('deleteEvidence', { caseId: activeId, attachmentId: file.id })">删除</button></span></div></article>
+            <article class="tp-execution__wide-card"><h3>执行备注</h3><textarea v-model="activeDraft.remark" :disabled="!canExecute" rows="3" placeholder="补充执行说明（选填）…" /></article>
+            <article class="tp-execution__wide-card is-evidence"><h3>执行证据</h3><input ref="evidenceInput" type="file" multiple hidden :disabled="!canManageEvidence" @change="emit('uploadEvidence', { caseId: activeId, files: Array.from(($event.target as HTMLInputElement).files || []) })"><button type="button" :disabled="uploadingEvidence || !canManageEvidence" @click="evidenceInput?.click()"><Upload :size="20" /><strong>{{ uploadingEvidence ? '上传中…' : '点击上传，或将文件拖拽至此处' }}</strong><small>支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB</small></button><div v-if="evidence?.length" class="tp-execution__evidence-list"><span v-for="file in evidence" :key="file.id"><a :href="file.downloadUrl" target="_blank" rel="noreferrer">{{ file.fileName }}</a><button v-if="canManageEvidence" type="button" :disabled="uploadingEvidence" aria-label="删除证据" title="删除证据" @click="emit('deleteEvidence', { caseId: activeId, attachmentId: file.id })">删除</button></span></div></article>
           </div>
 
           <div v-else-if="tab === 'defects'" class="tp-execution__defects">
-            <div class="tp-execution__defect-actions"><button type="button" @click="linkDefectOpen = true"><Link2 :size="12" />关联已有缺陷</button><button class="is-primary" type="button" @click="emit('createDefect', activeId)"><Plus :size="12" />新建缺陷</button></div>
-            <div v-if="activeDefects.length" class="tp-execution__defect-table"><table><thead><tr><th>缺陷编号</th><th>缺陷标题</th><th>优先级</th><th>严重级别</th><th>状态</th><th>负责人</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="defect in activeDefects" :key="defect.id"><td><code>{{ defect.bugNo }}</code></td><td>{{ defect.title }}</td><td><b :class="`is-${defect.priority.toLowerCase()}`">{{ defect.priority }}</b></td><td>{{ severityLabel[defect.severity] || defect.severity }}</td><td><span>{{ defectStatusLabel[defect.status] || defect.status }}</span></td><td>{{ defectAssignee(defect) }}</td><td><code>{{ defect.updatedAt?.slice(0, 16).replace('T', ' ') || '—' }}</code></td><td><button type="button" @click="emit('unsupported', '缺陷详情查看')">查看</button><button class="is-danger" type="button" @click="emit('unlinkDefect', { caseId: activeId, defectId: defect.id })">取消关联</button></td></tr></tbody></table></div>
+            <div class="tp-execution__defect-actions"><button v-if="canLinkDefect" type="button" @click="linkDefectOpen = true"><Link2 :size="12" />关联已有缺陷</button><button v-if="canCreateDefect" class="is-primary" type="button" @click="emit('createDefect', activeId)"><Plus :size="12" />新建缺陷</button></div>
+            <div v-if="activeDefects.length" class="tp-execution__defect-table"><table><thead><tr><th>缺陷编号</th><th>缺陷标题</th><th>优先级</th><th>严重级别</th><th>状态</th><th>负责人</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="defect in activeDefects" :key="defect.id"><td><code>{{ defect.bugNo }}</code></td><td>{{ defect.title }}</td><td><b :class="`is-${defect.priority.toLowerCase()}`">{{ defect.priority }}</b></td><td>{{ severityLabel[defect.severity] || defect.severity }}</td><td><span>{{ defectStatusLabel[defect.status] || defect.status }}</span></td><td>{{ defectAssignee(defect) }}</td><td><code>{{ defect.updatedAt?.slice(0, 16).replace('T', ' ') || '—' }}</code></td><td><button type="button" @click="emit('unsupported', '缺陷详情查看')">查看</button><button v-if="canLinkDefect" class="is-danger" type="button" @click="emit('unlinkDefect', { caseId: activeId, defectId: defect.id })">取消关联</button></td></tr></tbody></table></div>
             <div v-else class="tp-execution__tab-empty"><Bug :size="36" /><span>暂无关联缺陷</span></div>
           </div>
 
@@ -225,7 +233,7 @@ const defectAssignee = (item: TestPlanDefectItem) => item.assigneeName
         <footer class="tp-execution__actions">
           <button type="button" :disabled="activeIndex <= 0" @click="move(-1)"><ChevronLeft :size="13" />上一条</button><code><strong>{{ activeIndex + 1 }}</strong>/{{ cases.length }}</code><button type="button" :disabled="activeIndex >= cases.length - 1" @click="move(1)">下一条<ChevronRight :size="13" /></button><i />
           <label><button type="button" role="switch" :aria-checked="autoNext" :class="{ 'is-on': autoNext }" @click="autoNext = !autoNext"><span /></button>自动下一条</label><span />
-          <button class="is-defect" type="button" @click="emit('createDefect', activeId)"><Star :size="13" />添加缺陷</button><i />
+          <button v-if="canCreateDefect" class="is-defect" type="button" @click="emit('createDefect', activeId)"><Star :size="13" />添加缺陷</button><i v-if="canCreateDefect" />
           <button class="is-blocked" type="button" :disabled="submitting || !canExecute" @click="mark('BLOCKED')">标记阻塞</button><button class="is-failed" type="button" :disabled="submitting || !canExecute" @click="mark('FAILED')">标记失败</button><button class="is-passed" type="button" :disabled="submitting || !canExecute" @click="mark('PASSED')"><Check :size="14" />{{ submitting ? '保存中…' : '标记通过' }}</button>
         </footer>
       </main>
@@ -239,7 +247,7 @@ const defectAssignee = (item: TestPlanDefectItem) => item.assigneeName
       @submit="emit('editCase', { caseId: String(activeCase.id), ...$event })"
     />
     <TestPlanLinkDefectDialog
-      v-if="linkDefectOpen"
+      v-if="linkDefectOpen && canLinkDefect"
       :defects="defects"
       :linked-ids="activeDefects.map(item => item.id)"
       :submitting="submitting"

@@ -26,6 +26,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, type Component, wa
 
 import { caseApi, type CaseDirectoryNode, type CaseSummaryItem } from '@/entities/case'
 import { defectApi } from '@/entities/defect'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import {
   testManagementApi,
   type TestActivityItem,
@@ -99,6 +100,7 @@ const emit = defineEmits<{
 }>()
 
 const { selectedWorkspaceCode } = useWorkspaceContext()
+const { currentUser } = useSession()
 const plans = ref<ManagedTestPlan[]>([])
 const view = ref<PageView>('list')
 const selectedPlan = ref<ManagedTestPlan | null>(null)
@@ -178,6 +180,16 @@ const copyDialogTarget = ref<ManagedTestPlan | null>(null)
 const copyDialogError = ref('')
 const toastMessage = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
+
+const canCreate = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.create'))
+const canEdit = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.edit'))
+const canDelete = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.delete'))
+const canExecute = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.execute'))
+const canReview = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.review'))
+const canRelease = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.release'))
+const canExport = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.export'))
+const canCreateDefect = computed(() => canExecute.value
+  && hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'bugs.create'))
 
 const form = reactive({
   purpose: 'version' as TestPlanPurpose,
@@ -534,6 +546,10 @@ const resetWizard = () => {
 }
 
 const openWizard = (versionId?: string | null) => {
+  if (!canCreate.value) {
+    showToast('你没有创建测试计划的权限')
+    return
+  }
   resetWizard()
   if (versionId) {
     form.purpose = 'version'
@@ -561,6 +577,10 @@ const setPurpose = (purpose: TestPlanPurpose) => {
 }
 
 const openEditPlan = async (plan: ManagedTestPlan, returnToDetail = false) => {
+  if (!canEdit.value) {
+    showToast('你没有编辑测试计划的权限')
+    return
+  }
   if (plan.status !== 'draft' && plan.status !== 'pending') {
     showToast('只有草稿或待开始计划可以编辑')
     return
@@ -614,6 +634,10 @@ const openEditPlan = async (plan: ManagedTestPlan, returnToDetail = false) => {
 }
 
 const goNext = () => {
+  if (editingPlanId.value ? !canEdit.value : !canCreate.value) {
+    showToast(editingPlanId.value ? '你没有编辑测试计划的权限' : '你没有创建测试计划的权限')
+    return
+  }
   if (wizardStep.value === 0 && form.purpose === 'version' && !form.versionId) {
     showToast('请先选择关联版本')
     return
@@ -660,6 +684,10 @@ const buildPlanPayload = (draft: boolean): TestPlanSavePayload | null => {
 }
 
 const savePlanEdit = async () => {
+  if (!canEdit.value) {
+    showToast('你没有编辑测试计划的权限')
+    return
+  }
   if (!editingPlanId.value || !editingPlanStatus.value) return
   const payload = buildPlanPayload(editingPlanStatus.value === 'draft')
   if (!payload) return
@@ -702,6 +730,10 @@ const savePlanEdit = async () => {
 }
 
 const saveDraft = async () => {
+  if (!canCreate.value) {
+    showToast('你没有创建测试计划的权限')
+    return
+  }
   const payload = buildPlanPayload(true)
   if (!payload) return
   isSubmitting.value = true
@@ -720,6 +752,10 @@ const saveDraft = async () => {
 }
 
 const saveAndStart = async () => {
+  if (!canCreate.value || !canExecute.value) {
+    showToast('你没有创建并启动测试计划的权限')
+    return
+  }
   const payload = buildPlanPayload(false)
   if (!payload) return
   isSubmitting.value = true
@@ -738,6 +774,10 @@ const saveAndStart = async () => {
 }
 
 const openPicker = (mode: 'manual' | 'direct' | 'detail') => {
+  if (mode === 'detail' ? !canEdit.value : !canCreate.value) {
+    showToast('你没有调整测试用例范围的权限')
+    return
+  }
   pickerMode.value = mode
   const selectedIds = mode === 'manual'
     ? manualCaseIds.value
@@ -752,6 +792,10 @@ const openPicker = (mode: 'manual' | 'direct' | 'detail') => {
 }
 
 const confirmPicker = async () => {
+  if (pickerMode.value === 'detail' ? !canEdit.value : !canCreate.value) {
+    showToast('你没有调整测试用例范围的权限')
+    return
+  }
   const ids = [...pickerCheckedIds.value]
   if (pickerMode.value === 'detail') {
     if (!selectedPlan.value) return
@@ -901,6 +945,10 @@ const selectedCountForDirectory = (directory: CaseDirectory) => {
 }
 
 const assignCaseOwner = async (caseItem: TestPlanCaseItem) => {
+  if (!canEdit.value) {
+    showToast('你没有分配执行人的权限')
+    return
+  }
   if (!selectedPlan.value) return
   const owner = planOwners.value.find(item => item.displayName === caseItem.assignee)
   isSubmitting.value = true
@@ -923,6 +971,10 @@ const assignCaseOwner = async (caseItem: TestPlanCaseItem) => {
 }
 
 const openResultModal = (caseItem: TestPlanCaseItem) => {
+  if (!canExecute.value || selectedPlan.value?.status !== 'running') {
+    showToast('当前计划不可执行或你没有执行权限')
+    return
+  }
   resultTarget.value = caseItem
   resultStatus.value = caseItem.status === 'pending' ? null : caseItem.status
   resultNotes.value = caseItem.notes
@@ -935,7 +987,13 @@ const closeResultModal = () => {
 }
 
 const openDefectModal = (caseId?: string) => {
-  const selectedCase = caseId ? planCases.value.find(item => item.id === caseId) : null
+  if (!canCreateDefect.value) {
+    showToast('你没有在测试计划中创建缺陷的权限')
+    return
+  }
+  const selectedCase = caseId
+    ? planCases.value.find(item => item.id === caseId)
+    : planCases.value.find(item => item.status === 'failed' || item.status === 'blocked')
   if (!selectedCase || !['failed', 'blocked'].includes(selectedCase.status)) {
     showToast('请从失败或阻塞的用例进入新建缺陷')
     return
@@ -995,6 +1053,10 @@ const submitDefect = async (payload: TestPlanDefectSubmitPayload, continueCreate
 }
 
 const confirmResult = async () => {
+  if (!canExecute.value) {
+    showToast('你没有执行测试用例的权限')
+    return
+  }
   if (!resultTarget.value || !resultStatus.value) return
   if (!selectedPlan.value) return
   isSubmitting.value = true
@@ -1029,6 +1091,10 @@ const closeUnlinkCaseDialog = () => {
 }
 
 const confirmUnlinkCase = async (reason: string) => {
+  if (!canEdit.value) {
+    unlinkCaseError.value = '你没有解除用例关联的权限'
+    return
+  }
   if (!selectedPlan.value || !unlinkCaseTarget.value) return
   isSubmitting.value = true
   unlinkCaseError.value = ''
@@ -1056,6 +1122,10 @@ const openCaseDrawer = (caseItem: TestPlanCaseItem) => {
 }
 
 const openExecution = async (plan: ManagedTestPlan, caseId?: string) => {
+  if (!canExecute.value) {
+    showToast('你没有执行测试计划的权限')
+    return
+  }
   isDetailLoading.value = true
   detailError.value = ''
   try {
@@ -1110,6 +1180,10 @@ const loadExecutionCaseContext = async (caseId: string) => {
 }
 
 const editExecutionCase = async (payload: { caseId: string; title: string; module: string; priority: string; precondition: string; steps: string; expectedResult: string }) => {
+  if (!canEdit.value) {
+    showToast('你没有编辑测试用例快照的权限')
+    return
+  }
   if (!selectedPlan.value) return
   isSubmitting.value = true
   try {
@@ -1127,6 +1201,10 @@ const editExecutionCase = async (payload: { caseId: string; title: string; modul
 }
 
 const linkExecutionDefect = async (payload: { caseId: string; defectId: number }) => {
+  if (!canEdit.value) {
+    showToast('你没有关联缺陷的权限')
+    return
+  }
   if (!selectedPlan.value) return
   isSubmitting.value = true
   try {
@@ -1144,6 +1222,10 @@ const linkExecutionDefect = async (payload: { caseId: string; defectId: number }
 }
 
 const unlinkExecutionDefect = async (payload: { caseId: string; defectId: number }) => {
+  if (!canEdit.value) {
+    showToast('你没有解除缺陷关联的权限')
+    return
+  }
   if (!selectedPlan.value) return
   isSubmitting.value = true
   try {
@@ -1158,6 +1240,10 @@ const unlinkExecutionDefect = async (payload: { caseId: string; defectId: number
 }
 
 const uploadExecutionEvidence = async (payload: { caseId: string; files: File[] }) => {
+  if (!canExecute.value) {
+    showToast('你没有上传执行证据的权限')
+    return
+  }
   if (!selectedPlan.value || !payload.files.length) return
   isUploadingEvidence.value = true
   try {
@@ -1171,6 +1257,10 @@ const uploadExecutionEvidence = async (payload: { caseId: string; files: File[] 
 }
 
 const deleteExecutionEvidence = async (payload: { caseId: string; attachmentId: number }) => {
+  if (!canExecute.value) {
+    showToast('你没有删除执行证据的权限')
+    return
+  }
   if (!selectedPlan.value) return
   isUploadingEvidence.value = true
   try {
@@ -1188,6 +1278,7 @@ const recordExecutionResult = async (
   payload: { caseId: string; status: 'PENDING' | 'PASSED' | 'FAILED' | 'BLOCKED' | 'SKIPPED'; note: string },
   done: (success: boolean) => void,
 ) => {
+  if (!canExecute.value) return done(false)
   if (!selectedPlan.value) return done(false)
   isSubmitting.value = true
   try {
@@ -1238,6 +1329,10 @@ const refreshPlanActivities = async () => {
 }
 
 const generateReport = async () => {
+  if (!canEdit.value) {
+    showToast('你没有生成测试报告的权限')
+    return
+  }
   if (!selectedPlan.value) return
   isSubmitting.value = true
   try {
@@ -1253,6 +1348,10 @@ const generateReport = async () => {
 }
 
 const exportReportPdf = async () => {
+  if (!canExport.value) {
+    showToast('你没有导出测试报告的权限')
+    return
+  }
   if (!selectedPlan.value || !planReport.value || isExportingReport.value) return
   isExportingReport.value = true
   try {
@@ -1277,6 +1376,10 @@ const exportReportPdf = async () => {
 }
 
 const toggleReportSignature = async () => {
+  if (!canReview.value) {
+    showToast('你没有签署测试报告的权限')
+    return
+  }
   if (!selectedPlan.value || !planReport.value) return
   isSubmitting.value = true
   try {
@@ -1294,6 +1397,14 @@ const toggleReportSignature = async () => {
 }
 
 const openActionDialog = async (plan: ManagedTestPlan, action: TestPlanActionType) => {
+  if (action === 'delete' && !canDelete.value) {
+    showToast('你没有删除测试计划的权限')
+    return
+  }
+  if (action !== 'delete' && !['view', 'copy'].includes(action) && !canExecute.value) {
+    showToast('你没有执行测试计划状态操作的权限')
+    return
+  }
   actionMenuId.value = null
   actionDialogError.value = ''
   if (action === 'complete' && selectedPlanDetail.value?.id !== Number(plan.id)) {
@@ -1329,6 +1440,18 @@ const closeActionDialog = () => {
 const confirmPlanAction = async (payload: { reason?: string; force?: boolean }) => {
   const target = actionDialogTarget.value
   if (!target) return
+  if (target.action === 'delete' && !canDelete.value) {
+    actionDialogError.value = '你没有删除测试计划的权限'
+    return
+  }
+  if (target.action !== 'delete' && !['view', 'copy'].includes(target.action) && !canExecute.value) {
+    actionDialogError.value = '你没有执行测试计划状态操作的权限'
+    return
+  }
+  if (payload.force && !canRelease.value) {
+    actionDialogError.value = '你没有强制完成测试计划的权限'
+    return
+  }
   isSubmitting.value = true
   actionDialogError.value = ''
   try {
@@ -1366,6 +1489,10 @@ const confirmPlanAction = async (payload: { reason?: string; force?: boolean }) 
 }
 
 const openCopyDialog = (plan: ManagedTestPlan) => {
+  if (!canCreate.value) {
+    showToast('你没有复制测试计划的权限')
+    return
+  }
   actionMenuId.value = null
   copyDialogError.value = ''
   copyDialogTarget.value = plan
@@ -1378,6 +1505,10 @@ const closeCopyDialog = () => {
 }
 
 const copyPlan = async (payload: { name: string; targetVersionId: string | null; options: TestPlanCopyOptions }) => {
+  if (!canCreate.value) {
+    copyDialogError.value = '你没有复制测试计划的权限'
+    return
+  }
   const plan = copyDialogTarget.value
   if (!plan) return
   isSubmitting.value = true
@@ -1412,11 +1543,20 @@ const executeAction = (plan: ManagedTestPlan, action: string) => {
   openActionDialog(plan, action as TestPlanActionType)
 }
 
-const planActions = (status: TestPlanStatus) => ({
-  draft: ['edit', 'start', 'copy', 'delete'], pending: ['view', 'edit', 'start', 'copy', 'cancel'],
-  running: ['view', 'block', 'complete', 'copy', 'cancel'], blocked: ['view', 'resume', 'copy', 'cancel'],
-  completed: ['view', 'copy'], cancelled: ['view', 'copy', 'delete'],
-}[status])
+const planActions = (status: TestPlanStatus) => {
+  const actions = ({
+    draft: ['edit', 'start', 'copy', 'delete'], pending: ['view', 'edit', 'start', 'copy', 'cancel'],
+    running: ['view', 'block', 'complete', 'copy', 'cancel'], blocked: ['view', 'resume', 'copy', 'cancel'],
+    completed: ['view', 'copy'], cancelled: ['view', 'copy', 'delete'],
+  }[status] || [])
+  return actions.filter(action => {
+    if (action === 'view') return true
+    if (action === 'edit') return canEdit.value
+    if (action === 'copy') return canCreate.value
+    if (action === 'delete') return canDelete.value
+    return canExecute.value
+  })
+}
 
 const actionLabel: Record<string, string> = {
   view: '查看详情', edit: '编辑', start: '开始测试', complete: '完成计划',
@@ -1460,8 +1600,13 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         :evidence="executionEvidence"
         :uploading-evidence="isUploadingEvidence"
         :owners="planOwners.map(item => ({ id: item.id, name: item.displayName }))"
-        :initial-case-id="executionInitialCaseId"
-        :submitting="isSubmitting"
+         :initial-case-id="executionInitialCaseId"
+         :submitting="isSubmitting"
+         :can-execute="canExecute"
+         :can-edit-snapshot="canEdit"
+         :can-create-defect="canCreateDefect"
+         :can-link-defect="canEdit"
+         :can-manage-evidence="canExecute"
         @back="closeExecution"
         @create-defect="openDefectModal"
         @record="recordExecutionResult"
@@ -1480,12 +1625,12 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <button v-for="tab in managementTabs" :key="tab.key" type="button" :class="{ 'is-active': tab.key === 'plans' }" @click="switchManagementTab(tab.key)">{{ tab.label }}</button>
       </nav>
 
-      <section class="test-plan-management__stats">
+       <section class="test-plan-management__stats">
         <div class="test-plan-management__mini-stat is-primary"><strong>{{ stats.pending }}</strong><span>待开始</span></div><i />
         <div class="test-plan-management__mini-stat is-warning"><strong>{{ stats.running }}</strong><span>进行中</span></div><i />
         <div class="test-plan-management__mini-stat is-danger"><strong>{{ stats.blocked }}</strong><span>已阻塞</span></div><i />
         <div class="test-plan-management__mini-stat is-cyan is-wide"><strong>{{ stats.avgPass }}%</strong><span>本期平均通过率</span></div>
-        <button class="test-plan-management__button test-plan-management__create" type="button" @click="openWizard()"><Plus :size="13" />新建测试计划</button>
+         <button v-if="canCreate" class="test-plan-management__button test-plan-management__create" type="button" @click="openWizard()"><Plus :size="13" />新建测试计划</button>
       </section>
 
       <section class="test-plan-management__filters">
@@ -1521,7 +1666,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                   <td><span class="is-muted">{{ plan.updatedAt.slice(0, 10) }}</span></td>
                   <td class="test-plan-management__action-cell" @click.stop>
                     <div class="test-plan-management__action-wrapper" :class="{ 'has-execution': plan.status === 'running' || plan.status === 'blocked' }">
-                      <button v-if="plan.status === 'running' || plan.status === 'blocked'" class="test-plan-management__execute-button" type="button" @click="openExecution(plan)"><Play :size="11" />执行</button>
+                      <button v-if="(plan.status === 'running' || plan.status === 'blocked') && canExecute" class="test-plan-management__execute-button" type="button" @click="openExecution(plan)"><Play :size="11" />执行</button>
                       <button class="test-plan-management__icon-button" type="button" aria-label="计划操作" aria-haspopup="menu" :aria-expanded="actionMenuId === plan.id" @click="actionMenuId = actionMenuId === plan.id ? null : plan.id"><MoreHorizontal :size="14" /></button>
                       <template v-if="actionMenuId === plan.id">
                         <div class="test-plan-management__action-menu-overlay" @click="actionMenuId = null" />
@@ -1627,11 +1772,11 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <span class="test-plan-management__status" :style="{ color: testPlanStatusConfig[selectedPlan.status].color, backgroundColor: testPlanStatusConfig[selectedPlan.status].background }">{{ testPlanStatusConfig[selectedPlan.status].label }}</span>
         <div />
         <small>负责人：{{ selectedPlan.owner }}</small><small>周期：{{ selectedPlan.startDate }} — {{ selectedPlan.endDate }}</small>
-        <button class="test-plan-management__detail-edit" type="button" title="编辑" aria-label="编辑测试计划" @click="selectedPlan.status === 'draft' || selectedPlan.status === 'pending' ? openEditPlan(selectedPlan, true) : showToast('执行中的测试计划不可编辑')"><Edit2 :size="13" /></button>
-        <button v-if="selectedPlan.status === 'pending'" class="test-plan-management__button is-small" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'start')"><Play :size="11" />开始测试</button>
+        <button v-if="canEdit" class="test-plan-management__detail-edit" type="button" title="编辑" aria-label="编辑测试计划" @click="selectedPlan.status === 'draft' || selectedPlan.status === 'pending' ? openEditPlan(selectedPlan, true) : showToast('执行中的测试计划不可编辑')"><Edit2 :size="13" /></button>
+        <button v-if="selectedPlan.status === 'pending' && canExecute" class="test-plan-management__button is-small" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'start')"><Play :size="11" />开始测试</button>
         <template v-else-if="selectedPlan.status === 'running'">
-          <button class="test-plan-management__button is-small is-warning" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'block')"><AlertTriangle :size="12" />标记阻塞</button>
-          <button class="test-plan-management__button is-small is-success" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'complete')"><CheckCircle2 :size="12" />完成计划</button>
+          <button v-if="canExecute" class="test-plan-management__button is-small is-warning" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'block')"><AlertTriangle :size="12" />标记阻塞</button>
+          <button v-if="canExecute" class="test-plan-management__button is-small is-success" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'complete')"><CheckCircle2 :size="12" />完成计划</button>
         </template>
       </header>
       <section class="test-plan-management__detail-kpis">
@@ -1658,24 +1803,24 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             <span />
             <select v-model="caseAssigneeFilter" aria-label="执行人筛选"><option value="all">全部执行人</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option><option value="—">未分配</option></select>
             <label><Search :size="12" /><input v-model="caseSearch" type="search" placeholder="搜索用例…"></label>
-            <button class="test-plan-management__button is-small" type="button" @click="openPicker('detail')"><Plus :size="11" />添加用例</button>
+            <button v-if="canEdit" class="test-plan-management__button is-small" type="button" @click="openPicker('detail')"><Plus :size="11" />添加用例</button>
           </div>
           <div class="test-plan-management__case-stats"><div><strong>{{ detailCaseCounts.all }}</strong><span>全部</span></div><div class="is-success"><strong>{{ detailCaseCounts.passed }}</strong><span>通过</span></div><div class="is-danger"><strong>{{ detailCaseCounts.failed }}</strong><span>失败</span></div><div class="is-warning"><strong>{{ detailCaseCounts.blocked }}</strong><span>阻塞</span></div><div class="is-muted"><strong>{{ detailCaseCounts.pending }}</strong><span>未执行</span></div></div>
-          <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table"><thead><tr><th>编号</th><th>用例名称</th><th>模块</th><th>优先级</th><th>执行人</th><th>执行结果</th><th>执行时间</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="caseItem in filteredDetailCases" :key="caseItem.id"><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><small>{{ caseItem.module }}</small></td><td><b class="test-plan-management__priority" :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td><td><select v-model="caseItem.assignee" :disabled="isSubmitting" @change="assignCaseOwner(caseItem)"><option value="—">未分配</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></td><td><button class="test-plan-management__exec-status" type="button" :disabled="selectedPlan.status !== 'running' || isSubmitting" :style="{ color: executionStatusConfig[caseItem.status].color, backgroundColor: executionStatusConfig[caseItem.status].background }" @click="openResultModal(caseItem)">{{ executionStatusConfig[caseItem.status].label }}</button></td><td><small>{{ caseItem.execTime }}</small></td><td><small class="test-plan-management__case-note" :title="caseItem.notes">{{ caseItem.notes || '—' }}</small></td><td><div class="test-plan-management__case-actions"><button type="button" aria-label="查看" title="查看" @click="openCaseDrawer(caseItem)"><Eye :size="12" /></button><button v-if="selectedPlan.status === 'running' || selectedPlan.status === 'blocked'" type="button" aria-label="执行" title="执行" @click="openExecution(selectedPlan, caseItem.id)"><Play :size="12" /></button><button class="is-danger" type="button" aria-label="取消关联" title="取消关联" @click="unlinkCaseTarget = caseItem; unlinkCaseError = ''"><Trash2 :size="12" /></button></div></td></tr><tr v-if="!filteredDetailCases.length"><td colspan="9" class="test-plan-management__empty">暂无符合条件的用例</td></tr></tbody></table></div>
+            <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table"><thead><tr><th>编号</th><th>用例名称</th><th>模块</th><th>优先级</th><th>执行人</th><th>执行结果</th><th>执行时间</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="caseItem in filteredDetailCases" :key="caseItem.id"><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><small>{{ caseItem.module }}</small></td><td><b class="test-plan-management__priority" :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td><td><select v-model="caseItem.assignee" :disabled="!canEdit || isSubmitting" @change="assignCaseOwner(caseItem)"><option value="—">未分配</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></td><td><button class="test-plan-management__exec-status" type="button" :disabled="!canExecute || selectedPlan.status !== 'running' || isSubmitting" :style="{ color: executionStatusConfig[caseItem.status].color, backgroundColor: executionStatusConfig[caseItem.status].background }" @click="openResultModal(caseItem)">{{ executionStatusConfig[caseItem.status].label }}</button></td><td><small>{{ caseItem.execTime }}</small></td><td><small class="test-plan-management__case-note" :title="caseItem.notes">{{ caseItem.notes || '—' }}</small></td><td><div class="test-plan-management__case-actions"><button type="button" aria-label="查看" title="查看" @click="openCaseDrawer(caseItem)"><Eye :size="12" /></button><button v-if="(selectedPlan.status === 'running' || selectedPlan.status === 'blocked') && canExecute" type="button" aria-label="执行" title="执行" @click="openExecution(selectedPlan, caseItem.id)"><Play :size="12" /></button><button v-if="canEdit" class="is-danger" type="button" aria-label="取消关联" title="取消关联" @click="unlinkCaseTarget = caseItem; unlinkCaseError = ''"><Trash2 :size="12" /></button></div></td></tr><tr v-if="!filteredDetailCases.length"><td colspan="9" class="test-plan-management__empty">暂无符合条件的用例</td></tr></tbody></table></div>
         </div>
 
         <div v-else-if="detailTab === 'bugs'" class="test-plan-management__bugs-view">
-          <div class="test-plan-management__bug-toolbar"><div><button v-for="item in bugStatusFilters" :key="item.key" type="button" :class="{ 'is-active': bugStatusFilter === item.key }" @click="bugStatusFilter = item.key">{{ item.label }} {{ bugStatusCount(item.key) }}</button></div><button class="test-plan-management__button is-small is-danger" type="button" :disabled="isSubmitting || !planCases.some(item => item.status === 'failed' || item.status === 'blocked')" @click="openDefectModal()"><Plus :size="11" />新建缺陷</button></div>
+          <div class="test-plan-management__bug-toolbar"><div><button v-for="item in bugStatusFilters" :key="item.key" type="button" :class="{ 'is-active': bugStatusFilter === item.key }" @click="bugStatusFilter = item.key">{{ item.label }} {{ bugStatusCount(item.key) }}</button></div><button v-if="canCreateDefect" class="test-plan-management__button is-small is-danger" type="button" :disabled="isSubmitting || !planCases.some(item => item.status === 'failed' || item.status === 'blocked')" @click="openDefectModal()"><Plus :size="11" />新建缺陷</button></div>
           <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table is-bugs"><thead><tr><th>缺陷编号</th><th>标题</th><th>严重程度</th><th>优先级</th><th>状态</th><th>负责人</th><th>关联用例</th><th>发现时间</th></tr></thead><tbody><tr v-for="bug in filteredBugs" :key="bug.id"><td><code>{{ bug.no }}</code></td><td>{{ bug.title }}</td><td><span class="test-plan-management__severity" :style="{ color: bugSeverityConfig[bug.severity].color, borderColor: `${bugSeverityConfig[bug.severity].color}30`, backgroundColor: `${bugSeverityConfig[bug.severity].color}10` }">{{ bugSeverityConfig[bug.severity].label }}</span></td><td><b class="test-plan-management__priority" :class="`is-${bug.priority.toLowerCase()}`">{{ bug.priority }}</b></td><td><span class="test-plan-management__bug-status" :style="{ color: bugStatusConfig[bug.status].color, backgroundColor: bugStatusConfig[bug.status].background }">{{ bugStatusConfig[bug.status].label }}</span></td><td>{{ bug.assignee }}</td><td><code class="is-link">{{ bug.linkedCase }}</code></td><td><small>{{ bug.foundAt }}</small></td></tr><tr v-if="!filteredBugs.length"><td colspan="8" class="test-plan-management__empty">暂无关联缺陷</td></tr></tbody></table></div>
         </div>
 
         <div v-else-if="detailTab === 'report'" class="test-plan-management__report-card">
-          <div v-if="!planReport" class="test-plan-management__empty">尚未生成测试报告 <button v-if="selectedPlan.status === 'completed'" type="button" :disabled="isSubmitting" @click="generateReport">立即生成</button></div>
+          <div v-if="!planReport" class="test-plan-management__empty">尚未生成测试报告 <button v-if="selectedPlan.status === 'completed' && canEdit" type="button" :disabled="isSubmitting" @click="generateReport">立即生成</button></div>
           <template v-else>
-            <header><div><h2>{{ selectedPlan.name }}</h2><p>报告生成时间：{{ formatTestManagementDateTime(planReport.generatedAt) }}&nbsp; | &nbsp;负责人：{{ selectedPlan.owner }}</p></div><button class="test-plan-management__ghost-button" type="button" :disabled="isExportingReport" @click="exportReportPdf"><Download :size="13" />{{ isExportingReport ? '导出中...' : '导出 PDF' }}</button></header>
+            <header><div><h2>{{ selectedPlan.name }}</h2><p>报告生成时间：{{ formatTestManagementDateTime(planReport.generatedAt) }}&nbsp; | &nbsp;负责人：{{ selectedPlan.owner }}</p></div><button v-if="canExport" class="test-plan-management__ghost-button" type="button" :disabled="isExportingReport" @click="exportReportPdf"><Download :size="13" />{{ isExportingReport ? '导出中...' : '导出 PDF' }}</button></header>
             <div class="test-plan-management__report-stats"><div><strong>{{ planCases.length }}<small>项</small></strong><span>测试用例</span></div><div><strong class="is-primary">{{ detailExecutedCount }}<small>项</small></strong><span>已执行</span></div><div><strong class="is-primary">{{ passRate(selectedPlan) }}%</strong><span>用例通过率</span></div><div><strong class="is-danger">{{ planBugs.length }}<small>个</small></strong><span>发现缺陷</span></div></div>
             <section class="test-plan-management__report-conclusion"><p><CheckCircle2 :size="16" /><strong>{{ passedQualityCheckCount === qualityChecks.length ? '测试通过，可进入下一环节' : '仍有质量标准未达成' }}</strong></p><span>用例通过率 {{ passRate(selectedPlan) }}%，P1 缺陷 {{ selectedPlan.p1Bugs }} 个，P0 缺陷 {{ selectedPlan.p0Bugs }} 个。当前 {{ passedQualityCheckCount }}/{{ qualityChecks.length }} 项质量标准达标。</span></section>
-            <section class="test-plan-management__signature"><h3>负责人签字确认</h3><div v-if="!reportSigned"><span>{{ selectedPlan.owner }} 尚未确认本次测试报告</span><button class="test-plan-management__button" type="button" :disabled="isSubmitting" @click="toggleReportSignature"><Check :size="13" />确认并签字</button></div><div v-else class="is-signed"><CheckCircle2 :size="16" /><strong>{{ planReport.signerName || selectedPlan.owner }} 已于 {{ formatTestManagementDateTime(planReport.signedAt) }} 确认签字</strong><button type="button" :disabled="isSubmitting" @click="toggleReportSignature">撤回</button></div></section>
+            <section class="test-plan-management__signature"><h3>负责人签字确认</h3><div v-if="!reportSigned"><span>{{ selectedPlan.owner }} 尚未确认本次测试报告</span><button v-if="canReview" class="test-plan-management__button" type="button" :disabled="isSubmitting" @click="toggleReportSignature"><Check :size="13" />确认并签字</button></div><div v-else class="is-signed"><CheckCircle2 :size="16" /><strong>{{ planReport.signerName || selectedPlan.owner }} 已于 {{ formatTestManagementDateTime(planReport.signedAt) }} 确认签字</strong><button v-if="canReview" type="button" :disabled="isSubmitting" @click="toggleReportSignature">撤回</button></div></section>
           </template>
         </div>
 

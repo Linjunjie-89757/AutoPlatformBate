@@ -23,7 +23,8 @@ import {
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import { caseApi, type CaseSummaryItem } from '@/entities/case'
-import { testManagementApi, type TestRequirementItem } from '@/entities/test-management'
+import { hasWorkspacePermission, useSession } from '@/entities/session'
+import { testManagementApi, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
 import { userApi, type UserItem } from '@/entities/user'
 import { useWorkspaceContext } from '@/entities/workspace'
 
@@ -46,7 +47,7 @@ import './requirement-management-panel.css'
 
 type ManagementTab = 'versions' | 'requirements' | 'plans'
 type DetailTab = 'cases' | 'info' | 'defects'
-type ImportStep = 'config' | 'preview'
+type ImportStep = 'config' | 'preview' | 'result'
 
 const props = defineProps<{
   initialDetailId?: string | null
@@ -61,6 +62,7 @@ const emit = defineEmits<{
 }>()
 
 const { selectedWorkspaceCode } = useWorkspaceContext()
+const { currentUser } = useSession()
 
 const requirements = ref<ManagedRequirement[]>([])
 const requirementVersions = ref([...demoRequirementVersions])
@@ -78,10 +80,18 @@ const statusFilter = ref<'all' | RequirementStatus>('all')
 const priorityFilter = ref<'all' | RequirementPriority>('all')
 const importMenuOpen = ref(false)
 const createDialogOpen = ref(false)
+const editDialogOpen = ref(false)
+const editTarget = ref<ManagedRequirement | null>(null)
+const deleteDialogOpen = ref(false)
+const deleteTarget = ref<ManagedRequirement | null>(null)
 const importDialogOpen = ref(false)
 const importSource = ref<RequirementSource>('jira')
 const importStep = ref<ImportStep>('config')
 const importFileName = ref('')
+const importFile = ref<File | null>(null)
+const importVersionId = ref('')
+const importResult = ref<TestRequirementImportResult | null>(null)
+const isImporting = ref(false)
 const isDraggingFile = ref(false)
 const casePickerOpen = ref(false)
 const reviewCaseId = ref<string | null>(null)
@@ -93,6 +103,15 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 const createForm = reactive({
   title: '',
   versionId: 'V1',
+  priority: 'P1' as RequirementPriority,
+  assignee: '',
+  externalRef: '',
+  description: '',
+})
+
+const editForm = reactive({
+  title: '',
+  versionId: '',
   priority: 'P1' as RequirementPriority,
   assignee: '',
   externalRef: '',
@@ -330,6 +349,11 @@ const filteredLibraryCases = computed(() => {
 
 const allVisibleCasesChecked = computed(() => filteredLibraryCases.value.length > 0 && filteredLibraryCases.value.every(item => pickerChecked.value.has(item.id)))
 const canCreateRequirement = computed(() => Boolean(createForm.title.trim()))
+const canCreate = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.create'))
+const canEdit = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.edit'))
+const canDelete = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.delete'))
+const canReview = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.review'))
+const canExport = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.export'))
 
 const versionName = (versionId: string) => requirementVersions.value.find(item => item.id === versionId)?.name || '—'
 const statusStyle = (status: RequirementStatus) => ({ color: requirementStatusConfig[status].color, backgroundColor: requirementStatusConfig[status].background })
@@ -381,6 +405,10 @@ const restoreInitialDetail = () => {
 }
 
 const openCreateDialog = (versionId?: string | null) => {
+  if (!canCreate.value) {
+    showToast('暂无新建需求权限')
+    return
+  }
   resetCreateForm()
   if (versionId && requirementVersions.value.some(item => item.id === versionId)) {
     createForm.versionId = versionId
@@ -399,6 +427,9 @@ const openImportDialog = (source: RequirementSource) => {
   importSource.value = source
   importStep.value = 'config'
   importFileName.value = ''
+  importFile.value = null
+  importResult.value = null
+  importVersionId.value = versionFilter.value !== 'all' ? versionFilter.value : requirementVersions.value[0]?.id || ''
   importDialogOpen.value = true
 }
 
@@ -406,18 +437,85 @@ const closeImportDialog = () => {
   importDialogOpen.value = false
   importStep.value = 'config'
   importFileName.value = ''
+  importFile.value = null
+  importResult.value = null
   isDraggingFile.value = false
 }
 
 const handleImportFile = (files: FileList | null) => {
   const file = files?.[0]
-  if (file) importFileName.value = file.name
+  if (!file) return
+  const isSpreadsheet = /\.(xlsx|xls)$/i.test(file.name)
+  if (!isSpreadsheet) {
+    importFile.value = null
+    importFileName.value = ''
+    showToast('仅支持 .xlsx 或 .xls 文件')
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    importFile.value = null
+    importFileName.value = ''
+    showToast('文件大小不能超过 10MB')
+    return
+  }
+  importFile.value = file
+  importFileName.value = file.name
   isDraggingFile.value = false
 }
 
-const finishImport = () => {
-  showToast(importStep.value === 'preview' ? `已导入 ${previewRequirements.length} 条需求（演示）` : '需求文件已导入（演示）')
-  closeImportDialog()
+const downloadImportTemplate = async () => {
+  if (!canExport.value) {
+    showToast('暂无导入需求权限')
+    return
+  }
+  isSubmitting.value = true
+  try {
+    const { blob, fileName } = await testManagementApi.downloadRequirementImportTemplate(selectedWorkspaceCode.value)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    link.click()
+    URL.revokeObjectURL(url)
+    showToast('导入模板已下载')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '导入模板下载失败')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const handleExternalImport = () => {
+  showToast(`${importSource.value === 'jira' ? 'Jira' : '禅道'} 导入接口待接入`)
+}
+
+const finishImport = async () => {
+  if (!canCreate.value) {
+    showToast('暂无导入需求权限')
+    return
+  }
+  if (importSource.value !== 'excel') {
+    handleExternalImport()
+    return
+  }
+  if (!importFile.value || !importVersionId.value) {
+    showToast('请选择文件和默认版本')
+    return
+  }
+  isImporting.value = true
+  try {
+    importResult.value = await testManagementApi.importRequirements(
+      selectedWorkspaceCode.value,
+      Number(importVersionId.value),
+      importFile.value,
+    )
+    importStep.value = 'result'
+    await loadRequirements()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '需求导入失败')
+  } finally {
+    isImporting.value = false
+  }
 }
 
 const resetCreateForm = () => {
@@ -425,6 +523,10 @@ const resetCreateForm = () => {
 }
 
 const submitRequirement = async () => {
+  if (!canCreate.value) {
+    showToast('暂无创建需求权限')
+    return
+  }
   if (!canCreateRequirement.value) return
   const owner = requirementOwners.value.find(item => item.displayName === createForm.assignee.trim())
   isSubmitting.value = true
@@ -451,7 +553,98 @@ const submitRequirement = async () => {
   }
 }
 
+const openEditDialog = (requirement: ManagedRequirement) => {
+  if (!canEdit.value) {
+    showToast('暂无编辑需求权限')
+    return
+  }
+  Object.assign(editForm, {
+    title: requirement.title,
+    versionId: requirement.versionId,
+    priority: requirement.priority,
+    assignee: requirement.assignee === '—' ? '' : requirement.assignee,
+    externalRef: requirement.sourceRef || '',
+    description: requirement.description,
+  })
+  editTarget.value = requirement
+  editDialogOpen.value = true
+}
+
+const submitEditRequirement = async () => {
+  if (!canEdit.value) {
+    showToast('暂无编辑需求权限')
+    return
+  }
+  const target = editTarget.value
+  if (!target || !editForm.title.trim()) return
+  const owner = requirementOwners.value.find(item => item.displayName === editForm.assignee.trim())
+  isSubmitting.value = true
+  try {
+    const result = await testManagementApi.updateRequirement(selectedWorkspaceCode.value, Number(target.id), {
+      versionId: Number(editForm.versionId),
+      title: editForm.title.trim(),
+      priority: editForm.priority,
+      sourceType: target.source === 'jira' ? 'JIRA' : target.source === 'tapd' ? 'TAPD' : target.source === 'excel' ? 'EXCEL' : 'MANUAL',
+      sourceRef: editForm.externalRef.trim() || null,
+      assigneeId: owner?.id || null,
+      description: editForm.description.trim() || null,
+      expectedVersion: requirementLockVersions.value.get(target.id) || 0,
+    })
+    const mapped = mapRequirement(result)
+    requirements.value = requirements.value.map(item => item.id === mapped.id ? mapped : item)
+    requirementLockVersions.value.set(mapped.id, result.lockVersion)
+    if (selectedRequirement.value?.id === mapped.id) selectedRequirement.value = mapped
+    editDialogOpen.value = false
+    editTarget.value = null
+    showToast('需求信息已更新')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '需求更新失败')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const openDeleteDialog = (requirement: ManagedRequirement) => {
+  if (!canDelete.value) {
+    showToast('暂无删除需求权限')
+    return
+  }
+  deleteTarget.value = requirement
+  deleteDialogOpen.value = true
+}
+
+const deleteRequirement = async () => {
+  if (!canDelete.value) {
+    showToast('暂无删除需求权限')
+    return
+  }
+  const target = deleteTarget.value
+  if (!target) return
+  isSubmitting.value = true
+  try {
+    await testManagementApi.deleteRequirement(
+      selectedWorkspaceCode.value,
+      Number(target.id),
+      requirementLockVersions.value.get(target.id) || 0,
+    )
+    requirements.value = requirements.value.filter(item => item.id !== target.id)
+    requirementLockVersions.value.delete(target.id)
+    if (selectedRequirement.value?.id === target.id) closeDetail()
+    deleteDialogOpen.value = false
+    deleteTarget.value = null
+    showToast('需求已删除，历史关联记录已保留')
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '需求删除失败')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
 const openCasePicker = () => {
+  if (!canEdit.value) {
+    showToast('暂无关联需求用例权限')
+    return
+  }
   pickerChecked.value = new Set(linkedCases.value.map(item => item.id))
   pickerDirectoryId.value = 'root'
   pickerKeyword.value = ''
@@ -479,6 +672,10 @@ const toggleAllVisibleCases = () => {
 }
 
 const confirmCaseSelection = async () => {
+  if (!canEdit.value) {
+    showToast('暂无关联需求用例权限')
+    return
+  }
   if (!selectedRequirement.value || pickerChecked.value.size === 0) return
   isSubmitting.value = true
   try {
@@ -502,6 +699,10 @@ const confirmCaseSelection = async () => {
 }
 
 const removeLinkedCase = async (id: string) => {
+  if (!canEdit.value) {
+    showToast('暂无解除用例关联权限')
+    return
+  }
   if (!selectedRequirement.value) return
   isSubmitting.value = true
   try {
@@ -524,6 +725,10 @@ const removeLinkedCase = async (id: string) => {
 }
 
 const initiateReview = async () => {
+  if (!canReview.value) {
+    showToast('暂无评审需求用例权限')
+    return
+  }
   if (!selectedRequirement.value) return
   isSubmitting.value = true
   try {
@@ -559,6 +764,10 @@ const navigateReviewCase = (offset: number) => {
 }
 
 const saveReviewCase = async (decision: 'PASSED' | 'REJECTED') => {
+  if (!canReview.value) {
+    showToast('暂无评审需求用例权限')
+    return
+  }
   if (!reviewCase.value) return
   if (!selectedRequirement.value) return
   isSubmitting.value = true
@@ -645,7 +854,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <option v-for="priority in ['P0', 'P1', 'P2', 'P3']" :key="priority" :value="priority">{{ priority }}</option>
         </select>
         <span class="requirement-management__toolbar-spacer" />
-        <div class="requirement-management__import-menu">
+        <div v-if="canCreate" class="requirement-management__import-menu">
           <button class="requirement-management__button is-ghost is-import-trigger" type="button" @click="importMenuOpen = !importMenuOpen">
             <Upload :size="12" />导入<ChevronDown :size="11" />
           </button>
@@ -657,7 +866,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             </div>
           </Transition>
         </div>
-        <button class="requirement-management__button is-create-trigger" type="button" @click="openCreateDialog()">
+        <button v-if="canCreate" class="requirement-management__button is-create-trigger" type="button" @click="openCreateDialog()">
           <Plus :size="12" />新建需求
         </button>
       </div>
@@ -693,8 +902,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                 <div class="requirement-management__row-actions">
                   <button type="button" title="查看详情" @click="openRequirement(requirement)"><Eye :size="13" /></button>
                   <button type="button" title="关联用例" @click="openRequirement(requirement, 'cases')"><Link2 :size="13" /></button>
-                  <button type="button" title="编辑" @click="showToast('编辑需求（演示）')"><Edit2 :size="13" /></button>
-                  <button class="is-danger" type="button" title="删除" @click="showToast('删除需求（演示）')"><Trash2 :size="13" /></button>
+                  <button v-if="canEdit" type="button" title="编辑" @click="openEditDialog(requirement)"><Edit2 :size="13" /></button>
+                  <button v-if="canDelete" class="is-danger" type="button" title="删除" @click="openDeleteDialog(requirement)"><Trash2 :size="13" /></button>
                 </div>
               </td>
             </tr>
@@ -713,7 +922,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <span class="requirement-management__badge" :style="reviewStyle(selectedRequirement.reviewStatus)">{{ reviewStatusConfig[selectedRequirement.reviewStatus].label }}</span>
         <span class="requirement-management__badge is-priority" :style="priorityStyle(selectedRequirement.priority)">{{ selectedRequirement.priority }}</span>
         <span class="requirement-management__version-tag">{{ currentVersion?.name }}</span>
-        <button class="requirement-management__button is-ghost is-small" type="button" @click="showToast('编辑需求（演示）')"><Edit2 :size="12" />编辑</button>
+        <button v-if="canEdit" class="requirement-management__button is-ghost is-small" type="button" @click="openEditDialog(selectedRequirement)"><Edit2 :size="12" />编辑</button>
       </header>
       <nav class="requirement-management__detail-tabs">
         <button :class="{ 'is-active': detailTab === 'cases' }" type="button" @click="setDetailTab('cases')">关联用例<span v-if="linkedCases.length"> ({{ linkedCases.length }})</span></button>
@@ -736,8 +945,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
               </p>
             </div>
             <span class="requirement-management__toolbar-spacer" />
-            <button v-if="pendingCount" class="requirement-management__button" type="button" @click="initiateReview">{{ pendingCount === linkedCases.length ? '发起评审' : '继续评审' }}</button>
-            <button class="requirement-management__button is-ghost" type="button" @click="openCasePicker"><Plus :size="13" />从用例库关联</button>
+            <button v-if="pendingCount && canReview" class="requirement-management__button" type="button" :disabled="isSubmitting" @click="initiateReview">{{ pendingCount === linkedCases.length ? '发起评审' : '继续评审' }}</button>
+            <button v-if="canEdit" class="requirement-management__button is-ghost" type="button" @click="openCasePicker"><Plus :size="13" />从用例库关联</button>
             <div v-if="linkedCases.length" class="requirement-management__review-progress">
               <span><i :style="{ width: `${passedReviewCount / linkedCases.length * 100}%` }" /></span>
               <b>{{ Math.round(passedReviewCount / linkedCases.length * 100) }}%</b>
@@ -752,9 +961,9 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                 <strong>{{ caseItem.title }}</strong>
               </div>
               <small v-if="caseItem.reviewStatus === 'rejected' && caseItem.reviewNote" class="requirement-management__rejection-preview">{{ caseItem.reviewNote }}</small>
-              <button v-if="caseItem.reviewStatus === 'rejected'" class="requirement-management__mini-button" type="button" @click="reReviewCase(caseItem)">重新评审</button>
+              <button v-if="caseItem.reviewStatus === 'rejected' && canReview" class="requirement-management__mini-button" type="button" @click="reReviewCase(caseItem)">重新评审</button>
               <button class="requirement-management__mini-button" :class="{ 'is-primary': caseItem.reviewStatus === 'reviewing' }" type="button" @click="openReviewDrawer(caseItem)">{{ caseItem.reviewStatus === 'reviewing' ? '评审' : '查看' }}</button>
-              <button class="requirement-management__icon-button is-danger" type="button" title="解除关联" @click="removeLinkedCase(caseItem.id)"><Trash2 :size="13" /></button>
+              <button v-if="canEdit" class="requirement-management__icon-button is-danger" type="button" title="解除关联" :disabled="isSubmitting" @click="removeLinkedCase(caseItem.id)"><Trash2 :size="13" /></button>
             </article>
           </section>
           <section v-else class="requirement-management__empty-card">
@@ -775,7 +984,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                 <div><dt>负责人</dt><dd>{{ selectedRequirement.assignee || '—' }}</dd></div>
                 <div><dt>创建日期</dt><dd>{{ selectedRequirement.createdAt }}</dd></div>
               </dl>
-              <button v-if="selectedRequirement.sourceRef" class="requirement-management__source-link" type="button"><ExternalLink :size="12" />在 {{ selectedRequirement.source === 'jira' ? 'Jira' : '禅道' }} 中查看 · {{ selectedRequirement.sourceRef }}</button>
+              <button v-if="selectedRequirement.sourceRef" class="requirement-management__source-link" type="button" @click="showToast(`${selectedRequirement.source === 'jira' ? 'Jira' : '禅道'} 查看接口待接入`)" ><ExternalLink :size="12" />在 {{ selectedRequirement.source === 'jira' ? 'Jira' : '禅道' }} 中查看 · {{ selectedRequirement.sourceRef }}</button>
             </section>
             <section class="requirement-management__info-card"><h3>需求描述</h3><p>{{ selectedRequirement.description }}</p></section>
             <section v-if="currentRequirementPlans.length" class="requirement-management__info-card">
@@ -820,6 +1029,32 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
     </Transition>
 
     <Transition name="requirement-fade">
+      <div v-if="editDialogOpen" class="requirement-management__overlay" @click.self="editDialogOpen = false; editTarget = null">
+        <section class="requirement-management__dialog is-create" role="dialog" aria-modal="true" aria-labelledby="requirement-edit-title">
+          <header><h2 id="requirement-edit-title">编辑需求</h2><button type="button" aria-label="关闭" @click="editDialogOpen = false; editTarget = null"><X :size="16" /></button></header>
+          <div class="requirement-management__form">
+            <label><span>需求标题 <i>*</i></span><input v-model="editForm.title" type="text" placeholder="请输入需求标题"></label>
+            <div><label><span>所属版本</span><select v-model="editForm.versionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select></label><label><span>负责人</span><select v-model="editForm.assignee"><option value="">暂不分配</option><option v-for="owner in requirementOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
+            <fieldset><legend>优先级</legend><button v-for="priority in ['P0', 'P1', 'P2', 'P3'] as RequirementPriority[]" :key="priority" type="button" :class="{ 'is-active': editForm.priority === priority }" :style="editForm.priority === priority ? priorityStyle(priority) : undefined" @click="editForm.priority = priority">{{ priority }}</button></fieldset>
+            <label><span>外部需求链接（可选）</span><input v-model="editForm.externalRef" type="text" placeholder="如 Jira Issue ID / 禅道需求链接"></label>
+            <label><span>需求描述</span><textarea v-model="editForm.description" rows="4" placeholder="请输入需求详细描述..."></textarea></label>
+          </div>
+          <footer><button class="requirement-management__button is-ghost" type="button" @click="editDialogOpen = false; editTarget = null">取消</button><button class="requirement-management__button" type="button" :disabled="!editForm.title.trim() || isSubmitting" @click="submitEditRequirement">{{ isSubmitting ? '保存中...' : '保存修改' }}</button></footer>
+        </section>
+      </div>
+    </Transition>
+
+    <Transition name="requirement-fade">
+      <div v-if="deleteDialogOpen && deleteTarget" class="requirement-management__overlay" @click.self="deleteDialogOpen = false; deleteTarget = null">
+        <section class="requirement-management__dialog is-confirm" role="dialog" aria-modal="true" aria-labelledby="requirement-delete-title">
+          <header><h2 id="requirement-delete-title">删除需求</h2><button type="button" aria-label="关闭" @click="deleteDialogOpen = false; deleteTarget = null"><X :size="16" /></button></header>
+          <div class="requirement-management__confirm-body"><Trash2 :size="24" /><p>确定删除「{{ deleteTarget.title }}」吗？</p><small>需求将从当前列表移除；已关联的用例、执行记录和缺陷历史仍会保留。</small></div>
+          <footer><button class="requirement-management__button is-ghost" type="button" @click="deleteDialogOpen = false; deleteTarget = null">取消</button><button class="requirement-management__button is-danger" type="button" :disabled="isSubmitting" @click="deleteRequirement">{{ isSubmitting ? '删除中...' : '确认删除' }}</button></footer>
+        </section>
+      </div>
+    </Transition>
+
+    <Transition name="requirement-fade">
       <div v-if="importDialogOpen" class="requirement-management__overlay" @click.self="closeImportDialog">
         <section class="requirement-management__dialog is-import" role="dialog" aria-modal="true">
           <header><h2>导入需求</h2><button type="button" aria-label="关闭" @click="closeImportDialog"><X :size="16" /></button></header>
@@ -842,18 +1077,25 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             </div>
             <div v-else-if="importStep === 'config'" class="requirement-management__excel-config">
               <label :class="{ 'is-dragging': isDraggingFile }" @dragover.prevent="isDraggingFile = true" @dragleave="isDraggingFile = false" @drop.prevent="handleImportFile($event.dataTransfer?.files || null)">
-                <Upload :size="28" /><strong>{{ importFileName || '点击或拖拽文件至此处' }}</strong><span>支持 .xlsx · .xls · 文件大小不超过 10MB</span><input type="file" accept=".xlsx,.xls" @change="handleImportFile(($event.target as HTMLInputElement).files)">
+                 <Upload :size="28" /><strong>{{ importFileName || '点击或拖拽文件至此处' }}</strong><span>支持 .xlsx · .xls · 文件大小不超过 10MB</span><input type="file" accept=".xlsx,.xls" @change="handleImportFile(($event.target as HTMLInputElement).files)">
               </label>
-              <button class="requirement-management__template-button" type="button"><Download :size="13" />下载导入模板</button>
+              <label><span>默认所属版本 <i>*</i></span><select v-model="importVersionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select></label>
+              <button class="requirement-management__template-button" type="button" :disabled="isSubmitting || !canExport" @click="downloadImportTemplate"><Download :size="13" />下载导入模板</button>
               <p class="requirement-management__notice">模板必填列：需求标题、优先级（P0-P3）、负责人；版本和描述为选填列。</p>
             </div>
-            <div v-else class="requirement-management__preview">
+            <div v-else-if="importStep === 'preview'" class="requirement-management__preview">
               <p>已获取 <strong>{{ previewRequirements.length }}</strong> 条需求，请确认后导入：</p>
               <table><thead><tr><th>需求编号</th><th>标题</th><th>优先级</th><th>类型</th></tr></thead><tbody><tr v-for="item in previewRequirements" :key="item.id"><td><code>{{ item.id }}</code></td><td>{{ item.title }}</td><td><span class="requirement-management__badge is-priority" :style="priorityStyle(item.priority)">{{ item.priority }}</span></td><td>{{ item.type }}</td></tr></tbody></table>
             </div>
+            <div v-else class="requirement-management__import-result">
+              <p>导入完成，共处理 <strong>{{ importResult?.totalRows || 0 }}</strong> 条需求。</p>
+              <div><span class="is-success">成功 {{ importResult?.importedCount || 0 }}</span><span class="is-warning">跳过 {{ importResult?.skippedCount || 0 }}</span><span class="is-danger">失败 {{ importResult?.failedCount || 0 }}</span></div>
+              <table v-if="importResult?.issues.length"><thead><tr><th>行号</th><th>需求标题</th><th>结果</th><th>原因</th></tr></thead><tbody><tr v-for="issue in importResult.issues" :key="`${issue.rowNumber}-${issue.title}`"><td>{{ issue.rowNumber }}</td><td>{{ issue.title || '—' }}</td><td>{{ issue.status === 'SKIPPED' ? '已跳过' : '失败' }}</td><td>{{ issue.message }}</td></tr></tbody></table>
+            </div>
           </div>
           <footer v-if="importStep === 'preview'"><button class="requirement-management__button is-ghost" type="button" @click="importStep = 'config'">上一步</button><button class="requirement-management__button" type="button" @click="finishImport">确认导入 ({{ previewRequirements.length }})</button></footer>
-          <footer v-else><button class="requirement-management__button is-ghost" type="button" @click="closeImportDialog">取消</button><button v-if="importSource !== 'excel'" class="requirement-management__button" type="button" @click="importStep = 'preview'">获取预览</button><button v-else class="requirement-management__button" type="button" :disabled="!importFileName" @click="finishImport">开始导入</button></footer>
+          <footer v-else-if="importStep === 'result'"><button class="requirement-management__button" type="button" @click="closeImportDialog">完成</button></footer>
+          <footer v-else><button class="requirement-management__button is-ghost" type="button" @click="closeImportDialog">取消</button><button v-if="importSource !== 'excel'" class="requirement-management__button" type="button" @click="importStep = 'preview'">获取预览</button><button v-else class="requirement-management__button" type="button" :disabled="!importFileName || !importVersionId || isImporting" @click="finishImport">{{ isImporting ? '导入中...' : '开始导入' }}</button></footer>
         </section>
       </div>
     </Transition>
@@ -886,7 +1128,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         </div>
         <footer>
           <div class="requirement-management__drawer-nav"><button type="button" :disabled="reviewCaseIndex <= 0" @click="navigateReviewCase(-1)"><ChevronLeft :size="13" />上一条</button><span>{{ reviewCaseIndex + 1 }} / {{ linkedCases.length }}</span><button type="button" :disabled="reviewCaseIndex >= linkedCases.length - 1" @click="navigateReviewCase(1)">下一条<ChevronRight :size="13" /></button></div>
-          <div class="requirement-management__drawer-actions" :class="`is-${reviewCase.reviewStatus}`"><template v-if="reviewCase.reviewStatus === 'passed'"><p><CheckCircle2 :size="15" />已通过评审</p></template><template v-else-if="reviewCase.reviewStatus === 'rejected'"><p><XCircle :size="15" />已驳回</p><button class="requirement-management__button is-ghost is-small" type="button" @click="passReviewCase">撤回并通过</button></template><template v-else><p>{{ reviewCase.reviewStatus === 'reviewing' ? '请审阅上方步骤后操作' : '用例尚未进入评审流程' }}</p><button class="requirement-management__button is-reject" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="rejectEditorOpen = true">驳回</button><button class="requirement-management__button is-success" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="passReviewCase">通过</button></template></div>
+          <div class="requirement-management__drawer-actions" :class="`is-${reviewCase.reviewStatus}`"><template v-if="reviewCase.reviewStatus === 'passed'"><p><CheckCircle2 :size="15" />已通过评审</p></template><template v-else-if="reviewCase.reviewStatus === 'rejected'"><p><XCircle :size="15" />已驳回</p><button v-if="canReview" class="requirement-management__button is-ghost is-small" type="button" @click="passReviewCase">撤回并通过</button></template><template v-else><p>{{ reviewCase.reviewStatus === 'reviewing' ? '请审阅上方步骤后操作' : '用例尚未进入评审流程' }}</p><button v-if="canReview" class="requirement-management__button is-reject" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="rejectEditorOpen = true">驳回</button><button v-if="canReview" class="requirement-management__button is-success" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="passReviewCase">通过</button></template></div>
         </footer>
       </aside>
     </Transition>

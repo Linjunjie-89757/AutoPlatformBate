@@ -247,6 +247,22 @@ export interface TestRequirementSavePayload {
   description?: string | null
 }
 
+export interface TestRequirementImportIssue {
+  rowNumber: number
+  title: string
+  status: 'FAILED' | 'SKIPPED'
+  message: string
+}
+
+export interface TestRequirementImportResult {
+  totalRows: number
+  importedCount: number
+  skippedCount: number
+  failedCount: number
+  importedRequirementIds: number[]
+  issues: TestRequirementImportIssue[]
+}
+
 export interface TestPlanSavePayload {
   purpose: TestPlanPurpose
   planType?: TestPlanType | null

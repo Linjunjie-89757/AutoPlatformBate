@@ -17,6 +17,7 @@ import {
 } from '@lucide/vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 
+import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { testManagementApi, type TestPlanDefectItem } from '@/entities/test-management'
 import { userApi, type UserItem } from '@/entities/user'
 import { useWorkspaceContext } from '@/entities/workspace'
@@ -53,6 +54,7 @@ const emit = defineEmits<{
 }>()
 
 const { selectedWorkspaceCode } = useWorkspaceContext()
+const { currentUser } = useSession()
 const versions = ref<ManagedVersion[]>([])
 const selectedVersion = ref<ManagedVersion | null>(null)
 const versionRequirements = ref<VersionRequirement[]>([])
@@ -314,6 +316,12 @@ const qualityPassed = computed(() => qualityPassedCount.value === qualityChecks.
 
 const isEditing = computed(() => Boolean(editingId.value))
 const canSubmit = computed(() => Boolean(versionForm.name.trim() && versionForm.owner && versionOwners.value.some(item => item.displayName === versionForm.owner)))
+const canCreate = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.create'))
+const canEdit = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.edit'))
+const canRelease = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.release'))
+const canExport = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.export'))
+const canCreateDefect = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.execute')
+  && hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'bugs.create'))
 
 const statusStyle = (status: VersionStatus) => ({
   color: versionStatusConfig[status].color,
@@ -346,12 +354,20 @@ const resetForm = () => {
 }
 
 const openCreateDrawer = () => {
+  if (!canCreate.value) {
+    showToast('你没有创建版本的权限')
+    return
+  }
   editingId.value = null
   resetForm()
   drawerOpen.value = true
 }
 
 const openEditDrawer = (version: ManagedVersion) => {
+  if (!canEdit.value) {
+    showToast('你没有编辑版本的权限')
+    return
+  }
   editingId.value = version.id
   Object.assign(versionForm, {
     name: version.name,
@@ -372,6 +388,10 @@ const closeDrawer = () => {
 }
 
 const submitVersion = async () => {
+  if (isEditing.value ? !canEdit.value : !canCreate.value) {
+    showToast(isEditing.value ? '你没有编辑版本的权限' : '你没有创建版本的权限')
+    return
+  }
   if (!canSubmit.value) return
   const owner = versionOwners.value.find(item => item.displayName === versionForm.owner)
   if (!owner) return
@@ -444,6 +464,10 @@ const restoreInitialDetail = () => {
 }
 
 const transitionVersion = async (targetStatus: 'PENDING_RELEASE' | 'RELEASED') => {
+  if (!canRelease.value) {
+    showToast('你没有推进版本状态的权限')
+    return
+  }
   if (!selectedVersion.value) return
   isSubmitting.value = true
   try {
@@ -464,11 +488,19 @@ const transitionVersion = async (targetStatus: 'PENDING_RELEASE' | 'RELEASED') =
 }
 
 const createRequirementForVersion = () => {
+  if (!canCreate.value) {
+    showToast('你没有创建需求的权限')
+    return
+  }
   if (!selectedVersion.value) return
   emit('navigate', { view: 'requirements', id: null, tab: null, action: 'create', versionId: selectedVersion.value.id })
 }
 
 const createPlanForVersion = () => {
+  if (!canCreate.value) {
+    showToast('你没有创建测试计划的权限')
+    return
+  }
   if (!selectedVersion.value) return
   emit('navigate', { view: 'plans', id: null, tab: null, action: 'create', versionId: selectedVersion.value.id })
 }
@@ -482,6 +514,10 @@ const viewPlan = (plan: VersionPlan, tab = 'overview') => {
 }
 
 const startVersionDefectFlow = () => {
+  if (!canCreateDefect.value) {
+    showToast('你没有在测试计划中创建缺陷的权限')
+    return
+  }
   const plan = currentPlans.value.find(item => item.status === 'running' && item.scope > 0)
     || currentPlans.value.find(item => item.scope > 0)
   if (!plan) {
@@ -492,6 +528,10 @@ const startVersionDefectFlow = () => {
 }
 
 const exportVersionReport = async () => {
+  if (!canExport.value) {
+    showToast('你没有导出版本报告的权限')
+    return
+  }
   if (!selectedVersion.value || isExportingReport.value) return
   isExportingReport.value = true
   try {
@@ -566,7 +606,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         <div class="version-management__mini-stat is-muted"><strong>{{ stats.p0Blocked }}</strong><span>P0 阻塞</span></div>
         <i />
         <div class="version-management__mini-stat is-primary"><strong>{{ stats.released }}</strong><span>本月已发布</span></div>
-        <button class="version-management__button is-primary version-management__create" type="button" @click="openCreateDrawer">
+        <button v-if="canCreate" class="version-management__button is-primary version-management__create" type="button" @click="openCreateDrawer">
           <Plus :size="13" />新建版本
         </button>
       </section>
@@ -626,7 +666,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
                   <td @click.stop>
                     <div class="version-management__row-actions">
                       <button type="button" title="查看" @click="openVersion(version)"><Eye :size="13" /></button>
-                      <button v-if="version.status !== 'archived'" type="button" title="编辑" @click="openEditDrawer(version)"><Edit2 :size="13" /></button>
+                      <button v-if="version.status !== 'archived' && canEdit" type="button" title="编辑" @click="openEditDrawer(version)"><Edit2 :size="13" /></button>
                     </div>
                   </td>
                 </tr>
@@ -648,11 +688,11 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         <span class="version-management__badge" :style="statusStyle(selectedVersion.status)">{{ versionStatusConfig[selectedVersion.status].label }}</span>
         <div class="version-management__detail-actions">
           <span>负责人：{{ selectedVersion.owner }}</span>
-          <button class="version-management__icon-button" type="button" title="编辑" @click="openEditDrawer(selectedVersion)"><Edit2 :size="13" /></button>
-          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-ghost is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
-          <button v-if="selectedVersion.status !== 'archived'" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建测试计划</button>
-          <button v-if="selectedVersion.status === 'testing'" class="version-management__button is-purple is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('PENDING_RELEASE')">标记待发布</button>
-          <button v-if="selectedVersion.status === 'pending-release'" class="version-management__button is-success is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('RELEASED')"><CheckCircle2 :size="12" />标记已发布</button>
+          <button v-if="canEdit" class="version-management__icon-button" type="button" title="编辑" @click="openEditDrawer(selectedVersion)"><Edit2 :size="13" /></button>
+          <button v-if="selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-ghost is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
+          <button v-if="selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建测试计划</button>
+          <button v-if="selectedVersion.status === 'testing' && canRelease" class="version-management__button is-purple is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('PENDING_RELEASE')">标记待发布</button>
+          <button v-if="selectedVersion.status === 'pending-release' && canRelease" class="version-management__button is-success is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('RELEASED')"><CheckCircle2 :size="12" />标记已发布</button>
         </div>
       </header>
 
@@ -717,7 +757,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
               <span v-for="status in ['all', 'uncovered', 'partial', 'covered', 'passed'] as const" :key="status"><b>{{ requirementStatusCount(status) }}</b>{{ status === 'all' ? '全部' : requirementStatusConfig[status].label }}</span>
             </div>
             <button class="version-management__button is-ghost is-small is-link" type="button" @click="emit('change-tab', 'requirements')"><ExternalLink :size="12" />在需求管理中查看全部</button>
-            <button class="version-management__button is-primary is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
+            <button v-if="canCreate" class="version-management__button is-primary is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
           </div>
           <div class="version-management__table-card">
             <table v-if="currentRequirements.length" class="version-management__table is-requirements">
@@ -729,7 +769,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         </div>
 
         <div v-else-if="detailTab === 'plans'" class="version-management__table-card">
-          <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建计划</button></header>
+          <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button v-if="canCreate" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建计划</button></header>
           <table v-if="currentPlans.length" class="version-management__table is-plans">
             <thead><tr><th>计划名称</th><th>类型</th><th>负责人</th><th>周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>P0/P1</th><th>状态</th><th>操作</th></tr></thead>
             <tbody><tr v-for="item in currentPlans" :key="item.id"><td><strong>{{ item.name }}</strong></td><td><span class="version-management__plan-type">{{ item.type }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.startDate }}—{{ item.endDate }}</td><td class="is-centered"><b>{{ item.scope }}</b></td><td class="version-management__progress-cell"><div class="version-management__progress"><i><span :style="{ width: `${item.scope ? Math.round(item.executed / item.scope * 100) : 0}%` }" /></i><b>{{ item.scope ? Math.round(item.executed / item.scope * 100) : 0 }}%</b></div></td><td class="is-centered"><b class="is-rate">{{ item.executed ? Math.round(item.passed / item.executed * 100) : '—' }}{{ item.executed ? '%' : '' }}</b></td><td class="is-centered"><b v-if="item.highBugs" class="is-risk">{{ item.highBugs }}</b><span v-else class="is-muted">—</span></td><td><span :class="['version-management__badge', `is-plan-${item.status}`]">{{ item.status === 'running' ? '进行中' : item.status === 'completed' ? '已完成' : '待开始' }}</span></td><td><div class="version-management__row-actions"><button type="button" title="查看计划" @click="viewPlan(item)"><Eye :size="13" /></button></div></td></tr></tbody>
@@ -742,13 +782,13 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
             <div class="version-management__filter-pills">
               <button v-for="status in ['all', 'open', 'fixing', 'fixed', 'closed', 'rejected'] as const" :key="status" type="button" :class="{ 'is-active': bugStatusFilter === status }" @click="bugStatusFilter = status">{{ status === 'all' ? '全部' : bugStatusConfig[status].label }} {{ bugStatusCount(status) }}</button>
             </div>
-            <button class="version-management__button is-danger is-small" type="button" @click="startVersionDefectFlow"><Plus :size="11" />新建缺陷</button>
+            <button v-if="canCreateDefect" class="version-management__button is-danger is-small" type="button" @click="startVersionDefectFlow"><Plus :size="11" />新建缺陷</button>
           </div>
           <div class="version-management__table-card"><table v-if="currentBugs.length" class="version-management__table is-bugs"><thead><tr><th>缺陷编号</th><th>标题</th><th>严重程度</th><th>优先级</th><th>状态</th><th>负责人</th><th>所属计划</th><th>发现时间</th></tr></thead><tbody><tr v-for="item in currentBugs" :key="item.no"><td><code>{{ item.no }}</code></td><td>{{ item.title }}</td><td><span :class="['version-management__severity', { 'is-major': item.severity === '严重' }]">{{ item.severity }}</span></td><td><span :class="['version-management__priority', `is-${item.priority.toLowerCase()}`]">{{ item.priority }}</span></td><td><span class="version-management__badge" :style="{ color: bugStatusConfig[item.status].color, backgroundColor: bugStatusConfig[item.status].background }">{{ bugStatusConfig[item.status].label }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.plan }}</td><td class="is-muted">{{ item.foundAt }}</td></tr></tbody></table><div v-else class="version-management__empty"><strong>当前筛选下暂无缺陷</strong></div></div>
         </div>
 
         <article v-else-if="detailTab === 'report'" class="version-management__report">
-          <header><div><h2>{{ selectedVersion.name }} 版本测试汇总报告</h2><p>汇总 {{ currentPlans.length }} 个测试计划 · 负责人：{{ selectedVersion.owner }} · 生成：{{ reportGeneratedAt || '—' }}</p></div><button class="version-management__button is-ghost" type="button" :disabled="isExportingReport" @click="exportVersionReport"><Download :size="13" />{{ isExportingReport ? '导出中...' : '导出报告' }}</button></header>
+           <header><div><h2>{{ selectedVersion.name }} 版本测试汇总报告</h2><p>汇总 {{ currentPlans.length }} 个测试计划 · 负责人：{{ selectedVersion.owner }} · 生成：{{ reportGeneratedAt || '—' }}</p></div><button v-if="canExport" class="version-management__button is-ghost" type="button" :disabled="isExportingReport" @click="exportVersionReport"><Download :size="13" />{{ isExportingReport ? '导出中...' : '导出报告' }}</button></header>
           <div class="version-management__report-kpis"><div><strong class="is-dark">{{ currentPlans.length }}<small>个</small></strong><span>测试计划</span></div><div><strong>{{ selectedVersion.scope }}<small>项</small></strong><span>测试用例</span></div><div><strong>{{ selectedVersion.executed }}<small>项</small></strong><span>已执行</span></div><div><strong>{{ passRate }}%</strong><span>用例通过率</span></div><div><strong class="is-danger">{{ versionBugs.length }}<small>个</small></strong><span>发现缺陷</span></div></div>
           <template v-if="executedPlans.length">
             <h3>各计划通过率对比</h3>
@@ -779,7 +819,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
             <fieldset><legend>时间节点</legend><label><span>开始日期</span><input v-model="versionForm.startDate" type="date" :class="{ 'is-empty-date': !versionForm.startDate }"></label><label><span>计划提测日期</span><input v-model="versionForm.testDate" type="date" :class="{ 'is-empty-date': !versionForm.testDate }"></label><label><span>计划发布日期</span><input v-model="versionForm.releaseDate" type="date" :class="{ 'is-empty-date': !versionForm.releaseDate }"></label></fieldset>
             <label><span>版本目标</span><textarea v-model="versionForm.goal" rows="4" placeholder="描述本版本的核心目标和验收标准…" /></label>
           </div>
-          <footer><button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button><button class="version-management__button is-primary" type="button" :disabled="!canSubmit || isSubmitting" @click="submitVersion">{{ isSubmitting ? '保存中...' : isEditing ? '保存修改' : '创建版本' }}</button></footer>
+          <footer><button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button><button class="version-management__button is-primary" type="button" :disabled="!canSubmit || isSubmitting || (isEditing ? !canEdit : !canCreate)" @click="submitVersion">{{ isSubmitting ? '保存中...' : isEditing ? '保存修改' : '创建版本' }}</button></footer>
         </aside>
       </div>
     </Transition>

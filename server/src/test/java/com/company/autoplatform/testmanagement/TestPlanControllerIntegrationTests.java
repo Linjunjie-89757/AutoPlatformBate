@@ -99,6 +99,7 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
         planPayload.put("requirementIds", List.of(requirementId));
         planPayload.put("excludedAutoCaseIds", List.of());
         planPayload.put("manualCaseIds", List.of());
+        planPayload.put("maxP1", 1);
         planPayload.put("draft", false);
         JsonNode plan = data(mockMvc.perform(post("/api/test-management/plans/create-and-start")
                         .header("X-Workspace-Code", WORKSPACE_CODE)
@@ -117,10 +118,55 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
         plan = data(mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/results", planId, planCaseId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)
                         .contentType("application/json")
-                        .content(json(Map.of("status", "PASSED", "note", "冒烟通过", "expectedVersion", 1))))
+                        .content(json(Map.of("status", "FAILED", "note", "支付重试失败", "expectedVersion", 1))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.executedCount").value(1))
+                .andExpect(jsonPath("$.data.passedCount").value(0))
+                .andReturn());
+
+        JsonNode defect = data(mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/defects", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "title", "payment-retry-defect-" + suffix,
+                                "description", "验证失败用例的完整缺陷追溯",
+                                "priority", "P1",
+                                "severity", "HIGH",
+                                "assigneeId", 11,
+                                "sourceType", "TEST_PLAN",
+                                "tags", List.of("闭环验收", "支付重试")
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sourceType").value("TEST_PLAN"))
+                .andExpect(jsonPath("$.data.relatedCaseId").value(testCase.getId()))
+                .andExpect(jsonPath("$.data.tags[0]").value("闭环验收"))
+                .andExpect(jsonPath("$.data.tags[1]").value("支付重试"))
+                .andReturn());
+
+        mockMvc.perform(get("/api/test-management/plans/{id}/defects", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(defect.path("id").asLong()))
+                .andExpect(jsonPath("$.data[0].testVersionId").value(versionId))
+                .andExpect(jsonPath("$.data[0].testRequirementId").value(requirementId))
+                .andExpect(jsonPath("$.data[0].testPlanId").value(planId))
+                .andExpect(jsonPath("$.data[0].testPlanCaseId").value(planCaseId))
+                .andExpect(jsonPath("$.data[0].relatedCaseId").value(testCase.getId()));
+
+        plan = data(mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/results", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("status", "PASSED", "note", "修复验证通过", "expectedVersion", 2))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.passedCount").value(1))
                 .andReturn());
+
+        mockMvc.perform(get("/api/test-management/plans/{id}/cases/{planCaseId}/executions", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].executionStatus").value("PASSED"))
+                .andExpect(jsonPath("$.data[1].executionStatus").value("FAILED"));
 
         plan = data(mockMvc.perform(post("/api/test-management/plans/{id}/complete", planId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)
@@ -179,7 +225,7 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
         mockMvc.perform(get("/api/test-management/plans/{id}/activities", planId)
                         .header("X-Workspace-Code", WORKSPACE_CODE))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(5));
+                .andExpect(jsonPath("$.data.total").value(7));
     }
 
     @Test
