@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -54,6 +55,9 @@ public class TestPlanService {
     private final TestPlanCaseMapper planCaseMapper;
     private final TestPlanCaseRequirementMapper planCaseRequirementMapper;
     private final TestPlanCaseExecutionMapper executionMapper;
+    private final TestPlanCaseDefectRelationMapper planCaseDefectRelationMapper;
+    private final TestPlanExecutionAttachmentMapper executionAttachmentMapper;
+    private final TestPlanExecutionAttachmentStorageService executionAttachmentStorageService;
     private final TestPlanReportMapper reportMapper;
     private final TestRequirementMapper requirementMapper;
     private final TestRequirementCaseMapper requirementCaseMapper;
@@ -75,6 +79,9 @@ public class TestPlanService {
             TestPlanCaseMapper planCaseMapper,
             TestPlanCaseRequirementMapper planCaseRequirementMapper,
             TestPlanCaseExecutionMapper executionMapper,
+            TestPlanCaseDefectRelationMapper planCaseDefectRelationMapper,
+            TestPlanExecutionAttachmentMapper executionAttachmentMapper,
+            TestPlanExecutionAttachmentStorageService executionAttachmentStorageService,
             TestPlanReportMapper reportMapper,
             TestRequirementMapper requirementMapper,
             TestRequirementCaseMapper requirementCaseMapper,
@@ -95,6 +102,9 @@ public class TestPlanService {
         this.planCaseMapper = planCaseMapper;
         this.planCaseRequirementMapper = planCaseRequirementMapper;
         this.executionMapper = executionMapper;
+        this.planCaseDefectRelationMapper = planCaseDefectRelationMapper;
+        this.executionAttachmentMapper = executionAttachmentMapper;
+        this.executionAttachmentStorageService = executionAttachmentStorageService;
         this.reportMapper = reportMapper;
         this.requirementMapper = requirementMapper;
         this.requirementCaseMapper = requirementCaseMapper;
@@ -254,6 +264,25 @@ public class TestPlanService {
         requireExpectedVersion(source.getLockVersion(), request.expectedVersion(), "测试计划");
         LocalDateTime now = LocalDateTime.now();
         Long currentUserId = CurrentUserContext.get();
+        Long targetVersionId = request.targetVersionId() == null ? source.getVersionId() : request.targetVersionId();
+        boolean copyRequirements = request.copyRequirements() == null || request.copyRequirements();
+        boolean copyRequirementCases = request.copyRequirementCases() == null || request.copyRequirementCases();
+        boolean copyManualCases = request.copyManualCases() == null || request.copyManualCases();
+        boolean copyQualityStandards = request.copyQualityStandards() == null || request.copyQualityStandards();
+
+        if (source.getPurpose() == PlanPurpose.TEMP && targetVersionId != null) {
+            throw TestManagementException.validation("临时测试计划不能关联版本");
+        }
+        if (source.getPurpose() == PlanPurpose.VERSION) {
+            if (targetVersionId == null) throw TestManagementException.validation("版本测试计划必须选择目标版本");
+            TestVersionEntity targetVersion = versionMapper.selectById(targetVersionId);
+            if (targetVersion == null || !source.getWorkspaceId().equals(targetVersion.getWorkspaceId())) {
+                throw TestManagementException.validation("目标版本不属于当前工作区");
+            }
+            if (copyRequirements && !Objects.equals(source.getVersionId(), targetVersionId)) {
+                throw TestManagementException.validation("跨版本复制不能直接沿用原版本需求，请取消“复制需求范围”后重试");
+            }
+        }
 
         TestPlanEntity target = new TestPlanEntity();
         target.setWorkspaceId(source.getWorkspaceId());
@@ -261,18 +290,18 @@ public class TestPlanService {
         target.setPurpose(source.getPurpose());
         target.setPlanType(source.getPlanType());
         target.setStatus(PlanStatus.DRAFT);
-        target.setVersionId(source.getVersionId());
+        target.setVersionId(targetVersionId);
         target.setName(copyPlanName(source.getName(), request.name()));
         target.setOwnerId(source.getOwnerId());
         target.setStartDate(source.getStartDate());
         target.setEndDate(source.getEndDate());
         target.setGoal(source.getGoal());
-        target.setMinExecuteRate(source.getMinExecuteRate());
-        target.setMinPassRate(source.getMinPassRate());
-        target.setAllowP0(source.getAllowP0());
-        target.setMaxP1(source.getMaxP1());
-        target.setAutoReport(source.getAutoReport());
-        target.setOwnerConfirmRequired(source.getOwnerConfirmRequired());
+        target.setMinExecuteRate(copyQualityStandards ? source.getMinExecuteRate() : DEFAULT_EXECUTE_RATE);
+        target.setMinPassRate(copyQualityStandards ? source.getMinPassRate() : DEFAULT_PASS_RATE);
+        target.setAllowP0(copyQualityStandards && Boolean.TRUE.equals(source.getAllowP0()));
+        target.setMaxP1(copyQualityStandards ? source.getMaxP1() : 3);
+        target.setAutoReport(!copyQualityStandards || Boolean.TRUE.equals(source.getAutoReport()));
+        target.setOwnerConfirmRequired(!copyQualityStandards || Boolean.TRUE.equals(source.getOwnerConfirmRequired()));
         target.setLockVersion(0);
         target.setCreatedBy(currentUserId);
         target.setUpdatedBy(currentUserId);
@@ -284,7 +313,8 @@ public class TestPlanService {
             planMapper.update(null, new LambdaUpdateWrapper<TestPlanEntity>()
                     .eq(TestPlanEntity::getId, target.getId()).set(TestPlanEntity::getPlanNo, planNo));
             target.setPlanNo(planNo);
-            copyPlanScope(source, target, currentUserId, now);
+            copyPlanScope(source, target, currentUserId, now,
+                    copyRequirements, copyRequirementCases, copyManualCases);
         } catch (DuplicateKeyException exception) {
             throw TestManagementException.validation("测试计划编号生成冲突，请重试");
         }
@@ -300,7 +330,8 @@ public class TestPlanService {
         if (plan.getStatus() != PlanStatus.DRAFT) throw TestManagementException.snapshotLocked("只有草稿测试计划可以删除");
         if (planCaseMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseEntity>().eq(TestPlanCaseEntity::getPlanId, id)) > 0
                 || reportMapper.selectCount(new LambdaQueryWrapper<TestPlanReportEntity>().eq(TestPlanReportEntity::getPlanId, id)) > 0
-                || bugMapper.selectCount(new LambdaQueryWrapper<BugEntity>().eq(BugEntity::getTestPlanId, id)) > 0) {
+                || bugMapper.selectCount(new LambdaQueryWrapper<BugEntity>().eq(BugEntity::getTestPlanId, id)) > 0
+                || planCaseDefectRelationMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>().eq(TestPlanCaseDefectRelationEntity::getPlanId, id)) > 0) {
             throw TestManagementException.snapshotLocked("测试计划已有下游数据，不允许删除");
         }
         deleteScope(id);
@@ -385,6 +416,31 @@ public class TestPlanService {
     }
 
     @Transactional
+    public TestPlanResponse updateCaseSnapshot(Long id, Long planCaseId, String workspaceCode, UpdateTestPlanCaseSnapshotRequest request) {
+        TestPlanEntity plan = requireWritable(id, workspaceCode);
+        if (plan.getStatus() != PlanStatus.DRAFT && plan.getStatus() != PlanStatus.PENDING) {
+            throw TestManagementException.snapshotLocked("测试计划开始后不能编辑用例快照");
+        }
+        TestPlanCaseEntity planCase = requirePlanCase(planCaseId, id);
+        requireExpectedVersion(planCase.getLockVersion(), request.expectedVersion(), "测试用例快照");
+        if (!List.of("P0", "P1", "P2", "P3").contains(request.priority().trim().toUpperCase(Locale.ROOT))) {
+            throw TestManagementException.validation("用例优先级不合法");
+        }
+        planCase.setSnapshotTitle(request.title().trim());
+        planCase.setSnapshotModule(blankToNull(request.module()));
+        planCase.setSnapshotPriority(request.priority().trim().toUpperCase(Locale.ROOT));
+        planCase.setSnapshotPrecondition(blankToNull(request.precondition()));
+        planCase.setSnapshotSteps(blankToNull(request.steps()));
+        planCase.setSnapshotExpectedResult(blankToNull(request.expectedResult()));
+        planCase.setUpdatedAt(LocalDateTime.now());
+        if (planCaseMapper.updateById(planCase) == 0) {
+            throw TestManagementException.conflict("测试用例快照已被其他用户修改，请重新加载", Map.of("id", planCaseId));
+        }
+        activityLogService.record(plan.getWorkspaceId(), ActivityEntityType.PLAN, id, "PLAN_CASE_SNAPSHOT_UPDATED", "编辑测试用例快照", Map.of("planCaseId", planCaseId));
+        return get(id, workspaceCode);
+    }
+
+    @Transactional
     public TestPlanResponse recordResult(Long id, Long planCaseId, String workspaceCode, RecordTestPlanCaseResultRequest request) {
         TestPlanEntity plan = requireWritable(id, workspaceCode);
         if (plan.getStatus() != PlanStatus.RUNNING) throw TestManagementException.invalidTransition("测试计划执行", plan.getStatus(), "RESULT");
@@ -413,6 +469,21 @@ public class TestPlanService {
         if (planCaseMapper.updateById(planCase) == 0) throw TestManagementException.conflict("测试用例执行结果已被修改，请重新加载", Map.of("id", planCaseId));
         activityLogService.record(plan.getWorkspaceId(), ActivityEntityType.PLAN, id, "PLAN_CASE_RESULT_RECORDED", "记录测试结果", Map.of("planCaseId", planCaseId, "status", request.status()));
         return get(id, workspaceCode);
+    }
+
+    public List<TestPlanCaseExecutionHistoryResponse> listCaseExecutionHistory(Long id, Long planCaseId, String workspaceCode) {
+        TestPlanEntity plan = requireReadable(id, workspaceCode);
+        requirePlanCase(planCaseId, id);
+        List<TestPlanCaseExecutionEntity> records = executionMapper.selectList(new LambdaQueryWrapper<TestPlanCaseExecutionEntity>()
+                .eq(TestPlanCaseExecutionEntity::getPlanId, id)
+                .eq(TestPlanCaseExecutionEntity::getPlanCaseId, planCaseId)
+                .orderByDesc(TestPlanCaseExecutionEntity::getExecutedAt)
+                .orderByDesc(TestPlanCaseExecutionEntity::getId));
+        Map<Long, UserEntity> users = loadUsers(records.stream().map(TestPlanCaseExecutionEntity::getExecutorId).filter(Objects::nonNull).toList());
+        return records.stream().map(item -> new TestPlanCaseExecutionHistoryResponse(
+                item.getId(), item.getPreviousStatus(), item.getExecutionStatus(), item.getExecutionNote(), item.getExecutorId(),
+                users.get(item.getExecutorId()) == null ? null : users.get(item.getExecutorId()).getDisplayName(), item.getExecutedAt()
+        )).toList();
     }
 
     @Transactional
@@ -477,13 +548,74 @@ public class TestPlanService {
 
     public List<BugEntity> listDefects(Long id, String workspaceCode) {
         TestPlanEntity plan = requireReadable(id, workspaceCode);
-        return bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+        List<BugEntity> direct = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
                 .eq(BugEntity::getTestPlanId, id).eq(BugEntity::getWorkspaceId, plan.getWorkspaceId())
+                .orderByDesc(BugEntity::getUpdatedAt).orderByDesc(BugEntity::getId));
+        List<Long> linkedIds = planCaseDefectRelationMapper.selectList(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>()
+                .eq(TestPlanCaseDefectRelationEntity::getPlanId, id).eq(TestPlanCaseDefectRelationEntity::getWorkspaceId, plan.getWorkspaceId()))
+                .stream().map(TestPlanCaseDefectRelationEntity::getDefectId).toList();
+        if (linkedIds.isEmpty()) return direct;
+        List<Long> directIds = direct.stream().map(BugEntity::getId).collect(Collectors.toList());
+        List<Long> missingIds = linkedIds.stream().filter(item -> !directIds.contains(item)).distinct().toList();
+        if (missingIds.isEmpty()) return direct;
+        List<BugEntity> linked = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>().in(BugEntity::getId, missingIds).eq(BugEntity::getWorkspaceId, plan.getWorkspaceId()));
+        List<BugEntity> result = new ArrayList<>(direct);
+        result.addAll(linked);
+        return result.stream().sorted(Comparator.comparing(BugEntity::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())).thenComparing(BugEntity::getId, Comparator.reverseOrder())).toList();
+    }
+
+    public List<BugEntity> listCaseDefects(Long id, Long planCaseId, String workspaceCode) {
+        TestPlanEntity plan = requireReadable(id, workspaceCode);
+        requirePlanCase(planCaseId, id);
+        List<Long> relationIds = planCaseDefectRelationMapper.selectList(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>()
+                .eq(TestPlanCaseDefectRelationEntity::getPlanId, id).eq(TestPlanCaseDefectRelationEntity::getPlanCaseId, planCaseId))
+                .stream().map(TestPlanCaseDefectRelationEntity::getDefectId).toList();
+        return bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+                .eq(BugEntity::getWorkspaceId, plan.getWorkspaceId())
+                .and(query -> {
+                    query.eq(BugEntity::getTestPlanCaseId, planCaseId);
+                    if (!relationIds.isEmpty()) query.or().in(BugEntity::getId, relationIds);
+                })
                 .orderByDesc(BugEntity::getUpdatedAt).orderByDesc(BugEntity::getId));
     }
 
     @Transactional
+    public List<BugEntity> linkDefect(Long id, Long planCaseId, String workspaceCode, LinkTestPlanDefectRequest request) {
+        workspaceAccessSupport.requirePermission(workspaceCode, "test_management.execute");
+        TestPlanEntity plan = requireWritable(id, workspaceCode);
+        TestPlanCaseEntity planCase = requirePlanCase(planCaseId, id);
+        requireExpectedVersion(planCase.getLockVersion(), request.expectedVersion(), "测试用例快照");
+        BugEntity defect = bugMapper.selectById(request.defectId());
+        if (defect == null || !plan.getWorkspaceId().equals(defect.getWorkspaceId())) throw TestManagementException.notFound("缺陷", request.defectId());
+        TestPlanCaseDefectRelationEntity relation = new TestPlanCaseDefectRelationEntity();
+        relation.setWorkspaceId(plan.getWorkspaceId()); relation.setPlanId(id); relation.setPlanCaseId(planCaseId); relation.setDefectId(defect.getId()); relation.setCreatedBy(CurrentUserContext.get());
+        relation.setCreatedAt(LocalDateTime.now()); relation.setUpdatedAt(LocalDateTime.now());
+        try { planCaseDefectRelationMapper.insert(relation); } catch (DuplicateKeyException ignored) { }
+        activityLogService.record(plan.getWorkspaceId(), ActivityEntityType.PLAN, id, "PLAN_DEFECT_LINKED", "关联已有缺陷", Map.of("planCaseId", planCaseId, "bugId", defect.getId()));
+        return listDefects(id, workspaceCode);
+    }
+
+    @Transactional
+    public List<BugEntity> unlinkDefect(Long id, Long planCaseId, Long defectId, String workspaceCode) {
+        workspaceAccessSupport.requirePermission(workspaceCode, "test_management.execute");
+        TestPlanEntity plan = requireWritable(id, workspaceCode);
+        requirePlanCase(planCaseId, id);
+        planCaseDefectRelationMapper.delete(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>()
+                .eq(TestPlanCaseDefectRelationEntity::getPlanId, id).eq(TestPlanCaseDefectRelationEntity::getPlanCaseId, planCaseId).eq(TestPlanCaseDefectRelationEntity::getDefectId, defectId));
+        long remainingRelations = planCaseDefectRelationMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>()
+                .eq(TestPlanCaseDefectRelationEntity::getDefectId, defectId));
+        if (remainingRelations == 0) {
+            bugMapper.update(null, new LambdaUpdateWrapper<BugEntity>()
+                    .eq(BugEntity::getId, defectId).eq(BugEntity::getTestPlanId, id).eq(BugEntity::getTestPlanCaseId, planCaseId)
+                    .set(BugEntity::getTestPlanCaseId, null));
+        }
+        activityLogService.record(plan.getWorkspaceId(), ActivityEntityType.PLAN, id, "PLAN_DEFECT_UNLINKED", "解除缺陷关联", Map.of("planCaseId", planCaseId, "bugId", defectId));
+        return listDefects(id, workspaceCode);
+    }
+
+    @Transactional
     public Object createDefect(Long id, Long planCaseId, String workspaceCode, CreateBugRequest request) {
+        workspaceAccessSupport.requirePermission(workspaceCode, "bugs.create");
         TestPlanEntity plan = requireWritable(id, workspaceCode);
         TestPlanCaseEntity planCase = requirePlanCase(planCaseId, id);
         if (planCase.getExecutionStatus() != PlanCaseExecutionStatus.FAILED && planCase.getExecutionStatus() != PlanCaseExecutionStatus.BLOCKED) {
@@ -502,8 +634,59 @@ public class TestPlanService {
                 .set(BugEntity::getTestRequirementId, requirementId)
                 .set(BugEntity::getTestPlanId, id)
                 .set(BugEntity::getTestPlanCaseId, planCaseId));
+        TestPlanCaseDefectRelationEntity relation = new TestPlanCaseDefectRelationEntity();
+        relation.setWorkspaceId(plan.getWorkspaceId()); relation.setPlanId(id); relation.setPlanCaseId(planCaseId); relation.setDefectId(detail.id()); relation.setCreatedBy(CurrentUserContext.get());
+        relation.setCreatedAt(LocalDateTime.now()); relation.setUpdatedAt(LocalDateTime.now());
+        planCaseDefectRelationMapper.insert(relation);
         activityLogService.record(plan.getWorkspaceId(), ActivityEntityType.PLAN, id, "PLAN_DEFECT_CREATED", "从测试用例创建缺陷", Map.of("planCaseId", planCaseId, "bugId", detail.id()));
         return bugService.getBug(detail.id(), workspaceCode);
+    }
+
+    @Transactional
+    public List<TestPlanExecutionAttachmentResponse> uploadExecutionEvidence(Long id, Long planCaseId, String workspaceCode, List<MultipartFile> files) {
+        TestPlanEntity plan = requireWritable(id, workspaceCode);
+        requirePlanCase(planCaseId, id);
+        TestPlanCaseExecutionEntity execution = latestExecution(id, planCaseId);
+        if (execution == null) throw TestManagementException.validation("请先保存本次执行结果，再上传执行证据");
+        List<StoredTestPlanExecutionFile> stored = executionAttachmentStorageService.storeAll(plan.getWorkspaceId(), id, execution.getId(), files);
+        List<TestPlanExecutionAttachmentEntity> created = new ArrayList<>();
+        try {
+            for (int index = 0; index < stored.size(); index++) {
+                MultipartFile file = files.get(index); StoredTestPlanExecutionFile item = stored.get(index);
+                TestPlanExecutionAttachmentEntity attachment = new TestPlanExecutionAttachmentEntity();
+                attachment.setWorkspaceId(plan.getWorkspaceId()); attachment.setPlanId(id); attachment.setPlanCaseId(planCaseId); attachment.setExecutionId(execution.getId());
+                attachment.setFileName(file.getOriginalFilename()); attachment.setStoredPath(item.storedPath()); attachment.setContentType(item.contentType()); attachment.setFileSize(item.fileSize()); attachment.setCreatedBy(CurrentUserContext.get());
+                attachment.setCreatedAt(LocalDateTime.now()); attachment.setUpdatedAt(LocalDateTime.now()); executionAttachmentMapper.insert(attachment); created.add(attachment);
+            }
+        } catch (RuntimeException exception) {
+            created.forEach(item -> { executionAttachmentMapper.deleteById(item.getId()); executionAttachmentStorageService.delete(item.getStoredPath()); });
+            stored.forEach(item -> executionAttachmentStorageService.delete(item.storedPath()));
+            throw exception;
+        }
+        return created.stream().map(this::toExecutionAttachmentResponse).toList();
+    }
+
+    public List<TestPlanExecutionAttachmentResponse> listExecutionEvidence(Long id, Long planCaseId, String workspaceCode) {
+        requireReadable(id, workspaceCode); requirePlanCase(planCaseId, id);
+        TestPlanCaseExecutionEntity execution = latestExecution(id, planCaseId);
+        if (execution == null) return List.of();
+        return executionAttachmentMapper.selectList(new LambdaQueryWrapper<TestPlanExecutionAttachmentEntity>().eq(TestPlanExecutionAttachmentEntity::getExecutionId, execution.getId()).orderByAsc(TestPlanExecutionAttachmentEntity::getId))
+                .stream().map(this::toExecutionAttachmentResponse).toList();
+    }
+
+    @Transactional
+    public void deleteExecutionEvidence(Long id, Long planCaseId, Long attachmentId, String workspaceCode) {
+        TestPlanEntity plan = requireWritable(id, workspaceCode); requirePlanCase(planCaseId, id);
+        TestPlanExecutionAttachmentEntity attachment = executionAttachmentMapper.selectById(attachmentId);
+        if (attachment == null || !id.equals(attachment.getPlanId()) || !planCaseId.equals(attachment.getPlanCaseId())) throw TestManagementException.notFound("执行证据", attachmentId);
+        executionAttachmentMapper.deleteById(attachmentId); executionAttachmentStorageService.delete(attachment.getStoredPath());
+    }
+
+    public TestPlanExecutionFileDownload downloadExecutionEvidence(Long id, Long planCaseId, Long attachmentId, String workspaceCode) {
+        requireReadable(id, workspaceCode); requirePlanCase(planCaseId, id);
+        TestPlanExecutionAttachmentEntity attachment = executionAttachmentMapper.selectById(attachmentId);
+        if (attachment == null || !id.equals(attachment.getPlanId()) || !planCaseId.equals(attachment.getPlanCaseId())) throw TestManagementException.notFound("执行证据", attachmentId);
+        return executionAttachmentStorageService.load(attachment);
     }
 
     public TestPlanReportResponse getReport(Long id, String workspaceCode) {
@@ -674,27 +857,42 @@ public class TestPlanService {
         }
     }
 
-    private void copyPlanScope(TestPlanEntity source, TestPlanEntity target, Long currentUserId, LocalDateTime now) {
+    private void copyPlanScope(
+            TestPlanEntity source,
+            TestPlanEntity target,
+            Long currentUserId,
+            LocalDateTime now,
+            boolean copyRequirements,
+            boolean copyRequirementCases,
+            boolean copyManualCases
+    ) {
         List<TestPlanRequirementEntity> sourceRequirements = planRequirementMapper.selectList(
                 new LambdaQueryWrapper<TestPlanRequirementEntity>()
                         .eq(TestPlanRequirementEntity::getPlanId, source.getId())
                         .orderByAsc(TestPlanRequirementEntity::getId));
-        for (TestPlanRequirementEntity sourceRequirement : sourceRequirements) {
-            TestPlanRequirementEntity targetRequirement = new TestPlanRequirementEntity();
-            targetRequirement.setWorkspaceId(target.getWorkspaceId());
-            targetRequirement.setPlanId(target.getId());
-            targetRequirement.setRequirementId(sourceRequirement.getRequirementId());
-            targetRequirement.setCreatedBy(currentUserId);
-            targetRequirement.setCreatedAt(now);
-            targetRequirement.setUpdatedAt(now);
-            planRequirementMapper.insert(targetRequirement);
+        if (copyRequirements) {
+            for (TestPlanRequirementEntity sourceRequirement : sourceRequirements) {
+                TestPlanRequirementEntity targetRequirement = new TestPlanRequirementEntity();
+                targetRequirement.setWorkspaceId(target.getWorkspaceId());
+                targetRequirement.setPlanId(target.getId());
+                targetRequirement.setRequirementId(sourceRequirement.getRequirementId());
+                targetRequirement.setCreatedBy(currentUserId);
+                targetRequirement.setCreatedAt(now);
+                targetRequirement.setUpdatedAt(now);
+                planRequirementMapper.insert(targetRequirement);
+            }
         }
 
         List<TestPlanCaseEntity> sourceCases = planCaseMapper.selectList(
                 new LambdaQueryWrapper<TestPlanCaseEntity>()
                         .eq(TestPlanCaseEntity::getPlanId, source.getId())
                         .orderByAsc(TestPlanCaseEntity::getSortOrder)
-                        .orderByAsc(TestPlanCaseEntity::getId));
+                        .orderByAsc(TestPlanCaseEntity::getId))
+                .stream()
+                .filter(item -> item.getOriginType() == PlanCaseOriginType.REQUIREMENT
+                        ? copyRequirementCases
+                        : copyManualCases)
+                .toList();
         if (sourceCases.isEmpty()) return;
         List<Long> sourceCaseIds = sourceCases.stream().map(TestPlanCaseEntity::getId).toList();
         Map<Long, List<Long>> requirementIdsByCase = planCaseRequirementMapper.selectList(
@@ -732,8 +930,10 @@ public class TestPlanService {
             targetCase.setCreatedAt(now);
             targetCase.setUpdatedAt(now);
             planCaseMapper.insert(targetCase);
-            for (Long requirementId : requirementIdsByCase.getOrDefault(sourceCase.getId(), List.of())) {
-                insertCaseRequirement(target, targetCase, requirementId);
+            if (copyRequirements) {
+                for (Long requirementId : requirementIdsByCase.getOrDefault(sourceCase.getId(), List.of())) {
+                    insertCaseRequirement(target, targetCase, requirementId);
+                }
             }
         }
     }
@@ -847,7 +1047,11 @@ public class TestPlanService {
         Map<Long, List<TestPlanCaseEntity>> casesByPlan = cases.stream().collect(Collectors.groupingBy(TestPlanCaseEntity::getPlanId));
         Map<Long, List<TestPlanCaseRequirementEntity>> caseRequirements = cases.isEmpty() ? Map.of() : planCaseRequirementMapper.selectList(new LambdaQueryWrapper<TestPlanCaseRequirementEntity>().in(TestPlanCaseRequirementEntity::getPlanCaseId, cases.stream().map(TestPlanCaseEntity::getId).toList())).stream().collect(Collectors.groupingBy(TestPlanCaseRequirementEntity::getPlanCaseId));
         Map<Long, CaseEntity> sourceCases = loadCases(cases.stream().map(TestPlanCaseEntity::getSourceCaseId).toList());
-        Map<Long, Long> defectCounts = cases.isEmpty() ? Map.of() : bugMapper.selectList(new LambdaQueryWrapper<BugEntity>().in(BugEntity::getTestPlanCaseId, cases.stream().map(TestPlanCaseEntity::getId).toList())).stream().collect(Collectors.groupingBy(BugEntity::getTestPlanCaseId, Collectors.counting()));
+        List<BugEntity> planDefects = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>().in(BugEntity::getTestPlanId, planIds));
+        Map<Long, Long> defectCounts = planDefects.stream().filter(item -> item.getTestPlanCaseId() != null).collect(Collectors.groupingBy(BugEntity::getTestPlanCaseId, Collectors.counting()));
+        Map<Long, Long> planDefectCounts = planDefects.stream().filter(item -> item.getTestPlanId() != null).collect(Collectors.groupingBy(BugEntity::getTestPlanId, Collectors.counting()));
+        Map<Long, Long> p0DefectCounts = planDefects.stream().filter(item -> item.getTestPlanId() != null && "P0".equals(item.getPriority()) && !List.of("CLOSED", "REJECTED").contains(item.getStatus())).collect(Collectors.groupingBy(BugEntity::getTestPlanId, Collectors.counting()));
+        Map<Long, Long> p1DefectCounts = planDefects.stream().filter(item -> item.getTestPlanId() != null && "P1".equals(item.getPriority()) && !List.of("CLOSED", "REJECTED").contains(item.getStatus())).collect(Collectors.groupingBy(BugEntity::getTestPlanId, Collectors.counting()));
         List<Long> caseUserIds = cases.stream().flatMap(item -> java.util.stream.Stream.of(item.getAssigneeId(), item.getExecutedBy())).filter(Objects::nonNull).toList();
         users.putAll(loadUsers(caseUserIds));
         Map<Long, TestPlanReportEntity> reports = reportMapper.selectList(new LambdaQueryWrapper<TestPlanReportEntity>().in(TestPlanReportEntity::getPlanId, planIds)).stream().collect(Collectors.toMap(TestPlanReportEntity::getPlanId, Function.identity()));
@@ -866,7 +1070,7 @@ public class TestPlanService {
                 CaseEntity source = sourceCases.get(item.getSourceCaseId()); UserEntity assignee = users.get(item.getAssigneeId()); UserEntity executor = users.get(item.getExecutedBy());
                 return new TestPlanCaseItem(item.getId(), item.getSourceCaseId(), item.getOriginType(), item.getSnapshotCaseNo(), item.getSnapshotTitle(), item.getSnapshotModule(), item.getSnapshotPriority(), item.getSnapshotPrecondition(), item.getSnapshotSteps(), item.getSnapshotExpectedResult(), Boolean.TRUE.equals(item.getAddedAfterStart()), item.getAssigneeId(), assignee == null ? null : assignee.getDisplayName(), item.getExecutionStatus(), item.getExecutionNote(), item.getExecutedBy(), executor == null ? null : executor.getDisplayName(), item.getExecutedAt(), caseRequirements.getOrDefault(item.getId(), List.of()).stream().map(TestPlanCaseRequirementEntity::getRequirementId).toList(), defectCounts.getOrDefault(item.getId(), 0L), item.getLockVersion());
             }).toList();
-            return new TestPlanResponse(plan.getId(), plan.getPlanNo(), plan.getPurpose(), plan.getPlanType(), plan.getStatus(), plan.getVersionId(), plan.getVersionId() == null ? null : versions.get(plan.getVersionId()) == null ? null : versions.get(plan.getVersionId()).getName(), plan.getName(), plan.getOwnerId(), owner == null ? null : owner.getDisplayName(), plan.getStartDate(), plan.getEndDate(), plan.getGoal(), plan.getMinExecuteRate(), plan.getMinPassRate(), Boolean.TRUE.equals(plan.getAllowP0()), plan.getMaxP1(), Boolean.TRUE.equals(plan.getAutoReport()), Boolean.TRUE.equals(plan.getOwnerConfirmRequired()), requirementsByPlan.getOrDefault(plan.getId(), List.of()).size(), planCases.size(), executed, passed, rate(executed, planCases.size()), rate(passed, executed), bugMapper.selectCount(new LambdaQueryWrapper<BugEntity>().eq(BugEntity::getTestPlanId, plan.getId())), plan.getLockVersion(), workspace == null ? null : workspace.getWorkspaceCode(), workspace == null ? null : workspace.getWorkspaceName(), plan.getSnapshotFrozenAt(), plan.getStartedAt(), plan.getCompletedAt(), plan.getCancelledAt(), plan.getCancelReason(), reqItems, caseItems, reports.containsKey(plan.getId()) ? toReportResponse(reports.get(plan.getId())) : null, plan.getCreatedAt(), plan.getUpdatedAt());
+            return new TestPlanResponse(plan.getId(), plan.getPlanNo(), plan.getPurpose(), plan.getPlanType(), plan.getStatus(), plan.getVersionId(), plan.getVersionId() == null ? null : versions.get(plan.getVersionId()) == null ? null : versions.get(plan.getVersionId()).getName(), plan.getName(), plan.getOwnerId(), owner == null ? null : owner.getDisplayName(), plan.getStartDate(), plan.getEndDate(), plan.getGoal(), plan.getMinExecuteRate(), plan.getMinPassRate(), Boolean.TRUE.equals(plan.getAllowP0()), plan.getMaxP1(), Boolean.TRUE.equals(plan.getAutoReport()), Boolean.TRUE.equals(plan.getOwnerConfirmRequired()), requirementsByPlan.getOrDefault(plan.getId(), List.of()).size(), planCases.size(), executed, passed, rate(executed, planCases.size()), rate(passed, executed), planDefectCounts.getOrDefault(plan.getId(), 0L), p0DefectCounts.getOrDefault(plan.getId(), 0L), p1DefectCounts.getOrDefault(plan.getId(), 0L), plan.getLockVersion(), workspace == null ? null : workspace.getWorkspaceCode(), workspace == null ? null : workspace.getWorkspaceName(), plan.getSnapshotFrozenAt(), plan.getStartedAt(), plan.getCompletedAt(), plan.getCancelledAt(), plan.getCancelReason(), reqItems, caseItems, reports.containsKey(plan.getId()) ? toReportResponse(reports.get(plan.getId())) : null, plan.getCreatedAt(), plan.getUpdatedAt());
         }).toList();
     }
 
@@ -918,6 +1122,22 @@ public class TestPlanService {
         TestPlanCaseEntity item = planCaseMapper.selectById(planCaseId);
         if (item == null || !planId.equals(item.getPlanId())) throw TestManagementException.notFound("测试用例快照", planCaseId);
         return item;
+    }
+
+    private TestPlanCaseExecutionEntity latestExecution(Long planId, Long planCaseId) {
+        return executionMapper.selectOne(new LambdaQueryWrapper<TestPlanCaseExecutionEntity>()
+                .eq(TestPlanCaseExecutionEntity::getPlanId, planId)
+                .eq(TestPlanCaseExecutionEntity::getPlanCaseId, planCaseId)
+                .orderByDesc(TestPlanCaseExecutionEntity::getExecutedAt)
+                .orderByDesc(TestPlanCaseExecutionEntity::getId)
+                .last("limit 1"));
+    }
+
+    private TestPlanExecutionAttachmentResponse toExecutionAttachmentResponse(TestPlanExecutionAttachmentEntity attachment) {
+        return new TestPlanExecutionAttachmentResponse(
+                attachment.getId(), attachment.getFileName(), attachment.getContentType(), attachment.getFileSize(),
+                "/api/test-management/plans/" + attachment.getPlanId() + "/cases/" + attachment.getPlanCaseId() + "/evidence/" + attachment.getId() + "/download",
+                attachment.getCreatedAt());
     }
 
     private void requireActiveUser(Long userId) {

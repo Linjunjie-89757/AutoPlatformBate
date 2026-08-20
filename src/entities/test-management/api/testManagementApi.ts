@@ -5,6 +5,8 @@ import type {
   TestPage,
   TestPlanDefectItem,
   TestPlanCreateDefectPayload,
+  TestPlanExecutionAttachmentItem,
+  TestPlanExecutionHistoryItem,
   TestPlanItem,
   TestPlanReportItem,
   TestPlanSavePayload,
@@ -180,7 +182,15 @@ export const testManagementApi = {
     }), '测试计划更新失败')
   },
 
-  async copyPlan(workspaceCode: string, id: number, payload: { name?: string; expectedVersion: number }) {
+  async copyPlan(workspaceCode: string, id: number, payload: {
+    name?: string
+    targetVersionId?: number | null
+    copyRequirements?: boolean
+    copyRequirementCases?: boolean
+    copyManualCases?: boolean
+    copyQualityStandards?: boolean
+    expectedVersion: number
+  }) {
     return unwrap(await httpPost<ApiResponse<TestPlanItem>, typeof payload>(`/test-management/plans/${id}/copy`, payload, {
       headers: workspaceHeaders(workspaceCode),
     }), '测试计划复制失败')
@@ -222,10 +232,63 @@ export const testManagementApi = {
     }), '测试用例负责人更新失败')
   },
 
+  async updatePlanCaseSnapshot(workspaceCode: string, id: number, planCaseId: number, payload: {
+    title: string
+    module?: string | null
+    priority: string
+    precondition?: string | null
+    steps?: string | null
+    expectedResult?: string | null
+    expectedVersion: number
+  }) {
+    return unwrap(await httpPut<ApiResponse<TestPlanItem>, typeof payload>(`/test-management/plans/${id}/cases/${planCaseId}`, payload, {
+      headers: workspaceHeaders(workspaceCode),
+    }), '测试用例快照更新失败')
+  },
+
   async recordPlanCaseResult(workspaceCode: string, id: number, planCaseId: number, payload: { status: string; note?: string; expectedVersion: number }) {
     return unwrap(await httpPost<ApiResponse<TestPlanItem>, typeof payload>(`/test-management/plans/${id}/cases/${planCaseId}/results`, payload, {
       headers: workspaceHeaders(workspaceCode),
     }), '测试结果保存失败')
+  },
+
+  async listPlanCaseExecutions(workspaceCode: string, id: number, planCaseId: number) {
+    return unwrap(await httpGet<ApiResponse<TestPlanExecutionHistoryItem[]>>(`/test-management/plans/${id}/cases/${planCaseId}/executions`, {
+      headers: workspaceHeaders(workspaceCode),
+    }), '执行历史加载失败')
+  },
+
+  async uploadPlanCaseEvidence(workspaceCode: string, id: number, planCaseId: number, files: File[]) {
+    const form = new FormData()
+    files.forEach(file => form.append('files', file))
+    const response = await request.post<ApiResponse<TestPlanExecutionAttachmentItem[]>>(`/test-management/plans/${id}/cases/${planCaseId}/evidence`, form, {
+      headers: { ...workspaceHeaders(workspaceCode), 'Content-Type': 'multipart/form-data' },
+    })
+    return unwrap(response.data, '执行证据上传失败')
+  },
+
+  async listPlanCaseEvidence(workspaceCode: string, id: number, planCaseId: number) {
+    return unwrap(await httpGet<ApiResponse<TestPlanExecutionAttachmentItem[]>>(`/test-management/plans/${id}/cases/${planCaseId}/evidence`, {
+      headers: workspaceHeaders(workspaceCode),
+    }), '执行证据加载失败')
+  },
+
+  async deletePlanCaseEvidence(workspaceCode: string, id: number, planCaseId: number, attachmentId: number) {
+    return unwrap(await httpDelete<ApiResponse<null>>(`/test-management/plans/${id}/cases/${planCaseId}/evidence/${attachmentId}`, {
+      headers: workspaceHeaders(workspaceCode),
+    }), '执行证据删除失败')
+  },
+
+  async linkPlanDefect(workspaceCode: string, id: number, planCaseId: number, payload: { defectId: number; expectedVersion: number }) {
+    return unwrap(await httpPost<ApiResponse<unknown>, typeof payload>(`/test-management/plans/${id}/cases/${planCaseId}/defects/link`, payload, {
+      headers: workspaceHeaders(workspaceCode),
+    }), '缺陷关联失败')
+  },
+
+  async unlinkPlanDefect(workspaceCode: string, id: number, planCaseId: number, defectId: number) {
+    return unwrap(await httpDelete<ApiResponse<unknown>>(`/test-management/plans/${id}/cases/${planCaseId}/defects/${defectId}`, {
+      headers: workspaceHeaders(workspaceCode),
+    }), '缺陷解除关联失败')
   },
 
   async planAction(workspaceCode: string, id: number, action: 'start' | 'block' | 'resume' | 'complete' | 'cancel', payload: { expectedVersion: number; force?: boolean; reason?: string }) {
@@ -238,6 +301,12 @@ export const testManagementApi = {
     return unwrap(await httpGet<ApiResponse<TestPlanDefectItem[]>>(`/test-management/plans/${id}/defects`, {
       headers: workspaceHeaders(workspaceCode),
     }), '测试计划缺陷加载失败')
+  },
+
+  async listPlanCaseDefects(workspaceCode: string, id: number, planCaseId: number) {
+    return unwrap(await httpGet<ApiResponse<TestPlanDefectItem[]>>(`/test-management/plans/${id}/cases/${planCaseId}/defects`, {
+      headers: workspaceHeaders(workspaceCode),
+    }), '测试用例关联缺陷加载失败')
   },
 
   async createPlanDefect(workspaceCode: string, id: number, planCaseId: number, payload: TestPlanCreateDefectPayload) {

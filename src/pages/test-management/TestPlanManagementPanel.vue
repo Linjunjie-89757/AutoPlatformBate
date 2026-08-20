@@ -25,12 +25,14 @@ import {
 import { computed, onBeforeUnmount, onMounted, reactive, ref, type Component, watch } from 'vue'
 
 import { caseApi, type CaseDirectoryNode, type CaseSummaryItem } from '@/entities/case'
+import { defectApi } from '@/entities/defect'
 import {
   testManagementApi,
   type TestActivityItem,
-  type TestPlanCreateDefectPayload,
   type TestPlanCaseItem as ApiTestPlanCaseItem,
   type TestPlanDefectItem,
+  type TestPlanExecutionAttachmentItem,
+  type TestPlanExecutionHistoryItem,
   type TestPlanItem,
   type TestPlanReportItem,
   type TestPlanSavePayload,
@@ -57,12 +59,32 @@ import {
   type TestPlanType,
 } from './testPlanManagementDemoData'
 import TestPlanExecutionTrendChart from './TestPlanExecutionTrendChart.vue'
+import TestPlanActionDialog, { type TestPlanActionType } from './TestPlanActionDialog.vue'
+import TestPlanCaseDrawer from './TestPlanCaseDrawer.vue'
+import TestPlanCopyDialog, { type TestPlanCopyOptions } from './TestPlanCopyDialog.vue'
+import TestPlanDefectDrawer, { type TestPlanDefectSubmitPayload } from './TestPlanDefectDrawer.vue'
+import TestPlanExecutionWorkspace from './TestPlanExecutionWorkspace.vue'
+import TestPlanUnlinkCaseDialog from './TestPlanUnlinkCaseDialog.vue'
 import { formatTestManagementDateTime } from './testManagementFormatters'
 import './test-plan-management-panel.css'
 
 type ManagementTab = 'versions' | 'requirements' | 'plans'
-type PageView = 'list' | 'new' | 'detail'
+type PageView = 'list' | 'new' | 'detail' | 'execution'
 type DetailTab = 'overview' | 'cases' | 'bugs' | 'report' | 'logs'
+
+type ApiErrorLike = {
+  message?: unknown
+  raw?: { response?: { data?: { message?: unknown } } }
+}
+
+const apiErrorMessage = (error: unknown, fallback: string) => {
+  const candidate = error as ApiErrorLike | null
+  const backendMessage = candidate?.raw?.response?.data?.message
+  if (typeof backendMessage === 'string' && backendMessage.trim()) return backendMessage
+  if (error instanceof Error && error.message.trim()) return error.message
+  if (typeof candidate?.message === 'string' && candidate.message.trim()) return candidate.message
+  return fallback
+}
 
 const props = defineProps<{
   initialDetailId?: string | null
@@ -126,6 +148,7 @@ const manualCaseIds = ref<string[]>([])
 const directCaseIds = ref<string[]>([])
 const planCases = ref<TestPlanCaseItem[]>([])
 const planBugs = ref<TestPlanBugItem[]>([])
+const planDefectDetails = ref<TestPlanDefectItem[]>([])
 const planLogs = ref<TestPlanLogItem[]>([])
 const planReport = ref<TestPlanReportItem | null>(null)
 const caseStatusFilter = ref<'all' | TestPlanCaseStatus>('all')
@@ -137,11 +160,22 @@ const reportSigned = ref(false)
 const resultTarget = ref<TestPlanCaseItem | null>(null)
 const resultStatus = ref<TestPlanCaseStatus | null>(null)
 const resultNotes = ref('')
+const executionInitialCaseId = ref<string | null>(null)
+const executionHistory = ref<TestPlanExecutionHistoryItem[]>([])
+const executionEvidence = ref<TestPlanExecutionAttachmentItem[]>([])
+const executionCaseDefects = ref<TestPlanDefectItem[]>([])
+const isUploadingEvidence = ref(false)
 const defectModalOpen = ref(false)
-const defectCaseId = ref('')
-const defectForm = reactive<{ title: string; description: string; priority: TestPlanCreateDefectPayload['priority']; severity: TestPlanCreateDefectPayload['severity']; assigneeId: string }>({
-  title: '', description: '', priority: 'P1', severity: 'HIGH', assigneeId: '',
-})
+const defectInitialCaseId = ref<string | null>(null)
+const defectError = ref('')
+const defectResetToken = ref(0)
+const viewCaseTarget = ref<ApiTestPlanCaseItem | null>(null)
+const unlinkCaseTarget = ref<TestPlanCaseItem | null>(null)
+const unlinkCaseError = ref('')
+const actionDialogTarget = ref<{ action: TestPlanActionType; plan: ManagedTestPlan } | null>(null)
+const actionDialogError = ref('')
+const copyDialogTarget = ref<ManagedTestPlan | null>(null)
+const copyDialogError = ref('')
 const toastMessage = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -263,8 +297,8 @@ const mapPlan = (item: TestPlanItem): ManagedTestPlan => ({
   passed: item.passedCount,
   failed: (item.cases || []).filter(caseItem => caseItem.executionStatus === 'FAILED').length,
   blockedCases: (item.cases || []).filter(caseItem => caseItem.executionStatus === 'BLOCKED').length,
-  p0Bugs: 0,
-  p1Bugs: 0,
+  p0Bugs: item.p0DefectCount || 0,
+  p1Bugs: item.p1DefectCount || 0,
   updatedAt: item.updatedAt || '—',
   goal: item.goal || '',
 })
@@ -793,6 +827,7 @@ const openPlan = async (plan: ManagedTestPlan, tab: DetailTab = 'overview') => {
   detailTab.value = tab
   planCases.value = []
   planBugs.value = []
+  planDefectDetails.value = []
   planLogs.value = []
   planReport.value = null
   caseStatusFilter.value = 'all'
@@ -813,6 +848,7 @@ const openPlan = async (plan: ManagedTestPlan, tab: DetailTab = 'overview') => {
       testManagementApi.listPlanActivities(selectedWorkspaceCode.value, Number(plan.id)),
     ])
     applyPlanDetail(result)
+    planDefectDetails.value = defects
     planBugs.value = defects.map(mapPlanBug)
     planLogs.value = activities.items.map(mapPlanLog)
     if (selectedPlan.value) {
@@ -898,48 +934,61 @@ const closeResultModal = () => {
   resultNotes.value = ''
 }
 
-const openDefectModal = () => {
-  const defaultCase = planCases.value.find(item => item.status === 'failed') || planCases.value[0]
-  defectCaseId.value = defaultCase?.id || ''
-  defectForm.title = ''
-  defectForm.description = defaultCase?.notes || ''
-  defectForm.priority = defaultCase?.priority === 'P0' ? 'P0' : 'P1'
-  defectForm.severity = defectForm.priority === 'P0' ? 'CRITICAL' : 'HIGH'
-  defectForm.assigneeId = selectedPlanDetail.value?.ownerId ? String(selectedPlanDetail.value.ownerId) : String(planOwners.value[0]?.id || '')
+const openDefectModal = (caseId?: string) => {
+  const selectedCase = caseId ? planCases.value.find(item => item.id === caseId) : null
+  if (!selectedCase || !['failed', 'blocked'].includes(selectedCase.status)) {
+    showToast('请从失败或阻塞的用例进入新建缺陷')
+    return
+  }
+  defectInitialCaseId.value = selectedCase.id
+  defectError.value = ''
   defectModalOpen.value = true
 }
 
 const closeDefectModal = () => {
+  if (isSubmitting.value) return
   defectModalOpen.value = false
+  defectInitialCaseId.value = null
+  defectError.value = ''
 }
 
-const submitDefect = async () => {
-  if (!selectedPlan.value || !defectCaseId.value || !defectForm.title.trim() || !defectForm.description.trim() || !defectForm.assigneeId) {
-    showToast('请选择关联用例和负责人，并填写缺陷标题、描述')
-    return
-  }
+const submitDefect = async (payload: TestPlanDefectSubmitPayload, continueCreate: boolean) => {
+  if (!selectedPlan.value) return
   isSubmitting.value = true
+  defectError.value = ''
   try {
-    await testManagementApi.createPlanDefect(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(defectCaseId.value), {
-      title: defectForm.title.trim(),
-      description: defectForm.description.trim(),
-      priority: defectForm.priority,
-      severity: defectForm.severity,
-      assigneeId: Number(defectForm.assigneeId),
+    const createdDefect = await testManagementApi.createPlanDefect(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), {
+      title: payload.title,
+      description: payload.description,
+      priority: payload.priority,
+      severity: payload.severity,
+      assigneeId: payload.assigneeId,
       sourceType: 'TEST_PLAN',
+      tags: payload.tags,
     })
+    const createdDefectId = Number((createdDefect as { id?: number } | null)?.id)
+    if (createdDefectId && payload.files.length) {
+      await defectApi.uploadDefectAttachments(selectedWorkspaceCode.value, createdDefectId, payload.files)
+    }
     const [defects, activities] = await Promise.all([
       testManagementApi.listPlanDefects(selectedWorkspaceCode.value, Number(selectedPlan.value.id)),
       testManagementApi.listPlanActivities(selectedWorkspaceCode.value, Number(selectedPlan.value.id)),
     ])
+    planDefectDetails.value = defects
     planBugs.value = defects.map(mapPlanBug)
     planLogs.value = activities.items.map(mapPlanLog)
     selectedPlan.value.p0Bugs = planBugs.value.filter(item => item.priority === 'P0' && !['closed', 'rejected'].includes(item.status)).length
     selectedPlan.value.p1Bugs = planBugs.value.filter(item => item.priority === 'P1' && !['closed', 'rejected'].includes(item.status)).length
-    closeDefectModal()
+    if (!continueCreate) {
+      defectModalOpen.value = false
+      defectInitialCaseId.value = null
+    } else {
+      defectResetToken.value += 1
+    }
     showToast('缺陷已创建并关联至测试用例')
   } catch (error) {
-    showToast(error instanceof Error ? error.message : '测试计划缺陷创建失败')
+    defectError.value = apiErrorMessage(error, '测试计划缺陷创建失败')
+    showToast(defectError.value)
   } finally {
     isSubmitting.value = false
   }
@@ -969,6 +1018,210 @@ const confirmResult = async () => {
   } finally {
     isSubmitting.value = false
   }
+}
+
+const rawPlanCase = (id: string) => selectedPlanDetail.value?.cases.find(item => String(item.id) === id) || null
+
+const closeUnlinkCaseDialog = () => {
+  if (isSubmitting.value) return
+  unlinkCaseTarget.value = null
+  unlinkCaseError.value = ''
+}
+
+const confirmUnlinkCase = async (reason: string) => {
+  if (!selectedPlan.value || !unlinkCaseTarget.value) return
+  isSubmitting.value = true
+  unlinkCaseError.value = ''
+  try {
+    const result = await testManagementApi.removePlanCase(
+      selectedWorkspaceCode.value,
+      Number(selectedPlan.value.id),
+      Number(unlinkCaseTarget.value.id),
+      planLockVersions.value.get(selectedPlan.value.id) || 0,
+      reason || undefined,
+    )
+    applyPlanDetail(result)
+    await refreshPlanActivities()
+    unlinkCaseTarget.value = null
+    showToast('已解除用例与测试计划的关联')
+  } catch (error) {
+    unlinkCaseError.value = apiErrorMessage(error, '解除关联失败')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const openCaseDrawer = (caseItem: TestPlanCaseItem) => {
+  viewCaseTarget.value = rawPlanCase(caseItem.id)
+}
+
+const openExecution = async (plan: ManagedTestPlan, caseId?: string) => {
+  isDetailLoading.value = true
+  detailError.value = ''
+  try {
+    if (selectedPlanDetail.value?.id !== Number(plan.id)) {
+      const [detail, defects, activities] = await Promise.all([
+        testManagementApi.getPlan(selectedWorkspaceCode.value, Number(plan.id)),
+        testManagementApi.listPlanDefects(selectedWorkspaceCode.value, Number(plan.id)),
+        testManagementApi.listPlanActivities(selectedWorkspaceCode.value, Number(plan.id)),
+      ])
+      selectedPlan.value = plan
+      applyPlanDetail(detail)
+      planDefectDetails.value = defects
+      planBugs.value = defects.map(mapPlanBug)
+      planLogs.value = activities.items.map(mapPlanLog)
+    }
+    if (!selectedPlanDetail.value?.cases.length) {
+      showToast('当前计划暂无可执行用例')
+      return
+    }
+    executionInitialCaseId.value = caseId || null
+    view.value = 'execution'
+    const executionCaseId = caseId || selectedPlanDetail.value.cases[0]?.id
+    if (executionCaseId) await loadExecutionCaseContext(String(executionCaseId))
+  } catch (error) {
+    showToast(apiErrorMessage(error, '执行工作台加载失败'))
+  } finally {
+    isDetailLoading.value = false
+  }
+}
+
+const closeExecution = () => {
+  view.value = 'detail'
+  detailTab.value = 'cases'
+  executionInitialCaseId.value = null
+  if (selectedPlan.value) emit('detail-state-change', { id: selectedPlan.value.id, tab: 'cases' })
+}
+
+const loadExecutionCaseContext = async (caseId: string) => {
+  if (!selectedPlan.value) return
+  try {
+    const [history, evidence, defects] = await Promise.all([
+      testManagementApi.listPlanCaseExecutions(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(caseId)),
+      testManagementApi.listPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(caseId)),
+      testManagementApi.listPlanCaseDefects(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(caseId)),
+    ])
+    executionHistory.value = history
+    executionEvidence.value = evidence
+    executionCaseDefects.value = defects
+  } catch (error) {
+    showToast(apiErrorMessage(error, '执行上下文加载失败'))
+  }
+}
+
+const editExecutionCase = async (payload: { caseId: string; title: string; module: string; priority: string; precondition: string; steps: string; expectedResult: string }) => {
+  if (!selectedPlan.value) return
+  isSubmitting.value = true
+  try {
+    const result = await testManagementApi.updatePlanCaseSnapshot(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), {
+      ...payload,
+      expectedVersion: planCaseLockVersions.value.get(payload.caseId) || 0,
+    })
+    applyPlanDetail(result)
+    showToast('测试用例快照已更新')
+  } catch (error) {
+    showToast(apiErrorMessage(error, '测试用例快照更新失败'))
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const linkExecutionDefect = async (payload: { caseId: string; defectId: number }) => {
+  if (!selectedPlan.value) return
+  isSubmitting.value = true
+  try {
+    await testManagementApi.linkPlanDefect(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), {
+      defectId: payload.defectId,
+      expectedVersion: planCaseLockVersions.value.get(payload.caseId) || 0,
+    })
+    await loadExecutionCaseContext(payload.caseId)
+    showToast('缺陷已关联')
+  } catch (error) {
+    showToast(apiErrorMessage(error, '缺陷关联失败'))
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const unlinkExecutionDefect = async (payload: { caseId: string; defectId: number }) => {
+  if (!selectedPlan.value) return
+  isSubmitting.value = true
+  try {
+    await testManagementApi.unlinkPlanDefect(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), payload.defectId)
+    await loadExecutionCaseContext(payload.caseId)
+    showToast('缺陷关联已解除')
+  } catch (error) {
+    showToast(apiErrorMessage(error, '缺陷解除关联失败'))
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const uploadExecutionEvidence = async (payload: { caseId: string; files: File[] }) => {
+  if (!selectedPlan.value || !payload.files.length) return
+  isUploadingEvidence.value = true
+  try {
+    executionEvidence.value = await testManagementApi.uploadPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), payload.files)
+    showToast('执行证据上传成功')
+  } catch (error) {
+    showToast(apiErrorMessage(error, '执行证据上传失败'))
+  } finally {
+    isUploadingEvidence.value = false
+  }
+}
+
+const deleteExecutionEvidence = async (payload: { caseId: string; attachmentId: number }) => {
+  if (!selectedPlan.value) return
+  isUploadingEvidence.value = true
+  try {
+    await testManagementApi.deletePlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), payload.attachmentId)
+    executionEvidence.value = await testManagementApi.listPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId))
+    showToast('执行证据已删除')
+  } catch (error) {
+    showToast(apiErrorMessage(error, '执行证据删除失败'))
+  } finally {
+    isUploadingEvidence.value = false
+  }
+}
+
+const recordExecutionResult = async (
+  payload: { caseId: string; status: 'PENDING' | 'PASSED' | 'FAILED' | 'BLOCKED' | 'SKIPPED'; note: string },
+  done: (success: boolean) => void,
+) => {
+  if (!selectedPlan.value) return done(false)
+  isSubmitting.value = true
+  try {
+    const result = await testManagementApi.recordPlanCaseResult(
+      selectedWorkspaceCode.value,
+      Number(selectedPlan.value.id),
+      Number(payload.caseId),
+      {
+        status: payload.status,
+        note: payload.note,
+        expectedVersion: planCaseLockVersions.value.get(payload.caseId) || 0,
+      },
+    )
+    applyPlanDetail(result)
+    await loadExecutionCaseContext(payload.caseId)
+    await refreshPlanActivities()
+    showToast(`已标记为${executionStatusConfig[payload.status.toLowerCase() as TestPlanCaseStatus].label}`)
+    done(true)
+  } catch (error) {
+    showToast(apiErrorMessage(error, '测试结果保存失败'))
+    try {
+      const detail = await testManagementApi.getPlan(selectedWorkspaceCode.value, Number(selectedPlan.value.id))
+      applyPlanDetail(detail)
+    } catch {
+      // 保留原错误提示，避免刷新失败覆盖真正的执行错误。
+    }
+    done(false)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+const showUnsupportedFeature = (feature: string) => {
+  showToast(`${feature}尚缺少后端接口，已记录为遗留问题`)
 }
 
 const caseStatusCount = (status: 'all' | TestPlanCaseStatus) => status === 'all'
@@ -1040,76 +1293,123 @@ const toggleReportSignature = async () => {
   }
 }
 
-const executeDetailAction = async (action: 'start' | 'complete') => {
-  if (!selectedPlan.value) return
+const openActionDialog = async (plan: ManagedTestPlan, action: TestPlanActionType) => {
+  actionMenuId.value = null
+  actionDialogError.value = ''
+  if (action === 'complete' && selectedPlanDetail.value?.id !== Number(plan.id)) {
+    isDetailLoading.value = true
+    try {
+      const [detail, defects] = await Promise.all([
+        testManagementApi.getPlan(selectedWorkspaceCode.value, Number(plan.id)),
+        testManagementApi.listPlanDefects(selectedWorkspaceCode.value, Number(plan.id)),
+      ])
+      applyPlanDetail(detail)
+      planDefectDetails.value = defects
+      planBugs.value = defects.map(mapPlanBug)
+      if (selectedPlan.value?.id === plan.id) {
+        selectedPlan.value.p0Bugs = planBugs.value.filter(item => item.priority === 'P0' && !['closed', 'rejected'].includes(item.status)).length
+        selectedPlan.value.p1Bugs = planBugs.value.filter(item => item.priority === 'P1' && !['closed', 'rejected'].includes(item.status)).length
+      }
+    } catch (error) {
+      showToast(apiErrorMessage(error, '质量标准加载失败'))
+      return
+    } finally {
+      isDetailLoading.value = false
+    }
+  }
+  actionDialogTarget.value = { plan, action }
+}
+
+const closeActionDialog = () => {
+  if (isSubmitting.value) return
+  actionDialogTarget.value = null
+  actionDialogError.value = ''
+}
+
+const confirmPlanAction = async (payload: { reason?: string; force?: boolean }) => {
+  const target = actionDialogTarget.value
+  if (!target) return
   isSubmitting.value = true
+  actionDialogError.value = ''
   try {
-    const result = await testManagementApi.planAction(selectedWorkspaceCode.value, Number(selectedPlan.value.id), action, {
-      expectedVersion: planLockVersions.value.get(selectedPlan.value.id) || 0,
-    })
-    applyPlanDetail(result)
-    await refreshPlanActivities()
-    showToast(action === 'start' ? '测试计划已开始' : '测试计划已完成')
+    if (target.action === 'delete') {
+      await testManagementApi.deletePlan(selectedWorkspaceCode.value, Number(target.plan.id), planLockVersions.value.get(target.plan.id) || 0)
+      plans.value = plans.value.filter(item => item.id !== target.plan.id)
+      if (selectedPlan.value?.id === target.plan.id) closePlan()
+      actionDialogTarget.value = null
+      showToast('测试计划已删除')
+      return
+    }
+    const result = await testManagementApi.planAction(
+      selectedWorkspaceCode.value,
+      Number(target.plan.id),
+      target.action,
+      {
+        expectedVersion: planLockVersions.value.get(target.plan.id) || 0,
+        reason: payload.reason,
+        force: payload.force,
+      },
+    )
+    const mapped = mapPlan(result)
+    plans.value = plans.value.map(item => item.id === mapped.id ? mapped : item)
+    if (selectedPlan.value?.id === mapped.id) {
+      applyPlanDetail(result)
+      await refreshPlanActivities()
+    }
+    actionDialogTarget.value = null
+    showToast(target.action === 'start' ? '测试计划已开始' : target.action === 'complete' ? '测试计划已完成' : '测试计划状态已更新')
   } catch (error) {
-    showToast(error instanceof Error ? error.message : '测试计划状态更新失败')
+    actionDialogError.value = apiErrorMessage(error, '测试计划操作失败')
   } finally {
     isSubmitting.value = false
   }
 }
 
-const copyPlan = async (plan: ManagedTestPlan) => {
-  if (!window.confirm(`确认复制测试计划“${plan.name}”吗？复制后将生成一份未执行的草稿。`)) return
+const openCopyDialog = (plan: ManagedTestPlan) => {
+  actionMenuId.value = null
+  copyDialogError.value = ''
+  copyDialogTarget.value = plan
+}
+
+const closeCopyDialog = () => {
+  if (isSubmitting.value) return
+  copyDialogTarget.value = null
+  copyDialogError.value = ''
+}
+
+const copyPlan = async (payload: { name: string; targetVersionId: string | null; options: TestPlanCopyOptions }) => {
+  const plan = copyDialogTarget.value
+  if (!plan) return
   isSubmitting.value = true
+  copyDialogError.value = ''
   try {
     const result = await testManagementApi.copyPlan(selectedWorkspaceCode.value, Number(plan.id), {
+      name: payload.name,
+      targetVersionId: payload.targetVersionId ? Number(payload.targetVersionId) : null,
+      copyRequirements: payload.options.copyRequirements,
+      copyRequirementCases: payload.options.copyRequirementCases,
+      copyManualCases: payload.options.copyManualCases,
+      copyQualityStandards: payload.options.copyQualityStandards,
       expectedVersion: planLockVersions.value.get(plan.id) || 0,
     })
     const mapped = mapPlan(result)
     plans.value.unshift(mapped)
     planLockVersions.value.set(mapped.id, result.lockVersion)
+    copyDialogTarget.value = null
     showToast('测试计划已复制为新草稿')
   } catch (error) {
-    showToast(error instanceof Error ? error.message : '测试计划复制失败')
+    copyDialogError.value = apiErrorMessage(error, '测试计划复制失败')
   } finally {
     isSubmitting.value = false
   }
 }
 
-const executeAction = async (plan: ManagedTestPlan, action: string) => {
+const executeAction = (plan: ManagedTestPlan, action: string) => {
   actionMenuId.value = null
   if (action === 'view') return openPlan(plan)
   if (action === 'edit') return openEditPlan(plan)
-  if (action === 'copy') return copyPlan(plan)
-  isSubmitting.value = true
-  try {
-    if (action === 'delete') {
-      if (!window.confirm(`确认删除测试计划“${plan.name}”吗？`)) return
-      await testManagementApi.deletePlan(selectedWorkspaceCode.value, Number(plan.id), planLockVersions.value.get(plan.id) || 0)
-      plans.value = plans.value.filter(item => item.id !== plan.id)
-      showToast('测试计划已删除')
-    } else {
-      let reason: string | undefined
-      if (action === 'cancel' || action === 'block') {
-        const input = window.prompt(action === 'cancel' ? '请输入取消原因' : '请输入阻塞原因')
-        if (!input?.trim()) {
-          showToast(action === 'cancel' ? '取消计划必须填写原因' : '阻塞计划必须填写原因')
-          return
-        }
-        reason = input.trim()
-      }
-      const result = await testManagementApi.planAction(selectedWorkspaceCode.value, Number(plan.id), action as 'start' | 'block' | 'resume' | 'complete' | 'cancel', {
-        expectedVersion: planLockVersions.value.get(plan.id) || 0,
-        reason,
-      })
-      const mapped = mapPlan(result)
-      plans.value = plans.value.map(item => item.id === mapped.id ? mapped : item)
-      showToast('测试计划状态已更新')
-    }
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : '测试计划操作失败')
-  } finally {
-    isSubmitting.value = false
-  }
+  if (action === 'copy') return openCopyDialog(plan)
+  openActionDialog(plan, action as TestPlanActionType)
 }
 
 const planActions = (status: TestPlanStatus) => ({
@@ -1149,7 +1449,33 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
 
 <template>
   <main class="test-plan-management">
-    <template v-if="view === 'list'">
+    <template v-if="view === 'execution' && selectedPlan && selectedPlanDetail">
+      <TestPlanExecutionWorkspace
+        :plan-name="selectedPlan.name"
+        :plan-status="selectedPlan.status"
+        :cases="selectedPlanDetail.cases"
+        :defects="planDefectDetails"
+        :case-defects="executionCaseDefects"
+        :history="executionHistory"
+        :evidence="executionEvidence"
+        :uploading-evidence="isUploadingEvidence"
+        :owners="planOwners.map(item => ({ id: item.id, name: item.displayName }))"
+        :initial-case-id="executionInitialCaseId"
+        :submitting="isSubmitting"
+        @back="closeExecution"
+        @create-defect="openDefectModal"
+        @record="recordExecutionResult"
+        @edit-case="editExecutionCase"
+        @link-defect="linkExecutionDefect"
+        @unlink-defect="unlinkExecutionDefect"
+         @upload-evidence="uploadExecutionEvidence"
+         @delete-evidence="deleteExecutionEvidence"
+        @select-case="loadExecutionCaseContext"
+        @unsupported="showUnsupportedFeature"
+      />
+    </template>
+
+    <template v-else-if="view === 'list'">
       <nav class="test-plan-management__module-tabs" aria-label="测试管理视图">
         <button v-for="tab in managementTabs" :key="tab.key" type="button" :class="{ 'is-active': tab.key === 'plans' }" @click="switchManagementTab(tab.key)">{{ tab.label }}</button>
       </nav>
@@ -1194,7 +1520,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                   <td><span class="test-plan-management__status" :style="{ color: testPlanStatusConfig[plan.status].color, backgroundColor: testPlanStatusConfig[plan.status].background }">{{ testPlanStatusConfig[plan.status].label }}</span></td>
                   <td><span class="is-muted">{{ plan.updatedAt.slice(0, 10) }}</span></td>
                   <td class="test-plan-management__action-cell" @click.stop>
-                    <div class="test-plan-management__action-wrapper">
+                    <div class="test-plan-management__action-wrapper" :class="{ 'has-execution': plan.status === 'running' || plan.status === 'blocked' }">
+                      <button v-if="plan.status === 'running' || plan.status === 'blocked'" class="test-plan-management__execute-button" type="button" @click="openExecution(plan)"><Play :size="11" />执行</button>
                       <button class="test-plan-management__icon-button" type="button" aria-label="计划操作" aria-haspopup="menu" :aria-expanded="actionMenuId === plan.id" @click="actionMenuId = actionMenuId === plan.id ? null : plan.id"><MoreHorizontal :size="14" /></button>
                       <template v-if="actionMenuId === plan.id">
                         <div class="test-plan-management__action-menu-overlay" @click="actionMenuId = null" />
@@ -1300,9 +1627,12 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <span class="test-plan-management__status" :style="{ color: testPlanStatusConfig[selectedPlan.status].color, backgroundColor: testPlanStatusConfig[selectedPlan.status].background }">{{ testPlanStatusConfig[selectedPlan.status].label }}</span>
         <div />
         <small>负责人：{{ selectedPlan.owner }}</small><small>周期：{{ selectedPlan.startDate }} — {{ selectedPlan.endDate }}</small>
-        <button v-if="selectedPlan.status === 'draft' || selectedPlan.status === 'pending'" class="test-plan-management__detail-edit" type="button" title="编辑" aria-label="编辑测试计划" @click="openEditPlan(selectedPlan, true)"><Edit2 :size="13" /></button>
-        <button v-if="selectedPlan.status === 'pending'" class="test-plan-management__button is-small" type="button" :disabled="isSubmitting" @click="executeDetailAction('start')"><Play :size="11" />开始测试</button>
-        <button v-else-if="selectedPlan.status === 'running'" class="test-plan-management__button is-small is-success" type="button" :disabled="isSubmitting" @click="executeDetailAction('complete')"><CheckCircle2 :size="12" />完成计划</button>
+        <button class="test-plan-management__detail-edit" type="button" title="编辑" aria-label="编辑测试计划" @click="selectedPlan.status === 'draft' || selectedPlan.status === 'pending' ? openEditPlan(selectedPlan, true) : showToast('执行中的测试计划不可编辑')"><Edit2 :size="13" /></button>
+        <button v-if="selectedPlan.status === 'pending'" class="test-plan-management__button is-small" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'start')"><Play :size="11" />开始测试</button>
+        <template v-else-if="selectedPlan.status === 'running'">
+          <button class="test-plan-management__button is-small is-warning" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'block')"><AlertTriangle :size="12" />标记阻塞</button>
+          <button class="test-plan-management__button is-small is-success" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'complete')"><CheckCircle2 :size="12" />完成计划</button>
+        </template>
       </header>
       <section class="test-plan-management__detail-kpis">
         <div><strong>{{ planCases.length }}<small>项</small></strong><span>测试用例</span></div><i />
@@ -1331,11 +1661,11 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             <button class="test-plan-management__button is-small" type="button" @click="openPicker('detail')"><Plus :size="11" />添加用例</button>
           </div>
           <div class="test-plan-management__case-stats"><div><strong>{{ detailCaseCounts.all }}</strong><span>全部</span></div><div class="is-success"><strong>{{ detailCaseCounts.passed }}</strong><span>通过</span></div><div class="is-danger"><strong>{{ detailCaseCounts.failed }}</strong><span>失败</span></div><div class="is-warning"><strong>{{ detailCaseCounts.blocked }}</strong><span>阻塞</span></div><div class="is-muted"><strong>{{ detailCaseCounts.pending }}</strong><span>未执行</span></div></div>
-          <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table"><thead><tr><th>编号</th><th>用例名称</th><th>模块</th><th>优先级</th><th>执行人</th><th>执行结果</th><th>执行时间</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="caseItem in filteredDetailCases" :key="caseItem.id"><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><small>{{ caseItem.module }}</small></td><td><b class="test-plan-management__priority" :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td><td><select v-model="caseItem.assignee" :disabled="isSubmitting" @change="assignCaseOwner(caseItem)"><option value="—">未分配</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></td><td><button class="test-plan-management__exec-status" type="button" :disabled="selectedPlan.status !== 'running' || isSubmitting" :style="{ color: executionStatusConfig[caseItem.status].color, backgroundColor: executionStatusConfig[caseItem.status].background }" @click="openResultModal(caseItem)">{{ executionStatusConfig[caseItem.status].label }}</button></td><td><small>{{ caseItem.execTime }}</small></td><td><small class="test-plan-management__case-note" :title="caseItem.notes">{{ caseItem.notes || '—' }}</small></td><td><button class="test-plan-management__case-action" :class="{ 'is-muted': caseItem.status === 'passed' }" type="button" :disabled="selectedPlan.status !== 'running' || isSubmitting" @click="openResultModal(caseItem)">{{ caseItem.status === 'pending' ? '标记结果' : '修改结果' }}</button></td></tr><tr v-if="!filteredDetailCases.length"><td colspan="9" class="test-plan-management__empty">暂无符合条件的用例</td></tr></tbody></table></div>
+          <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table"><thead><tr><th>编号</th><th>用例名称</th><th>模块</th><th>优先级</th><th>执行人</th><th>执行结果</th><th>执行时间</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="caseItem in filteredDetailCases" :key="caseItem.id"><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><small>{{ caseItem.module }}</small></td><td><b class="test-plan-management__priority" :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td><td><select v-model="caseItem.assignee" :disabled="isSubmitting" @change="assignCaseOwner(caseItem)"><option value="—">未分配</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></td><td><button class="test-plan-management__exec-status" type="button" :disabled="selectedPlan.status !== 'running' || isSubmitting" :style="{ color: executionStatusConfig[caseItem.status].color, backgroundColor: executionStatusConfig[caseItem.status].background }" @click="openResultModal(caseItem)">{{ executionStatusConfig[caseItem.status].label }}</button></td><td><small>{{ caseItem.execTime }}</small></td><td><small class="test-plan-management__case-note" :title="caseItem.notes">{{ caseItem.notes || '—' }}</small></td><td><div class="test-plan-management__case-actions"><button type="button" aria-label="查看" title="查看" @click="openCaseDrawer(caseItem)"><Eye :size="12" /></button><button v-if="selectedPlan.status === 'running' || selectedPlan.status === 'blocked'" type="button" aria-label="执行" title="执行" @click="openExecution(selectedPlan, caseItem.id)"><Play :size="12" /></button><button class="is-danger" type="button" aria-label="取消关联" title="取消关联" @click="unlinkCaseTarget = caseItem; unlinkCaseError = ''"><Trash2 :size="12" /></button></div></td></tr><tr v-if="!filteredDetailCases.length"><td colspan="9" class="test-plan-management__empty">暂无符合条件的用例</td></tr></tbody></table></div>
         </div>
 
         <div v-else-if="detailTab === 'bugs'" class="test-plan-management__bugs-view">
-          <div class="test-plan-management__bug-toolbar"><div><button v-for="item in bugStatusFilters" :key="item.key" type="button" :class="{ 'is-active': bugStatusFilter === item.key }" @click="bugStatusFilter = item.key">{{ item.label }} {{ bugStatusCount(item.key) }}</button></div><button class="test-plan-management__button is-small is-danger" type="button" :disabled="isSubmitting || !planCases.length" @click="openDefectModal"><Plus :size="11" />新建缺陷</button></div>
+          <div class="test-plan-management__bug-toolbar"><div><button v-for="item in bugStatusFilters" :key="item.key" type="button" :class="{ 'is-active': bugStatusFilter === item.key }" @click="bugStatusFilter = item.key">{{ item.label }} {{ bugStatusCount(item.key) }}</button></div><button class="test-plan-management__button is-small is-danger" type="button" :disabled="isSubmitting || !planCases.some(item => item.status === 'failed' || item.status === 'blocked')" @click="openDefectModal()"><Plus :size="11" />新建缺陷</button></div>
           <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table is-bugs"><thead><tr><th>缺陷编号</th><th>标题</th><th>严重程度</th><th>优先级</th><th>状态</th><th>负责人</th><th>关联用例</th><th>发现时间</th></tr></thead><tbody><tr v-for="bug in filteredBugs" :key="bug.id"><td><code>{{ bug.no }}</code></td><td>{{ bug.title }}</td><td><span class="test-plan-management__severity" :style="{ color: bugSeverityConfig[bug.severity].color, borderColor: `${bugSeverityConfig[bug.severity].color}30`, backgroundColor: `${bugSeverityConfig[bug.severity].color}10` }">{{ bugSeverityConfig[bug.severity].label }}</span></td><td><b class="test-plan-management__priority" :class="`is-${bug.priority.toLowerCase()}`">{{ bug.priority }}</b></td><td><span class="test-plan-management__bug-status" :style="{ color: bugStatusConfig[bug.status].color, backgroundColor: bugStatusConfig[bug.status].background }">{{ bugStatusConfig[bug.status].label }}</span></td><td>{{ bug.assignee }}</td><td><code class="is-link">{{ bug.linkedCase }}</code></td><td><small>{{ bug.foundAt }}</small></td></tr><tr v-if="!filteredBugs.length"><td colspan="8" class="test-plan-management__empty">暂无关联缺陷</td></tr></tbody></table></div>
         </div>
 
@@ -1376,19 +1706,52 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
       </section>
     </div>
 
-    <div v-if="defectModalOpen" class="test-plan-management__modal-layer" @click.self="closeDefectModal">
-      <section class="test-plan-management__result-modal" role="dialog" aria-modal="true" aria-labelledby="test-plan-defect-title">
-        <header><div><strong id="test-plan-defect-title">新建缺陷</strong><small>关联当前测试计划和测试用例</small></div><button type="button" aria-label="关闭" @click="closeDefectModal"><X :size="15" /></button></header>
-        <div class="test-plan-management__result-body">
-          <label><span>关联用例 *</span><select v-model="defectCaseId"><option value="">请选择用例</option><option v-for="caseItem in planCases" :key="caseItem.id" :value="caseItem.id">{{ caseItem.no }} · {{ caseItem.title }}</option></select></label>
-          <label><span>缺陷标题 *</span><input v-model="defectForm.title" type="text" placeholder="简要描述缺陷现象"></label>
-          <label><span>缺陷描述 *</span><textarea v-model="defectForm.description" rows="4" placeholder="填写复现步骤、实际结果和预期结果"></textarea></label>
-          <div class="test-plan-management__form-grid"><label><span>优先级</span><select v-model="defectForm.priority"><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option></select></label><label><span>严重程度</span><select v-model="defectForm.severity"><option value="CRITICAL">致命</option><option value="HIGH">严重</option><option value="MEDIUM">一般</option><option value="LOW">轻微</option></select></label></div>
-          <label><span>负责人 *</span><select v-model="defectForm.assigneeId"><option value="">请选择负责人</option><option v-for="owner in planOwners" :key="owner.id" :value="String(owner.id)">{{ owner.displayName }}</option></select></label>
-        </div>
-        <footer><button class="test-plan-management__ghost-button" type="button" :disabled="isSubmitting" @click="closeDefectModal">取消</button><button class="test-plan-management__button" type="button" :disabled="isSubmitting" @click="submitDefect">{{ isSubmitting ? '提交中...' : '创建缺陷' }}</button></footer>
-      </section>
-    </div>
+    <TestPlanActionDialog
+      v-if="actionDialogTarget"
+      :action="actionDialogTarget.action"
+      :plan-name="actionDialogTarget.plan.name"
+      :quality-checks="actionDialogTarget.action === 'complete' ? qualityChecks : []"
+      :submitting="isSubmitting"
+      :error-message="actionDialogError"
+      @close="closeActionDialog"
+      @confirm="confirmPlanAction"
+    />
+
+    <TestPlanCopyDialog
+      v-if="copyDialogTarget"
+      :plan-name="copyDialogTarget.name"
+      :version-id="copyDialogTarget.versionId"
+      :versions="planVersions"
+      :submitting="isSubmitting"
+      :error-message="copyDialogError"
+      @close="closeCopyDialog"
+      @confirm="copyPlan"
+    />
+
+    <TestPlanCaseDrawer v-if="viewCaseTarget" :case-item="viewCaseTarget" @close="viewCaseTarget = null" />
+
+    <TestPlanUnlinkCaseDialog
+      v-if="unlinkCaseTarget"
+      :case-title="unlinkCaseTarget.title"
+      :require-reason="selectedPlan?.status === 'running'"
+      :submitting="isSubmitting"
+      :error-message="unlinkCaseError"
+      @close="closeUnlinkCaseDialog"
+      @confirm="confirmUnlinkCase"
+    />
+
+    <TestPlanDefectDrawer
+      v-if="defectModalOpen"
+      :cases="(selectedPlanDetail?.cases || []).filter(item => item.executionStatus === 'FAILED' || item.executionStatus === 'BLOCKED').map(item => ({ id: String(item.id), no: item.caseNo, title: item.title, priority: ['P0','P1','P2','P3'].includes(item.priority) ? item.priority as 'P0' | 'P1' | 'P2' | 'P3' : 'P2', precondition: item.precondition, steps: item.steps, expectedResult: item.expectedResult, notes: item.executionNote }))"
+      :owners="planOwners.map(item => ({ id: item.id, name: item.displayName }))"
+      :initial-case-id="defectInitialCaseId"
+      :reset-token="defectResetToken"
+      :submitting="isSubmitting"
+      :error-message="defectError"
+      @close="closeDefectModal"
+      @submit="submitDefect"
+      @unsupported="showUnsupportedFeature"
+    />
 
     <Transition name="test-plan-toast"><div v-if="toastMessage" class="test-plan-management__toast"><CheckCircle2 :size="16" />{{ toastMessage }}</div></Transition>
   </main>

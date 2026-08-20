@@ -178,7 +178,7 @@ public class TestRequirementService {
             requireMovableRequirement(id);
         }
         requireActiveUser(request.assigneeId());
-        String beforeTitle = entity.getTitle();
+        Map<String, Object> before = requirementAuditSnapshot(entity);
 
         entity.setVersionId(request.versionId());
         entity.setTitle(request.title().trim());
@@ -193,7 +193,10 @@ public class TestRequirementService {
         updateWithOptimisticLock(entity);
         activityLogService.record(
                 entity.getWorkspaceId(), ActivityEntityType.REQUIREMENT, entity.getId(),
-                "REQUIREMENT_UPDATED", "更新需求", Map.of("beforeTitle", beforeTitle, "afterTitle", entity.getTitle())
+                "REQUIREMENT_UPDATED", "更新需求", Map.of(
+                        "before", before,
+                        "after", requirementAuditSnapshot(entity)
+                )
         );
         return get(id, workspaceCode);
     }
@@ -203,14 +206,8 @@ public class TestRequirementService {
         TestRequirementEntity entity = requireWritable(id, workspaceCode);
         requireExpectedVersion(entity.getLockVersion(), expectedVersion);
         requireEditableVersion(entity.getVersionId(), entity.getWorkspaceId());
-        if (planCaseRequirementMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseRequirementEntity>()
-                .eq(TestPlanCaseRequirementEntity::getRequirementId, id)) > 0) {
-            throw TestManagementException.snapshotLocked("需求已进入测试计划快照，不允许删除");
-        }
-        if (bugMapper.selectCount(new LambdaQueryWrapper<BugEntity>()
-                .eq(BugEntity::getTestRequirementId, id)) > 0) {
-            throw TestManagementException.snapshotLocked("需求已有缺陷追溯记录，不允许删除");
-        }
+        List<Long> retainedSnapshotPlanIds = snapshotPlanIds(id, List.of());
+        List<Long> retainedDefectIds = defectIds(id);
         entity.setDeletedAt(LocalDateTime.now());
         entity.setUpdatedBy(CurrentUserContext.get());
         entity.setUpdatedAt(LocalDateTime.now());
@@ -218,7 +215,11 @@ public class TestRequirementService {
         updateWithOptimisticLock(entity);
         activityLogService.record(
                 entity.getWorkspaceId(), ActivityEntityType.REQUIREMENT, entity.getId(),
-                "REQUIREMENT_DELETED", "删除需求", Map.of("requirementNo", entity.getRequirementNo())
+                "REQUIREMENT_DELETED", "删除需求", Map.of(
+                        "requirementNo", entity.getRequirementNo(),
+                        "retainedSnapshotPlanIds", retainedSnapshotPlanIds,
+                        "retainedDefectIds", retainedDefectIds
+                )
         );
     }
 
@@ -238,10 +239,8 @@ public class TestRequirementService {
         Set<Long> existingCaseIds = existing.stream().map(TestRequirementCaseEntity::getCaseId).collect(Collectors.toSet());
         Set<Long> requestedSet = new LinkedHashSet<>(requestedIds);
         Set<Long> removed = existingCaseIds.stream().filter(caseId -> !requestedSet.contains(caseId)).collect(Collectors.toSet());
-        if (!removed.isEmpty() && planCaseRequirementMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseRequirementEntity>()
-                .eq(TestPlanCaseRequirementEntity::getRequirementId, id)) > 0) {
-            throw TestManagementException.snapshotLocked("需求用例已进入测试计划快照，不允许解除关联");
-        }
+        Set<Long> added = requestedSet.stream().filter(caseId -> !existingCaseIds.contains(caseId)).collect(Collectors.toCollection(LinkedHashSet::new));
+        List<Long> retainedSnapshotPlanIds = removed.isEmpty() ? List.of() : snapshotPlanIds(id, removed);
         LocalDateTime now = LocalDateTime.now();
         Long currentUserId = CurrentUserContext.get();
         Map<Long, TestRequirementCaseEntity> existingByCase = existing.stream()
@@ -266,7 +265,12 @@ public class TestRequirementService {
         touchRequirement(requirement, request.expectedVersion());
         activityLogService.record(
                 requirement.getWorkspaceId(), ActivityEntityType.REQUIREMENT, id,
-                "REQUIREMENT_CASES_REPLACED", "调整关联用例", Map.of("caseIds", requestedIds)
+                "REQUIREMENT_CASES_REPLACED", "调整关联用例", Map.of(
+                        "caseIds", requestedIds,
+                        "addedCaseIds", added,
+                        "removedCaseIds", removed,
+                        "retainedSnapshotPlanIds", retainedSnapshotPlanIds
+                )
         );
         return get(id, workspaceCode);
     }
@@ -544,6 +548,48 @@ public class TestRequirementService {
         List<Long> distinct = ids.stream().filter(Objects::nonNull).distinct().toList();
         if (distinct.isEmpty()) return Map.of();
         return userMapper.selectBatchIds(distinct).stream().collect(Collectors.toMap(UserEntity::getId, Function.identity()));
+    }
+
+    private List<Long> snapshotPlanIds(Long requirementId, Collection<Long> sourceCaseIds) {
+        List<TestPlanCaseRequirementEntity> links = planCaseRequirementMapper.selectList(
+                new LambdaQueryWrapper<TestPlanCaseRequirementEntity>()
+                        .eq(TestPlanCaseRequirementEntity::getRequirementId, requirementId));
+        if (links.isEmpty()) return List.of();
+        Set<Long> planCaseIds = links.stream()
+                .map(TestPlanCaseRequirementEntity::getPlanCaseId)
+                .collect(Collectors.toSet());
+        Set<Long> sourceCaseFilter = sourceCaseIds == null ? Set.of() : new LinkedHashSet<>(sourceCaseIds);
+        return planCaseMapper.selectList(new LambdaQueryWrapper<TestPlanCaseEntity>()
+                        .in(TestPlanCaseEntity::getId, planCaseIds))
+                .stream()
+                .filter(item -> sourceCaseFilter.isEmpty() || sourceCaseFilter.contains(item.getSourceCaseId()))
+                .map(TestPlanCaseEntity::getPlanId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    private List<Long> defectIds(Long requirementId) {
+        return bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+                        .eq(BugEntity::getTestRequirementId, requirementId))
+                .stream()
+                .map(BugEntity::getId)
+                .filter(Objects::nonNull)
+                .sorted()
+                .toList();
+    }
+
+    private Map<String, Object> requirementAuditSnapshot(TestRequirementEntity entity) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("versionId", entity.getVersionId());
+        snapshot.put("title", entity.getTitle());
+        snapshot.put("priority", entity.getPriority());
+        snapshot.put("sourceType", entity.getSourceType());
+        snapshot.put("sourceRef", entity.getSourceRef());
+        snapshot.put("assigneeId", entity.getAssigneeId());
+        snapshot.put("description", entity.getDescription());
+        return snapshot;
     }
 
     private TestVersionEntity requireEditableVersion(Long versionId, Long workspaceId) {

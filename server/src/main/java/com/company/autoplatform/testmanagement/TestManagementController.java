@@ -7,6 +7,7 @@ import com.company.autoplatform.bug.BugDetailResponse;
 import com.company.autoplatform.bug.CreateBugRequest;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.nio.charset.StandardCharsets;
@@ -33,11 +35,18 @@ public class TestManagementController {
     private final TestVersionService versionService;
     private final TestRequirementService requirementService;
     private final TestPlanService planService;
+    private final TestRequirementImportService requirementImportService;
 
-    public TestManagementController(TestVersionService versionService, TestRequirementService requirementService, TestPlanService planService) {
+    public TestManagementController(
+            TestVersionService versionService,
+            TestRequirementService requirementService,
+            TestPlanService planService,
+            TestRequirementImportService requirementImportService
+    ) {
         this.versionService = versionService;
         this.requirementService = requirementService;
         this.planService = planService;
+        this.requirementImportService = requirementImportService;
     }
 
     @GetMapping("/versions")
@@ -150,6 +159,32 @@ public class TestManagementController {
             @Valid @RequestBody CreateTestRequirementRequest request
     ) {
         return ApiResponse.ok(requirementService.create(workspaceCode, request), "需求创建成功");
+    }
+
+    @GetMapping(value = "/requirements/import-template", produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    public ResponseEntity<byte[]> downloadRequirementImportTemplate() {
+        TestRequirementImportTemplate template = requirementImportService.buildTemplate();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(template.fileName(), StandardCharsets.UTF_8)
+                        .build()
+                        .toString())
+                .contentLength(template.content().length)
+                .contentType(MediaType.parseMediaType(template.contentType()))
+                .body(template.content());
+    }
+
+    @PostMapping(value = "/requirements/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<TestRequirementImportResult> importRequirements(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam("defaultVersionId") Long defaultVersionId,
+            @RequestParam(value = "duplicateStrategy", defaultValue = "SKIP") String duplicateStrategy,
+            @RequestParam("file") MultipartFile file
+    ) {
+        return ApiResponse.ok(
+                requirementImportService.importRequirements(workspaceCode, defaultVersionId, duplicateStrategy, file),
+                "需求导入完成");
     }
 
     @GetMapping("/requirements/{id}")
@@ -331,6 +366,16 @@ public class TestManagementController {
         return ApiResponse.ok(planService.assignCase(id, planCaseId, workspaceCode, request), "测试用例负责人已更新");
     }
 
+    @PutMapping("/plans/{id}/cases/{planCaseId}")
+    public ApiResponse<TestPlanResponse> updatePlanCaseSnapshot(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody UpdateTestPlanCaseSnapshotRequest request
+    ) {
+        return ApiResponse.ok(planService.updateCaseSnapshot(id, planCaseId, workspaceCode, request), "测试用例快照已更新");
+    }
+
     @PostMapping("/plans/{id}/cases/{planCaseId}/results")
     public ApiResponse<TestPlanResponse> recordPlanCaseResult(
             @PathVariable Long id,
@@ -339,6 +384,58 @@ public class TestManagementController {
             @Valid @RequestBody RecordTestPlanCaseResultRequest request
     ) {
         return ApiResponse.ok(planService.recordResult(id, planCaseId, workspaceCode, request), "测试结果已保存");
+    }
+
+    @GetMapping("/plans/{id}/cases/{planCaseId}/executions")
+    public ApiResponse<List<TestPlanCaseExecutionHistoryResponse>> listPlanCaseExecutions(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(planService.listCaseExecutionHistory(id, planCaseId, workspaceCode));
+    }
+
+    @PostMapping(value = "/plans/{id}/cases/{planCaseId}/evidence", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<List<TestPlanExecutionAttachmentResponse>> uploadPlanCaseEvidence(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam("files") List<MultipartFile> files
+    ) {
+        return ApiResponse.ok(planService.uploadExecutionEvidence(id, planCaseId, workspaceCode, files), "执行证据上传成功");
+    }
+
+    @GetMapping("/plans/{id}/cases/{planCaseId}/evidence")
+    public ApiResponse<List<TestPlanExecutionAttachmentResponse>> listPlanCaseEvidence(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(planService.listExecutionEvidence(id, planCaseId, workspaceCode));
+    }
+
+    @DeleteMapping("/plans/{id}/cases/{planCaseId}/evidence/{attachmentId}")
+    public ApiResponse<Void> deletePlanCaseEvidence(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @PathVariable Long attachmentId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        planService.deleteExecutionEvidence(id, planCaseId, attachmentId, workspaceCode);
+        return ApiResponse.ok(null, "执行证据已删除");
+    }
+
+    @GetMapping("/plans/{id}/cases/{planCaseId}/evidence/{attachmentId}/download")
+    public ResponseEntity<Resource> downloadPlanCaseEvidence(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @PathVariable Long attachmentId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        TestPlanExecutionFileDownload download = planService.downloadExecutionEvidence(id, planCaseId, attachmentId, workspaceCode);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(download.contentType())).contentLength(download.fileSize())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(download.fileName(), StandardCharsets.UTF_8).build().toString())
+                .body(download.resource());
     }
 
     @PostMapping("/plans/{id}/start")
@@ -394,6 +491,15 @@ public class TestManagementController {
         return ApiResponse.ok(planService.listDefects(id, workspaceCode));
     }
 
+    @GetMapping("/plans/{id}/cases/{planCaseId}/defects")
+    public ApiResponse<List<BugEntity>> listPlanCaseDefects(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(planService.listCaseDefects(id, planCaseId, workspaceCode));
+    }
+
     @PostMapping("/plans/{id}/cases/{planCaseId}/defects")
     public ApiResponse<Object> createPlanDefect(
             @PathVariable Long id,
@@ -402,6 +508,26 @@ public class TestManagementController {
             @Valid @RequestBody CreateBugRequest request
     ) {
         return ApiResponse.ok(planService.createDefect(id, planCaseId, workspaceCode, request), "缺陷创建成功");
+    }
+
+    @PostMapping("/plans/{id}/cases/{planCaseId}/defects/link")
+    public ApiResponse<List<BugEntity>> linkPlanDefect(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody LinkTestPlanDefectRequest request
+    ) {
+        return ApiResponse.ok(planService.linkDefect(id, planCaseId, workspaceCode, request), "缺陷关联成功");
+    }
+
+    @DeleteMapping("/plans/{id}/cases/{planCaseId}/defects/{defectId}")
+    public ApiResponse<List<BugEntity>> unlinkPlanDefect(
+            @PathVariable Long id,
+            @PathVariable Long planCaseId,
+            @PathVariable Long defectId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(planService.unlinkDefect(id, planCaseId, defectId, workspaceCode), "缺陷关联已解除");
     }
 
     @GetMapping("/plans/{id}/report")

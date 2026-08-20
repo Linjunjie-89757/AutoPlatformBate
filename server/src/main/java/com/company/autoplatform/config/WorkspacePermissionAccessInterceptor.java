@@ -98,7 +98,8 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
 
     private String resolveAction(String module, String uri, String method) {
         if (HttpMethod.GET.matches(method) || HttpMethod.HEAD.matches(method)) {
-            if (uri.contains("/export") || uri.endsWith("-export")) {
+            if (uri.contains("/export") || uri.endsWith("-export")
+                    || ("test_management".equals(module) && uri.endsWith("/report/pdf"))) {
                 return "export";
             }
             return "view";
@@ -129,7 +130,8 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
                     return "review";
                 }
                 if (uri.endsWith("/start") || uri.endsWith("/block") || uri.endsWith("/resume")
-                        || uri.endsWith("/complete") || uri.endsWith("/cancel") || uri.endsWith("/results")) {
+                        || uri.endsWith("/complete") || uri.endsWith("/cancel") || uri.endsWith("/results")
+                        || uri.endsWith("/report/generate") || uri.endsWith("/defects")) {
                     return "execute";
                 }
             }

@@ -32,6 +32,8 @@ public record TestPlanResponse(
         BigDecimal executeRate,
         BigDecimal passRate,
         long defectCount,
+        long p0DefectCount,
+        long p1DefectCount,
         Integer lockVersion,
         String workspaceCode,
         String workspaceName,

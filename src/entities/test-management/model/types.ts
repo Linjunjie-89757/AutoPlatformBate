@@ -155,6 +155,8 @@ export interface TestPlanItem {
   executeRate: number | null
   passRate: number | null
   defectCount: number
+  p0DefectCount: number
+  p1DefectCount: number
   lockVersion: number
   workspaceCode: string
   workspaceName: string
@@ -196,6 +198,25 @@ export interface TestPlanDefectItem {
   updatedAt: string | null
 }
 
+export interface TestPlanExecutionHistoryItem {
+  id: number
+  previousStatus: TestPlanCaseStatus
+  executionStatus: TestPlanCaseStatus
+  executionNote: string | null
+  executorId: number | null
+  executorName: string | null
+  executedAt: string | null
+}
+
+export interface TestPlanExecutionAttachmentItem {
+  id: number
+  fileName: string
+  contentType: string | null
+  fileSize: number | null
+  downloadUrl: string
+  createdAt: string | null
+}
+
 export interface TestPlanCreateDefectPayload {
   title: string
   description: string
@@ -203,6 +224,7 @@ export interface TestPlanCreateDefectPayload {
   severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
   assigneeId: number
   sourceType: 'TEST_PLAN'
+  tags?: string[]
 }
 
 export interface TestVersionSavePayload {

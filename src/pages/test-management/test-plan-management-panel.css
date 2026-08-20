@@ -195,8 +195,10 @@
 .test-plan-management__rate { color: var(--tp-primary) !important; font-size: 13px !important; font-weight: 700 !important; }
 .test-plan-management__status { display: inline-flex; min-height: 20px; align-items: center; padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 18px; }
 
-.test-plan-management__action-cell { width: 56px; }
-.test-plan-management__action-wrapper { position: relative; display: inline-flex; }
+.test-plan-management__action-cell { width: 90px; }
+.test-plan-management__action-wrapper { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.test-plan-management__execute-button { display: inline-flex; height: 28px; align-items: center; gap: 4px; padding: 0 10px; border: 0; border-radius: 7px; color: #fff; background: var(--tp-primary); font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color 120ms ease; }
+.test-plan-management__execute-button:hover { background: var(--tp-primary-hover); }
 .test-plan-management__icon-button { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; color: var(--tp-placeholder); background: transparent; cursor: pointer; transition: color 120ms ease, background-color 120ms ease; }
 .test-plan-management__icon-button:hover { color: var(--tp-text); background: #f2f3f5; }
 .test-plan-management__action-menu-overlay { position: fixed; z-index: 40; inset: 0; }
@@ -350,6 +352,8 @@
 .test-plan-management .test-plan-management__detail-edit:hover { color: var(--tp-text); background: #f2f3f5; }
 .test-plan-management .test-plan-management__button.is-success { background: var(--tp-success); }
 .test-plan-management .test-plan-management__button.is-success:hover { background: #009a24; }
+.test-plan-management .test-plan-management__button.is-warning { background: var(--tp-warning); }
+.test-plan-management .test-plan-management__button.is-warning:hover { background: #e66f00; }
 .test-plan-management .test-plan-management__button.is-danger { background: var(--tp-danger); }
 .test-plan-management .test-plan-management__button.is-danger:hover { background: #d92d2d; }
 .test-plan-management__detail-kpis { display: flex; height: 72px; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--tp-border); background: #fff; }
@@ -446,6 +450,10 @@
 .test-plan-management__case-action:hover { background: var(--tp-primary-hover); }
 .test-plan-management__case-action.is-muted { background: var(--tp-muted); }
 .test-plan-management__case-action.is-muted:hover { background: #6f7b89; }
+.test-plan-management__case-actions { display: flex; align-items: center; gap: 2px; }
+.test-plan-management__case-actions button { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 6px; color: var(--tp-placeholder); background: transparent; cursor: pointer; transition: color 120ms ease, background-color 120ms ease; }
+.test-plan-management__case-actions button:hover { color: var(--tp-text); background: #f2f3f5; }
+.test-plan-management__case-actions button.is-danger:hover { color: var(--tp-danger); background: #fff0f0; }
 
 .test-plan-management__bug-toolbar { display: flex; min-width: 840px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .test-plan-management__bug-toolbar > div { display: flex; gap: 6px; }

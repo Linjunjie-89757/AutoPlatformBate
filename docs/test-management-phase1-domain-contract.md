@@ -555,6 +555,8 @@ test_management.export     导出需求、计划和报告
 - 需求是否属于计划版本。
 - 当前状态是否允许该操作。
 - 操作者是否为负责人不作为权限替代条件。
+- 从测试计划创建缺陷同时要求 `test_management.execute` 与 `bugs.create`，不能用测试执行权限替代缺陷新建权限。
+- 计划和版本 PDF 下载统一要求 `test_management.export`，不能只按普通查看接口放行。
 
 ## 9. API 契约
 
@@ -564,7 +566,7 @@ test_management.export     导出需求、计划和报告
 - 列表使用现有 `PageResponse<T>`。
 - 写请求必须携带具体 `X-Workspace-Code`。
 - 更新和状态变更请求必须携带 `expectedVersion`。
-- 导入采用“预览后提交”，避免解析错误时直接写入数据库。
+- Jira / 禅道导入采用“预览后提交”；Excel 导入由服务端先完成全文件预校验，再逐行写入合法数据，并返回成功、重复和失败明细，单行错误不能阻断其他合法行。
 - 状态变更使用动作接口，不允许通过普通 `PUT` 直接修改状态字段。
 
 ### 9.2 版本
@@ -607,10 +609,26 @@ POST   /api/test-management/requirements/{id}/review/start
 POST   /api/test-management/requirements/{id}/cases/{caseId}/review
 GET    /api/test-management/requirements/{id}/defects
 GET    /api/test-management/requirements/{id}/activities
-POST   /api/test-management/requirements/import/preview
-POST   /api/test-management/requirements/import/commit
-GET    /api/test-management/requirements/import/template
+POST   /api/test-management/requirements/import
+GET    /api/test-management/requirements/import-template
 ```
+
+Excel 导入使用 `multipart/form-data`：
+
+```text
+file                必填，.xlsx / .xls，最大 10 MB，最多 500 条非空数据行
+defaultVersionId    必填，行内版本为空时使用；必须属于当前工作区且未发布、未归档
+duplicateStrategy   可选，SKIP（默认）或 ALLOW
+```
+
+Excel 行内字段规则：
+
+- 需求标题、优先级、负责人必填；版本、外部需求标识、需求描述选填。
+- 负责人支持用户 ID、用户名、邮箱或唯一显示名；重名显示名必须改用稳定标识。
+- 版本支持版本 ID 或版本名称；行内版本优先于默认版本。
+- 同版本同标题，或外部需求标识相同，默认判为重复并跳过。
+- 返回 `totalRows / importedCount / skippedCount / failedCount / importedRequirementIds / issues`，失败明细包含 Excel 行号、标题、状态和原因。
+- Jira / 禅道预览与提交接口尚未实现，不能把 Excel 接口复用成携带第三方账号密码的同步接口。
 
 单条关联评审请求：
 
@@ -712,7 +730,7 @@ HTTP 与业务码：
 - 标记执行结果时，同时更新当前结果、追加执行历史和活动日志。
 - 从计划用例创建缺陷时，同时创建缺陷和全部追溯关系。
 - 完成计划时，同时校验门禁、变更状态、生成报告和记录活动日志。
-- 删除或解除关联前必须检查下游计划快照和缺陷引用。
+- 删除或解除关联前必须检查并记录下游计划快照和缺陷引用。需求删除采用软删除，保留计划、快照、缺陷和活动日志追溯；解除来源用例关联不得删除已冻结计划快照。
 - 聚合指标由查询实时计算；一期不维护容易漂移的手工计数字段。
 - 所有关联写入前必须验证工作区一致，禁止跨工作区 ID 关联。
 
