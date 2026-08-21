@@ -506,7 +506,6 @@ const qualityChecks = computed(() => {
     { label: '用例通过率', target: `≥ ${minPassRate}%`, current: `${currentPassRate}%`, passed: currentPassRate >= minPassRate },
     { label: 'P0 缺陷', target: detail?.allowP0 ? '允许' : '0 个', current: `${p0} 个`, passed: Boolean(detail?.allowP0) || p0 === 0 },
     { label: 'P1 缺陷', target: `≤ ${maxP1} 个`, current: `${p1} 个`, passed: p1 <= maxP1 },
-    { label: '负责人确认', target: detail?.ownerConfirmRequired ? '已确认' : '无需确认', current: reportSigned.value ? '已确认' : detail?.ownerConfirmRequired ? '待确认' : '无需确认', passed: !detail?.ownerConfirmRequired || reportSigned.value },
   ]
 })
 const passedQualityCheckCount = computed(() => qualityChecks.value.filter(item => item.passed).length)
@@ -1035,6 +1034,9 @@ const submitDefect = async (payload: TestPlanDefectSubmitPayload, continueCreate
     planDefectDetails.value = defects
     planBugs.value = defects.map(mapPlanBug)
     planLogs.value = activities.items.map(mapPlanLog)
+    if (view.value === 'execution' && selectedPlan.value) {
+      await loadExecutionCaseContext(String(payload.caseId))
+    }
     selectedPlan.value.p0Bugs = planBugs.value.filter(item => item.priority === 'P0' && !['closed', 'rejected'].includes(item.status)).length
     selectedPlan.value.p1Bugs = planBugs.value.filter(item => item.priority === 'P1' && !['closed', 'rejected'].includes(item.status)).length
     if (!continueCreate) {
