@@ -39,8 +39,7 @@ import {
   type TestPlanSavePayload,
   type TestRequirementItem,
 } from '@/entities/test-management'
-import { userApi, type UserItem } from '@/entities/user'
-import { useWorkspaceContext } from '@/entities/workspace'
+import { useWorkspaceContext, workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
 
 import {
   type CaseDirectory,
@@ -108,7 +107,7 @@ const selectedPlanDetail = ref<TestPlanItem | null>(null)
 const planLockVersions = ref(new Map<string, number>())
 const planCaseLockVersions = ref(new Map<string, number>())
 const planVersions = ref<Array<{ id: string; name: string; status: string }>>([])
-const planOwners = ref<UserItem[]>([])
+const planOwners = ref<Array<{ id: number; displayName: string }>>([])
 const planCaseLibrary = ref<LibraryCase[]>([])
 const planCaseDirectoryTree = ref<CaseDirectory[]>([{ id: 'root', label: '全部用例', count: 0, children: [] }])
 type PlanRequirementOption = {
@@ -324,15 +323,20 @@ const mapPlanRequirement = (item: TestRequirementItem): PlanRequirementOption =>
   linkedCases: (item.cases || []).map(caseItem => ({ id: String(caseItem.caseId), no: caseItem.caseNo, reviewStatus: caseItem.reviewStatus.toLowerCase() as PlanRequirementOption['linkedCases'][number]['reviewStatus'] })),
 })
 
+const mapAssignableMember = (item: WorkspaceAssignableMemberItem) => ({
+  id: item.userId,
+  displayName: item.displayName,
+})
+
 const loadPlans = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const [result, versions, requirements, owners, cases, directoryWorkspaces] = await Promise.all([
+    const [result, versions, requirements, members, cases, directoryWorkspaces] = await Promise.all([
       testManagementApi.listPlans(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
-      userApi.getUsers(),
+      workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value),
       caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 }),
       caseApi.getCaseDirectories(selectedWorkspaceCode.value),
     ])
@@ -340,7 +344,7 @@ const loadPlans = async () => {
     planLockVersions.value = new Map(result.items.map(item => [String(item.id), item.lockVersion]))
     planVersions.value = versions.items.map(item => ({ id: String(item.id), name: item.name, status: item.status }))
     planRequirements.value = requirements.items.map(mapPlanRequirement)
-    planOwners.value = owners
+    planOwners.value = members.map(mapAssignableMember)
     planCaseLibrary.value = cases.items.map(mapLibraryCase)
     const workspaceDirectories = directoryWorkspaces.find(item => item.workspaceCode === selectedWorkspaceCode.value)
       || directoryWorkspaces[0]

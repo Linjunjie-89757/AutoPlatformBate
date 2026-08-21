@@ -25,8 +25,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { caseApi, type CaseSummaryItem } from '@/entities/case'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { testManagementApi, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
-import { userApi, type UserItem } from '@/entities/user'
-import { useWorkspaceContext } from '@/entities/workspace'
+import { useWorkspaceContext, workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
 
 import {
   caseDirectoryTree,
@@ -67,7 +66,7 @@ const { currentUser } = useSession()
 const requirements = ref<ManagedRequirement[]>([])
 const requirementVersions = ref([...demoRequirementVersions])
 const caseLibrary = ref([...demoCaseLibrary])
-const requirementOwners = ref<UserItem[]>([])
+const requirementOwners = ref<Array<{ id: number; displayName: string }>>([])
 const requirementLockVersions = ref(new Map<string, number>())
 const isLoading = ref(false)
 const isSubmitting = ref(false)
@@ -147,6 +146,11 @@ const mapCase = (item: CaseSummaryItem) => ({
   priority: mapCasePriority(item.priority),
 })
 
+const mapAssignableMember = (item: WorkspaceAssignableMemberItem) => ({
+  id: item.userId,
+  displayName: item.displayName,
+})
+
 const mapRequirement = (item: TestRequirementItem): ManagedRequirement => ({
   id: String(item.id),
   title: item.title,
@@ -178,11 +182,11 @@ const loadRequirements = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const [versions, requirementPage, cases, owners] = await Promise.all([
+    const [versions, requirementPage, cases, members] = await Promise.all([
       testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 }),
-      userApi.getUsers(),
+      workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value),
     ])
     requirementVersions.value = versions.items.map(item => ({
       id: String(item.id),
@@ -192,7 +196,7 @@ const loadRequirements = async () => {
     requirements.value = requirementPage.items.map(mapRequirement)
     requirementLockVersions.value = new Map(requirementPage.items.map(item => [String(item.id), item.lockVersion]))
     caseLibrary.value = cases.items.map(mapCase)
-    requirementOwners.value = owners
+    requirementOwners.value = members.map(mapAssignableMember)
     if (!requirementVersions.value.some(item => item.id === createForm.versionId)) {
       createForm.versionId = requirementVersions.value[0]?.id || ''
     }

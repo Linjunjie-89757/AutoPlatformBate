@@ -79,6 +79,26 @@ public class WorkspaceMemberDomainService {
         return new ArrayList<>(result.values());
     }
 
+    public List<WorkspaceAssignableMemberItem> listAssignableMembers(String workspaceCode) {
+        WorkspaceEntity workspace = workspaceAccessSupport.requireReadableWorkspace(workspaceCode);
+        Map<Long, WorkspaceAssignableMemberItem> result = new LinkedHashMap<>();
+
+        userService.listPlatformAdminUsers().stream()
+                .filter(user -> Objects.equals(user.getStatus(), STATUS_ACTIVE))
+                .forEach(user -> result.put(user.getId(), toAssignableMemberItem(user)));
+
+        workspaceMemberMapper.selectList(new LambdaQueryWrapper<WorkspaceMemberEntity>()
+                        .eq(WorkspaceMemberEntity::getWorkspaceId, workspace.getId())
+                        .eq(WorkspaceMemberEntity::getStatus, STATUS_ACTIVE)
+                        .orderByAsc(WorkspaceMemberEntity::getId))
+                .stream()
+                .map(member -> userService.requireAnyUser(member.getUserId()))
+                .filter(user -> Objects.equals(user.getStatus(), STATUS_ACTIVE))
+                .forEach(user -> result.put(user.getId(), toAssignableMemberItem(user)));
+
+        return new ArrayList<>(result.values());
+    }
+
     public WorkspaceMemberCandidateItem findMemberCandidate(String workspaceCode, String account) {
         WorkspaceEntity workspace = workspaceAccessSupport.requireWorkspaceAdmin(workspaceCode);
         UserEntity user = userService.findAnyUserByAccount(account);
@@ -323,6 +343,14 @@ public class WorkspaceMemberDomainService {
                 ensureAndListMemberRoles(entity),
                 entity.getStatus(),
                 user.getStatus()
+        );
+    }
+
+    private WorkspaceAssignableMemberItem toAssignableMemberItem(UserEntity user) {
+        return new WorkspaceAssignableMemberItem(
+                user.getId(),
+                user.getUsername(),
+                user.getDisplayName()
         );
     }
 }

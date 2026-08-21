@@ -12,6 +12,7 @@ import type {
   WorkspaceInvitationItem,
   WorkspaceJoinApplicationItem,
   WorkspaceJoinCandidateItem,
+  WorkspaceAssignableMemberItem,
   WorkspaceMemberItem,
   WorkspaceMemberCandidateItem,
   WorkspacePermissionModuleItem,
@@ -223,6 +224,21 @@ export const workspaceApi = {
     )
 
     return unwrapMemberResponse(payload)
+  },
+
+  async getWorkspaceAssignableMembers(workspaceCode: string) {
+    const payload = await httpGet<ApiResponse<WorkspaceAssignableMemberItem[]>>(
+      `/workspaces/${encodeURIComponent(workspaceCode)}/assignable-members`,
+      {
+        headers: workspaceHeaders(workspaceCode),
+      },
+    )
+
+    if (payload.success === false) {
+      throw new Error(payload.message || '可分配成员加载失败')
+    }
+
+    return Array.isArray(payload.data) ? payload.data : []
   },
 
   async findWorkspaceMemberCandidate(workspaceCode: string, account: string) {

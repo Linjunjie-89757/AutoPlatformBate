@@ -627,6 +627,13 @@ class WorkspaceControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
 
+        mockMvc.perform(get("/api/workspaces/{workspaceCode}/assignable-members", readableWorkspaceCode))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data[*].userId", hasItem(13)))
+                .andExpect(jsonPath("$.data[*].displayName", hasItem("Li Ping")))
+                .andExpect(jsonPath("$.data[*].email").doesNotExist());
+
         mockMvc.perform(get("/api/settings/envs")
                         .header(WorkspaceScope.HEADER, readableWorkspaceCode))
                 .andExpect(status().isOk())

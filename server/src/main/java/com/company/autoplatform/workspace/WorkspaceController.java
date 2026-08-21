@@ -133,6 +133,13 @@ public class WorkspaceController {
         return ApiResponse.ok(workspaceService.listMembers(workspaceCode));
     }
 
+    @GetMapping("/{workspaceCode}/assignable-members")
+    public ApiResponse<List<WorkspaceAssignableMemberItem>> listAssignableMembers(
+            @PathVariable String workspaceCode
+    ) {
+        return ApiResponse.ok(workspaceService.listAssignableMembers(workspaceCode));
+    }
+
     @GetMapping("/{workspaceCode}/members/lookup")
     public ApiResponse<WorkspaceMemberCandidateItem> findMemberCandidate(
             @PathVariable String workspaceCode,

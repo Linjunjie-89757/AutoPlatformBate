@@ -78,6 +78,12 @@ export interface WorkspaceMemberItem {
   accountStatus: number | null
 }
 
+export interface WorkspaceAssignableMemberItem {
+  userId: number
+  username: string
+  displayName: string
+}
+
 export interface WorkspaceMemberRoleItem {
   id: number
   roleCode: string
