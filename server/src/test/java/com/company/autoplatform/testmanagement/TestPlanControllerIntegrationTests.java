@@ -178,6 +178,48 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
                 .andReturn());
         int reportVersion = plan.path("report").path("lockVersion").asInt();
 
+        mockMvc.perform(put("/api/test-management/plans/{id}", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "name", "completed-plan-edit-attempt",
+                                "ownerId", 11,
+                                "expectedVersion", plan.path("lockVersion").asInt()
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(post("/api/test-management/plans/{id}/cases", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("caseIds", List.of(testCase.getId()), "expectedVersion", plan.path("lockVersion").asInt()))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(delete("/api/test-management/plans/{id}/cases/{planCaseId}", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .param("expectedVersion", String.valueOf(plan.path("lockVersion").asInt())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(put("/api/test-management/plans/{id}/cases/{planCaseId}/assignee", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("assigneeId", 11, "expectedVersion", 2))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(put("/api/test-management/plans/{id}/cases/{planCaseId}", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "title", "completed-plan-case-edit-attempt",
+                                "priority", "P1",
+                                "expectedVersion", 2
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
         mockMvc.perform(post("/api/test-management/plans/{id}/report/sign", planId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)
                         .contentType("application/json")
@@ -226,6 +268,68 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
                         .header("X-Workspace-Code", WORKSPACE_CODE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(7));
+    }
+
+    @Test
+    void cancelledPlanRejectsSnapshotMutations() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        CaseEntity testCase = firstCaseInRiskWorkspace();
+        JsonNode draft = data(mockMvc.perform(post("/api/test-management/plans")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "purpose", "TEMP",
+                                "planType", "MIXED",
+                                "name", "cancelled-plan-" + suffix,
+                                "draft", true
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("DRAFT"))
+                .andReturn());
+        long planId = draft.path("id").asLong();
+
+        draft = data(mockMvc.perform(post("/api/test-management/plans/{id}/cancel", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("expectedVersion", 0, "reason", "取消本次临时测试"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANCELLED"))
+                .andReturn());
+        int planVersion = draft.path("lockVersion").asInt();
+
+        mockMvc.perform(put("/api/test-management/plans/{id}", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("name", "cancelled-plan-edit-attempt", "expectedVersion", planVersion))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(post("/api/test-management/plans/{id}/cases", planId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("caseIds", List.of(testCase.getId()), "expectedVersion", planVersion))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(delete("/api/test-management/plans/{id}/cases/{planCaseId}", planId, 999999L)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .param("expectedVersion", String.valueOf(planVersion)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(put("/api/test-management/plans/{id}/cases/{planCaseId}/assignee", planId, 999999L)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("assigneeId", 11, "expectedVersion", 0))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+
+        mockMvc.perform(put("/api/test-management/plans/{id}/cases/{planCaseId}", planId, 999999L)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("title", "cancelled-plan-case-edit-attempt", "priority", "P1", "expectedVersion", 0))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
     }
 
     @Test

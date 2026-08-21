@@ -189,6 +189,12 @@ const canRelease = computed(() => hasWorkspacePermission(currentUser.value, sele
 const canExport = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.export'))
 const canCreateDefect = computed(() => canExecute.value
   && hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'bugs.create'))
+const selectedPlanCanEdit = computed(() => Boolean(selectedPlan.value
+  && (selectedPlan.value.status === 'draft' || selectedPlan.value.status === 'pending')))
+const selectedPlanCanModifyCases = computed(() => Boolean(selectedPlan.value
+  && !['completed', 'cancelled'].includes(selectedPlan.value.status)))
+const canEditSelectedPlan = computed(() => canEdit.value && selectedPlanCanEdit.value)
+const canModifySelectedPlanCases = computed(() => canEdit.value && selectedPlanCanModifyCases.value)
 
 const form = reactive({
   purpose: 'version' as TestPlanPurpose,
@@ -777,7 +783,7 @@ const saveAndStart = async () => {
 }
 
 const openPicker = (mode: 'manual' | 'direct' | 'detail') => {
-  if (mode === 'detail' ? !canEdit.value : !canCreate.value) {
+  if (mode === 'detail' ? !canModifySelectedPlanCases.value : !canCreate.value) {
     showToast('你没有调整测试用例范围的权限')
     return
   }
@@ -795,7 +801,7 @@ const openPicker = (mode: 'manual' | 'direct' | 'detail') => {
 }
 
 const confirmPicker = async () => {
-  if (pickerMode.value === 'detail' ? !canEdit.value : !canCreate.value) {
+  if (pickerMode.value === 'detail' ? !canModifySelectedPlanCases.value : !canCreate.value) {
     showToast('你没有调整测试用例范围的权限')
     return
   }
@@ -948,7 +954,7 @@ const selectedCountForDirectory = (directory: CaseDirectory) => {
 }
 
 const assignCaseOwner = async (caseItem: TestPlanCaseItem) => {
-  if (!canEdit.value) {
+  if (!canModifySelectedPlanCases.value) {
     showToast('你没有分配执行人的权限')
     return
   }
@@ -1097,7 +1103,7 @@ const closeUnlinkCaseDialog = () => {
 }
 
 const confirmUnlinkCase = async (reason: string) => {
-  if (!canEdit.value) {
+  if (!canModifySelectedPlanCases.value) {
     unlinkCaseError.value = '你没有解除用例关联的权限'
     return
   }
@@ -1610,7 +1616,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
          :initial-case-id="executionInitialCaseId"
          :submitting="isSubmitting"
          :can-execute="canExecute"
-         :can-edit-snapshot="canEdit"
+         :can-edit-snapshot="canEditSelectedPlan"
          :can-create-defect="canCreateDefect"
          :can-link-defect="canExecute"
          :can-manage-evidence="canExecute"
@@ -1779,7 +1785,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <span class="test-plan-management__status" :style="{ color: testPlanStatusConfig[selectedPlan.status].color, backgroundColor: testPlanStatusConfig[selectedPlan.status].background }">{{ testPlanStatusConfig[selectedPlan.status].label }}</span>
         <div />
         <small>负责人：{{ selectedPlan.owner }}</small><small>周期：{{ selectedPlan.startDate }} — {{ selectedPlan.endDate }}</small>
-        <button v-if="canEdit" class="test-plan-management__detail-edit" type="button" title="编辑" aria-label="编辑测试计划" @click="selectedPlan.status === 'draft' || selectedPlan.status === 'pending' ? openEditPlan(selectedPlan, true) : showToast('执行中的测试计划不可编辑')"><Edit2 :size="13" /></button>
+        <button v-if="canEditSelectedPlan" class="test-plan-management__detail-edit" type="button" title="编辑" aria-label="编辑测试计划" @click="openEditPlan(selectedPlan, true)"><Edit2 :size="13" /></button>
         <button v-if="selectedPlan.status === 'pending' && canExecute" class="test-plan-management__button is-small" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'start')"><Play :size="11" />开始测试</button>
         <template v-else-if="selectedPlan.status === 'running'">
           <button v-if="canExecute" class="test-plan-management__button is-small is-warning" type="button" :disabled="isSubmitting" @click="openActionDialog(selectedPlan, 'block')"><AlertTriangle :size="12" />标记阻塞</button>
@@ -1810,10 +1816,10 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             <span />
             <select v-model="caseAssigneeFilter" aria-label="执行人筛选"><option value="all">全部执行人</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option><option value="—">未分配</option></select>
             <label><Search :size="12" /><input v-model="caseSearch" type="search" placeholder="搜索用例…"></label>
-            <button v-if="canEdit" class="test-plan-management__button is-small" type="button" @click="openPicker('detail')"><Plus :size="11" />添加用例</button>
+            <button v-if="canModifySelectedPlanCases" class="test-plan-management__button is-small" type="button" @click="openPicker('detail')"><Plus :size="11" />添加用例</button>
           </div>
           <div class="test-plan-management__case-stats"><div><strong>{{ detailCaseCounts.all }}</strong><span>全部</span></div><div class="is-success"><strong>{{ detailCaseCounts.passed }}</strong><span>通过</span></div><div class="is-danger"><strong>{{ detailCaseCounts.failed }}</strong><span>失败</span></div><div class="is-warning"><strong>{{ detailCaseCounts.blocked }}</strong><span>阻塞</span></div><div class="is-muted"><strong>{{ detailCaseCounts.pending }}</strong><span>未执行</span></div></div>
-            <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table"><thead><tr><th>编号</th><th>用例名称</th><th>模块</th><th>优先级</th><th>执行人</th><th>执行结果</th><th>执行时间</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="caseItem in filteredDetailCases" :key="caseItem.id"><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><small>{{ caseItem.module }}</small></td><td><b class="test-plan-management__priority" :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td><td><select v-model="caseItem.assignee" :disabled="!canEdit || isSubmitting" @change="assignCaseOwner(caseItem)"><option value="—">未分配</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></td><td><button class="test-plan-management__exec-status" type="button" :disabled="!canExecute || selectedPlan.status !== 'running' || isSubmitting" :style="{ color: executionStatusConfig[caseItem.status].color, backgroundColor: executionStatusConfig[caseItem.status].background }" @click="openResultModal(caseItem)">{{ executionStatusConfig[caseItem.status].label }}</button></td><td><small>{{ caseItem.execTime }}</small></td><td><small class="test-plan-management__case-note" :title="caseItem.notes">{{ caseItem.notes || '—' }}</small></td><td><div class="test-plan-management__case-actions"><button type="button" aria-label="查看" title="查看" @click="openCaseDrawer(caseItem)"><Eye :size="12" /></button><button v-if="(selectedPlan.status === 'running' || selectedPlan.status === 'blocked') && canExecute" type="button" aria-label="执行" title="执行" @click="openExecution(selectedPlan, caseItem.id)"><Play :size="12" /></button><button v-if="canEdit" class="is-danger" type="button" aria-label="取消关联" title="取消关联" @click="unlinkCaseTarget = caseItem; unlinkCaseError = ''"><Trash2 :size="12" /></button></div></td></tr><tr v-if="!filteredDetailCases.length"><td colspan="9" class="test-plan-management__empty">暂无符合条件的用例</td></tr></tbody></table></div>
+            <div class="test-plan-management__detail-table-wrap"><table class="test-plan-management__detail-table"><thead><tr><th>编号</th><th>用例名称</th><th>模块</th><th>优先级</th><th>执行人</th><th>执行结果</th><th>执行时间</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="caseItem in filteredDetailCases" :key="caseItem.id"><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><small>{{ caseItem.module }}</small></td><td><b class="test-plan-management__priority" :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td><td><select v-model="caseItem.assignee" :disabled="!canModifySelectedPlanCases || isSubmitting" @change="assignCaseOwner(caseItem)"><option value="—">未分配</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></td><td><button class="test-plan-management__exec-status" type="button" :disabled="!canExecute || selectedPlan.status !== 'running' || isSubmitting" :style="{ color: executionStatusConfig[caseItem.status].color, backgroundColor: executionStatusConfig[caseItem.status].background }" @click="openResultModal(caseItem)">{{ executionStatusConfig[caseItem.status].label }}</button></td><td><small>{{ caseItem.execTime }}</small></td><td><small class="test-plan-management__case-note" :title="caseItem.notes">{{ caseItem.notes || '—' }}</small></td><td><div class="test-plan-management__case-actions"><button type="button" aria-label="查看" title="查看" @click="openCaseDrawer(caseItem)"><Eye :size="12" /></button><button v-if="(selectedPlan.status === 'running' || selectedPlan.status === 'blocked') && canExecute" type="button" aria-label="执行" title="执行" @click="openExecution(selectedPlan, caseItem.id)"><Play :size="12" /></button><button v-if="canModifySelectedPlanCases" class="is-danger" type="button" aria-label="取消关联" title="取消关联" @click="unlinkCaseTarget = caseItem; unlinkCaseError = ''"><Trash2 :size="12" /></button></div></td></tr><tr v-if="!filteredDetailCases.length"><td colspan="9" class="test-plan-management__empty">暂无符合条件的用例</td></tr></tbody></table></div>
         </div>
 
         <div v-else-if="detailTab === 'bugs'" class="test-plan-management__bugs-view">
