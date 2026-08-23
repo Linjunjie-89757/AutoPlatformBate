@@ -363,8 +363,8 @@ function handleDocumentPointerDown(event: MouseEvent) {
 
 function goToAiConnections() {
   void router.push({
-    path: '/settings',
-    query: { tab: 'aiConnection' },
+    path: '/config-center',
+    query: { tab: 'ai' },
   })
 }
 
@@ -655,7 +655,7 @@ onBeforeUnmount(() => {
           <span>
             模型来自 AI 连接池，现有 <strong>{{ totalModelCount }}</strong> 个可选模型。若当前没有可用连接，请前往
             <button type="button" class="case-ai-config-page__tip-link" @click="goToAiConnections">
-              系统设置 / AI 连接池
+            配置中心 / AI 连接配置
             </button>
             创建或维护连接。
           </span>
@@ -699,7 +699,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-else-if="hasNoProviders && !loadingProviders" class="case-ai-config-page__state">
-        <AppEmptyState title="暂无可用 AI 连接" description="先去系统设置创建连接，再回来配置生成和评审模型。">
+        <AppEmptyState title="暂无可用 AI 连接" description="先去配置中心创建连接，再回来配置生成和评审模型。">
           <template #actions>
             <AppButton type="primary" @click="goToAiConnections">
               去创建连接

@@ -284,6 +284,20 @@ const loadOwners = async () => {
   }
 }
 
+const mapVersionActivities = (items: VersionActivityItem[]): VersionLog[] => items.map(item => ({
+  id: String(item.id),
+  actor: item.actorName || '系统',
+  action: item.actionName,
+  detail: formatVersionLogDetail(item),
+  time: formatTestManagementDateTime(item.createdAt),
+  type: versionLogType(item.actionCode),
+}))
+
+const refreshVersionLogs = async (versionId: number) => {
+  const activities = await testManagementApi.listVersionActivities(selectedWorkspaceCode.value, versionId)
+  versionLogs.value = mapVersionActivities(activities.items)
+}
+
 const loadVersionDetail = async (version: ManagedVersion) => {
   isDetailLoading.value = true
   detailError.value = ''
@@ -296,14 +310,7 @@ const loadVersionDetail = async (version: ManagedVersion) => {
     ])
     versionRequirements.value = requirements.items.map(mapRequirement)
     versionPlans.value = plans.items.map(mapPlan)
-    versionLogs.value = activities.items.map(item => ({
-      id: String(item.id),
-      actor: item.actorName || '系统',
-      action: item.actionName,
-      detail: formatVersionLogDetail(item),
-      time: formatTestManagementDateTime(item.createdAt),
-      type: versionLogType(item.actionCode),
-    }))
+    versionLogs.value = mapVersionActivities(activities.items)
     const defects = await Promise.all(plans.items.map(item => testManagementApi.listPlanDefects(selectedWorkspaceCode.value, item.id)))
     versionBugs.value = defects.flatMap((items, index) => items.map(item => mapPlanDefect(item, plans.items[index]?.name || '')))
     const summary = await testManagementApi.getVersion(selectedWorkspaceCode.value, versionId)
@@ -688,7 +695,13 @@ const transitionVersion = async (force = false) => {
     versions.value = versions.value.map(item => item.id === mapped.id ? mapped : item)
     selectedVersion.value = mapped
     versionLockVersions.value.set(mapped.id, result.lockVersion)
-    showToast('版本状态已更新')
+    let operationLogRefreshed = true
+    try {
+      await refreshVersionLogs(Number(mapped.id))
+    } catch {
+      operationLogRefreshed = false
+    }
+    showToast(operationLogRefreshed ? '版本状态已更新' : '版本状态已更新，操作记录将在重新打开后刷新')
     versionStatusModalPhase.value = 'form'
     closeVersionAction()
   } catch (error) {
