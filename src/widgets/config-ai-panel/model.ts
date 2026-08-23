@@ -27,6 +27,7 @@ export interface ProviderVisualConfig {
   label: string
   color: string
   bg: string
+  logoBg?: string
   initial: string
   logoSrc: string
   baseUrl: string
@@ -135,6 +136,7 @@ export const providerVisuals: Record<AiProviderType, ProviderVisualConfig> = {
     label: 'Kimi',
     color: '#1C1C1C',
     bg: '#F5F5F5',
+    logoBg: '#1C1C1C',
     initial: 'K',
     logoSrc: kimiLogo,
     baseUrl: 'https://api.moonshot.cn/v1',

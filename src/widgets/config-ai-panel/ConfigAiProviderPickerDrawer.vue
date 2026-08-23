@@ -36,7 +36,7 @@ defineEmits<{
               class="config-ai-provider-option__avatar"
               :style="{
                 color: getProviderVisual(providerType).color,
-                backgroundColor: getProviderVisual(providerType).bg,
+                backgroundColor: getProviderVisual(providerType).logoBg || getProviderVisual(providerType).bg,
               }"
             >
               <img v-if="getProviderVisual(providerType).logoSrc" :src="getProviderVisual(providerType).logoSrc" alt="">

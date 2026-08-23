@@ -136,7 +136,7 @@ const {
                     class="config-ai-conn__avatar"
                     :style="{
                       color: getProviderVisual(provider).color,
-                      backgroundColor: getProviderVisual(provider).bg,
+                      backgroundColor: getProviderVisual(provider).logoBg || getProviderVisual(provider).bg,
                     }"
                   >
                     <img v-if="getProviderVisual(provider).logoSrc" :src="getProviderVisual(provider).logoSrc" alt="">

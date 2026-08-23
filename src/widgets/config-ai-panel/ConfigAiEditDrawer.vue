@@ -98,7 +98,7 @@ function testConnection() {
           >
             <span
               class="config-ai-edit__provider-avatar"
-              :style="{ color: visual.color, backgroundColor: '#ffffff' }"
+              :style="{ color: visual.color, backgroundColor: visual.logoBg || '#ffffff' }"
             >
               <img v-if="visual.logoSrc" :src="visual.logoSrc" alt="">
               <span v-else>{{ visual.initial }}</span>
