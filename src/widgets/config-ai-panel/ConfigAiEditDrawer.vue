@@ -328,7 +328,6 @@ function testConnection() {
   height: 40px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e5e6eb;
   border-radius: 11px;
   font-size: 12px;
   font-weight: 700;
