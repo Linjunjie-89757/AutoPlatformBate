@@ -9,6 +9,14 @@ export type TestPlanType = 'SMOKE' | 'FUNCTIONAL' | 'REGRESSION' | 'RELEASE' | '
 export type TestPlanStatus = 'DRAFT' | 'PENDING' | 'RUNNING' | 'BLOCKED' | 'COMPLETED' | 'CANCELLED'
 export type TestPlanCaseStatus = 'PENDING' | 'PASSED' | 'FAILED' | 'BLOCKED' | 'SKIPPED'
 
+export interface TestQualityGateCheck {
+  key: string
+  label: string
+  target: string | number
+  actual: string | number
+  passed: boolean
+}
+
 export interface TestPage<T> {
   items: T[]
   total: number
@@ -36,6 +44,7 @@ export interface TestVersionItem {
   passedCount: number
   openP0Count: number
   openP1Count: number
+  qualityGateChecks: TestQualityGateCheck[]
   lockVersion: number
   workspaceCode: string
   workspaceName: string

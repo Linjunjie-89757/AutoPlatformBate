@@ -17,6 +17,7 @@ class TestManagementPermissionCatalogTests {
             "test_management.review",
             "test_management.execute",
             "test_management.release",
+            "test_management.force_release",
             "test_management.export"
     );
 
@@ -43,7 +44,7 @@ class TestManagementPermissionCatalogTests {
                         "test_management.execute",
                         "test_management.export"
                 )
-                .doesNotContain("test_management.delete", "test_management.review", "test_management.release");
+                .doesNotContain("test_management.delete", "test_management.review", "test_management.release", "test_management.force_release");
         assertThat(WorkspacePermissionCatalog.defaultCodesForRole("SYSTEM_DEVELOPER"))
                 .contains("test_management.view");
         assertThat(WorkspacePermissionCatalog.defaultCodesForRole("SYSTEM_READ_ONLY"))

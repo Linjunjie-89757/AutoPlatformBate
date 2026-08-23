@@ -71,6 +71,9 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
     private TestPlanCaseExecutionMapper planCaseExecutionMapper;
 
     @Autowired
+    private TestPlanReportMapper planReportMapper;
+
+    @Autowired
     private TestRequirementMapper requirementMapper;
 
     @Autowired
@@ -645,7 +648,7 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
-    void releasingVersionRequiresReason() throws Exception {
+    void forcedReleaseRequiresReasonAndLocksReleasedVersion() throws Exception {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         JsonNode version = data(mockMvc.perform(post("/api/test-management/versions")
                         .header("X-Workspace-Code", WORKSPACE_CODE)
@@ -683,8 +686,8 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
                                 "expectedVersion", 1,
                                 "force", false
                         ))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("TM_VALIDATION_FAILED"));
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("TM_QUALITY_GATE_FAILED"));
 
         mockMvc.perform(post("/api/test-management/versions/{id}/transition", versionId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)
@@ -692,11 +695,32 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
                         .content(json(Map.of(
                                 "targetStatus", "RELEASED",
                                 "expectedVersion", 1,
-                                "force", false,
+                                "force", true,
                                 "reason", "版本验收完成"
                         ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("RELEASED"));
+                .andExpect(jsonPath("$.data.status").value("RELEASED"))
+                .andExpect(jsonPath("$.data.qualityGateChecks.length()").value(7));
+
+        TestActivityLogEntity releaseActivity = activityLogMapper.selectOne(new LambdaQueryWrapper<TestActivityLogEntity>()
+                .eq(TestActivityLogEntity::getEntityType, ActivityEntityType.VERSION)
+                .eq(TestActivityLogEntity::getEntityId, versionId)
+                .eq(TestActivityLogEntity::getActionCode, "VERSION_STATUS_CHANGED")
+                .orderByDesc(TestActivityLogEntity::getId)
+                .last("LIMIT 1"));
+        assertThat(releaseActivity.getDetail()).contains("qualityGateSnapshot", "bypassedChecks");
+
+        mockMvc.perform(post("/api/test-management/plans")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "purpose", "VERSION",
+                                "versionId", versionId,
+                                "name", "released-version-plan-" + suffix,
+                                "draft", true
+                        ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
 
         mockMvc.perform(put("/api/test-management/requirements/{id}", requirementId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)
@@ -708,6 +732,98 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
                                 "sourceType", "MANUAL",
                                 "expectedVersion", 0
                         ))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
+    }
+
+    @Test
+    void qualifiedVersionCanBeReleasedWithoutReason() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        JsonNode version = data(mockMvc.perform(post("/api/test-management/versions")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "name", "qualified-release-version-" + suffix,
+                                "versionType", "ITERATION",
+                                "ownerId", 11
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+        long versionId = version.path("id").asLong();
+
+        JsonNode requirement = data(mockMvc.perform(post("/api/test-management/requirements")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "versionId", versionId,
+                                "title", "qualified-release-requirement-" + suffix,
+                                "priority", "P2",
+                                "sourceType", "MANUAL"
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+        long requirementId = requirement.path("id").asLong();
+        CaseEntity testCase = firstCaseInRiskWorkspace();
+
+        requirement = data(mockMvc.perform(put("/api/test-management/requirements/{id}/cases", requirementId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("caseIds", List.of(testCase.getId()), "expectedVersion", 0))))
+                .andExpect(status().isOk())
+                .andReturn());
+        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/review/start", requirementId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("expectedVersion", requirement.path("lockVersion").asInt()))))
+                .andExpect(status().isOk())
+                .andReturn());
+        mockMvc.perform(post("/api/test-management/requirements/{id}/cases/{caseId}/review", requirementId, testCase.getId())
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "decision", "PASSED",
+                                "expectedVersion", requirement.path("lockVersion").asInt()
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reviewStatus").value("PASSED"));
+
+        TestPlanEntity plan = createPlanExecution(
+                versionId, requirementId, testCase, PlanCaseExecutionStatus.PASSED, LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        TestPlanReportEntity report = new TestPlanReportEntity();
+        report.setWorkspaceId(testCase.getWorkspaceId());
+        report.setPlanId(plan.getId());
+        report.setStatus(PlanReportStatus.SIGNED);
+        report.setContentSnapshotJson("{}");
+        report.setGeneratedAt(now);
+        report.setSignedBy(11L);
+        report.setSignedAt(now);
+        report.setLockVersion(0);
+        report.setCreatedAt(now);
+        report.setUpdatedAt(now);
+        planReportMapper.insert(report);
+
+        TestVersionEntity entity = versionMapper.selectById(versionId);
+        entity.setStatus(VersionStatus.PENDING_RELEASE);
+        entity.setUpdatedAt(now);
+        assertThat(versionMapper.updateById(entity)).isEqualTo(1);
+
+        mockMvc.perform(post("/api/test-management/versions/{id}/transition", versionId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "targetStatus", "RELEASED",
+                                "expectedVersion", 1,
+                                "force", false
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RELEASED"))
+                .andExpect(jsonPath("$.data.qualityGateChecks.length()").value(7));
+
+        mockMvc.perform(post("/api/test-management/plans/{id}/report/revoke-signature", plan.getId())
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("expectedVersion", 0, "reason", "不应允许修改已发布版本"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TM_SNAPSHOT_LOCKED"));
     }

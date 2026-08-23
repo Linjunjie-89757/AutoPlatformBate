@@ -72,7 +72,11 @@ export interface PlatformAccountInvitationItem {
   displayName: string
   roleCode: string
   status: string
+  invitedAt: string
   expiresAt: string
+  operatorName: string
+  source: 'MANUAL' | 'BATCH' | string
+  failReason?: string | null
 }
 
 export interface PlatformNotificationRuleItem {

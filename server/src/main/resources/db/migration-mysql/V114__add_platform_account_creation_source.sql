@@ -1,0 +1,2 @@
+ALTER TABLE tb_sys_user
+    ADD COLUMN creation_source VARCHAR(32) NOT NULL DEFAULT 'MANUAL';

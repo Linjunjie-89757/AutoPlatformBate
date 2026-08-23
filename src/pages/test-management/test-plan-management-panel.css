@@ -390,6 +390,7 @@
 .test-plan-management__quality-overview { grid-column: 1 / -1; padding: 20px; border: 1px solid var(--tp-border); border-radius: 12px; background: #fff; }
 .test-plan-management__quality-overview > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .test-plan-management__quality-overview > header span { padding: 3px 10px; border-radius: 12px; color: var(--tp-warning); background: rgb(255 125 0 / 8%); font-size: 12px; font-weight: 600; }
+.test-plan-management__quality-overview > header span.is-passed { color: var(--tp-success); background: rgb(0 180 42 / 8%); }
 .test-plan-management__quality-overview > div { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .test-plan-management__quality-overview section { padding: 14px; border: 1px solid rgb(245 63 63 / 19%); border-radius: 10px; background: rgb(245 63 63 / 2%); }
 .test-plan-management__quality-overview section.is-passed { border-color: rgb(0 180 42 / 19%); background: rgb(0 180 42 / 2%); }

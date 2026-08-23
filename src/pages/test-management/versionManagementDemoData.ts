@@ -4,6 +4,14 @@ export type RequirementStatus = 'uncovered' | 'partial' | 'covered' | 'passed'
 export type BugStatus = 'open' | 'fixing' | 'fixed' | 'closed' | 'rejected'
 export type VersionDetailTab = 'overview' | 'requirements' | 'plans' | 'bugs' | 'report' | 'logs'
 
+export interface VersionQualityGateCheck {
+  key: string
+  label: string
+  target: string | number
+  actual: string | number
+  passed: boolean
+}
+
 export interface ManagedVersion {
   id: string
   no: string
@@ -20,6 +28,7 @@ export interface ManagedVersion {
   passed: number
   p0Bugs: number
   p1Bugs: number
+  qualityGateChecks?: VersionQualityGateCheck[]
   goal: string
 }
 

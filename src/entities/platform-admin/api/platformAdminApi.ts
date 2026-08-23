@@ -27,6 +27,35 @@ export const platformAdminApi = {
     return response.data
   },
 
+  async getAccountInvitations() {
+    const response = await httpGet<ApiResponse<PlatformAccountInvitationItem[]>>(
+      '/platform-admin/account-invitations',
+      { headers: platformHeaders },
+    )
+    if (response.success === false) throw new Error(response.message || '邀请记录加载失败')
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  async resendAccountInvitation(invitationId: number) {
+    const response = await httpPost<ApiResponse<PlatformAccountInvitationItem>, undefined>(
+      `/platform-admin/account-invitations/${invitationId}/resend`,
+      undefined,
+      { headers: platformHeaders },
+    )
+    if (response.success === false) throw new Error(response.message || '邀请邮件重发失败')
+    return response.data
+  },
+
+  async revokeAccountInvitation(invitationId: number) {
+    const response = await httpPost<ApiResponse<PlatformAccountInvitationItem>, undefined>(
+      `/platform-admin/account-invitations/${invitationId}/revoke`,
+      undefined,
+      { headers: platformHeaders },
+    )
+    if (response.success === false) throw new Error(response.message || '邀请撤销失败')
+    return response.data
+  },
+
   async getNotificationSettings() {
     const response = await httpGet<ApiResponse<PlatformNotificationSettings>>(
       '/platform-admin/notifications',

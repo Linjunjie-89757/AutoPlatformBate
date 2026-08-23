@@ -166,6 +166,7 @@ public class TestPlanService {
     public TestPlanResponse create(String workspaceCode, CreateTestPlanRequest request) {
         WorkspaceEntity workspace = workspaceSupport.requireWritableWorkspace(workspaceCode);
         validatePurpose(request.purpose(), request.versionId(), workspace.getId(), request.requirementIds(), request.draft());
+        requireVersionAllowsPlanChanges(request.versionId(), workspace.getId());
         validateDates(request.startDate(), request.endDate());
         if (request.ownerId() != null) requireActiveUser(request.ownerId());
         if (!request.draft()) {
@@ -226,6 +227,7 @@ public class TestPlanService {
         requireExpectedVersion(plan.getLockVersion(), request.expectedVersion(), "测试计划");
         validateDates(request.startDate(), request.endDate());
         Long versionId = request.versionId() == null ? plan.getVersionId() : request.versionId();
+        requireVersionAllowsPlanChanges(versionId, plan.getWorkspaceId());
         if (plan.getStatus() != PlanStatus.DRAFT && !Objects.equals(plan.getVersionId(), versionId)) {
             throw TestManagementException.snapshotLocked("待开始计划不能修改关联版本");
         }
@@ -260,7 +262,8 @@ public class TestPlanService {
 
     @Transactional
     public TestPlanResponse copy(Long id, String workspaceCode, CopyTestPlanRequest request) {
-        TestPlanEntity source = requireWritable(id, workspaceCode);
+        TestPlanEntity source = requireReadable(id, workspaceCode);
+        workspaceSupport.requireWritableEntityWorkspace(workspaceCode, source.getWorkspaceId());
         requireExpectedVersion(source.getLockVersion(), request.expectedVersion(), "测试计划");
         LocalDateTime now = LocalDateTime.now();
         Long currentUserId = CurrentUserContext.get();
@@ -279,6 +282,7 @@ public class TestPlanService {
             if (targetVersion == null || !source.getWorkspaceId().equals(targetVersion.getWorkspaceId())) {
                 throw TestManagementException.validation("目标版本不属于当前工作区");
             }
+            requireVersionAllowsPlanChanges(targetVersionId, source.getWorkspaceId());
             if (copyRequirements && !Objects.equals(source.getVersionId(), targetVersionId)) {
                 throw TestManagementException.validation("跨版本复制不能直接沿用原版本需求，请取消“复制需求范围”后重试");
             }
@@ -763,7 +767,19 @@ public class TestPlanService {
     TestPlanEntity requireWritable(Long id, String workspaceCode) {
         TestPlanEntity plan = requireReadable(id, workspaceCode);
         workspaceSupport.requireWritableEntityWorkspace(workspaceCode, plan.getWorkspaceId());
+        requireVersionAllowsPlanChanges(plan.getVersionId(), plan.getWorkspaceId());
         return plan;
+    }
+
+    private void requireVersionAllowsPlanChanges(Long versionId, Long workspaceId) {
+        if (versionId == null) return;
+        TestVersionEntity version = versionMapper.selectById(versionId);
+        if (version == null || !workspaceId.equals(version.getWorkspaceId())) {
+            throw TestManagementException.validation("测试计划关联版本不存在或不属于当前工作区");
+        }
+        if (version.getStatus() == VersionStatus.RELEASED || version.getStatus() == VersionStatus.ARCHIVED) {
+            throw TestManagementException.snapshotLocked("已发布或已归档版本的测试计划数据已冻结");
+        }
     }
 
     private TestPlanResponse transitionSimple(Long id, String workspaceCode, TestPlanActionRequest request, PlanStatus target, String actionCode, String actionName, boolean reasonRequired) {

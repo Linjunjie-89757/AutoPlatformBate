@@ -52,6 +52,7 @@ class TestManagementMigrationTests extends IntegrationTestSupport {
                 "test_management.review",
                 "test_management.execute",
                 "test_management.release",
+                "test_management.force_release",
                 "test_management.export"
         );
 

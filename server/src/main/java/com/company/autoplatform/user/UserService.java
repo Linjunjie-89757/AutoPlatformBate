@@ -54,6 +54,10 @@ public class UserService {
             CreateUserRequest item = users.get(i);
             try {
                 UserItem created = createUser(item);
+                UserEntity createdEntity = userMapper.selectById(created.id());
+                createdEntity.setCreationSource("BATCH");
+                createdEntity.setUpdatedAt(LocalDateTime.now());
+                userMapper.updateById(createdEntity);
                 successCount++;
                 results.add(new BatchCreateUserItem(
                         i + 1,

@@ -19,8 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -47,7 +50,7 @@ public class PlatformAccountInvitationService {
             PlatformNotificationSettingsService notificationService,
             PasswordEncoder passwordEncoder,
             @Value("${app.account-invitation.frontend-base-url:${app.password-reset.frontend-base-url:http://localhost:5173}}") String frontendBaseUrl,
-            @Value("${app.account-invitation.token-valid-hours:24}") long validHours
+            @Value("${app.account-invitation.token-valid-hours:48}") long validHours
     ) {
         this.invitationMapper = invitationMapper;
         this.userMapper = userMapper;
@@ -77,6 +80,7 @@ public class PlatformAccountInvitationService {
             user.setEmail(email);
             user.setDisplayName(request.displayName().trim());
             user.setRoleCode(storedRole);
+            user.setCreationSource("INVITATION");
             user.setPassword(null);
             user.setStatus(1);
             user.setCreatedAt(now);
@@ -85,6 +89,7 @@ public class PlatformAccountInvitationService {
         } else {
             user.setDisplayName(request.displayName().trim());
             user.setRoleCode(storedRole);
+            user.setCreationSource("INVITATION");
             user.setStatus(1);
             user.setUpdatedAt(now);
             userMapper.updateById(user);
@@ -97,6 +102,9 @@ public class PlatformAccountInvitationService {
         invitation.setTokenHash(hashToken(rawToken));
         invitation.setExpiresAt(now.plusHours(validHours));
         invitation.setCreatedBy(CurrentUserContext.get());
+        invitation.setSendStatus("SENDING");
+        invitation.setSendAttempts(1);
+        invitation.setLastSendAt(now);
         invitation.setCreatedAt(now);
         invitation.setUpdatedAt(now);
         invitationMapper.insert(invitation);
@@ -106,14 +114,93 @@ public class PlatformAccountInvitationService {
                 .queryParam("token", rawToken)
                 .build()
                 .toUriString();
-        notificationService.sendRequired(
-                "invite",
-                email,
-                "AutoTest 平台账号邀请",
-                "您好，%s：\n\n管理员邀请你加入 AutoTest 平台。请在 %d 小时内打开以下链接设置密码并激活账号：\n\n%s\n\n如果你没有申请加入，请忽略此邮件。"
-                        .formatted(user.getDisplayName(), validHours, activationUrl)
-        );
-        return toItem(invitation, user, "PENDING");
+        try {
+            notificationService.sendRequired(
+                    "invite",
+                    email,
+                    "AutoTest 平台账号邀请",
+                    "您好，%s：\n\n管理员邀请你加入 AutoTest 平台。请在 %d 小时内打开以下链接设置密码并激活账号：\n\n%s\n\n如果你没有申请加入，请忽略此邮件。"
+                            .formatted(user.getDisplayName(), validHours, activationUrl)
+            );
+            invitation.setSendStatus("SENT");
+            invitation.setSentAt(LocalDateTime.now());
+            invitation.setSendError(null);
+        } catch (RuntimeException exception) {
+            invitation.setSendStatus("FAILED");
+            invitation.setSendError(normalizeSendError(exception));
+        }
+        invitation.setUpdatedAt(LocalDateTime.now());
+        invitationMapper.updateById(invitation);
+        return toItem(invitation, user, invitation.getSendStatus(), "当前管理员", "MANUAL");
+    }
+
+    public List<PlatformAccountInvitationItem> listInvitations() {
+        requireSuperAdmin();
+        LocalDateTime now = LocalDateTime.now();
+        List<PlatformAccountInvitationItem> records = new ArrayList<>(invitationMapper.selectList(new LambdaQueryWrapper<PlatformAccountInvitationEntity>()
+                        .orderByDesc(PlatformAccountInvitationEntity::getCreatedAt))
+                .stream()
+                .map(invitation -> {
+                    UserEntity user = userMapper.selectById(invitation.getUserId());
+                    if (user == null) return null;
+                    UserEntity operator = invitation.getCreatedBy() == null ? null : userMapper.selectById(invitation.getCreatedBy());
+                    return toItem(invitation, user, invitationStatus(invitation, now),
+                            operator == null ? "系统" : operator.getDisplayName(), "MANUAL");
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList());
+
+        userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .eq(UserEntity::getCreationSource, "BATCH")
+                        .orderByDesc(UserEntity::getCreatedAt))
+                .stream()
+                .map(user -> toBatchItem(user))
+                .forEach(records::add);
+
+        return records.stream()
+                .sorted(Comparator.comparing(PlatformAccountInvitationItem::invitedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    @Transactional
+    public PlatformAccountInvitationItem resendInvitation(Long invitationId) {
+        requireSuperAdmin();
+        PlatformAccountInvitationEntity invitation = invitationMapper.selectById(invitationId);
+        if (invitation == null) throw new BadRequestException("邀请记录不存在");
+        if (invitation.getAcceptedAt() != null) throw new BadRequestException("该账号已经激活，不能重新发送邀请");
+        if (invitation.getRevokedAt() != null) throw new BadRequestException("该邀请已撤销，请从账号管理重新发起邀请");
+        String status = invitationStatus(invitation, LocalDateTime.now());
+        if (!"FAILED".equals(status) && !"EXPIRED".equals(status)) {
+            throw new BadRequestException("当前邀请仍有效，无需重复发送");
+        }
+        UserEntity user = userMapper.selectById(invitation.getUserId());
+        if (user == null) throw new BadRequestException("被邀请账号不存在");
+        return createInvitation(new CreatePlatformAccountInvitationRequest(
+                user.getDisplayName(), user.getEmail(), null, user.getRoleCode()));
+    }
+
+    @Transactional
+    public PlatformAccountInvitationItem revokeInvitation(Long invitationId) {
+        requireSuperAdmin();
+        PlatformAccountInvitationEntity invitation = invitationMapper.selectById(invitationId);
+        if (invitation == null) throw new BadRequestException("邀请记录不存在");
+        if (invitation.getAcceptedAt() != null) throw new BadRequestException("该账号已经激活，不能撤销邀请");
+        if (invitation.getRevokedAt() == null) {
+            LocalDateTime now = LocalDateTime.now();
+            PlatformAccountInvitationEntity patch = new PlatformAccountInvitationEntity();
+            patch.setRevokedAt(now);
+            patch.setUpdatedAt(now);
+            invitationMapper.update(patch, new LambdaUpdateWrapper<PlatformAccountInvitationEntity>()
+                    .eq(PlatformAccountInvitationEntity::getId, invitationId)
+                    .isNull(PlatformAccountInvitationEntity::getAcceptedAt)
+                    .isNull(PlatformAccountInvitationEntity::getRevokedAt));
+            invitation.setRevokedAt(now);
+        }
+        UserEntity user = userMapper.selectById(invitation.getUserId());
+        if (user == null) throw new BadRequestException("被邀请账号不存在");
+        UserEntity operator = invitation.getCreatedBy() == null ? null : userMapper.selectById(invitation.getCreatedBy());
+        return toItem(invitation, user, "REVOKED", operator == null ? "系统" : operator.getDisplayName(), "MANUAL");
     }
 
     public AccountActivationInfo validateInvitation(String rawToken) {
@@ -208,12 +295,44 @@ public class PlatformAccountInvitationService {
     private PlatformAccountInvitationItem toItem(
             PlatformAccountInvitationEntity invitation,
             UserEntity user,
-            String status
+            String status,
+            String operatorName,
+            String source
     ) {
         return new PlatformAccountInvitationItem(
                 invitation.getId(), user.getId(), user.getEmail(), user.getDisplayName(),
-                user.getRoleCode(), status, invitation.getExpiresAt()
+                user.getRoleCode(), status, invitation.getCreatedAt(), invitation.getExpiresAt(),
+                operatorName, source, invitation.getSendError()
         );
+    }
+
+    private PlatformAccountInvitationItem toBatchItem(UserEntity user) {
+        return new PlatformAccountInvitationItem(
+                -user.getId(), user.getId(), user.getEmail(), user.getDisplayName(),
+                user.getRoleCode(), "ACTIVATED", user.getCreatedAt(), null,
+                "平台管理员", "BATCH", null
+        );
+    }
+
+    private String invitationStatus(PlatformAccountInvitationEntity invitation, LocalDateTime now) {
+        if (invitation.getAcceptedAt() != null) return "ACTIVATED";
+        if (invitation.getRevokedAt() != null) return "REVOKED";
+        if (invitation.getSendStatus() != null && !invitation.getSendStatus().isBlank()) {
+            if ("SENT".equals(invitation.getSendStatus())
+                    && invitation.getExpiresAt() != null
+                    && !invitation.getExpiresAt().isAfter(now)) {
+                return "EXPIRED";
+            }
+            return invitation.getSendStatus();
+        }
+        if (invitation.getExpiresAt() != null && !invitation.getExpiresAt().isAfter(now)) return "EXPIRED";
+        return "SENT";
+    }
+
+    private String normalizeSendError(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) return "邮件发送失败，请检查 SMTP 配置后重试";
+        return message.length() > 500 ? message.substring(0, 500) : message;
     }
 
     private void validatePassword(String password) {

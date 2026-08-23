@@ -11,6 +11,7 @@ import com.company.autoplatform.user.UserEntity;
 import com.company.autoplatform.user.UserMapper;
 import com.company.autoplatform.user.UserService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
+import com.company.autoplatform.workspace.WorkspaceAccessSupport;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -36,6 +38,7 @@ public class TestVersionService {
 
     private final TestVersionMapper versionMapper;
     private final TestRequirementMapper requirementMapper;
+    private final TestRequirementCaseMapper requirementCaseMapper;
     private final TestPlanMapper planMapper;
     private final TestPlanCaseMapper planCaseMapper;
     private final TestPlanReportMapper planReportMapper;
@@ -43,6 +46,7 @@ public class TestVersionService {
     private final UserMapper userMapper;
     private final UserService userService;
     private final TestManagementWorkspaceSupport workspaceSupport;
+    private final WorkspaceAccessSupport workspaceAccessSupport;
     private final TestActivityLogService activityLogService;
     private final TestRequirementService requirementService;
     private final TestPlanService planService;
@@ -51,6 +55,7 @@ public class TestVersionService {
     public TestVersionService(
             TestVersionMapper versionMapper,
             TestRequirementMapper requirementMapper,
+            TestRequirementCaseMapper requirementCaseMapper,
             TestPlanMapper planMapper,
             TestPlanCaseMapper planCaseMapper,
             TestPlanReportMapper planReportMapper,
@@ -58,6 +63,7 @@ public class TestVersionService {
             UserMapper userMapper,
             UserService userService,
             TestManagementWorkspaceSupport workspaceSupport,
+            WorkspaceAccessSupport workspaceAccessSupport,
             TestActivityLogService activityLogService,
             TestRequirementService requirementService,
             TestPlanService planService,
@@ -65,6 +71,7 @@ public class TestVersionService {
     ) {
         this.versionMapper = versionMapper;
         this.requirementMapper = requirementMapper;
+        this.requirementCaseMapper = requirementCaseMapper;
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
         this.planReportMapper = planReportMapper;
@@ -72,6 +79,7 @@ public class TestVersionService {
         this.userMapper = userMapper;
         this.userService = userService;
         this.workspaceSupport = workspaceSupport;
+        this.workspaceAccessSupport = workspaceAccessSupport;
         this.activityLogService = activityLogService;
         this.requirementService = requirementService;
         this.planService = planService;
@@ -254,12 +262,22 @@ public class TestVersionService {
         TestManagementStateMachine.requireVersionTransition(current, request.targetStatus());
         requireTransitionReason(current, request.targetStatus(), request.force(), request.reason());
 
-        List<Map<String, Object>> failedChecks = qualityChecks(entity, request.targetStatus());
+        List<TestQualityGateCheck> qualityGateSnapshot = request.targetStatus() == VersionStatus.PENDING_RELEASE
+                || request.targetStatus() == VersionStatus.RELEASED
+                ? qualityGateChecks(entity)
+                : List.of();
+        List<Map<String, Object>> failedChecks = request.targetStatus() == VersionStatus.PENDING_RELEASE
+                || request.targetStatus() == VersionStatus.RELEASED
+                ? qualityGateSnapshot.stream().filter(item -> !item.passed()).map(item -> failedCheck(item.key(), item.target(), item.actual())).toList()
+                : qualityChecks(entity, request.targetStatus());
         if (!failedChecks.isEmpty() && !request.force()) {
             throw TestManagementException.qualityGate("版本未达到状态推进条件", failedChecks);
         }
         if (!failedChecks.isEmpty() && blankToNull(request.reason()) == null) {
             throw TestManagementException.validation("强制推进必须填写原因");
+        }
+        if (request.force()) {
+            workspaceAccessSupport.requirePermission(workspaceCode, "test_management.force_release");
         }
 
         entity.setStatus(request.targetStatus());
@@ -275,6 +293,7 @@ public class TestVersionService {
         detail.put("force", request.force());
         detail.put("reason", blankToNull(request.reason()));
         if (!failedChecks.isEmpty()) detail.put("bypassedChecks", failedChecks);
+        if (request.targetStatus() == VersionStatus.RELEASED) detail.put("qualityGateSnapshot", qualityGateSnapshot);
         activityLogService.record(
                 entity.getWorkspaceId(), ActivityEntityType.VERSION, entity.getId(),
                 "VERSION_STATUS_CHANGED", "变更版本状态", detail
@@ -319,6 +338,12 @@ public class TestVersionService {
                         .isNull(TestRequirementEntity::getDeletedAt));
         Map<Long, Long> requirementCounts = requirements.stream()
                 .collect(Collectors.groupingBy(TestRequirementEntity::getVersionId, Collectors.counting()));
+        List<Long> requirementIds = requirements.stream().map(TestRequirementEntity::getId).toList();
+        Map<Long, List<TestRequirementCaseEntity>> requirementCases = requirementIds.isEmpty()
+                ? Map.of()
+                : requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>()
+                        .in(TestRequirementCaseEntity::getRequirementId, requirementIds))
+                .stream().collect(Collectors.groupingBy(TestRequirementCaseEntity::getRequirementId));
         List<TestPlanEntity> plans = planMapper.selectList(
                 new LambdaQueryWrapper<TestPlanEntity>()
                         .in(TestPlanEntity::getVersionId, versionIds)
@@ -333,6 +358,12 @@ public class TestVersionService {
                 : planCaseMapper.selectList(new LambdaQueryWrapper<TestPlanCaseEntity>()
                         .in(TestPlanCaseEntity::getPlanId, planIds))
                 .stream().collect(Collectors.groupingBy(TestPlanCaseEntity::getPlanId));
+        Set<Long> signedPlanIds = planIds.isEmpty()
+                ? Set.of()
+                : planReportMapper.selectList(new LambdaQueryWrapper<TestPlanReportEntity>()
+                        .in(TestPlanReportEntity::getPlanId, planIds)
+                        .eq(TestPlanReportEntity::getStatus, PlanReportStatus.SIGNED))
+                .stream().map(TestPlanReportEntity::getPlanId).collect(Collectors.toSet());
         Map<Long, List<BugEntity>> bugsByVersion = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
                         .in(BugEntity::getTestVersionId, versionIds))
                 .stream().collect(Collectors.groupingBy(BugEntity::getTestVersionId));
@@ -352,6 +383,14 @@ public class TestVersionService {
             long passedCount = versionCases.stream()
                     .filter(item -> item.getExecutionStatus() == PlanCaseExecutionStatus.PASSED)
                     .count();
+            List<TestQualityGateCheck> qualityGateChecks = buildQualityGateChecks(
+                    requirements.stream().filter(item -> entity.getId().equals(item.getVersionId())).toList(),
+                    versionPlans,
+                    casesByPlan,
+                    versionBugs,
+                    requirementCases,
+                    signedPlanIds
+            );
             return new TestVersionResponse(
                     entity.getId(), entity.getVersionNo(), entity.getName(), entity.getVersionType(), entity.getStatus(),
                     entity.getOwnerId(), owner == null ? null : owner.getDisplayName(),
@@ -360,6 +399,7 @@ public class TestVersionService {
                     versionCases.size(), executedCount, passedCount,
                     versionBugs.stream().filter(item -> isOpenPriority(item, "P0")).count(),
                     versionBugs.stream().filter(item -> isOpenPriority(item, "P1")).count(),
+                    qualityGateChecks,
                     entity.getLockVersion(),
                     workspace == null ? null : workspace.getWorkspaceCode(),
                     workspace == null ? null : workspace.getWorkspaceName(),
@@ -376,55 +416,91 @@ public class TestVersionService {
                     .isNull(TestRequirementEntity::getDeletedAt));
             if (requirementCount == 0) failures.add(failedCheck("REQUIREMENT_COUNT", 1, 0));
         }
-        if (target != VersionStatus.PENDING_RELEASE) return failures;
+        return failures;
+    }
 
+    private List<TestQualityGateCheck> qualityGateChecks(TestVersionEntity version) {
+        List<TestRequirementEntity> requirements = requirementMapper.selectList(new LambdaQueryWrapper<TestRequirementEntity>()
+                .eq(TestRequirementEntity::getVersionId, version.getId())
+                .isNull(TestRequirementEntity::getDeletedAt));
+        List<Long> requirementIds = requirements.stream().map(TestRequirementEntity::getId).toList();
+        Map<Long, List<TestRequirementCaseEntity>> requirementCases = requirementIds.isEmpty()
+                ? Map.of()
+                : requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>()
+                        .in(TestRequirementCaseEntity::getRequirementId, requirementIds))
+                .stream().collect(Collectors.groupingBy(TestRequirementCaseEntity::getRequirementId));
         List<TestPlanEntity> plans = planMapper.selectList(new LambdaQueryWrapper<TestPlanEntity>()
                 .eq(TestPlanEntity::getVersionId, version.getId())
-                .isNull(TestPlanEntity::getDeletedAt)
-                .ne(TestPlanEntity::getStatus, PlanStatus.CANCELLED));
-        if (plans.isEmpty()) {
-            failures.add(failedCheck("COMPLETED_PLAN_COUNT", 1, 0));
-            return failures;
-        }
-        long completedPlans = plans.stream().filter(plan -> plan.getStatus() == PlanStatus.COMPLETED).count();
-        if (completedPlans != plans.size()) failures.add(failedCheck("ALL_PLANS_COMPLETED", plans.size(), completedPlans));
+                .isNull(TestPlanEntity::getDeletedAt));
+        List<Long> planIds = plans.stream().map(TestPlanEntity::getId).toList();
+        Map<Long, List<TestPlanCaseEntity>> casesByPlan = planIds.isEmpty()
+                ? Map.of()
+                : planCaseMapper.selectList(new LambdaQueryWrapper<TestPlanCaseEntity>()
+                        .in(TestPlanCaseEntity::getPlanId, planIds))
+                .stream().collect(Collectors.groupingBy(TestPlanCaseEntity::getPlanId));
+        Set<Long> signedPlanIds = planIds.isEmpty()
+                ? Set.of()
+                : planReportMapper.selectList(new LambdaQueryWrapper<TestPlanReportEntity>()
+                        .in(TestPlanReportEntity::getPlanId, planIds)
+                        .eq(TestPlanReportEntity::getStatus, PlanReportStatus.SIGNED))
+                .stream().map(TestPlanReportEntity::getPlanId).collect(Collectors.toSet());
+        List<BugEntity> bugs = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+                .eq(BugEntity::getTestVersionId, version.getId()));
+        return buildQualityGateChecks(requirements, plans, casesByPlan, bugs, requirementCases, signedPlanIds);
+    }
 
-        for (TestPlanEntity plan : plans) {
-            List<TestPlanCaseEntity> cases = planCaseMapper.selectList(new LambdaQueryWrapper<TestPlanCaseEntity>()
-                    .eq(TestPlanCaseEntity::getPlanId, plan.getId()));
-            long executed = cases.stream().filter(item -> item.getExecutionStatus() != PlanCaseExecutionStatus.PENDING).count();
-            long passed = cases.stream().filter(item -> item.getExecutionStatus() == PlanCaseExecutionStatus.PASSED).count();
-            BigDecimal executeRate = rate(executed, cases.size());
-            BigDecimal passRate = rate(passed, executed);
-            if (executeRate.compareTo(plan.getMinExecuteRate()) < 0) {
-                failures.add(failedCheck("PLAN_EXECUTION_RATE:" + plan.getId(), plan.getMinExecuteRate(), executeRate));
-            }
-            if (passRate.compareTo(plan.getMinPassRate()) < 0) {
-                failures.add(failedCheck("PLAN_PASS_RATE:" + plan.getId(), plan.getMinPassRate(), passRate));
-            }
-            if (Boolean.TRUE.equals(plan.getOwnerConfirmRequired())) {
-                long signed = planReportMapper.selectCount(new LambdaQueryWrapper<TestPlanReportEntity>()
-                        .eq(TestPlanReportEntity::getPlanId, plan.getId())
-                        .eq(TestPlanReportEntity::getStatus, PlanReportStatus.SIGNED));
-                if (signed == 0) failures.add(failedCheck("PLAN_REPORT_SIGNED:" + plan.getId(), 1, 0));
-            }
-        }
+    private List<TestQualityGateCheck> buildQualityGateChecks(
+            List<TestRequirementEntity> requirements,
+            List<TestPlanEntity> plans,
+            Map<Long, List<TestPlanCaseEntity>> casesByPlan,
+            List<BugEntity> bugs,
+            Map<Long, List<TestRequirementCaseEntity>> requirementCases,
+            Set<Long> signedPlanIds
+    ) {
+        List<TestPlanEntity> activePlans = plans.stream()
+                .filter(plan -> plan.getStatus() != PlanStatus.CANCELLED)
+                .toList();
+        long completedPlans = activePlans.stream().filter(plan -> plan.getStatus() == PlanStatus.COMPLETED).count();
+        long signedReports = activePlans.stream().filter(plan -> signedPlanIds.contains(plan.getId())).count();
+        long coveredRequirements = requirements.stream().filter(requirement -> {
+            List<TestRequirementCaseEntity> relations = requirementCases.getOrDefault(requirement.getId(), List.of());
+            return !relations.isEmpty() && relations.stream().allMatch(item -> item.getReviewStatus() == RequirementReviewStatus.PASSED);
+        }).count();
+        BigDecimal requirementCoverRate = rate(coveredRequirements, requirements.size());
+        List<TestPlanCaseEntity> cases = activePlans.stream()
+                .flatMap(plan -> casesByPlan.getOrDefault(plan.getId(), List.of()).stream())
+                .toList();
+        long executed = cases.stream().filter(item -> item.getExecutionStatus() != PlanCaseExecutionStatus.PENDING).count();
+        long passed = cases.stream().filter(item -> item.getExecutionStatus() == PlanCaseExecutionStatus.PASSED).count();
+        BigDecimal executeRate = rate(executed, cases.size());
+        BigDecimal passRate = rate(passed, executed);
+        long p0 = bugs.stream().filter(item -> isOpenPriority(item, "P0")).count();
+        long p1 = bugs.stream().filter(item -> isOpenPriority(item, "P1")).count();
+        int expectedPlanCount = Math.max(1, activePlans.size());
+        return List.of(
+                qualityCheck(activePlans.isEmpty() ? "COMPLETED_PLAN_COUNT" : "ALL_PLANS_COMPLETED", "计划完成情况", expectedPlanCount, completedPlans,
+                        !activePlans.isEmpty() && completedPlans == activePlans.size()),
+                qualityCheck("REPORT_SIGNED", "报告签署", expectedPlanCount, signedReports,
+                        !activePlans.isEmpty() && signedReports == activePlans.size()),
+                qualityCheck("REQUIREMENT_COVER_RATE", "需求覆盖率", BigDecimal.valueOf(100), requirementCoverRate,
+                        !requirements.isEmpty() && requirementCoverRate.compareTo(BigDecimal.valueOf(100)) >= 0),
+                qualityCheck("VERSION_EXECUTION_RATE", "用例执行率", BigDecimal.valueOf(90), executeRate,
+                        executeRate.compareTo(BigDecimal.valueOf(90)) >= 0),
+                qualityCheck("VERSION_PASS_RATE", "用例通过率", BigDecimal.valueOf(85), passRate,
+                        passRate.compareTo(BigDecimal.valueOf(85)) >= 0),
+                qualityCheck("OPEN_P0_DEFECTS", "P0 缺陷", 0, p0, p0 == 0),
+                qualityCheck("OPEN_P1_DEFECTS", "P1 缺陷", 3, p1, p1 <= 3)
+        );
+    }
 
-        List<BugEntity> openBugs = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
-                .eq(BugEntity::getTestVersionId, version.getId())
-                .notIn(BugEntity::getStatus, "CLOSED", "REJECTED"));
-        long p0 = openBugs.stream().filter(item -> "P0".equalsIgnoreCase(item.getPriority())).count();
-        long p1 = openBugs.stream().filter(item -> "P1".equalsIgnoreCase(item.getPriority())).count();
-        if (p0 > 0) failures.add(failedCheck("OPEN_P0_DEFECTS", 0, p0));
-        int maxP1 = plans.stream().map(TestPlanEntity::getMaxP1).filter(Objects::nonNull).min(Integer::compareTo).orElse(0);
-        if (p1 > maxP1) failures.add(failedCheck("OPEN_P1_DEFECTS", maxP1, p1));
-        return failures;
+    private TestQualityGateCheck qualityCheck(String key, String label, Object target, Object actual, boolean passed) {
+        return new TestQualityGateCheck(key, label, target, actual, passed);
     }
 
     private void requireTransitionReason(VersionStatus current, VersionStatus target, boolean force, String reason) {
         boolean backward = (current == VersionStatus.TESTING && target == VersionStatus.DEVELOPING)
                 || (current == VersionStatus.PENDING_RELEASE && target == VersionStatus.TESTING);
-        if ((backward || target == VersionStatus.RELEASED || target == VersionStatus.ARCHIVED || force)
+        if ((backward || target == VersionStatus.ARCHIVED || force)
                 && blankToNull(reason) == null) {
             throw TestManagementException.validation("当前状态变更必须填写原因");
         }

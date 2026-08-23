@@ -30,4 +30,19 @@ public class PlatformAccountInvitationEntity extends BaseEntity {
 
     @TableField("created_by")
     private Long createdBy;
+
+    @TableField("send_status")
+    private String sendStatus;
+
+    @TableField("send_error")
+    private String sendError;
+
+    @TableField("send_attempts")
+    private Integer sendAttempts;
+
+    @TableField("last_send_at")
+    private LocalDateTime lastSendAt;
+
+    @TableField("sent_at")
+    private LocalDateTime sentAt;
 }

@@ -125,6 +125,8 @@
   transition: border-color 150ms ease;
 }
 
+.requirement-management__toolbar > select:first-of-type { width: 90px; flex: 0 0 90px; }
+
 .requirement-management__toolbar > select:focus,
 .requirement-management__picker-toolbar select:focus { border-color: var(--rm-primary); }
 
@@ -147,6 +149,7 @@
   transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
 }
 
+.requirement-management .requirement-management__button { color: #fff; }
 .requirement-management__button.is-ghost { border-color: var(--rm-border); color: var(--rm-secondary); background: #fff; }
 .requirement-management__button.is-ghost:hover { color: var(--rm-text); background: #f4f6fa; }
 .requirement-management__button.is-small { height: 28px; padding: 0 10px; font-size: 12px; }
@@ -291,7 +294,7 @@
 .requirement-management__review-drawer > header > button:hover { color: var(--rm-text); background: #f4f6fa; }
 .requirement-management__dialog > footer { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rm-border); }
 .requirement-management__dialog.is-create > footer { padding-top: 0; border-top: 0; }
-.requirement-management__dialog.is-create > footer .requirement-management__button { height: 28px; font-size: 13px; font-weight: 500; }
+.requirement-management__dialog.is-create > footer .requirement-management__button { height: 28px; padding-right: 10.5px; padding-left: 10.5px; font-size: 13px; font-weight: 500; }
 
 .requirement-management__form { display: flex; flex-direction: column; gap: 14px; }
 .requirement-management__form > div { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }

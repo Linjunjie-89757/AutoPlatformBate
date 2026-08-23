@@ -75,6 +75,7 @@ public class UserDomainService {
         entity.setEmail(email);
         entity.setDisplayName(request.displayName().trim());
         entity.setRoleCode(storedRole);
+        entity.setCreationSource("MANUAL");
         entity.setPassword(userCredentialSupport.encodeDefaultPassword());
         entity.setStatus(1);
         entity.setCreatedAt(LocalDateTime.now());

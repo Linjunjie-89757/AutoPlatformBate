@@ -165,6 +165,7 @@ const executionInitialCaseId = ref<string | null>(null)
 const executionHistory = ref<TestPlanExecutionHistoryItem[]>([])
 const executionEvidence = ref<TestPlanExecutionAttachmentItem[]>([])
 const executionCaseDefects = ref<TestPlanDefectItem[]>([])
+let executionContextRequestSeq = 0
 const isUploadingEvidence = ref(false)
 const defectModalOpen = ref(false)
 const defectInitialCaseId = ref<string | null>(null)
@@ -288,11 +289,47 @@ const mapActivityType = (actionCode: string): TestPlanLogItem['type'] => {
   return 'system'
 }
 
+const planCaseResultLabels: Record<string, string> = {
+  PASSED: '通过',
+  FAILED: '失败',
+  BLOCKED: '阻塞',
+  SKIPPED: '跳过',
+  PENDING: '未执行',
+}
+
+const formatPlanLogDetail = (item: TestActivityItem) => {
+  if (!item.detail) return '—'
+  try {
+    const detail = JSON.parse(item.detail) as Record<string, unknown>
+    const reason = typeof detail.reason === 'string' ? detail.reason.trim() : ''
+    const planCaseId = typeof detail.planCaseId === 'number' ? detail.planCaseId : null
+    const bugId = typeof detail.bugId === 'number' ? detail.bugId : null
+    if (item.actionCode === 'PLAN_CREATED') return typeof detail.planNo === 'string' ? `计划编号：${detail.planNo}` : '测试计划已创建'
+    if (item.actionCode === 'PLAN_COPIED') return typeof detail.sourcePlanNo === 'string' ? `复制自计划：${detail.sourcePlanNo}` : '测试计划副本已创建'
+    if (item.actionCode === 'PLAN_COMPLETED') return detail.force
+      ? `强制完成${reason ? `，原因：${reason}` : ''}`
+      : reason ? `完成原因：${reason}` : '质量检查通过，计划已完成'
+    if (item.actionCode === 'PLAN_CANCELLED') return reason ? `取消原因：${reason}` : '计划已取消'
+    if (item.actionCode === 'PLAN_CASE_RESULT_RECORDED') {
+      const result = typeof detail.status === 'string' ? planCaseResultLabels[detail.status] || detail.status : '—'
+      return `用例 #${planCaseId ?? '—'}，执行结果：${result}`
+    }
+    if (item.actionCode === 'PLAN_CASES_ADDED') return reason ? `添加原因：${reason}` : '已补充测试用例'
+    if (item.actionCode === 'PLAN_CASE_REMOVED') return `用例 #${planCaseId ?? '—'}${reason ? `，移除原因：${reason}` : ''}`
+    if (item.actionCode === 'PLAN_REPORT_SIGNATURE_REVOKED') return reason ? `撤回原因：${reason}` : '报告签署已撤回'
+    if (item.actionCode.includes('DEFECT')) return `用例 #${planCaseId ?? '—'}，缺陷 #${bugId ?? '—'}`
+    if (planCaseId !== null) return `用例 #${planCaseId}`
+  } catch {
+    return item.detail
+  }
+  return item.detail
+}
+
 const mapPlanLog = (item: TestActivityItem): TestPlanLogItem => ({
   id: String(item.id),
   actor: item.actorName || '系统',
   action: item.actionName,
-  detail: item.detail || '—',
+  detail: formatPlanLogDetail(item),
   time: formatTestManagementDateTime(item.createdAt),
   type: mapActivityType(item.actionCode),
 })
@@ -516,8 +553,11 @@ const qualityChecks = computed(() => {
     { label: '用例通过率', target: `≥ ${minPassRate}%`, current: `${currentPassRate}%`, passed: currentPassRate >= minPassRate },
     { label: 'P0 缺陷', target: detail?.allowP0 ? '允许' : '0 个', current: `${p0} 个`, passed: Boolean(detail?.allowP0) || p0 === 0 },
     { label: 'P1 缺陷', target: `≤ ${maxP1} 个`, current: `${p1} 个`, passed: p1 <= maxP1 },
+    { label: '报告签署', target: '已签署', current: reportSigned.value ? '已签署' : '未签署', passed: reportSigned.value },
   ]
 })
+// 报告在计划完成后生成并由负责人签署，因此签署状态属于版本发布准出，不能阻止计划完成。
+const completionQualityChecks = computed(() => qualityChecks.value.filter(item => item.label !== '报告签署'))
 const passedQualityCheckCount = computed(() => qualityChecks.value.filter(item => item.passed).length)
 const caseStatusFilters: Array<{ key: 'all' | TestPlanCaseStatus; label: string }> = [
   { key: 'all', label: '全部' }, { key: 'pending', label: '未执行' }, { key: 'passed', label: '通过' },
@@ -1177,12 +1217,17 @@ const closeExecution = () => {
 
 const loadExecutionCaseContext = async (caseId: string) => {
   if (!selectedPlan.value) return
+  const requestSeq = ++executionContextRequestSeq
+  executionHistory.value = []
+  executionEvidence.value = []
+  executionCaseDefects.value = []
   try {
     const [history, evidence, defects] = await Promise.all([
       testManagementApi.listPlanCaseExecutions(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(caseId)),
       testManagementApi.listPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(caseId)),
       testManagementApi.listPlanCaseDefects(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(caseId)),
     ])
+    if (requestSeq !== executionContextRequestSeq) return
     executionHistory.value = history
     executionEvidence.value = evidence
     executionCaseDefects.value = defects
@@ -1606,6 +1651,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
       <TestPlanExecutionWorkspace
         :plan-name="selectedPlan.name"
         :plan-status="selectedPlan.status"
+        :workspace-code="selectedWorkspaceCode"
         :cases="selectedPlanDetail.cases"
         :defects="planDefectDetails"
         :case-defects="executionCaseDefects"
@@ -1807,7 +1853,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <div v-else-if="detailTab === 'overview'" class="test-plan-management__overview-grid">
           <article class="test-plan-management__overview-card"><h3>整体执行进度</h3><div class="test-plan-management__overview-card-body"><div class="test-plan-management__progress-ring" :style="{ '--rate': `${progressRate(selectedPlan) * 3.6}deg` }"><span><strong>{{ progressRate(selectedPlan) }}%</strong><small>执行率</small></span></div><dl><div><dt><i class="is-success" />已通过</dt><dd class="is-success">{{ selectedPlan.passed }}</dd></div><div><dt><i class="is-danger" />失败</dt><dd class="is-danger">{{ selectedPlan.failed }}</dd></div><div><dt><i class="is-warning" />阻塞</dt><dd class="is-warning">{{ selectedPlan.blockedCases }}</dd></div><div><dt><i />未执行</dt><dd>{{ selectedPlan.scope - selectedPlan.executed }}</dd></div></dl></div></article>
           <article class="test-plan-management__overview-card"><h3>每日执行趋势</h3><TestPlanExecutionTrendChart :items="executionTrend" /></article>
-          <article class="test-plan-management__quality-overview"><header><h3>质量标准完成情况</h3><span>{{ passedQualityCheckCount }}/{{ qualityChecks.length }} 达标</span></header><div><section v-for="checkItem in qualityChecks" :key="checkItem.label" :class="{ 'is-passed': checkItem.passed }"><p><CheckCircle2 v-if="checkItem.passed" :size="14" /><XCircle v-else :size="14" /><strong>{{ checkItem.label }}</strong></p><small>目标：{{ checkItem.target }}</small><b>{{ checkItem.current }}</b></section></div></article>
+          <article class="test-plan-management__quality-overview"><header><h3>质量标准完成情况</h3><span :class="{ 'is-passed': passedQualityCheckCount === qualityChecks.length }">{{ passedQualityCheckCount === qualityChecks.length ? '全部达标' : `${passedQualityCheckCount}/${qualityChecks.length} 达标` }}</span></header><div><section v-for="checkItem in qualityChecks" :key="checkItem.label" :class="{ 'is-passed': checkItem.passed }"><p><CheckCircle2 v-if="checkItem.passed" :size="14" /><XCircle v-else :size="14" /><strong>{{ checkItem.label }}</strong></p><small>目标：{{ checkItem.target }}</small><b>{{ checkItem.current }}</b></section></div></article>
         </div>
 
         <div v-else-if="detailTab === 'cases'" class="test-plan-management__cases-view">
@@ -1868,7 +1914,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
       v-if="actionDialogTarget"
       :action="actionDialogTarget.action"
       :plan-name="actionDialogTarget.plan.name"
-      :quality-checks="actionDialogTarget.action === 'complete' ? qualityChecks : []"
+      :quality-checks="actionDialogTarget.action === 'complete' ? completionQualityChecks : []"
       :submitting="isSubmitting"
       :error-message="actionDialogError"
       @close="closeActionDialog"

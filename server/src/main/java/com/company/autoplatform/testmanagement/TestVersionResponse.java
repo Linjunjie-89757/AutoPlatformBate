@@ -2,6 +2,7 @@ package com.company.autoplatform.testmanagement;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record TestVersionResponse(
         Long id,
@@ -22,6 +23,7 @@ public record TestVersionResponse(
         long passedCount,
         long openP0Count,
         long openP1Count,
+        List<TestQualityGateCheck> qualityGateChecks,
         Integer lockVersion,
         String workspaceCode,
         String workspaceName,

@@ -25,6 +25,7 @@ import { useRouter } from 'vue-router'
 import { platformAdminApi } from '@/entities/platform-admin'
 import { userApi, type UserItem } from '@/entities/user'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import PlatformInviteRecordsPanel from './components/PlatformInviteRecordsPanel.vue'
 
 type AccountFilter = 'all' | 'active' | 'disabled'
 type AccountRole = 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER'
@@ -57,6 +58,10 @@ const accounts = ref<AccountRow[]>([])
 const pendingApprovalTotal = ref(0)
 const inviteOpen = ref(false)
 const batchOpen = ref(false)
+const activeTab = ref<'accounts' | 'invites'>('accounts')
+const inviteRecordTotal = ref(0)
+const inviteFailedTotal = ref(0)
+const invitePanelKey = ref(0)
 
 const navigationItems: NavigationItem[] = [
   { key: 'overview', label: '平台概览', icon: LayoutDashboard },
@@ -105,6 +110,14 @@ async function loadAccounts() {
       String(user.roleCode).toUpperCase() === 'SUPER_ADMIN' ? workspaces.length : undefined,
     ))
     pendingApprovalTotal.value = overview.pendingApprovalTotal
+    try {
+      const invitations = await platformAdminApi.getAccountInvitations()
+      inviteRecordTotal.value = invitations.length
+      inviteFailedTotal.value = invitations.filter(item => String(item.status).toUpperCase() === 'FAILED').length
+    } catch {
+      inviteRecordTotal.value = 0
+      inviteFailedTotal.value = 0
+    }
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
@@ -181,6 +194,12 @@ function mergeImportedUsers(rows: UserItem[]) {
   accounts.value = [...mapped, ...accounts.value.filter(account => !mapped.some(item => item.id === account.id))]
 }
 
+function refreshMemberRecords(rows?: UserItem[]) {
+  if (rows?.length) mergeImportedUsers(rows)
+  invitePanelKey.value += 1
+  void loadAccounts()
+}
+
 function closeInvite() {
   inviteOpen.value = false
 }
@@ -238,7 +257,7 @@ onMounted(() => {
       <div v-else class="platform-accounts-page__content">
         <section class="platform-accounts-page__card">
           <header class="platform-accounts-page__card-header">
-            <h1>账号管理（共 {{ accounts.length }} 个账号）</h1>
+            <h1>账号管理</h1>
             <div class="platform-accounts-page__header-actions">
               <button type="button" class="platform-accounts-page__secondary-button" @click="batchOpen = true">
                 <Upload :size="12" />
@@ -251,7 +270,17 @@ onMounted(() => {
             </div>
           </header>
 
-          <div class="platform-accounts-page__toolbar">
+          <div class="platform-accounts-page__tabs" role="tablist" aria-label="账号管理视图">
+            <button type="button" role="tab" :aria-selected="activeTab === 'accounts'" :class="{ 'is-active': activeTab === 'accounts' }" @click="activeTab = 'accounts'">
+              账号列表（{{ accounts.length }}）
+            </button>
+            <button type="button" role="tab" :aria-selected="activeTab === 'invites'" :class="{ 'is-active': activeTab === 'invites' }" @click="activeTab = 'invites'">
+              成员记录（{{ inviteRecordTotal }}）
+              <span v-if="inviteFailedTotal > 0" class="platform-accounts-page__tab-badge">{{ inviteFailedTotal }}</span>
+            </button>
+          </div>
+
+          <div v-if="activeTab === 'accounts'" class="platform-accounts-page__toolbar">
             <label class="platform-accounts-page__search">
               <Search :size="13" aria-hidden="true" />
               <input v-model="query" type="search" placeholder="搜索姓名或邮箱…" aria-label="搜索姓名或邮箱" />
@@ -274,7 +303,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="platform-accounts-page__table" role="table" aria-label="平台账号列表">
+          <div v-if="activeTab === 'accounts'" class="platform-accounts-page__table" role="table" aria-label="平台账号列表">
             <div class="platform-accounts-page__table-row platform-accounts-page__table-head" role="row">
               <div role="columnheader">用户</div>
               <div role="columnheader">邮箱</div>
@@ -339,12 +368,14 @@ onMounted(() => {
               <span>调整搜索条件或切换状态筛选后重试</span>
             </div>
           </div>
+
+          <PlatformInviteRecordsPanel v-else :key="invitePanelKey" @stats="(total, failed) => { inviteRecordTotal = total; inviteFailedTotal = failed }" />
         </section>
       </div>
     </section>
 
-    <InviteAccountModal v-if="inviteOpen" @close="closeInvite" @done="loadAccounts" />
-    <BatchImportModal v-if="batchOpen" @close="closeBatch" @done="mergeImportedUsers" />
+    <InviteAccountModal v-if="inviteOpen" @close="closeInvite" @done="refreshMemberRecords" />
+    <BatchImportModal v-if="batchOpen" @close="closeBatch" @done="refreshMemberRecords" />
   </div>
 </template>
 
@@ -387,7 +418,8 @@ const InviteAccountModal = defineComponent({
     const email = vueRef('')
     const department = vueRef('')
     const role = vueRef<'MEMBER' | 'ADMIN' | 'SUPER_ADMIN'>('MEMBER')
-    const step = vueRef<'form' | 'success'>('form')
+    const step = vueRef<'form' | 'success' | 'failed'>('form')
+    const inviteResult = vueRef<Awaited<ReturnType<typeof modalPlatformAdminApi.createAccountInvitation>> | null>(null)
     const submitting = vueRef(false)
     const errors = vueRef<{ name?: string; email?: string }>({})
 
@@ -400,14 +432,15 @@ const InviteAccountModal = defineComponent({
       if (Object.keys(nextErrors).length) return
       submitting.value = true
       try {
-        await modalPlatformAdminApi.createAccountInvitation({
+        const result = await modalPlatformAdminApi.createAccountInvitation({
           email: email.value.trim(),
           displayName: name.value.trim(),
           department: department.value.trim() || undefined,
           roleCode: role.value,
         })
+        inviteResult.value = result
         emit('done')
-        step.value = 'success'
+        step.value = result.status === 'FAILED' ? 'failed' : 'success'
       } catch (error) {
         ElMessage.error(getModalRequestErrorMessage(error))
       } finally {
@@ -424,12 +457,20 @@ const InviteAccountModal = defineComponent({
           ]),
           h('button', { type: 'button', class: 'platform-accounts-page__close-button', 'aria-label': '关闭', onClick: () => emit('close') }, [h(X, { size: 18 })]),
         ]),
-        step.value === 'success'
+        step.value === 'failed'
+          ? h('div', { class: 'platform-accounts-page__success-body is-failed' }, [
+              h('div', { class: 'platform-accounts-page__success-icon is-failed' }, [h(AlertTriangle, { size: 28 })]),
+              h('strong', '账号已创建，但邮件发送失败'),
+              h('span', ['邀请记录已保存，可在“成员记录”中重新发送至 ', h('b', email.value)]),
+              inviteResult.value?.failReason ? h('small', inviteResult.value.failReason) : h('small', '请检查平台管理的消息与通知中的 SMTP 配置'),
+              h('button', { type: 'button', class: 'platform-accounts-page__success-button', onClick: () => emit('close') }, '完成'),
+            ])
+          : step.value === 'success'
           ? h('div', { class: 'platform-accounts-page__success-body' }, [
               h('div', { class: 'platform-accounts-page__success-icon' }, [h(CheckCircle2, { size: 28 })]),
               h('strong', '邀请邮件已发送'),
               h('span', ['激活链接已发送至 ', h('b', email.value)]),
-              h('small', '用户需在 24 小时内打开链接设置密码并激活账号'),
+              h('small', '用户需在 48 小时内打开链接设置密码并激活账号'),
               h('button', { type: 'button', class: 'platform-accounts-page__success-button', onClick: () => emit('close') }, '完成'),
             ])
           : h('div', { class: 'platform-accounts-page__modal-body' }, [
@@ -566,21 +607,41 @@ const BatchImportModal = defineComponent({
             ])
           : step.value === 'preview'
             ? h('div', { class: 'platform-accounts-page__preview-shell' }, [
-                h('div', { class: 'platform-accounts-page__preview-body' }, [
+                h('div', {
+                  class: 'platform-accounts-page__preview-body',
+                  style: {
+                    height: `${190 + Math.max(0, rows.value.length - 1) * 42 + (rows.value.some(row => !row.valid) ? 26.5 : 0)}px`,
+                    flexBasis: `${190 + Math.max(0, rows.value.length - 1) * 42 + (rows.value.some(row => !row.valid) ? 26.5 : 0)}px`,
+                  },
+                }, [
                   h('div', { class: 'platform-accounts-page__preview-metrics' }, [
                     h('div', { class: 'platform-accounts-page__preview-metric is-valid' }, [h('strong', rows.value.filter(row => row.valid).length), h('span', '可导入')]),
-                    h('div', { class: 'platform-accounts-page__preview-metric is-error' }, [h('strong', rows.value.filter(row => !row.valid).length), h('span', '数据异常')]),
+                    h('div', {
+                      class: ['platform-accounts-page__preview-metric', 'is-error', { 'has-errors': rows.value.some(row => !row.valid) }],
+                    }, [h('strong', rows.value.filter(row => !row.valid).length), h('span', '数据异常')]),
                     h('div', { class: 'platform-accounts-page__preview-metric is-total' }, [h('strong', rows.value.length), h('span', '共识别')]),
                   ]),
-                  h('div', { class: 'platform-accounts-page__preview-table' }, [
+                  h('div', {
+                    class: 'platform-accounts-page__preview-table',
+                    style: {
+                      height: `${76.5 + Math.max(0, rows.value.length - 1) * 42}px`,
+                      maxHeight: `${76.5 + Math.max(0, rows.value.length - 1) * 42}px`,
+                      flexBasis: `${76.5 + Math.max(0, rows.value.length - 1) * 42}px`,
+                    },
+                  }, [
                     h('div', { class: 'platform-accounts-page__preview-row is-head' }, [h('span', '姓名'), h('span', '邮箱'), h('span', '部门'), h('span', '状态')]),
-                    ...rows.value.map(row => h('div', { class: 'platform-accounts-page__preview-row' }, [
+                    ...rows.value.map(row => h('div', {
+                      class: ['platform-accounts-page__preview-row', { 'is-invalid': !row.valid }],
+                    }, [
                       h('span', row.displayName || '-'),
                       h('span', row.email || '-'),
                       h('span', row.department || '-'),
-                      h('small', { class: row.valid ? 'is-valid' : 'is-error' }, row.error || '正常'),
+                      h('small', { class: row.valid ? 'is-valid' : 'is-error', title: row.error }, row.valid ? '正常' : '异常'),
                     ])),
                   ]),
+                  rows.value.some(row => !row.valid)
+                    ? h('div', { class: 'platform-accounts-page__preview-note' }, `异常行将被跳过，仅导入状态正常的 ${rows.value.filter(row => row.valid).length} 条记录。`)
+                    : null,
                 ]),
                 h('div', { class: 'platform-accounts-page__preview-footer' }, [
                   h('button', { type: 'button', class: 'platform-accounts-page__modal-cancel', onClick: () => { step.value = 'edit' } }, '← 返回修改'),
@@ -646,6 +707,10 @@ const BatchImportModal = defineComponent({
 .platform-accounts-page__card-header { display:flex; height:65px; align-items:center; justify-content:space-between; padding:0 20px; border-bottom:1px solid #e5e6eb; }
 .platform-accounts-page__card-header h1 { margin:0; color:#1d2129; font-size:14px; font-weight:700; line-height:21px; }
 .platform-accounts-page__header-actions { display:flex; gap:8px; align-items:flex-start; }
+.platform-accounts-page__tabs { display:flex; height:45px; align-items:stretch; border-bottom:1px solid #e5e6eb; }
+.platform-accounts-page__tabs button { position:relative; display:inline-flex; height:45px; align-items:center; gap:6px; padding:11px 20px; border:0; border-bottom:2px solid transparent; background:transparent; color:#86909c; cursor:pointer; font-size:13px; font-weight:400; line-height:19.5px; }
+.platform-accounts-page__tabs button.is-active { border-bottom-color:#db2777; color:#db2777; font-weight:700; }
+.platform-accounts-page__tab-badge { display:inline-flex; min-width:16px; height:16px; align-items:center; justify-content:center; padding:0 4px; border-radius:8px; background:#f53f3f; color:#fff; font-size:10px; font-weight:700; line-height:15px; }
 .platform-accounts-page__secondary-button,.platform-accounts-page__primary-button { display:inline-flex; height:32px; align-items:center; gap:5px; padding:0 14px; border-radius:8px; cursor:pointer; font-size:12px; line-height:18px; white-space:nowrap; }
 .platform-accounts-page__secondary-button { border:1px solid #e5e6eb; background:#fff; color:#4e5969; font-weight:500; }
 .platform-accounts-page__primary-button { border:0; background:#db2777; color:#fff; font-weight:600; }
@@ -735,9 +800,11 @@ const BatchImportModal = defineComponent({
 .platform-accounts-page__success-body { display:flex; min-height:295.5px; align-items:center; flex-direction:column; padding:40px 24px; }
 .platform-accounts-page__success-body.is-batch { height:310.5px; min-height:310.5px; padding:48px 24px; }
 .platform-accounts-page__success-icon { display:flex; width:60px; height:60px; align-items:center; justify-content:center; border-radius:30px; background:#e8ffea; color:#00b42a; }
+.platform-accounts-page__success-icon.is-failed { background:#fff0f0; color:#f53f3f; }
 .platform-accounts-page__success-body > strong { margin-top:16px; color:#1d2129; font-size:16px; font-weight:700; line-height:24px; }
 .platform-accounts-page__success-body > span { margin-top:8px; color:#86909c; font-size:13px; line-height:19.5px; text-align:center; }
 .platform-accounts-page__success-body > small { margin-top:4px; color:#c9cdd4; font-size:12px; line-height:18px; text-align:center; }
+.platform-accounts-page__success-body.is-failed > small { color:#f53f3f; }
 .platform-accounts-page__success-body b { color:#1d2129; font-weight:700; }
 .platform-accounts-page__success-button { width:90px; height:38px; margin-top:28px; border:0; border-radius:9px; background:#db2777; color:#fff; cursor:pointer; font-size:13px; font-weight:600; }
 .platform-accounts-page__success-body.is-batch .platform-accounts-page__success-button { background:#165dff; }
@@ -767,7 +834,7 @@ const BatchImportModal = defineComponent({
 .platform-accounts-page__batch-actions .platform-accounts-page__modal-submit { flex:0 0 auto; padding:0 24px; border:0; background:#165dff; }
 .platform-accounts-page__batch-actions .platform-accounts-page__modal-submit:disabled { border-color:#c9cdd4; background:#c9cdd4; opacity:1; }
 .platform-accounts-page__preview-shell { display:flex; flex-direction:column; }
-.platform-accounts-page__preview-body { display:flex; height:191px; flex:0 0 191px; flex-direction:column; overflow:hidden; padding:16px 24px; }
+.platform-accounts-page__preview-body { display:flex; height:190px; flex:0 0 190px; flex-direction:column; overflow:hidden; padding:16px 24px 14.5px; }
 .platform-accounts-page__preview-metrics { display:flex; width:100%; height:67px; flex:0 0 67px; gap:12px; }
 .platform-accounts-page__preview-metric { display:flex; min-width:0; flex:1; align-items:center; flex-direction:column; padding:10px 16px; border-radius:10px; }
 .platform-accounts-page__preview-metric strong { font-size:20px; font-weight:700; line-height:30px; }
@@ -776,17 +843,21 @@ const BatchImportModal = defineComponent({
 .platform-accounts-page__preview-metric.is-valid strong { color:#00b42a; }
 .platform-accounts-page__preview-metric.is-error { background:#f2f3f5; }
 .platform-accounts-page__preview-metric.is-error strong { color:#c9cdd4; }
+.platform-accounts-page__preview-metric.is-error.has-errors { background:#fff0f0; }
+.platform-accounts-page__preview-metric.is-error.has-errors strong { color:#f53f3f; }
 .platform-accounts-page__preview-metric.is-total { background:#f4f6fa; }
 .platform-accounts-page__preview-metric.is-total strong { color:#1d2129; }
 .platform-accounts-page__preview-table { display:flex; height:76.5px; max-height:76.5px; flex:0 0 76.5px; flex-direction:column; margin-top:16px; overflow-x:hidden; overflow-y:auto; border:1px solid #e5e6eb; border-radius:10px; }
 .platform-accounts-page__preview-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr) minmax(0,1fr) 80px; min-height:42px; align-items:center; padding:0 14px; border-top:1px solid #e5e6eb; color:#86909c; font-size:12px; line-height:18px; }
+.platform-accounts-page__preview-row.is-invalid { background:#fff8f8; }
 .platform-accounts-page__preview-row.is-head { min-height:32.5px; border-top:0; background:#f4f6fa; color:#86909c; font-size:11px; font-weight:600; line-height:16.5px; text-transform:uppercase; }
 .platform-accounts-page__preview-row > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .platform-accounts-page__preview-row:not(.is-head) > span:first-child { color:#1d2129; }
 .platform-accounts-page__preview-row small { justify-self:start; padding:0 7px; border-radius:10px; font-size:10px; font-weight:600; line-height:16px; white-space:nowrap; }
 .platform-accounts-page__preview-row small.is-valid { background:#e8ffea; color:#00b42a; }
 .platform-accounts-page__preview-row small.is-error { background:#fff0f0; color:#f53f3f; }
-.platform-accounts-page__preview-footer { display:flex; height:68px; flex:0 0 68px; align-items:center; justify-content:space-between; padding:16px 24px; border-top:1px solid #e5e6eb; }
+.platform-accounts-page__preview-note { height:27px; flex:0 0 27px; margin-top:0; color:#86909c; font-size:11px; line-height:17px; }
+.platform-accounts-page__preview-footer { display:flex; height:69px; flex:0 0 69px; align-items:center; justify-content:space-between; padding:16px 24px; border-top:1px solid #e5e6eb; }
 .platform-accounts-page__preview-footer button { height:36px; padding:0 20px; border-radius:8px; cursor:pointer; font-size:13px; line-height:19.5px; }
 .platform-accounts-page__preview-footer .platform-accounts-page__modal-cancel { flex:0 0 auto; }
 .platform-accounts-page__preview-footer .platform-accounts-page__modal-submit { flex:0 0 auto; padding:0 24px; border:0; background:#165dff; }

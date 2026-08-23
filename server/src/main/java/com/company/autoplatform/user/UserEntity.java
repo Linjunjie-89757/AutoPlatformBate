@@ -20,6 +20,9 @@ public class UserEntity extends BaseEntity {
     @TableField("role_code")
     private String roleCode;
 
+    @TableField("creation_source")
+    private String creationSource;
+
     private String password;
 
     private Integer status;

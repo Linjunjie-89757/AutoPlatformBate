@@ -9,6 +9,10 @@ public record PlatformAccountInvitationItem(
         String displayName,
         String roleCode,
         String status,
-        LocalDateTime expiresAt
+        LocalDateTime invitedAt,
+        LocalDateTime expiresAt,
+        String operatorName,
+        String source,
+        String failReason
 ) {
 }

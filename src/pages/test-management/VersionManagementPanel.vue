@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
   AlertTriangle,
+  Archive,
+  ArrowRight,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -11,7 +13,11 @@ import {
   Eye,
   Link2,
   Plus,
+  Play,
+  RefreshCw,
   Search,
+  ShieldAlert,
+  ShieldCheck,
   X,
   XCircle,
 } from '@lucide/vue'
@@ -19,8 +25,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { testManagementApi, type TestPlanDefectItem } from '@/entities/test-management'
-import { userApi, type UserItem } from '@/entities/user'
-import { useWorkspaceContext } from '@/entities/workspace'
+import { type UserItem } from '@/entities/user'
+import { useWorkspaceContext, workspaceApi } from '@/entities/workspace'
 import VersionPlanDonutChart from '@/shared/ui/charts/VersionPlanDonutChart.vue'
 
 import {
@@ -80,6 +86,17 @@ const logTypeFilter = ref('all')
 const drawerOpen = ref(false)
 const editingId = ref<string | null>(null)
 const toastMessage = ref('')
+type VersionActionType = 'start-dev' | 'start-test' | 'mark-release' | 'release' | 'archive'
+type VersionStatusModalPhase = 'form' | 'loading' | 'error' | 'gate'
+type VersionFailedCheck = { key: string; target: string | number; actual: string | number }
+const versionAction = ref<VersionActionType | null>(null)
+const versionStatusModalPhase = ref<VersionStatusModalPhase>('form')
+const versionStatusModalReason = ref('')
+const versionStatusModalError = ref('')
+const versionStatusModalChecks = ref<VersionFailedCheck[]>([])
+const releaseConfirmed = ref(false)
+const releaseForceReason = ref('')
+const releaseForceReasonError = ref(false)
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 const versionForm = reactive({
@@ -117,6 +134,7 @@ const mapVersion = (item: Awaited<ReturnType<typeof testManagementApi.getVersion
   passed: item.passedCount,
   p0Bugs: item.openP0Count,
   p1Bugs: item.openP1Count,
+  qualityGateChecks: item.qualityGateChecks || [],
   goal: item.goal || '',
 })
 
@@ -200,7 +218,17 @@ const loadVersions = async () => {
 
 const loadOwners = async () => {
   try {
-    versionOwners.value = await userApi.getUsers()
+    const members = await workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value)
+    versionOwners.value = members.map(member => ({
+      id: member.userId,
+      username: member.username,
+      email: '',
+      displayName: member.displayName,
+      roleCode: '',
+      status: 1,
+      workspaceCodes: [selectedWorkspaceCode.value],
+      workspaceNames: [],
+    }))
   } catch {
     versionOwners.value = []
   }
@@ -286,42 +314,89 @@ const passRate = computed(() => {
   const version = selectedVersion.value
   return version && version.executed ? Math.round(version.passed / version.executed * 100) : 0
 })
-const executeRate = computed(() => {
-  const version = selectedVersion.value
-  return version && version.scope ? Math.round(version.executed / version.scope * 100) : 0
-})
 const requirementCoverRate = computed(() => {
   if (!currentRequirements.value.length) return 0
   const covered = currentRequirements.value.filter(item => item.status === 'covered' || item.status === 'passed').length
   return Math.round(covered / currentRequirements.value.length * 100)
 })
-const showQualitySummary = computed(() => selectedVersion.value?.status === 'testing' || selectedVersion.value?.status === 'pending-release')
-const allPlansCompleted = computed(() => currentPlans.value.length > 0 && currentPlans.value.every(item => item.status === 'completed'))
-const ownersConfirmed = computed(() => currentPlans.value.length > 0
-  && currentPlans.value.every(item => !item.ownerConfirmRequired || item.reportSigned))
 const qualityChecks = computed(() => {
   const version = selectedVersion.value
-  return [
-    { label: '用例执行率', target: '目标：≥ 90%', value: `${executeRate.value}%`, passed: executeRate.value >= 90 },
-    { label: '用例通过率', target: '目标：≥ 85%', value: `${passRate.value}%`, passed: passRate.value >= 85 },
-    { label: '需求覆盖率', target: '目标：100%', value: `${requirementCoverRate.value}%`, passed: requirementCoverRate.value >= 100 },
-    { label: 'P0 缺陷', target: '目标：0 个', value: `${version?.p0Bugs || 0} 个`, passed: (version?.p0Bugs || 0) === 0 },
-    { label: 'P1 缺陷', target: '目标：≤ 3 个', value: `${version?.p1Bugs || 0} 个`, passed: (version?.p1Bugs || 0) <= 3 },
-    { label: '计划全部完成', target: '目标：是', value: allPlansCompleted.value ? '是' : '否', passed: allPlansCompleted.value },
-    { label: '负责人确认', target: '目标：已确认', value: ownersConfirmed.value ? '已确认' : '待确认', passed: ownersConfirmed.value },
-  ]
+  return (version?.qualityGateChecks || []).map((item) => {
+    if (item.key === 'ALL_PLANS_COMPLETED' || item.key === 'COMPLETED_PLAN_COUNT') return { ...item, target: `${item.target} 个全部完成`, value: `${item.actual}/${item.target} 已完成` }
+    if (item.key === 'REPORT_SIGNED') return { ...item, target: '全部已签署', value: `${item.actual}/${item.target} 已签署` }
+    if (item.key === 'REQUIREMENT_COVER_RATE') return { ...item, target: '100%', value: `${item.actual}%` }
+    if (item.key === 'VERSION_EXECUTION_RATE') return { ...item, target: '≥ 90%', value: `${item.actual}%` }
+    if (item.key === 'VERSION_PASS_RATE') return { ...item, target: '≥ 85%', value: `${item.actual}%` }
+    if (item.key === 'OPEN_P0_DEFECTS') return { ...item, target: '0 个', value: `${item.actual} 个` }
+    if (item.key === 'OPEN_P1_DEFECTS') return { ...item, target: '≤ 3 个', value: `${item.actual} 个` }
+    return { ...item, target: String(item.target), value: String(item.actual) }
+  })
 })
 const qualityPassedCount = computed(() => qualityChecks.value.filter(item => item.passed).length)
-const qualityPassed = computed(() => qualityPassedCount.value === qualityChecks.value.length)
+const qualityPassed = computed(() => qualityChecks.value.length === 7 && qualityPassedCount.value === qualityChecks.value.length)
+const releaseNeedsForce = computed(() => !qualityPassed.value)
 
 const isEditing = computed(() => Boolean(editingId.value))
 const canSubmit = computed(() => Boolean(versionForm.name.trim() && versionForm.owner && versionOwners.value.some(item => item.displayName === versionForm.owner)))
 const canCreate = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.create'))
 const canEdit = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.edit'))
 const canRelease = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.release'))
+const canForceRelease = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.force_release'))
 const canExport = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.export'))
 const canCreateDefect = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.execute')
   && hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'bugs.create'))
+
+const versionActionConfig: Record<VersionActionType, {
+  title: string
+  confirmLabel: string
+  fromLabel: string
+  toLabel: string
+  description: string
+  targetStatus: 'DEVELOPING' | 'TESTING' | 'PENDING_RELEASE' | 'RELEASED' | 'ARCHIVED'
+  color: string
+  requiresReason?: boolean
+  danger?: boolean
+}> = {
+  'start-dev': {
+    title: '开始开发', confirmLabel: '开始开发', fromLabel: '规划中', toLabel: '开发中',
+    description: '版本将进入开发阶段，研发人员可开始认领任务。', targetStatus: 'DEVELOPING', color: '#165DFF',
+  },
+  'start-test': {
+    title: '开始测试', confirmLabel: '开始测试', fromLabel: '开发中', toLabel: '测试中',
+    description: '版本切换为「测试中」，测试团队可创建并执行测试计划。', targetStatus: 'TESTING', color: '#165DFF',
+  },
+  'mark-release': {
+    title: '标记待发布', confirmLabel: '标记待发布', fromLabel: '测试中', toLabel: '待发布',
+    description: '版本将进入待发布队列，等待发布负责人最终确认。', targetStatus: 'PENDING_RELEASE', color: '#7816FF',
+  },
+  release: {
+    title: '发布版本', confirmLabel: '确认发布', fromLabel: '待发布', toLabel: '已发布',
+    description: '版本将正式标记为已发布，请确认所有准出条件已满足，生产环境已准备就绪。', targetStatus: 'RELEASED', color: '#00B42A', requiresReason: true,
+  },
+  archive: {
+    title: '归档版本', confirmLabel: '确认归档', fromLabel: '已发布', toLabel: '已归档',
+    description: '归档后不可再添加测试计划或修改状态，相关数据将长期保留。', targetStatus: 'ARCHIVED', color: '#86909C', requiresReason: true, danger: true,
+  },
+}
+
+const currentVersionActionConfig = computed(() => versionAction.value ? versionActionConfig[versionAction.value] : null)
+const versionStatusModalNeedsReason = computed(() => Boolean((currentVersionActionConfig.value?.requiresReason && versionAction.value !== 'release') || versionStatusModalPhase.value === 'gate'))
+
+const getTransitionErrorPayload = (error: unknown) => {
+  const candidate = error as {
+    raw?: { response?: { data?: { code?: string; message?: string; details?: { failedChecks?: unknown } } } }
+    message?: string
+  }
+  const responseData = candidate?.raw?.response?.data
+  const failedChecks = Array.isArray(responseData?.details?.failedChecks)
+    ? responseData.details.failedChecks
+    : []
+  return {
+    code: responseData?.code || '',
+    message: responseData?.message || candidate?.message || '版本状态更新失败',
+    failedChecks: failedChecks.filter((item): item is VersionFailedCheck => Boolean(item && typeof item === 'object' && 'key' in item && 'target' in item && 'actual' in item)),
+  }
+}
 
 const statusStyle = (status: VersionStatus) => ({
   color: versionStatusConfig[status].color,
@@ -463,27 +538,112 @@ const restoreInitialDetail = () => {
   openVersion(version, tab)
 }
 
-const transitionVersion = async (targetStatus: 'PENDING_RELEASE' | 'RELEASED') => {
-  if (!canRelease.value) {
-    showToast('你没有推进版本状态的权限')
+const openVersionAction = (action: VersionActionType) => {
+  const requiresForcePermission = action === 'release' && releaseNeedsForce.value
+  if ((requiresForcePermission && (!canRelease.value || !canForceRelease.value)) || (!requiresForcePermission && !canRelease.value)) {
+    showToast(requiresForcePermission ? '你没有强制发布版本的权限' : '你没有推进版本状态的权限')
     return
   }
-  if (!selectedVersion.value) return
-  isSubmitting.value = true
+  versionAction.value = action
+  versionStatusModalPhase.value = 'form'
+  versionStatusModalReason.value = ''
+  versionStatusModalError.value = ''
+  versionStatusModalChecks.value = []
+  releaseConfirmed.value = false
+  releaseForceReason.value = ''
+  releaseForceReasonError.value = false
+}
+
+const closeVersionAction = () => {
+  if (versionStatusModalPhase.value === 'loading') return
+  versionAction.value = null
+  versionStatusModalPhase.value = 'form'
+  versionStatusModalReason.value = ''
+  versionStatusModalError.value = ''
+  versionStatusModalChecks.value = []
+  releaseConfirmed.value = false
+  releaseForceReason.value = ''
+  releaseForceReasonError.value = false
+}
+
+const failedCheckLabel = (key: string) => {
+  const [name, planId] = key.split(':')
+  const labels: Record<string, string> = {
+    REQUIREMENT_COUNT: '版本已关联需求',
+    REQUIREMENT_COVER_RATE: '需求覆盖率',
+    COMPLETED_PLAN_COUNT: '存在可执行测试计划',
+    ALL_PLANS_COMPLETED: '所有测试计划已完成',
+    OPEN_P0_DEFECTS: '未关闭 P0 缺陷',
+    OPEN_P1_DEFECTS: '未关闭 P1 缺陷数量',
+    VERSION_EXECUTION_RATE: '版本用例执行率',
+    VERSION_PASS_RATE: '版本用例通过率',
+    REPORT_SIGNED: '测试报告签署情况',
+    PLAN_EXECUTION_RATE: `计划 ${planId || ''} 用例执行率`,
+    PLAN_PASS_RATE: `计划 ${planId || ''} 用例通过率`,
+    PLAN_REPORT_SIGNED: `计划 ${planId || ''} 测试报告已签署`,
+  }
+  return labels[name] || key
+}
+
+const transitionVersion = async (force = false) => {
+  const action = currentVersionActionConfig.value
+  if (!action || !selectedVersion.value) return
+  if (versionAction.value === 'release') {
+    if (!releaseConfirmed.value) {
+      releaseForceReasonError.value = true
+      return
+    }
+    if (releaseNeedsForce.value && !releaseForceReason.value.trim()) {
+      releaseForceReasonError.value = true
+      return
+    }
+    force = releaseNeedsForce.value
+    versionStatusModalReason.value = releaseForceReason.value.trim()
+  }
+  if (versionStatusModalNeedsReason.value && !versionStatusModalReason.value.trim()) {
+    versionStatusModalError.value = '请填写状态变更原因'
+    return
+  }
+  versionStatusModalPhase.value = 'loading'
+  versionStatusModalError.value = ''
   try {
+    let expectedVersion = versionLockVersions.value.get(selectedVersion.value.id) || 0
+    if (versionAction.value === 'release' && selectedVersion.value.status === 'testing') {
+      const pendingResult = await testManagementApi.transitionVersion(selectedWorkspaceCode.value, Number(selectedVersion.value.id), {
+        targetStatus: 'PENDING_RELEASE',
+        expectedVersion,
+        force,
+        reason: versionStatusModalReason.value.trim() || undefined,
+      })
+      const pendingVersion = mapVersion(pendingResult)
+      versions.value = versions.value.map(item => item.id === pendingVersion.id ? pendingVersion : item)
+      selectedVersion.value = pendingVersion
+      expectedVersion = pendingResult.lockVersion
+      versionLockVersions.value.set(pendingVersion.id, expectedVersion)
+    }
     const result = await testManagementApi.transitionVersion(selectedWorkspaceCode.value, Number(selectedVersion.value.id), {
-      targetStatus,
-      expectedVersion: versionLockVersions.value.get(selectedVersion.value.id) || 0,
+      targetStatus: action.targetStatus,
+      expectedVersion,
+      force,
+       reason: versionStatusModalReason.value.trim() || undefined,
     })
     const mapped = mapVersion(result)
     versions.value = versions.value.map(item => item.id === mapped.id ? mapped : item)
     selectedVersion.value = mapped
     versionLockVersions.value.set(mapped.id, result.lockVersion)
     showToast('版本状态已更新')
+    versionStatusModalPhase.value = 'form'
+    closeVersionAction()
   } catch (error) {
-    showToast(error instanceof Error ? error.message : '版本状态更新失败')
-  } finally {
-    isSubmitting.value = false
+    const payload = getTransitionErrorPayload(error)
+    if (payload.code === 'TM_QUALITY_GATE_FAILED' && !force) {
+      versionStatusModalChecks.value = payload.failedChecks
+      versionStatusModalPhase.value = 'gate'
+      versionStatusModalError.value = payload.message
+    } else {
+      versionStatusModalPhase.value = 'error'
+      versionStatusModalError.value = payload.message
+    }
   }
 }
 
@@ -556,12 +716,11 @@ const exportVersionReport = async () => {
 }
 
 const gateState = (version: ManagedVersion) => {
-  if (!version.scope) return { label: '—', color: '#c9cdd4' }
   if (version.status === 'released') return { label: '已发布', color: '#0ea5e9' }
-  const ok = version.executed > 0
-    && version.p0Bugs === 0 && version.p1Bugs <= 3
-    && Math.round(version.passed / version.executed * 100) >= 85
-    && Math.round(version.executed / version.scope * 100) >= 90
+  if (version.status === 'archived') return { label: '已归档', color: '#86909c' }
+  const checks = version.qualityGateChecks || []
+  if (checks.length !== 7) return { label: '计算中', color: '#86909c' }
+  const ok = checks.every(item => item.passed)
   return ok ? { label: '可发布', color: '#00b42a' } : { label: '存在风险', color: '#f53f3f' }
 }
 
@@ -580,6 +739,7 @@ onMounted(() => {
 watch(selectedWorkspaceCode, () => {
   selectedVersion.value = null
   void loadVersions()
+  void loadOwners()
 })
 
 watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetail)
@@ -666,7 +826,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
                   <td @click.stop>
                     <div class="version-management__row-actions">
                       <button type="button" title="查看" @click="openVersion(version)"><Eye :size="13" /></button>
-                      <button v-if="version.status !== 'archived' && canEdit" type="button" title="编辑" @click="openEditDrawer(version)"><Edit2 :size="13" /></button>
+                      <button v-if="version.status !== 'released' && version.status !== 'archived' && canEdit" type="button" title="编辑" @click="openEditDrawer(version)"><Edit2 :size="13" /></button>
                     </div>
                   </td>
                 </tr>
@@ -688,11 +848,14 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         <span class="version-management__badge" :style="statusStyle(selectedVersion.status)">{{ versionStatusConfig[selectedVersion.status].label }}</span>
         <div class="version-management__detail-actions">
           <span>负责人：{{ selectedVersion.owner }}</span>
-          <button v-if="canEdit" class="version-management__icon-button" type="button" title="编辑" @click="openEditDrawer(selectedVersion)"><Edit2 :size="13" /></button>
-          <button v-if="selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-ghost is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
-          <button v-if="selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建测试计划</button>
-          <button v-if="selectedVersion.status === 'testing' && canRelease" class="version-management__button is-purple is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('PENDING_RELEASE')">标记待发布</button>
-          <button v-if="selectedVersion.status === 'pending-release' && canRelease" class="version-management__button is-success is-small" type="button" :disabled="isSubmitting" @click="transitionVersion('RELEASED')"><CheckCircle2 :size="12" />标记已发布</button>
+            <button v-if="selectedVersion.status !== 'released' && selectedVersion.status !== 'archived' && canEdit" class="version-management__icon-button" type="button" title="编辑" @click="openEditDrawer(selectedVersion)"><Edit2 :size="13" /></button>
+            <button v-if="selectedVersion.status !== 'released' && selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-ghost is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
+            <button v-if="selectedVersion.status !== 'released' && selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建测试计划</button>
+           <button v-if="selectedVersion.status === 'planning' && canRelease" class="version-management__button is-primary is-small" type="button" @click="openVersionAction('start-dev')"><Play :size="11" />开始开发</button>
+           <button v-if="selectedVersion.status === 'developing' && canRelease" class="version-management__button is-primary is-small" type="button" @click="openVersionAction('start-test')"><Play :size="11" />开始测试</button>
+           <button v-if="selectedVersion.status === 'testing' && canRelease" class="version-management__button is-purple is-small" type="button" @click="openVersionAction('mark-release')"><CheckCircle2 :size="11" />标记待发布</button>
+           <button v-if="selectedVersion.status === 'pending-release' && canRelease" class="version-management__button is-success is-small" type="button" @click="openVersionAction('release')"><CheckCircle2 :size="12" />确认发布</button>
+           <button v-if="selectedVersion.status === 'released' && canRelease" class="version-management__button is-ghost is-small" type="button" @click="openVersionAction('archive')"><Archive :size="11" />归档版本</button>
         </div>
       </header>
 
@@ -709,10 +872,6 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
           <i v-if="index" />
           <div :class="`is-${item.tone}`"><strong>{{ item.value }}<small>{{ item.unit }}</small></strong><span>{{ item.label }}</span></div>
         </template>
-        <template v-if="showQualitySummary">
-          <i />
-          <div class="version-management__quality-kpi"><strong>未达到准出标准</strong><span>质量准出</span></div>
-        </template>
       </section>
 
       <nav class="version-management__detail-tabs" aria-label="版本详情视图">
@@ -723,7 +882,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
 
       <section class="version-management__detail-body">
         <div v-if="isDetailLoading" class="version-management__panel-empty">正在加载版本详情...</div>
-        <div v-if="detailTab === 'overview'" class="version-management__overview">
+        <div v-else-if="detailTab === 'overview'" class="version-management__overview">
           <div class="version-management__overview-grid">
             <article class="version-management__panel">
               <h3>版本信息</h3>
@@ -740,14 +899,28 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
               <div v-else class="version-management__panel-empty">暂无测试计划</div>
             </article>
           </div>
-          <article v-if="showQualitySummary" class="version-management__panel version-management__quality-panel">
-            <header><h3>质量准出概览</h3><span>{{ qualityPassed ? '已达到准出标准' : '未达到准出标准' }}</span></header>
+          <article class="version-management__panel version-management__quality-panel" :class="qualityPassed ? 'is-passed' : 'is-warning'">
+            <header>
+              <div class="version-management__quality-heading">
+                <span class="version-management__quality-icon" :class="qualityPassed ? 'is-passed' : 'is-warning'">
+                  <ShieldCheck v-if="qualityPassed" :size="16" /><ShieldAlert v-else :size="16" />
+                </span>
+                <div><h3>质量准出概览</h3><p>汇总各测试计划质量数据，作为版本发布的准入参考</p></div>
+              </div>
+              <div class="version-management__quality-actions">
+                <span :class="qualityPassed ? 'is-passed' : 'is-warning'">{{ qualityPassed ? '满足发布条件' : `${qualityChecks.length - qualityPassedCount} 项未达标` }}</span>
+                <button v-if="(selectedVersion.status === 'testing' || selectedVersion.status === 'pending-release') && canRelease && (qualityPassed || canForceRelease)" class="version-management__quality-action" :class="qualityPassed ? 'is-success' : 'is-warning'" type="button" @click="openVersionAction('release')">
+                  {{ qualityPassed ? '确认发布' : '强制发布' }}
+                </button>
+              </div>
+            </header>
             <div class="version-management__gate-grid">
               <div v-for="item in qualityChecks" :key="item.label" :class="item.passed ? 'is-passed' : 'is-failed'">
-                <span><component :is="item.passed ? CheckCircle2 : XCircle" :size="12" />{{ item.label }}</span>
-                <small>{{ item.target }}</small><strong>{{ item.value }}</strong>
+                <span><component :is="item.passed ? CheckCircle2 : XCircle" :size="13" />{{ item.label }}</span>
+                <small>目标：{{ item.target }}</small><strong>{{ item.value }}</strong>
               </div>
             </div>
+            <div v-if="!qualityPassed" class="version-management__quality-warning"><AlertTriangle :size="14" />存在 {{ qualityChecks.length - qualityPassedCount }} 项未达标，强制发布需填写原因、确认风险并留存审计记录。</div>
           </article>
         </div>
 
@@ -757,7 +930,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
               <span v-for="status in ['all', 'uncovered', 'partial', 'covered', 'passed'] as const" :key="status"><b>{{ requirementStatusCount(status) }}</b>{{ status === 'all' ? '全部' : requirementStatusConfig[status].label }}</span>
             </div>
             <button class="version-management__button is-ghost is-small is-link" type="button" @click="emit('change-tab', 'requirements')"><ExternalLink :size="12" />在需求管理中查看全部</button>
-            <button v-if="canCreate" class="version-management__button is-primary is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
+            <button v-if="selectedVersion.status !== 'released' && selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-primary is-small" type="button" @click="createRequirementForVersion"><Plus :size="11" />添加需求</button>
           </div>
           <div class="version-management__table-card">
             <table v-if="currentRequirements.length" class="version-management__table is-requirements">
@@ -769,7 +942,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         </div>
 
         <div v-else-if="detailTab === 'plans'" class="version-management__table-card">
-          <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button v-if="canCreate" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建计划</button></header>
+          <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button v-if="selectedVersion.status !== 'released' && selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建计划</button></header>
           <table v-if="currentPlans.length" class="version-management__table is-plans">
             <thead><tr><th>计划名称</th><th>类型</th><th>负责人</th><th>周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>P0/P1</th><th>状态</th><th>操作</th></tr></thead>
             <tbody><tr v-for="item in currentPlans" :key="item.id"><td><strong>{{ item.name }}</strong></td><td><span class="version-management__plan-type">{{ item.type }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.startDate }}—{{ item.endDate }}</td><td class="is-centered"><b>{{ item.scope }}</b></td><td class="version-management__progress-cell"><div class="version-management__progress"><i><span :style="{ width: `${item.scope ? Math.round(item.executed / item.scope * 100) : 0}%` }" /></i><b>{{ item.scope ? Math.round(item.executed / item.scope * 100) : 0 }}%</b></div></td><td class="is-centered"><b class="is-rate">{{ item.executed ? Math.round(item.passed / item.executed * 100) : '—' }}{{ item.executed ? '%' : '' }}</b></td><td class="is-centered"><b v-if="item.highBugs" class="is-risk">{{ item.highBugs }}</b><span v-else class="is-muted">—</span></td><td><span :class="['version-management__badge', `is-plan-${item.status}`]">{{ item.status === 'running' ? '进行中' : item.status === 'completed' ? '已完成' : '待开始' }}</span></td><td><div class="version-management__row-actions"><button type="button" title="查看计划" @click="viewPlan(item)"><Eye :size="13" /></button></div></td></tr></tbody>
@@ -821,6 +994,85 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
           </div>
           <footer><button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button><button class="version-management__button is-primary" type="button" :disabled="!canSubmit || isSubmitting || (isEditing ? !canEdit : !canCreate)" @click="submitVersion">{{ isSubmitting ? '保存中...' : isEditing ? '保存修改' : '创建版本' }}</button></footer>
         </aside>
+      </div>
+    </Transition>
+
+    <Transition name="version-management-fade">
+      <div v-if="versionAction && currentVersionActionConfig && selectedVersion" class="version-management__status-overlay" @click.self="closeVersionAction">
+        <section class="version-management__status-modal" :class="{ 'is-release-confirm': versionAction === 'release' }" role="dialog" aria-modal="true" :aria-label="versionAction === 'release' ? (qualityPassed ? '确认发布' : '确认强制发布') : currentVersionActionConfig.title">
+          <header>
+            <div><h2>{{ versionAction === 'release' ? (qualityPassed ? '确认发布' : '确认强制发布') : currentVersionActionConfig.title }}</h2><p>{{ selectedVersion.name }}</p></div>
+            <button v-if="versionStatusModalPhase !== 'loading'" type="button" aria-label="关闭" @click="closeVersionAction"><X :size="15" /></button>
+          </header>
+          <div class="version-management__status-body">
+            <template v-if="versionAction === 'release'">
+              <div v-if="versionStatusModalPhase === 'error'" class="version-management__status-error"><AlertTriangle :size="14" /><span>{{ versionStatusModalError }}</span></div>
+              <div class="version-management__release-summary" :class="qualityPassed ? 'is-passed' : 'is-warning'">
+                <ShieldCheck v-if="qualityPassed" :size="20" /><ShieldAlert v-else :size="20" />
+                <div><strong>{{ qualityPassed ? '所有准出指标均已达标，可正常发布' : '存在未达标指标，发布须填写原因并留存记录' }}</strong><small>{{ qualityPassedCount }}/{{ qualityChecks.length }} 项达标</small></div>
+              </div>
+              <div class="version-management__release-checks">
+                <div v-for="item in qualityChecks" :key="item.label" :class="item.passed ? 'is-passed' : 'is-failed'">
+                  <component :is="item.passed ? CheckCircle2 : XCircle" :size="14" />
+                  <div><strong>{{ item.label }}</strong><small>目标 {{ item.target }} · 当前 <b>{{ item.value }}</b></small></div>
+                </div>
+              </div>
+              <div v-if="!qualityPassed" class="version-management__release-force">
+                <div class="version-management__release-warning"><AlertTriangle :size="13" /><span>强制发布将在确认后立即生效，请填写业务原因并确认风险。操作及未达标项将被完整记录。</span></div>
+                <label class="version-management__reason"><span>强制发布原因 <i>*</i></span><textarea v-model="releaseForceReason" rows="3" placeholder="请说明业务紧急度、风险评估及已采取的缓解措施…" :class="{ 'is-error': releaseForceReasonError && !releaseForceReason.trim() }" @input="releaseForceReasonError = false" /><small v-if="releaseForceReasonError && !releaseForceReason.trim()">请填写强制发布原因</small></label>
+              </div>
+            </template>
+            <template v-else>
+              <div v-if="versionStatusModalPhase === 'error'" class="version-management__status-error"><AlertTriangle :size="14" /><span>{{ versionStatusModalError }}</span></div>
+              <div v-if="versionStatusModalPhase === 'gate'" class="version-management__status-gate">
+              <div class="version-management__status-error"><AlertTriangle :size="14" /><span>{{ versionStatusModalError || '版本未达到状态推进条件' }}</span></div>
+              <div class="version-management__check-list">
+                <div v-for="check in versionStatusModalChecks" :key="check.key">
+                  <XCircle :size="14" />
+                  <span>{{ failedCheckLabel(check.key) }}</span>
+                  <small>目标 {{ check.target }}，当前 {{ check.actual }}</small>
+                </div>
+              </div>
+              <label class="version-management__reason"><span>强制推进原因 <i>*</i></span><textarea v-model="versionStatusModalReason" rows="3" placeholder="请填写强制推进的业务原因…" /></label>
+              </div>
+              <div v-else class="version-management__status-copy">
+              <div class="version-management__status-icon" :class="{ 'is-danger': currentVersionActionConfig.danger }" :style="{ color: currentVersionActionConfig.color, backgroundColor: `${currentVersionActionConfig.color}12` }">
+                <Archive v-if="versionAction === 'archive'" :size="19" /><CheckCircle2 v-else-if="versionAction === 'mark-release'" :size="19" /><Play v-else :size="19" />
+              </div>
+              <p>{{ currentVersionActionConfig.description }}</p>
+              </div>
+              <div class="version-management__status-transition">
+              <span>{{ currentVersionActionConfig.fromLabel }}</span><ArrowRight :size="14" /><b :style="{ color: currentVersionActionConfig.color, backgroundColor: `${currentVersionActionConfig.color}12` }">{{ currentVersionActionConfig.toLabel }}</b>
+              </div>
+              <label v-if="versionStatusModalNeedsReason && versionStatusModalPhase !== 'gate'" class="version-management__reason"><span>状态变更原因 <i>*</i></span><textarea v-model="versionStatusModalReason" rows="3" placeholder="请填写状态变更原因…" /></label>
+            </template>
+          </div>
+          <div v-if="versionAction === 'release' && versionStatusModalPhase !== 'error'" class="version-management__release-confirm-wrap">
+            <label class="version-management__release-confirm" :class="{ 'is-confirmed': releaseConfirmed }"><input v-model="releaseConfirmed" type="checkbox"><span v-if="qualityPassed">本人已审阅全部质量指标，确认版本 <strong>{{ selectedVersion.name }}</strong> 符合发布要求，同意正式发布上线。</span><span v-else>我已了解当前版本存在的质量风险，确认立即强制发布。</span></label>
+          </div>
+          <footer>
+            <template v-if="versionStatusModalPhase === 'error'">
+              <button class="version-management__button is-ghost" type="button" @click="closeVersionAction">关闭</button>
+              <button class="version-management__button is-primary" type="button" @click="versionStatusModalPhase = 'form'; versionStatusModalError = ''"><RefreshCw :size="12" />重新提交</button>
+            </template>
+            <template v-else-if="versionAction !== 'release' && versionStatusModalPhase === 'gate'">
+              <button class="version-management__button is-ghost" type="button" @click="versionStatusModalPhase = 'form'; versionStatusModalError = ''">返回处理</button>
+              <button class="version-management__button is-purple" type="button" :disabled="!versionStatusModalReason.trim()" @click="transitionVersion(true)">强制推进</button>
+            </template>
+            <template v-else-if="versionAction === 'release'">
+              <button class="version-management__button is-ghost" type="button" :disabled="versionStatusModalPhase === 'loading'" @click="closeVersionAction">取消</button>
+              <button class="version-management__button" :class="qualityPassed ? 'is-success' : 'is-warning'" type="button" :disabled="versionStatusModalPhase === 'loading' || !releaseConfirmed || (!qualityPassed && !releaseForceReason.trim())" @click="transitionVersion()">
+                <template v-if="versionStatusModalPhase === 'loading'"><RefreshCw class="is-spinning" :size="12" />发布中...</template><template v-else>{{ qualityPassed ? '确认发布' : '确认强制发布' }}</template>
+              </button>
+            </template>
+            <template v-else>
+              <button class="version-management__button is-ghost" type="button" :disabled="versionStatusModalPhase === 'loading'" @click="closeVersionAction">取消</button>
+              <button class="version-management__button" :class="currentVersionActionConfig.danger ? 'is-muted' : versionAction === 'mark-release' ? 'is-purple' : 'is-primary'" type="button" :disabled="versionStatusModalPhase === 'loading' || (versionStatusModalNeedsReason && !versionStatusModalReason.trim())" @click="transitionVersion()">
+                <RefreshCw v-if="versionStatusModalPhase === 'loading'" class="is-spinning" :size="12" /><template v-else>{{ currentVersionActionConfig.confirmLabel }}</template>
+              </button>
+            </template>
+          </footer>
+        </section>
       </div>
     </Transition>
 

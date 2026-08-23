@@ -54,7 +54,7 @@ const configs: Record<TestPlanActionType, {
   },
   complete: {
     title: '完成计划',
-    description: '完成后计划进入「已完成」状态，不可继续执行用例。请确认所有关键指标已满足。',
+    description: '完成后计划进入「已完成」状态并生成测试报告，不可继续执行用例。负责人签署报告后进入版本发布准出。',
     confirmLabel: '确认完成',
     color: '#00b42a',
     icon: CheckCircle2,
