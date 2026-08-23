@@ -272,7 +272,10 @@
 .requirement-management__plan-list span { flex: 1; color: var(--rm-text); font-size: 13px; }
 .requirement-management__plan-list em { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-style: normal; font-weight: 500; }
 .requirement-management__plan-list em.is-in-progress { color: #ff7d00; background: #fff3e8; }
+.requirement-management__plan-list em.is-pending { color: #86909c; background: #f2f3f5; }
+.requirement-management__plan-list em.is-blocked { color: #f53f3f; background: #ffece8; }
 .requirement-management__plan-list em.is-completed { color: #00b42a; background: #e8ffea; }
+.requirement-management__plan-list em.is-cancelled { color: #86909c; background: #f2f3f5; }
 
 .requirement-management__defect-list { display: flex; width: 100%; flex-direction: column; gap: 8px; }
 .requirement-management__defect-list article { padding: 12px 16px; border: 1px solid var(--rm-border); border-radius: 10px; background: #fff; }

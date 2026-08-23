@@ -76,6 +76,7 @@ const isDetailLoading = ref(false)
 const isSubmitting = ref(false)
 const isExportingReport = ref(false)
 const loadError = ref('')
+const detailError = ref('')
 const detailTab = ref<VersionDetailTab>('overview')
 const keyword = ref('')
 const typeFilter = ref<'all' | VersionType>('all')
@@ -285,6 +286,7 @@ const loadOwners = async () => {
 
 const loadVersionDetail = async (version: ManagedVersion) => {
   isDetailLoading.value = true
+  detailError.value = ''
   try {
     const versionId = Number(version.id)
     const [requirements, plans, activities] = await Promise.all([
@@ -312,7 +314,8 @@ const loadVersionDetail = async (version: ManagedVersion) => {
     versionLockVersions.value.set(version.id, summary.lockVersion)
     if (summary.ownerId !== null) versionOwnerIds.value.set(version.id, summary.ownerId)
   } catch (error) {
-    showToast(error instanceof Error ? error.message : '版本详情加载失败')
+    detailError.value = error instanceof Error ? error.message : '版本详情加载失败'
+    showToast(detailError.value)
   } finally {
     isDetailLoading.value = false
   }
@@ -936,6 +939,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
 
       <section class="version-management__detail-body">
         <div v-if="isDetailLoading" class="version-management__panel-empty">正在加载版本详情...</div>
+        <div v-else-if="detailError" class="version-management__panel-empty"><strong>{{ detailError }}</strong><button class="version-management__button is-ghost is-small" type="button" @click="selectedVersion && loadVersionDetail(selectedVersion)">重新加载</button></div>
         <div v-else-if="detailTab === 'overview'" class="version-management__overview">
           <div class="version-management__overview-grid">
             <article class="version-management__panel">

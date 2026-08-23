@@ -22,17 +22,12 @@ import {
 } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-import { caseApi, type CaseSummaryItem } from '@/entities/case'
+import { caseApi, type CaseDetail, type CaseDirectoryNode, type CaseSummaryItem } from '@/entities/case'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
-import { testManagementApi, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
+import { testManagementApi, type TestPlanItem, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
 import { useWorkspaceContext, workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
 
 import {
-  caseDirectoryTree,
-  getCaseDetail,
-  requirementTestPlans,
-  caseLibrary as demoCaseLibrary,
-  requirementVersions as demoRequirementVersions,
   type CaseDirectory,
   type LinkedRequirementCase,
   type ManagedRequirement,
@@ -47,6 +42,7 @@ import './requirement-management-panel.css'
 type ManagementTab = 'versions' | 'requirements' | 'plans'
 type DetailTab = 'cases' | 'info' | 'defects'
 type ImportStep = 'config' | 'preview' | 'result'
+type RequirementPlanStatus = 'pending' | 'in-progress' | 'blocked' | 'completed' | 'cancelled'
 
 const props = defineProps<{
   initialDetailId?: string | null
@@ -64,8 +60,10 @@ const { selectedWorkspaceCode } = useWorkspaceContext()
 const { currentUser } = useSession()
 
 const requirements = ref<ManagedRequirement[]>([])
-const requirementVersions = ref([...demoRequirementVersions])
-const caseLibrary = ref([...demoCaseLibrary])
+const requirementVersions = ref<Array<{ id: string; name: string; status: string }>>([])
+const caseLibrary = ref<Array<{ id: string; no: string; title: string; directoryId: string; module: string; priority: RequirementPriority }>>([])
+const caseDirectoryTree = ref<CaseDirectory[]>([{ id: 'root', label: '全部用例', count: 0, children: [] }])
+const requirementTestPlans = ref<Array<{ id: string; name: string; status: RequirementPlanStatus; requirementIds: number[] }>>([])
 const requirementOwners = ref<Array<{ id: number; displayName: string }>>([])
 const requirementLockVersions = ref(new Map<string, number>())
 const isLoading = ref(false)
@@ -94,6 +92,10 @@ const isImporting = ref(false)
 const isDraggingFile = ref(false)
 const casePickerOpen = ref(false)
 const reviewCaseId = ref<string | null>(null)
+const reviewCaseDetail = ref<CaseDetail | null>(null)
+const reviewCaseDetailLoading = ref(false)
+const reviewCaseDetailError = ref('')
+let reviewCaseDetailRequestSeq = 0
 const rejectEditorOpen = ref(false)
 const rejectNote = ref('')
 const toastMessage = ref('')
@@ -101,7 +103,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined
 
 const createForm = reactive({
   title: '',
-  versionId: 'V1',
+  versionId: '',
   priority: 'P1' as RequirementPriority,
   assignee: '',
   externalRef: '',
@@ -151,6 +153,50 @@ const mapAssignableMember = (item: WorkspaceAssignableMemberItem) => ({
   displayName: item.displayName,
 })
 
+const directoryCaseCount = (node: CaseDirectoryNode, cases: Array<{ directoryId: string }>): number => {
+  const directCount = cases.filter(item => item.directoryId === String(node.id)).length
+  return directCount + (node.children || []).reduce((total, child) => total + directoryCaseCount(child, cases), 0)
+}
+
+const mapCaseDirectory = (node: CaseDirectoryNode, cases: Array<{ directoryId: string }>): CaseDirectory => ({
+  id: String(node.id),
+  label: node.name,
+  count: directoryCaseCount(node, cases),
+  children: (node.children || []).map(child => mapCaseDirectory(child, cases)),
+})
+
+const mapRequirementPlanStatus = (status: TestPlanItem['status']): RequirementPlanStatus => {
+  switch (status) {
+    case 'RUNNING':
+      return 'in-progress'
+    case 'BLOCKED':
+      return 'blocked'
+    case 'COMPLETED':
+      return 'completed'
+    case 'CANCELLED':
+      return 'cancelled'
+    case 'DRAFT':
+    case 'PENDING':
+    default:
+      return 'pending'
+  }
+}
+
+const requirementPlanStatusLabel = (status: RequirementPlanStatus) => ({
+  pending: '待开始',
+  'in-progress': '进行中',
+  blocked: '已阻塞',
+  completed: '已完成',
+  cancelled: '已取消',
+}[status])
+
+const mapRequirementPlan = (item: TestPlanItem) => ({
+  id: String(item.id),
+  name: item.name,
+  status: mapRequirementPlanStatus(item.status),
+  requirementIds: (item.requirements || []).map(requirement => requirement.id),
+})
+
 const mapRequirement = (item: TestRequirementItem): ManagedRequirement => ({
   id: String(item.id),
   title: item.title,
@@ -182,11 +228,13 @@ const loadRequirements = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const [versions, requirementPage, cases, members] = await Promise.all([
+    const [versions, requirementPage, cases, members, directories, plans] = await Promise.all([
       testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 }),
       workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value),
+      caseApi.getCaseDirectories(selectedWorkspaceCode.value),
+      testManagementApi.listPlans(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
     ])
     requirementVersions.value = versions.items.map(item => ({
       id: String(item.id),
@@ -196,6 +244,14 @@ const loadRequirements = async () => {
     requirements.value = requirementPage.items.map(mapRequirement)
     requirementLockVersions.value = new Map(requirementPage.items.map(item => [String(item.id), item.lockVersion]))
     caseLibrary.value = cases.items.map(mapCase)
+    const workspaceDirectories = directories.find(item => item.workspaceCode === selectedWorkspaceCode.value) || directories[0]
+    caseDirectoryTree.value = [{
+      id: 'root',
+      label: workspaceDirectories?.workspaceName || '全部用例',
+      count: caseLibrary.value.length,
+      children: (workspaceDirectories?.children || []).map(node => mapCaseDirectory(node, caseLibrary.value)),
+    }]
+    requirementTestPlans.value = plans.items.map(mapRequirementPlan)
     requirementOwners.value = members.map(mapAssignableMember)
     if (!requirementVersions.value.some(item => item.id === createForm.versionId)) {
       createForm.versionId = requirementVersions.value[0]?.id || ''
@@ -290,7 +346,11 @@ const filteredRequirements = computed(() => {
 })
 
 const currentVersion = computed(() => requirementVersions.value.find(item => item.id === selectedRequirement.value?.versionId))
-const currentRequirementPlans = computed(() => requirementTestPlans.filter(item => item.versionId === selectedRequirement.value?.versionId))
+const currentRequirementPlans = computed(() => {
+  const requirementId = Number(selectedRequirement.value?.id)
+  if (!Number.isFinite(requirementId)) return []
+  return requirementTestPlans.value.filter(item => item.requirementIds.includes(requirementId))
+})
 const linkedCases = computed(() => selectedRequirement.value?.linkedCases || [])
 const passedReviewCount = computed(() => linkedCases.value.filter(item => item.reviewStatus === 'passed').length)
 const reviewingCount = computed(() => linkedCases.value.filter(item => item.reviewStatus === 'reviewing').length)
@@ -298,7 +358,23 @@ const rejectedCount = computed(() => linkedCases.value.filter(item => item.revie
 const pendingCount = computed(() => linkedCases.value.filter(item => item.reviewStatus === 'pending').length)
 const reviewCase = computed(() => linkedCases.value.find(item => item.id === reviewCaseId.value) || null)
 const reviewCaseIndex = computed(() => reviewCase.value ? linkedCases.value.findIndex(item => item.id === reviewCase.value?.id) : -1)
-const reviewCaseDetail = computed(() => reviewCase.value ? getCaseDetail(reviewCase.value.no) : null)
+
+const plainCaseText = (content: string | null | undefined) => {
+  if (!content) return ''
+  return content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
+}
+
+const reviewStepRows = computed(() => {
+  const detail = reviewCaseDetail.value
+  if (!detail) return []
+  const steps = plainCaseText(detail.steps).split(/\r?\n/).map(item => item.trim()).filter(Boolean)
+  const expectedResult = plainCaseText(detail.expectedResult) || '—'
+  if (!steps.length) return [{ action: '—', expected: expectedResult }]
+  return steps.map((action, index) => ({
+    action,
+    expected: index === steps.length - 1 ? expectedResult : '按步骤描述继续执行',
+  }))
+})
 
 const flattenDirectoryTree = (nodes: CaseDirectory[], depth = 0): Array<{ node: CaseDirectory; depth: number }> => {
   const flattened: Array<{ node: CaseDirectory; depth: number }> = []
@@ -311,7 +387,7 @@ const flattenDirectoryTree = (nodes: CaseDirectory[], depth = 0): Array<{ node: 
   return flattened
 }
 
-const visibleDirectories = computed(() => flattenDirectoryTree(caseDirectoryTree))
+const visibleDirectories = computed(() => flattenDirectoryTree(caseDirectoryTree.value))
 
 const findDirectory = (nodes: CaseDirectory[], id: string): CaseDirectory | undefined => {
   for (const node of nodes) {
@@ -334,7 +410,7 @@ const selectedCaseCountForDirectory = (node: CaseDirectory) => {
   return caseLibrary.value.filter(item => directoryIds.has(item.directoryId) && pickerChecked.value.has(item.id)).length
 }
 
-const selectedDirectory = computed(() => findDirectory(caseDirectoryTree, pickerDirectoryId.value))
+const selectedDirectory = computed(() => findDirectory(caseDirectoryTree.value, pickerDirectoryId.value))
 const selectedDirectoryIds = computed(() => selectedDirectory.value ? collectDirectoryIds(selectedDirectory.value) : [pickerDirectoryId.value])
 const pickerRequirementOptions = computed(() => requirements.value.filter(item => !selectedRequirement.value || item.versionId === selectedRequirement.value.versionId))
 
@@ -381,12 +457,18 @@ const openRequirement = (requirement: ManagedRequirement, tab: DetailTab = 'case
   selectedRequirement.value = requirement
   detailTab.value = tab
   reviewCaseId.value = null
+  reviewCaseDetail.value = null
+  reviewCaseDetailError.value = ''
+  reviewCaseDetailRequestSeq += 1
   emit('detail-state-change', { id: requirement.id, tab })
 }
 
 const closeDetail = () => {
   selectedRequirement.value = null
   reviewCaseId.value = null
+  reviewCaseDetail.value = null
+  reviewCaseDetailError.value = ''
+  reviewCaseDetailRequestSeq += 1
   emit('detail-state-change', { id: null, tab: null })
 }
 
@@ -725,7 +807,12 @@ const removeLinkedCase = async (id: string) => {
   } finally {
     isSubmitting.value = false
   }
-  if (reviewCaseId.value === id) reviewCaseId.value = null
+  if (reviewCaseId.value === id) {
+    reviewCaseId.value = null
+    reviewCaseDetail.value = null
+    reviewCaseDetailError.value = ''
+    reviewCaseDetailRequestSeq += 1
+  }
 }
 
 const initiateReview = async () => {
@@ -756,10 +843,27 @@ const reReviewCase = async (_caseItem: LinkedRequirementCase) => {
   await initiateReview()
 }
 
+const loadReviewCaseDetail = async (caseId: string) => {
+  const requestSeq = ++reviewCaseDetailRequestSeq
+  reviewCaseDetailLoading.value = true
+  reviewCaseDetailError.value = ''
+  reviewCaseDetail.value = null
+  try {
+    reviewCaseDetail.value = await caseApi.getCaseDetail(Number(caseId), selectedWorkspaceCode.value)
+  } catch (error) {
+    if (requestSeq === reviewCaseDetailRequestSeq) {
+      reviewCaseDetailError.value = error instanceof Error ? error.message : '用例详情加载失败'
+    }
+  } finally {
+    if (requestSeq === reviewCaseDetailRequestSeq) reviewCaseDetailLoading.value = false
+  }
+}
+
 const openReviewDrawer = (caseItem: LinkedRequirementCase) => {
   reviewCaseId.value = caseItem.id
   rejectEditorOpen.value = false
   rejectNote.value = caseItem.reviewNote || ''
+  void loadReviewCaseDetail(caseItem.id)
 }
 
 const navigateReviewCase = (offset: number) => {
@@ -997,7 +1101,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                 <div v-for="plan in currentRequirementPlans" :key="plan.id">
                   <ClipboardList :size="14" />
                   <span>{{ plan.name }}</span>
-                  <em :class="`is-${plan.status}`">{{ plan.status === 'in-progress' ? '进行中' : '已完成' }}</em>
+                  <em :class="`is-${plan.status}`">{{ requirementPlanStatusLabel(plan.status) }}</em>
                 </div>
               </div>
             </section>
@@ -1113,7 +1217,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             <main>
               <div class="requirement-management__picker-toolbar"><label><Search :size="13" /><input v-model="pickerKeyword" type="search" placeholder="搜索用例名称或编号…"></label><select v-model="pickerRequirementFilter"><option value="all">按需求筛选</option><option v-for="requirement in pickerRequirementOptions" :key="requirement.id" :value="requirement.id">{{ requirement.id }} · {{ requirement.title }}</option></select></div>
               <div class="requirement-management__picker-breadcrumb"><Folder :size="11" /><span>{{ selectedDirectory?.label || '全部' }}</span><small>({{ filteredLibraryCases.length }} 条)</small></div>
-              <div class="requirement-management__picker-table-wrap"><table><thead><tr><th><input type="checkbox" :checked="allVisibleCasesChecked" @change="toggleAllVisibleCases"></th><th>编号</th><th>用例名称</th><th>所属目录</th><th>优先级</th></tr></thead><tbody><tr v-for="caseItem in filteredLibraryCases" :key="caseItem.id" :class="{ 'is-checked': pickerChecked.has(caseItem.id) }" @click="togglePickerCase(caseItem.id)"><td><input type="checkbox" :checked="pickerChecked.has(caseItem.id)" @click.stop @change="togglePickerCase(caseItem.id)"></td><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><span><Folder :size="10" />{{ findDirectory(caseDirectoryTree, caseItem.directoryId)?.label }}</span></td><td><span class="requirement-management__badge is-priority" :style="priorityStyle(caseItem.priority)">{{ caseItem.priority }}</span></td></tr><tr v-if="!filteredLibraryCases.length"><td colspan="5">该目录下暂无用例</td></tr></tbody></table></div>
+              <div class="requirement-management__picker-table-wrap"><table><thead><tr><th><input type="checkbox" :checked="allVisibleCasesChecked" @change="toggleAllVisibleCases"></th><th>编号</th><th>用例名称</th><th>所属目录</th><th>优先级</th></tr></thead><tbody><tr v-for="caseItem in filteredLibraryCases" :key="caseItem.id" :class="{ 'is-checked': pickerChecked.has(caseItem.id) }" @click="togglePickerCase(caseItem.id)"><td><input type="checkbox" :checked="pickerChecked.has(caseItem.id)" @click.stop @change="togglePickerCase(caseItem.id)"></td><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><span><Folder :size="10" />{{ findDirectory(caseDirectoryTree, caseItem.directoryId)?.label || caseItem.module }}</span></td><td><span class="requirement-management__badge is-priority" :style="priorityStyle(caseItem.priority)">{{ caseItem.priority }}</span></td></tr><tr v-if="!filteredLibraryCases.length"><td colspan="5">该目录下暂无用例</td></tr></tbody></table></div>
             </main>
           </div>
           <footer><span>已选 <strong>{{ pickerChecked.size }}</strong> 个用例</span><button class="requirement-management__button is-ghost" type="button" @click="casePickerOpen = false">取消</button><button class="requirement-management__button" type="button" :disabled="!pickerChecked.size" @click="confirmCaseSelection">确认添加</button></footer>
@@ -1122,15 +1226,19 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
     </Transition>
 
     <Transition name="requirement-drawer">
-      <aside v-if="reviewCase && reviewCaseDetail" class="requirement-management__review-drawer">
+      <aside v-if="reviewCase" class="requirement-management__review-drawer">
         <header><div><p><code>{{ reviewCase.no }}</code><span class="requirement-management__badge" :style="reviewStyle(reviewCase.reviewStatus)">{{ reviewStatusConfig[reviewCase.reviewStatus].label }}</span><span class="requirement-management__badge is-priority" :style="priorityStyle(caseLibrary.find(item => item.id === reviewCase?.id)?.priority || 'P2')">{{ caseLibrary.find(item => item.id === reviewCase?.id)?.priority || 'P2' }}</span><small>{{ caseLibrary.find(item => item.id === reviewCase?.id)?.module }}</small></p><h2>{{ reviewCase.title }}</h2></div><button type="button" aria-label="关闭" @click="reviewCaseId = null"><X :size="15" /></button></header>
         <div class="requirement-management__review-content">
-          <section><h3><i />前置条件</h3><p>{{ reviewCaseDetail.precondition }}</p></section>
-          <section><h3><i />测试步骤</h3><div class="requirement-management__steps"><div><strong>#</strong><strong>操作步骤</strong><strong>预期结果</strong></div><div v-for="(step, index) in reviewCaseDetail.steps" :key="index"><b>{{ index + 1 }}</b><span>{{ step.action }}</span><span>{{ step.expected }}</span></div></div></section>
-          <p v-if="reviewCase.reviewStatus === 'rejected' && reviewCase.reviewNote && !rejectEditorOpen" class="requirement-management__rejection-note"><XCircle :size="13" />{{ reviewCase.reviewNote }}</p>
-          <section v-if="rejectEditorOpen" class="requirement-management__reject-editor"><h3>驳回原因</h3><textarea v-model="rejectNote" rows="3" placeholder="请说明驳回原因，帮助用例作者修改…" autofocus /><div><button class="requirement-management__button is-ghost is-small" type="button" @click="rejectEditorOpen = false">取消</button><button class="requirement-management__button is-danger is-small" type="button" @click="submitRejectCase">确认驳回</button></div></section>
+          <div v-if="reviewCaseDetailLoading" class="requirement-management__empty-card">正在加载用例详情...</div>
+          <div v-else-if="reviewCaseDetailError" class="requirement-management__empty-card"><strong>{{ reviewCaseDetailError }}</strong><button class="requirement-management__button is-ghost is-small" type="button" @click="loadReviewCaseDetail(reviewCase.id)">重新加载</button></div>
+          <template v-else-if="reviewCaseDetail">
+            <section><h3><i />前置条件</h3><p>{{ plainCaseText(reviewCaseDetail.precondition) || '—' }}</p></section>
+            <section><h3><i />测试步骤</h3><div class="requirement-management__steps"><div><strong>#</strong><strong>操作步骤</strong><strong>预期结果</strong></div><div v-for="(step, index) in reviewStepRows" :key="index"><b>{{ index + 1 }}</b><span>{{ step.action }}</span><span>{{ step.expected }}</span></div></div></section>
+            <p v-if="reviewCase.reviewStatus === 'rejected' && reviewCase.reviewNote && !rejectEditorOpen" class="requirement-management__rejection-note"><XCircle :size="13" />{{ reviewCase.reviewNote }}</p>
+            <section v-if="rejectEditorOpen" class="requirement-management__reject-editor"><h3>驳回原因</h3><textarea v-model="rejectNote" rows="3" placeholder="请说明驳回原因，帮助用例作者修改…" autofocus /><div><button class="requirement-management__button is-ghost is-small" type="button" @click="rejectEditorOpen = false">取消</button><button class="requirement-management__button is-danger is-small" type="button" @click="submitRejectCase">确认驳回</button></div></section>
+          </template>
         </div>
-        <footer>
+        <footer v-if="reviewCaseDetail && !reviewCaseDetailLoading && !reviewCaseDetailError">
           <div class="requirement-management__drawer-nav"><button type="button" :disabled="reviewCaseIndex <= 0" @click="navigateReviewCase(-1)"><ChevronLeft :size="13" />上一条</button><span>{{ reviewCaseIndex + 1 }} / {{ linkedCases.length }}</span><button type="button" :disabled="reviewCaseIndex >= linkedCases.length - 1" @click="navigateReviewCase(1)">下一条<ChevronRight :size="13" /></button></div>
           <div class="requirement-management__drawer-actions" :class="`is-${reviewCase.reviewStatus}`"><template v-if="reviewCase.reviewStatus === 'passed'"><p><CheckCircle2 :size="15" />已通过评审</p></template><template v-else-if="reviewCase.reviewStatus === 'rejected'"><p><XCircle :size="15" />已驳回</p><button v-if="canReview" class="requirement-management__button is-ghost is-small" type="button" @click="passReviewCase">撤回并通过</button></template><template v-else><p>{{ reviewCase.reviewStatus === 'reviewing' ? '请审阅上方步骤后操作' : '用例尚未进入评审流程' }}</p><button v-if="canReview" class="requirement-management__button is-reject" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="rejectEditorOpen = true">驳回</button><button v-if="canReview" class="requirement-management__button is-success" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="passReviewCase">通过</button></template></div>
         </footer>
