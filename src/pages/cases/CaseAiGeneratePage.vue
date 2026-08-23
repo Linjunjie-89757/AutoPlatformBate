@@ -2876,6 +2876,8 @@ onBeforeUnmount(() => {
   height: 38px;
   margin-bottom: 24px;
   padding: 3px;
+  border-radius: 7px;
+  background: var(--ai-fill);
 }
 
 .figma-ai-case-generation__mode-tabs button {
@@ -2886,14 +2888,13 @@ onBeforeUnmount(() => {
   color: var(--ai-text-3);
   background: transparent;
   font-size: 13px;
+  font-weight: 500;
 }
 
 .figma-ai-case-generation__mode-tabs button.is-active {
-  border: 1px solid var(--ai-border);
   color: var(--ai-text-1);
   background: #fff;
-  box-shadow: 0 2px 5px rgb(0 0 0 / 6%);
-  font-weight: 500;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 10%);
 }
 
 .figma-ai-case-generation__card {
@@ -2951,7 +2952,7 @@ onBeforeUnmount(() => {
 .figma-ai-case-generation__card input,
 .figma-ai-case-generation__card textarea {
   width: 100%;
-  border: 1px solid #d9dce1;
+  border: 1px solid var(--ai-border);
   border-radius: 6px;
   outline: 0;
   color: var(--ai-text-1);
@@ -2960,8 +2961,12 @@ onBeforeUnmount(() => {
 }
 
 .figma-ai-case-generation__card input {
-  height: 41px;
-  padding: 0 13px;
+  height: 40px;
+  padding: 9px 12px;
+}
+
+.figma-ai-case-generation__requirement-card > label:first-child input {
+  font-size: 14px;
 }
 
 .figma-ai-case-generation__card textarea {
@@ -3156,9 +3161,9 @@ button.figma-ai-case-generation__dropzone:hover {
 }
 
 .figma-ai-case-generation__ai-config.config-status-danger {
-  border-color: #ffccc7;
-  color: #a8071a;
-  background: #fff8f7;
+  border-color: rgb(245 63 63 / 19%);
+  color: var(--ai-danger);
+  background: #fff0f0;
 }
 
 .figma-ai-case-generation__ai-config.config-status-danger > svg {
@@ -3197,7 +3202,7 @@ button.figma-ai-case-generation__dropzone:hover {
   gap: 4px;
   align-content: center;
   padding: 8px 13px;
-  border: 1px solid #d9dce1;
+  border: 1px solid var(--ai-border);
   border-radius: 6px;
   color: var(--ai-text-3);
   background: #fff;
@@ -3207,7 +3212,7 @@ button.figma-ai-case-generation__dropzone:hover {
 .figma-ai-case-generation__output-options button.is-active {
   border: 2px solid var(--ai-primary);
   padding: 7px 12px;
-  background: #f7f9ff;
+  background: rgb(22 93 255 / 3%);
 }
 
 .figma-ai-case-generation__output-options button.is-active > strong {
@@ -3241,31 +3246,37 @@ button.figma-ai-case-generation__dropzone:hover {
   white-space: nowrap;
 }
 
-.figma-ai-case-generation__primary-button,
-.figma-ai-case-generation__ghost-button,
-.figma-ai-case-generation__danger-button {
+.figma-ai-case-generation .figma-ai-case-generation__primary-button,
+.figma-ai-case-generation .figma-ai-case-generation__ghost-button,
+.figma-ai-case-generation .figma-ai-case-generation__danger-button {
   display: inline-flex;
   height: 36px;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 0 16px;
+  border: 1px solid transparent;
   border-radius: 6px;
   font-size: 13px;
+  font-weight: 500;
 }
 
-.figma-ai-case-generation__primary-button {
+.figma-ai-case-generation .figma-ai-case-generation__primary-button {
+  border-color: var(--ai-primary);
   color: #fff;
   background: var(--ai-primary);
 }
 
-.figma-ai-case-generation__primary-button:hover {
+.figma-ai-case-generation .figma-ai-case-generation__primary-button:hover:not(:disabled),
+.figma-ai-case-generation .figma-ai-case-generation__primary-button:focus-visible:not(:disabled) {
+  border-color: var(--ai-primary-hover);
+  color: #fff;
   background: var(--ai-primary-hover);
 }
 
-.figma-ai-case-generation__primary-button:disabled,
-.figma-ai-case-generation__ghost-button:disabled,
-.figma-ai-case-generation__danger-button:disabled {
+.figma-ai-case-generation .figma-ai-case-generation__primary-button:disabled,
+.figma-ai-case-generation .figma-ai-case-generation__ghost-button:disabled,
+.figma-ai-case-generation .figma-ai-case-generation__danger-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
@@ -3274,16 +3285,30 @@ button.figma-ai-case-generation__dropzone:hover {
   animation: figma-ai-spin 1s linear infinite;
 }
 
-.figma-ai-case-generation__ghost-button {
-  border: 1px solid #d9dce1;
+.figma-ai-case-generation .figma-ai-case-generation__ghost-button {
+  border-color: var(--ai-border);
   color: var(--ai-primary);
-  background: #fff;
+  background: transparent;
 }
 
-.figma-ai-case-generation__danger-button {
-  border: 1px solid #ffccc7;
+.figma-ai-case-generation .figma-ai-case-generation__danger-button {
+  border-color: rgb(245 63 63 / 19%);
   color: var(--ai-danger);
-  background: #fff;
+  background: transparent;
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__ghost-button:hover:not(:disabled),
+.figma-ai-case-generation .figma-ai-case-generation__ghost-button:focus-visible:not(:disabled) {
+  border-color: var(--ai-border);
+  color: var(--ai-primary);
+  background: transparent;
+}
+
+.figma-ai-case-generation .figma-ai-case-generation__danger-button:hover:not(:disabled),
+.figma-ai-case-generation .figma-ai-case-generation__danger-button:focus-visible:not(:disabled) {
+  border-color: rgb(245 63 63 / 19%);
+  color: var(--ai-danger);
+  background: transparent;
 }
 
 .figma-ai-case-generation__hidden-input {
