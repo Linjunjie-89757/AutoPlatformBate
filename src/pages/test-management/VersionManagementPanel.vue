@@ -175,6 +175,55 @@ const mapBugStatus = (value: string): BugStatus => {
   return 'open'
 }
 
+type VersionActivityItem = Awaited<ReturnType<typeof testManagementApi.listVersionActivities>>['items'][number]
+
+const versionLogType = (actionCode: string): VersionLog['type'] => {
+  if (actionCode.includes('CREATED')) return 'create'
+  if (actionCode.includes('STATUS')) return 'status'
+  return 'edit'
+}
+
+const versionStatusLabel = (value: unknown) => {
+  if (typeof value !== 'string') return '未知状态'
+  return versionStatusConfig[normalizeVersionStatus(value)]?.label || value
+}
+
+const formatVersionLogDetail = (item: VersionActivityItem) => {
+  if (!item.detail) return '—'
+  try {
+    const detail = JSON.parse(item.detail) as Record<string, unknown>
+    if (item.actionCode === 'VERSION_CREATED') {
+      const name = typeof detail.name === 'string' ? `「${detail.name}」` : ''
+      const versionNo = typeof detail.versionNo === 'string' ? `（${detail.versionNo}）` : ''
+      return `新建版本${name}${versionNo}`
+    }
+    if (item.actionCode === 'VERSION_UPDATED') {
+      const beforeName = typeof detail.beforeName === 'string' ? detail.beforeName : ''
+      const afterName = typeof detail.afterName === 'string' ? detail.afterName : ''
+      return beforeName && afterName && beforeName !== afterName ? `版本名称：${beforeName} → ${afterName}` : '版本信息已更新'
+    }
+    if (item.actionCode === 'VERSION_STATUS_CHANGED') {
+      const from = versionStatusLabel(detail.from)
+      const to = versionStatusLabel(detail.to)
+      const force = detail.force === true
+      const reason = typeof detail.reason === 'string' ? detail.reason.trim() : ''
+      const bypassedCount = Array.isArray(detail.bypassedChecks) ? detail.bypassedChecks.length : 0
+      const snapshot = Array.isArray(detail.qualityGateSnapshot) ? detail.qualityGateSnapshot : []
+      const passedCount = snapshot.filter(check => typeof check === 'object' && check !== null && (check as Record<string, unknown>).passed === true).length
+      const action = force ? (detail.to === 'RELEASED' ? '强制发布' : '强制推进') : '状态流转'
+      const additions = [
+        reason ? `原因：${reason}` : '',
+        bypassedCount ? `绕过 ${bypassedCount} 项门禁` : '',
+        snapshot.length ? `准出快照 ${passedCount}/${snapshot.length} 项达标` : '',
+      ].filter(Boolean)
+      return `${action}：${from} → ${to}${additions.length ? `；${additions.join('；')}` : ''}`
+    }
+  } catch {
+    return item.detail
+  }
+  return item.detail
+}
+
 const mapPlanDefect = (item: TestPlanDefectItem, plan = ''): VersionBug => ({
   no: item.bugNo,
   title: item.title,
@@ -246,7 +295,12 @@ const loadVersionDetail = async (version: ManagedVersion) => {
     versionRequirements.value = requirements.items.map(mapRequirement)
     versionPlans.value = plans.items.map(mapPlan)
     versionLogs.value = activities.items.map(item => ({
-      id: String(item.id), actor: item.actorName || '系统', action: item.actionName, detail: item.detail || '', time: formatTestManagementDateTime(item.createdAt), type: 'edit',
+      id: String(item.id),
+      actor: item.actorName || '系统',
+      action: item.actionName,
+      detail: formatVersionLogDetail(item),
+      time: formatTestManagementDateTime(item.createdAt),
+      type: versionLogType(item.actionCode),
     }))
     const defects = await Promise.all(plans.items.map(item => testManagementApi.listPlanDefects(selectedWorkspaceCode.value, item.id)))
     versionBugs.value = defects.flatMap((items, index) => items.map(item => mapPlanDefect(item, plans.items[index]?.name || '')))
