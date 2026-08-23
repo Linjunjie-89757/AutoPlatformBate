@@ -153,6 +153,29 @@ public class AiCaseController {
         return ApiResponse.ok(aiCaseService.probeProviderModel(id, workspaceCode, request), "AI provider model probed");
     }
 
+    @PutMapping("/providers/{id}/models/{modelId}")
+    public ApiResponse<AiProviderModelItem> updateProviderModelStatus(
+            @PathVariable Long id,
+            @PathVariable Long modelId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody UpdateAiProviderModelStatusRequest request
+    ) {
+        return ApiResponse.ok(
+                aiCaseService.updateProviderModelStatus(id, modelId, workspaceCode, request.selectable()),
+                "AI provider model status updated"
+        );
+    }
+
+    @DeleteMapping("/providers/{id}/models/{modelId}")
+    public ApiResponse<Void> deleteProviderModel(
+            @PathVariable Long id,
+            @PathVariable Long modelId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        aiCaseService.deleteProviderModel(id, modelId, workspaceCode);
+        return ApiResponse.ok(null, "AI provider model deleted");
+    }
+
     @GetMapping("/config/{id}/secret")
     public ApiResponse<AiCaseConfigSecretResponse> getConfigSecret(
             @PathVariable Long id,

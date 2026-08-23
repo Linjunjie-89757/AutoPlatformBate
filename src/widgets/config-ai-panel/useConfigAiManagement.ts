@@ -45,25 +45,26 @@ export function useConfigAiManagement(workspaceCode: Readonly<Ref<string>>) {
       if (keyword && !provider.connectionName.toLowerCase().includes(keyword)) return false
       if (providerFilter.value !== 'all' && getProviderType(provider) !== providerFilter.value) return false
       if (statusFilter.value === 'normal') return provider.status === 1
-      if (statusFilter.value === 'error') return provider.status === 0 && provider.apiKeyConfigured === false
-      if (statusFilter.value === 'disabled') return provider.status === 0 && provider.apiKeyConfigured
+      if (statusFilter.value === 'error') return provider.status === 1 && (!provider.apiKeyConfigured || provider.lastTestStatus === 'FAILED')
+      if (statusFilter.value === 'disabled') return provider.status === 0
       return true
     })
   })
 
   const stats = computed(() => {
     const items = providers.value
+    const hasFailedTest = (item: AiProviderConnectionItem) => item.lastTestStatus === 'FAILED'
     return [
       { label: '连接总数', value: items.length, color: '#1D2129', bg: '#F2F3F5' },
-      { label: '正常连接', value: items.filter(item => item.status === 1).length, color: '#00B42A', bg: '#E8FFEA' },
-      { label: '异常连接', value: items.filter(item => item.status === 0 && !item.apiKeyConfigured).length, color: '#F53F3F', bg: '#FFE8E8' },
-      { label: '已停用', value: items.filter(item => item.status === 0 && item.apiKeyConfigured).length, color: '#86909C', bg: '#F2F3F5' },
+      { label: '正常连接', value: items.filter(item => item.status === 1 && item.apiKeyConfigured && !hasFailedTest(item)).length, color: '#00B42A', bg: '#E8FFEA' },
+      { label: '异常连接', value: items.filter(item => item.status === 1 && (!item.apiKeyConfigured || hasFailedTest(item))).length, color: '#F53F3F', bg: '#FFE8E8' },
+      { label: '已停用', value: items.filter(item => item.status === 0).length, color: '#86909C', bg: '#F2F3F5' },
     ]
   })
 
   const warningText = computed(() => {
     const missingKey = providers.value.filter(item => !item.apiKeyConfigured).length
-    const errorCount = providers.value.filter(item => item.status === 0 && !item.apiKeyConfigured).length
+    const errorCount = providers.value.filter(item => item.status === 1 && (!item.apiKeyConfigured || item.lastTestStatus === 'FAILED')).length
     if (!missingKey && !errorCount) return ''
     return `${missingKey} 个连接未配置 API Key，${errorCount} 个连接状态异常`
   })
@@ -277,14 +278,19 @@ export function useConfigAiManagement(workspaceCode: Readonly<Ref<string>>) {
   }
 
   function getStatusMeta(provider: AiProviderConnectionItem) {
-    if (provider.status === 1) return { label: '正常', color: '#4E5969', dot: '#00B42A' }
-    if (!provider.apiKeyConfigured) return { label: '异常', color: '#F53F3F', dot: '#F53F3F' }
-    return { label: '已停用', color: '#86909C', dot: '#C9CDD4' }
+    if (provider.status === 0) return { label: '已停用', color: '#86909C', dot: '#C9CDD4' }
+    if (!provider.apiKeyConfigured || provider.lastTestStatus === 'FAILED') {
+      return { label: '异常', color: '#F53F3F', dot: '#F53F3F' }
+    }
+    return { label: '正常', color: '#4E5969', dot: '#00B42A' }
   }
 
   function getLastTestMeta(provider: AiProviderConnectionItem) {
-    if (!provider.lastVerifiedAt) return { main: '从未测试', sub: '', failed: false }
-    return { main: '✓ 成功', sub: formatAiTime(provider.lastVerifiedAt), failed: false }
+    if (provider.lastTestStatus === 'FAILED') {
+      return { main: '✗ 失败', sub: formatAiTime(provider.lastTestAt), failed: true }
+    }
+    if (!provider.lastTestAt && !provider.lastVerifiedAt) return { main: '从未测试', sub: '', failed: false }
+    return { main: '✓ 成功', sub: formatAiTime(provider.lastTestAt || provider.lastVerifiedAt), failed: false }
   }
 
   async function handleModelProviderChanged(provider: AiProviderConnectionItem) {

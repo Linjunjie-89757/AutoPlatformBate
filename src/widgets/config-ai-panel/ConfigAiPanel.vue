@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toRef } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Clock, Sparkles } from '@lucide/vue'
 
 import { figmaConfigAiIcons } from '@/shared/assets/figma-icons'
 
@@ -112,7 +113,7 @@ const {
       </select>
     </div>
 
-    <section class="config-ai-table-card">
+    <section v-if="filteredProviders.length" class="config-ai-table-card">
       <div class="config-ai-table-wrap">
         <table class="config-ai-table">
           <thead>
@@ -129,7 +130,7 @@ const {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="provider in filteredProviders" :key="provider.id">
+            <tr v-for="provider in filteredProviders" :key="provider.id" class="config-ai-provider-row">
               <td>
                 <div class="config-ai-conn">
                   <span
@@ -195,8 +196,16 @@ const {
               </td>
               <td>
                 <div class="config-ai-row-actions">
-                  <button type="button" title="测试连接" :disabled="testingId === provider.id" @click="testProvider(provider)">
-                    <img :src="figmaConfigAiIcons.action.test" alt="">
+                  <button
+                    type="button"
+                    title="测试连接"
+                    :class="{ 'is-testing': testingId === provider.id }"
+                    :disabled="testingId === provider.id"
+                    :aria-busy="testingId === provider.id"
+                    @click="testProvider(provider)"
+                  >
+                    <Clock v-if="testingId === provider.id" :size="13" aria-hidden="true" />
+                    <img v-else :src="figmaConfigAiIcons.action.test" alt="">
                   </button>
                   <button type="button" title="模型管理" @click="openModels(provider)">
                     <img :src="figmaConfigAiIcons.action.model" alt="">
@@ -207,14 +216,11 @@ const {
                   <button type="button" title="启停" @click="toggleProvider(provider)">
                     <img :src="figmaConfigAiIcons.action.power" alt="">
                   </button>
-                  <button type="button" title="删除" @click="deleteProvider(provider)">
+                  <button type="button" class="is-danger" title="删除" @click="deleteProvider(provider)">
                     <img :src="figmaConfigAiIcons.action.delete" alt="">
                   </button>
                 </div>
               </td>
-            </tr>
-            <tr v-if="!filteredProviders.length">
-              <td class="config-ai-table__empty" colspan="9">暂无 AI 连接</td>
             </tr>
           </tbody>
         </table>
@@ -224,6 +230,16 @@ const {
         <img :src="figmaConfigAiIcons.warning" alt="">
         <span>{{ warningText }}</span>
       </div>
+    </section>
+
+    <section v-else class="config-ai-empty">
+      <Sparkles :size="32" aria-hidden="true" />
+      <p>暂无 AI 连接</p>
+      <span>点击「新增连接」添加第一个 AI 服务商配置</span>
+      <button class="config-ai-btn config-ai-btn--primary" type="button" @click="openCreatePicker">
+        <img :src="figmaConfigAiIcons.plus" alt="">
+        新增连接
+      </button>
     </section>
 
     <section class="config-ai-usage-section" :class="{ 'is-open': usageBindOpen }">

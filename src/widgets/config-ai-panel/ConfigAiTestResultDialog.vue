@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { AlertTriangle } from '@lucide/vue'
+
 import type { AiProviderTestResult } from '@/entities/ai-provider'
 import { figmaConfigAiIcons } from '@/shared/assets/figma-icons'
 
@@ -29,10 +31,11 @@ defineEmits<{
             class="config-ai-test-dialog__status"
             :class="{ 'is-failed': !result.success }"
           >
-            <img :src="figmaConfigAiIcons.testSuccess" alt="">
+            <img v-if="result.success" :src="figmaConfigAiIcons.testSuccess" alt="">
+            <AlertTriangle v-else :size="22" aria-hidden="true" />
             <div>
               <strong>{{ result.success ? '连接测试成功' : '连接测试失败' }}</strong>
-              <p>{{ result.message || (result.success ? 'API 正常响应，连接可用' : '无法建立连接，请检查配置') }}</p>
+              <p>{{ result.success ? 'API 正常响应，连接可用' : '无法建立连接，请检查配置' }}</p>
             </div>
           </div>
 
@@ -49,7 +52,20 @@ defineEmits<{
               <dt>测试时间</dt>
               <dd>{{ result.verifiedAt ? result.verifiedAt.replace('T', ' ').slice(0, 19) : '-' }}</dd>
             </div>
+            <div v-if="!result.success && result.message">
+              <dt>错误信息</dt>
+              <dd class="is-error">{{ result.message }}</dd>
+            </div>
           </dl>
+
+          <div v-if="!result.success" class="config-ai-test-dialog__suggestion">
+            <strong>建议处理方式</strong>
+            <ul>
+              <li>检查 API Key 是否正确配置且未过期</li>
+              <li>确认 API Base URL 格式正确</li>
+              <li>检查网络连通性和防火墙设置</li>
+            </ul>
+          </div>
         </div>
 
         <footer class="config-ai-test-dialog__foot">
@@ -106,6 +122,16 @@ defineEmits<{
   border-radius: 5px;
   background: transparent;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.config-ai-test-dialog__icon-btn:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-ai-test-dialog__icon-btn:hover:not(:disabled) img {
+  filter: brightness(0) saturate(100%) invert(11%) sepia(12%) saturate(1551%) hue-rotate(180deg) brightness(95%) contrast(91%);
 }
 
 .config-ai-test-dialog__icon-btn img {
@@ -130,9 +156,15 @@ defineEmits<{
   background: #ffe8e8;
 }
 
+.config-ai-test-dialog__status.is-failed svg {
+  color: #f53f3f;
+  flex: 0 0 auto;
+}
+
 .config-ai-test-dialog__status img {
   width: 22px;
   height: 22px;
+  flex: 0 0 auto;
 }
 
 .config-ai-test-dialog__status strong {
@@ -195,6 +227,44 @@ defineEmits<{
   color: #4e5969;
   font-size: 13px;
   line-height: 19.5px;
+}
+
+.config-ai-test-dialog__info dd.is-error {
+  color: #f53f3f;
+  overflow-wrap: anywhere;
+}
+
+.config-ai-test-dialog__suggestion {
+  margin-top: 14px;
+  padding: 11.5px;
+  border: 1px solid #ffd6a0;
+  border-radius: 11px;
+  background: #fff3e8;
+}
+
+.config-ai-test-dialog__suggestion strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #ff7d00;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.config-ai-test-dialog__suggestion ul {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-ai-test-dialog__suggestion li::before {
+  content: '· ';
 }
 
 .config-ai-test-dialog__foot {

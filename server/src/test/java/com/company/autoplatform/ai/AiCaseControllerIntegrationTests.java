@@ -302,7 +302,7 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
-    void providerTestFailureMarksConnectionDisabledAndConfigTestUsesBoundProvider() throws Exception {
+    void providerTestFailureRecordsHealthWithoutDisablingConnectionAndConfigTestUsesBoundProvider() throws Exception {
         reset(aiProviderClient);
         String unique = uniquePrefix("provider-test");
         Long failingProviderId = createProvider(unique + "-failing-provider", "gpt-5-mini", unique + "-failing-secret");
@@ -320,7 +320,9 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[?(@.id == %d)].status".formatted(failingProviderId), hasItem(0)));
+                .andExpect(jsonPath("$.data[?(@.id == %d)].status".formatted(failingProviderId), hasItem(1)))
+                .andExpect(jsonPath("$.data[?(@.id == %d)].lastTestStatus".formatted(failingProviderId), hasItem("FAILED")))
+                .andExpect(jsonPath("$.data[?(@.id == %d)].lastTestAt".formatted(failingProviderId), hasItem(notNullValue())));
 
         reset(aiProviderClient);
         Long providerId = createProvider(unique + "-config-provider", "gpt-5.1", unique + "-config-secret");
@@ -337,9 +339,90 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void providerModelStatusAndDeleteEnforceDefaultAndBindingRules() throws Exception {
+        reset(aiProviderClient);
+        switchToTestUser(14L, "zhaofeng");
+        String unique = uniquePrefix("provider-model-actions");
+        Long providerId = createProvider(unique + "-provider", unique + "-default", unique + "-secret");
+        AiModelCapabilities capabilities = capabilities(true, true, false);
+        when(aiProviderClient.fetchModels(any(), any())).thenReturn(new AiModelFetchResult(List.of(
+                new AiProviderModelItem(null, null, unique + "-default", "Default Model", capabilities, true, null, null),
+                new AiProviderModelItem(null, null, unique + "-alternate", "Alternate Model", capabilities, true, null, null),
+                new AiProviderModelItem(null, null, unique + "-disposable", "Disposable Model", capabilities, true, null, null)
+        ), "mock models fetched"));
+
+        String fetchResponse = mockMvc.perform(post("/api/cases/ai/providers/{id}/fetch-models", providerId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        var fetchedModels = objectMapper.readTree(fetchResponse).path("data").path("models");
+        Long alternateModelId = java.util.stream.StreamSupport.stream(fetchedModels.spliterator(), false)
+                .filter(model -> model.path("modelName").asText().equals(unique + "-alternate"))
+                .findFirst()
+                .orElseThrow()
+                .path("id")
+                .asLong();
+        Long defaultModelId = java.util.stream.StreamSupport.stream(fetchedModels.spliterator(), false)
+                .filter(model -> model.path("modelName").asText().equals(unique + "-default"))
+                .findFirst()
+                .orElseThrow()
+                .path("id")
+                .asLong();
+        Long disposableModelId = java.util.stream.StreamSupport.stream(fetchedModels.spliterator(), false)
+                .filter(model -> model.path("modelName").asText().equals(unique + "-disposable"))
+                .findFirst()
+                .orElseThrow()
+                .path("id")
+                .asLong();
+
+        mockMvc.perform(put("/api/cases/ai/providers/{id}/models/{modelId}", providerId, alternateModelId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content("{\"selectable\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(alternateModelId.intValue()))
+                .andExpect(jsonPath("$.data.selectable").value(false));
+
+        mockMvc.perform(put("/api/cases/ai/providers/{id}/models/{modelId}", providerId, alternateModelId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content("{\"selectable\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.selectable").value(true));
+
+        createConfig(providerId, "CASE_GENERATOR", unique + "-alternate", unique + " binding", 1, true);
+
+        mockMvc.perform(put("/api/cases/ai/providers/{id}/models/{modelId}", providerId, alternateModelId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content("{\"selectable\":false}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("该模型已被 AI 用途绑定，不能停用"));
+
+        mockMvc.perform(delete("/api/cases/ai/providers/{id}/models/{modelId}", providerId, alternateModelId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("该模型已被 AI 用途绑定，请先解除绑定后再删除"));
+
+        mockMvc.perform(delete("/api/cases/ai/providers/{id}/models/{modelId}", providerId, defaultModelId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("当前模型是默认模型，请先切换默认模型后再删除"));
+
+        mockMvc.perform(delete("/api/cases/ai/providers/{id}/models/{modelId}", providerId, disposableModelId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
     void generateReviewAndImageSupportValidateKeepSynchronousResponseShape() throws Exception {
         reset(aiProviderClient);
-        switchToTestUser(101L, "ai-sync-user");
+        switchToTestUser(12L, "chennan");
         String unique = uniquePrefix("sync");
         Long providerId = createProvider(unique + "-provider", "gpt-4o-mini", unique + "-secret");
         createConfig(providerId, "CASE_GENERATOR", "gpt-4o-mini", unique + " generator prompt", 1, true);
@@ -461,7 +544,7 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
     @Test
     void imageSupportValidateFailsWhenGeneratorModelDoesNotSupportImages() throws Exception {
         reset(aiProviderClient);
-        switchToTestUser(102L, "ai-image-user");
+        switchToTestUser(13L, "liping");
         String unique = uniquePrefix("image-fail");
         Long providerId = createProvider(unique + "-provider", "text-only-model", unique + "-secret");
         createConfig(providerId, "CASE_GENERATOR", "text-only-model", unique + " generator prompt", 1, false);

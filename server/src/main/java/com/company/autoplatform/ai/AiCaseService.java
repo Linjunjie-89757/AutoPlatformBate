@@ -305,6 +305,20 @@ public class AiCaseService {
         return aiProviderDomainService.probeProviderModel(id, headerWorkspaceCode, request);
     }
 
+    public AiProviderModelItem updateProviderModelStatus(
+            Long connectionId,
+            Long modelId,
+            String headerWorkspaceCode,
+            boolean selectable
+    ) {
+        return aiProviderDomainService.updateProviderModelStatus(connectionId, modelId, headerWorkspaceCode, selectable);
+    }
+
+    @Transactional
+    public void deleteProviderModel(Long connectionId, Long modelId, String headerWorkspaceCode) {
+        aiProviderDomainService.deleteProviderModel(connectionId, modelId, headerWorkspaceCode);
+    }
+
     public AiCaseConfigResponse bootstrapConfigFromLegacy(String headerWorkspaceCode) {
         return aiCaseConfigDomainService.bootstrapConfigFromLegacy(headerWorkspaceCode);
     }

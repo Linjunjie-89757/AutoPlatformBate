@@ -9,6 +9,7 @@ import type {
   PreviewAiProviderModelsResult,
   ProbeAiProviderModelPayload,
   SaveAiProviderConnectionPayload,
+  UpdateAiProviderModelStatusPayload,
   UpdateAiProviderStatusPayload,
 } from '../model/types'
 
@@ -114,6 +115,30 @@ export const aiProviderApi = {
     const response = await httpPost<ApiResponse<AiProviderModelItem>, ProbeAiProviderModelPayload>(
       `/cases/ai/providers/${id}/models/probe`,
       payload,
+      {
+        headers: workspaceHeaders(workspaceCode),
+      },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async updateProviderModelStatus(workspaceCode: string, connectionId: number, modelId: number, selectable: boolean) {
+    const payload: UpdateAiProviderModelStatusPayload = { selectable }
+    const response = await httpPut<ApiResponse<AiProviderModelItem>, UpdateAiProviderModelStatusPayload>(
+      `/cases/ai/providers/${connectionId}/models/${modelId}`,
+      payload,
+      {
+        headers: workspaceHeaders(workspaceCode),
+      },
+    )
+
+    return unwrapApiResponse(response)
+  },
+
+  async deleteProviderModel(workspaceCode: string, connectionId: number, modelId: number) {
+    const response = await httpDelete<ApiResponse<null>>(
+      `/cases/ai/providers/${connectionId}/models/${modelId}`,
       {
         headers: workspaceHeaders(workspaceCode),
       },

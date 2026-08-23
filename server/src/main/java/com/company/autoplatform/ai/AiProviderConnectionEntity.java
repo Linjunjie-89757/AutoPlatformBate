@@ -47,4 +47,13 @@ public class AiProviderConnectionEntity extends BaseEntity {
 
     @TableField("last_fetch_models_at")
     private LocalDateTime lastFetchModelsAt;
+
+    @TableField("last_test_at")
+    private LocalDateTime lastTestAt;
+
+    @TableField("last_test_status")
+    private String lastTestStatus;
+
+    @TableField("last_test_message")
+    private String lastTestMessage;
 }

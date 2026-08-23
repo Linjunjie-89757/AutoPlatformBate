@@ -17,6 +17,9 @@ public record AiProviderConnectionItem(
         Integer status,
         Integer modelCount,
         LocalDateTime lastVerifiedAt,
-        LocalDateTime lastFetchModelsAt
+        LocalDateTime lastFetchModelsAt,
+        LocalDateTime lastTestAt,
+        String lastTestStatus,
+        String lastTestMessage
 ) {
 }

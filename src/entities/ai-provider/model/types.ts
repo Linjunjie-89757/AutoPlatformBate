@@ -29,6 +29,9 @@ export interface AiProviderConnectionItem {
   modelCount: number | null
   lastVerifiedAt: string | null
   lastFetchModelsAt: string | null
+  lastTestAt: string | null
+  lastTestStatus: 'SUCCESS' | 'FAILED' | null
+  lastTestMessage: string | null
 }
 
 export interface SaveAiProviderConnectionPayload {
@@ -86,6 +89,10 @@ export interface PreviewAiProviderModelsResult {
 
 export interface ProbeAiProviderModelPayload {
   modelName: string
+}
+
+export interface UpdateAiProviderModelStatusPayload {
+  selectable: boolean
 }
 
 export interface UpdateAiProviderStatusPayload extends SaveAiProviderConnectionPayload {

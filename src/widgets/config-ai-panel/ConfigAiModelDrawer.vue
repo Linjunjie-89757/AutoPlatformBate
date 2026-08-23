@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Sparkles } from '@lucide/vue'
 
 import {
   aiProviderApi,
@@ -9,6 +10,7 @@ import {
 } from '@/entities/ai-provider'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaConfigAiIcons } from '@/shared/assets/figma-icons'
+import { confirmDelete } from '@/shared/ui'
 
 import { createStatusPayload, getModelType, modelTypeVisuals } from './model'
 
@@ -26,6 +28,7 @@ const loading = ref(false)
 const syncing = ref(false)
 const probingModelName = ref('')
 const changingDefaultModelName = ref('')
+const changingSelectableModelName = ref('')
 const errorMessage = ref('')
 const models = ref<AiProviderModelItem[]>([])
 
@@ -97,8 +100,39 @@ async function setDefaultModel(model: AiProviderModelItem) {
   }
 }
 
-function unsupported(action: string) {
-  ElMessage.info(`后台暂不支持${action}`)
+async function toggleModel(model: AiProviderModelItem) {
+  changingSelectableModelName.value = model.modelName
+  try {
+    const updated = await aiProviderApi.updateProviderModelStatus(
+      props.workspaceCode,
+      props.provider.id,
+      model.id,
+      !model.selectable,
+    )
+    const index = models.value.findIndex(item => item.id === model.id)
+    if (index >= 0) models.value[index] = updated
+    ElMessage.success(updated.selectable ? `模型 ${model.modelName} 已启用` : `模型 ${model.modelName} 已停用`)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    changingSelectableModelName.value = ''
+  }
+}
+
+async function deleteModel(model: AiProviderModelItem) {
+  try {
+    await confirmDelete({
+      title: '删除 AI 模型',
+      message: `确认删除模型「${model.displayName || model.modelName}」吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+      zIndex: 2300,
+    })
+    await aiProviderApi.deleteProviderModel(props.workspaceCode, props.provider.id, model.id)
+    models.value = models.value.filter(item => item.id !== model.id)
+    ElMessage.success(`模型 ${model.modelName} 已删除`)
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error(getRequestErrorMessage(error))
+  }
 }
 
 function maxContextText(model: AiProviderModelItem) {
@@ -131,7 +165,7 @@ onMounted(() => {
 
 <template>
   <Teleport to="body">
-    <div class="config-ai-model">
+    <div class="config-ai-model" @click.self="$emit('close')">
       <aside class="config-ai-model__drawer">
         <header class="config-ai-model__head">
           <div>
@@ -155,7 +189,7 @@ onMounted(() => {
             <button type="button" @click="loadModels">重试</button>
           </div>
           <div v-else-if="loading" class="config-ai-model__state">模型加载中...</div>
-          <div v-else class="config-ai-model-table">
+          <div v-else-if="models.length" class="config-ai-model-table">
             <table>
               <thead>
                 <tr>
@@ -224,20 +258,31 @@ onMounted(() => {
                       >
                         <img :src="figmaConfigAiIcons.action.test" alt="">
                       </button>
-                      <button type="button" title="启停" @click="unsupported('模型启停')">
+                      <button
+                        type="button"
+                        :title="model.selectable ? '停用' : '启用'"
+                        :disabled="changingSelectableModelName === model.modelName"
+                        @click="toggleModel(model)"
+                      >
                         <img :src="figmaConfigAiIcons.action.power" alt="">
                       </button>
-                      <button type="button" title="删除" @click="unsupported('模型删除')">
+                      <button type="button" title="删除" @click="deleteModel(model)">
                         <img :src="figmaConfigAiIcons.action.delete" alt="">
                       </button>
                     </div>
                   </td>
                 </tr>
-                <tr v-if="!models.length">
-                  <td class="config-ai-model-table__empty" colspan="9">暂无模型数据</td>
-                </tr>
               </tbody>
             </table>
+          </div>
+          <div v-else class="config-ai-model-empty">
+            <Sparkles :size="28" aria-hidden="true" />
+            <p>暂无模型</p>
+            <span>点击「获取模型列表」自动拉取，或手动添加</span>
+            <button class="config-ai-model-empty__refresh" type="button" :disabled="syncing" @click="syncModels">
+              <img :src="figmaConfigAiIcons.refresh" alt="">
+              获取模型列表
+            </button>
           </div>
         </div>
       </aside>
@@ -266,10 +311,11 @@ onMounted(() => {
 
 .config-ai-model__head {
   display: flex;
-  min-height: 59px;
+  box-sizing: border-box;
+  min-height: 71.75px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 21px;
+  padding: 14px 21px;
   border-bottom: 1px solid #e5e6eb;
 }
 
@@ -296,10 +342,12 @@ onMounted(() => {
 
 .config-ai-model__add {
   display: inline-flex;
+  box-sizing: border-box;
+  width: 85.25px;
   height: 28px;
   align-items: center;
   gap: 5.25px;
-  padding: 0 10.5px;
+  padding: 0 10px;
   border: 0;
   border-radius: 7px;
   background: #7816ff;
@@ -307,6 +355,15 @@ onMounted(() => {
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
+  transition: filter 150ms, transform 150ms;
+}
+
+.config-ai-model__add:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.config-ai-model__add:active:not(:disabled) {
+  transform: scale(.98);
 }
 
 .config-ai-model__add img {
@@ -325,6 +382,16 @@ onMounted(() => {
   border-radius: 5px;
   background: transparent;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.config-ai-model__icon-btn:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-ai-model__icon-btn:hover:not(:disabled) img {
+  filter: brightness(0) saturate(100%) invert(11%) sepia(12%) saturate(1551%) hue-rotate(180deg) brightness(95%) contrast(91%);
 }
 
 .config-ai-model__icon-btn img {
@@ -333,7 +400,7 @@ onMounted(() => {
 }
 
 .config-ai-model__body {
-  padding: 17.5px 21px;
+  padding: 17.5px;
 }
 
 .config-ai-model__state {
@@ -394,17 +461,51 @@ onMounted(() => {
 
 .config-ai-model-table th:nth-child(1),
 .config-ai-model-table td:nth-child(1) {
-  width: 120px;
+  width: 110.375px;
+}
+
+.config-ai-model-table tbody tr:hover {
+  background: #fafbff;
 }
 
 .config-ai-model-table th:nth-child(2),
 .config-ai-model-table td:nth-child(2) {
-  width: 118px;
+  width: 98.796875px;
+}
+
+.config-ai-model-table th:nth-child(3),
+.config-ai-model-table td:nth-child(3) {
+  width: 77.046875px;
+}
+
+.config-ai-model-table th:nth-child(4),
+.config-ai-model-table td:nth-child(4) {
+  width: 81.671875px;
+}
+
+.config-ai-model-table th:nth-child(5),
+.config-ai-model-table td:nth-child(5) {
+  width: 45.96875px;
+}
+
+.config-ai-model-table th:nth-child(6),
+.config-ai-model-table td:nth-child(6) {
+  width: 55.34375px;
+}
+
+.config-ai-model-table th:nth-child(7),
+.config-ai-model-table td:nth-child(7) {
+  width: 51.71875px;
+}
+
+.config-ai-model-table th:nth-child(8),
+.config-ai-model-table td:nth-child(8) {
+  width: 58.578125px;
 }
 
 .config-ai-model-table th:nth-child(9),
 .config-ai-model-table td:nth-child(9) {
-  width: 88px;
+  width: 103.5px;
 }
 
 .config-ai-model-table__name {
@@ -511,6 +612,21 @@ onMounted(() => {
   border-radius: 5px;
   background: transparent;
   cursor: pointer;
+  transition: background-color 120ms ease, filter 120ms ease;
+}
+
+.config-ai-model-table__actions button:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-ai-model-table__actions button:hover:not(:disabled) img {
+  filter: brightness(0) saturate(100%) invert(11%) sepia(12%) saturate(1551%) hue-rotate(180deg) brightness(95%) contrast(91%);
+}
+
+.config-ai-model-table__actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .config-ai-model-table__actions img {
@@ -518,8 +634,46 @@ onMounted(() => {
   height: 13px;
 }
 
-.config-ai-model-table__empty {
-  height: 96px;
-  text-align: center;
+.config-ai-model-empty {
+  display: flex;
+  min-height: 192px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #c9cdd4;
+}
+
+.config-ai-model-empty p {
+  margin: 12px 0 0;
+  color: #4e5969;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.config-ai-model-empty span {
+  margin-top: 4px;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.config-ai-model-empty__refresh {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.config-ai-model-empty__refresh img {
+  width: 12px;
+  height: 12px;
 }
 </style>

@@ -104,6 +104,16 @@ defineEmits<{
   border-radius: 5px;
   background: transparent;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.config-ai-picker__icon-btn:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-ai-picker__icon-btn:hover:not(:disabled) img {
+  filter: brightness(0) saturate(100%) invert(11%) sepia(12%) saturate(1551%) hue-rotate(180deg) brightness(95%) contrast(91%);
 }
 
 .config-ai-picker__icon-btn img {

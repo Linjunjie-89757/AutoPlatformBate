@@ -139,14 +139,20 @@ public class AiProviderDomainService {
         try {
             aiProviderClient.testConnection(profile, apiKey);
         } catch (RuntimeException exception) {
-            entity.setStatus(0);
-            entity.setUpdatedAt(LocalDateTime.now());
+            LocalDateTime testedAt = LocalDateTime.now();
+            entity.setLastTestAt(testedAt);
+            entity.setLastTestStatus("FAILED");
+            entity.setLastTestMessage(truncateTestMessage(exception.getMessage()));
+            entity.setUpdatedAt(testedAt);
             aiProviderConnectionMapper.updateById(entity);
             throw exception;
         }
-        entity.setStatus(1);
-        entity.setLastVerifiedAt(LocalDateTime.now());
-        entity.setUpdatedAt(LocalDateTime.now());
+        LocalDateTime verifiedAt = LocalDateTime.now();
+        entity.setLastTestAt(verifiedAt);
+        entity.setLastTestStatus("SUCCESS");
+        entity.setLastTestMessage(null);
+        entity.setLastVerifiedAt(verifiedAt);
+        entity.setUpdatedAt(verifiedAt);
         aiProviderConnectionMapper.updateById(entity);
         return new TestAiProviderConnectionResponse(
                 true,
@@ -208,6 +214,36 @@ public class AiProviderDomainService {
             aiProviderModelMapper.updateById(modelEntity);
         }
         return toModelItem(modelEntity);
+    }
+
+    public AiProviderModelItem updateProviderModelStatus(
+            Long connectionId,
+            Long modelId,
+            String headerWorkspaceCode,
+            boolean selectable
+    ) {
+        requireProviderConnection(connectionId);
+        AiProviderModelEntity modelEntity = requireProviderModel(connectionId, modelId);
+        if (!selectable && isModelInUse(connectionId, modelEntity.getModelName())) {
+            throw new BadRequestException("该模型已被 AI 用途绑定，不能停用");
+        }
+        modelEntity.setSelectable(selectable ? 1 : 0);
+        modelEntity.setUpdatedAt(LocalDateTime.now());
+        aiProviderModelMapper.updateById(modelEntity);
+        return toModelItem(modelEntity);
+    }
+
+    @Transactional
+    public void deleteProviderModel(Long connectionId, Long modelId, String headerWorkspaceCode) {
+        AiProviderConnectionEntity connection = requireProviderConnection(connectionId);
+        AiProviderModelEntity modelEntity = requireProviderModel(connectionId, modelId);
+        if (Objects.equals(blankToNull(connection.getSelectedModelName()), blankToNull(modelEntity.getModelName()))) {
+            throw new BadRequestException("当前模型是默认模型，请先切换默认模型后再删除");
+        }
+        if (isModelInUse(connectionId, modelEntity.getModelName())) {
+            throw new BadRequestException("该模型已被 AI 用途绑定，请先解除绑定后再删除");
+        }
+        aiProviderModelMapper.deleteById(modelEntity.getId());
     }
 
     public ResolvedProviderModelConfig requireResolvedProviderModel(Long providerConnectionId, String modelName) {
@@ -469,8 +505,35 @@ public class AiProviderDomainService {
                 normalizeStatus(entity.getStatus()),
                 modelCount == null ? 0 : modelCount.intValue(),
                 entity.getLastVerifiedAt(),
-                entity.getLastFetchModelsAt()
+                entity.getLastFetchModelsAt(),
+                entity.getLastTestAt(),
+                entity.getLastTestStatus(),
+                entity.getLastTestMessage()
         );
+    }
+
+    private AiProviderModelEntity requireProviderModel(Long connectionId, Long modelId) {
+        AiProviderModelEntity modelEntity = aiProviderModelMapper.selectOne(new LambdaQueryWrapper<AiProviderModelEntity>()
+                .eq(AiProviderModelEntity::getId, modelId)
+                .eq(AiProviderModelEntity::getConnectionId, connectionId)
+                .last("limit 1"));
+        if (modelEntity == null) {
+            throw new BadRequestException("AI 模型不存在");
+        }
+        return modelEntity;
+    }
+
+    private boolean isModelInUse(Long connectionId, String modelName) {
+        return aiCaseConfigMapper.selectCount(new LambdaQueryWrapper<AiCaseConfigEntity>()
+                .eq(AiCaseConfigEntity::getOwnerUserId, CurrentUserContext.get())
+                .eq(AiCaseConfigEntity::getProviderConnectionId, connectionId)
+                .eq(AiCaseConfigEntity::getModel, modelName)) > 0;
+    }
+
+    private String truncateTestMessage(String message) {
+        String normalized = blankToNull(message);
+        if (normalized == null) return null;
+        return normalized.length() <= 2000 ? normalized : normalized.substring(0, 2000);
     }
 
     private AiProviderModelItem toModelItem(AiProviderModelEntity entity) {

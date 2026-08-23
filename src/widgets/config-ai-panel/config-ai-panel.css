@@ -36,6 +36,7 @@
 
 .config-ai-btn {
   display: inline-flex;
+  box-sizing: border-box;
   align-items: center;
   gap: 5.25px;
   border-radius: 7px;
@@ -51,6 +52,7 @@
 }
 
 .config-ai-btn--ghost {
+  width: 67.25px;
   height: 28px;
   padding: 0 11.5px;
   border: 1px solid #e5e6eb;
@@ -59,6 +61,7 @@
 }
 
 .config-ai-btn--primary {
+  width: 111.25px;
   height: 32px;
   padding: 0 14px;
   border: 0;
@@ -209,6 +212,10 @@
 .config-ai-table tbody tr {
   height: 54px;
   border-bottom: 1px solid #e5e6eb;
+}
+
+.config-ai-table tbody tr.config-ai-provider-row:hover {
+  background: #fafbff;
 }
 
 .config-ai-table tbody tr:last-child {
@@ -431,11 +438,37 @@
   border-radius: 5px;
   background: transparent;
   cursor: pointer;
+  transition: background-color 120ms ease, filter 120ms ease;
 }
 
 .config-ai-row-actions img {
   width: 13px;
   height: 13px;
+  transition: filter 120ms ease;
+}
+
+.config-ai-row-actions button:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.config-ai-row-actions button:hover:not(:disabled) img {
+  filter: brightness(0) saturate(100%) invert(11%) sepia(12%) saturate(1551%) hue-rotate(180deg) brightness(95%) contrast(91%);
+}
+
+.config-ai-row-actions button.is-danger:hover:not(:disabled) {
+  background: #fff0f0;
+  filter: none;
+}
+
+.config-ai-row-actions button.is-danger:hover:not(:disabled) img {
+  filter: brightness(0) saturate(100%) invert(35%) sepia(96%) saturate(4547%) hue-rotate(343deg) brightness(95%) contrast(98%);
+}
+
+.config-ai-row-actions button:disabled {
+  cursor: wait;
+  background: transparent;
+  color: #c9cdd4;
 }
 
 .config-ai-warning {
@@ -622,4 +655,32 @@
   .config-ai-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.config-ai-empty {
+  display: flex;
+  min-height: 272px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e5e6eb;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  color: #c9cdd4;
+}
+
+.config-ai-empty p {
+  margin: 12px 0 0;
+  color: #4e5969;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22.5px;
+}
+
+.config-ai-empty > span {
+  margin: 6px 0 20px;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
 }
