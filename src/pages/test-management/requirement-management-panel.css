@@ -164,6 +164,7 @@
 .requirement-management__import-options { position: absolute; z-index: 210; top: 34px; right: 0; width: 132px; overflow: hidden; border: 1px solid var(--rm-border); border-radius: 10px; background: #fff; box-shadow: 0 6px 18px rgba(0, 0, 0, .1); }
 .requirement-management__import-options button { display: block; width: 100%; padding: 9px 14px; border: 0; background: transparent; text-align: left; font-size: 13px; cursor: pointer; transition: background-color 120ms ease; }
 .requirement-management__import-options button:hover { background: #f4f6fa; }
+.requirement-management__import-options button:disabled { color: var(--rm-placeholder); background: transparent; cursor: not-allowed; }
 
 .requirement-management__table-wrap { height: calc(100dvh - 183px); overflow: auto; background: #fff; }
 .requirement-management__table { width: 100%; min-width: 1724px; border-collapse: collapse; table-layout: fixed; }
@@ -321,6 +322,7 @@
 .requirement-management__form fieldset button.is-active { border-color: currentColor; font-weight: 700; }
 
 .requirement-management__import-tabs { display: flex; height: 37px; flex: 0 0 auto; margin-bottom: 20px; border-bottom: 1px solid var(--rm-border); }
+.requirement-management__import-tabs button:disabled { color: var(--rm-placeholder); cursor: not-allowed; opacity: .65; }
 .requirement-management__import-body { overflow: auto; }
 .requirement-management__notice { margin: 0; padding: 10px 14px; border: 1px solid #ffd666; border-radius: 8px; color: #7d6608; background: #fffbe6; font-size: 12px; line-height: 1.5; }
 .requirement-management__excel-config { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
@@ -330,11 +332,6 @@
 .requirement-management__excel-config > label span { margin-top: 4px; color: var(--rm-muted); font-size: 12px; }
 .requirement-management__excel-config > label input { display: none; }
 .requirement-management .requirement-management__template-button { margin-top: 0; background: #fff; }
-.requirement-management__preview > p { margin: 0 0 12px; color: var(--rm-secondary); font-size: 13px; }
-.requirement-management__preview > p strong { color: var(--rm-primary); font-weight: 600; }
-.requirement-management__preview table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.requirement-management__preview th { padding: 8px 10px; border-bottom: 1px solid var(--rm-border); color: var(--rm-muted); background: #f7f8fa; font-weight: 500; text-align: left; }
-.requirement-management__preview td { padding: 8px 10px; border-bottom: 1px solid var(--rm-border); color: var(--rm-secondary); }
 
 .requirement-management__case-picker { display: flex; width: 840px; height: 580px; overflow: hidden; flex-direction: column; border-radius: 14px; background: #fff; box-shadow: 0 24px 64px rgba(0, 0, 0, .2); }
 .requirement-management__case-picker > header { display: flex; height: 52px; flex: 0 0 auto; align-items: center; padding: 0 20px; border-bottom: 1px solid var(--rm-border); }

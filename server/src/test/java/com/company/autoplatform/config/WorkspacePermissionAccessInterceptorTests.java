@@ -16,10 +16,13 @@ class WorkspacePermissionAccessInterceptorTests {
     @CsvSource({
             "GET, /api/test-management/versions, test_management.view",
             "POST, /api/test-management/versions, test_management.create",
+            "POST, /api/test-management/plans/create-and-start, test_management.create",
             "PUT, /api/test-management/requirements/1, test_management.edit",
             "DELETE, /api/test-management/requirements/1, test_management.delete",
             "POST, /api/test-management/requirements/1/review/start, test_management.review",
             "POST, /api/test-management/plans/1/cases/2/results, test_management.execute",
+            "POST, /api/test-management/plans/1/cases, test_management.edit",
+            "PUT, /api/test-management/plans/1/cases, test_management.edit",
             "POST, /api/test-management/plans/1/report/generate, test_management.execute",
             "POST, /api/test-management/plans/1/cases/2/defects, test_management.execute",
             "POST, /api/test-management/versions/1/transition, test_management.release",

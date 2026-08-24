@@ -128,6 +128,9 @@ public class WorkspacePermissionAccessInterceptor implements HandlerInterceptor,
         }
         if (HttpMethod.POST.matches(method)) {
             if ("test_management".equals(module)) {
+                if (uri.matches("^/api/test-management/plans/[^/]+/cases$")) {
+                    return "edit";
+                }
                 if (uri.matches("^/api/test-management/plans/[^/]+/cases/[^/]+/(evidence|defects/link)$")) {
                     return "execute";
                 }

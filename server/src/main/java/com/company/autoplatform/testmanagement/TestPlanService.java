@@ -213,6 +213,7 @@ public class TestPlanService {
 
     @Transactional
     public TestPlanResponse createAndStart(String workspaceCode, CreateTestPlanRequest request) {
+        workspaceAccessSupport.requirePermission(workspaceCode, "test_management.execute");
         if (request.draft()) {
             throw TestManagementException.validation("草稿计划不能直接启动");
         }

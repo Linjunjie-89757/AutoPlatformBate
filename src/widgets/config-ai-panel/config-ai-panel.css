@@ -37,12 +37,15 @@
 .config-ai-btn {
   display: inline-flex;
   box-sizing: border-box;
+  flex-shrink: 0;
   align-items: center;
+  justify-content: center;
   gap: 5.25px;
   border-radius: 7px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
   transition: filter 150ms, transform 150ms;
 }
 
@@ -52,7 +55,7 @@
 }
 
 .config-ai-btn--ghost {
-  width: 67.25px;
+  min-width: 67.25px;
   height: 28px;
   padding: 0 11.5px;
   border: 1px solid #e5e6eb;

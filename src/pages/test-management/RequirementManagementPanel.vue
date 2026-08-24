@@ -41,7 +41,7 @@ import './requirement-management-panel.css'
 
 type ManagementTab = 'versions' | 'requirements' | 'plans'
 type DetailTab = 'cases' | 'info' | 'defects'
-type ImportStep = 'config' | 'preview' | 'result'
+type ImportStep = 'config' | 'result'
 type RequirementPlanStatus = 'pending' | 'in-progress' | 'blocked' | 'completed' | 'cancelled'
 
 const props = defineProps<{
@@ -82,7 +82,7 @@ const editTarget = ref<ManagedRequirement | null>(null)
 const deleteDialogOpen = ref(false)
 const deleteTarget = ref<ManagedRequirement | null>(null)
 const importDialogOpen = ref(false)
-const importSource = ref<RequirementSource>('jira')
+const importSource = ref<RequirementSource>('excel')
 const importStep = ref<ImportStep>('config')
 const importFileName = ref('')
 const importFile = ref<File | null>(null)
@@ -117,16 +117,6 @@ const editForm = reactive({
   assignee: '',
   externalRef: '',
   description: '',
-})
-
-const importForm = reactive({
-  jiraUrl: '',
-  jiraToken: '',
-  jiraProject: '',
-  tapdUrl: '',
-  tapdUser: '',
-  tapdPassword: '',
-  tapdProject: '',
 })
 
 const pickerDirectoryId = ref('root')
@@ -314,13 +304,6 @@ const defectSeverityConfig = {
   minor: { label: '一般', color: '#0ea5e9', background: '#e0f5fe' },
   trivial: { label: '轻微', color: '#86909c', background: '#f2f3f5' },
 }
-
-const previewRequirements = [
-  { id: 'PROJ-251', title: '搜索结果排序优化', priority: 'P1' as RequirementPriority, type: '功能需求' },
-  { id: 'PROJ-252', title: '首页 Banner 点击率统计', priority: 'P2' as RequirementPriority, type: '数据需求' },
-  { id: 'PROJ-253', title: '购物车价格实时刷新', priority: 'P1' as RequirementPriority, type: '功能需求' },
-  { id: 'PROJ-254', title: '退款超时自动审批', priority: 'P0' as RequirementPriority, type: '功能需求' },
-]
 
 const requirementCounts = computed(() => ({
   total: requirements.value.length,
@@ -571,17 +554,13 @@ const downloadImportTemplate = async () => {
   }
 }
 
-const handleExternalImport = () => {
-  showToast(`${importSource.value === 'jira' ? 'Jira' : '禅道'} 导入接口待接入`)
-}
-
 const finishImport = async () => {
   if (!canCreate.value) {
     showToast('暂无导入需求权限')
     return
   }
   if (importSource.value !== 'excel') {
-    handleExternalImport()
+    showToast('该导入方式暂未开放')
     return
   }
   if (!importFile.value || !importVersionId.value) {
@@ -968,8 +947,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           </button>
           <Transition name="requirement-popover">
             <div v-if="importMenuOpen" class="requirement-management__import-options">
-              <button type="button" @click="openImportDialog('jira')">从 Jira 导入</button>
-              <button type="button" @click="openImportDialog('tapd')">从禅道导入</button>
+              <button type="button" disabled title="暂未开放">从 Jira 导入</button>
+              <button type="button" disabled title="暂未开放">从禅道导入</button>
               <button type="button" @click="openImportDialog('excel')">Excel 导入</button>
             </div>
           </Transition>
@@ -1167,23 +1146,12 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <section class="requirement-management__dialog is-import" role="dialog" aria-modal="true">
           <header><h2>导入需求</h2><button type="button" aria-label="关闭" @click="closeImportDialog"><X :size="16" /></button></header>
           <nav class="requirement-management__import-tabs">
-            <button :class="{ 'is-active': importSource === 'jira' }" type="button" @click="importSource = 'jira'; importStep = 'config'">Jira</button>
-            <button :class="{ 'is-active': importSource === 'tapd' }" type="button" @click="importSource = 'tapd'; importStep = 'config'">禅道 / TAPD</button>
+            <button type="button" disabled title="暂未开放">Jira</button>
+            <button type="button" disabled title="暂未开放">禅道 / TAPD</button>
             <button :class="{ 'is-active': importSource === 'excel' }" type="button" @click="importSource = 'excel'; importStep = 'config'">Excel</button>
           </nav>
           <div class="requirement-management__import-body">
-            <div v-if="importStep === 'config' && importSource === 'jira'" class="requirement-management__form">
-              <label><span>Jira 服务地址</span><input v-model="importForm.jiraUrl" type="url" placeholder="https://your-domain.atlassian.net"></label>
-              <label><span>API Token</span><input v-model="importForm.jiraToken" type="password" placeholder="请输入 Jira API Token"></label>
-              <label><span>项目标识</span><input v-model="importForm.jiraProject" type="text" placeholder="如 PROJ、MOBILE"></label>
-              <p class="requirement-management__notice">仅导入状态为「待处理」或「进行中」的需求；关联 Sprint 和 Assignee 信息将自动填充。</p>
-            </div>
-            <div v-else-if="importStep === 'config' && importSource === 'tapd'" class="requirement-management__form">
-              <label><span>禅道 / TAPD 地址</span><input v-model="importForm.tapdUrl" type="url" placeholder="https://your-tapd.zentao.net"></label>
-              <div><label><span>用户名</span><input v-model="importForm.tapdUser" type="text" placeholder="登录账号"></label><label><span>密码</span><input v-model="importForm.tapdPassword" type="password" placeholder="登录密码"></label></div>
-              <label><span>项目名称</span><input v-model="importForm.tapdProject" type="text" placeholder="请输入项目名称"></label>
-            </div>
-            <div v-else-if="importStep === 'config'" class="requirement-management__excel-config">
+            <div v-if="importStep === 'config'" class="requirement-management__excel-config">
               <label :class="{ 'is-dragging': isDraggingFile }" @dragover.prevent="isDraggingFile = true" @dragleave="isDraggingFile = false" @drop.prevent="handleImportFile($event.dataTransfer?.files || null)">
                  <Upload :size="28" /><strong>{{ importFileName || '点击或拖拽文件至此处' }}</strong><span>支持 .xlsx · .xls · 文件大小不超过 10MB</span><input type="file" accept=".xlsx,.xls" @change="handleImportFile(($event.target as HTMLInputElement).files)">
               </label>
@@ -1191,19 +1159,14 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
               <button class="requirement-management__template-button" type="button" :disabled="isSubmitting || !canExport" @click="downloadImportTemplate"><Download :size="13" />下载导入模板</button>
               <p class="requirement-management__notice">模板必填列：需求标题、优先级（P0-P3）、负责人；版本和描述为选填列。</p>
             </div>
-            <div v-else-if="importStep === 'preview'" class="requirement-management__preview">
-              <p>已获取 <strong>{{ previewRequirements.length }}</strong> 条需求，请确认后导入：</p>
-              <table><thead><tr><th>需求编号</th><th>标题</th><th>优先级</th><th>类型</th></tr></thead><tbody><tr v-for="item in previewRequirements" :key="item.id"><td><code>{{ item.id }}</code></td><td>{{ item.title }}</td><td><span class="requirement-management__badge is-priority" :style="priorityStyle(item.priority)">{{ item.priority }}</span></td><td>{{ item.type }}</td></tr></tbody></table>
-            </div>
             <div v-else class="requirement-management__import-result">
               <p>导入完成，共处理 <strong>{{ importResult?.totalRows || 0 }}</strong> 条需求。</p>
               <div><span class="is-success">成功 {{ importResult?.importedCount || 0 }}</span><span class="is-warning">跳过 {{ importResult?.skippedCount || 0 }}</span><span class="is-danger">失败 {{ importResult?.failedCount || 0 }}</span></div>
               <table v-if="importResult?.issues.length"><thead><tr><th>行号</th><th>需求标题</th><th>结果</th><th>原因</th></tr></thead><tbody><tr v-for="issue in importResult.issues" :key="`${issue.rowNumber}-${issue.title}`"><td>{{ issue.rowNumber }}</td><td>{{ issue.title || '—' }}</td><td>{{ issue.status === 'SKIPPED' ? '已跳过' : '失败' }}</td><td>{{ issue.message }}</td></tr></tbody></table>
             </div>
           </div>
-          <footer v-if="importStep === 'preview'"><button class="requirement-management__button is-ghost" type="button" @click="importStep = 'config'">上一步</button><button class="requirement-management__button" type="button" @click="finishImport">确认导入 ({{ previewRequirements.length }})</button></footer>
-          <footer v-else-if="importStep === 'result'"><button class="requirement-management__button" type="button" @click="closeImportDialog">完成</button></footer>
-          <footer v-else><button class="requirement-management__button is-ghost" type="button" @click="closeImportDialog">取消</button><button v-if="importSource !== 'excel'" class="requirement-management__button" type="button" @click="importStep = 'preview'">获取预览</button><button v-else class="requirement-management__button" type="button" :disabled="!importFileName || !importVersionId || isImporting" @click="finishImport">{{ isImporting ? '导入中...' : '开始导入' }}</button></footer>
+          <footer v-if="importStep === 'result'"><button class="requirement-management__button" type="button" @click="closeImportDialog">完成</button></footer>
+          <footer v-else><button class="requirement-management__button is-ghost" type="button" @click="closeImportDialog">取消</button><button class="requirement-management__button" type="button" :disabled="!importFileName || !importVersionId || isImporting" @click="finishImport">{{ isImporting ? '导入中...' : '开始导入' }}</button></footer>
         </section>
       </div>
     </Transition>
