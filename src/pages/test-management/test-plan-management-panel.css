@@ -569,6 +569,10 @@
 .test-plan-management__picker tbody tr { height: 39px; border-bottom: 1px solid var(--tp-border); cursor: pointer; transition: background-color 100ms ease; }
 .test-plan-management__picker tbody tr:hover { background: #fafbff; }
 .test-plan-management__picker tbody tr.is-selected { background: rgb(14 165 233 / 2.5%); }
+.test-plan-management__picker tbody tr.is-unavailable { cursor: not-allowed; color: var(--tp-placeholder); background: #fafafa; }
+.test-plan-management__picker tbody tr.is-unavailable:hover { background: #fafafa; }
+.test-plan-management__picker tbody tr.is-unavailable td { color: var(--tp-muted); }
+.test-plan-management__picker-case-origin { display: inline-block; margin-left: 6px; color: var(--tp-primary); font-size: 11px; font-weight: 500; }
 .test-plan-management__picker td { padding: 8px 12px; color: var(--tp-text); font-size: 13px; }
 .test-plan-management__picker td code { color: var(--tp-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; }
 .test-plan-management__picker td span { display: inline-flex; align-items: center; gap: 4px; color: var(--tp-muted); font-size: 11px; }

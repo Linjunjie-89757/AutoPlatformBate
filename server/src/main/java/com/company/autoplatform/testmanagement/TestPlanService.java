@@ -854,7 +854,11 @@ public class TestPlanService {
         Map<Long, List<Long>> requirementsByCase = new LinkedHashMap<>();
         if (!requirementIds.isEmpty()) {
             for (TestRequirementCaseEntity relation : requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>().in(TestRequirementCaseEntity::getRequirementId, requirementIds))) {
-                if (relation.getReviewStatus() == RequirementReviewStatus.PASSED && !excluded.contains(relation.getCaseId())) {
+                if (relation.getReviewStatus() == RequirementReviewStatus.PASSED) {
+                    if (excluded.contains(relation.getCaseId()) && manualIds.contains(relation.getCaseId())) {
+                        throw TestManagementException.validation("已排除的需求用例不能作为手动用例添加，请恢复自动带入后重试");
+                    }
+                    if (excluded.contains(relation.getCaseId())) continue;
                     selected.putIfAbsent(relation.getCaseId(), PlanCaseOriginType.REQUIREMENT);
                     requirementsByCase.computeIfAbsent(relation.getCaseId(), ignored -> new ArrayList<>()).add(relation.getRequirementId());
                 }

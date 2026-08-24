@@ -98,7 +98,9 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
         planPayload.put("endDate", "2026-08-20");
         planPayload.put("requirementIds", List.of(requirementId));
         planPayload.put("excludedAutoCaseIds", List.of());
-        planPayload.put("manualCaseIds", List.of());
+        // The same case is already automatically brought in by the reviewed requirement.
+        // Supplying it again as a manual case must not create a duplicate snapshot.
+        planPayload.put("manualCaseIds", List.of(testCase.getId()));
         planPayload.put("maxP1", 1);
         planPayload.put("draft", false);
         JsonNode plan = data(mockMvc.perform(post("/api/test-management/plans/create-and-start")
@@ -109,7 +111,9 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.status").value("RUNNING"))
                 .andExpect(jsonPath("$.data.requirementCount").value(1))
                 .andExpect(jsonPath("$.data.caseCount").value(1))
+                .andExpect(jsonPath("$.data.cases.length()").value(1))
                 .andExpect(jsonPath("$.data.cases[0].originType").value("REQUIREMENT"))
+                .andExpect(jsonPath("$.data.cases[0].sourceCaseId").value(testCase.getId()))
                 .andExpect(jsonPath("$.data.snapshotFrozenAt").exists())
                 .andReturn());
         long planId = plan.path("id").asLong();

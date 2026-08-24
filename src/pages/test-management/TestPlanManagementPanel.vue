@@ -144,7 +144,7 @@ const pickerRequirementId = ref('all')
 const pickerCheckedIds = ref(new Set<string>())
 const expandedDirectoryIds = ref(new Set<string>(['root']))
 const selectedRequirementIds = ref<string[]>([])
-const excludedCaseNos = ref<string[]>([])
+const excludedCaseIds = ref<string[]>([])
 const manualCaseIds = ref<string[]>([])
 const directCaseIds = ref<string[]>([])
 const planCases = ref<TestPlanCaseItem[]>([])
@@ -455,10 +455,15 @@ const stats = computed(() => {
 
 const currentVersionRequirements = computed(() => planRequirements.value.filter(item => item.versionId === form.versionId))
 const selectedRequirements = computed(() => currentVersionRequirements.value.filter(item => selectedRequirementIds.value.includes(item.id)))
-const autoCaseNos = computed(() => new Set(selectedRequirements.value.flatMap(item => item.linkedCases.filter(caseItem => caseItem.reviewStatus === 'passed').map(caseItem => caseItem.no))))
-const autoCases = computed(() => planCaseLibrary.value.filter(item => autoCaseNos.value.has(item.no) && !excludedCaseNos.value.includes(item.no)))
-const manualCases = computed(() => planCaseLibrary.value.filter(item => manualCaseIds.value.includes(item.id)))
+const automaticCaseIds = computed(() => new Set(selectedRequirements.value
+  .flatMap(item => item.linkedCases)
+  .filter(caseItem => caseItem.reviewStatus === 'passed')
+  .map(caseItem => caseItem.id)))
+const automaticCases = computed(() => planCaseLibrary.value.filter(item => automaticCaseIds.value.has(item.id)))
+const autoCases = computed(() => automaticCases.value.filter(item => !excludedCaseIds.value.includes(item.id)))
+const manualCases = computed(() => planCaseLibrary.value.filter(item => manualCaseIds.value.includes(item.id) && !automaticCaseIds.value.has(item.id)))
 const directCases = computed(() => planCaseLibrary.value.filter(item => directCaseIds.value.includes(item.id)))
+const scopeCaseIds = computed(() => new Set([...autoCases.value.map(item => item.id), ...manualCases.value.map(item => item.id)]))
 
 const findDirectory = (nodes: CaseDirectory[], id: string): CaseDirectory | undefined => {
   for (const node of nodes) {
@@ -486,7 +491,9 @@ const pickerCases = computed(() => {
     return matchesDirectory && matchesKeyword && matchesRequirement
   })
 })
-const pickerAllChecked = computed(() => pickerCases.value.length > 0 && pickerCases.value.every(item => pickerCheckedIds.value.has(item.id)))
+const isPickerCaseUnavailable = (caseId: string) => pickerMode.value === 'manual' && automaticCaseIds.value.has(caseId)
+const selectablePickerCases = computed(() => pickerCases.value.filter(item => !isPickerCaseUnavailable(item.id)))
+const pickerAllChecked = computed(() => selectablePickerCases.value.length > 0 && selectablePickerCases.value.every(item => pickerCheckedIds.value.has(item.id)))
 const detailCaseCounts = computed(() => ({
   all: planCases.value.length,
   passed: planCases.value.filter(item => item.status === 'passed').length,
@@ -586,7 +593,7 @@ const resetWizard = () => {
   })
   wizardStep.value = 0
   selectedRequirementIds.value = []
-  excludedCaseNos.value = []
+  excludedCaseIds.value = []
   manualCaseIds.value = []
   directCaseIds.value = []
   editingPlanId.value = null
@@ -620,7 +627,7 @@ const setPurpose = (purpose: TestPlanPurpose) => {
   if (editingPlanId.value) return
   form.purpose = purpose
   selectedRequirementIds.value = []
-  excludedCaseNos.value = []
+  excludedCaseIds.value = []
   manualCaseIds.value = []
   directCaseIds.value = []
 }
@@ -662,11 +669,11 @@ const openEditPlan = async (plan: ManagedTestPlan, returnToDetail = false) => {
     const requirementCaseIds = new Set((detail.cases || [])
       .filter(item => item.originType === 'REQUIREMENT')
       .map(item => String(item.sourceCaseId)))
-    excludedCaseNos.value = [...new Set(planRequirements.value
+    excludedCaseIds.value = [...new Set(planRequirements.value
       .filter(item => selectedRequirementIds.value.includes(item.id))
       .flatMap(item => item.linkedCases)
       .filter(item => item.reviewStatus === 'passed' && !requirementCaseIds.has(item.id))
-      .map(item => item.no))]
+      .map(item => item.id))]
     const selectedManualIds = (detail.cases || [])
       .filter(item => item.originType === 'MANUAL')
       .map(item => String(item.sourceCaseId))
@@ -704,11 +711,7 @@ const buildPlanPayload = (draft: boolean): TestPlanSavePayload | null => {
     showToast('请完整填写负责人和计划周期')
     return null
   }
-  const excludedAutoCaseIds = excludedCaseNos.value
-    .map(no => planCaseLibrary.value.find(item => item.no === no)?.id)
-    .filter((id): id is string => Boolean(id))
-    .map(Number)
-    .filter(Number.isFinite)
+  const excludedAutoCaseIds = excludedCaseIds.value.map(Number).filter(Number.isFinite)
   const selectedManualCaseIds = form.purpose === 'temp' ? directCaseIds.value : manualCaseIds.value
   return {
     purpose: form.purpose.toUpperCase() as 'VERSION' | 'TEMP',
@@ -727,7 +730,10 @@ const buildPlanPayload = (draft: boolean): TestPlanSavePayload | null => {
     ownerConfirmRequired: form.ownerConfirm,
     requirementIds: selectedRequirementIds.value.map(Number).filter(Number.isFinite),
     excludedAutoCaseIds,
-    manualCaseIds: selectedManualCaseIds.map(Number).filter(Number.isFinite),
+    manualCaseIds: selectedManualCaseIds
+      .filter(caseId => form.purpose === 'temp' || !automaticCaseIds.value.has(caseId))
+      .map(Number)
+      .filter(Number.isFinite),
     draft,
   }
 }
@@ -833,7 +839,7 @@ const openPicker = (mode: 'manual' | 'direct' | 'detail') => {
     : mode === 'direct'
       ? directCaseIds.value
       : planCases.value.map(item => item.sourceCaseId).filter((id): id is string => Boolean(id))
-  pickerCheckedIds.value = new Set(selectedIds)
+  pickerCheckedIds.value = new Set(selectedIds.filter(caseId => mode !== 'manual' || !automaticCaseIds.value.has(caseId)))
   pickerDirectoryId.value = 'root'
   pickerKeyword.value = ''
   pickerRequirementId.value = 'all'
@@ -870,12 +876,13 @@ const confirmPicker = async () => {
     } finally {
       isSubmitting.value = false
     }
-  } else if (pickerMode.value === 'manual') manualCaseIds.value = ids
+  } else if (pickerMode.value === 'manual') manualCaseIds.value = ids.filter(caseId => !automaticCaseIds.value.has(caseId))
   else directCaseIds.value = ids
   pickerOpen.value = false
 }
 
 const togglePickerCase = (id: string) => {
+  if (isPickerCaseUnavailable(id)) return
   const next = new Set(pickerCheckedIds.value)
   next.has(id) ? next.delete(id) : next.add(id)
   pickerCheckedIds.value = next
@@ -883,8 +890,8 @@ const togglePickerCase = (id: string) => {
 
 const togglePickerAll = () => {
   const next = new Set(pickerCheckedIds.value)
-  if (pickerAllChecked.value) pickerCases.value.forEach(item => next.delete(item.id))
-  else pickerCases.value.forEach(item => next.add(item.id))
+  if (pickerAllChecked.value) selectablePickerCases.value.forEach(item => next.delete(item.id))
+  else selectablePickerCases.value.forEach(item => next.add(item.id))
   pickerCheckedIds.value = next
 }
 
@@ -906,10 +913,10 @@ const selectAllRequirements = () => {
     : currentVersionRequirements.value.map(item => item.id)
 }
 
-const toggleExcludeCase = (no: string) => {
-  excludedCaseNos.value = excludedCaseNos.value.includes(no)
-    ? excludedCaseNos.value.filter(item => item !== no)
-    : [...excludedCaseNos.value, no]
+const toggleExcludeCase = (caseId: string) => {
+  excludedCaseIds.value = excludedCaseIds.value.includes(caseId)
+    ? excludedCaseIds.value.filter(item => item !== caseId)
+    : [...excludedCaseIds.value, caseId]
 }
 
 const isDetailTab = (value?: string | null): value is DetailTab =>
@@ -1788,8 +1795,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
               </section>
 
               <section v-if="selectedRequirementIds.length" class="test-plan-management__card test-plan-management__scope-card">
-                <header><div><h3>第二步：确认已带入用例</h3><p>系统已自动带入已通过评审的用例，可排除不需要的用例</p></div><span>{{ autoCaseNos.size }} 个需求带入，已排除 {{ autoCaseNos.size - autoCases.length }} 个</span></header>
-                <div v-if="autoCaseNos.size" class="test-plan-management__brought-cases"><div v-for="no in autoCaseNos" :key="no" :class="{ 'is-excluded': excludedCaseNos.includes(no) }"><code>{{ no }}</code><strong>{{ planCaseLibrary.find(item => item.no === no)?.title }}</strong><button type="button" @click="toggleExcludeCase(no)">{{ excludedCaseNos.includes(no) ? '恢复' : '排除' }}</button></div></div>
+                <header><div><h3>第二步：确认已带入用例</h3><p>系统已自动带入已通过评审的用例，可排除不需要的用例</p></div><span>{{ automaticCases.length }} 个需求带入，已排除 {{ automaticCases.length - autoCases.length }} 个</span></header>
+                <div v-if="automaticCases.length" class="test-plan-management__brought-cases"><div v-for="caseItem in automaticCases" :key="caseItem.id" :class="{ 'is-excluded': excludedCaseIds.includes(caseItem.id) }"><code>{{ caseItem.no }}</code><strong>{{ caseItem.title }}</strong><button type="button" @click="toggleExcludeCase(caseItem.id)">{{ excludedCaseIds.includes(caseItem.id) ? '恢复' : '排除' }}</button></div></div>
                 <div v-else class="test-plan-management__dashed-empty">所选需求暂无已通过评审的用例</div>
               </section>
 
@@ -1801,7 +1808,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
 
               <div v-if="selectedRequirementIds.length" class="test-plan-management__scope-summary">
                 <CheckCircle2 :size="16" />
-                <span>已选 <strong>{{ selectedRequirementIds.length }}</strong> 个需求，本次计划共纳入 <strong>{{ autoCases.length + manualCases.length }}</strong> 个用例（{{ autoCases.length }} 个需求带入，{{ manualCases.length }} 个手动补充）</span>
+                <span>已选 <strong>{{ selectedRequirementIds.length }}</strong> 个需求，本次计划共纳入 <strong>{{ scopeCaseIds.size }}</strong> 个用例（{{ autoCases.length }} 个需求带入，{{ manualCases.length }} 个手动补充）</span>
               </div>
             </template>
 
@@ -1895,7 +1902,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <div class="test-plan-management__picker-main">
             <div class="test-plan-management__picker-toolbar"><label><Search :size="13" /><input v-model="pickerKeyword" type="search" placeholder="搜索用例名称或编号…"></label><select v-model="pickerRequirementId"><option value="all">按需求筛选</option><option v-for="requirement in pickerRequirements" :key="requirement.id" :value="requirement.id">{{ requirement.id }} · {{ requirement.title }}</option></select></div>
             <div class="test-plan-management__picker-path"><Folder :size="11" /><span>{{ selectedDirectory?.label || '全部' }}</span><small>({{ pickerCases.length }} 条)</small></div>
-            <div class="test-plan-management__picker-table-wrap"><table><thead><tr><th><input type="checkbox" :checked="pickerAllChecked" @change="togglePickerAll"></th><th>编号</th><th>用例名称</th><th>所属目录</th><th>优先级</th></tr></thead><tbody><tr v-for="caseItem in pickerCases" :key="caseItem.id" :class="{ 'is-selected': pickerCheckedIds.has(caseItem.id) }" @click="togglePickerCase(caseItem.id)"><td><input type="checkbox" :checked="pickerCheckedIds.has(caseItem.id)" @click.stop @change="togglePickerCase(caseItem.id)"></td><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><span><Folder :size="10" />{{ findDirectory(planCaseDirectoryTree, caseItem.directoryId)?.label || caseItem.module }}</span></td><td><b :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td></tr><tr v-if="!pickerCases.length"><td colspan="5">该目录下暂无用例</td></tr></tbody></table></div>
+            <div class="test-plan-management__picker-table-wrap"><table><thead><tr><th><input type="checkbox" :disabled="!selectablePickerCases.length" :checked="pickerAllChecked" @change="togglePickerAll"></th><th>编号</th><th>用例名称</th><th>所属目录</th><th>优先级</th></tr></thead><tbody><tr v-for="caseItem in pickerCases" :key="caseItem.id" :class="{ 'is-selected': pickerCheckedIds.has(caseItem.id), 'is-unavailable': isPickerCaseUnavailable(caseItem.id) }" @click="togglePickerCase(caseItem.id)"><td><input type="checkbox" :disabled="isPickerCaseUnavailable(caseItem.id)" :checked="pickerCheckedIds.has(caseItem.id)" @click.stop @change="togglePickerCase(caseItem.id)"></td><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }} <small v-if="isPickerCaseUnavailable(caseItem.id)" class="test-plan-management__picker-case-origin">已自动带入</small></td><td><span><Folder :size="10" />{{ findDirectory(planCaseDirectoryTree, caseItem.directoryId)?.label || caseItem.module }}</span></td><td><b :class="`is-${caseItem.priority.toLowerCase()}`">{{ caseItem.priority }}</b></td></tr><tr v-if="!pickerCases.length"><td colspan="5">该目录下暂无用例</td></tr></tbody></table></div>
           </div>
         </div>
         <footer><span>已选 <b>{{ pickerCheckedIds.size }}</b> 个用例</span><button class="test-plan-management__ghost-button" type="button" :disabled="isSubmitting" @click="pickerOpen = false">取消</button><button class="test-plan-management__button is-small" type="button" :disabled="(pickerMode === 'direct' && !pickerCheckedIds.size) || isSubmitting" @click="confirmPicker">{{ isSubmitting ? '保存中...' : '确认添加' }}</button></footer>
