@@ -25,6 +25,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { caseApi, type CaseDetail, type CaseDirectoryNode, type CaseSummaryItem } from '@/entities/case'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { testManagementApi, type TestPlanItem, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
+import { getRequestErrorMessage } from '@/shared/api/error'
 import { useWorkspaceContext, workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
 
 import {
@@ -577,7 +578,7 @@ const finishImport = async () => {
     importStep.value = 'result'
     await loadRequirements()
   } catch (error) {
-    showToast(error instanceof Error ? error.message : '需求导入失败')
+    showToast(getRequestErrorMessage(error) || '需求导入失败')
   } finally {
     isImporting.value = false
   }
