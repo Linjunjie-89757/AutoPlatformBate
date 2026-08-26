@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Download,
   Edit2,
   ExternalLink,
   Eye,
@@ -42,7 +41,7 @@ import './requirement-management-panel.css'
 
 type ManagementTab = 'versions' | 'requirements' | 'plans'
 type DetailTab = 'cases' | 'info' | 'defects'
-type ImportStep = 'config' | 'result'
+type ImportStep = 'config' | 'parsing' | 'result'
 type RequirementPlanStatus = 'pending' | 'in-progress' | 'blocked' | 'completed' | 'cancelled'
 
 const props = defineProps<{
@@ -87,6 +86,7 @@ const importSource = ref<RequirementSource>('excel')
 const importStep = ref<ImportStep>('config')
 const importFileName = ref('')
 const importFile = ref<File | null>(null)
+const importFileInput = ref<HTMLInputElement | null>(null)
 const importVersionId = ref('')
 const importResult = ref<TestRequirementImportResult | null>(null)
 const isImporting = ref(false)
@@ -531,6 +531,9 @@ const handleImportFile = (files: FileList | null) => {
   importFile.value = file
   importFileName.value = file.name
   isDraggingFile.value = false
+  if (importVersionId.value) {
+    void finishImport()
+  }
 }
 
 const downloadImportTemplate = async () => {
@@ -569,6 +572,7 @@ const finishImport = async () => {
     return
   }
   isImporting.value = true
+  importStep.value = 'parsing'
   try {
     importResult.value = await testManagementApi.importRequirements(
       selectedWorkspaceCode.value,
@@ -578,6 +582,7 @@ const finishImport = async () => {
     importStep.value = 'result'
     await loadRequirements()
   } catch (error) {
+    importStep.value = 'config'
     showToast(getRequestErrorMessage(error) || '需求导入失败')
   } finally {
     isImporting.value = false
@@ -1143,22 +1148,31 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
     </Transition>
 
     <Transition name="requirement-fade">
-      <div v-if="importDialogOpen" class="requirement-management__overlay" @click.self="closeImportDialog">
-        <section class="requirement-management__dialog is-import" role="dialog" aria-modal="true">
-          <header><h2>导入需求</h2><button type="button" aria-label="关闭" @click="closeImportDialog"><X :size="16" /></button></header>
-          <nav class="requirement-management__import-tabs">
-            <button type="button" disabled title="暂未开放">Jira</button>
-            <button type="button" disabled title="暂未开放">禅道 / TAPD</button>
-            <button :class="{ 'is-active': importSource === 'excel' }" type="button" @click="importSource = 'excel'; importStep = 'config'">Excel</button>
-          </nav>
+      <div v-if="importDialogOpen" class="requirement-management__overlay" :class="{ 'is-import-processing-overlay': importStep === 'parsing' }" @click.self="(importStep === 'config' || importStep === 'result') && closeImportDialog()">
+        <section class="requirement-management__dialog is-import" :class="{ 'is-import-processing': importStep === 'parsing', 'is-import-result': importStep === 'result' }" role="dialog" aria-modal="true">
+          <header>
+            <div class="requirement-management__dialog-title">
+              <h2>导入需求</h2>
+              <span v-if="importStep === 'config'">Excel 文件</span>
+            </div>
+            <button v-if="importStep !== 'parsing'" type="button" aria-label="关闭" @click="closeImportDialog"><X :size="16" /></button>
+          </header>
           <div class="requirement-management__import-body">
             <div v-if="importStep === 'config'" class="requirement-management__excel-config">
-              <label :class="{ 'is-dragging': isDraggingFile }" @dragover.prevent="isDraggingFile = true" @dragleave="isDraggingFile = false" @drop.prevent="handleImportFile($event.dataTransfer?.files || null)">
-                 <Upload :size="28" /><strong>{{ importFileName || '点击或拖拽文件至此处' }}</strong><span>支持 .xlsx · .xls · 文件大小不超过 10MB</span><input type="file" accept=".xlsx,.xls" @change="handleImportFile(($event.target as HTMLInputElement).files)">
+              <label class="requirement-management__import-version">
+                <span>默认关联版本 <i>*</i></span>
+                <select v-model="importVersionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select>
               </label>
-              <label><span>默认所属版本 <i>*</i></span><select v-model="importVersionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select></label>
-              <button class="requirement-management__template-button" type="button" :disabled="isSubmitting || !canExport" @click="downloadImportTemplate"><Download :size="13" />下载导入模板</button>
-              <p class="requirement-management__notice">模板必填列：需求标题、优先级（P0-P3）、负责人；版本和描述为选填列。</p>
+              <label class="requirement-management__import-dropzone" :class="{ 'is-dragging': isDraggingFile }" @dragover.prevent="isDraggingFile = true" @dragleave="isDraggingFile = false" @drop.prevent="handleImportFile($event.dataTransfer?.files || null)">
+                <Upload :size="28" /><strong>{{ importFileName || '点击或拖拽文件至此处' }}</strong><span>支持 .xlsx / .xls 格式，文件不超过 10MB</span><input ref="importFileInput" type="file" accept=".xlsx,.xls" @change="handleImportFile(($event.target as HTMLInputElement).files)">
+              </label>
+              <p class="requirement-management__notice">请按模板格式填写，必填字段：需求标题、优先级。<button type="button" :disabled="isSubmitting || !canExport" @click="downloadImportTemplate">下载模板</button></p>
+            </div>
+            <div v-else-if="importStep === 'parsing'" class="requirement-management__import-processing" aria-live="polite">
+              <div class="requirement-management__import-spinner" aria-hidden="true" />
+              <p class="requirement-management__import-processing-title">正在上传并解析内容…</p>
+              <p class="requirement-management__import-processing-description">文件上传中，随后将识别字段并校验数据格式</p>
+              <div class="requirement-management__import-progress" aria-hidden="true"><span /></div>
             </div>
             <div v-else class="requirement-management__import-result">
               <p>导入完成，共处理 <strong>{{ importResult?.totalRows || 0 }}</strong> 条需求。</p>
@@ -1167,7 +1181,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             </div>
           </div>
           <footer v-if="importStep === 'result'"><button class="requirement-management__button" type="button" @click="closeImportDialog">完成</button></footer>
-          <footer v-else><button class="requirement-management__button is-ghost" type="button" @click="closeImportDialog">取消</button><button class="requirement-management__button" type="button" :disabled="!importFileName || !importVersionId || isImporting" @click="finishImport">{{ isImporting ? '导入中...' : '开始导入' }}</button></footer>
+          <footer v-else-if="importStep === 'parsing'"><button class="requirement-management__button is-ghost is-import-cancel" type="button" @click="closeImportDialog">取消</button></footer>
+          <footer v-else><button class="requirement-management__button is-ghost" type="button" @click="closeImportDialog">取消</button><button class="requirement-management__button" type="button" :disabled="isImporting" @click="importFileInput?.click()"><Upload :size="13" />选择文件</button></footer>
         </section>
       </div>
     </Transition>

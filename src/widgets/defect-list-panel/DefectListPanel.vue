@@ -57,6 +57,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   loaded: [items: DefectSummaryItem[]]
+  'data-change': []
   'selection-change': [count: number]
 }>()
 
@@ -355,6 +356,7 @@ async function deleteActiveDetailDefect() {
     ElMessage.success('缺陷已删除')
     detailDrawerVisible.value = false
     await loadDefects()
+    emit('data-change')
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -385,6 +387,7 @@ async function deleteRowDefect(item: DefectSummaryItem) {
       detailDrawerVisible.value = false
     }
     await loadDefects()
+    emit('data-change')
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -443,6 +446,7 @@ async function batchCloseSelectedDefects() {
 
   try {
     await loadDefects()
+    emit('data-change')
     selectedDefectIds.value = failedIds.filter(id => defects.value.some(item => item.id === id))
     emit('selection-change', selectedDefectIds.value.length)
     if (!failedIds.length) {
@@ -478,6 +482,7 @@ async function deleteSelectedDefects() {
     ElMessage.success('已删除选中缺陷')
     clearDefectSelection()
     await loadDefects()
+    emit('data-change')
   } catch (error) {
     if (error === 'cancel' || error === 'close') {
       return
@@ -499,6 +504,7 @@ async function submitTransitionDefect(payload: TransitionDefectPayload) {
       ElMessage.success(payload.assigneeId ? '缺陷处理成功' : '缺陷流转成功')
     transitionDialogVisible.value = false
     await loadDefects()
+    emit('data-change')
     detailRefreshKey.value += 1
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))

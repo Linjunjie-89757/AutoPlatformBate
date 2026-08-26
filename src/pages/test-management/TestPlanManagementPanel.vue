@@ -22,7 +22,7 @@ import {
   X,
   XCircle,
 } from '@lucide/vue'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, type Component, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type Component, watch } from 'vue'
 
 import { caseApi, type CaseDirectoryNode, type CaseSummaryItem } from '@/entities/case'
 import { defectApi } from '@/entities/defect'
@@ -132,6 +132,7 @@ const versionFilter = ref('all')
 const statusFilter = ref<'all' | TestPlanStatus>('all')
 const ownerFilter = ref('all')
 const actionMenuId = ref<string | null>(null)
+const actionMenuPosition = ref({ top: 0, left: 0 })
 const wizardStep = ref(0)
 const editingPlanId = ref<string | null>(null)
 const editingPlanStatus = ref<TestPlanStatus | null>(null)
@@ -164,9 +165,11 @@ const resultNotes = ref('')
 const executionInitialCaseId = ref<string | null>(null)
 const executionHistory = ref<TestPlanExecutionHistoryItem[]>([])
 const executionEvidence = ref<TestPlanExecutionAttachmentItem[]>([])
+const executionEvidenceImageUrls = ref<Record<number, string>>({})
 const executionCaseDefects = ref<TestPlanDefectItem[]>([])
 let executionContextRequestSeq = 0
 const isUploadingEvidence = ref(false)
+const downloadingEvidenceId = ref<number | null>(null)
 const defectModalOpen = ref(false)
 const defectInitialCaseId = ref<string | null>(null)
 const defectError = ref('')
@@ -457,13 +460,13 @@ const currentVersionRequirements = computed(() => planRequirements.value.filter(
 const selectedRequirements = computed(() => currentVersionRequirements.value.filter(item => selectedRequirementIds.value.includes(item.id)))
 const automaticCaseIds = computed(() => new Set(selectedRequirements.value
   .flatMap(item => item.linkedCases)
-  .filter(caseItem => caseItem.reviewStatus === 'passed')
   .map(caseItem => caseItem.id)))
 const automaticCases = computed(() => planCaseLibrary.value.filter(item => automaticCaseIds.value.has(item.id)))
 const autoCases = computed(() => automaticCases.value.filter(item => !excludedCaseIds.value.includes(item.id)))
 const manualCases = computed(() => planCaseLibrary.value.filter(item => manualCaseIds.value.includes(item.id) && !automaticCaseIds.value.has(item.id)))
 const directCases = computed(() => planCaseLibrary.value.filter(item => directCaseIds.value.includes(item.id)))
 const scopeCaseIds = computed(() => new Set([...autoCases.value.map(item => item.id), ...manualCases.value.map(item => item.id)]))
+const selectedScopeCaseCount = computed(() => form.purpose === 'temp' ? directCaseIds.value.length : scopeCaseIds.value.size)
 
 const findDirectory = (nodes: CaseDirectory[], id: string): CaseDirectory | undefined => {
   for (const node of nodes) {
@@ -672,7 +675,7 @@ const openEditPlan = async (plan: ManagedTestPlan, returnToDetail = false) => {
     excludedCaseIds.value = [...new Set(planRequirements.value
       .filter(item => selectedRequirementIds.value.includes(item.id))
       .flatMap(item => item.linkedCases)
-      .filter(item => item.reviewStatus === 'passed' && !requirementCaseIds.has(item.id))
+      .filter(item => !requirementCaseIds.has(item.id))
       .map(item => item.id))]
     const selectedManualIds = (detail.cases || [])
       .filter(item => item.originType === 'MANUAL')
@@ -709,6 +712,10 @@ const buildPlanPayload = (draft: boolean): TestPlanSavePayload | null => {
   }
   if (!draft && (!owner || !form.startDate || !form.endDate)) {
     showToast('请完整填写负责人和计划周期')
+    return null
+  }
+  if (!draft && selectedScopeCaseCount.value === 0) {
+    showToast('请至少关联一个测试用例后再开始测试')
     return null
   }
   const excludedAutoCaseIds = excludedCaseIds.value.map(Number).filter(Number.isFinite)
@@ -968,6 +975,8 @@ const closePlan = () => {
   selectedPlanDetail.value = null
   view.value = 'list'
   detailTab.value = 'overview'
+  executionContextRequestSeq += 1
+  revokeExecutionEvidenceImageUrls()
   emit('detail-state-change', { id: null, tab: null })
 }
 
@@ -1219,14 +1228,55 @@ const closeExecution = () => {
   view.value = 'detail'
   detailTab.value = 'cases'
   executionInitialCaseId.value = null
+  executionContextRequestSeq += 1
+  revokeExecutionEvidenceImageUrls()
   if (selectedPlan.value) emit('detail-state-change', { id: selectedPlan.value.id, tab: 'cases' })
+}
+
+const isImageExecutionEvidence = (file: TestPlanExecutionAttachmentItem) => (
+  Boolean(file.contentType?.startsWith('image/'))
+  || /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(file.fileName)
+)
+
+const revokeExecutionEvidenceImageUrls = () => {
+  Object.values(executionEvidenceImageUrls.value).forEach(url => URL.revokeObjectURL(url))
+  executionEvidenceImageUrls.value = {}
+}
+
+const loadExecutionEvidenceImageUrls = async (evidence: TestPlanExecutionAttachmentItem[], requestSeq: number, caseId: string) => {
+  if (!selectedPlan.value) return
+  const nextUrls: Record<number, string> = {}
+  for (const file of evidence.filter(isImageExecutionEvidence)) {
+    try {
+      const blob = await testManagementApi.downloadPlanCaseEvidence(
+        selectedWorkspaceCode.value,
+        Number(selectedPlan.value.id),
+        Number(caseId),
+        file.id,
+      )
+      if (requestSeq !== executionContextRequestSeq) {
+        Object.values(nextUrls).forEach(url => URL.revokeObjectURL(url))
+        return
+      }
+      nextUrls[file.id] = URL.createObjectURL(blob)
+    } catch {
+      // Thumbnail failures stay local to the evidence card; the download action remains available.
+    }
+  }
+  if (requestSeq === executionContextRequestSeq) {
+    executionEvidenceImageUrls.value = nextUrls
+  } else {
+    Object.values(nextUrls).forEach(url => URL.revokeObjectURL(url))
+  }
 }
 
 const loadExecutionCaseContext = async (caseId: string) => {
   if (!selectedPlan.value) return
+  executionInitialCaseId.value = caseId
   const requestSeq = ++executionContextRequestSeq
   executionHistory.value = []
   executionEvidence.value = []
+  revokeExecutionEvidenceImageUrls()
   executionCaseDefects.value = []
   try {
     const [history, evidence, defects] = await Promise.all([
@@ -1238,6 +1288,7 @@ const loadExecutionCaseContext = async (caseId: string) => {
     executionHistory.value = history
     executionEvidence.value = evidence
     executionCaseDefects.value = defects
+    void loadExecutionEvidenceImageUrls(evidence, requestSeq, caseId)
   } catch (error) {
     showToast(apiErrorMessage(error, '执行上下文加载失败'))
   }
@@ -1309,14 +1360,47 @@ const uploadExecutionEvidence = async (payload: { caseId: string; files: File[] 
     return
   }
   if (!selectedPlan.value || !payload.files.length) return
+  const requestSeq = executionContextRequestSeq
   isUploadingEvidence.value = true
   try {
-    executionEvidence.value = await testManagementApi.uploadPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), payload.files)
+    const uploadedEvidence = await testManagementApi.uploadPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), payload.files)
+    if (requestSeq !== executionContextRequestSeq || executionInitialCaseId.value !== payload.caseId) return
+    const evidenceById = new Map(executionEvidence.value.map(file => [file.id, file]))
+    uploadedEvidence.forEach(file => evidenceById.set(file.id, file))
+    const evidence = Array.from(evidenceById.values())
+    executionEvidence.value = evidence
+    revokeExecutionEvidenceImageUrls()
+    void loadExecutionEvidenceImageUrls(evidence, requestSeq, payload.caseId)
     showToast('执行证据上传成功')
   } catch (error) {
     showToast(apiErrorMessage(error, '执行证据上传失败'))
   } finally {
     isUploadingEvidence.value = false
+  }
+}
+
+const downloadExecutionEvidence = async (payload: { caseId: string; attachmentId: number; fileName: string }) => {
+  if (!selectedPlan.value) return
+  downloadingEvidenceId.value = payload.attachmentId
+  try {
+    const blob = await testManagementApi.downloadPlanCaseEvidence(
+      selectedWorkspaceCode.value,
+      Number(selectedPlan.value.id),
+      Number(payload.caseId),
+      payload.attachmentId,
+    )
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = payload.fileName || '执行证据'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    showToast(apiErrorMessage(error, '执行证据下载失败'))
+  } finally {
+    downloadingEvidenceId.value = null
   }
 }
 
@@ -1326,10 +1410,15 @@ const deleteExecutionEvidence = async (payload: { caseId: string; attachmentId: 
     return
   }
   if (!selectedPlan.value) return
+  const requestSeq = executionContextRequestSeq
   isUploadingEvidence.value = true
   try {
     await testManagementApi.deletePlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId), payload.attachmentId)
-    executionEvidence.value = await testManagementApi.listPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId))
+    const evidence = await testManagementApi.listPlanCaseEvidence(selectedWorkspaceCode.value, Number(selectedPlan.value.id), Number(payload.caseId))
+    if (requestSeq !== executionContextRequestSeq || executionInitialCaseId.value !== payload.caseId) return
+    executionEvidence.value = evidence
+    revokeExecutionEvidenceImageUrls()
+    void loadExecutionEvidenceImageUrls(evidence, requestSeq, payload.caseId)
     showToast('执行证据已删除')
   } catch (error) {
     showToast(apiErrorMessage(error, '执行证据删除失败'))
@@ -1608,6 +1697,37 @@ const executeAction = (plan: ManagedTestPlan, action: string) => {
   openActionDialog(plan, action as TestPlanActionType)
 }
 
+const toggleActionMenu = async (planId: string, event: MouseEvent) => {
+  if (actionMenuId.value === planId) {
+    actionMenuId.value = null
+    return
+  }
+  const trigger = event.currentTarget as HTMLElement | null
+  if (!trigger) return
+  const triggerRect = trigger.getBoundingClientRect()
+  const menuWidth = 128
+  const viewportPadding = 8
+  const gap = 4
+  const left = Math.min(
+    Math.max(viewportPadding, triggerRect.right - menuWidth),
+    Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding),
+  )
+  actionMenuPosition.value = { top: triggerRect.bottom + gap, left }
+  actionMenuId.value = planId
+  await nextTick()
+  const menu = document.querySelector(`[data-test-plan-action-menu="${planId}"]`) as HTMLElement | null
+  if (!menu) return
+  const menuRect = menu.getBoundingClientRect()
+  const shouldOpenUpward = menuRect.bottom > window.innerHeight - viewportPadding
+  const top = shouldOpenUpward
+    ? triggerRect.top - gap - menuRect.height
+    : triggerRect.bottom + gap
+  actionMenuPosition.value = {
+    top: Math.max(viewportPadding, Math.min(top, window.innerHeight - menuRect.height - viewportPadding)),
+    left,
+  }
+}
+
 const planActions = (status: TestPlanStatus) => {
   const actions = ({
     draft: ['edit', 'start', 'copy', 'delete'], pending: ['view', 'edit', 'start', 'copy', 'cancel'],
@@ -1636,7 +1756,11 @@ const actionIcon: Record<string, Component> = {
 const progressRate = (plan: ManagedTestPlan) => plan.scope ? Math.round(plan.executed / plan.scope * 100) : 0
 const passRate = (plan: ManagedTestPlan) => plan.executed ? Math.round(plan.passed / plan.executed * 100) : 0
 
-onBeforeUnmount(() => { if (toastTimer) clearTimeout(toastTimer) })
+onBeforeUnmount(() => {
+  if (toastTimer) clearTimeout(toastTimer)
+  executionContextRequestSeq += 1
+  revokeExecutionEvidenceImageUrls()
+})
 
 onMounted(() => {
   void loadPlans()
@@ -1645,6 +1769,8 @@ onMounted(() => {
 watch(selectedWorkspaceCode, () => {
   selectedPlan.value = null
   view.value = 'list'
+  executionContextRequestSeq += 1
+  revokeExecutionEvidenceImageUrls()
   void loadPlans()
 })
 
@@ -1664,7 +1790,9 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         :case-defects="executionCaseDefects"
         :history="executionHistory"
         :evidence="executionEvidence"
+        :evidence-image-urls="executionEvidenceImageUrls"
         :uploading-evidence="isUploadingEvidence"
+        :downloading-evidence-id="downloadingEvidenceId"
         :owners="planOwners.map(item => ({ id: item.id, name: item.displayName }))"
          :initial-case-id="executionInitialCaseId"
          :submitting="isSubmitting"
@@ -1680,6 +1808,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         @link-defect="linkExecutionDefect"
         @unlink-defect="unlinkExecutionDefect"
          @upload-evidence="uploadExecutionEvidence"
+         @download-evidence="downloadExecutionEvidence"
          @delete-evidence="deleteExecutionEvidence"
         @select-case="loadExecutionCaseContext"
         @unsupported="showUnsupportedFeature"
@@ -1713,7 +1842,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <div class="test-plan-management__table-card">
           <div class="test-plan-management__table-scroll">
             <table class="test-plan-management__table">
-              <thead><tr><th>计划名称</th><th>编号</th><th>关联版本</th><th>类型</th><th>负责人</th><th>计划周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>P0/P1</th><th>状态</th><th>更新</th><th>操作</th></tr></thead>
+              <thead><tr><th>计划名称</th><th>编号</th><th>关联版本</th><th>类型</th><th>负责人</th><th>计划周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>开放 P0/P1</th><th>状态</th><th>更新</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-if="isLoading"><td class="test-plan-management__empty" colspan="13">测试计划加载中...</td></tr>
                 <tr v-else-if="loadError"><td class="test-plan-management__empty" colspan="13">{{ loadError }} <button type="button" @click="loadPlans">重新加载</button></td></tr>
@@ -1732,11 +1861,11 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                   <td><span class="is-muted">{{ plan.updatedAt.slice(0, 10) }}</span></td>
                   <td class="test-plan-management__action-cell" @click.stop>
                     <div class="test-plan-management__action-wrapper" :class="{ 'has-execution': plan.status === 'running' || plan.status === 'blocked' }">
-                      <button v-if="(plan.status === 'running' || plan.status === 'blocked') && canExecute" class="test-plan-management__execute-button" type="button" @click="openExecution(plan)"><Play :size="11" />执行</button>
-                      <button class="test-plan-management__icon-button" type="button" aria-label="计划操作" aria-haspopup="menu" :aria-expanded="actionMenuId === plan.id" @click="actionMenuId = actionMenuId === plan.id ? null : plan.id"><MoreHorizontal :size="14" /></button>
+                      <button v-if="(plan.status === 'running' || plan.status === 'blocked') && canExecute" class="test-plan-management__execute-button" type="button" title="执行" aria-label="执行" @click="openExecution(plan)"><Play :size="13" /></button>
+                      <button class="test-plan-management__icon-button" type="button" aria-label="计划操作" aria-haspopup="menu" :aria-expanded="actionMenuId === plan.id" @click="toggleActionMenu(plan.id, $event)"><MoreHorizontal :size="14" /></button>
                       <template v-if="actionMenuId === plan.id">
                         <div class="test-plan-management__action-menu-overlay" @click="actionMenuId = null" />
-                        <div class="test-plan-management__action-menu" role="menu">
+                        <div class="test-plan-management__action-menu" :data-test-plan-action-menu="plan.id" :style="{ top: `${actionMenuPosition.top}px`, left: `${actionMenuPosition.left}px` }" role="menu">
                           <button v-for="action in planActions(plan.status)" :key="action" type="button" role="menuitem" :class="{ 'is-danger': action === 'cancel' || action === 'delete' }" @click="executeAction(plan, action)"><component :is="actionIcon[action]" :size="12" />{{ actionLabel[action] }}</button>
                         </div>
                       </template>
@@ -1775,10 +1904,10 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                 <label><span>计划编号</span><input type="text" disabled :value="editingPlanId ? plans.find(item => item.id === editingPlanId)?.no || '自动生成' : '自动生成（TP-007）'"></label>
                 <label><span>关联版本 <em v-if="form.purpose === 'version'">*</em></span><select v-model="form.versionId" :disabled="Boolean(editingPlanId && editingPlanStatus !== 'draft')"><option value="">请选择版本</option><option v-for="version in planVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select><small v-if="form.purpose === 'temp'">临时测试不关联版本</small></label>
                 <label><span>测试类型 <em>*</em></span><select v-model="form.type"><option v-for="(config, key) in testPlanTypeConfig" :key="key" :value="key">{{ config.label }}</option></select></label>
-                <label><span>负责人 <em>*</em></span><select v-model="form.owner"><option value="">请选择负责人</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label>
+                <label><span>负责人</span><small>开始执行前必填</small><select v-model="form.owner"><option value="">可稍后补充</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label>
                 <label><span>参与成员</span><select v-model="form.member"><option value="">请选择（可多选）</option><option v-for="owner in planOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label>
-                <label><span>开始日期 <em>*</em></span><input v-model="form.startDate" type="date" :class="{ 'is-empty-date': !form.startDate }"></label>
-                <label><span>结束日期 <em>*</em></span><input v-model="form.endDate" type="date" :class="{ 'is-empty-date': !form.endDate }"></label>
+                <label><span>开始日期</span><small>开始执行前必填</small><input v-model="form.startDate" type="date" :class="{ 'is-empty-date': !form.startDate }"></label>
+                <label><span>结束日期</span><small>开始执行前必填</small><input v-model="form.endDate" type="date" :class="{ 'is-empty-date': !form.endDate }"></label>
               </div>
               <label class="test-plan-management__textarea-label"><span>测试目标</span><textarea v-model="form.goal" rows="3" placeholder="描述本次测试的目标和验收标准…" /></label>
             </section>
@@ -1787,17 +1916,17 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <template v-else-if="wizardStep === 1">
             <template v-if="form.purpose === 'version'">
               <section class="test-plan-management__card test-plan-management__scope-card">
-                <header><div><h3>第一步：选择测试需求</h3><p>系统将自动带入所选需求下已通过评审的测试用例</p></div><button v-if="currentVersionRequirements.length" type="button" @click="selectAllRequirements">{{ selectedRequirementIds.length === currentVersionRequirements.length ? '取消全选' : '全选' }}</button></header>
+                <header><div><h3>选择测试需求（可选）</h3><p>选择需求后，系统会自动带入该需求下的全部关联用例；评审状态仅作为质量提示</p></div><button v-if="currentVersionRequirements.length" type="button" @click="selectAllRequirements">{{ selectedRequirementIds.length === currentVersionRequirements.length ? '取消全选' : '全选' }}</button></header>
                 <div v-if="currentVersionRequirements.length" class="test-plan-management__requirements">
-                  <button v-for="requirement in currentVersionRequirements" :key="requirement.id" type="button" :class="{ 'is-selected': selectedRequirementIds.includes(requirement.id) }" @click="selectRequirement(requirement.id)"><span class="test-plan-management__checkbox"><Check v-if="selectedRequirementIds.includes(requirement.id)" :size="11" /></span><div><p><code>{{ requirement.id }}</code><i>{{ requirement.reviewStatus === 'passed' ? '已通过' : requirement.reviewStatus === 'reviewing' ? '评审中' : '待评审' }}</i><b>{{ requirement.priority }}</b></p><strong>{{ requirement.title }}</strong></div><small>{{ requirement.linkedCases.filter(item => item.reviewStatus === 'passed').length ? `${requirement.linkedCases.filter(item => item.reviewStatus === 'passed').length} 个已通过用例` : '无已通过用例' }}</small></button>
+                  <button v-for="requirement in currentVersionRequirements" :key="requirement.id" type="button" :class="{ 'is-selected': selectedRequirementIds.includes(requirement.id) }" @click="selectRequirement(requirement.id)"><span class="test-plan-management__checkbox"><Check v-if="selectedRequirementIds.includes(requirement.id)" :size="11" /></span><div><p><code>{{ requirement.id }}</code><i>{{ requirement.reviewStatus === 'passed' ? '已通过' : requirement.reviewStatus === 'reviewing' ? '评审中' : requirement.reviewStatus === 'rejected' ? '已驳回' : '待评审' }}</i><b>{{ requirement.priority }}</b></p><strong>{{ requirement.title }}</strong></div><small>{{ requirement.linkedCases.length ? `${requirement.linkedCases.length} 个关联用例` : '暂无关联用例' }}</small></button>
                 </div>
                 <div v-else class="test-plan-management__dashed-empty">该版本暂无需求，请先在需求管理中添加</div>
               </section>
 
               <section v-if="selectedRequirementIds.length" class="test-plan-management__card test-plan-management__scope-card">
-                <header><div><h3>第二步：确认已带入用例</h3><p>系统已自动带入已通过评审的用例，可排除不需要的用例</p></div><span>{{ automaticCases.length }} 个需求带入，已排除 {{ automaticCases.length - autoCases.length }} 个</span></header>
+                <header><div><h3>确认自动带入用例</h3><p>系统已自动带入所选需求的全部关联用例，可排除本次不执行的用例</p></div><span>{{ automaticCases.length }} 个需求带入，已排除 {{ automaticCases.length - autoCases.length }} 个</span></header>
                 <div v-if="automaticCases.length" class="test-plan-management__brought-cases"><div v-for="caseItem in automaticCases" :key="caseItem.id" :class="{ 'is-excluded': excludedCaseIds.includes(caseItem.id) }"><code>{{ caseItem.no }}</code><strong>{{ caseItem.title }}</strong><button type="button" @click="toggleExcludeCase(caseItem.id)">{{ excludedCaseIds.includes(caseItem.id) ? '恢复' : '排除' }}</button></div></div>
-                <div v-else class="test-plan-management__dashed-empty">所选需求暂无已通过评审的用例</div>
+                <div v-else class="test-plan-management__dashed-empty">所选需求暂无关联用例</div>
               </section>
 
               <section class="test-plan-management__card test-plan-management__scope-card">
@@ -1806,7 +1935,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
                 <div v-else class="test-plan-management__dashed-empty is-small">暂无手动补充的用例</div>
               </section>
 
-              <div v-if="selectedRequirementIds.length" class="test-plan-management__scope-summary">
+              <div class="test-plan-management__scope-summary">
                 <CheckCircle2 :size="16" />
                 <span>已选 <strong>{{ selectedRequirementIds.length }}</strong> 个需求，本次计划共纳入 <strong>{{ scopeCaseIds.size }}</strong> 个用例（{{ autoCases.length }} 个需求带入，{{ manualCases.length }} 个手动补充）</span>
               </div>
@@ -1816,6 +1945,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
               <header><div><h3>测试用例范围</h3><p>从用例库中选择需要纳入本次计划的功能测试用例</p></div><button class="test-plan-management__button is-small" type="button" @click="openPicker('direct')"><Plus :size="11" />{{ directCases.length ? '管理用例' : '选择用例' }}</button></header>
               <div v-if="directCases.length" class="test-plan-management__manual-cases"><div v-for="caseItem in directCases" :key="caseItem.id"><code>{{ caseItem.no }}</code><strong>{{ caseItem.title }}</strong><b>{{ caseItem.priority }}</b><button type="button" aria-label="移除" @click="directCaseIds = directCaseIds.filter(id => id !== caseItem.id)"><X :size="13" /></button></div></div>
               <div v-else class="test-plan-management__direct-empty"><FileText :size="36" /><strong>尚未选择任何测试用例</strong><span>点击右上角「选择用例」从用例库中添加</span></div>
+              <div class="test-plan-management__scope-summary"><CheckCircle2 :size="16" /><span>本次计划共纳入 <strong>{{ directCases.length }}</strong> 个用例，可稍后继续补充</span></div>
             </section>
           </template>
 
@@ -1850,10 +1980,10 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
         <div><strong class="is-primary">{{ detailExecutedCount }}<small>项</small></strong><span>已执行</span></div><i />
         <div><strong class="is-cyan">{{ selectedPlan.executed ? `${passRate(selectedPlan)}%` : '—' }}</strong><span>用例通过率</span></div><i />
         <div><strong class="is-cyan">{{ progressRate(selectedPlan) }}%</strong><span>执行进度</span></div><i />
-        <div><strong :class="{ 'is-danger': selectedPlan.p0Bugs + selectedPlan.p1Bugs }">{{ selectedPlan.p0Bugs + selectedPlan.p1Bugs }}<small>个</small></strong><span>P0/P1 缺陷</span></div><i />
+        <div><strong :class="{ 'is-danger': selectedPlan.p0Bugs + selectedPlan.p1Bugs }">{{ selectedPlan.p0Bugs + selectedPlan.p1Bugs }}<small>个</small></strong><span>开放 P0/P1</span></div><i />
         <div><strong class="is-danger">已逾期</strong><span>剩余时间</span></div>
       </section>
-      <nav class="test-plan-management__detail-tabs"><button v-for="tab in [{key:'overview',label:'计划概览'},{key:'cases',label:`测试用例（${planCases.length}）`},{key:'bugs',label:`缺陷（${selectedPlan.p0Bugs + selectedPlan.p1Bugs}）`},{key:'report',label:'测试报告'},{key:'logs',label:'操作记录'}]" :key="tab.key" type="button" :class="{ 'is-active': detailTab === tab.key }" @click="setDetailTab(tab.key as DetailTab)">{{ tab.label }}</button></nav>
+        <nav class="test-plan-management__detail-tabs"><button v-for="tab in [{key:'overview',label:'计划概览'},{key:'cases',label:`测试用例（${planCases.length}）`},{key:'bugs',label:`缺陷（${planDefectDetails.length}）`},{key:'report',label:'测试报告'},{key:'logs',label:'操作记录'}]" :key="tab.key" type="button" :class="{ 'is-active': detailTab === tab.key }" @click="setDetailTab(tab.key as DetailTab)">{{ tab.label }}</button></nav>
       <section class="test-plan-management__detail-body">
         <div v-if="isDetailLoading" class="test-plan-management__empty">测试计划详情加载中...</div>
         <div v-else-if="detailError" class="test-plan-management__empty">{{ detailError }} <button type="button" @click="selectedPlan && openPlan(selectedPlan, detailTab)">重新加载</button></div>

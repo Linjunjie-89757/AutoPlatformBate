@@ -186,7 +186,9 @@ function resetForm() {
 }
 
 function submit() {
-  const error = validateDefectForm(form)
+  const error = validateDefectForm(form, {
+    assigneeRequired: props.mode === 'edit' && props.defectItem?.status !== 'TODO',
+  })
   if (error) {
     formError.message = error
     return
@@ -306,6 +308,7 @@ watch(
             v-model="form.assigneeId"
             :workspace-code="activeWorkspaceCode"
             :disabled="loadingDetail"
+            :clearable="props.mode === 'create'"
             placeholder="请选择指派人"
           />
         </div>

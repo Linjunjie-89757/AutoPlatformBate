@@ -10,11 +10,11 @@ import {
   Plus,
   Search,
   Star,
-  Upload,
 } from '@lucide/vue'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import type { TestPlanCaseItem, TestPlanDefectItem, TestPlanExecutionAttachmentItem, TestPlanExecutionHistoryItem } from '@/entities/test-management'
+import { AttachmentFileWall, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
 import TestPlanCaseEditDrawer from './TestPlanCaseEditDrawer.vue'
 import TestPlanLinkDefectDialog from './TestPlanLinkDefectDialog.vue'
 import DefectDetailDrawer from '@/widgets/defect-detail-drawer/DefectDetailDrawer.vue'
@@ -34,7 +34,9 @@ const props = defineProps<{
   submitting?: boolean
   history?: TestPlanExecutionHistoryItem[]
   evidence?: TestPlanExecutionAttachmentItem[]
+  evidenceImageUrls?: Record<number, string>
   uploadingEvidence?: boolean
+  downloadingEvidenceId?: number | null
   canExecute?: boolean
   canEditSnapshot?: boolean
   canCreateDefect?: boolean
@@ -50,6 +52,7 @@ const emit = defineEmits<{
   linkDefect: [payload: { caseId: string; defectId: number }]
   unlinkDefect: [payload: { caseId: string; defectId: number }]
   uploadEvidence: [payload: { caseId: string; files: File[] }]
+  downloadEvidence: [payload: { caseId: string; attachmentId: number; fileName: string }]
   deleteEvidence: [payload: { caseId: string; attachmentId: number }]
   selectCase: [caseId: string]
   unsupported: [feature: string]
@@ -64,7 +67,6 @@ const caseEditOpen = ref(false)
 const linkDefectOpen = ref(false)
 const defectDetailOpen = ref(false)
 const defectDetailId = ref<number | null>(null)
-const evidenceInput = ref<HTMLInputElement | null>(null)
 const drafts = reactive(new Map<string, { actual: string; remark: string }>())
 
 const statusConfig: Record<ExecutionStatus, { label: string; color: string; background: string; dot: string }> = {
@@ -90,6 +92,14 @@ const canEditSnapshot = computed(() => props.canEditSnapshot !== false && ['DRAF
 const canCreateDefect = computed(() => props.canCreateDefect !== false)
 const canLinkDefect = computed(() => props.canLinkDefect !== false)
 const canManageEvidence = computed(() => props.canManageEvidence !== false)
+const evidenceWallItems = computed<AttachmentFileWallItem[]>(() => (props.evidence || []).map(file => ({
+  id: file.id,
+  fileName: file.fileName,
+  fileSize: file.fileSize,
+  contentType: file.contentType,
+  imageUrl: props.evidenceImageUrls?.[file.id],
+  createdAt: file.createdAt,
+})))
 const openDefectDetail = (defectId: number) => {
   defectDetailId.value = defectId
   defectDetailOpen.value = true
@@ -100,20 +110,24 @@ const emitEvidenceFiles = (files: File[]) => {
   emit('uploadEvidence', { caseId: activeId.value, files })
 }
 
-const handleEvidenceDrop = (event: DragEvent) => {
-  emitEvidenceFiles(Array.from(event.dataTransfer?.files || []))
+const handleEvidenceDownload = (item: AttachmentFileWallItem) => {
+  const file = props.evidence?.find(entry => entry.id === Number(item.id))
+  if (file) emit('downloadEvidence', { caseId: activeId.value, attachmentId: file.id, fileName: file.fileName })
 }
 
-const handleEvidencePaste = (event: ClipboardEvent) => {
-  const target = event.target as HTMLElement | null
-  if (target?.matches('input, textarea, [contenteditable="true"]')) return
-  const files = Array.from(event.clipboardData?.items || [])
-    .filter(item => item.kind === 'file')
-    .map(item => item.getAsFile())
-    .filter((file): file is File => Boolean(file))
-  if (!files.length) return
-  event.preventDefault()
-  emitEvidenceFiles(files)
+const handleEvidenceRemove = async (item: AttachmentFileWallItem) => {
+  const file = props.evidence?.find(entry => entry.id === Number(item.id))
+  if (!file || !canManageEvidence.value || props.uploadingEvidence) return
+  try {
+    await confirmDelete({
+      title: '删除执行证据',
+      message: `确认删除执行证据“${file.fileName}”吗？删除后不可恢复。`,
+      confirmText: '确认删除',
+    })
+  } catch {
+    return
+  }
+  emit('deleteEvidence', { caseId: activeId.value, attachmentId: file.id })
 }
 const activeDraft = computed(() => {
   if (!activeCase.value) return { actual: '', remark: '' }
@@ -166,9 +180,6 @@ watch(() => [props.initialCaseId, props.cases.length], () => {
     activeId.value = String(firstPending?.id || props.cases[0]?.id || '')
   }
 }, { immediate: true })
-
-onMounted(() => window.addEventListener('paste', handleEvidencePaste))
-onBeforeUnmount(() => window.removeEventListener('paste', handleEvidencePaste))
 
 const selectCase = (id: string) => {
   activeId.value = id
@@ -247,7 +258,7 @@ const defectAssignee = (item: TestPlanDefectItem) => item.assigneeName
               <article class="is-editable"><h3>实际结果</h3><textarea v-model="activeDraft.actual" :disabled="!canExecute" placeholder="请填写本次执行的实际结果…" /></article>
             </div>
             <article class="tp-execution__wide-card"><h3>执行备注</h3><textarea v-model="activeDraft.remark" :disabled="!canExecute" rows="3" placeholder="补充执行说明（选填）…" /></article>
-            <article class="tp-execution__wide-card is-evidence"><h3>执行证据</h3><input ref="evidenceInput" type="file" multiple hidden :disabled="!canManageEvidence" @change="emitEvidenceFiles(Array.from(($event.target as HTMLInputElement).files || [])); ($event.target as HTMLInputElement).value = ''"><button type="button" :disabled="uploadingEvidence || !canManageEvidence" @dragover.prevent @drop.prevent="handleEvidenceDrop" @click="evidenceInput?.click()"><Upload :size="20" /><strong>{{ uploadingEvidence ? '上传中…' : '点击上传，或将文件拖拽至此处' }}</strong><small>支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB</small></button><div v-if="evidence?.length" class="tp-execution__evidence-list"><span v-for="file in evidence" :key="file.id"><a :href="file.downloadUrl" target="_blank" rel="noreferrer">{{ file.fileName }}</a><button v-if="canManageEvidence" type="button" :disabled="uploadingEvidence" aria-label="删除证据" title="删除证据" @click="emit('deleteEvidence', { caseId: activeId, attachmentId: file.id })">删除</button></span></div></article>
+            <article class="tp-execution__wide-card is-evidence"><h3>执行证据</h3><AttachmentFileWall :items="evidenceWallItems" :disabled="!canManageEvidence" :uploading="uploadingEvidence" :downloading-id="downloadingEvidenceId" :show-remove="canManageEvidence" empty-title="点击上传，或将文件拖拽至此处" empty-description="支持图片 / 文档，截图可直接粘贴（Ctrl+V），单文件不超过 20 MB" @add-files="emitEvidenceFiles" @download="handleEvidenceDownload" @remove="handleEvidenceRemove" /></article>
           </div>
 
           <div v-else-if="tab === 'defects'" class="tp-execution__defects">
@@ -296,10 +307,6 @@ const defectAssignee = (item: TestPlanDefectItem) => item.assigneeName
 </template>
 
 <style scoped>
-.tp-execution__evidence-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.tp-execution__evidence-list > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; border-radius: 5px; background: #f7f8fa; }
-.tp-execution__evidence-list a { min-width: 0; overflow: hidden; color: #0ea5e9; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.tp-execution__evidence-list button { flex: 0 0 auto; padding: 0; border: 0; color: #f53f3f; background: transparent; font-size: 11px; cursor: pointer; }
 .tp-execution { display: flex; width: 100%; height: calc(100dvh - 42px); min-height: 620px; overflow: hidden; flex-direction: column; color: #1d2129; background: #f4f6fa; font-family: inherit; }
 .tp-execution * { box-sizing: border-box; }
 .tp-execution button,.tp-execution input,.tp-execution textarea { font-family: inherit; }
@@ -351,7 +358,7 @@ const defectAssignee = (item: TestPlanDefectItem) => item.assigneeName
 .tp-execution__grid ol { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .tp-execution__grid li { display: flex; align-items: flex-start; gap: 8px; }.tp-execution__grid li b { display: flex; width: 18px; height: 18px; flex: 0 0 auto; align-items: center; justify-content: center; margin-top: 1px; border-radius: 50%; color: #0ea5e9; background: rgb(14 165 233 / 8%); font-size: 10px; }.tp-execution__grid li span { color: #1d2129; font-size: 12px; line-height: 19.2px; }
 .tp-execution__grid article.is-editable { display: flex; flex-direction: column; }.tp-execution textarea { width: 100%; resize: none; padding: 8px 10px; border: 1px solid #e5e6eb; border-radius: 8px; outline: 0; color: #1d2129; font-size: 13px; line-height: 20.8px; }.tp-execution textarea:focus { border-color: #0ea5e9; box-shadow: 0 0 0 2px rgb(14 165 233 / 9%); }.tp-execution__grid textarea { min-height: 140px; flex: 1; }
-.tp-execution__wide-card { min-height: 149.4px; }.tp-execution__wide-card textarea { height: 82px; }.tp-execution__wide-card.is-evidence { min-height: 191px; }.tp-execution__wide-card.is-evidence > button { display: flex; width: 100%; min-height: 126px; align-items: center; justify-content: center; flex-direction: column; gap: 6px; border: 1.5px dashed #e5e6eb; border-radius: 8px; color: #c9cdd4; background: #fafafa; cursor: pointer; transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease; }.tp-execution__wide-card.is-evidence > button:hover { border-color: #0ea5e9; color: #0ea5e9; background: rgb(14 165 233 / 2%); }.tp-execution__wide-card.is-evidence strong { color: #4e5969; font-size: 13px; font-weight: 400; }.tp-execution__wide-card.is-evidence small { color: #c9cdd4; font-size: 11px; }
+.tp-execution__wide-card { min-height: 149.4px; }.tp-execution__wide-card textarea { height: 82px; }.tp-execution__wide-card.is-evidence { min-height: 191px; }
 .tp-execution__defect-actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 16px; }.tp-execution__defect-actions button { display: flex; height: 28px; align-items: center; gap: 5px; padding: 0 10.5px; border: 1px solid #e5e6eb; border-radius: 7px; color: #4e5969; background: #fff; font-size: 13px; cursor: pointer; }.tp-execution__defect-actions button.is-primary { height: 34px; padding: 0 18px; border: 0; border-radius: 8px; color: #fff; background: #0ea5e9; font-weight: 600; }
 .tp-execution__defect-table { overflow: hidden; border: 1px solid #e5e6eb; border-radius: 10px; background: #fff; }.tp-execution__defect-table table { width: 100%; border-collapse: collapse; }.tp-execution__defect-table tr { height: 43px; border-bottom: 1px solid #e5e6eb; }.tp-execution__defect-table tr:last-child { border-bottom: 0; }.tp-execution__defect-table th,.tp-execution__defect-table td { padding: 10px 12px; color: #4e5969; font-size: 12px; text-align: left; white-space: nowrap; }.tp-execution__defect-table th { color: #86909c; background: #fafafa; font-weight: 500; }.tp-execution__defect-table td:nth-child(2) { max-width: 320px; overflow: hidden; color: #1d2129; font-size: 13px; text-overflow: ellipsis; }.tp-execution__defect-table code { color: #0ea5e9; font-family: Cousine, ui-monospace, monospace; font-size: 11px; }.tp-execution__defect-table td > b { padding: 2px 6px; border-radius: 4px; color: #0ea5e9; background: rgb(14 165 233 / 8%); font-size: 11px; }.tp-execution__defect-table td > b.is-p0 { color: #f53f3f; background: rgb(245 63 63 / 8%); }.tp-execution__defect-table td > b.is-p1 { color: #ff7d00; background: rgb(255 125 0 / 8%); }.tp-execution__defect-table td button { padding: 2px 4px; border: 0; color: #0ea5e9; background: transparent; font-size: 12px; cursor: pointer; }.tp-execution__defect-table td button.is-danger { margin-left: 6px; color: #f53f3f; }
 .tp-execution__tab-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 64px 0; color: #c9cdd4; }.tp-execution__tab-empty span { color: #86909c; font-size: 13px; }

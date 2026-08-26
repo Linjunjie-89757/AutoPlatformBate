@@ -522,7 +522,9 @@ async function goBack() {
 }
 
 async function submit(keepCreating = false) {
-  const error = validateDefectForm(form)
+  const error = validateDefectForm(form, {
+    assigneeRequired: !isCreateMode.value && detail.value?.status !== 'TODO',
+  })
   if (error) {
     formError.value = error
     return
@@ -729,11 +731,12 @@ watch(
           <aside class="defect-edit-page__side">
             <div class="defect-edit-page__card defect-edit-page__properties-card">
               <div class="defect-edit-page__field">
-                <span class="is-required">处理人</span>
+                <span :class="{ 'is-required': !isCreateMode && detail?.status !== 'TODO' }">处理人</span>
                 <AppUserSelect
                   v-model="form.assigneeId"
                   :workspace-code="form.workspaceCode"
                   :disabled="saving"
+                  :clearable="isCreateMode"
                   :fallback-label="detail?.assigneeName"
                   placeholder="请选择处理人"
                 />

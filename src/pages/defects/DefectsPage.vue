@@ -7,8 +7,8 @@ import { hasWorkspacePermission, useSession } from '@/entities/session'
 import {
   useWorkspaceContext,
   workspaceApi,
+  type WorkspaceAssignableMemberItem,
   type WorkspaceItem,
-  type WorkspaceMemberItem,
 } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaDefectIcons } from '@/shared/assets/figma-icons'
@@ -27,7 +27,7 @@ const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext(
 const workspaceCode = ref('ALL')
 const workspaceSelectorCode = ref('ALL')
 const workspaces = ref<WorkspaceItem[]>([])
-const workspaceMembers = ref<WorkspaceMemberItem[]>([])
+const workspaceMembers = ref<WorkspaceAssignableMemberItem[]>([])
 const workspaceLoading = ref(false)
 const workspaceReady = ref(false)
 const workspaceErrorMessage = ref('')
@@ -207,9 +207,9 @@ async function loadWorkspaceMembers() {
   try {
     if (workspaceCode.value === 'ALL') {
       const memberGroups = await Promise.allSettled(
-        businessWorkspaces.value.map((workspace) => workspaceApi.getWorkspaceMembers(workspace.workspaceCode)),
+        businessWorkspaces.value.map((workspace) => workspaceApi.getWorkspaceAssignableMembers(workspace.workspaceCode)),
       )
-      const memberMap = new Map<number, WorkspaceMemberItem>()
+      const memberMap = new Map<number, WorkspaceAssignableMemberItem>()
       memberGroups.forEach((group) => {
         if (group.status !== 'fulfilled') {
           return
@@ -224,7 +224,7 @@ async function loadWorkspaceMembers() {
       return
     }
 
-    workspaceMembers.value = await workspaceApi.getWorkspaceMembers(workspaceCode.value)
+    workspaceMembers.value = await workspaceApi.getWorkspaceAssignableMembers(workspaceCode.value)
   } catch {
     workspaceMembers.value = []
   }
@@ -409,6 +409,7 @@ watch(
             :can-review="canReviewDefects"
             :can-delete="canDeleteDefects"
             embedded
+            @data-change="loadStatistics"
             @selection-change="handleDefectSelectionChange"
           />
         </section>

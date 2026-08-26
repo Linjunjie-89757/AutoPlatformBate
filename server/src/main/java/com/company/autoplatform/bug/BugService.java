@@ -95,6 +95,7 @@ public class BugService {
         bugMapper.deleteById(id);
 
         attachments.forEach(attachment -> bugAttachmentSupport.deleteStoredFile(attachment.getStoredPath()));
+        bugAttachmentSupport.deleteStoredBugDirectory(bug.getWorkspaceId(), id);
     }
 
     public BugDetailResponse assignBug(Long id, String headerWorkspaceCode, AssignBugRequest request) {

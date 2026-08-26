@@ -37,8 +37,9 @@ import caseTreeExpand from './cases/case-tree-expand.svg'
 import caseTreeFolder from './cases/case-tree-folder.svg'
 import caseTreeSearch from './cases/case-tree-search.svg'
 import defectActionDelete from './defects/defect-action-delete.svg'
-import defectActionEdit from './defects/defect-action-edit.svg'
-import defectActionTransition from './defects/defect-action-transition.svg'
+// Figma exported these two files with swapped names, so keep the aliases semantic.
+import defectActionPencil from './defects/defect-action-transition.svg'
+import defectActionCycle from './defects/defect-action-edit.svg'
 import defectActionView from './defects/defect-action-view.svg'
 import defectAdd from './defects/defect-add.svg'
 import defectDrawerEdit from './defects/defect-drawer-edit.svg'
@@ -340,8 +341,8 @@ export const figmaDefectIcons = {
   },
   action: {
     view: defectActionView,
-    edit: defectActionEdit,
-    transition: defectActionTransition,
+    edit: defectActionPencil,
+    transition: defectActionCycle,
     delete: defectActionDelete,
   },
 } as const

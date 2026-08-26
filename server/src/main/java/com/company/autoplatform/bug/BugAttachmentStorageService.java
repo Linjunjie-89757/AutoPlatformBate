@@ -9,11 +9,13 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,6 +61,31 @@ public class BugAttachmentStorageService {
             deleteEmptyParents(target.getParent());
         }
         catch (IOException ignored) {
+        }
+    }
+
+    public void deleteBugDirectory(Long workspaceId, Long bugId) {
+        if (workspaceId == null || bugId == null) {
+            return;
+        }
+        Path target = storageRoot.resolve(Paths.get("workspace-" + workspaceId, "bug-" + bugId)).normalize();
+        if (!target.startsWith(storageRoot) || target.equals(storageRoot) || !Files.exists(target)) {
+            return;
+        }
+        try {
+            List<Path> paths;
+            try (var pathStream = Files.walk(target)) {
+                paths = pathStream.sorted(Comparator.reverseOrder()).toList();
+            }
+            paths.forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            });
+            deleteEmptyParents(target.getParent());
+        } catch (IOException | UncheckedIOException ignored) {
         }
     }
 

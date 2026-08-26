@@ -117,6 +117,10 @@ public class BugAttachmentSupport {
         bugAttachmentStorageService.delete(storedPath);
     }
 
+    public void deleteStoredBugDirectory(Long workspaceId, Long bugId) {
+        bugAttachmentStorageService.deleteBugDirectory(workspaceId, bugId);
+    }
+
     public BugAttachmentResponse toAttachmentResponse(BugEntity bug, BugAttachmentEntity attachment) {
         UserEntity uploader = attachment.getCreatedBy() == null ? null : userService.findActiveUser(attachment.getCreatedBy());
         return new BugAttachmentResponse(

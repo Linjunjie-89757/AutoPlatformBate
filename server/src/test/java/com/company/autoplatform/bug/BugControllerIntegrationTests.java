@@ -1,5 +1,6 @@
 package com.company.autoplatform.bug;
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.company.autoplatform.IntegrationTestSupport;
 import com.company.autoplatform.casecenter.CaseService;
 import com.company.autoplatform.casecenter.CaseSummaryResponse;
@@ -9,6 +10,8 @@ import com.company.autoplatform.execution.CreateTaskRequest;
 import com.company.autoplatform.execution.ExecutionService;
 import com.company.autoplatform.execution.ReportSummaryResponse;
 import com.company.autoplatform.execution.TaskSummaryResponse;
+import com.company.autoplatform.workspace.WorkspaceEntity;
+import com.company.autoplatform.workspace.WorkspaceMapper;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -49,6 +52,9 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
     @Autowired
     private ExecutionService executionService;
 
+    @Autowired
+    private WorkspaceMapper workspaceMapper;
+
     @Test
     void createAndGetBugKeepsDetailResponseShape() throws Exception {
         String unique = uniquePrefix("create-detail");
@@ -84,6 +90,64 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.comments.length()").value(0))
                 .andExpect(jsonPath("$.data.activities[*].type", hasItem("CREATED")))
                 .andExpect(jsonPath("$.data.activities[*].type", hasItem("ASSIGNED")));
+    }
+
+    @Test
+    void createWithoutAssigneeStartsTodoAndCanBeAssignedLater() throws Exception {
+        String title = uniquePrefix("todo-create");
+        String response = mockMvc.perform(post("/api/bugs")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(bugRequest(title, "P1", "HIGH", null, null, null, null, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("TODO"))
+                .andExpect(jsonPath("$.data.assigneeId").value(nullValue()))
+                .andExpect(jsonPath("$.data.flows.length()").value(0))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Integer bugId = objectMapper.readTree(response).path("data").path("id").asInt();
+
+        transitionBugAndExpectStatus(bugId, "ASSIGNED", ASSIGNEE_ID, "assign after creation");
+    }
+
+    @Test
+    void transitionRejectsIllegalJumpAndAllowsTerminalStatusReopen() throws Exception {
+        Integer bugId = createBug(uniquePrefix("state-machine"), "P1", "HIGH", null, null, null);
+
+        mockMvc.perform(post("/api/bugs/{id}/transition", bugId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "workspaceCode": "%s",
+                                  "toStatus": "REJECTED",
+                                  "actionComment": "illegal jump"
+                                }
+                                """.formatted(WORKSPACE_CODE)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        transitionBugAndExpectStatus(bugId, "IN_PROGRESS", ASSIGNEE_ID, "start processing");
+        transitionBugAndExpectStatus(bugId, "PENDING_VERIFY", null, "submit verification");
+        transitionBugAndExpectStatus(bugId, "REJECTED", null, "verification rejected");
+        transitionBugAndExpectStatus(bugId, "IN_PROGRESS", ASSIGNEE_ID, "reopen rejected bug");
+        transitionBugAndExpectStatus(bugId, "CLOSED", null, "close directly");
+
+        mockMvc.perform(post("/api/bugs/{id}/assign", bugId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "workspaceCode": "%s",
+                                  "assigneeId": 12
+                                }
+                                """.formatted(WORKSPACE_CODE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CLOSED"));
+
+        transitionBugAndExpectStatus(bugId, "ASSIGNED", ASSIGNEE_ID, "reopen closed bug");
     }
 
     @Test
@@ -335,7 +399,12 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        Path attachmentDirectory = Path.of("data/bug-files/workspace-11/bug-" + bugId).toAbsolutePath().normalize();
+        WorkspaceEntity workspace = workspaceMapper.selectOne(Wrappers.<WorkspaceEntity>lambdaQuery()
+                .eq(WorkspaceEntity::getWorkspaceCode, WORKSPACE_CODE));
+        org.junit.jupiter.api.Assertions.assertNotNull(workspace);
+        Path attachmentDirectory = Path.of(
+                "data/bug-files/workspace-" + workspace.getId() + "/bug-" + bugId
+        ).toAbsolutePath().normalize();
         org.junit.jupiter.api.Assertions.assertTrue(Files.exists(attachmentDirectory));
 
         mockMvc.perform(delete("/api/bugs/{id}", bugId)
@@ -373,6 +442,33 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 .getResponse()
                 .getContentAsString();
         return objectMapper.readTree(response).path("data").path("id").asInt();
+    }
+
+    private void transitionBugAndExpectStatus(
+            Integer bugId,
+            String toStatus,
+            Long assigneeId,
+            String actionComment
+    ) throws Exception {
+        mockMvc.perform(post("/api/bugs/{id}/transition", bugId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "workspaceCode": "%s",
+                                  "toStatus": "%s",
+                                  "assigneeId": %s,
+                                  "actionComment": "%s"
+                                }
+                                """.formatted(
+                                WORKSPACE_CODE,
+                                toStatus,
+                                jsonNumberOrNull(assigneeId),
+                                actionComment
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value(toStatus));
     }
 
     private Integer createBugFromCase(Long caseId, String title) throws Exception {
@@ -418,6 +514,19 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
             Long taskId,
             String sourceType
     ) {
+        return bugRequest(title, priority, severity, caseId, reportId, taskId, sourceType, ASSIGNEE_ID);
+    }
+
+    private String bugRequest(
+            String title,
+            String priority,
+            String severity,
+            Long caseId,
+            Long reportId,
+            Long taskId,
+            String sourceType,
+            Long assigneeId
+    ) {
         return """
                 {
                   "workspaceCode": "%s",
@@ -430,7 +539,7 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                   "priority": "%s",
                   "severity": "%s",
                   "sourceType": %s,
-                  "assigneeId": %d,
+                  "assigneeId": %s,
                   "relatedCaseId": %s,
                   "relatedReportId": %s,
                   "relatedTaskId": %s,
@@ -442,7 +551,7 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 priority,
                 severity,
                 sourceType == null ? "null" : "\"" + sourceType + "\"",
-                ASSIGNEE_ID,
+                jsonNumberOrNull(assigneeId),
                 jsonNumberOrNull(caseId),
                 jsonNumberOrNull(reportId),
                 jsonNumberOrNull(taskId)

@@ -9,9 +9,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class BugWorkflowDomainService {
+
+    private static final Map<BugStatus, Set<BugStatus>> ALLOWED_TRANSITIONS = Map.of(
+            BugStatus.TODO, Set.of(BugStatus.ASSIGNED),
+            BugStatus.ASSIGNED, Set.of(BugStatus.IN_PROGRESS, BugStatus.CLOSED),
+            BugStatus.IN_PROGRESS, Set.of(BugStatus.PENDING_VERIFY, BugStatus.CLOSED),
+            BugStatus.PENDING_VERIFY, Set.of(BugStatus.CLOSED, BugStatus.REJECTED),
+            BugStatus.CLOSED, Set.of(BugStatus.ASSIGNED),
+            BugStatus.REJECTED, Set.of(BugStatus.ASSIGNED, BugStatus.IN_PROGRESS)
+    );
 
     private final BugDomainService bugDomainService;
     private final BugMapper bugMapper;
@@ -40,11 +51,12 @@ public class BugWorkflowDomainService {
         UserEntity assignee = userService.requireUser(request.assigneeId());
 
         BugStatus fromStatus = BugStatus.valueOf(entity.getStatus());
+        BugStatus toStatus = fromStatus == BugStatus.TODO ? BugStatus.ASSIGNED : fromStatus;
         entity.setAssigneeId(assignee.getId());
-        entity.setStatus(BugStatus.ASSIGNED.name());
+        entity.setStatus(toStatus.name());
         entity.setUpdatedAt(LocalDateTime.now());
         bugMapper.updateById(entity);
-        appendFlow(id, fromStatus, BugStatus.ASSIGNED, "分配处理人: " + assignee.getDisplayName());
+        appendFlow(id, fromStatus, toStatus, "分配处理人: " + assignee.getDisplayName());
         return entity;
     }
 
@@ -57,6 +69,11 @@ public class BugWorkflowDomainService {
         BugStatus fromStatus = BugStatus.valueOf(entity.getStatus());
         if (fromStatus == request.toStatus()) {
             throw new BadRequestException("目标状态与当前状态一致，无需流转");
+        }
+        if (!ALLOWED_TRANSITIONS.getOrDefault(fromStatus, Set.of()).contains(request.toStatus())) {
+            throw new BadRequestException(
+                    "不允许从“" + fromStatus.getLabel() + "”流转至“" + request.toStatus().getLabel() + "”"
+            );
         }
         if ((request.toStatus() == BugStatus.ASSIGNED || request.toStatus() == BugStatus.IN_PROGRESS)
                 && request.assigneeId() == null && entity.getAssigneeId() == null) {

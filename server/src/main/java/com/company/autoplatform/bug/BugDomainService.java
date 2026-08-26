@@ -119,7 +119,9 @@ public class BugDomainService {
     public BugEntity createBug(String headerWorkspaceCode, CreateBugRequest request, BugSourceType sourceType) {
         WorkspaceEntity workspace = workspaceService.requireWritableWorkspace(
                 workspaceService.resolveTargetWorkspace(headerWorkspaceCode, request.workspaceCode()));
-        userService.requireUser(request.assigneeId());
+        if (request.assigneeId() != null) {
+            userService.requireUser(request.assigneeId());
+        }
         if (request.relatedCaseId() != null) {
             caseService.requireCase(request.relatedCaseId());
         }
@@ -139,7 +141,7 @@ public class BugDomainService {
         entity.setVersionName(request.versionName());
         entity.setPriority(request.priority().name());
         entity.setSeverity(request.severity().name());
-        entity.setStatus(BugStatus.ASSIGNED.name());
+        entity.setStatus(request.assigneeId() == null ? BugStatus.TODO.name() : BugStatus.ASSIGNED.name());
         entity.setSourceType(sourceType.name());
         entity.setAssigneeId(request.assigneeId());
         entity.setReporterId(CurrentUserContext.get());
@@ -168,6 +170,11 @@ public class BugDomainService {
         }
         if (request.assigneeId() != null) {
             userService.requireUser(request.assigneeId());
+        }
+        BugStatus currentStatus = BugStatus.valueOf(entity.getStatus());
+        if ((currentStatus == BugStatus.ASSIGNED || currentStatus == BugStatus.IN_PROGRESS)
+                && request.assigneeId() == null) {
+            throw new BadRequestException("当前状态必须保留处理人");
         }
         if (request.relatedCaseId() != null) {
             caseService.requireCase(request.relatedCaseId());

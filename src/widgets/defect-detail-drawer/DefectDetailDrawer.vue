@@ -16,6 +16,7 @@ import {
   type DefectDetail,
 } from '@/entities/defect'
 import DefectCaseAssociateDialog from '@/features/defect-case-associate/DefectCaseAssociateDialog.vue'
+import { getDefectTransitionOptions } from '@/features/defect-transition'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
@@ -94,6 +95,8 @@ const detailTabs = computed(() => [
   { key: 'history' as const, label: `流转记录（${activityCount.value}）` },
   { key: 'comment' as const, label: `评论（${comments.value.length}）` },
 ])
+
+const transitionOptions = computed(() => getDefectTransitionOptions(detail.value?.status))
 
 const activityCount = computed(() => {
   if (!Array.isArray(detail.value?.activities)) {
@@ -745,10 +748,21 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <div v-if="detail && canTransition" class="defect-detail-drawer__flowbar">
+      <div v-if="detail && canTransition && transitionOptions.length" class="defect-detail-drawer__flowbar">
         <span>流转至：</span>
-        <button type="button" class="is-verify" @click="emitIfDetail('transition')">提交验证</button>
-        <button type="button" class="is-close" @click="emitIfDetail('transition')">直接关闭</button>
+        <button
+          v-for="option in transitionOptions"
+          :key="option.value"
+          type="button"
+          :style="{
+            '--flow-color': option.color,
+            '--flow-border': option.borderColor,
+            '--flow-background': option.selectedBackground,
+          }"
+          @click="emitIfDetail('transition')"
+        >
+          {{ option.label }}
+        </button>
       </div>
 
       <nav v-if="detail" class="defect-detail-drawer__tabs" aria-label="缺陷详情分区">
@@ -1343,23 +1357,19 @@ onBeforeUnmount(() => {
 .defect-detail-drawer__flowbar button {
   height: 24.5px;
   padding: 1px 11.5px;
+  border: 1px solid var(--flow-border);
   border-radius: 7px;
+  background: var(--flow-background);
+  color: var(--flow-color);
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
+  transition: filter 0.15s ease;
 }
 
-.defect-detail-drawer__flowbar .is-verify {
-  border: 1px solid rgba(200, 155, 0, 0.25);
-  background: rgba(200, 155, 0, 0.05);
-  color: #c89b00;
-}
-
-.defect-detail-drawer__flowbar .is-close {
-  border: 1px solid rgba(0, 180, 42, 0.25);
-  background: rgba(0, 180, 42, 0.05);
-  color: #00b42a;
+.defect-detail-drawer__flowbar button:hover {
+  filter: brightness(0.94);
 }
 
 .defect-detail-drawer__figma-meta {

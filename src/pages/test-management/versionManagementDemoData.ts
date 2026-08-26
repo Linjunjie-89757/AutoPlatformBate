@@ -55,7 +55,8 @@ export interface VersionPlan {
   scope: number
   executed: number
   passed: number
-  highBugs: number
+  p0Bugs: number
+  p1Bugs: number
   status: 'running' | 'completed' | 'pending'
   ownerConfirmRequired: boolean
   reportSigned: boolean
@@ -113,10 +114,10 @@ export const versionRequirements: VersionRequirement[] = [
 ]
 
 export const versionPlans: VersionPlan[] = [
-  { id: 'P1', versionId: 'V1', name: 'v2.4.0 全量回归测试', type: '回归测试', owner: '李明', startDate: '2026-07-01', endDate: '2026-07-12', scope: 80, executed: 62, passed: 58, highBugs: 2, status: 'running', ownerConfirmRequired: true, reportSigned: false },
-  { id: 'P2', versionId: 'V1', name: 'v2.4.0 冒烟验证', type: '冒烟测试', owner: '陈伟', startDate: '2026-07-01', endDate: '2026-07-01', scope: 12, executed: 12, passed: 12, highBugs: 0, status: 'completed', ownerConfirmRequired: false, reportSigned: false },
-  { id: 'P3', versionId: 'V2', name: 'v2.3.5 补丁回归', type: '回归测试', owner: '王芳', startDate: '2026-06-28', endDate: '2026-07-04', scope: 48, executed: 48, passed: 46, highBugs: 0, status: 'completed', ownerConfirmRequired: true, reportSigned: true },
-  { id: 'P4', versionId: 'V2', name: 'v2.3.5 发布验证', type: '发布验证', owner: '张程远', startDate: '2026-07-08', endDate: '2026-07-08', scope: 20, executed: 0, passed: 0, highBugs: 0, status: 'pending', ownerConfirmRequired: false, reportSigned: false },
+  { id: 'P1', versionId: 'V1', name: 'v2.4.0 全量回归测试', type: '回归测试', owner: '李明', startDate: '2026-07-01', endDate: '2026-07-12', scope: 80, executed: 62, passed: 58, p0Bugs: 0, p1Bugs: 2, status: 'running', ownerConfirmRequired: true, reportSigned: false },
+  { id: 'P2', versionId: 'V1', name: 'v2.4.0 冒烟验证', type: '冒烟测试', owner: '陈伟', startDate: '2026-07-01', endDate: '2026-07-01', scope: 12, executed: 12, passed: 12, p0Bugs: 0, p1Bugs: 0, status: 'completed', ownerConfirmRequired: false, reportSigned: false },
+  { id: 'P3', versionId: 'V2', name: 'v2.3.5 补丁回归', type: '回归测试', owner: '王芳', startDate: '2026-06-28', endDate: '2026-07-04', scope: 48, executed: 48, passed: 46, p0Bugs: 0, p1Bugs: 0, status: 'completed', ownerConfirmRequired: true, reportSigned: true },
+  { id: 'P4', versionId: 'V2', name: 'v2.3.5 发布验证', type: '发布验证', owner: '张程远', startDate: '2026-07-08', endDate: '2026-07-08', scope: 20, executed: 0, passed: 0, p0Bugs: 0, p1Bugs: 0, status: 'pending', ownerConfirmRequired: false, reportSigned: false },
 ]
 
 export const versionBugs: VersionBug[] = [

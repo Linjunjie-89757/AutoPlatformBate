@@ -170,7 +170,7 @@ public class TestPlanService {
         validateDates(request.startDate(), request.endDate());
         if (request.ownerId() != null) requireActiveUser(request.ownerId());
         if (!request.draft()) {
-            validateCompleteDefinition(request.purpose(), request.versionId(), request.ownerId(), request.startDate(), request.endDate(), request.requirementIds(), request.manualCaseIds());
+            validateCompleteDefinition(request.ownerId(), request.startDate(), request.endDate());
         }
         LocalDateTime now = LocalDateTime.now();
         TestPlanEntity plan = new TestPlanEntity();
@@ -236,7 +236,7 @@ public class TestPlanService {
         List<Long> manualCaseIds = request.manualCaseIds() == null ? manualCaseIds(id) : distinct(request.manualCaseIds());
         validatePurpose(plan.getPurpose(), versionId, plan.getWorkspaceId(), requirementIds, plan.getStatus() == PlanStatus.DRAFT);
         if (plan.getStatus() != PlanStatus.DRAFT) {
-            validateCompleteDefinition(plan.getPurpose(), versionId, request.ownerId(), request.startDate(), request.endDate(), requirementIds, manualCaseIds);
+            validateCompleteDefinition(request.ownerId(), request.startDate(), request.endDate());
         }
         if (request.ownerId() != null) requireActiveUser(request.ownerId());
         plan.setName(request.name().trim());
@@ -469,6 +469,14 @@ public class TestPlanService {
         history.setCreatedAt(now);
         history.setUpdatedAt(now);
         executionMapper.insert(history);
+        executionAttachmentMapper.update(
+                null,
+                new LambdaUpdateWrapper<TestPlanExecutionAttachmentEntity>()
+                        .set(TestPlanExecutionAttachmentEntity::getExecutionId, history.getId())
+                        .eq(TestPlanExecutionAttachmentEntity::getPlanId, id)
+                        .eq(TestPlanExecutionAttachmentEntity::getPlanCaseId, planCaseId)
+                        .isNull(TestPlanExecutionAttachmentEntity::getExecutionId)
+        );
         planCase.setExecutionStatus(request.status());
         planCase.setExecutionNote(blankToNull(request.note()));
         planCase.setExecutedBy(CurrentUserContext.get());
@@ -653,16 +661,16 @@ public class TestPlanService {
     @Transactional
     public List<TestPlanExecutionAttachmentResponse> uploadExecutionEvidence(Long id, Long planCaseId, String workspaceCode, List<MultipartFile> files) {
         TestPlanEntity plan = requireWritable(id, workspaceCode);
+        if (plan.getStatus() != PlanStatus.RUNNING) throw TestManagementException.invalidTransition("上传执行证据", plan.getStatus(), "EVIDENCE");
         requirePlanCase(planCaseId, id);
         TestPlanCaseExecutionEntity execution = latestExecution(id, planCaseId);
-        if (execution == null) throw TestManagementException.validation("请先保存本次执行结果，再上传执行证据");
-        List<StoredTestPlanExecutionFile> stored = executionAttachmentStorageService.storeAll(plan.getWorkspaceId(), id, execution.getId(), files);
+        List<StoredTestPlanExecutionFile> stored = executionAttachmentStorageService.storeAll(plan.getWorkspaceId(), id, execution == null ? null : execution.getId(), files);
         List<TestPlanExecutionAttachmentEntity> created = new ArrayList<>();
         try {
             for (int index = 0; index < stored.size(); index++) {
                 MultipartFile file = files.get(index); StoredTestPlanExecutionFile item = stored.get(index);
                 TestPlanExecutionAttachmentEntity attachment = new TestPlanExecutionAttachmentEntity();
-                attachment.setWorkspaceId(plan.getWorkspaceId()); attachment.setPlanId(id); attachment.setPlanCaseId(planCaseId); attachment.setExecutionId(execution.getId());
+                attachment.setWorkspaceId(plan.getWorkspaceId()); attachment.setPlanId(id); attachment.setPlanCaseId(planCaseId); attachment.setExecutionId(execution == null ? null : execution.getId());
                 attachment.setFileName(file.getOriginalFilename()); attachment.setStoredPath(item.storedPath()); attachment.setContentType(item.contentType()); attachment.setFileSize(item.fileSize()); attachment.setCreatedBy(CurrentUserContext.get());
                 attachment.setCreatedAt(LocalDateTime.now()); attachment.setUpdatedAt(LocalDateTime.now()); executionAttachmentMapper.insert(attachment); created.add(attachment);
             }
@@ -676,15 +684,18 @@ public class TestPlanService {
 
     public List<TestPlanExecutionAttachmentResponse> listExecutionEvidence(Long id, Long planCaseId, String workspaceCode) {
         requireReadable(id, workspaceCode); requirePlanCase(planCaseId, id);
-        TestPlanCaseExecutionEntity execution = latestExecution(id, planCaseId);
-        if (execution == null) return List.of();
-        return executionAttachmentMapper.selectList(new LambdaQueryWrapper<TestPlanExecutionAttachmentEntity>().eq(TestPlanExecutionAttachmentEntity::getExecutionId, execution.getId()).orderByAsc(TestPlanExecutionAttachmentEntity::getId))
+        return executionAttachmentMapper.selectList(new LambdaQueryWrapper<TestPlanExecutionAttachmentEntity>()
+                        .eq(TestPlanExecutionAttachmentEntity::getPlanId, id)
+                        .eq(TestPlanExecutionAttachmentEntity::getPlanCaseId, planCaseId)
+                        .orderByAsc(TestPlanExecutionAttachmentEntity::getId))
                 .stream().map(this::toExecutionAttachmentResponse).toList();
     }
 
     @Transactional
     public void deleteExecutionEvidence(Long id, Long planCaseId, Long attachmentId, String workspaceCode) {
-        TestPlanEntity plan = requireWritable(id, workspaceCode); requirePlanCase(planCaseId, id);
+        TestPlanEntity plan = requireWritable(id, workspaceCode);
+        if (plan.getStatus() != PlanStatus.RUNNING) throw TestManagementException.invalidTransition("删除执行证据", plan.getStatus(), "EVIDENCE");
+        requirePlanCase(planCaseId, id);
         TestPlanExecutionAttachmentEntity attachment = executionAttachmentMapper.selectById(attachmentId);
         if (attachment == null || !id.equals(attachment.getPlanId()) || !planCaseId.equals(attachment.getPlanCaseId())) throw TestManagementException.notFound("执行证据", attachmentId);
         executionAttachmentMapper.deleteById(attachmentId); executionAttachmentStorageService.delete(attachment.getStoredPath());
@@ -796,30 +807,22 @@ public class TestPlanService {
 
     private void validatePurpose(PlanPurpose purpose, Long versionId, Long workspaceId, List<Long> requirementIds, boolean draft) {
         if (purpose == PlanPurpose.VERSION) {
-            if (versionId == null && !draft) throw TestManagementException.validation("版本测试计划必须选择版本");
+            if (versionId == null) throw TestManagementException.validation("版本测试计划必须选择版本");
             if (requirementIds != null && !requirementIds.isEmpty() && versionId != null) validateRequirements(versionId, workspaceId, requirementIds);
         } else if (purpose == PlanPurpose.TEMP && (versionId != null || (requirementIds != null && !requirementIds.isEmpty()))) {
             throw TestManagementException.validation("临时测试计划不能关联版本或需求");
         }
     }
 
-    private void validateCompleteDefinition(PlanPurpose purpose, Long versionId, Long ownerId, LocalDate startDate, LocalDate endDate, List<Long> requirementIds, List<Long> manualCaseIds) {
+    private void validateCompleteDefinition(Long ownerId, LocalDate startDate, LocalDate endDate) {
         if (ownerId == null) throw TestManagementException.validation("正式测试计划必须设置负责人");
         if (startDate == null || endDate == null) throw TestManagementException.validation("正式测试计划必须设置计划周期");
-        if (purpose == PlanPurpose.VERSION && (versionId == null || requirementIds == null || requirementIds.isEmpty())) throw TestManagementException.validation("版本测试计划至少选择一个需求");
-        if (purpose == PlanPurpose.TEMP && (manualCaseIds == null || manualCaseIds.isEmpty())) throw TestManagementException.validation("临时测试计划至少选择一个用例");
     }
 
     private void validateStart(TestPlanEntity plan) {
-        validateCompleteDefinition(plan.getPurpose(), plan.getVersionId(), plan.getOwnerId(), plan.getStartDate(), plan.getEndDate(), selectedRequirementIds(plan.getId()), manualCaseIds(plan.getId()));
+        validateCompleteDefinition(plan.getOwnerId(), plan.getStartDate(), plan.getEndDate());
         long caseCount = planCaseMapper.selectCount(new LambdaQueryWrapper<TestPlanCaseEntity>().eq(TestPlanCaseEntity::getPlanId, plan.getId()));
-        if (caseCount == 0) throw TestManagementException.reviewRequired("测试计划至少需要一个用例", Map.of("planId", plan.getId()));
-        if (plan.getPurpose() == PlanPurpose.VERSION) {
-            List<TestRequirementEntity> requirements = requirementsByIds(selectedRequirementIds(plan.getId()));
-            if (requirements.stream().anyMatch(item -> aggregateReviewStatus(item.getId()) != RequirementReviewStatus.PASSED)) {
-                throw TestManagementException.reviewRequired("自动带入用例的需求必须先完成评审", Map.of("planId", plan.getId()));
-            }
-        }
+        if (caseCount == 0) throw TestManagementException.validation("测试计划至少需要一个用例");
     }
 
     private List<Map<String, Object>> qualityChecks(TestPlanEntity plan) {
@@ -855,14 +858,12 @@ public class TestPlanService {
         Map<Long, List<Long>> requirementsByCase = new LinkedHashMap<>();
         if (!requirementIds.isEmpty()) {
             for (TestRequirementCaseEntity relation : requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>().in(TestRequirementCaseEntity::getRequirementId, requirementIds))) {
-                if (relation.getReviewStatus() == RequirementReviewStatus.PASSED) {
-                    if (excluded.contains(relation.getCaseId()) && manualIds.contains(relation.getCaseId())) {
-                        throw TestManagementException.validation("已排除的需求用例不能作为手动用例添加，请恢复自动带入后重试");
-                    }
-                    if (excluded.contains(relation.getCaseId())) continue;
-                    selected.putIfAbsent(relation.getCaseId(), PlanCaseOriginType.REQUIREMENT);
-                    requirementsByCase.computeIfAbsent(relation.getCaseId(), ignored -> new ArrayList<>()).add(relation.getRequirementId());
+                if (excluded.contains(relation.getCaseId()) && manualIds.contains(relation.getCaseId())) {
+                    throw TestManagementException.validation("已排除的需求用例不能作为手动用例添加，请恢复自动带入后重试");
                 }
+                if (excluded.contains(relation.getCaseId())) continue;
+                selected.putIfAbsent(relation.getCaseId(), PlanCaseOriginType.REQUIREMENT);
+                requirementsByCase.computeIfAbsent(relation.getCaseId(), ignored -> new ArrayList<>()).add(relation.getRequirementId());
             }
         }
         for (Long caseId : manualIds) selected.putIfAbsent(caseId, PlanCaseOriginType.MANUAL);

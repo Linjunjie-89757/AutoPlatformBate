@@ -302,6 +302,14 @@ export const testManagementApi = {
     }), '执行证据加载失败')
   },
 
+  async downloadPlanCaseEvidence(workspaceCode: string, id: number, planCaseId: number, attachmentId: number) {
+    const response = await request.get<Blob>(`/test-management/plans/${id}/cases/${planCaseId}/evidence/${attachmentId}/download`, {
+      headers: workspaceHeaders(workspaceCode),
+      responseType: 'blob',
+    })
+    return response.data
+  },
+
   async deletePlanCaseEvidence(workspaceCode: string, id: number, planCaseId: number, attachmentId: number) {
     return unwrap(await httpDelete<ApiResponse<null>>(`/test-management/plans/${id}/cases/${planCaseId}/evidence/${attachmentId}`, {
       headers: workspaceHeaders(workspaceCode),

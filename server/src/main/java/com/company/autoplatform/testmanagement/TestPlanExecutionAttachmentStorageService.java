@@ -35,7 +35,8 @@ public class TestPlanExecutionAttachmentStorageService {
             for (MultipartFile file : files) {
                 String original = StringUtils.cleanPath(file.getOriginalFilename() == null ? "evidence" : file.getOriginalFilename());
                 String extension = original.contains(".") ? original.substring(original.lastIndexOf('.')) : "";
-                Path relative = Paths.get("workspace-" + workspaceId, "plan-" + planId, "execution-" + executionId, UUID.randomUUID() + extension);
+                String executionDirectory = executionId == null ? "execution-pending" : "execution-" + executionId;
+                Path relative = Paths.get("workspace-" + workspaceId, "plan-" + planId, executionDirectory, UUID.randomUUID() + extension);
                 Path target = storageRoot.resolve(relative).normalize();
                 Files.createDirectories(target.getParent());
                 file.transferTo(target);

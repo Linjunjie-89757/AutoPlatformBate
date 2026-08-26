@@ -120,7 +120,7 @@ export function buildSaveDefectPayload(form: DefectForm): SaveDefectPayload {
   }
 }
 
-export function validateDefectForm(form: DefectForm) {
+export function validateDefectForm(form: DefectForm, options: { assigneeRequired?: boolean } = {}) {
   if (!form.title.trim()) {
     return '请输入缺陷标题'
   }
@@ -136,11 +136,11 @@ export function validateDefectForm(form: DefectForm) {
   if (!form.severity) {
     return '请选择严重级别'
   }
-  if (!form.assigneeId.trim()) {
+  if (options.assigneeRequired && !form.assigneeId.trim()) {
     return '请选择处理人'
   }
-  if (!Number.isFinite(Number(form.assigneeId))) {
-    return '处理人数据异常，请重新选择'
+  if (form.assigneeId.trim() && !Number.isFinite(Number(form.assigneeId))) {
+    return '处理人参数无效'
   }
   if (form.relatedCaseId.trim() && !Number.isFinite(Number(form.relatedCaseId))) {
     return '关联用例数据异常，请重新选择'

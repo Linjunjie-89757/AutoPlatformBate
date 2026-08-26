@@ -12,6 +12,7 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -38,6 +40,65 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
 
     @Autowired
     private CaseMapper caseMapper;
+
+    @Test
+    void runningPlanAllowsEvidenceBeforeRecordingCaseResult() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        CaseEntity testCase = firstCaseInRiskWorkspace();
+        JsonNode plan = data(mockMvc.perform(post("/api/test-management/plans/create-and-start")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "purpose", "TEMP",
+                                "planType", "MIXED",
+                                "name", "evidence-before-result-" + suffix,
+                                "ownerId", 11,
+                                "startDate", "2026-08-18",
+                                "endDate", "2026-08-20",
+                                "manualCaseIds", List.of(testCase.getId()),
+                                "draft", false
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RUNNING"))
+                .andExpect(jsonPath("$.data.cases[0].executionStatus").value("PENDING"))
+                .andReturn());
+        long planId = plan.path("id").asLong();
+        long planCaseId = plan.path("cases").path(0).path("id").asLong();
+
+        MockMultipartFile evidence = new MockMultipartFile(
+                "files", "pending-execution.log", "text/plain", "before-result".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mockMvc.perform(multipart("/api/test-management/plans/{id}/cases/{planCaseId}/evidence", planId, planCaseId)
+                        .file(evidence)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].fileName").value("pending-execution.log"));
+
+        MockMultipartFile repeatedEvidence = new MockMultipartFile(
+                "files", "pending-execution.log", "text/plain", "before-result-again".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mockMvc.perform(multipart("/api/test-management/plans/{id}/cases/{planCaseId}/evidence", planId, planCaseId)
+                        .file(repeatedEvidence)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1));
+
+        mockMvc.perform(get("/api/test-management/plans/{id}/cases/{planCaseId}/evidence", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2));
+
+        mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/results", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("status", "PASSED", "expectedVersion", 1))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/test-management/plans/{id}/cases/{planCaseId}/evidence", planId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].fileName").value("pending-execution.log"));
+    }
 
     @Test
     void versionPlanFreezesExecutesGeneratesAndSignsReport() throws Exception {

@@ -17,7 +17,7 @@ public record CreateBugRequest(
         @NotNull(message = "优先级不能为空") BugPriority priority,
         @NotNull(message = "严重程度不能为空") BugSeverity severity,
         BugSourceType sourceType,
-        @NotNull(message = "处理人不能为空") Long assigneeId,
+        Long assigneeId,
         Long relatedCaseId,
         Long relatedReportId,
         Long relatedTaskId,

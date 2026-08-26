@@ -150,7 +150,8 @@ const mapPlan = (item: Awaited<ReturnType<typeof testManagementApi.listPlans>>['
   scope: item.caseCount,
   executed: item.executedCount,
   passed: item.passedCount,
-  highBugs: item.defectCount,
+  p0Bugs: item.p0DefectCount,
+  p1Bugs: item.p1DefectCount,
   status: normalizePlanStatus(item.status),
   ownerConfirmRequired: item.ownerConfirmRequired,
   reportSigned: item.report?.status === 'SIGNED',
@@ -869,7 +870,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
             <table class="version-management__table is-version-list">
               <thead>
                 <tr>
-                  <th>版本名称</th><th>编号</th><th>类型</th><th>负责人</th><th>状态</th><th>开始日期</th><th>提测日期</th><th>计划发布</th><th>计划数</th><th>测试进度</th><th>通过率</th><th>P0/P1</th><th>准出</th><th>操作</th>
+                  <th>版本名称</th><th>编号</th><th>类型</th><th>负责人</th><th>状态</th><th>开始日期</th><th>提测日期</th><th>计划发布</th><th>计划数</th><th>测试进度</th><th>通过率</th><th>开放 P0/P1</th><th>准出</th><th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -937,7 +938,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
           { value: selectedVersion.scope, unit: '项', label: '测试用例', tone: 'primary' },
           { value: selectedVersion.executed, unit: '项', label: '已执行', tone: 'primary' },
           { value: selectedVersion.executed ? `${passRate}%` : '—', unit: '', label: '用例通过率', tone: !selectedVersion.executed ? 'muted' : passRate >= 85 ? 'primary' : 'warning' },
-          { value: selectedVersion.p0Bugs + selectedVersion.p1Bugs, unit: '个', label: 'P0/P1 缺陷', tone: selectedVersion.p0Bugs + selectedVersion.p1Bugs > 0 ? 'danger' : 'muted' },
+          { value: selectedVersion.p0Bugs + selectedVersion.p1Bugs, unit: '个', label: '开放 P0/P1', tone: selectedVersion.p0Bugs + selectedVersion.p1Bugs > 0 ? 'danger' : 'muted' },
         ]" :key="item.label">
           <i v-if="index" />
           <div :class="`is-${item.tone}`"><strong>{{ item.value }}<small>{{ item.unit }}</small></strong><span>{{ item.label }}</span></div>
@@ -946,7 +947,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
 
       <nav class="version-management__detail-tabs" aria-label="版本详情视图">
         <button v-for="tab in detailTabs" :key="tab.key" type="button" :class="{ 'is-active': detailTab === tab.key }" @click="setDetailTab(tab.key)">
-          {{ tab.label }}<template v-if="tab.key === 'requirements'">（{{ currentRequirements.length }}）</template><template v-else-if="tab.key === 'plans'">（{{ currentPlans.length }}）</template><template v-else-if="tab.key === 'bugs'">（{{ selectedVersion.p0Bugs + selectedVersion.p1Bugs }}）</template>
+          {{ tab.label }}<template v-if="tab.key === 'requirements'">（{{ currentRequirements.length }}）</template><template v-else-if="tab.key === 'plans'">（{{ currentPlans.length }}）</template><template v-else-if="tab.key === 'bugs'">（{{ versionBugs.length }}）</template>
         </button>
       </nav>
 
@@ -1015,8 +1016,8 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         <div v-else-if="detailTab === 'plans'" class="version-management__table-card">
           <header class="version-management__card-header"><strong>该版本下的测试计划</strong><button v-if="selectedVersion.status !== 'released' && selectedVersion.status !== 'archived' && canCreate" class="version-management__button is-primary is-small" type="button" @click="createPlanForVersion"><Plus :size="11" />新建计划</button></header>
           <table v-if="currentPlans.length" class="version-management__table is-plans">
-            <thead><tr><th>计划名称</th><th>类型</th><th>负责人</th><th>周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>P0/P1</th><th>状态</th><th>操作</th></tr></thead>
-            <tbody><tr v-for="item in currentPlans" :key="item.id"><td><strong>{{ item.name }}</strong></td><td><span class="version-management__plan-type">{{ item.type }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.startDate }}—{{ item.endDate }}</td><td class="is-centered"><b>{{ item.scope }}</b></td><td class="version-management__progress-cell"><div class="version-management__progress"><i><span :style="{ width: `${item.scope ? Math.round(item.executed / item.scope * 100) : 0}%` }" /></i><b>{{ item.scope ? Math.round(item.executed / item.scope * 100) : 0 }}%</b></div></td><td class="is-centered"><b class="is-rate">{{ item.executed ? Math.round(item.passed / item.executed * 100) : '—' }}{{ item.executed ? '%' : '' }}</b></td><td class="is-centered"><b v-if="item.highBugs" class="is-risk">{{ item.highBugs }}</b><span v-else class="is-muted">—</span></td><td><span :class="['version-management__badge', `is-plan-${item.status}`]">{{ item.status === 'running' ? '进行中' : item.status === 'completed' ? '已完成' : '待开始' }}</span></td><td><div class="version-management__row-actions"><button type="button" title="查看计划" @click="viewPlan(item)"><Eye :size="13" /></button></div></td></tr></tbody>
+            <thead><tr><th>计划名称</th><th>类型</th><th>负责人</th><th>周期</th><th>用例数</th><th>执行进度</th><th>通过率</th><th>开放 P0/P1</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody><tr v-for="item in currentPlans" :key="item.id"><td><strong>{{ item.name }}</strong></td><td><span class="version-management__plan-type">{{ item.type }}</span></td><td>{{ item.owner }}</td><td class="is-muted">{{ item.startDate }}—{{ item.endDate }}</td><td class="is-centered"><b>{{ item.scope }}</b></td><td class="version-management__progress-cell"><div class="version-management__progress"><i><span :style="{ width: `${item.scope ? Math.round(item.executed / item.scope * 100) : 0}%` }" /></i><b>{{ item.scope ? Math.round(item.executed / item.scope * 100) : 0 }}%</b></div></td><td class="is-centered"><b class="is-rate">{{ item.executed ? Math.round(item.passed / item.executed * 100) : '—' }}{{ item.executed ? '%' : '' }}</b></td><td class="is-centered"><b v-if="item.p0Bugs + item.p1Bugs" class="is-risk">{{ item.p0Bugs ? `P0·${item.p0Bugs} ` : '' }}{{ item.p1Bugs ? `P1·${item.p1Bugs}` : '' }}</b><span v-else class="is-muted">—</span></td><td><span :class="['version-management__badge', `is-plan-${item.status}`]">{{ item.status === 'running' ? '进行中' : item.status === 'completed' ? '已完成' : '待开始' }}</span></td><td><div class="version-management__row-actions"><button type="button" title="查看计划" @click="viewPlan(item)"><Eye :size="13" /></button></div></td></tr></tbody>
           </table>
           <div v-else class="version-management__empty"><strong>该版本下暂无测试计划，点击右上角新建</strong></div>
         </div>
