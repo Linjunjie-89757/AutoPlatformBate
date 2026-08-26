@@ -6,6 +6,7 @@ import com.company.autoplatform.user.UserEntity;
 import com.company.autoplatform.user.UserService;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -47,6 +48,7 @@ public class BugWorkflowDomainService {
         return entity;
     }
 
+    @Transactional
     public BugEntity transitionBug(Long id, String headerWorkspaceCode, TransitionBugRequest request) {
         BugEntity entity = bugDomainService.requireBug(id);
         bugDomainService.validateReadable(entity, headerWorkspaceCode);
@@ -56,10 +58,22 @@ public class BugWorkflowDomainService {
         if (fromStatus == request.toStatus()) {
             throw new BadRequestException("目标状态与当前状态一致，无需流转");
         }
+        if ((request.toStatus() == BugStatus.ASSIGNED || request.toStatus() == BugStatus.IN_PROGRESS)
+                && request.assigneeId() == null && entity.getAssigneeId() == null) {
+            throw new BadRequestException("指派处理时必须选择处理人");
+        }
+        UserEntity assignee = request.assigneeId() == null ? null : userService.requireUser(request.assigneeId());
+        if (assignee != null) {
+            entity.setAssigneeId(assignee.getId());
+        }
         entity.setStatus(request.toStatus().name());
         entity.setUpdatedAt(LocalDateTime.now());
         bugMapper.updateById(entity);
-        appendFlow(id, fromStatus, request.toStatus(), request.actionComment());
+        String comment = request.actionComment();
+        if (assignee != null && (comment == null || comment.isBlank())) {
+            comment = "指派处理人: " + assignee.getDisplayName();
+        }
+        appendFlow(id, fromStatus, request.toStatus(), comment);
         return entity;
     }
 

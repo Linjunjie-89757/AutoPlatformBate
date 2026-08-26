@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-import { workspaceApi, type WorkspaceMemberItem } from '@/entities/workspace'
+import { workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
 
 const props = withDefaults(
   defineProps<{
@@ -23,7 +23,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
-const members = ref<WorkspaceMemberItem[]>([])
+const members = ref<WorkspaceAssignableMemberItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 let requestSeq = 0
@@ -40,12 +40,12 @@ const selectPlaceholder = computed(() => {
   return props.placeholder
 })
 
-function getMemberLabel(member: WorkspaceMemberItem) {
+function getMemberLabel(member: WorkspaceAssignableMemberItem) {
   return member.displayName || member.username || `用户 ${member.userId}`
 }
 
-function dedupeMembers(items: WorkspaceMemberItem[]) {
-  const memberMap = new Map<number, WorkspaceMemberItem>()
+function dedupeMembers(items: WorkspaceAssignableMemberItem[]) {
+  const memberMap = new Map<number, WorkspaceAssignableMemberItem>()
   items.forEach((member) => {
     if (!memberMap.has(member.userId)) {
       memberMap.set(member.userId, member)
@@ -62,7 +62,7 @@ async function loadAllWorkspaceMembers() {
     && !workspace.allScope
   ))
   const memberGroups = await Promise.allSettled(
-    businessWorkspaces.map((workspace) => workspaceApi.getWorkspaceMembers(workspace.workspaceCode)),
+    businessWorkspaces.map((workspace) => workspaceApi.getWorkspaceAssignableMembers(workspace.workspaceCode)),
   )
   return dedupeMembers(memberGroups.flatMap((group) => (group.status === 'fulfilled' ? group.value : [])))
 }
@@ -80,7 +80,7 @@ async function loadMembers(workspaceCode: string) {
   try {
     const nextMembers = workspaceCode === 'ALL'
       ? await loadAllWorkspaceMembers()
-      : await workspaceApi.getWorkspaceMembers(workspaceCode)
+      : await workspaceApi.getWorkspaceAssignableMembers(workspaceCode)
     if (currentSeq === requestSeq) {
       members.value = nextMembers
     }

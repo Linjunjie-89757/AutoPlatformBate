@@ -113,6 +113,7 @@ export interface AssignDefectPayload {
 export interface TransitionDefectPayload {
   workspaceCode?: string
   toStatus: string
+  assigneeId?: number
   actionComment?: string
 }
 

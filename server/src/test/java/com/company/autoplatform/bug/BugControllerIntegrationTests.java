@@ -222,6 +222,7 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                                 {
                                   "workspaceCode": "%s",
                                   "toStatus": "IN_PROGRESS",
+                                  "assigneeId": 12,
                                   "actionComment": "start fixing"
                                 }
                                 """.formatted(WORKSPACE_CODE)))

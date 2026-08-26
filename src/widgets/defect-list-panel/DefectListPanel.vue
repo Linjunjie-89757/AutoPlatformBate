@@ -5,7 +5,6 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 
 import {
-  type AssignDefectPayload,
   DefectPriorityBadge,
   DefectSeverityBadge,
   DefectStatusBadge,
@@ -17,7 +16,6 @@ import {
   type TransitionDefectPayload,
 } from '@/entities/defect'
 import { useSession } from '@/entities/session'
-import { assignDefect } from '@/features/defect-assign'
 import { DefectTransitionDialog, transitionDefect } from '@/features/defect-transition'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaDefectIcons } from '@/shared/assets/figma-icons'
@@ -76,7 +74,6 @@ const detailDrawerVisible = ref(false)
 const detailDefectId = ref<number | null>(null)
 const activeDetailRowId = ref<number | null>(null)
 const selectedDefectIds = ref<number[]>([])
-const assigningDefectId = ref<number | null>(null)
 const transitionDialogVisible = ref(false)
 const transitioningDefect = ref<DefectSummaryItem | null>(null)
 const transitioningDefectId = ref<number | null>(null)
@@ -492,31 +489,20 @@ async function deleteSelectedDefects() {
 }
 
 async function submitTransitionDefect(payload: TransitionDefectPayload) {
-  if (!transitioningDefect.value || transitioningDefectId.value !== null || assigningDefectId.value !== null) {
+  if (!transitioningDefect.value || transitioningDefectId.value !== null) {
     return
   }
 
   transitioningDefectId.value = transitioningDefect.value.id
   try {
-    const assigneeId = (payload as TransitionDefectPayload & { assigneeId?: number | null }).assigneeId
-    if (typeof assigneeId === 'number' && Number.isFinite(assigneeId)) {
-      const assignPayload: AssignDefectPayload = {
-        workspaceCode: payload.workspaceCode,
-        assigneeId,
-      }
-      assigningDefectId.value = transitioningDefect.value.id
-      await assignDefect(transitioningDefect.value, props.workspaceCode, assignPayload)
-    }
-
-    await transitionDefect(transitioningDefect.value, props.workspaceCode, payload)
-    ElMessage.success(assigneeId ? '缺陷处理成功' : '缺陷流转成功')
+      await transitionDefect(transitioningDefect.value, props.workspaceCode, payload)
+      ElMessage.success(payload.assigneeId ? '缺陷处理成功' : '缺陷流转成功')
     transitionDialogVisible.value = false
     await loadDefects()
     detailRefreshKey.value += 1
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
-    assigningDefectId.value = null
     transitioningDefectId.value = null
   }
 }
@@ -695,18 +681,18 @@ defineExpose({
               <button type="button" title="查看" aria-label="查看" @click.stop="openDetailDrawer(row)">
                 <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.view" alt="" />
               </button>
-              <button v-if="canEdit" type="button" title="编辑" aria-label="编辑" :disabled="saving" @click.stop="openEditDialog(row)">
-                <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.edit" alt="" />
-              </button>
               <button
                 v-if="canReview"
                 type="button"
                 title="流转"
                 aria-label="流转"
-                :disabled="transitioningDefectId === row.id || assigningDefectId === row.id"
+                :disabled="transitioningDefectId === row.id"
                 @click.stop="openTransitionDialog(row)"
               >
                 <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.transition" alt="" />
+              </button>
+              <button v-if="canEdit" type="button" title="编辑" aria-label="编辑" :disabled="saving" @click.stop="openEditDialog(row)">
+                <img class="defect-list-panel__action-icon" :src="figmaDefectIcons.action.edit" alt="" />
               </button>
               <button
                 v-if="canDelete"
