@@ -92,7 +92,9 @@ public class CaseExportDomainService {
             }
             query.in(CaseEntity::getId, selectedIds);
         } else {
-            applyDirectoryFilter(query, workspace.getId(), directoryId);
+            if (exportScope == ExportScope.DIRECTORY || exportScope == ExportScope.FILTERED) {
+                applyDirectoryFilter(query, workspace.getId(), directoryId);
+            }
             if (exportScope == ExportScope.FILTERED) {
                 applyListFilters(query, keyword, priority, reviewStatus, executionStatus, executorName, createdByName);
             }
@@ -412,6 +414,7 @@ public class CaseExportDomainService {
     }
 
     private enum ExportScope {
+        ALL,
         SELECTED,
         FILTERED,
         DIRECTORY;

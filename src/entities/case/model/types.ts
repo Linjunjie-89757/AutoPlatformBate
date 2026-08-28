@@ -103,7 +103,7 @@ export interface BatchUpdateCasesPayload {
   executionStatus?: string
 }
 
-export type CaseImportDuplicateStrategy = 'SKIP' | 'ALLOW'
+export type CaseImportDuplicateStrategy = 'SKIP' | 'ALLOW' | 'OVERWRITE' | 'RENAME'
 
 export interface CaseImportRowIssue {
   rowNumber: number
@@ -120,7 +120,7 @@ export interface CaseImportResult {
   issues: CaseImportRowIssue[]
 }
 
-export type CaseExportScope = 'SELECTED' | 'FILTERED' | 'DIRECTORY'
+export type CaseExportScope = 'ALL' | 'SELECTED' | 'FILTERED' | 'DIRECTORY'
 
 export interface CaseExportQuery {
   scope: CaseExportScope
