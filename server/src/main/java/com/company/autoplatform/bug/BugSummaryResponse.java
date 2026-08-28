@@ -18,6 +18,8 @@ public record BugSummaryResponse(
         LocalDateTime updatedAt,
         Long relatedCaseId,
         int relatedCaseCount,
+        String versionName,
+        String environmentName,
         String workspaceCode,
         String workspaceName
 ) {

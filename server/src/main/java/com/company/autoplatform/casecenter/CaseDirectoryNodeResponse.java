@@ -8,6 +8,7 @@ public record CaseDirectoryNodeResponse(
         String workspaceCode,
         String workspaceName,
         Long parentId,
+        long caseCount,
         List<CaseDirectoryNodeResponse> children
 ) {
 }

@@ -38,7 +38,7 @@ import java.util.Set;
 @Service
 public class CaseImportDomainService {
     private static final int MAX_IMPORT_ROWS = 500;
-    private static final long MAX_FILE_SIZE = 5L * 1024 * 1024;
+    private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     private static final String TEMPLATE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final List<String> HEADERS = List.of(
             "用例标题*", "用例类型", "优先级", "前置条件", "测试步骤", "预期结果", "状态");
@@ -246,7 +246,7 @@ public class CaseImportDomainService {
             throw new BadRequestException("请选择 Excel 文件");
         }
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BadRequestException("Excel 文件不能超过 5 MB");
+            throw new BadRequestException("Excel 文件不能超过 10 MB");
         }
         String fileName = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
         if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {

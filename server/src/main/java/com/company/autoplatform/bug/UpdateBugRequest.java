@@ -14,6 +14,8 @@ public record UpdateBugRequest(
         String actualResult,
         String moduleName,
         String versionName,
+        String bugType,
+        String environmentName,
         @NotNull(message = "优先级不能为空") BugPriority priority,
         @NotNull(message = "严重程度不能为空") BugSeverity severity,
         BugSourceType sourceType,

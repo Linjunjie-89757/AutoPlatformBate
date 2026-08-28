@@ -853,7 +853,7 @@ onBeforeUnmount(() => {
           <section v-show="activeTab === 'detail'" class="defect-detail-drawer__pane">
             <dl class="defect-detail-drawer__figma-meta">
               <div>
-                <dt>所属模块</dt>
+                <dt>所属工作空间</dt>
                 <dd>{{ displayText(detail.workspaceName || detail.workspaceCode) }}</dd>
               </div>
               <div>

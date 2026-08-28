@@ -14,6 +14,7 @@ import {
   type DefectDetail,
 } from '@/entities/defect'
 import { workspaceApi, type WorkspaceItem } from '@/entities/workspace'
+import { testManagementApi, type TestVersionItem } from '@/entities/test-management'
 import DefectCaseAssociateDialog from '@/features/defect-case-associate/DefectCaseAssociateDialog.vue'
 import DefectRichTextEditor from '@/features/defect-create-edit/DefectRichTextEditor.vue'
 import { getRequestErrorMessage } from '@/shared/api/error'
@@ -47,12 +48,14 @@ const router = useRouter()
 const form = reactive<DefectForm>(createDefaultDefectForm())
 const detail = ref<DefectDetail | null>(null)
 const workspaces = ref<WorkspaceItem[]>([])
+const versionOptions = ref<TestVersionItem[]>([])
 const caseOptions = ref<CaseSummaryItem[]>([])
 const selectedCases = ref<SelectedCaseSummary[]>([])
 const loading = ref(false)
 const saving = ref(false)
 const optionsLoading = ref(false)
 const caseOptionsLoading = ref(false)
+const versionOptionsLoading = ref(false)
 const caseAssociateVisible = ref(false)
 const errorMessage = ref('')
 const formError = ref('')
@@ -65,7 +68,8 @@ const initialSnapshot = ref('')
 const suppressLeaveGuard = ref(false)
 const deletingAttachmentIds = ref<Set<number>>(new Set())
 const tagDraft = ref('')
-const defectModuleOptions = ['用户中心', '订单中心', '获客中心', '风控中心', '接口自动化', '报告']
+const defectTypeOptions = ['功能缺陷', 'UI/样式', '性能问题', '兼容性', '安全漏洞', '逻辑错误', '数据问题']
+const defectEnvironmentOptions = ['生产环境', '预发布', '测试环境', '开发环境', '本地']
 const defectSourceTypeOptions = [
   { value: 'MANUAL', label: '手动发现' },
   { value: 'CASE', label: '用例执行' },
@@ -167,6 +171,8 @@ function buildDirtySnapshot() {
     actualResult: form.actualResult,
     moduleName: form.moduleName,
     versionName: form.versionName,
+    bugType: form.bugType,
+    environmentName: form.environmentName,
     priority: form.priority,
     severity: form.severity,
     assigneeId: form.assigneeId,
@@ -189,6 +195,8 @@ function resetCreateForm(keepDefaults = true) {
     severity: form.severity,
     assigneeId: form.assigneeId,
     moduleName: form.moduleName,
+    bugType: form.bugType,
+    environmentName: form.environmentName,
   }
   Object.assign(form, createDefaultDefectForm(keepDefaults ? preserved.workspaceCode : 'ALL'))
   if (keepDefaults) {
@@ -196,6 +204,8 @@ function resetCreateForm(keepDefaults = true) {
     form.severity = preserved.severity
     form.assigneeId = preserved.assigneeId
     form.moduleName = preserved.moduleName
+    form.bugType = preserved.bugType
+    form.environmentName = preserved.environmentName
   }
   formError.value = ''
   clearPendingFiles()
@@ -376,8 +386,11 @@ async function loadOptions() {
     workspaces.value = workspaceList
     if (isCreateMode.value && (!form.workspaceCode || form.workspaceCode === 'ALL')) {
       form.workspaceCode = resolveInitialWorkspaceCode(workspaceList)
-      await loadCaseOptions(form.workspaceCode)
     }
+    await Promise.all([
+      loadCaseOptions(form.workspaceCode),
+      loadVersionOptions(form.workspaceCode),
+    ])
   } catch (error) {
     optionErrorMessage.value = getRequestErrorMessage(error)
   } finally {
@@ -431,6 +444,23 @@ function handleCaseAssociated(caseIds: number[], cases: SelectedCaseSummary[]) {
   caseAssociateVisible.value = false
 }
 
+async function loadVersionOptions(workspaceCode: string) {
+  if (!workspaceCode || workspaceCode === 'ALL') {
+    versionOptions.value = []
+    return
+  }
+
+  versionOptionsLoading.value = true
+  try {
+    const page = await testManagementApi.listVersions(workspaceCode, { pageNo: 1, pageSize: 100 })
+    versionOptions.value = Array.isArray(page.items) ? page.items : []
+  } catch {
+    versionOptions.value = []
+  } finally {
+    versionOptionsLoading.value = false
+  }
+}
+
 function removeAssociatedCase(caseId: number) {
   form.relatedCaseIds = form.relatedCaseIds.filter(id => Number(id) !== caseId)
   form.relatedCaseId = form.relatedCaseIds[0] ?? ''
@@ -477,7 +507,10 @@ async function loadDefectDetail() {
     existingAttachments.value = nextDetail.attachments ?? []
     await loadAttachmentImageUrls(nextDetail)
     Object.assign(form, createDefectFormFromDetail(nextDetail))
-    await loadCaseOptions(nextDetail.workspaceCode)
+    await Promise.all([
+      loadCaseOptions(nextDetail.workspaceCode),
+      loadVersionOptions(nextDetail.workspaceCode),
+    ])
     selectedCases.value = nextDetail.relatedCases?.length
       ? nextDetail.relatedCases
       : caseOptions.value.filter(item => form.relatedCaseIds.includes(String(item.id)))
@@ -619,6 +652,7 @@ watch(
     form.relatedCaseId = ''
     form.assigneeId = ''
     void loadCaseOptions(workspaceCode)
+    void loadVersionOptions(workspaceCode)
   },
 )
 </script>
@@ -772,15 +806,15 @@ watch(
               </div>
 
               <div class="defect-edit-page__field">
-                <span>所属模块</span>
+                <span>Bug 类型</span>
                 <el-select
-                  v-model="form.moduleName"
+                  v-model="form.bugType"
                   class="defect-edit-page__select"
                   :disabled="saving"
-                  placeholder="请选择模块"
+                  placeholder="请选择类型"
                 >
                   <el-option
-                    v-for="item in defectModuleOptions"
+                    v-for="item in defectTypeOptions"
                     :key="item"
                     :label="item"
                     :value="item"
@@ -788,14 +822,39 @@ watch(
                 </el-select>
               </div>
 
-              <div class="defect-edit-page__field">
-                <span>影响版本</span>
-                <el-input
-                  v-model="form.versionName"
-                  :disabled="saving"
-                  maxlength="128"
-                  placeholder="请输入影响版本（选填）"
-                />
+              <div class="defect-edit-page__compact-field-row">
+                <div class="defect-edit-page__field">
+                  <span>影响版本</span>
+                  <el-select
+                    v-model="form.versionName"
+                    class="defect-edit-page__select"
+                    :disabled="saving || versionOptionsLoading"
+                    placeholder="版本"
+                  >
+                    <el-option
+                      v-for="item in versionOptions"
+                      :key="item.id"
+                      :label="item.name"
+                      :value="item.name"
+                    />
+                  </el-select>
+                </div>
+                <div class="defect-edit-page__field">
+                  <span>发现环境</span>
+                  <el-select
+                    v-model="form.environmentName"
+                    class="defect-edit-page__select"
+                    :disabled="saving"
+                    placeholder="环境"
+                  >
+                    <el-option
+                      v-for="item in defectEnvironmentOptions"
+                      :key="item"
+                      :label="item"
+                      :value="item"
+                    />
+                  </el-select>
+                </div>
               </div>
             </div>
 
@@ -915,7 +974,7 @@ watch(
 
 .defect-edit-page__shell {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) 64px;
+  grid-template-rows: auto minmax(0, 1fr) 61px;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -1017,7 +1076,7 @@ watch(
 .defect-edit-page__field > span {
   color: #4e5969;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 18px;
 }
 
@@ -1062,6 +1121,12 @@ watch(
 
 .defect-edit-page__select {
   width: 100%;
+}
+
+.defect-edit-page__compact-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .defect-edit-page__case-picker {
@@ -1165,22 +1230,38 @@ watch(
 }
 
 .defect-edit-page__footer {
+  box-sizing: border-box;
   z-index: 5;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding: 14px 24px;
+  height: 61px;
+  padding: 12px 24px;
   border-top: 1px solid #e5e6eb;
   background: #fafafa;
 }
 
 .defect-edit-page__footer :deep(.app-button) {
+  box-sizing: border-box;
   min-width: 82px;
   height: 36px;
   border-radius: 4px;
   font-size: 13px;
   font-weight: 500;
+}
+
+.defect-edit-page__footer :deep(.defect-edit-page__continue) {
+  width: 129px;
+}
+
+.defect-edit-page__footer :deep(.defect-edit-page__submit) {
+  width: 100px;
+  height: 34px;
+}
+
+.defect-edit-page__footer :deep(.app-button .el-button__text) {
+  line-height: 20px;
 }
 
 .defect-edit-page :deep(.defect-rich-text-editor) {
@@ -1293,7 +1374,7 @@ watch(
 }
 
 .defect-edit-page__shell {
-  grid-template-rows: 48px minmax(0, 1fr) 56px;
+  grid-template-rows: 48px minmax(0, 1fr) 61px;
   overflow: hidden;
   border: 0;
   border-radius: 0;
@@ -1818,15 +1899,31 @@ watch(
 }
 
 .defect-edit-page__footer {
-  padding: 10px 24px;
+  box-sizing: border-box;
+  height: 61px;
+  padding: 12px 24px;
   border-top: 1px solid #e5e6eb;
   background: #ffffff;
 }
 
 .defect-edit-page__footer :deep(.app-button) {
+  box-sizing: border-box;
   min-width: 64px;
-  height: 34px;
+  height: 36px;
   border-radius: 8px;
+}
+
+.defect-edit-page__footer :deep(.defect-edit-page__continue) {
+  width: 129px;
+}
+
+.defect-edit-page__footer :deep(.defect-edit-page__submit) {
+  width: 100px;
+  height: 34px;
+}
+
+.defect-edit-page__footer :deep(.app-button .el-button__text) {
+  line-height: 20px;
 }
 
 .defect-edit-page__footer :deep(.defect-edit-page__continue) {

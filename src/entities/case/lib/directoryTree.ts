@@ -8,6 +8,7 @@ export interface CaseTreeNode {
   type: CaseTreeNodeType
   workspaceCode: string
   directoryId: number | null
+  count?: number
   children: CaseTreeNode[]
 }
 
@@ -31,6 +32,7 @@ export function mapCaseDirectoryNode(node: CaseDirectoryNode): CaseTreeNode {
     type: 'module',
     workspaceCode: node.workspaceCode,
     directoryId: node.id,
+    count: node.caseCount,
     children: node.children.map(mapCaseDirectoryNode),
   }
 }
@@ -53,6 +55,7 @@ export function buildCaseTreeNodes(workspaces: CaseDirectoryWorkspace[], current
         type: 'workspace',
         workspaceCode: workspace.workspaceCode,
         directoryId: null,
+        count: workspace.caseCount,
         children: workspace.children.map(mapCaseDirectoryNode),
       })),
     },

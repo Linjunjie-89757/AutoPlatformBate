@@ -67,6 +67,8 @@ public class BugResponseAssembler {
                 entity.getUpdatedAt(),
                 primaryCaseId,
                 relatedCases.size(),
+                entity.getVersionName(),
+                entity.getEnvironmentName(),
                 workspace.getWorkspaceCode(),
                 workspace.getWorkspaceName()
         );
@@ -92,6 +94,8 @@ public class BugResponseAssembler {
                 entity.getActualResult(),
                 entity.getModuleName(),
                 entity.getVersionName(),
+                entity.getBugType(),
+                entity.getEnvironmentName(),
                 BugPriority.valueOf(entity.getPriority()),
                 BugSeverity.valueOf(entity.getSeverity()),
                 BugStatus.valueOf(entity.getStatus()),

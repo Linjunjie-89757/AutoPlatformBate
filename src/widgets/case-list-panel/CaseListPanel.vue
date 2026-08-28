@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { useRoute, useRouter } from 'vue-router'
+import { ClipboardCheck } from '@lucide/vue'
 
 import {
   type CaseDetail,
@@ -17,7 +17,6 @@ import {
   type ReviewCasePayload,
   type CaseSummaryItem,
   type PageResponse,
-  saveCaseExecutionContext,
 } from '@/entities/case'
 import {
   defectApi,
@@ -66,7 +65,6 @@ const props = withDefaults(
     canCreate?: boolean
     canEdit?: boolean
     canDelete?: boolean
-    canExecute?: boolean
   }>(),
   {
     workspaceCode: 'ALL',
@@ -77,7 +75,6 @@ const props = withDefaults(
     canCreate: true,
     canEdit: true,
     canDelete: true,
-    canExecute: true,
   },
 )
 
@@ -86,8 +83,6 @@ const emit = defineEmits<{
   reloadDirectories: []
 }>()
 
-const route = useRoute()
-const router = useRouter()
 const { currentUser } = useSession()
 const cases = ref<CaseSummaryItem[]>([])
 const loading = ref(false)
@@ -125,7 +120,6 @@ const defectForm = reactive({
   assigneeId: '',
   tags: [] as string[],
 })
-const runningCaseId = ref<number | null>(null)
 const deletingCaseId = ref<number | null>(null)
 const togglingCaseId = ref<number | null>(null)
 const caseTableRef = ref<{ clearSelection: () => void } | null>(null)
@@ -605,7 +599,7 @@ function isMessageBoxCancel(error: unknown) {
 
 async function handleDeleteCase(item: CaseSummaryItem) {
   if (!props.canDelete) return
-  if (deletingCaseId.value !== null || runningCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
+  if (deletingCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
     return
   }
 
@@ -625,7 +619,7 @@ async function handleDeleteCase(item: CaseSummaryItem) {
 
 async function handleBatchDeleteCases() {
   if (!props.canDelete) return
-  if (!selectedCaseIds.value.length || deletingCaseId.value !== null || runningCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
+  if (!selectedCaseIds.value.length || deletingCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
     return
   }
 
@@ -654,37 +648,18 @@ async function handleBatchDeleteCases() {
   }
 }
 
-function buildReturnQuery() {
-  return Object.fromEntries(
-    Object.entries(route.query)
-      .filter(([, value]) => typeof value === 'string')
-      .map(([key, value]) => [key, value as string]),
-  )
-}
-
-function openExecutionPage(item: CaseSummaryItem) {
-  if (!props.canExecute) return
-  if (runningCaseId.value !== null || deletingCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
+function openReviewDrawer(item: CaseSummaryItem) {
+  if (!props.canEdit || deletingCaseId.value !== null || togglingCaseId.value !== null || reviewingCaseId.value !== null) {
     return
   }
 
-  saveCaseExecutionContext({
-    workspaceCode: item.workspaceCode || props.workspaceCode,
-    returnQuery: buildReturnQuery(),
-    selectedDirectoryId: props.directoryId,
-    selectedNodeId: props.selectedNodeId,
-    sourceLabel: getCaseDirectoryText(item),
-    filter: { ...props.filter },
-    items: cases.value,
-  })
+  reviewingCase.value = item
+  reviewDialogVisible.value = true
+}
 
-  void router.push({
-    name: 'case-execution',
-    params: { id: item.id },
-    query: {
-      workspace: item.workspaceCode || props.workspaceCode,
-    },
-  })
+function navigateReviewDrawer(item: CaseSummaryItem) {
+  if (reviewingCaseId.value !== null) return
+  reviewingCase.value = item
 }
 
 async function saveReviewCase(payload: ReviewCasePayload) {
@@ -901,14 +876,14 @@ defineExpose({
                 <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.edit" alt="" />
               </button>
               <button
-                v-if="canExecute"
+                v-if="canEdit"
                 type="button"
-                title="执行用例"
-                aria-label="执行用例"
-                :disabled="runningCaseId === item.id"
-                @click.stop="openExecutionPage(item)"
+                title="评审用例"
+                aria-label="评审用例"
+                :disabled="deletingCaseId === item.id || togglingCaseId === item.id || reviewingCaseId === item.id"
+                @click.stop="openReviewDrawer(item)"
               >
-                <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.run" alt="" />
+                <ClipboardCheck class="case-list-panel__action-icon-svg" :size="13" :stroke-width="1.8" />
               </button>
               <button
                 v-if="canDelete"
@@ -916,7 +891,7 @@ defineExpose({
                 data-danger="true"
                 title="删除用例"
                 aria-label="删除用例"
-                :disabled="deletingCaseId === item.id || runningCaseId === item.id || togglingCaseId === item.id || reviewingCaseId === item.id"
+                :disabled="deletingCaseId === item.id || togglingCaseId === item.id || reviewingCaseId === item.id"
                 @click.stop="handleDeleteCase(item)"
               >
                 <img class="case-list-panel__action-icon" :src="figmaCaseIcons.action.delete" alt="" />
@@ -1101,7 +1076,10 @@ defineExpose({
     <CaseReviewDialog
       v-model="reviewDialogVisible"
       :case-item="reviewingCase"
+      :case-items="cases"
+      :workspace-code="workspaceCode"
       :saving="reviewingCaseId !== null"
+      @navigate="navigateReviewDrawer"
       @submit="saveReviewCase"
     />
 
@@ -1110,9 +1088,7 @@ defineExpose({
       :case-id="detailCaseId"
       :workspace-code="workspaceCode"
       :can-edit="canEdit"
-      :can-run="canExecute"
       @edit="openEditDialog"
-      @run="openExecutionPage"
     />
 
     <AppTableColumnSettingsDrawer
@@ -1242,6 +1218,11 @@ defineExpose({
   width: 13px;
   height: 13px;
   object-fit: contain;
+}
+
+.case-list-panel__action-icon-svg {
+  display: block;
+  flex: none;
 }
 
 .case-list-panel__batch-bar span {

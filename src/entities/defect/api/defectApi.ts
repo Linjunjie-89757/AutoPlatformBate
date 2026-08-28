@@ -52,6 +52,8 @@ function normalizeDefectItem(item: DefectSummaryItem): DefectSummaryItem {
     relatedCaseCount: Number(item.relatedCaseCount || 0),
     workspaceCode: item.workspaceCode || 'ALL',
     workspaceName: item.workspaceName || item.workspaceCode || 'ALL',
+    versionName: item.versionName || '',
+    environmentName: item.environmentName || '',
   }
 }
 
@@ -105,6 +107,8 @@ function normalizeDefectDetail(item: DefectDetail): DefectDetail {
     actualResult: item.actualResult || '',
     moduleName: item.moduleName || '',
     versionName: item.versionName || '',
+    bugType: item.bugType || '',
+    environmentName: item.environmentName || '',
     sourceType: item.sourceType || null,
     assigneeId: item.assigneeId ?? null,
     reporterId: item.reporterId ?? null,

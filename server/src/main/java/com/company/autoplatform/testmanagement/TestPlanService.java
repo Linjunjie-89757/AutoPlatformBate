@@ -642,7 +642,7 @@ public class TestPlanService {
         Long requirementId = primaryRequirement == null ? null : primaryRequirement.getRequirementId();
         CreateBugRequest normalized = new CreateBugRequest(
                 workspaceCode, request.title(), request.description(), request.reproductionSteps(), request.expectedResult(), request.actualResult(),
-                request.moduleName(), request.versionName(), request.priority(), request.severity(), BugSourceType.TEST_PLAN,
+                request.moduleName(), request.versionName(), request.bugType(), request.environmentName(), request.priority(), request.severity(), BugSourceType.TEST_PLAN,
                 request.assigneeId(), planCase.getSourceCaseId(), request.relatedReportId(), request.relatedTaskId(), request.tags());
         var detail = bugService.createBug(workspaceCode, normalized, BugSourceType.TEST_PLAN);
         bugMapper.update(null, new LambdaUpdateWrapper<BugEntity>().eq(BugEntity::getId, detail.id())

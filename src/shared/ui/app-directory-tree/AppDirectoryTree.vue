@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<{
   searchPlaceholder?: string
   showCreate?: boolean
   showMore?: boolean
+  collapseCreateIntoMore?: boolean
   showTitleCount?: boolean
   showCollapseAll?: boolean
   titleCount?: number
@@ -39,6 +40,7 @@ const props = withDefaults(defineProps<{
   searchPlaceholder: '搜索目录',
   showCreate: true,
   showMore: true,
+  collapseCreateIntoMore: false,
   showTitleCount: true,
   showCollapseAll: false,
   variant: 'default',
@@ -78,7 +80,13 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 </script>
 
 <template>
-  <aside class="app-directory-tree" :class="`app-directory-tree--${variant}`">
+  <aside
+    class="app-directory-tree"
+    :class="[
+      `app-directory-tree--${variant}`,
+      { 'app-directory-tree--collapse-create': collapseCreateIntoMore },
+    ]"
+  >
     <div v-if="$slots.toolbar" class="app-directory-tree__toolbar">
       <slot name="toolbar" />
     </div>
@@ -150,7 +158,7 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 
           <div class="app-directory-tree__node-actions" @click.stop>
             <el-button
-              v-if="showCreate && data.canCreate !== false"
+              v-if="showCreate && !collapseCreateIntoMore && data.canCreate !== false"
               text
               class="app-directory-tree__icon-button"
               aria-label="新建子目录"
@@ -358,6 +366,30 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
   margin-left: 4px;
   opacity: 0;
   transition: opacity 150ms ease;
+}
+
+.app-directory-tree--collapse-create .app-directory-tree__node-main {
+  flex: 1;
+}
+
+.app-directory-tree--collapse-create .app-directory-tree__node-count {
+  margin-left: auto;
+  transition: opacity 150ms ease;
+}
+
+.app-directory-tree--collapse-create .app-directory-tree__node-actions {
+  min-width: 20px;
+  pointer-events: none;
+}
+
+.app-directory-tree--collapse-create .app-directory-tree__tree :deep(.el-tree-node__content:hover) .app-directory-tree__node-count,
+.app-directory-tree--collapse-create .app-directory-tree__tree :deep(.el-tree-node__content:focus-within) .app-directory-tree__node-count {
+  opacity: 0;
+}
+
+.app-directory-tree--collapse-create .app-directory-tree__tree :deep(.el-tree-node__content:hover) .app-directory-tree__node-actions,
+.app-directory-tree--collapse-create .app-directory-tree__tree :deep(.el-tree-node__content:focus-within) .app-directory-tree__node-actions {
+  pointer-events: auto;
 }
 
 .app-directory-tree__tree :deep(.el-tree-node__content:hover) .app-directory-tree__node-actions,

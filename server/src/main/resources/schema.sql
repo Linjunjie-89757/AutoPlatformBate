@@ -86,6 +86,8 @@ CREATE TABLE IF NOT EXISTS tb_bug_info (
     related_case_id BIGINT,
     related_report_id BIGINT,
     related_task_id BIGINT,
+    bug_type VARCHAR(64),
+    environment_name VARCHAR(128),
     tags_json TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

@@ -29,6 +29,8 @@ export interface DefectSummaryItem {
   relatedCaseCount: number
   workspaceCode: string
   workspaceName: string
+  versionName: string
+  environmentName: string
 }
 
 export interface DefectCaseSummary {
@@ -52,6 +54,8 @@ export interface DefectDetail extends DefectSummaryItem {
   actualResult: string
   moduleName: string
   versionName: string
+  bugType: string
+  environmentName: string
   sourceType: DefectSourceType | string | null
   assigneeId: number | null
   reporterId: number | null
@@ -97,6 +101,8 @@ export interface SaveDefectPayload {
   actualResult: string
   moduleName: string
   versionName?: string
+  bugType?: string
+  environmentName?: string
   priority: string
   severity: string
   sourceType?: DefectSourceType | string

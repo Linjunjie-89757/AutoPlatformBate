@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,6 +51,17 @@ public class CaseDirectoryDomainService {
                 .in(CaseDirectoryEntity::getWorkspaceId, workspaceIds)
                 .orderByAsc(CaseDirectoryEntity::getWorkspaceId)
                 .orderByAsc(CaseDirectoryEntity::getId));
+        Map<Long, Long> caseCountsByWorkspaceId = new HashMap<>();
+        Map<Long, Long> caseCountsByDirectoryId = new HashMap<>();
+        caseMapper.selectList(new LambdaQueryWrapper<CaseEntity>()
+                        .select(CaseEntity::getWorkspaceId, CaseEntity::getCaseDirectoryId)
+                        .in(CaseEntity::getWorkspaceId, workspaceIds))
+                .forEach(item -> {
+                    caseCountsByWorkspaceId.merge(item.getWorkspaceId(), 1L, Long::sum);
+                    if (item.getCaseDirectoryId() != null) {
+                        caseCountsByDirectoryId.merge(item.getCaseDirectoryId(), 1L, Long::sum);
+                    }
+                });
         Map<Long, List<CaseDirectoryEntity>> grouped = directories.stream()
                 .collect(Collectors.groupingBy(CaseDirectoryEntity::getWorkspaceId, LinkedHashMap::new, Collectors.toList()));
 
@@ -57,7 +69,12 @@ public class CaseDirectoryDomainService {
                 .map(workspace -> new CaseDirectoryWorkspaceResponse(
                         workspace.getWorkspaceCode(),
                         workspace.getWorkspaceName(),
-                        buildDirectoryTree(workspace, grouped.getOrDefault(workspace.getId(), List.of()))
+                        caseCountsByWorkspaceId.getOrDefault(workspace.getId(), 0L),
+                        buildDirectoryTree(
+                                workspace,
+                                grouped.getOrDefault(workspace.getId(), List.of()),
+                                caseCountsByDirectoryId
+                        )
                 ))
                 .toList();
     }
@@ -74,7 +91,7 @@ public class CaseDirectoryDomainService {
         entity.setCreatedAt(LocalDateTime.now());
         entity.setUpdatedAt(LocalDateTime.now());
         caseDirectoryMapper.insert(entity);
-        return toDirectoryNode(entity, workspace, List.of());
+        return toDirectoryNode(entity, workspace, 0L, List.of());
     }
 
     public CaseDirectoryNodeResponse renameDirectory(Long id, String workspaceCode, RenameCaseDirectoryRequest request) {
@@ -85,7 +102,7 @@ public class CaseDirectoryDomainService {
         entity.setDirectoryName(request.name().trim());
         entity.setUpdatedAt(LocalDateTime.now());
         caseDirectoryMapper.updateById(entity);
-        return toDirectoryNode(entity, workspace, List.of());
+        return toDirectoryNode(entity, workspace, countDirectCases(entity.getId()), List.of());
     }
 
     public CaseDirectoryNodeResponse moveDirectory(Long id, String workspaceCode, MoveCaseDirectoryRequest request) {
@@ -107,7 +124,7 @@ public class CaseDirectoryDomainService {
         entity.setParentId(targetParent == null ? null : targetParent.getId());
         entity.setUpdatedAt(LocalDateTime.now());
         caseDirectoryMapper.updateById(entity);
-        return toDirectoryNode(entity, workspace, List.of());
+        return toDirectoryNode(entity, workspace, countDirectCases(entity.getId()), List.of());
     }
 
     public void deleteDirectory(Long id, String workspaceCode) {
@@ -192,28 +209,49 @@ public class CaseDirectoryDomainService {
         return requireDirectoryForWorkspace(workspace, parentId);
     }
 
-    private List<CaseDirectoryNodeResponse> buildDirectoryTree(WorkspaceEntity workspace, List<CaseDirectoryEntity> directories) {
+    private List<CaseDirectoryNodeResponse> buildDirectoryTree(
+            WorkspaceEntity workspace,
+            List<CaseDirectoryEntity> directories,
+            Map<Long, Long> caseCountsByDirectoryId
+    ) {
         Map<Long, List<CaseDirectoryEntity>> childrenByParent = directories.stream()
                 .collect(Collectors.groupingBy(item -> item.getParentId() == null ? 0L : item.getParentId(), LinkedHashMap::new, Collectors.toList()));
-        return buildDirectoryChildren(workspace, childrenByParent, 0L);
+        return buildDirectoryChildren(workspace, childrenByParent, 0L, caseCountsByDirectoryId);
     }
 
     private List<CaseDirectoryNodeResponse> buildDirectoryChildren(
             WorkspaceEntity workspace,
             Map<Long, List<CaseDirectoryEntity>> childrenByParent,
-            Long parentId
+            Long parentId,
+            Map<Long, Long> caseCountsByDirectoryId
     ) {
         List<CaseDirectoryEntity> currentChildren = childrenByParent.getOrDefault(parentId, List.of());
         List<CaseDirectoryNodeResponse> result = new ArrayList<>();
         for (CaseDirectoryEntity child : currentChildren) {
-            result.add(toDirectoryNode(child, workspace, buildDirectoryChildren(workspace, childrenByParent, child.getId())));
+            List<CaseDirectoryNodeResponse> children = buildDirectoryChildren(
+                    workspace,
+                    childrenByParent,
+                    child.getId(),
+                    caseCountsByDirectoryId
+            );
+            long descendantCaseCount = children.stream()
+                    .mapToLong(CaseDirectoryNodeResponse::caseCount)
+                    .sum();
+            long caseCount = caseCountsByDirectoryId.getOrDefault(child.getId(), 0L) + descendantCaseCount;
+            result.add(toDirectoryNode(child, workspace, caseCount, children));
         }
         return result;
+    }
+
+    private long countDirectCases(Long directoryId) {
+        return caseMapper.selectCount(new LambdaQueryWrapper<CaseEntity>()
+                .eq(CaseEntity::getCaseDirectoryId, directoryId));
     }
 
     private CaseDirectoryNodeResponse toDirectoryNode(
             CaseDirectoryEntity entity,
             WorkspaceEntity workspace,
+            long caseCount,
             List<CaseDirectoryNodeResponse> children
     ) {
         return new CaseDirectoryNodeResponse(
@@ -222,6 +260,7 @@ public class CaseDirectoryDomainService {
                 workspace.getWorkspaceCode(),
                 workspace.getWorkspaceName(),
                 entity.getParentId(),
+                caseCount,
                 children
         );
     }

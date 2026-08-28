@@ -13,7 +13,6 @@ import {
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
-import DefectModuleBarChart from '@/shared/ui/charts/DefectModuleBarChart.vue'
 import DefectStatusDonutChart from '@/shared/ui/charts/DefectStatusDonutChart.vue'
 import DefectTrendAreaChart from '@/shared/ui/charts/DefectTrendAreaChart.vue'
 import { DefectFilterPanel } from '@/widgets/defect-filter-panel'
@@ -55,15 +54,6 @@ const statusDistributionItems = [
   { name: '待验证', value: 9, color: '#FAAD14' },
   { name: '已指派', value: 8, color: '#7816FF' },
   { name: '已驳回', value: 4, color: '#F53F3F' },
-]
-
-const moduleDistributionItems = [
-  { name: '订单中心', count: 24 },
-  { name: '用户中心', count: 18 },
-  { name: '获客中心', count: 15 },
-  { name: '风控中心', count: 11 },
-  { name: '接口自动化', count: 8 },
-  { name: '报告', count: 6 },
 ]
 
 const trendDistributionItems = [
@@ -449,12 +439,6 @@ watch(
           </article>
         </div>
         <article class="defects-page__chart-card defects-page__chart-card--wide">
-          <h3>模块缺陷分布</h3>
-          <div class="defects-page__chart-asset defects-page__chart-asset--module">
-            <DefectModuleBarChart :items="moduleDistributionItems" />
-          </div>
-        </article>
-        <article class="defects-page__chart-card defects-page__chart-card--wide">
           <h3>新增 vs 关闭趋势</h3>
           <div class="defects-page__trend-chart">
             <DefectTrendAreaChart :items="trendDistributionItems" />
@@ -692,12 +676,6 @@ watch(
 .defects-page__chart-asset--severity img {
   width: 865.25px;
   height: 170px;
-}
-
-.defects-page__chart-asset--module {
-  width: 600px;
-  height: 200px;
-  margin-top: 14px;
 }
 
 .defects-page__trend-chart {

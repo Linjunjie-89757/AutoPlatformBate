@@ -119,7 +119,8 @@ const tableColumnDefinitions: AppTableColumnDefinition[] = [
   { key: 'priority', label: '优先级', width: 101.562, defaultVisible: true },
   { key: 'status', label: '状态', width: 116.078, defaultVisible: true },
   { key: 'assigneeName', label: '负责人', width: 101.562, defaultVisible: true },
-  { key: 'workspaceName', label: '所属模块', width: 130.578, defaultVisible: true },
+  { key: 'versionName', label: '影响版本', width: 130.578, defaultVisible: true },
+  { key: 'environmentName', label: '发现环境', width: 130.578, defaultVisible: true },
   { key: 'updatedAt', label: '更新时间', width: 210.156, defaultVisible: true },
   { key: 'tags', label: '标签', width: 190, defaultVisible: false },
   { key: 'reporterName', label: '创建人', width: 120, defaultVisible: false },
@@ -128,7 +129,7 @@ const tableColumnDefinitions: AppTableColumnDefinition[] = [
   { key: 'relatedCaseCount', label: '关联用例数', width: 112, defaultVisible: false },
 ]
 const tableSettings = useTableColumnSettings({
-  storageKey: computed(() => `app-figma-table:defects:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
+  storageKey: computed(() => `app-figma-table:defects:v2:${currentUser.value?.id || 'anonymous'}:${props.workspaceCode}`),
   columns: tableColumnDefinitions,
   immediate: true,
 })
@@ -161,8 +162,10 @@ function formatColumnValue(row: DefectSummaryItem, key: string) {
       return row.severity || '-'
     case 'assigneeName':
       return row.assigneeName || '-'
-    case 'workspaceName':
-      return row.workspaceName || row.workspaceCode || '-'
+    case 'versionName':
+      return row.versionName || '-'
+    case 'environmentName':
+      return row.environmentName || '-'
     case 'tags':
       return formatDefectTags(row.tags)
     case 'reporterName':

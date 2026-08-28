@@ -165,12 +165,14 @@ export interface CaseDirectoryNode {
   workspaceCode: string
   workspaceName: string
   parentId: number | null
+  caseCount?: number
   children: CaseDirectoryNode[]
 }
 
 export interface CaseDirectoryWorkspace {
   workspaceCode: string
   workspaceName: string
+  caseCount?: number
   children: CaseDirectoryNode[]
 }
 

@@ -11,6 +11,8 @@ export interface DefectForm {
   actualResult: string
   moduleName: string
   versionName: string
+  bugType: string
+  environmentName: string
   priority: DefectPriority
   severity: DefectSeverity
   sourceType: DefectSourceType
@@ -31,6 +33,8 @@ export function createDefaultDefectForm(workspaceCode = 'ALL'): DefectForm {
     actualResult: '',
     moduleName: '',
     versionName: '',
+    bugType: '',
+    environmentName: '',
     priority: 'P1',
     severity: 'MEDIUM',
     sourceType: 'MANUAL',
@@ -52,6 +56,8 @@ export function createDefectFormFromDetail(item: DefectDetail): DefectForm {
     actualResult: item.actualResult || '',
     moduleName: item.moduleName || '',
     versionName: item.versionName || '',
+    bugType: item.bugType || '',
+    environmentName: item.environmentName || '',
     priority: (item.priority || 'P1') as DefectPriority,
     severity: (item.severity || 'MEDIUM') as DefectSeverity,
     sourceType: (item.sourceType || 'MANUAL') as DefectSourceType,
@@ -73,6 +79,8 @@ export function createDefectFormFromSummary(item: DefectSummaryItem, fallbackWor
     actualResult: '',
     moduleName: '',
     versionName: '',
+    bugType: '',
+    environmentName: '',
     priority: (item.priority || 'P1') as DefectPriority,
     severity: (item.severity || 'MEDIUM') as DefectSeverity,
     sourceType: 'MANUAL',
@@ -111,6 +119,8 @@ export function buildSaveDefectPayload(form: DefectForm): SaveDefectPayload {
     actualResult: form.actualResult.trim(),
     moduleName: form.moduleName.trim(),
     versionName: form.versionName.trim(),
+    bugType: form.bugType.trim(),
+    environmentName: form.environmentName.trim(),
     priority: form.priority,
     severity: form.severity,
     sourceType: form.sourceType,

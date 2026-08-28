@@ -139,6 +139,8 @@ public class BugDomainService {
         entity.setActualResult(request.actualResult());
         entity.setModuleName(request.moduleName());
         entity.setVersionName(request.versionName());
+        entity.setBugType(request.bugType());
+        entity.setEnvironmentName(request.environmentName());
         entity.setPriority(request.priority().name());
         entity.setSeverity(request.severity().name());
         entity.setStatus(request.assigneeId() == null ? BugStatus.TODO.name() : BugStatus.ASSIGNED.name());
@@ -186,6 +188,8 @@ public class BugDomainService {
         entity.setActualResult(request.actualResult());
         entity.setModuleName(request.moduleName());
         entity.setVersionName(request.versionName());
+        entity.setBugType(request.bugType());
+        entity.setEnvironmentName(request.environmentName());
         entity.setPriority(request.priority().name());
         entity.setSeverity(request.severity().name());
         entity.setSourceType(request.sourceType() == null ? entity.getSourceType() : request.sourceType().name());
@@ -204,6 +208,8 @@ public class BugDomainService {
                         .set(BugEntity::getActualResult, entity.getActualResult())
                         .set(BugEntity::getModuleName, entity.getModuleName())
                         .set(BugEntity::getVersionName, entity.getVersionName())
+                        .set(BugEntity::getBugType, entity.getBugType())
+                        .set(BugEntity::getEnvironmentName, entity.getEnvironmentName())
                         .set(BugEntity::getPriority, entity.getPriority())
                         .set(BugEntity::getSeverity, entity.getSeverity())
                         .set(BugEntity::getSourceType, entity.getSourceType())

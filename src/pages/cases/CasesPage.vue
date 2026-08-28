@@ -130,7 +130,6 @@ const canCreateCases = computed(() => hasWorkspacePermission(currentUser.value, 
 const canExportCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.export'))
 const canEditCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.edit'))
 const canDeleteCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.delete'))
-const canExecuteCases = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'cases.execute'))
 const moveTargetOptions = computed(() => {
   const node = activeDirectoryNode.value
   if (!node || node.directoryId === null) {
@@ -708,7 +707,6 @@ watch(
               :can-create="canCreateCases"
               :can-edit="canEditCases"
               :can-delete="canDeleteCases"
-              :can-execute="canExecuteCases"
               @loaded="currentPageCases = $event"
               @reload-directories="loadDirectories"
             />

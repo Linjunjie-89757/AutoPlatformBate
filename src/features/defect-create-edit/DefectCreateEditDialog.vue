@@ -283,14 +283,14 @@ watch(
         </div>
 
         <div class="defect-dialog__field">
-          <span class="is-required">所属模块</span>
+          <span class="is-required">所属工作空间</span>
           <el-select
             v-model="form.workspaceCode"
             class="defect-dialog__select"
             :disabled="mode === 'edit' || loadingDetail || workspaceOptionsLoading"
             :loading="workspaceOptionsLoading"
             filterable
-            placeholder="请选择所属模块"
+            placeholder="请选择所属工作空间"
           >
             <el-option
               v-for="workspace in getConcreteWorkspaces()"

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import {
-  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -9,6 +8,7 @@ import {
   Edit2,
   ExternalLink,
   Eye,
+  FileText,
   Folder,
   FolderOpen,
   Link2,
@@ -17,7 +17,6 @@ import {
   Trash2,
   Upload,
   X,
-  XCircle,
 } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
@@ -92,13 +91,11 @@ const importResult = ref<TestRequirementImportResult | null>(null)
 const isImporting = ref(false)
 const isDraggingFile = ref(false)
 const casePickerOpen = ref(false)
-const reviewCaseId = ref<string | null>(null)
-const reviewCaseDetail = ref<CaseDetail | null>(null)
-const reviewCaseDetailLoading = ref(false)
-const reviewCaseDetailError = ref('')
-let reviewCaseDetailRequestSeq = 0
-const rejectEditorOpen = ref(false)
-const rejectNote = ref('')
+const viewCaseId = ref<string | null>(null)
+const viewCaseDetail = ref<CaseDetail | null>(null)
+const viewCaseDetailLoading = ref(false)
+const viewCaseDetailError = ref('')
+let viewCaseDetailRequestSeq = 0
 const toastMessage = ref('')
 let toastTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -340,16 +337,15 @@ const passedReviewCount = computed(() => linkedCases.value.filter(item => item.r
 const reviewingCount = computed(() => linkedCases.value.filter(item => item.reviewStatus === 'reviewing').length)
 const rejectedCount = computed(() => linkedCases.value.filter(item => item.reviewStatus === 'rejected').length)
 const pendingCount = computed(() => linkedCases.value.filter(item => item.reviewStatus === 'pending').length)
-const reviewCase = computed(() => linkedCases.value.find(item => item.id === reviewCaseId.value) || null)
-const reviewCaseIndex = computed(() => reviewCase.value ? linkedCases.value.findIndex(item => item.id === reviewCase.value?.id) : -1)
+const viewCase = computed(() => linkedCases.value.find(item => item.id === viewCaseId.value) || null)
 
 const plainCaseText = (content: string | null | undefined) => {
   if (!content) return ''
   return content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
 }
 
-const reviewStepRows = computed(() => {
-  const detail = reviewCaseDetail.value
+const viewStepRows = computed(() => {
+  const detail = viewCaseDetail.value
   if (!detail) return []
   const steps = plainCaseText(detail.steps).split(/\r?\n/).map(item => item.trim()).filter(Boolean)
   const expectedResult = plainCaseText(detail.expectedResult) || '—'
@@ -416,7 +412,6 @@ const canCreateRequirement = computed(() => Boolean(createForm.title.trim()))
 const canCreate = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.create'))
 const canEdit = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.edit'))
 const canDelete = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.delete'))
-const canReview = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.review'))
 const canExport = computed(() => hasWorkspacePermission(currentUser.value, selectedWorkspaceCode.value, 'test_management.export'))
 
 const versionName = (versionId: string) => requirementVersions.value.find(item => item.id === versionId)?.name || '—'
@@ -438,22 +433,23 @@ const switchManagementTab = (tab: ManagementTab) => {
 const isDetailTab = (value?: string | null): value is DetailTab => ['cases', 'info', 'defects'].includes(value || '')
 
 const openRequirement = (requirement: ManagedRequirement, tab: DetailTab = 'cases') => {
+  closeCaseDetail()
   selectedRequirement.value = requirement
   detailTab.value = tab
-  reviewCaseId.value = null
-  reviewCaseDetail.value = null
-  reviewCaseDetailError.value = ''
-  reviewCaseDetailRequestSeq += 1
   emit('detail-state-change', { id: requirement.id, tab })
 }
 
 const closeDetail = () => {
   selectedRequirement.value = null
-  reviewCaseId.value = null
-  reviewCaseDetail.value = null
-  reviewCaseDetailError.value = ''
-  reviewCaseDetailRequestSeq += 1
+  closeCaseDetail()
   emit('detail-state-change', { id: null, tab: null })
+}
+
+const closeCaseDetail = () => {
+  viewCaseId.value = null
+  viewCaseDetail.value = null
+  viewCaseDetailError.value = ''
+  viewCaseDetailRequestSeq += 1
 }
 
 const setDetailTab = (tab: DetailTab) => {
@@ -792,103 +788,28 @@ const removeLinkedCase = async (id: string) => {
   } finally {
     isSubmitting.value = false
   }
-  if (reviewCaseId.value === id) {
-    reviewCaseId.value = null
-    reviewCaseDetail.value = null
-    reviewCaseDetailError.value = ''
-    reviewCaseDetailRequestSeq += 1
-  }
 }
 
-const initiateReview = async () => {
-  if (!canReview.value) {
-    showToast('暂无评审需求用例权限')
-    return
-  }
-  if (!selectedRequirement.value) return
-  isSubmitting.value = true
+const loadCaseDetail = async (caseId: string) => {
+  const requestSeq = ++viewCaseDetailRequestSeq
+  viewCaseDetailLoading.value = true
+  viewCaseDetailError.value = ''
+  viewCaseDetail.value = null
   try {
-    const result = await testManagementApi.startRequirementReview(
-      selectedWorkspaceCode.value,
-      Number(selectedRequirement.value.id),
-      requirementLockVersions.value.get(selectedRequirement.value.id) || 0,
-    )
-    const mapped = mapRequirement(result)
-    selectedRequirement.value = mapped
-    requirements.value = requirements.value.map(item => item.id === mapped.id ? mapped : item)
-    requirementLockVersions.value.set(mapped.id, result.lockVersion)
+    viewCaseDetail.value = await caseApi.getCaseDetail(Number(caseId), selectedWorkspaceCode.value)
   } catch (error) {
-    showToast(error instanceof Error ? error.message : '需求评审发起失败')
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-const reReviewCase = async (_caseItem: LinkedRequirementCase) => {
-  await initiateReview()
-}
-
-const loadReviewCaseDetail = async (caseId: string) => {
-  const requestSeq = ++reviewCaseDetailRequestSeq
-  reviewCaseDetailLoading.value = true
-  reviewCaseDetailError.value = ''
-  reviewCaseDetail.value = null
-  try {
-    reviewCaseDetail.value = await caseApi.getCaseDetail(Number(caseId), selectedWorkspaceCode.value)
-  } catch (error) {
-    if (requestSeq === reviewCaseDetailRequestSeq) {
-      reviewCaseDetailError.value = error instanceof Error ? error.message : '用例详情加载失败'
+    if (requestSeq === viewCaseDetailRequestSeq) {
+      viewCaseDetailError.value = error instanceof Error ? error.message : '用例详情加载失败'
     }
   } finally {
-    if (requestSeq === reviewCaseDetailRequestSeq) reviewCaseDetailLoading.value = false
+    if (requestSeq === viewCaseDetailRequestSeq) viewCaseDetailLoading.value = false
   }
 }
 
-const openReviewDrawer = (caseItem: LinkedRequirementCase) => {
-  reviewCaseId.value = caseItem.id
-  rejectEditorOpen.value = false
-  rejectNote.value = caseItem.reviewNote || ''
-  void loadReviewCaseDetail(caseItem.id)
+const openCaseDetail = (caseItem: LinkedRequirementCase) => {
+  viewCaseId.value = caseItem.id
+  void loadCaseDetail(caseItem.id)
 }
-
-const navigateReviewCase = (offset: number) => {
-  const next = linkedCases.value[reviewCaseIndex.value + offset]
-  if (next) openReviewDrawer(next)
-}
-
-const saveReviewCase = async (decision: 'PASSED' | 'REJECTED') => {
-  if (!canReview.value) {
-    showToast('暂无评审需求用例权限')
-    return
-  }
-  if (!reviewCase.value) return
-  if (!selectedRequirement.value) return
-  isSubmitting.value = true
-  try {
-    const result = await testManagementApi.reviewRequirementCase(
-      selectedWorkspaceCode.value,
-      Number(selectedRequirement.value.id),
-      Number(reviewCase.value.id),
-      {
-        decision,
-        comment: decision === 'REJECTED' ? rejectNote.value.trim() || '已驳回，请修改后重新提交' : undefined,
-        expectedVersion: requirementLockVersions.value.get(selectedRequirement.value.id) || 0,
-      },
-    )
-    const mapped = mapRequirement(result)
-    selectedRequirement.value = mapped
-    requirements.value = requirements.value.map(item => item.id === mapped.id ? mapped : item)
-    requirementLockVersions.value.set(mapped.id, result.lockVersion)
-    rejectEditorOpen.value = false
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : '用例评审保存失败')
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-const passReviewCase = async () => saveReviewCase('PASSED')
-const submitRejectCase = async () => saveReviewCase('REJECTED')
 
 onBeforeUnmount(() => {
   if (toastTimer) clearTimeout(toastTimer)
@@ -900,6 +821,7 @@ onMounted(() => {
 
 watch(selectedWorkspaceCode, () => {
   selectedRequirement.value = null
+  closeCaseDetail()
   void loadRequirements()
 })
 
@@ -1028,8 +950,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <section class="requirement-management__review-summary" :class="{ 'is-complete': linkedCases.length && passedReviewCount === linkedCases.length }">
             <div>
               <strong v-if="!linkedCases.length">尚未关联任何用例</strong>
-              <strong v-else-if="passedReviewCount === linkedCases.length">所有用例已通过评审 <Check :size="14" /></strong>
-              <strong v-else>评审进度：{{ passedReviewCount }} / {{ linkedCases.length }} 已通过</strong>
+              <strong v-else-if="passedReviewCount === linkedCases.length">关联用例已全部通过评审 ✓</strong>
+              <strong v-else>用例评审状态：{{ passedReviewCount }} / {{ linkedCases.length }} 已通过</strong>
               <p v-if="linkedCases.length">
                 <span v-if="passedReviewCount" class="is-success">{{ passedReviewCount }} 已通过</span>
                 <span v-if="reviewingCount" class="is-warning">{{ reviewingCount }} 评审中</span>
@@ -1038,7 +960,6 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
               </p>
             </div>
             <span class="requirement-management__toolbar-spacer" />
-            <button v-if="pendingCount && canReview" class="requirement-management__button" type="button" :disabled="isSubmitting" @click="initiateReview">{{ pendingCount === linkedCases.length ? '发起评审' : '继续评审' }}</button>
             <button v-if="canEdit" class="requirement-management__button is-ghost" type="button" @click="openCasePicker"><Plus :size="13" />从用例库关联</button>
             <div v-if="linkedCases.length" class="requirement-management__review-progress">
               <span><i :style="{ width: `${passedReviewCount / linkedCases.length * 100}%` }" /></span>
@@ -1047,20 +968,18 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           </section>
 
           <section v-if="linkedCases.length" class="requirement-management__case-list">
-            <article v-for="caseItem in linkedCases" :key="caseItem.id" :class="[`is-${caseItem.reviewStatus}`, { 'is-active': reviewCaseId === caseItem.id }]">
+            <article v-for="caseItem in linkedCases" :key="caseItem.id" :class="`is-${caseItem.reviewStatus}`">
               <i />
               <div>
                 <p><code>{{ caseItem.no }}</code><span class="requirement-management__badge" :style="reviewStyle(caseItem.reviewStatus)">{{ reviewStatusConfig[caseItem.reviewStatus].label }}</span><span class="requirement-management__badge is-priority" :style="priorityStyle(caseLibrary.find(item => item.id === caseItem.id)?.priority || 'P2')">{{ caseLibrary.find(item => item.id === caseItem.id)?.priority || 'P2' }}</span><small>{{ caseLibrary.find(item => item.id === caseItem.id)?.module }}</small></p>
                 <strong>{{ caseItem.title }}</strong>
               </div>
-              <small v-if="caseItem.reviewStatus === 'rejected' && caseItem.reviewNote" class="requirement-management__rejection-preview">{{ caseItem.reviewNote }}</small>
-              <button v-if="caseItem.reviewStatus === 'rejected' && canReview" class="requirement-management__mini-button" type="button" @click="reReviewCase(caseItem)">重新评审</button>
-              <button class="requirement-management__mini-button" :class="{ 'is-primary': caseItem.reviewStatus === 'reviewing' }" type="button" @click="openReviewDrawer(caseItem)">{{ caseItem.reviewStatus === 'reviewing' ? '评审' : '查看' }}</button>
+              <button class="requirement-management__view-case-button" type="button" title="查看用例" aria-label="查看用例" @click="openCaseDetail(caseItem)"><Eye :size="14" /></button>
               <button v-if="canEdit" class="requirement-management__icon-button is-danger" type="button" title="解除关联" :disabled="isSubmitting" @click="removeLinkedCase(caseItem.id)"><Trash2 :size="13" /></button>
             </article>
           </section>
           <section v-else class="requirement-management__empty-card">
-            <Link2 :size="32" /><strong>暂未关联任何测试用例</strong><span>点击上方「从用例库关联」添加</span>
+            <FileText :size="36" /><strong>暂未关联任何测试用例</strong><span>点击上方「从用例库关联」添加</span>
           </section>
         </template>
 
@@ -1205,22 +1124,16 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
     </Transition>
 
     <Transition name="requirement-drawer">
-      <aside v-if="reviewCase" class="requirement-management__review-drawer">
-        <header><div><p><code>{{ reviewCase.no }}</code><span class="requirement-management__badge" :style="reviewStyle(reviewCase.reviewStatus)">{{ reviewStatusConfig[reviewCase.reviewStatus].label }}</span><span class="requirement-management__badge is-priority" :style="priorityStyle(caseLibrary.find(item => item.id === reviewCase?.id)?.priority || 'P2')">{{ caseLibrary.find(item => item.id === reviewCase?.id)?.priority || 'P2' }}</span><small>{{ caseLibrary.find(item => item.id === reviewCase?.id)?.module }}</small></p><h2>{{ reviewCase.title }}</h2></div><button type="button" aria-label="关闭" @click="reviewCaseId = null"><X :size="15" /></button></header>
-        <div class="requirement-management__review-content">
-          <div v-if="reviewCaseDetailLoading" class="requirement-management__empty-card">正在加载用例详情...</div>
-          <div v-else-if="reviewCaseDetailError" class="requirement-management__empty-card"><strong>{{ reviewCaseDetailError }}</strong><button class="requirement-management__button is-ghost is-small" type="button" @click="loadReviewCaseDetail(reviewCase.id)">重新加载</button></div>
-          <template v-else-if="reviewCaseDetail">
-            <section><h3><i />前置条件</h3><p>{{ plainCaseText(reviewCaseDetail.precondition) || '—' }}</p></section>
-            <section><h3><i />测试步骤</h3><div class="requirement-management__steps"><div><strong>#</strong><strong>操作步骤</strong><strong>预期结果</strong></div><div v-for="(step, index) in reviewStepRows" :key="index"><b>{{ index + 1 }}</b><span>{{ step.action }}</span><span>{{ step.expected }}</span></div></div></section>
-            <p v-if="reviewCase.reviewStatus === 'rejected' && reviewCase.reviewNote && !rejectEditorOpen" class="requirement-management__rejection-note"><XCircle :size="13" />{{ reviewCase.reviewNote }}</p>
-            <section v-if="rejectEditorOpen" class="requirement-management__reject-editor"><h3>驳回原因</h3><textarea v-model="rejectNote" rows="3" placeholder="请说明驳回原因，帮助用例作者修改…" autofocus /><div><button class="requirement-management__button is-ghost is-small" type="button" @click="rejectEditorOpen = false">取消</button><button class="requirement-management__button is-danger is-small" type="button" @click="submitRejectCase">确认驳回</button></div></section>
+      <aside v-if="viewCase" class="requirement-management__case-detail-drawer">
+        <header><div><p><code>{{ viewCase.no }}</code><span class="requirement-management__badge" :style="reviewStyle(viewCase.reviewStatus)">{{ reviewStatusConfig[viewCase.reviewStatus].label }}</span><span class="requirement-management__badge is-priority" :style="priorityStyle(caseLibrary.find(item => item.id === viewCase?.id)?.priority || 'P2')">{{ caseLibrary.find(item => item.id === viewCase?.id)?.priority || 'P2' }}</span><small>{{ caseLibrary.find(item => item.id === viewCase?.id)?.module }}</small></p><h2>{{ viewCase.title }}</h2></div><button type="button" aria-label="关闭" @click="closeCaseDetail"><X :size="15" /></button></header>
+        <div class="requirement-management__case-detail-content">
+          <div v-if="viewCaseDetailLoading" class="requirement-management__empty-card">正在加载用例详情...</div>
+          <div v-else-if="viewCaseDetailError" class="requirement-management__empty-card"><strong>{{ viewCaseDetailError }}</strong><button class="requirement-management__button is-ghost is-small" type="button" @click="loadCaseDetail(viewCase.id)">重新加载</button></div>
+          <template v-else-if="viewCaseDetail">
+            <section><h3><i />前置条件</h3><p>{{ plainCaseText(viewCaseDetail.precondition) || '—' }}</p></section>
+            <section><h3><i />测试步骤</h3><div class="requirement-management__steps"><div><strong>#</strong><strong>操作步骤</strong><strong>预期结果</strong></div><div v-for="(step, index) in viewStepRows" :key="index"><b>{{ index + 1 }}</b><span>{{ step.action }}</span><span>{{ step.expected }}</span></div></div></section>
           </template>
         </div>
-        <footer v-if="reviewCaseDetail && !reviewCaseDetailLoading && !reviewCaseDetailError">
-          <div class="requirement-management__drawer-nav"><button type="button" :disabled="reviewCaseIndex <= 0" @click="navigateReviewCase(-1)"><ChevronLeft :size="13" />上一条</button><span>{{ reviewCaseIndex + 1 }} / {{ linkedCases.length }}</span><button type="button" :disabled="reviewCaseIndex >= linkedCases.length - 1" @click="navigateReviewCase(1)">下一条<ChevronRight :size="13" /></button></div>
-          <div class="requirement-management__drawer-actions" :class="`is-${reviewCase.reviewStatus}`"><template v-if="reviewCase.reviewStatus === 'passed'"><p><CheckCircle2 :size="15" />已通过评审</p></template><template v-else-if="reviewCase.reviewStatus === 'rejected'"><p><XCircle :size="15" />已驳回</p><button v-if="canReview" class="requirement-management__button is-ghost is-small" type="button" @click="passReviewCase">撤回并通过</button></template><template v-else><p>{{ reviewCase.reviewStatus === 'reviewing' ? '请审阅上方步骤后操作' : '用例尚未进入评审流程' }}</p><button v-if="canReview" class="requirement-management__button is-reject" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="rejectEditorOpen = true">驳回</button><button v-if="canReview" class="requirement-management__button is-success" type="button" :disabled="reviewCase.reviewStatus !== 'reviewing'" @click="passReviewCase">通过</button></template></div>
-        </footer>
       </aside>
     </Transition>
 

@@ -20,20 +20,17 @@ const props = withDefaults(
     caseId?: number | null
     workspaceCode?: string
     canEdit?: boolean
-    canRun?: boolean
   }>(),
   {
     caseId: null,
     workspaceCode: 'ALL',
     canEdit: true,
-    canRun: true,
   },
 )
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   edit: [item: CaseDetail]
-  run: [item: CaseDetail]
 }>()
 
 const detail = ref<CaseDetail | null>(null)
@@ -88,12 +85,6 @@ function getSourceLabel(sourceType: string) {
 function emitEdit() {
   if (props.canEdit && detail.value) {
     emit('edit', detail.value)
-  }
-}
-
-function emitRun() {
-  if (props.canRun && detail.value) {
-    emit('run', detail.value)
   }
 }
 
@@ -181,10 +172,6 @@ watch(
             <button v-if="canEdit" type="button" class="case-detail-drawer__outline-button" @click="emitEdit">
               <img :src="figmaCaseIcons.action.edit" alt="" />
               编辑
-            </button>
-            <button v-if="canRun" type="button" class="case-detail-drawer__primary-button" @click="emitRun">
-              <img :src="figmaCaseIcons.action.run" alt="" />
-              执行用例
             </button>
             <button type="button" class="case-detail-drawer__close" aria-label="关闭" @click="closeDrawer">×</button>
           </div>

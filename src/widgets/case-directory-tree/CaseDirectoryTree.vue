@@ -66,7 +66,9 @@ function mapCaseNodeToDirectoryNode(node: CaseTreeNode): CaseDirectoryTreeNode {
     label: node.label,
     type: node.type,
     canCreate: props.canCreate !== false && node.type !== 'root',
-    canMore: node.type === 'module' && (props.canEdit !== false || props.canDelete !== false),
+    canMore: node.type === 'workspace'
+      ? props.canCreate !== false
+      : node.type === 'module' && (props.canCreate !== false || props.canEdit !== false || props.canDelete !== false),
     children: node.children.map(mapCaseNodeToDirectoryNode),
     meta: node,
   }
@@ -135,11 +137,19 @@ function emitCreateChild(node: AppDirectoryTreeNode) {
 
 function handleModuleCommand(payload: { command: string | number | object; node: AppDirectoryTreeNode }) {
   const data = getCaseNode(payload.node)
+  const command = String(payload.command)
+
+  if (command === 'create') {
+    if (props.canCreate === false || payload.node.canCreate === false) return
+    emitCreateChild(payload.node)
+    return
+  }
+
   if (data.type !== 'module' || data.directoryId === null) {
     return
   }
 
-  if (String(payload.command) === 'rename') {
+  if (command === 'rename') {
     if (props.canEdit === false) return
     emit('rename', {
       nodeId: data.id,
@@ -150,7 +160,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
     return
   }
 
-  if (String(payload.command) === 'move') {
+  if (command === 'move') {
     if (props.canEdit === false) return
     emit('move', {
       nodeId: data.id,
@@ -161,7 +171,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
     return
   }
 
-  if (props.canDelete === false) return
+  if (command !== 'delete' || props.canDelete === false) return
   emit('delete', {
     nodeId: data.id,
     workspaceCode: data.workspaceCode,
@@ -183,6 +193,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
     :selected-node-id="selectedNodeId"
     :expanded-node-ids="visibleExpandedNodeIds"
     :render-key="renderKey"
+    :collapse-create-into-more="true"
     @select="handleNodeSelect"
     @create="emitCreateChild"
     @command="handleModuleCommand"
@@ -204,11 +215,25 @@ function handleModuleCommand(payload: { command: string | number | object; node:
     </template>
 
     <template #dropdown="{ node }">
-      <el-dropdown-menu v-if="(node.meta as CaseTreeNode).type === 'module' && (canEdit !== false || canDelete !== false)">
-        <el-dropdown-item v-if="canEdit !== false" command="rename">重命名</el-dropdown-item>
-        <el-dropdown-item v-if="canEdit !== false" command="move">移动</el-dropdown-item>
-        <el-dropdown-item v-if="canDelete !== false" command="delete" class="case-directory-tree__danger-action">
-          删除
+      <el-dropdown-menu
+        v-if="
+          ((node.meta as CaseTreeNode).type === 'workspace' || (node.meta as CaseTreeNode).type === 'module')
+          && (canCreate !== false || canEdit !== false || canDelete !== false)
+        "
+      >
+        <el-dropdown-item v-if="canCreate !== false" command="create">添加子目录</el-dropdown-item>
+        <el-dropdown-item v-if="(node.meta as CaseTreeNode).type === 'module' && canEdit !== false" command="rename">
+          重命名目录
+        </el-dropdown-item>
+        <el-dropdown-item v-if="(node.meta as CaseTreeNode).type === 'module' && canEdit !== false" command="move">
+          移动目录
+        </el-dropdown-item>
+        <el-dropdown-item
+          v-if="(node.meta as CaseTreeNode).type === 'module' && canDelete !== false"
+          command="delete"
+          class="case-directory-tree__danger-action"
+        >
+          删除目录
         </el-dropdown-item>
       </el-dropdown-menu>
     </template>
