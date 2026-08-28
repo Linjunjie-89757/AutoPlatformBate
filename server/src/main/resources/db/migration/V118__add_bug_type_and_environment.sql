@@ -1,0 +1,2 @@
+ALTER TABLE tb_bug_info ADD COLUMN IF NOT EXISTS bug_type VARCHAR(64);
+ALTER TABLE tb_bug_info ADD COLUMN IF NOT EXISTS environment_name VARCHAR(128);
