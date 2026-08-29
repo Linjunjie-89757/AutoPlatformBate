@@ -65,6 +65,7 @@ function mapCaseNodeToDirectoryNode(node: CaseTreeNode): CaseDirectoryTreeNode {
     id: node.id,
     label: node.label,
     type: node.type,
+    count: node.count,
     canCreate: props.canCreate !== false && node.type !== 'root',
     canMore: node.type === 'workspace'
       ? props.canCreate !== false

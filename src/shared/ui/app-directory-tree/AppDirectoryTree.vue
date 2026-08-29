@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Fold, Folder, FolderOpened, MoreFilled, Plus, Search } from '@element-plus/icons-vue'
+import { Fold, Folder, FolderOpened, Plus, Search } from '@element-plus/icons-vue'
 
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 
@@ -157,30 +157,34 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
           </div>
 
           <div class="app-directory-tree__node-actions" @click.stop>
-            <el-button
+            <button
               v-if="showCreate && !collapseCreateIntoMore && data.canCreate !== false"
-              text
+              type="button"
               class="app-directory-tree__icon-button"
               aria-label="新建子目录"
               title="新建子目录"
               @click.stop="emit('create', data)"
             >
-              <el-icon><Plus /></el-icon>
-            </el-button>
+              <Plus :size="13" />
+            </button>
             <el-dropdown
               v-if="showMore && data.canMore !== false"
               trigger="click"
               @command="(command: string | number | object) => emit('command', { command, node: data })"
             >
-              <el-button
-                text
+              <button
+                type="button"
                 class="app-directory-tree__icon-button"
                 aria-label="更多操作"
                 title="更多操作"
                 @click.stop
               >
-                <el-icon><MoreFilled /></el-icon>
-              </el-button>
+                <svg class="app-directory-tree__more-icon" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="5" cy="12" r="1.5" fill="currentColor" />
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+                  <circle cx="19" cy="12" r="1.5" fill="currentColor" />
+                </svg>
+              </button>
               <template #dropdown>
                 <slot name="dropdown" :node="data" />
               </template>
@@ -319,6 +323,7 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree__node {
+  position: relative;
   display: flex;
   min-width: 0;
   width: 100%;
@@ -330,12 +335,15 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 
 .app-directory-tree__node-main {
   display: flex;
+  flex: 1;
   min-width: 0;
   align-items: center;
   gap: 7px;
 }
 
 .app-directory-tree__node-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -368,17 +376,19 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
   transition: opacity 150ms ease;
 }
 
-.app-directory-tree--collapse-create .app-directory-tree__node-main {
-  flex: 1;
-}
-
 .app-directory-tree--collapse-create .app-directory-tree__node-count {
-  margin-left: auto;
+  margin-right: 8px;
   transition: opacity 150ms ease;
 }
 
 .app-directory-tree--collapse-create .app-directory-tree__node-actions {
-  min-width: 20px;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  margin-left: 0;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
@@ -398,11 +408,28 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 20px;
   padding: 0;
   border-radius: 4px;
+  border: 0;
+  background: transparent;
   color: var(--app-text-muted);
+  cursor: pointer;
+}
+
+.app-directory-tree__more-icon {
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
+  color: var(--app-text-muted);
+}
+
+.app-directory-tree__more-icon circle {
+  fill: currentColor;
 }
 
 .app-directory-tree__icon-button:hover {
@@ -508,6 +535,7 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__node-count {
+  flex: 0 0 auto;
   margin-left: auto;
   color: var(--app-text-subtle);
   font-size: 11px;
