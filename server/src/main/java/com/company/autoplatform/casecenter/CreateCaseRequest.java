@@ -9,7 +9,6 @@ public record CreateCaseRequest(
         @NotBlank(message = "用例类型不能为空") String caseType,
         @NotBlank(message = "优先级不能为空") String priority,
         @NotBlank(message = "来源不能为空") String sourceType,
-        @NotBlank(message = "状态不能为空") String caseStatus,
         Long ownerId,
         String precondition,
         String steps,

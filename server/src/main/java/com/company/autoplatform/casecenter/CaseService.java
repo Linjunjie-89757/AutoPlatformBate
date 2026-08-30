@@ -59,7 +59,9 @@ public class CaseService {
             String keyword,
             String priority,
             String reviewStatus,
-            String executionStatus
+            String executionStatus,
+            String sourceType,
+            String createdByName
     ) {
         return caseDomainService.listCases(
                 workspaceCode,
@@ -69,7 +71,9 @@ public class CaseService {
                 keyword,
                 priority,
                 reviewStatus,
-                executionStatus);
+                executionStatus,
+                sourceType,
+                createdByName);
     }
 
     public CaseDetailResponse getCase(Long id, String workspaceCode) {
@@ -245,7 +249,6 @@ public class CaseService {
                 item.getCaseType(),
                 item.getPriority(),
                 item.getSourceType(),
-                item.getCaseStatus(),
                 item.getOwnerId(),
                 owner == null ? "-" : owner.getDisplayName(),
                 defaultExecutionStatus(item.getExecutionStatus()),

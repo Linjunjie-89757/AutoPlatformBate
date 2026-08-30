@@ -600,7 +600,6 @@ async function submitAdoptCases() {
         caseType: entry.item.caseType || '功能测试',
         priority: entry.item.priority || 'P2',
         sourceType: 'AI生成',
-        caseStatus: '草稿',
         ownerId: null,
         precondition: entry.item.precondition || '',
         steps: entry.item.steps || '',

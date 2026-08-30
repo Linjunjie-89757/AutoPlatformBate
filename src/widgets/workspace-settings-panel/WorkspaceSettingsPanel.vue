@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { Activity, Check, ChevronLeft, Crown, Edit2, Layers, Package, Shield, Target, Trash2, User, UserCog, Users } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   workspaceApi,
@@ -587,16 +587,13 @@ async function resetUserPassword(row: UserItem) {
 
   setMutatingUser(row.id, true)
   try {
-    await ElMessageBox.confirm(
-      `确定重置用户“${getUserDisplayName(row)}”的密码吗？`,
-      '重置密码',
-      {
-        confirmButtonText: '重置',
-        cancelButtonText: '取消',
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger',
-      },
-    )
+    await confirmAction({
+      title: '重置密码',
+      message: `确定重置用户“${getUserDisplayName(row)}”的密码吗？`,
+      confirmText: '重置',
+      cancelText: '取消',
+      tone: 'warning',
+    })
     const response = await userApi.resetUserPassword(row.id)
     ElMessage.success(`密码已重置为 ${response.defaultPassword}`)
   } catch (error) {

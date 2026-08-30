@@ -99,9 +99,6 @@ public class AiCaseService {
                 : request.maxCases();
         int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
-        if (!assets.isEmpty() && !aiCaseConfigDomainService.supportsImageInputForGeneration(resolved)) {
-            throw new BadRequestException("The current AI config does not support image input. Remove the images or enable an image-capable model.");
-        }
         List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         boolean ignoredImages = false;
         String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, effectiveMaxCases, assets, false);
@@ -162,9 +159,6 @@ public class AiCaseService {
                 : request.maxCases();
         int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
-        if (!assets.isEmpty() && !aiCaseConfigDomainService.supportsImageInputForGeneration(resolved)) {
-            throw new BadRequestException("The current AI config does not support image input. Remove the images or enable an image-capable model.");
-        }
         List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         if (modelConsumer != null) {
             modelConsumer.accept(new AiStreamModelInfo(resolved.profile().provider(), config.getModel()));
@@ -192,7 +186,7 @@ public class AiCaseService {
 
         AiProviderClient.StreamContentResult streamResult;
         try {
-            streamResult = aiProviderClient.streamStructuredContentWithResult(
+            streamResult = streamStructuredContentWithImages(
                     resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
@@ -214,7 +208,6 @@ public class AiCaseService {
                     resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
-                    List.of(),
                     deltaConsumer
             );
         }
@@ -410,6 +403,19 @@ public class AiCaseService {
         return aiProviderClient.review(resolved.profile(), resolved.apiKey(), prompt);
     }
 
+    private AiProviderClient.StreamContentResult streamStructuredContentWithImages(
+            AiProviderRequestProfile profile,
+            String apiKey,
+            String prompt,
+            List<AiProviderClient.ImageInput> images,
+            Consumer<String> deltaConsumer
+    ) {
+        if (images == null || images.isEmpty()) {
+            return aiProviderClient.streamStructuredContentWithResult(profile, apiKey, prompt, deltaConsumer);
+        }
+        return aiProviderClient.streamStructuredContentWithResult(profile, apiKey, prompt, images, deltaConsumer);
+    }
+
 
     private String blankToNull(String value) {
         if (value == null || value.trim().isEmpty()) {
@@ -442,7 +448,16 @@ public class AiCaseService {
             String coverageGap,
             GeneratedAiCaseItem optimizedCase,
             GeneratedAiCaseItem supplementCase,
-            String rawOutput
+            String rawOutput,
+            String candidateCaseId,
+            String suggestedAction,
+            Integer score,
+            Double confidence,
+            String reason,
+            GeneratedAiCaseItem suggestedCase,
+            List<String> mergeTargetCandidateIds,
+            Integer sourceVersion,
+            String sourceContentHash
     ) {
     }
 

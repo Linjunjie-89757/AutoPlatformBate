@@ -1,6 +1,8 @@
 package com.company.autoplatform.ai;
 
 import com.company.autoplatform.IntegrationTestSupport;
+import com.company.autoplatform.casecenter.CaseService;
+import com.company.autoplatform.casecenter.CreateCaseDirectoryRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -11,6 +13,7 @@ import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -25,6 +28,15 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
     @Autowired
     private AiGenerationTaskService aiGenerationTaskService;
+
+    @Autowired
+    private AiCaseCandidateService aiCaseCandidateService;
+
+    @Autowired
+    private AiCaseAdoptionService aiCaseAdoptionService;
+
+    @Autowired
+    private CaseService caseService;
 
     @MockitoBean
     private AiProviderClient aiProviderClient;
@@ -117,6 +129,112 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
                         "FINAL_CASES_READY",
                         "TASK_COMPLETED"
                 );
+    }
+
+    @Test
+    void reviewSuggestionNeverOverwritesOriginalOrCurrentCandidate() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("human-confirmation");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+
+        GeneratedAiCaseItem original = generatedCase(unique + " original case");
+        GeneratedAiCaseItem suggestion = generatedCase(unique + " suggested case");
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(original), "coverage", List.of(), List.of(), List.of(), "{}"
+        ));
+        when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
+                "SUGGEST",
+                "review suggestion",
+                List.of(),
+                List.of("improve assertion"),
+                List.of(new AiReviewCaseDecision(
+                        0,
+                        "CHANGE_SUGGESTED",
+                        "use explicit assertion",
+                        "coverage ok",
+                        "evidence ok",
+                        "needs improvement",
+                        "expected result is vague",
+                        null,
+                        null,
+                        null,
+                        "MODIFY",
+                        78,
+                        0.91,
+                        "expected result is vague",
+                        suggestion,
+                        List.of(),
+                        1,
+                        null
+                )),
+                List.of(),
+                List.of(),
+                "{}",
+                true
+        ));
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+
+        AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(detail.generatedCases()).hasSize(1);
+        assertThat(detail.generatedCases().get(0).title()).isEqualTo(original.title());
+        assertThat(detail.generatedCases().get(0).aiReviewStatus()).isEqualTo("CHANGE_SUGGESTED");
+
+        List<AiCaseCandidateItem> candidates = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE);
+        assertThat(candidates).hasSize(1);
+        AiCaseCandidateItem candidate = candidates.get(0);
+        assertThat(candidate.candidateCaseId()).startsWith("AIC_");
+        assertThat(candidate.originalCase().title()).isEqualTo(original.title());
+        assertThat(candidate.currentCase().title()).isEqualTo(original.title());
+        assertThat(candidate.suggestedCase().title()).isEqualTo(suggestion.title());
+        assertThat(candidate.reviewStatus()).isEqualTo("CHANGE_SUGGESTED");
+        assertThat(candidate.suggestedAction()).isEqualTo("MODIFY");
+        assertThat(candidate.humanDecision()).isEqualTo("PENDING");
+
+        AiCaseCandidateItem applied = aiCaseCandidateService.applySuggestion(
+                created.taskId(),
+                candidate.candidateCaseId(),
+                WORKSPACE_CODE,
+                new AiCaseCandidateVersionRequest(candidate.contentVersion(), candidate.contentHash())
+        );
+        assertThat(applied.originalCase().title()).isEqualTo(original.title());
+        assertThat(applied.currentCase().title()).isEqualTo(suggestion.title());
+        assertThat(applied.humanDecision()).isEqualTo("APPLIED_SUGGESTION");
+        assertThat(applied.contentVersion()).isEqualTo(2);
+        assertThatThrownBy(() -> aiCaseCandidateService.applySuggestion(
+                created.taskId(),
+                candidate.candidateCaseId(),
+                WORKSPACE_CODE,
+                new AiCaseCandidateVersionRequest(candidate.contentVersion(), candidate.contentHash())
+        )).hasMessageContaining("请刷新后重试");
+
+        var directory = caseService.createDirectory(
+                WORKSPACE_CODE,
+                new CreateCaseDirectoryRequest(WORKSPACE_CODE, null, unique + " adopted directory")
+        );
+        AiCaseAdoptionItem adoption = aiCaseAdoptionService.adoptCandidate(
+                created.taskId(),
+                WORKSPACE_CODE,
+                candidate.candidateCaseId(),
+                new AdoptAiCaseRequest(directory.id())
+        );
+        assertThat(adoption.status()).isEqualTo("ADOPTED");
+        assertThat(adoption.candidateCaseId()).isEqualTo(candidate.candidateCaseId());
+        assertThat(adoption.adoptedContentVersion()).isEqualTo(2);
+        assertThat(adoption.adoptedContentSource()).isEqualTo("AI_SUGGESTED");
+        assertThat(caseService.getCase(adoption.createdCaseId(), WORKSPACE_CODE).title()).isEqualTo(suggestion.title());
+
+        AiCaseAdoptionItem repeated = aiCaseAdoptionService.adoptCandidate(
+                created.taskId(),
+                WORKSPACE_CODE,
+                candidate.candidateCaseId(),
+                new AdoptAiCaseRequest(directory.id())
+        );
+        assertThat(repeated.createdCaseId()).isEqualTo(adoption.createdCaseId());
     }
 
     @Test

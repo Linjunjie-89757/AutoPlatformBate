@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { X } from '@lucide/vue'
 
 import {
   type CaseDetail,
@@ -36,7 +37,7 @@ const emit = defineEmits<{
 const detail = ref<CaseDetail | null>(null)
 const loading = ref(false)
 const errorMessage = ref('')
-const activeTab = ref<'detail' | 'history' | 'defects'>('detail')
+const activeTab = ref<'detail' | 'defects'>('detail')
 let detailRequestSeq = 0
 
 function closeDrawer() {
@@ -64,16 +65,9 @@ const detailSteps = computed(() => {
 })
 
 function getReviewStatusVisual(status: string) {
-  if (status === 'PASSED') return { label: '已确认', tone: 'success' }
-  if (status === 'REJECTED') return { label: '不通过', tone: 'danger' }
-  return { label: '待确认', tone: 'warning' }
-}
-
-function getExecutionStatusVisual(status: string) {
-  if (status === 'PASSED') return { label: '通过', tone: 'success' }
-  if (status === 'FAILED') return { label: '失败', tone: 'danger' }
-  if (status === 'BLOCKED') return { label: '阻塞', tone: 'warning' }
-  return { label: '未执行', tone: 'default' }
+  if (status === 'PASSED') return { label: '已通过', tone: 'success' }
+  if (status === 'REJECTED') return { label: '未通过', tone: 'danger' }
+  return { label: '待评审', tone: 'warning' }
 }
 
 function getSourceLabel(sourceType: string) {
@@ -158,13 +152,6 @@ watch(
               >
                 {{ getReviewStatusVisual(detail.reviewStatus).label }}
               </span>
-              <span
-                class="case-detail-drawer__execution"
-                :class="`is-${getExecutionStatusVisual(detail.executionStatus).tone}`"
-              >
-                <span class="case-detail-drawer__execution-dot" />
-                {{ getExecutionStatusVisual(detail.executionStatus).label }}
-              </span>
             </div>
             <h3>{{ detail.title }}</h3>
           </div>
@@ -173,7 +160,7 @@ watch(
               <img :src="figmaCaseIcons.action.edit" alt="" />
               编辑
             </button>
-            <button type="button" class="case-detail-drawer__close" aria-label="关闭" @click="closeDrawer">×</button>
+            <button type="button" class="case-detail-drawer__close" aria-label="关闭" @click="closeDrawer"><X :size="15" /></button>
           </div>
         </header>
 
@@ -184,13 +171,6 @@ watch(
             @click="activeTab = 'detail'"
           >
             用例详情
-          </button>
-          <button
-            type="button"
-            :class="{ 'is-active': activeTab === 'history' }"
-            @click="activeTab = 'history'"
-          >
-            执行记录
           </button>
           <button
             type="button"
@@ -264,19 +244,6 @@ watch(
               <p class="case-detail-drawer__text case-detail-drawer__text--success">{{ displayText(detail.expectedResult) }}</p>
             </section>
           </template>
-
-          <section v-else-if="activeTab === 'history'" class="case-detail-drawer__tab-panel">
-            <dl class="case-detail-drawer__meta">
-              <div>
-                <dt>执行时间</dt>
-                <dd>{{ formatCaseDateTime(detail.executedAt) }}</dd>
-              </div>
-              <div>
-                <dt>执行备注</dt>
-                <dd>{{ displayText(detail.executionComment || detail.executionNote) }}</dd>
-              </div>
-            </dl>
-          </section>
 
           <section v-else class="case-detail-drawer__tab-panel">
             <AppEmptyState title="暂无关联缺陷" description="当前用例列表接口暂未返回关联缺陷明细。" />

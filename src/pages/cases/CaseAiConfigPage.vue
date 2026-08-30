@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Check, CheckCircle, ChevronDown, ClipboardCheck, Info, RotateCcw, Save, Settings, Sparkles, Wrench, Zap } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import { aiProviderApi, type AiProviderConnectionItem } from '@/entities/ai-provider'
 import {
@@ -17,6 +17,7 @@ import {
   AppButton,
   AppEmptyState,
   AppLoadingState,
+  confirmAction,
 } from '@/shared/ui'
 import CaseAiConfigFigmaWorkspace from '@/widgets/case-ai-config/CaseAiConfigFigmaWorkspace.vue'
 
@@ -525,15 +526,13 @@ async function bootstrapLegacyConfig() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      '将尝试从旧配置初始化当前工作空间下的个人 AI 配置，是否继续？',
-      '初始化 AI 配置',
-      {
-        type: 'warning',
-        confirmButtonText: '继续',
-        cancelButtonText: '取消',
-      },
-    )
+    await confirmAction({
+      title: '初始化 AI 配置',
+      message: '将尝试从旧配置初始化当前工作空间下的个人 AI 配置，是否继续？',
+      confirmText: '继续',
+      cancelText: '取消',
+      tone: 'warning',
+    })
   }
   catch {
     return

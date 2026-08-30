@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 import { Bug, Check, Clock, Edit2, Link, Plus } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   caseApi,
@@ -42,7 +42,7 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import { AttachmentFileWall, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
+import { AttachmentFileWall, confirmAction, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
 import DefectDetailDrawer from '@/widgets/defect-detail-drawer/DefectDetailDrawer.vue'
 
 const route = useRoute()
@@ -990,11 +990,12 @@ async function unlinkDefect(row: DefectSummaryItem) {
   }
 
   try {
-    await ElMessageBox.confirm('确认取消关联当前缺陷吗？', '取消关联缺陷', {
-      type: 'warning',
-      confirmButtonText: '取消关联',
-      cancelButtonText: '保留',
-      confirmButtonClass: 'el-button--danger',
+    await confirmAction({
+      title: '取消关联缺陷',
+      message: '确认取消关联当前缺陷吗？',
+      confirmText: '取消关联',
+      cancelText: '保留',
+      tone: 'warning',
     })
   } catch {
     return

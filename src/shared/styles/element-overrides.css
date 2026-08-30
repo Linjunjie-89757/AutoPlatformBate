@@ -147,3 +147,73 @@
 .el-overlay {
   background-color: rgba(15, 23, 42, 0.42);
 }
+
+/* System toast: keep Element Plus' top-center behavior, align its visuals with
+   the application tokens, and allow long business messages to wrap safely. */
+.el-message {
+  --app-message-accent: var(--app-primary);
+  --app-message-background: var(--app-primary-soft);
+  --app-message-border: rgb(22 93 255 / 22%);
+  width: max-content;
+  min-width: 280px;
+  max-width: min(420px, calc(100vw - 32px));
+  min-height: 44px;
+  padding: 10px 14px;
+  gap: 8px;
+  border: 1px solid var(--app-message-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-message-background);
+  box-shadow: 0 4px 16px rgb(29 33 41 / 14%);
+}
+
+.el-message--success {
+  --app-message-accent: var(--app-success);
+  --app-message-background: var(--app-success-soft);
+  --app-message-border: rgb(0 180 42 / 22%);
+}
+
+.el-message--warning {
+  --app-message-accent: var(--app-warning);
+  --app-message-background: var(--app-warning-soft);
+  --app-message-border: rgb(255 125 0 / 24%);
+}
+
+.el-message--error {
+  --app-message-accent: var(--app-danger);
+  --app-message-background: var(--app-danger-soft);
+  --app-message-border: rgb(245 63 63 / 22%);
+}
+
+.el-message--info {
+  --app-message-accent: var(--app-primary);
+  --app-message-background: var(--app-primary-soft);
+  --app-message-border: rgb(22 93 255 / 22%);
+}
+
+.el-message .el-message__icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-right: 0;
+  color: var(--app-message-accent);
+  font-size: 16px;
+}
+
+.el-message .el-message__content {
+  min-width: 0;
+  color: var(--app-text-primary);
+  font-size: var(--app-font-size-sm);
+  font-weight: 500;
+  line-height: var(--app-line-height-md);
+  overflow-wrap: anywhere;
+}
+
+.el-message .el-message__closeBtn {
+  margin-left: 4px;
+  color: var(--app-text-muted);
+  font-size: 14px;
+}
+
+.el-message .el-message__closeBtn:hover {
+  color: var(--app-text-primary);
+}

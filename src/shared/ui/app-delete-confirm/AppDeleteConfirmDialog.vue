@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import { Trash2 } from '@lucide/vue'
 
 const props = withDefaults(
   defineProps<{
@@ -82,48 +83,13 @@ onBeforeUnmount(() => {
         @click.self="closeByCancel"
       >
         <section class="app-delete-confirm__panel">
-          <span class="app-delete-confirm__icon" aria-hidden="true">
-            <svg viewBox="0 0 16 16" focusable="false">
-              <path
-                d="M2.667 4h10.666"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.333"
-              />
-              <path
-                d="M12 4v8.667c0 .666-.667 1.333-1.333 1.333H5.333C4.667 14 4 13.333 4 12.667V4"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.333"
-              />
-              <path
-                d="M6 4V2.667C6 2 6.667 1.333 7.333 1.333h1.334C9.333 1.333 10 2 10 2.667V4"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.333"
-              />
-              <path
-                d="M6.667 7.333v3.334M9.333 7.333v3.334"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.333"
-              />
-            </svg>
-          </span>
+          <span class="app-delete-confirm__icon" aria-hidden="true"><Trash2 :size="18" /></span>
           <div class="app-delete-confirm__content">
             <h2>{{ title }}</h2>
             <p>{{ message }}</p>
           </div>
           <footer class="app-delete-confirm__actions">
-            <button type="button" class="app-delete-confirm__button" :disabled="loading" @click="closeByCancel">
+            <button type="button" class="app-delete-confirm__button is-ghost" :disabled="loading" @click="closeByCancel">
               {{ cancelText }}
             </button>
             <button type="button" class="app-delete-confirm__button is-danger" :disabled="loading" @click="confirm">
@@ -171,8 +137,8 @@ onBeforeUnmount(() => {
 }
 
 .app-delete-confirm__icon svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .app-delete-confirm__content {
@@ -193,7 +159,7 @@ onBeforeUnmount(() => {
   color: #86909c;
   font-size: 13px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 19.5px;
 }
 
 .app-delete-confirm__actions {
@@ -206,11 +172,10 @@ onBeforeUnmount(() => {
 
 .app-delete-confirm__button {
   display: inline-flex;
-  min-width: 56px;
   height: 32px;
   align-items: center;
   justify-content: center;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 1px solid #e5e6eb;
   border-radius: 8px;
   background: #ffffff;
@@ -239,7 +204,7 @@ onBeforeUnmount(() => {
 }
 
 .app-delete-confirm__button.is-danger {
-  min-width: 80px;
+  padding: 0 14px;
   border-color: #f53f3f;
   background: #f53f3f;
   color: #ffffff;
@@ -250,7 +215,7 @@ onBeforeUnmount(() => {
   column-gap: 10.5px;
   padding: 21px;
   border-radius: 14px;
-  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.16);
 }
 
 .app-delete-confirm.is-compact .app-delete-confirm__icon {
@@ -294,6 +259,10 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 32px;
   padding: 0 14px;
+}
+
+.app-delete-confirm__button.is-ghost {
+  padding: 0 12px;
 }
 
 .app-delete-confirm__button.is-danger:not(:disabled):hover,

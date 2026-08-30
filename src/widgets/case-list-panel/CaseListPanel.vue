@@ -134,14 +134,11 @@ const tableColumnDefinitions = computed<AppTableColumnDefinition[]>(() => [
   { key: 'title', label: '用例标题', width: 341.031, required: true, defaultVisible: true },
   { key: 'directoryName', label: '所属目录', width: 158.328, defaultVisible: true },
   { key: 'priority', label: '优先级', width: 73.078, defaultVisible: true },
-  { key: 'reviewStatus', label: '状态', width: 97.438, defaultVisible: true },
-  { key: 'executionStatus', label: '执行状态', width: 97.438, defaultVisible: true },
+  { key: 'reviewStatus', label: '评审状态', width: 97.438, defaultVisible: true },
   { key: 'sourceType', label: '来源', width: 73.078, defaultVisible: true },
   { key: 'defectCount', label: '关联缺陷', width: 73.078, defaultVisible: true },
   { key: 'reviewedByName', label: '评审人', width: 110, defaultVisible: false },
   { key: 'reviewedAt', label: '评审时间', width: 156, defaultVisible: false },
-  { key: 'executorName', label: '执行人', width: 104, defaultVisible: false },
-  { key: 'executedAt', label: '执行时间', width: 156, defaultVisible: false },
   { key: 'workspaceName', label: '所属空间', width: 128, defaultVisible: false },
   { key: 'createdByName', label: '创建人', width: 130, defaultVisible: false },
   { key: 'createdAt', label: '创建时间', width: 176, defaultVisible: false },
@@ -259,12 +256,6 @@ function formatColumnValue(row: CaseSummaryItem, key: string) {
       return row.reviewedByName || '-'
     case 'reviewedAt':
       return formatCaseDateTime(row.reviewedAt)
-    case 'executionStatus':
-      return row.executionStatus || '-'
-    case 'executorName':
-      return row.executorName || '-'
-    case 'executedAt':
-      return formatCaseDateTime(row.executedAt)
     case 'workspaceName':
       return row.workspaceName || row.workspaceCode || '-'
     case 'directoryName':
@@ -289,16 +280,9 @@ function isAiGeneratedCase(item: CaseSummaryItem) {
 }
 
 function getReviewStatusVisual(status: string) {
-  if (status === 'PASSED') return { label: '已确认', tone: 'success' }
-  if (status === 'REJECTED') return { label: '不通过', tone: 'danger' }
-  return { label: '待确认', tone: 'warning' }
-}
-
-function getExecutionStatusVisual(status: string) {
-  if (status === 'PASSED') return { label: '通过', tone: 'success' }
-  if (status === 'FAILED') return { label: '失败', tone: 'danger' }
-  if (status === 'BLOCKED') return { label: '阻塞', tone: 'warning' }
-  return { label: '未执行', tone: 'default' }
+  if (status === 'PASSED') return { label: '已通过', tone: 'success' }
+  if (status === 'REJECTED') return { label: '未通过', tone: 'danger' }
+  return { label: '待评审', tone: 'warning' }
 }
 
 function getCaseSourceVisual(sourceType: string) {
@@ -360,20 +344,12 @@ async function loadCases() {
       keyword: props.filter.keyword,
       priority: props.filter.priority,
       reviewStatus: props.filter.reviewStatus,
-      executionStatus: props.filter.executionStatus,
+      sourceType: props.filter.sourceType,
+      createdByName: props.filter.createdByName,
     })
     if (requestSeq === loadRequestSeq) {
       const filteredItems = page.items.filter((item) => {
-        if (props.filter.executorName && item.executorName !== props.filter.executorName) {
-          return false
-        }
-        if (props.filter.createdByName && item.createdByName !== props.filter.createdByName) {
-          return false
-        }
-        if (props.filter.workspaceCode && item.workspaceCode !== props.filter.workspaceCode) {
-          return false
-        }
-        return true
+        return !props.filter.workspaceCode || item.workspaceCode === props.filter.workspaceCode
       })
       applyPage({
         ...page,
@@ -837,14 +813,6 @@ defineExpose({
                 :class="`is-${getReviewStatusVisual(item.reviewStatus).tone}`"
               >
                 {{ getReviewStatusVisual(item.reviewStatus).label }}
-              </span>
-              <span
-                v-else-if="column.key === 'executionStatus'"
-                class="case-list-panel__execution"
-                :class="`is-${getExecutionStatusVisual(item.executionStatus).tone}`"
-              >
-                <span class="case-list-panel__execution-dot" />
-                {{ getExecutionStatusVisual(item.executionStatus).label }}
               </span>
               <span
                 v-else-if="column.key === 'sourceType'"

@@ -375,6 +375,11 @@ const mapAssignableMember = (item: WorkspaceAssignableMemberItem) => ({
 })
 
 const loadPlans = async () => {
+  if (!selectedWorkspaceCode.value || selectedWorkspaceCode.value === 'ALL') {
+    isLoading.value = false
+    return
+  }
+
   isLoading.value = true
   loadError.value = ''
   try {

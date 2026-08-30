@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   AlertTriangle,
@@ -18,12 +18,13 @@ import {
   X,
   XCircle,
 } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import { caseAiApi, type AiGenerationTaskEventItem, type AiGenerationTaskItem, type AiRequirementAssetItem } from '@/entities/case-ai'
 import { caseApi, type CaseDirectoryNode, type CaseDirectoryWorkspace } from '@/entities/case'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction } from '@/shared/ui'
 
 type OutputMode = 'STREAM' | 'COMPLETE'
 type DirectoryPickerMode = 'manual' | 'document'
@@ -88,6 +89,7 @@ const importedRequirementContent = ref('')
 const requirementAssets = ref<AiRequirementAssetItem[]>([])
 
 const requirementFileInput = ref<HTMLInputElement | null>(null)
+const logListRef = ref<HTMLElement | null>(null)
 const directoryWorkspaces = ref<CaseDirectoryWorkspace[]>([])
 const directoryOptions = ref<DirectoryOption[]>([])
 const manualDirectoryBasePath = ref('')
@@ -111,10 +113,9 @@ let taskPollingTimer: number | null = null
 let streamAbortController: AbortController | null = null
 let streamTaskId: string | null = null
 let streamRefreshTimer: number | null = null
+let navigatedCompletedTaskId = ''
 let syncingManualDirectoryPath = false
 let syncingDocumentDirectoryPath = false
-
-const IMAGE_UNSUPPORTED_CONFIRM_MESSAGE = '当前生成模型不支持图片识别。可以取消生成，或忽略图片素材，仅基于文档文本继续生成。'
 
 const isAllScope = computed(() => selectedWorkspaceCode.value === 'ALL')
 
@@ -227,18 +228,29 @@ const canGenerateDocument = computed(() => !documentGenerateBlockReason.value)
 const selectedRequirementAssetIds = computed(() => requirementAssets.value.map(item => item.id))
 const activeProcessRecord = computed(() => getCurrentProcessRecord())
 const activeProcessGeneratedCount = computed(() => activeProcessRecord.value?.generatedCount ?? activeProcessRecord.value?.generatedCases?.length ?? 0)
-const activeProcessReviewedCount = computed(() => activeProcessRecord.value?.reviewResult?.caseDecisions?.length ?? 0)
-const activeProcessTotal = computed(() => Math.max(activeProcessGeneratedCount.value, 12))
+const activeProcessReviewedCount = computed(() => activeProcessRecord.value?.reviewResult?.caseDecisions?.length
+  ?? activeProcessRecord.value?.events?.filter(event => event.eventType === 'CASE_REVIEWED').length
+  ?? 0)
+const activeProcessTotal = computed<number | null>(() => {
+  const estimate = activeProcessRecord.value?.estimatedCaseCount
+  return estimate && estimate > 0 ? estimate : null
+})
 const activeProcessStep = computed(() => {
   const record = activeProcessRecord.value
   if (!record) return 0
-  if (record.status === 'COMPLETED') return 5
+  if (record.status === 'COMPLETED') return generationSteps.length
   if (record.status === 'REVIEWING') return 3
-  return Math.max(0, Math.min(4, Number(record.currentStep ?? (record.status === 'GENERATING' ? 2 : 0))))
+  if (record.status === 'GENERATING') return 2
+  if (record.status === 'PENDING') return 0
+  return Math.max(0, Math.min(generationSteps.length - 1, Number(record.currentStep ?? 1) - 1))
 })
 const activeProcessPercent = computed(() => {
-  if (activeProcessRecord.value?.status === 'COMPLETED') return 100
-  return Math.min(99, Math.round(((activeProcessGeneratedCount.value + activeProcessReviewedCount.value) / Math.max(activeProcessTotal.value * 2, 1)) * 100))
+  const status = activeProcessRecord.value?.status
+  if (status === 'COMPLETED') return 100
+  if (status === 'REVIEWING') return activeProcessReviewedCount.value > 0 ? 85 : 75
+  if (status === 'GENERATING') return activeProcessGeneratedCount.value > 0 ? 50 : 25
+  if (status === 'FAILED' || status === 'CANCELED') return 100
+  return 10
 })
 const activeProcessElapsed = computed(() => {
   const createdAt = activeProcessRecord.value?.createdAt
@@ -249,6 +261,71 @@ const activeProcessElapsed = computed(() => {
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m${seconds % 60}s`
 })
 const generationSteps = ['解析需求', '提取测试点', '生成用例', 'AI 评审', '保存结果']
+
+const activeProcessTitle = computed(() => {
+  const status = activeProcessRecord.value?.status
+  if (status === 'FAILED') return '生成任务失败'
+  if (status === 'CANCELED') return '生成任务已取消'
+  if (status === 'COMPLETED') return '生成任务完成'
+  return '生成任务进行中'
+})
+
+function getEventTone(event: AiGenerationTaskEventItem) {
+  const level = String(event.level || '').toUpperCase()
+  if (level === 'ERROR') return 'error'
+  if (level === 'WARN' || level === 'WARNING') return 'warn'
+  if (level === 'SUCCESS') return 'success'
+  if (event.eventType === 'CASE_REVIEWED' && event.payloadJson) {
+    try {
+      const status = String(JSON.parse(event.payloadJson).status || '').toUpperCase()
+      if (['APPROVED', 'SUPPLEMENTED'].includes(status)) return 'success'
+      if (['OPTIMIZED', 'CONFIRM_REQUIRED'].includes(status)) return 'warn'
+      if (['NOT_RECOMMENDED', 'REJECTED'].includes(status)) return 'error'
+    } catch {
+      // Fall back to the event type when historical payload is invalid.
+    }
+  }
+  if (['CASE_GENERATED', 'CASE_SUPPLEMENTED', 'GENERATION_COMPLETED', 'REVIEW_COMPLETED', 'FINAL_CASES_READY', 'TASK_COMPLETED', 'IMAGE_ASSETS_ACCEPTED'].includes(event.eventType)) {
+    return 'success'
+  }
+  if (['OPTIMIZED', 'CONFIRM_REQUIRED'].some(status => event.message.includes(status))) return 'warn'
+  if (['NOT_RECOMMENDED', 'REJECTED'].some(status => event.message.includes(status))) return 'error'
+  return 'info'
+}
+
+function getReviewStatusLabel(status: string | null | undefined) {
+  const labels: Record<string, string> = {
+    APPROVED: '通过',
+    OPTIMIZED: '已优化',
+    SUPPLEMENTED: '已补充',
+    CONFIRM_REQUIRED: '建议确认',
+    NOT_RECOMMENDED: '不推荐',
+    REJECTED: '需重生成',
+  }
+  return labels[String(status || '').toUpperCase()] || '建议优化'
+}
+
+function formatProcessEventMessage(event: AiGenerationTaskEventItem) {
+  const index = event.itemIndex == null ? null : event.itemIndex + 1
+  if (event.eventType === 'CASE_GENERATED') {
+    return `生成用例 #${index ?? '-'}：${event.itemTitle || '用例'}`
+  }
+  if (event.eventType === 'CASE_SUPPLEMENTED') {
+    return `评审补充用例 #${index ?? '-'}：${event.itemTitle || '用例'}`
+  }
+  if (event.eventType === 'CASE_REVIEWED') {
+    let status: string | null = null
+    if (event.payloadJson) {
+      try {
+        status = JSON.parse(event.payloadJson).status || null
+      } catch {
+        // Keep the generic review label when historical payload is invalid.
+      }
+    }
+    return `评审用例 #${index ?? '-'}：${event.itemTitle || '用例'} ${getReviewStatusLabel(status)}`
+  }
+  return event.message
+}
 function getTaskSortTimestamp(task: AiGenerationTaskItem) {
   return new Date(task.updatedAt || task.createdAt || 0).getTime()
 }
@@ -496,6 +573,7 @@ function mergeTaskRecord(incoming: AiGenerationTaskItem, existing?: AiGeneration
 }
 
 function updateTaskRecordSnapshot(record: AiGenerationTaskItem) {
+  const previousRecord = latestTaskRecord.value?.taskId === record.taskId ? latestTaskRecord.value : null
   const nextRecord = mergeTaskRecord(record, latestTaskRecord.value)
   latestTaskRecord.value = nextRecord
   const existingIndex = taskRecords.value.findIndex(item => item.taskId === nextRecord.taskId)
@@ -505,6 +583,13 @@ function updateTaskRecordSnapshot(record: AiGenerationTaskItem) {
     taskRecords.value = [nextRecord, ...taskRecords.value]
   }
   syncEventStream(nextRecord)
+  if (processDialogVisible.value && previousRecord && isRunningTask(previousRecord) && nextRecord.status === 'COMPLETED' && navigatedCompletedTaskId !== nextRecord.taskId) {
+    navigatedCompletedTaskId = nextRecord.taskId
+    processDialogVisible.value = false
+    stopTaskPolling()
+    stopEventStream()
+    void nextTick(() => openTaskResult(nextRecord.taskId))
+  }
 }
 
 function shouldRefreshForEvent(event: AiGenerationTaskEventItem) {
@@ -930,6 +1015,11 @@ async function openTaskProcessDialog(taskId?: string) {
   }
 
   activeProcessTaskId.value = latestTaskRecord.value.taskId
+  navigatedCompletedTaskId = ''
+  if (latestTaskRecord.value.status === 'COMPLETED') {
+    openTaskResult(latestTaskRecord.value.taskId)
+    return
+  }
   processDialogVisible.value = true
   syncEventStream(latestTaskRecord.value)
 }
@@ -1002,35 +1092,6 @@ async function handleGenerateCases(source: DirectoryPickerMode = 'manual') {
 
   try {
     const resolvedDirectory = await ensureDirectoryPath(directoryPath)
-    let finalAssetIds = selectedAssetIds
-    let ignoredAssetCount = 0
-
-    if (source === 'document' && selectedAssetIds.length) {
-      try {
-        await caseAiApi.validateImageSupport(targetWorkspaceCode.value, { assetIds: selectedAssetIds })
-      } catch (error) {
-        const message = getRequestErrorMessage(error)
-        try {
-          await ElMessageBox.confirm(
-            message || IMAGE_UNSUPPORTED_CONFIRM_MESSAGE,
-            '模型不支持图片',
-            {
-              type: 'warning',
-              confirmButtonText: '忽略图片继续生成',
-              cancelButtonText: '取消生成',
-              distinguishCancelAndClose: true,
-            },
-          )
-        } catch {
-          return
-        }
-
-        ignoredAssetCount = selectedAssetIds.length
-        finalAssetIds = []
-        ElMessage.warning(`已忽略 ${ignoredAssetCount} 个图片素材，将按纯文本需求继续生成。`)
-      }
-    }
-
     const baseRecord = await caseAiApi.createTask(targetWorkspaceCode.value, {
       workspaceCode: targetWorkspaceCode.value,
       requirementTitle,
@@ -1038,8 +1099,8 @@ async function handleGenerateCases(source: DirectoryPickerMode = 'manual') {
       outputMode: manualForm.value.outputMode,
       directoryId: resolvedDirectory.directoryId,
       directoryName: resolvedDirectory.directoryName ?? directoryPath,
-      assetIds: finalAssetIds,
-      ignoredAssetCount,
+      assetIds: selectedAssetIds,
+      ignoredAssetCount: 0,
     })
 
     if (source === 'document') {
@@ -1047,6 +1108,7 @@ async function handleGenerateCases(source: DirectoryPickerMode = 'manual') {
     } else {
       manualTaskRecordId.value = baseRecord.taskId
     }
+    navigatedCompletedTaskId = ''
     activeProcessTaskId.value = baseRecord.taskId
     updateTaskRecordSnapshot(baseRecord)
     processDialogVisible.value = true
@@ -1068,15 +1130,14 @@ async function cancelCurrentTask() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      '取消后当前任务将停止继续生成，是否确认取消？',
-      '取消生成',
-      {
-        type: 'warning',
-        confirmButtonText: '确认取消',
-        cancelButtonText: '继续生成',
-      },
-    )
+    await confirmAction({
+      title: '确认取消生成任务？',
+      message: `取消后已生成的 ${currentRecord.generatedCount ?? currentRecord.generatedCases?.length ?? 0} 条用例将不会保存，此操作不可恢复。`,
+      confirmText: '确认取消',
+      cancelText: '继续等待',
+      tone: 'warning',
+      variant: 'figma-danger',
+    })
   } catch {
     return
   }
@@ -1085,6 +1146,10 @@ async function cancelCurrentTask() {
   try {
     updateTaskRecordSnapshot(await caseAiApi.cancelTask(targetWorkspaceCode.value, currentRecord.taskId))
     await refreshLatestTaskRecord()
+    processDialogVisible.value = false
+    activeProcessTaskId.value = ''
+    stopEventStream()
+    stopTaskPolling()
     ElMessage.success('已取消当前生成任务')
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
@@ -1160,6 +1225,17 @@ watch(
   },
 )
 
+watch(
+  () => activeProcessRecord.value?.events?.length ?? 0,
+  () => {
+    void nextTick(() => {
+      if (logListRef.value) {
+        logListRef.value.scrollTop = logListRef.value.scrollHeight
+      }
+    })
+  },
+)
+
 onMounted(async () => {
   await loadWorkspaces()
   await refreshPageData()
@@ -1183,7 +1259,7 @@ onBeforeUnmount(() => {
           <header class="figma-ai-case-generation__process-header">
             <div class="figma-ai-case-generation__process-title">
               <span class="figma-ai-case-generation__status-dot"></span>
-              <strong>生成任务进行中</strong>
+              <strong>{{ activeProcessTitle }}</strong>
             </div>
             <div class="figma-ai-case-generation__process-actions">
               <span>耗时 {{ activeProcessElapsed }}</span>
@@ -1216,9 +1292,9 @@ onBeforeUnmount(() => {
               </template>
             </div>
             <div class="figma-ai-case-generation__process-metrics">
-              <div><strong>{{ activeProcessGeneratedCount }}</strong><span>/ {{ activeProcessTotal }} 已生成</span></div>
+              <div><strong>{{ activeProcessGeneratedCount }}</strong><span v-if="activeProcessTotal !== null">/ {{ activeProcessTotal }} 已生成</span><span v-else>已生成</span></div>
               <i></i>
-              <div><strong>{{ activeProcessReviewedCount }}</strong><span>/ {{ activeProcessTotal }} 已评审</span></div>
+              <div><strong>{{ activeProcessReviewedCount }}</strong><span v-if="activeProcessTotal !== null">/ {{ activeProcessTotal }} 已评审</span><span v-else>已评审</span></div>
               <div class="figma-ai-case-generation__progress">
                 <div><span :style="{ width: activeProcessPercent + '%' }"></span></div>
                 <em>{{ activeProcessPercent }}%</em>
@@ -1228,14 +1304,14 @@ onBeforeUnmount(() => {
 
           <section class="figma-ai-case-generation__log-panel">
             <div class="figma-ai-case-generation__section-caption">生成日志</div>
-            <div v-if="activeProcessRecord.events?.length" class="figma-ai-case-generation__log-list">
+            <div v-if="activeProcessRecord.events?.length" ref="logListRef" class="figma-ai-case-generation__log-list">
               <div
                 v-for="event in activeProcessRecord.events"
                 :key="event.id || event.seq"
                 class="figma-ai-case-generation__log-row"
-                :class="'is-' + String(event.level || 'info').toLowerCase()"
+                :class="'is-' + getEventTone(event)"
               >
-                <time>{{ formatEventTime(event.createdAt) }}</time><span></span><p>{{ event.message }}</p>
+                <time>{{ formatEventTime(event.createdAt) }}</time><span></span><p :title="event.message">{{ formatProcessEventMessage(event) }}</p>
               </div>
             </div>
             <div v-else class="figma-ai-case-generation__log-empty">
@@ -1256,17 +1332,16 @@ onBeforeUnmount(() => {
               <div><dt>输出模式</dt><dd>{{ activeProcessRecord.outputMode === 'STREAM' ? '⚡ 实时流式' : '📋 完整输出' }}</dd></div>
             </dl>
           </section>
-          <section v-if="activeProcessRecord.outputMode === 'STREAM'" class="figma-ai-case-generation__preview-section">
+          <section v-if="activeProcessRecord.outputMode === 'STREAM' && activeProcessRecord.generatedCases?.length" class="figma-ai-case-generation__preview-section">
             <div class="figma-ai-case-generation__section-caption">实时预览（{{ activeProcessRecord.generatedCases?.length || 0 }} 条）</div>
             <div class="figma-ai-case-generation__preview-list">
               <article v-for="(item, index) in activeProcessRecord.generatedCases" :key="index" class="figma-ai-case-generation__preview-item">
                 <span :class="'is-' + String(item.priority || 'P2').toLowerCase()">{{ item.priority || 'P2' }}</span>
                 <p>{{ item.title || '生成用例 #' + (index + 1) }}</p>
               </article>
-              <div v-if="!activeProcessRecord.generatedCases?.length" class="figma-ai-case-generation__preview-empty">用例生成后将在这里实时展示</div>
             </div>
           </section>
-          <section v-else class="figma-ai-case-generation__complete-output">
+          <section v-else-if="activeProcessRecord.outputMode !== 'STREAM'" class="figma-ai-case-generation__complete-output">
             <LoaderCircle :size="28" />
             <strong>完整输出模式</strong>
             <span>生成和评审完成后统一展示</span>
@@ -3546,6 +3621,7 @@ button.figma-ai-case-generation__dropzone:hover {
   overflow-y: auto;
   padding: 0 28px 20px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  scroll-behavior: smooth;
 }
 
 .figma-ai-case-generation__log-row {
@@ -3574,10 +3650,14 @@ button.figma-ai-case-generation__dropzone:hover {
 }
 
 .figma-ai-case-generation__log-row p {
+  min-width: 0;
+  overflow: hidden;
   margin: 0;
   color: var(--ai-text-2);
   font-size: 12px;
   line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .figma-ai-case-generation__log-row.is-success > span {

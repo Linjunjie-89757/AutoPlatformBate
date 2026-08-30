@@ -102,7 +102,7 @@ export interface AiInvalidCaseItem {
 
 export interface AiReviewCaseDecision {
   caseIndex: number
-  status: string
+  status: AiReviewStatus
   summary: string | null
   coverageComment: string | null
   evidenceComment: string | null
@@ -110,7 +110,28 @@ export interface AiReviewCaseDecision {
   optimizationReason?: string | null
   supplementReason?: string | null
   coverageGap?: string | null
+  candidateCaseId?: string | null
+  suggestedAction?: AiSuggestedAction | null
+  score?: number | null
+  confidence?: number | null
+  reason?: string | null
+  suggestedCase?: GeneratedAiCaseItem | null
+  mergeTargetCandidateIds?: string[] | null
+  sourceVersion?: number | null
+  sourceContentHash?: string | null
 }
+
+export type AiReviewStatus = 'APPROVED' | 'CHANGE_SUGGESTED' | 'CONFIRM_REQUIRED' | 'NOT_RECOMMENDED'
+
+export type AiSuggestedAction = 'KEEP' | 'MODIFY' | 'EXCLUDE' | 'MERGE'
+
+export type AiCandidateHumanDecision =
+  | 'PENDING'
+  | 'KEEP_ORIGINAL'
+  | 'APPLIED_SUGGESTION'
+  | 'MANUAL_EDITED'
+  | 'EXCLUDED'
+  | 'MERGED'
 
 export interface GeneratedAiCaseItem {
   title: string
@@ -176,6 +197,51 @@ export interface AiGenerationTaskEventItem {
   createdAt: string | null
 }
 
+export interface AiCaseAdoptionItem {
+  caseIndex: number
+  status: 'ADOPTING' | 'ADOPTED' | 'ADOPT_FAILED'
+  failureReason: string | null
+  directoryId: number | null
+  createdCaseId: number | null
+  attemptCount: number | null
+  updatedAt: string | null
+  candidateCaseId?: string | null
+  adoptedContentVersion?: number | null
+  adoptedContentSource?: 'ORIGINAL' | 'AI_SUGGESTED' | 'MANUAL_EDITED' | 'MERGED' | null
+  idempotencyKey?: string | null
+}
+
+export interface AiCaseCandidateItem {
+  candidateCaseId: string
+  displayIndex: number
+  origin: 'GENERATOR' | 'REVIEW_SUPPLEMENTED'
+  originalCase: GeneratedAiCaseItem
+  suggestedCase: GeneratedAiCaseItem | null
+  currentCase: GeneratedAiCaseItem
+  reviewStatus: AiReviewStatus | null
+  suggestedAction: AiSuggestedAction | null
+  reviewScore: number | null
+  reviewConfidence: number | null
+  reviewReason: string | null
+  mergeTargetCandidateIds: string[]
+  humanDecision: AiCandidateHumanDecision
+  contentVersion: number
+  contentHash: string
+  suggestionSourceVersion: number | null
+  suggestionSourceHash: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface AiCaseCandidateVersionPayload {
+  expectedVersion: number
+  expectedContentHash: string
+}
+
+export interface UpdateAiCaseCandidatePayload extends AiCaseCandidateVersionPayload {
+  currentCase: GeneratedAiCaseItem
+}
+
 export interface AiGenerationTaskItem {
   taskId: string
   workspaceCode: string
@@ -194,6 +260,7 @@ export interface AiGenerationTaskItem {
   provider: string | null
   model: string | null
   generatedCount: number | null
+  estimatedCaseCount?: number | null
   savedCaseCount: number | null
   warnings: string[]
   invalidCases: AiInvalidCaseItem[]
@@ -204,6 +271,7 @@ export interface AiGenerationTaskItem {
   events: AiGenerationTaskEventItem[]
   adoptedCaseIndexes: number[]
   deletedCaseIndexes: number[]
+  adoptions: AiCaseAdoptionItem[]
   cancelRequested: boolean
   sourceTaskId: string | null
   createdAt: string | null

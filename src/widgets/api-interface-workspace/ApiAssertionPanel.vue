@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, CopyDocument, Delete, MagicStick } from '@element-plus/icons-vue'
+import { ChevronDown, Plus, Zap } from '@lucide/vue'
 import ApiCodeEditor from './ApiCodeEditor.vue'
 
 interface AssertionOption {
@@ -118,9 +119,9 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
         <div class="api-assertion-toolbar">
           <el-dropdown trigger="click" @command="emitAddFromCommand">
             <button type="button" class="api-legacy-primary">
-              <span class="api-button-plus">+</span>
+              <Plus class="api-button-plus" :size="12" aria-hidden="true" />
               添加断言
-              <span class="api-button-chevron">⌄</span>
+              <ChevronDown class="api-button-chevron" :size="10" aria-hidden="true" />
             </button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -130,7 +131,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
           </el-dropdown>
           <el-dropdown trigger="click" @command="emitAddFromLatestResponse">
             <button type="button" class="api-assertion-batch-link" :disabled="!hasLatestResponseBody" :title="fastExtractionTitle">
-              <span class="api-button-spark">✦</span>
+              <Zap class="api-button-spark" :size="10" aria-hidden="true" />
               快速生成
             </button>
             <template #dropdown>

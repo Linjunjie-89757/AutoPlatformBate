@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { X } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -23,7 +24,7 @@ import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import { AttachmentFileWall, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
+import { AttachmentFileWall, confirmAction, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
 
 type DefectActivityRecord = Record<string, unknown>
 type DetailTab = 'basic' | 'detail' | 'case' | 'comment' | 'history'
@@ -207,11 +208,12 @@ async function unlinkCase(caseItem: DefectCaseRow) {
   }
 
   try {
-    await ElMessageBox.confirm('确认取消关联当前用例吗？', '取消关联用例', {
-      type: 'warning',
-      confirmButtonText: '取消关联',
-      cancelButtonText: '保留',
-      confirmButtonClass: 'el-button--danger',
+    await confirmAction({
+      title: '取消关联用例',
+      message: '确认取消关联当前用例吗？',
+      confirmText: '取消关联',
+      cancelText: '保留',
+      tone: 'warning',
     })
   } catch {
     return
@@ -743,7 +745,7 @@ onBeforeUnmount(() => {
             <span>编辑</span>
           </button>
           <button type="button" class="defect-detail-drawer__close-button" aria-label="关闭" @click="closeDrawer">
-            ×
+            <X :size="16" aria-hidden="true" />
           </button>
         </div>
       </header>

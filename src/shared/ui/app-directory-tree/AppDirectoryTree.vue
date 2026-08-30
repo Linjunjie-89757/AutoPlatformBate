@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Fold, Folder, FolderOpened, MoreFilled, Plus, Search } from '@element-plus/icons-vue'
 
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+import AppDirectoryMoreButton from './AppDirectoryMoreButton.vue'
 
 export interface AppDirectoryTreeNode {
   id: string
@@ -130,7 +131,7 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
       :current-node-key="selectedNodeId"
       :default-expanded-keys="defaultExpandedKeys"
       highlight-current
-      :expand-on-click-node="false"
+      :expand-on-click-node="variant === 'figma-compact'"
       @node-click="handleNodeClick"
       @node-expand="handleNodeExpand"
       @node-collapse="handleNodeCollapse"
@@ -152,35 +153,40 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
               :src="figmaCaseIcons.treeFolder"
               alt=""
             />
-            <span class="app-directory-tree__node-label">{{ data.label }}</span>
+            <span
+              class="app-directory-tree__node-label"
+              :class="{ 'is-root': data.type === 'root' }"
+            >{{ data.label }}</span>
             <span v-if="typeof data.count === 'number'" class="app-directory-tree__node-count">{{ data.count }}</span>
           </div>
 
           <div class="app-directory-tree__node-actions" @click.stop>
-            <el-button
+            <button
               v-if="showCreate && !collapseCreateIntoMore && data.canCreate !== false"
-              text
+              type="button"
               class="app-directory-tree__icon-button"
               aria-label="新建子目录"
               title="新建子目录"
               @click.stop="emit('create', data)"
             >
-              <el-icon><Plus /></el-icon>
-            </el-button>
+              <Plus :size="13" />
+            </button>
             <el-dropdown
               v-if="showMore && data.canMore !== false"
               trigger="click"
               @command="(command: string | number | object) => emit('command', { command, node: data })"
             >
-              <el-button
-                text
+              <AppDirectoryMoreButton v-if="variant === 'figma-compact'" @click.stop />
+              <button
+                v-else
+                type="button"
                 class="app-directory-tree__icon-button"
                 aria-label="更多操作"
                 title="更多操作"
                 @click.stop
               >
                 <el-icon><MoreFilled /></el-icon>
-              </el-button>
+              </button>
               <template #dropdown>
                 <slot name="dropdown" :node="data" />
               </template>
@@ -319,6 +325,7 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree__node {
+  position: relative;
   display: flex;
   min-width: 0;
   width: 100%;
@@ -330,12 +337,15 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 
 .app-directory-tree__node-main {
   display: flex;
+  flex: 1;
   min-width: 0;
   align-items: center;
   gap: 7px;
 }
 
 .app-directory-tree__node-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -368,17 +378,19 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
   transition: opacity 150ms ease;
 }
 
-.app-directory-tree--collapse-create .app-directory-tree__node-main {
-  flex: 1;
-}
-
 .app-directory-tree--collapse-create .app-directory-tree__node-count {
-  margin-left: auto;
+  margin-right: 8px;
   transition: opacity 150ms ease;
 }
 
 .app-directory-tree--collapse-create .app-directory-tree__node-actions {
-  min-width: 20px;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  margin-left: 0;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
@@ -398,11 +410,17 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 20px;
   padding: 0;
   border-radius: 4px;
+  border: 0;
+  background: transparent;
   color: var(--app-text-muted);
+  cursor: pointer;
 }
 
 .app-directory-tree__icon-button:hover {
@@ -411,8 +429,8 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree--figma-compact {
-  width: 240px;
-  flex: 0 0 240px;
+  width: 250px;
+  flex: 0 0 250px;
   height: calc(100dvh - 86px);
   border: 0;
   border-right: 1px solid var(--app-border);
@@ -449,11 +467,14 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__title {
-  min-height: 32px;
-  padding: 0 10.5px;
+  box-sizing: border-box;
+  height: 33px;
+  min-height: 33px;
+  padding: 3.5px 14px 4.5px;
   border-bottom: 1px solid #e5e6eb;
   color: var(--app-text-muted);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__title strong {
@@ -477,7 +498,17 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__tree :deep(.el-tree-node__content:hover) {
-  background: var(--app-bg-subtle);
+  background: #f4f6fa;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__tree :deep(.el-tree-node__expand-icon) {
+  width: 12px;
+  height: 12px;
+  margin-right: 0;
+  padding: 0;
+  color: var(--app-text-subtle);
+  font-size: 12px;
+  line-height: 12px;
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
@@ -486,7 +517,15 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__node-main {
-  gap: 5.25px;
+  gap: 6px;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__node-label {
+  font-weight: 400;
+}
+
+.app-directory-tree--figma-compact .app-directory-tree__node-label.is-root {
+  font-weight: 600;
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__node-icon {
@@ -508,9 +547,19 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__node-count {
+  flex: 0 0 auto;
   margin-left: auto;
   color: var(--app-text-subtle);
   font-size: 11px;
+}
+
+.app-directory-tree--collapse-create .app-directory-tree__tree :deep(.el-tree-node.is-current > .el-tree-node__content) .app-directory-tree__node-count {
+  opacity: 0;
+}
+
+.app-directory-tree--collapse-create .app-directory-tree__tree :deep(.el-tree-node.is-current > .el-tree-node__content) .app-directory-tree__node-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .app-directory-tree--figma-compact .app-directory-tree__icon-button {

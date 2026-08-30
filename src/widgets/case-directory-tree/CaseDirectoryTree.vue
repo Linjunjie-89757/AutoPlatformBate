@@ -65,6 +65,7 @@ function mapCaseNodeToDirectoryNode(node: CaseTreeNode): CaseDirectoryTreeNode {
     id: node.id,
     label: node.label,
     type: node.type,
+    count: node.count,
     canCreate: props.canCreate !== false && node.type !== 'root',
     canMore: node.type === 'workspace'
       ? props.canCreate !== false
@@ -184,7 +185,7 @@ function handleModuleCommand(payload: { command: string | number | object; node:
 <template>
   <AppDirectoryTree
     v-model:search="searchKeyword"
-    title="目录树"
+    title="用例目录"
     search-placeholder="搜索目录"
     variant="figma-compact"
     :nodes="filteredTreeNodes"

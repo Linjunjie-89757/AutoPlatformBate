@@ -41,7 +41,7 @@ public class CaseImportDomainService {
     private static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
     private static final String TEMPLATE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static final List<String> HEADERS = List.of(
-            "用例标题*", "用例类型", "优先级", "前置条件", "测试步骤", "预期结果", "状态");
+            "用例标题*", "用例类型", "优先级", "前置条件", "测试步骤", "预期结果");
 
     private final CaseDomainService caseDomainService;
     private final CaseMapper caseMapper;
@@ -72,13 +72,12 @@ public class CaseImportDomainService {
             }
             dataSheet.createFreezePane(0, 1);
             dataSheet.setAutoFilter(new CellRangeAddress(0, 0, 0, HEADERS.size() - 1));
-            int[] widths = {32, 14, 12, 36, 48, 48, 12};
+            int[] widths = {32, 14, 12, 36, 48, 48};
             for (int index = 0; index < widths.length; index++) {
                 dataSheet.setColumnWidth(index, widths[index] * 256);
             }
             addListValidation(dataSheet, 1, new String[]{"功能", "回归", "异常"});
             addListValidation(dataSheet, 2, new String[]{"P0", "P1", "P2", "P3"});
-            addListValidation(dataSheet, 6, new String[]{"启用", "草稿", "归档"});
 
             Sheet instructionSheet = workbook.createSheet("填写说明");
             String[][] instructions = {
@@ -86,7 +85,6 @@ public class CaseImportDomainService {
                     {"用例标题", "必填，最多 255 个字符"},
                     {"用例类型", "功能、回归、异常；留空默认功能"},
                     {"优先级", "P0、P1、P2、P3；留空默认 P1"},
-                    {"状态", "启用、草稿、归档；留空默认启用"},
                     {"导入位置", "工作空间和用例路径在上传时选择，不在 Excel 中填写"}
             };
             for (int rowIndex = 0; rowIndex < instructions.length; rowIndex++) {
@@ -154,7 +152,6 @@ public class CaseImportDomainService {
                     row.caseType(),
                     row.priority(),
                     "IMPORTED",
-                    row.caseStatus(),
                     null,
                     row.precondition(),
                     row.steps(),
@@ -208,8 +205,7 @@ public class CaseImportDomainService {
                             normalizePriority(cellValue(row, findColumn(columns, "优先级", "priority"), formatter)),
                             cellValue(row, findColumn(columns, "前置条件", "precondition"), formatter),
                             cellValue(row, findColumn(columns, "测试步骤", "步骤", "steps"), formatter),
-                            cellValue(row, findColumn(columns, "预期结果", "expectedResult"), formatter),
-                            normalizeCaseStatus(cellValue(row, findColumn(columns, "状态", "caseStatus"), formatter))));
+                            cellValue(row, findColumn(columns, "预期结果", "expectedResult"), formatter)));
                 } catch (IllegalArgumentException exception) {
                     issues.add(new CaseImportRowIssue(displayRow, blankToFallback(title, "-"), "FAILED", exception.getMessage()));
                 }
@@ -329,16 +325,6 @@ public class CaseImportDomainService {
         return normalized;
     }
 
-    private String normalizeCaseStatus(String value) {
-        String normalized = blankToFallback(value, "ACTIVE").toUpperCase(Locale.ROOT);
-        return switch (normalized) {
-            case "启用", "ACTIVE" -> "ACTIVE";
-            case "草稿", "DRAFT" -> "DRAFT";
-            case "归档", "ARCHIVED" -> "ARCHIVED";
-            default -> throw new IllegalArgumentException("状态仅支持启用、草稿或归档");
-        };
-    }
-
     private String normalizeTitleKey(String value) {
         return (value == null ? "" : value.trim()).toLowerCase(Locale.ROOT);
     }
@@ -375,8 +361,7 @@ public class CaseImportDomainService {
             String priority,
             String precondition,
             String steps,
-            String expectedResult,
-            String caseStatus
+            String expectedResult
     ) {
     }
 

@@ -29,9 +29,6 @@ public class CaseEntity extends BaseEntity {
     @TableField("source_type")
     private String sourceType;
 
-    @TableField("case_status")
-    private String caseStatus;
-
     @TableField("owner_id")
     private Long ownerId;
 

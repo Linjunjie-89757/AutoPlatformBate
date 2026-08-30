@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MagicStick, Search } from '@element-plus/icons-vue'
-import { Play as LucidePlay } from '@lucide/vue'
+import { Loader2, Play as LucidePlay } from '@lucide/vue'
 
 import type { AiCaseGenerationTabState, ApiAiGeneratedCaseResult, ApiAiCaseResultFilter } from './apiInterfaceTypes'
 
@@ -141,17 +141,7 @@ const emit = defineEmits<{
           >
             <div class="ai-generation-row-selector" @click.stop>
               <template v-if="row.status === 'generating' || row.runResult === '运行中'">
-                <svg class="ai-generation-row-loading" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 40 60 16" aria-hidden="true" focusable="false">
-                  <circle fill="currentColor" stroke="none" cx="6" cy="50" r="6">
-                    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.1s" />
-                  </circle>
-                  <circle fill="currentColor" stroke="none" cx="26" cy="50" r="6">
-                    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.2s" />
-                  </circle>
-                  <circle fill="currentColor" stroke="none" cx="46" cy="50" r="6">
-                    <animate attributeName="opacity" dur="1s" values="0;1;0" repeatCount="indefinite" begin="0.3s" />
-                  </circle>
-                </svg>
+                <Loader2 class="ai-generation-row-loading" :size="16" aria-hidden="true" />
               </template>
               <template v-else>
                 <span class="ai-generation-row-index">{{ index + 1 }}</span>
@@ -558,6 +548,11 @@ const emit = defineEmits<{
   width: 16px;
   height: 16px;
   color: #3b82f6;
+  animation: ai-generation-row-spin 1s linear infinite;
+}
+
+@keyframes ai-generation-row-spin {
+  to { transform: rotate(360deg); }
 }
 
 .ai-generation-row-checkbox {

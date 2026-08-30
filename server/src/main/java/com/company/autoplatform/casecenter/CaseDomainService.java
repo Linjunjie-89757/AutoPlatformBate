@@ -6,6 +6,7 @@ import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.user.UserEntity;
+import com.company.autoplatform.user.UserMapper;
 import com.company.autoplatform.user.UserService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceScope;
@@ -35,6 +36,7 @@ public class CaseDomainService {
     private final CaseDirectoryMapper caseDirectoryMapper;
     private final CaseExecutionAttachmentMapper caseExecutionAttachmentMapper;
     private final CaseExecutionAttachmentSupport caseExecutionAttachmentSupport;
+    private final UserMapper userMapper;
     private final UserService userService;
     private final WorkspaceService workspaceService;
 
@@ -43,6 +45,7 @@ public class CaseDomainService {
             CaseDirectoryMapper caseDirectoryMapper,
             CaseExecutionAttachmentMapper caseExecutionAttachmentMapper,
             CaseExecutionAttachmentSupport caseExecutionAttachmentSupport,
+            UserMapper userMapper,
             UserService userService,
             WorkspaceService workspaceService
     ) {
@@ -50,6 +53,7 @@ public class CaseDomainService {
         this.caseDirectoryMapper = caseDirectoryMapper;
         this.caseExecutionAttachmentMapper = caseExecutionAttachmentMapper;
         this.caseExecutionAttachmentSupport = caseExecutionAttachmentSupport;
+        this.userMapper = userMapper;
         this.userService = userService;
         this.workspaceService = workspaceService;
     }
@@ -62,7 +66,9 @@ public class CaseDomainService {
             String keyword,
             String priority,
             String reviewStatus,
-            String executionStatus
+            String executionStatus,
+            String sourceType,
+            String createdByName
     ) {
         String normalized = WorkspaceScope.normalize(workspaceCode);
         int safePageNo = pageNo == null || pageNo < 1 ? DEFAULT_PAGE_NO : pageNo;
@@ -105,6 +111,12 @@ public class CaseDomainService {
             query.eq(CaseEntity::getReviewStatus, normalizeReviewStatus(normalizedReviewStatus));
         }
 
+        String normalizedSourceType = blankToNull(sourceType);
+        if (normalizedSourceType != null) {
+            query.eq(CaseEntity::getSourceType, normalizedSourceType.toUpperCase());
+        }
+        applyCreatedByFilter(query, createdByName);
+
         String normalizedExecutionStatus = blankToNull(executionStatus);
         if (normalizedExecutionStatus != null) {
             query.eq(CaseEntity::getExecutionStatus, normalizeExecutionStatus(normalizedExecutionStatus));
@@ -131,6 +143,23 @@ public class CaseDomainService {
         return PageResponse.of(items, total, safePageNo, safePageSize);
     }
 
+    private void applyCreatedByFilter(LambdaQueryWrapper<CaseEntity> query, String displayName) {
+        String normalizedName = blankToNull(displayName);
+        if (normalizedName == null) {
+            return;
+        }
+        List<Long> userIds = userMapper.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .eq(UserEntity::getDisplayName, normalizedName))
+                .stream()
+                .map(UserEntity::getId)
+                .toList();
+        if (userIds.isEmpty()) {
+            query.eq(CaseEntity::getId, -1L);
+        } else {
+            query.in(CaseEntity::getCreatedBy, userIds);
+        }
+    }
+
     public CaseDetailResponse getCase(Long id, String workspaceCode) {
         CaseEntity entity = requireCase(id);
         validateReadable(entity, workspaceCode);
@@ -152,7 +181,6 @@ public class CaseDomainService {
         entity.setCaseType(request.caseType());
         entity.setPriority(request.priority());
         entity.setSourceType(request.sourceType());
-        entity.setCaseStatus(request.caseStatus());
         entity.setOwnerId(request.ownerId());
         entity.setExecutionStatus("NOT_RUN");
         entity.setExecutorId(null);
@@ -191,7 +219,6 @@ public class CaseDomainService {
         entity.setCaseType(request.caseType());
         entity.setPriority(request.priority());
         entity.setSourceType(request.sourceType());
-        entity.setCaseStatus(request.caseStatus());
         entity.setOwnerId(request.ownerId());
         entity.setCaseDirectoryId(directory == null ? null : directory.getId());
         entity.setPrecondition(request.precondition());
@@ -295,7 +322,6 @@ public class CaseDomainService {
                 item.getCaseType(),
                 item.getPriority(),
                 item.getSourceType(),
-                item.getCaseStatus(),
                 defaultExecutionStatus(item.getExecutionStatus()),
                 owner == null ? "-" : owner.getDisplayName(),
                 executor == null ? "-" : executor.getDisplayName(),
@@ -340,7 +366,6 @@ public class CaseDomainService {
                 item.getCaseType(),
                 item.getPriority(),
                 item.getSourceType(),
-                item.getCaseStatus(),
                 item.getOwnerId(),
                 owner == null ? "-" : owner.getDisplayName(),
                 defaultExecutionStatus(item.getExecutionStatus()),

@@ -258,8 +258,9 @@ export function useConfigAiManagement(workspaceCode: Readonly<Ref<string>>) {
     try {
       await confirmDelete({
         title: '删除 AI 连接',
-        message: `确认删除 AI 连接「${provider.connectionName}」吗？删除后不可恢复。`,
+        message: `确认删除「${provider.connectionName}」？删除后依赖该连接的 AI 能力将无法正常运行。`,
         confirmText: '确认删除',
+        density: 'compact',
       })
       await aiProviderApi.deleteProviderConnection(workspaceCode.value, provider.id)
       ElMessage.success('AI 连接已删除')

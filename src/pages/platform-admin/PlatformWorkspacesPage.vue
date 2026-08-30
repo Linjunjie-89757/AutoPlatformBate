@@ -12,8 +12,9 @@ import {
   ShieldAlert,
   Trash2,
   Users,
+  X,
 } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -23,6 +24,7 @@ import {
   type PlatformWorkspaceItem,
 } from '@/entities/platform-admin'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmDelete } from '@/shared/ui'
 
 type WorkspaceFilter = 'all' | 'active' | 'disabled'
 
@@ -153,11 +155,12 @@ function viewWorkspace(workspace: PlatformWorkspaceItem) {
 
 async function deleteWorkspace(workspace: PlatformWorkspaceItem) {
   try {
-    await ElMessageBox.confirm(
-      `确定删除工作区“${workspace.workspaceName}”吗？删除后不可恢复。`,
-      '删除工作区',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
-    )
+    await confirmDelete({
+      title: '删除工作区',
+      message: `确定删除工作区“${workspace.workspaceName}”吗？删除后不可恢复。`,
+      confirmText: '删除',
+      cancelText: '取消',
+    })
     await platformAdminApi.deleteWorkspace(workspace.workspaceCode)
     workspaces.value = workspaces.value.filter(item => item.workspaceCode !== workspace.workspaceCode)
     ElMessage.success('工作区已删除')
@@ -410,7 +413,7 @@ onMounted(() => {
             <h2 id="create-workspace-title">新建工作区</h2>
             <p>创建后可在工作区中继续配置成员和权限</p>
           </div>
-          <button type="button" aria-label="关闭" @click="closeCreateDialog">×</button>
+          <button type="button" aria-label="关闭" @click="closeCreateDialog"><X :size="16" /></button>
         </header>
         <div class="platform-workspaces-page__dialog-body">
           <label>
@@ -443,7 +446,7 @@ onMounted(() => {
             <h2 id="workspace-detail-title">工作区详情</h2>
             <p>查看平台工作区的基础信息和当前状态</p>
           </div>
-          <button type="button" aria-label="关闭" @click="detailWorkspace = null">×</button>
+          <button type="button" aria-label="关闭" @click="detailWorkspace = null"><X :size="16" /></button>
         </header>
         <div class="platform-workspaces-page__detail-body">
           <div class="platform-workspaces-page__detail-identity">

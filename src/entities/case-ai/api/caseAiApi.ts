@@ -1,6 +1,9 @@
 import { httpDelete, httpGet, httpPost, httpPut, request, type ApiResponse } from '@/shared/api/request'
 
 import type {
+  AiCaseAdoptionItem,
+  AiCaseCandidateItem,
+  AiCaseCandidateVersionPayload,
   AiCaseConfigResponse,
   AiGenerationTaskEventItem,
   AiGenerationTaskItem,
@@ -10,6 +13,7 @@ import type {
   SaveAiCaseConfigPayload,
   TestAiCaseConfigResponse,
   UpdateAiGenerationTaskPayload,
+  UpdateAiCaseCandidatePayload,
   ValidateAiGenerationImageSupportPayload,
 } from '../model/types'
 
@@ -291,6 +295,115 @@ export const caseAiApi = {
       },
     )
 
+    return unwrapApiResponse(payload)
+  },
+
+  async adoptCase(workspaceCode: string, taskId: string, caseIndex: number, directoryId: number) {
+    const payload = await httpPost<ApiResponse<AiCaseAdoptionItem>, { directoryId: number }>(
+      `/cases/ai/tasks/${taskId}/adoptions/${caseIndex}`,
+      { directoryId },
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async listCandidates(workspaceCode: string, taskId: string) {
+    const payload = await httpGet<ApiResponse<AiCaseCandidateItem[]>>(
+      `/cases/ai/tasks/${taskId}/candidates`,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async getCandidate(workspaceCode: string, taskId: string, candidateId: string) {
+    const payload = await httpGet<ApiResponse<AiCaseCandidateItem>>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}`,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async keepCandidateOriginal(
+    workspaceCode: string,
+    taskId: string,
+    candidateId: string,
+    data: AiCaseCandidateVersionPayload,
+  ) {
+    const payload = await httpPost<ApiResponse<AiCaseCandidateItem>, AiCaseCandidateVersionPayload>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}/keep-original`,
+      data,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async applyCandidateSuggestion(
+    workspaceCode: string,
+    taskId: string,
+    candidateId: string,
+    data: AiCaseCandidateVersionPayload,
+  ) {
+    const payload = await httpPost<ApiResponse<AiCaseCandidateItem>, AiCaseCandidateVersionPayload>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}/apply-suggestion`,
+      data,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async updateCandidateCurrentCase(
+    workspaceCode: string,
+    taskId: string,
+    candidateId: string,
+    data: UpdateAiCaseCandidatePayload,
+  ) {
+    const payload = await httpPut<ApiResponse<AiCaseCandidateItem>, UpdateAiCaseCandidatePayload>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}/current-case`,
+      data,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async excludeCandidate(
+    workspaceCode: string,
+    taskId: string,
+    candidateId: string,
+    data: AiCaseCandidateVersionPayload,
+  ) {
+    const payload = await httpPost<ApiResponse<AiCaseCandidateItem>, AiCaseCandidateVersionPayload>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}/exclude`,
+      data,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async restoreCandidate(
+    workspaceCode: string,
+    taskId: string,
+    candidateId: string,
+    data: AiCaseCandidateVersionPayload,
+  ) {
+    const payload = await httpPost<ApiResponse<AiCaseCandidateItem>, AiCaseCandidateVersionPayload>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}/restore`,
+      data,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
+  async adoptCandidate(
+    workspaceCode: string,
+    taskId: string,
+    candidateId: string,
+    directoryId: number,
+  ) {
+    const payload = await httpPost<ApiResponse<AiCaseAdoptionItem>, { directoryId: number }>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}/adopt`,
+      { directoryId },
+      { headers: workspaceHeaders(workspaceCode) },
+    )
     return unwrapApiResponse(payload)
   },
 }

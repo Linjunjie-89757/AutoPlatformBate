@@ -6,6 +6,7 @@ import {
   FolderOpen as LucideFolderOpen,
 } from '@lucide/vue'
 
+import AppDirectoryMoreButton from '@/shared/ui/app-directory-tree/AppDirectoryMoreButton.vue'
 import type { DirectoryNode } from './lib/apiDirectoryTree'
 
 const props = defineProps<{
@@ -43,7 +44,6 @@ const treeRef = ref<{
 
 const moreMenuTitle = '\u66f4\u591a\u64cd\u4f5c'
 const addChildDirectoryLabel = '\u6dfb\u52a0\u5b50\u76ee\u5f55'
-const addRootDirectoryLabel = '\u6dfb\u52a0\u9876\u7ea7\u76ee\u5f55'
 const addRequestLabel = '\u6dfb\u52a0\u8bf7\u6c42'
 const renameDirectoryLabel = '\u91cd\u547d\u540d\u76ee\u5f55'
 const deleteDirectoryLabel = '\u5220\u9664\u76ee\u5f55'
@@ -73,7 +73,7 @@ defineExpose({
     node-key="key"
     :default-expanded-keys="props.expandedKeys"
     :current-node-key="props.selectedKey"
-    :expand-on-click-node="false"
+    :expand-on-click-node="true"
     :icon="LucideChevronRight"
     highlight-current
     class="api-directory-tree"
@@ -97,7 +97,11 @@ defineExpose({
               <LucideFolderOpen v-if="props.expandedKeys.includes(data.key)" class="api-directory-node__icon" />
               <LucideFolder v-else class="api-directory-node__icon" />
             </span>
-            <span class="api-directory-node__name" :title="data.label">{{ data.label }}</span>
+            <span
+              class="api-directory-node__name"
+              :class="{ 'is-root': data.type === 'root' }"
+              :title="data.label"
+            >{{ data.label }}</span>
             <span v-if="data.type === 'workspace' || data.type === 'module'" class="api-directory-node__count">{{ data.count || 0 }}</span>
           </template>
         </div>
@@ -108,13 +112,11 @@ defineExpose({
             trigger="click"
             @click.stop
           >
-            <button type="button" class="api-directory-node__action is-more" :title="moreMenuTitle" @click.stop>
-              <span class="api-directory-node__ellipsis" aria-hidden="true">...</span>
-            </button>
+            <AppDirectoryMoreButton :label="moreMenuTitle" @click.stop />
             <template #dropdown>
               <el-dropdown-menu>
                 <template v-if="data.type === 'workspace'">
-                  <el-dropdown-item v-if="canCreate !== false" @click="emit('createModule', null)">{{ addRootDirectoryLabel }}</el-dropdown-item>
+                  <el-dropdown-item v-if="canCreate !== false" @click="emit('createModule', null)">{{ addChildDirectoryLabel }}</el-dropdown-item>
                 </template>
                 <template v-if="data.type === 'module'">
                   <el-dropdown-item v-if="canCreate !== false" @click="emit('createModule', data.moduleId)">{{ addChildDirectoryLabel }}</el-dropdown-item>
@@ -146,22 +148,26 @@ defineExpose({
 }
 
 .api-directory-tree :deep(.el-tree-node__expand-icon) {
+  width: 12px;
+  height: 12px;
+  margin-right: 0;
   padding: 0;
   color: var(--app-text-subtle);
   font-size: 12px;
+  line-height: 12px;
   transition: color 0.16s ease, transform 0.16s ease;
 }
 
 .api-directory-tree :deep(.el-tree-node__content) {
-  min-height: 30px;
-  height: 30px;
-  border-radius: 0;
-  padding-right: 10.5px;
+  min-height: 28.5px;
+  height: 28.5px;
+  border-radius: 7px;
+  padding-right: 7px;
   transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .api-directory-tree :deep(.el-tree-node__content:hover) {
-  background: #fafbff;
+  background: #f4f6fa;
 }
 
 .api-directory-tree :deep(.el-tree-node__content:hover .el-tree-node__expand-icon) {
@@ -173,23 +179,23 @@ defineExpose({
 }
 
 .api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content) {
-  background: #e8f3ff;
-  box-shadow: inset 0 0 0 1px rgba(22, 93, 255, 0.12);
+  background: transparent;
+  box-shadow: none;
 }
 
-.api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content .el-tree-node__expand-icon) {
-  color: var(--app-primary);
+.api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content:has(.api-directory-node.is-request)) {
+  background: #fff3e8;
 }
 
 .api-directory-node {
   position: relative;
   display: flex;
-  min-height: 30px;
+  min-height: 28.5px;
   min-width: 0;
   width: 100%;
   align-items: center;
   justify-content: flex-start;
-  gap: 5.25px;
+  gap: 6px;
   font-size: 13px;
   line-height: 20px;
 }
@@ -215,51 +221,32 @@ defineExpose({
   min-width: 0;
   width: 100%;
   align-items: center;
-  gap: 5.25px;
-  padding-right: 18px;
+  gap: 6px;
+  padding-right: 0;
 }
 
 .api-directory-node__actions {
   position: absolute;
-  right: 0;
+  top: 50%;
+  right: 6px;
   display: flex;
-  width: 0;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
   overflow: hidden;
-  padding-left: 4px;
-  border-radius: 0;
+  padding-left: 0;
+  border-radius: 4px;
   background: transparent;
+  transform: translateY(-50%);
   opacity: 0;
   pointer-events: none;
   transition: width 0.15s ease, opacity 0.15s ease;
 }
 
-.api-directory-node__action {
-  display: inline-flex;
-  width: 18px;
-  height: 22px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--app-text-subtle);
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.api-directory-node__actions .api-directory-node__action {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 .api-directory-node:hover .api-directory-node__actions,
 .api-directory-node:focus-within .api-directory-node__actions,
 .api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content) .api-directory-node__actions {
-  width: auto;
   opacity: 1;
   pointer-events: auto;
 }
@@ -268,28 +255,6 @@ defineExpose({
 .api-directory-node:focus-within .api-directory-node__count,
 .api-directory-tree :deep(.el-tree-node.is-current > .el-tree-node__content) .api-directory-node__count {
   opacity: 0;
-}
-
-.api-directory-node__action:hover {
-  background: transparent;
-  color: var(--app-text-secondary);
-}
-
-.api-directory-node__action.is-more {
-  border-radius: 0;
-}
-
-.api-directory-node__ellipsis {
-  display: inline-flex;
-  width: 18px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 18px;
 }
 
 .api-directory-node__name {
@@ -315,7 +280,8 @@ defineExpose({
 }
 
 .api-directory-node.is-request .api-directory-node__main {
-  gap: 7px;
+  gap: 6px;
+  padding-right: 28px;
 }
 
 .api-directory-node.is-request .api-directory-node__name {
@@ -326,7 +292,11 @@ defineExpose({
 
 .api-directory-node:not(.is-request):not(.is-placeholder) .api-directory-node__name {
   color: var(--app-text-primary);
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.api-directory-node:not(.is-request):not(.is-placeholder) .api-directory-node__name.is-root {
+  font-weight: 600;
 }
 
 .api-directory-node__folder {
@@ -357,6 +327,7 @@ defineExpose({
   justify-content: flex-end;
   padding: 0;
   margin-left: auto;
+  margin-right: 8px;
   color: var(--app-text-subtle);
   font-size: 11px;
   line-height: 16px;

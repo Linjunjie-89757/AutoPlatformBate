@@ -30,6 +30,7 @@ public record AiGenerationTaskResponse(
         List<AiGenerationTaskEventResponse> events,
         List<Integer> adoptedCaseIndexes,
         List<Integer> deletedCaseIndexes,
+        List<AiCaseAdoptionItem> adoptions,
         Boolean cancelRequested,
         String sourceTaskId,
         String createdAt,

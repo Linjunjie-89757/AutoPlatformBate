@@ -54,6 +54,10 @@ public class BugEntity extends BaseEntity {
     @TableField("assignee_id")
     private Long assigneeId;
 
+    /** Populated for response projections such as test-plan defect lists. */
+    @TableField(exist = false)
+    private String assigneeName;
+
     @TableField("reporter_id")
     private Long reporterId;
 

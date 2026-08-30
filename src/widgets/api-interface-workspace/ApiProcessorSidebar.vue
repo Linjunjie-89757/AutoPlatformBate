@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, CopyDocument, Delete } from '@element-plus/icons-vue'
+import { ChevronDown, Plus } from '@lucide/vue'
 
 import type { ApiProcessorOption, ApiProcessorPanelRow } from './apiProcessorTypes'
 
@@ -38,9 +39,9 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
     <div class="api-processor-toolbar">
       <el-dropdown trigger="click" @command="emit('add', $event)">
         <button type="button" class="api-legacy-primary">
-          <span class="api-button-plus">+</span>
+          <Plus class="api-button-plus" :size="12" aria-hidden="true" />
           添加处理器
-          <span class="api-button-chevron">⌄</span>
+          <ChevronDown class="api-button-chevron" :size="10" aria-hidden="true" />
         </button>
         <template #dropdown>
           <el-dropdown-menu>

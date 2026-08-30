@@ -56,7 +56,9 @@ public class CaseController {
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "priority", required = false) String priority,
             @RequestParam(value = "reviewStatus", required = false) String reviewStatus,
-            @RequestParam(value = "executionStatus", required = false) String executionStatus
+            @RequestParam(value = "executionStatus", required = false) String executionStatus,
+            @RequestParam(value = "sourceType", required = false) String sourceType,
+            @RequestParam(value = "createdByName", required = false) String createdByName
     ) {
         return ApiResponse.ok(caseService.listCases(
                 workspaceCode,
@@ -66,7 +68,9 @@ public class CaseController {
                 keyword,
                 priority,
                 reviewStatus,
-                executionStatus));
+                executionStatus,
+                sourceType,
+                createdByName));
     }
 
     @GetMapping("/directories")
@@ -125,7 +129,8 @@ public class CaseController {
             @RequestParam(value = "reviewStatus", required = false) String reviewStatus,
             @RequestParam(value = "executionStatus", required = false) String executionStatus,
             @RequestParam(value = "executorName", required = false) String executorName,
-            @RequestParam(value = "createdByName", required = false) String createdByName
+            @RequestParam(value = "createdByName", required = false) String createdByName,
+            @RequestParam(value = "sourceType", required = false) String sourceType
     ) {
         CaseExportFile export = caseExportDomainService.exportCases(
                 workspaceCode,
@@ -137,7 +142,8 @@ public class CaseController {
                 reviewStatus,
                 executionStatus,
                 executorName,
-                createdByName);
+                createdByName,
+                sourceType);
         ByteArrayResource resource = new ByteArrayResource(export.content());
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(export.contentType()))

@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { nextTick, reactive, watch } from 'vue'
+import { CheckCircle, Trash2, UserCheck } from '@lucide/vue'
 
 import {
   defectPriorityOptions,
@@ -149,27 +150,15 @@ watch(
     <div v-if="selectedCount && selectedCount > 0" class="defect-filter-panel__right">
       <span class="defect-filter-panel__selected-count">已选 {{ selectedCount }}</span>
       <button v-if="canEdit !== false" type="button" class="defect-filter-panel__batch-button" @click="emit('batchAssign')">
-        <svg viewBox="0 0 13 13" aria-hidden="true">
-          <path d="M1.083 6.5s1.971-3.792 5.417-3.792S11.917 6.5 11.917 6.5 9.946 10.292 6.5 10.292 1.083 6.5 1.083 6.5Z" />
-          <path d="M6.5 8.125a1.625 1.625 0 1 0 0-3.25 1.625 1.625 0 0 0 0 3.25Z" />
-        </svg>
+        <UserCheck :size="13" aria-hidden="true" />
         批量指派
       </button>
       <button v-if="canReview !== false" type="button" class="defect-filter-panel__batch-button" @click="emit('batchClose')">
-        <svg viewBox="0 0 13 13" aria-hidden="true">
-          <path d="M11.917 5.998v.499a5.417 5.417 0 1 1-3.213-4.949" />
-          <path d="M11.917 2.167 6.5 7.59 4.875 5.965" />
-        </svg>
+        <CheckCircle :size="13" aria-hidden="true" />
         批量关闭
       </button>
       <button v-if="canDelete !== false" type="button" class="defect-filter-panel__batch-button is-danger" @click="emit('batchDelete')">
-        <svg viewBox="0 0 13 13" aria-hidden="true">
-          <path d="M1.625 3.25h9.75" />
-          <path d="M10.292 3.25v7.583c0 .542-.542 1.084-1.084 1.084H3.792c-.542 0-1.084-.542-1.084-1.084V3.25" />
-          <path d="M4.333 3.25V2.167c0-.542.542-1.084 1.084-1.084h2.166c.542 0 1.084.542 1.084 1.084V3.25" />
-          <path d="M5.417 5.958v3.25" />
-          <path d="M7.583 5.958v3.25" />
-        </svg>
+        <Trash2 :size="13" aria-hidden="true" />
         删除
       </button>
     </div>

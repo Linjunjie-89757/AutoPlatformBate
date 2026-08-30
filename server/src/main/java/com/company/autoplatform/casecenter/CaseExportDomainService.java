@@ -44,7 +44,7 @@ public class CaseExportDomainService {
     private static final int MAX_CELL_TEXT_LENGTH = 32_767;
     private static final List<String> HEADERS = List.of(
             "用例 ID", "工作空间", "目录路径", "用例标题", "用例类型", "优先级", "来源",
-            "用例状态", "前置条件", "测试步骤", "预期结果", "评审状态", "执行状态",
+            "前置条件", "测试步骤", "预期结果", "评审状态", "执行状态",
             "负责人", "执行人", "创建人", "更新时间");
 
     private final CaseMapper caseMapper;
@@ -74,7 +74,8 @@ public class CaseExportDomainService {
             String reviewStatus,
             String executionStatus,
             String executorName,
-            String createdByName
+            String createdByName,
+            String sourceType
     ) {
         String normalizedWorkspaceCode = WorkspaceScope.normalize(workspaceCode);
         if (WorkspaceScope.isAll(normalizedWorkspaceCode)) {
@@ -96,7 +97,7 @@ public class CaseExportDomainService {
                 applyDirectoryFilter(query, workspace.getId(), directoryId);
             }
             if (exportScope == ExportScope.FILTERED) {
-                applyListFilters(query, keyword, priority, reviewStatus, executionStatus, executorName, createdByName);
+                applyListFilters(query, keyword, priority, reviewStatus, executionStatus, executorName, createdByName, sourceType);
             }
         }
 
@@ -129,7 +130,8 @@ public class CaseExportDomainService {
             String reviewStatus,
             String executionStatus,
             String executorName,
-            String createdByName
+            String createdByName,
+            String sourceType
     ) {
         String normalizedKeyword = blankToNull(keyword);
         if (normalizedKeyword != null) {
@@ -145,6 +147,10 @@ public class CaseExportDomainService {
         String normalizedReviewStatus = normalizeChoice(reviewStatus, Set.of("PENDING", "PASSED", "REJECTED"), "评审状态");
         if (normalizedReviewStatus != null) {
             query.eq(CaseEntity::getReviewStatus, normalizedReviewStatus);
+        }
+        String normalizedSourceType = blankToNull(sourceType);
+        if (normalizedSourceType != null) {
+            query.eq(CaseEntity::getSourceType, normalizedSourceType.toUpperCase(Locale.ROOT));
         }
         String normalizedExecutionStatus = normalizeChoice(executionStatus, Set.of("NOT_RUN", "PASSED", "FAILED", "BLOCKED", "SKIPPED", "RUNNING"), "执行状态");
         if (normalizedExecutionStatus != null) {
@@ -204,7 +210,6 @@ public class CaseExportDomainService {
                         caseTypeLabel(item.getCaseType()),
                         text(item.getPriority()),
                         sourceTypeLabel(item.getSourceType()),
-                        caseStatusLabel(item.getCaseStatus()),
                         text(item.getPrecondition()),
                         text(item.getSteps()),
                         text(item.getExpectedResult()),
@@ -221,7 +226,7 @@ public class CaseExportDomainService {
                 }
             }
 
-            int[] widths = {16, 18, 28, 36, 12, 10, 12, 12, 36, 48, 48, 12, 12, 14, 14, 14, 20};
+            int[] widths = {16, 18, 28, 36, 12, 10, 12, 36, 48, 48, 12, 12, 14, 14, 14, 20};
             for (int index = 0; index < widths.length; index++) {
                 sheet.setColumnWidth(index, widths[index] * 256);
             }
@@ -361,15 +366,6 @@ public class CaseExportDomainService {
             case "MANUAL" -> "手工创建";
             case "IMPORTED" -> "导入";
             case "AI_GENERATED" -> "AI 生成";
-            default -> text(value);
-        };
-    }
-
-    private String caseStatusLabel(String value) {
-        return switch (text(value).toUpperCase(Locale.ROOT)) {
-            case "CONFIRMED", "ENABLED" -> "启用";
-            case "DRAFT" -> "草稿";
-            case "ARCHIVED" -> "归档";
             default -> text(value);
         };
     }

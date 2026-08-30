@@ -7,7 +7,6 @@ public record CaseSummaryResponse(
         String caseType,
         String priority,
         String sourceType,
-        String status,
         String executionStatus,
         String ownerName,
         String executorName,

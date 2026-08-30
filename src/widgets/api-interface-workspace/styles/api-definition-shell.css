@@ -34,7 +34,6 @@
 
 :global(.api-method-popper),
 :global(.api-save-dropdown-menu),
-:global(.api-soft-message-box),
 :global(.api-case-detail-drawer),
 :global(.api-ai-case-drawer),
 :global(.el-dialog.api-ai-case-detail-dialog) {
@@ -43,9 +42,6 @@
 
 :global(.api-method-popper .el-select-dropdown__item),
 :global(.api-save-dropdown-menu .el-dropdown-menu__item),
-:global(.api-soft-message-box .el-message-box__title),
-:global(.api-soft-message-box .el-message-box__content),
-:global(.api-soft-message-box .el-button),
 :global(.api-case-detail-drawer .el-button),
 :global(.api-case-detail-drawer .el-input__inner),
 :global(.api-ai-case-drawer .el-button),

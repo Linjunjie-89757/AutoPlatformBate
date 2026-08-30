@@ -150,7 +150,10 @@ public class AiPromptBuilderSupport {
         builder.append("[Candidate Cases To Review]\n");
         int index = 0;
         for (AiExistingCaseItem item : request.generatedCases()) {
-            builder.append("[Index ").append(index++).append("] Title: ").append(nullSafe(item.title())).append('\n');
+            builder.append("[Candidate ID ").append(nullSafe(item.candidateCaseId()))
+                    .append(", Index ").append(index++).append("] Title: ").append(nullSafe(item.title())).append('\n');
+            builder.append("   Content Version: ").append(item.contentVersion() == null ? 1 : item.contentVersion())
+                    .append(", Content Hash: ").append(nullSafe(item.contentHash())).append('\n');
             builder.append("   Type: ").append(nullSafe(item.caseType()))
                     .append(", Priority: ").append(nullSafe(item.priority())).append('\n');
             builder.append("   Precondition: ").append(nullSafe(item.precondition())).append('\n');
@@ -169,16 +172,23 @@ public class AiPromptBuilderSupport {
                     1. Return NDJSON only. Do not return markdown, explanation, JSON array wrappers, or extra prose.
                     2. You have the full candidate case set above. First evaluate overall coverage, duplicates, gaps, and priorities internally, then output results line by line.
                     3. Output one complete JSON object per line. Flush each line immediately after the decision is ready. Do not wait until all lines are complete before emitting.
-                    4. Output reviewed existing-case lines in ascending caseIndex order, then output any supplement lines.
+                    4. Output reviewed existing-case lines in ascending caseIndex order, then output any supplement lines. candidateCaseId is the primary mapping key; caseIndex is compatibility and display information only.
                     5. Reviewed existing-case lines must contain:
-                       - caseIndex: the zero-based Index shown above. This is an internal mapping key only.
-                       - status: APPROVED, OPTIMIZED, CONFIRM_REQUIRED, or NOT_RECOMMENDED
+                       - candidateCaseId: the exact Candidate ID shown above
+                       - caseIndex: the zero-based Index shown above, for compatibility only
+                       - reviewStatus: APPROVED, CHANGE_SUGGESTED, CONFIRM_REQUIRED, or NOT_RECOMMENDED
+                       - suggestedAction: KEEP, MODIFY, EXCLUDE, or MERGE
                        - summary: one short actionable review summary. Do not mention internal labels such as "Index 0", "caseIndex", or "itemIndex"; refer to the case title or user-facing case number when needed.
+                       - reason: specific reason supporting the status and action
+                       - score: integer from 0 to 100
+                       - confidence: number from 0 to 1
                        - coverageComment: explain whether this case covers the intended requirement, risk, boundary, or scenario
                        - evidenceComment: judge whether requirementEvidence clearly maps to requirement text, business rule, image/prototype information, or a reasonable risk-based inference
                        - reviewComment: final quality judgment for this case
-                       - optimizationReason: required when status is OPTIMIZED
-                       - optimizedCase: required when status is OPTIMIZED, containing the full improved case fields
+                       - suggestedCase: required when suggestedAction is MODIFY or MERGE, containing the full suggested case fields
+                       - mergeTargetCaseIds: required when suggestedAction is MERGE
+                       - sourceVersion: the exact Content Version shown above
+                       - sourceContentHash: the exact Content Hash shown above
                        - coverageGap: optional gap this case relates to
                     6. Supplement lines must contain:
                        - status: SUPPLEMENTED
@@ -186,12 +196,13 @@ public class AiPromptBuilderSupport {
                        - supplementCase: the full new case fields
                        - supplementReason: what missing coverage this case fills
                        - coverageGap: the gap being covered
-                    7. Use APPROVED when the case can be kept unchanged.
-                    8. Use OPTIMIZED when the case is valuable but should be rewritten; include optimizedCase.
-                    9. Do not use OPTIMIZED without optimizedCase. If you cannot provide a full rewritten case, use CONFIRM_REQUIRED.
-                    10. Use CONFIRM_REQUIRED only when requirement ambiguity prevents a reliable automatic rewrite.
+                    7. Use APPROVED + KEEP when the case can be kept unchanged.
+                    8. Use CHANGE_SUGGESTED + MODIFY when the case is valuable but should be changed; include suggestedCase.
+                    9. Do not use MODIFY or MERGE without a complete suggestedCase. If you cannot provide a reliable full suggestion, use CONFIRM_REQUIRED.
+                    10. Use CONFIRM_REQUIRED when requirement ambiguity or merge uncertainty requires a human decision.
                     11. Use NOT_RECOMMENDED when the case is duplicated, low-value, unexecutable, or misaligned.
                     12. Add SUPPLEMENTED lines only for important missing coverage. Do not pad the count.
+                    13. Never state that a suggestion has already been applied. You only provide a review conclusion and a read-only suggestion for human confirmation.
                     """);
         } else {
             builder.append("""
@@ -204,15 +215,22 @@ public class AiPromptBuilderSupport {
                          \"issues\":[\"issue 1\",\"issue 2\"],
                          \"suggestions\":[\"suggestion 1\",\"suggestion 2\"],
                          \"caseDecisions\":[{
+                           \"candidateCaseId\":\"AIC_...\",
                            \"caseIndex\":0,
-                           \"status\":\"APPROVED|OPTIMIZED|CONFIRM_REQUIRED|NOT_RECOMMENDED\",
+                           \"reviewStatus\":\"APPROVED|CHANGE_SUGGESTED|CONFIRM_REQUIRED|NOT_RECOMMENDED\",
+                           \"suggestedAction\":\"KEEP|MODIFY|EXCLUDE|MERGE\",
                            \"summary\":\"short summary\",
+                           \"reason\":\"specific review reason\",
+                           \"score\":85,
+                           \"confidence\":0.92,
                            \"coverageComment\":\"coverage judgment\",
                            \"evidenceComment\":\"evidence judgment\",
                            \"reviewComment\":\"quality judgment\",
-                           \"optimizationReason\":\"why optimized, required for OPTIMIZED\",
                            \"coverageGap\":\"related gap if any\",
-                           \"optimizedCase\":{ \"title\":\"...\", \"caseType\":\"FUNCTION|BOUNDARY|EXCEPTION|REGRESSION\", \"priority\":\"P0|P1|P2|P3\", \"precondition\":\"...\", \"steps\":\"...\", \"expectedResult\":\"...\", \"riskNotes\":\"...\", \"testAngle\":\"...\", \"generationReason\":\"...\", \"requirementEvidence\":\"...\" }
+                           \"suggestedCase\":{ \"title\":\"...\", \"caseType\":\"FUNCTION|BOUNDARY|EXCEPTION|REGRESSION\", \"priority\":\"P0|P1|P2|P3\", \"precondition\":\"...\", \"steps\":\"...\", \"expectedResult\":\"...\", \"riskNotes\":\"...\", \"testAngle\":\"...\", \"generationReason\":\"...\", \"requirementEvidence\":\"...\" },
+                           \"mergeTargetCaseIds\":[],
+                           \"sourceVersion\":1,
+                           \"sourceContentHash\":\"sha256...\"
                          }],
                          \"supplementCases\":[{
                            \"title\":\"...\",
@@ -231,7 +249,7 @@ public class AiPromptBuilderSupport {
                          \"unresolvedCoverageGaps\":[\"gap still not covered because of ambiguity or final limit\"]
                        }
                     3. Use issues to point out missing coverage, duplicates, ambiguity, or non-executable content.
-                    4. Review must directly optimize useful weak cases and supplement important missing cases.
+                    4. Review must provide suggestions for useful weak cases and supplement important missing cases. It must never apply a suggestion or claim that candidate content has been changed.
                     5. Do not add low-value supplement cases. Total final cases should stay within the product limit.
                     """);
         }

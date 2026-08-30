@@ -2,15 +2,17 @@
 import { reactive, watch } from 'vue'
 
 import {
-  caseExecutionStatusOptions,
   casePriorityOptions,
   caseReviewStatusOptions,
   type CaseClientFilter,
 } from '@/entities/case'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
+
+type FilterOption = { label: string; value: string }
+
 const props = defineProps<{
   modelValue: CaseClientFilter
-  executorOptions?: string[]
+  sourceOptions?: FilterOption[]
   creatorOptions?: string[]
   workspaceOptions?: Array<{ label: string; value: string }>
   showWorkspaceFilter?: boolean
@@ -24,8 +26,7 @@ const form = reactive<CaseClientFilter>({
   keyword: props.modelValue.keyword,
   priority: props.modelValue.priority,
   reviewStatus: props.modelValue.reviewStatus,
-  executionStatus: props.modelValue.executionStatus,
-  executorName: props.modelValue.executorName,
+  sourceType: props.modelValue.sourceType,
   createdByName: props.modelValue.createdByName,
   workspaceCode: props.modelValue.workspaceCode,
 })
@@ -71,16 +72,16 @@ watch(
         :value="item.value"
       />
     </el-select>
-    <el-select v-model="form.executionStatus" class="case-filter-panel__control" clearable placeholder="执行状态">
+    <el-select v-model="form.sourceType" class="case-filter-panel__control" clearable placeholder="来源">
       <el-option
-        v-for="item in caseExecutionStatusOptions"
+        v-for="item in sourceOptions"
         :key="item.value"
         :label="item.label"
         :value="item.value"
       />
     </el-select>
-    <el-select v-model="form.executorName" class="case-filter-panel__control" clearable filterable placeholder="执行人">
-      <el-option v-for="item in executorOptions" :key="`executor-${item}`" :label="item" :value="item" />
+    <el-select v-model="form.createdByName" class="case-filter-panel__control" clearable filterable placeholder="创建人">
+      <el-option v-for="item in creatorOptions" :key="`creator-${item}`" :label="item" :value="item" />
     </el-select>
   </div>
 </template>

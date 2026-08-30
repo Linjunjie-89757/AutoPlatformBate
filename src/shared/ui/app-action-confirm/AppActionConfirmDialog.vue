@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { AlertTriangle, Power } from '@lucide/vue'
 
 type ActionConfirmTone = 'success' | 'warning'
 
@@ -11,6 +12,7 @@ const props = withDefaults(
     confirmText?: string
     cancelText?: string
     tone?: ActionConfirmTone
+    variant?: 'default' | 'figma-danger'
   }>(),
   {
     title: '确认操作',
@@ -18,6 +20,7 @@ const props = withDefaults(
     confirmText: '确认',
     cancelText: '取消',
     tone: 'warning',
+    variant: 'default',
   },
 )
 
@@ -64,6 +67,7 @@ onBeforeUnmount(() => {
       <div
         v-if="modelValue"
         class="app-action-confirm"
+        :class="`is-${props.variant}`"
         role="dialog"
         aria-modal="true"
         :aria-label="title"
@@ -72,24 +76,8 @@ onBeforeUnmount(() => {
         <section class="app-action-confirm__panel">
           <div class="app-action-confirm__body">
             <span class="app-action-confirm__icon" :class="iconClass" aria-hidden="true">
-              <svg viewBox="0 0 16 16" focusable="false">
-                <path
-                  d="M8 1.333V8"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.333"
-                />
-                <path
-                  d="M12.267 4.4a6 6 0 1 1-8.514.027"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="1.333"
-                />
-              </svg>
+              <AlertTriangle v-if="tone === 'warning'" :size="props.variant === 'figma-danger' ? 20 : 17" />
+              <Power v-else :size="17" aria-hidden="true" />
             </span>
             <span class="app-action-confirm__copy">
               <strong>{{ title }}</strong>
@@ -124,31 +112,32 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .app-action-confirm__panel {
   width: min(380px, calc(100vw - 48px));
-  padding: 21px;
-  border-radius: 14px;
+  padding: 24px 24px 20px;
+  border-radius: 10px;
   background: #ffffff;
-  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.16);
 }
 
 .app-action-confirm__body {
   display: flex;
   align-items: flex-start;
-  gap: 10.5px;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
 .app-action-confirm__icon {
   display: inline-flex;
-  width: 35px;
-  height: 35px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 8px;
 }
 
 .app-action-confirm__icon.is-success {
@@ -162,45 +151,43 @@ onBeforeUnmount(() => {
 }
 
 .app-action-confirm__icon svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .app-action-confirm__copy {
-  display: grid;
-  width: min(208px, 100%);
+  min-width: 0;
 }
 
 .app-action-confirm__copy strong {
   color: #1d2129;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 22.5px;
 }
 
 .app-action-confirm__copy small {
-  padding-top: 3.5px;
-  color: #86909c;
+  display: block;
+  margin-top: 6px;
+  color: #4e5969;
   font-size: 13px;
   font-weight: 400;
-  line-height: 19.5px;
+  line-height: 1.65;
+  white-space: pre-line;
 }
 
 .app-action-confirm__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 7px;
-  padding-top: 17.5px;
-  border-top: 0;
+  gap: 8px;
 }
 
 .app-action-confirm__button {
   display: inline-flex;
-  width: 49px;
-  height: 28px;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  min-height: 34px;
+  padding: 7px 18px;
   border: 1px solid #e5e6eb;
   border-radius: 7px;
   background: #ffffff;
@@ -224,10 +211,6 @@ onBeforeUnmount(() => {
 }
 
 .app-action-confirm__button.is-primary {
-  width: 80px;
-  min-width: 80px;
-  height: 32px;
-  padding: 0;
   border-color: transparent;
   color: #ffffff;
 }
@@ -248,6 +231,51 @@ onBeforeUnmount(() => {
 .app-action-confirm__button.is-primary.is-warning:hover,
 .app-action-confirm__button.is-primary.is-warning:focus-visible {
   background: #e66f00;
+}
+
+.app-action-confirm.is-figma-danger {
+  background: rgba(29, 33, 41, 0.5);
+}
+
+.app-action-confirm.is-figma-danger .app-action-confirm__panel {
+  width: min(380px, calc(100vw - 48px));
+  padding: 28px;
+  border-radius: 10px;
+}
+
+.app-action-confirm.is-figma-danger .app-action-confirm__body {
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.app-action-confirm.is-figma-danger .app-action-confirm__icon {
+  width: 20px;
+  height: 22px;
+  border-radius: 0;
+  background: transparent;
+  color: #f53f3f;
+}
+
+.app-action-confirm.is-figma-danger .app-action-confirm__copy strong {
+  color: #1d2129;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.app-action-confirm.is-figma-danger .app-action-confirm__copy small {
+  margin-top: 6px;
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.app-action-confirm.is-figma-danger .app-action-confirm__button.is-primary.is-warning {
+  background: #f53f3f;
+}
+
+.app-action-confirm.is-figma-danger .app-action-confirm__button.is-primary.is-warning:hover,
+.app-action-confirm.is-figma-danger .app-action-confirm__button.is-primary.is-warning:focus-visible {
+  background: #cb2636;
 }
 
 .app-action-confirm-enter-active,

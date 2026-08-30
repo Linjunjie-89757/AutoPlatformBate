@@ -15,7 +15,6 @@ export interface CaseForm {
   caseType: string
   priority: string
   sourceType: string
-  caseStatus: string
   ownerId: string
   precondition: string
   steps: string
@@ -40,12 +39,6 @@ export const caseSourceTypeOptions = [
   { label: 'AI 生成', value: 'AI_GENERATED' },
 ] as const
 
-export const caseStatusOptions = [
-  { label: '启用', value: 'ACTIVE' },
-  { label: '草稿', value: 'DRAFT' },
-  { label: '归档', value: 'ARCHIVED' },
-] as const
-
 export function createDefaultCaseForm(workspaceCode = 'ALL', directoryId: number | null = null): CaseForm {
   return {
     workspaceCode,
@@ -54,7 +47,6 @@ export function createDefaultCaseForm(workspaceCode = 'ALL', directoryId: number
     caseType: 'FUNCTION',
     priority: 'P1',
     sourceType: 'MANUAL',
-    caseStatus: 'ACTIVE',
     ownerId: '',
     precondition: '',
     steps: '',
@@ -70,7 +62,6 @@ export function createCaseFormFromDetail(item: CaseDetail, mode: CaseDialogMode 
     caseType: item.caseType || 'FUNCTION',
     priority: item.priority || 'P1',
     sourceType: item.sourceType || 'MANUAL',
-    caseStatus: item.status || 'ACTIVE',
     ownerId: item.ownerId ? String(item.ownerId) : '',
     precondition: item.precondition || '',
     steps: item.steps || '',
@@ -90,7 +81,6 @@ export function createCaseFormFromSummary(
     caseType: item.caseType || 'FUNCTION',
     priority: item.priority || 'P1',
     sourceType: item.sourceType || 'MANUAL',
-    caseStatus: item.status || 'ACTIVE',
     ownerId: '',
     precondition: '',
     steps: '',
@@ -108,7 +98,6 @@ export function buildSaveCasePayload(form: CaseForm): SaveCasePayload {
     caseType: form.caseType,
     priority: form.priority,
     sourceType: form.sourceType,
-    caseStatus: form.caseStatus,
     ownerId: form.ownerId.trim() && Number.isFinite(ownerId) ? ownerId : null,
     precondition: form.precondition.trim(),
     steps: form.steps.trim(),
@@ -128,9 +117,6 @@ export function validateCaseForm(form: CaseForm) {
   }
   if (!form.sourceType) {
     return '请选择来源'
-  }
-  if (!form.caseStatus) {
-    return '请选择状态'
   }
   if (form.ownerId.trim() && !Number.isFinite(Number(form.ownerId))) {
     return '负责人 ID 必须是数字'

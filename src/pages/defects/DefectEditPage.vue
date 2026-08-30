@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { Plus, X } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
@@ -17,6 +17,7 @@ import { workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { testManagementApi, type TestVersionItem } from '@/entities/test-management'
 import DefectCaseAssociateDialog from '@/features/defect-case-associate/DefectCaseAssociateDialog.vue'
 import DefectRichTextEditor from '@/features/defect-create-edit/DefectRichTextEditor.vue'
+import UnsavedConfirmModal from '@/features/defect-create-edit/UnsavedConfirmModal.vue'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -66,6 +67,9 @@ const existingAttachments = ref<DefectAttachment[]>([])
 const attachmentImageUrls = ref<Record<number, string>>({})
 const initialSnapshot = ref('')
 const suppressLeaveGuard = ref(false)
+const leaveConfirmVisible = ref(false)
+let leaveDecisionResolver: ((shouldLeave: boolean) => void) | null = null
+let leaveDecisionPromise: Promise<boolean> | null = null
 const deletingAttachmentIds = ref<Set<number>>(new Set())
 const tagDraft = ref('')
 const defectTypeOptions = ['功能缺陷', 'UI/样式', '性能问题', '兼容性', '安全漏洞', '逻辑错误', '数据问题']
@@ -522,20 +526,26 @@ async function loadDefectDetail() {
   }
 }
 
-async function confirmLeave() {
+function resolveLeaveDecision(shouldLeave: boolean) {
+  leaveConfirmVisible.value = false
+  const resolve = leaveDecisionResolver
+  leaveDecisionResolver = null
+  leaveDecisionPromise = null
+  resolve?.(shouldLeave)
+}
+
+function confirmLeave() {
   if (!isDirty.value || suppressLeaveGuard.value) {
-    return true
+    return Promise.resolve(true)
   }
-  try {
-    await ElMessageBox.confirm('系统不会保存尚未提交的修改，确认离开吗？', '离开此页面？', {
-      type: 'warning',
-      confirmButtonText: '离开',
-      cancelButtonText: '留下',
-    })
-    return true
-  } catch {
-    return false
+  if (leaveDecisionResolver) {
+    return leaveDecisionPromise ?? Promise.resolve(false)
   }
+  leaveConfirmVisible.value = true
+  leaveDecisionPromise = new Promise<boolean>((resolve) => {
+    leaveDecisionResolver = resolve
+  })
+  return leaveDecisionPromise
 }
 
 async function goBack() {
@@ -668,6 +678,7 @@ watch(
           </button>
           <span class="defect-edit-page__heading-divider" />
           <h1>{{ pageTitle }}</h1>
+          <span v-if="isDirty" class="defect-edit-page__dirty-badge">未保存</span>
         </div>
         <span class="defect-edit-page__workspace-context">当前项目：{{ currentWorkspaceLabel }} · 测试平台</span>
       </header>
@@ -899,7 +910,9 @@ watch(
                 <div v-if="form.tags.length" class="defect-edit-page__tag-list">
                   <span v-for="tag in form.tags" :key="tag" class="defect-edit-page__tag-chip">
                     {{ tag }}
-                    <button type="button" :aria-label="`移除标签 ${tag}`" :disabled="saving" @click="removeDefectTag(tag)">×</button>
+                    <button type="button" :aria-label="`移除标签 ${tag}`" :disabled="saving" @click="removeDefectTag(tag)">
+                      <X :size="12" aria-hidden="true" />
+                    </button>
                   </span>
                 </div>
                 <input
@@ -961,6 +974,12 @@ watch(
     :current-case-ids="form.relatedCaseIds.map(Number).filter(Number.isFinite)"
     :current-cases="selectedCases"
     @associate="handleCaseAssociated"
+  />
+
+  <UnsavedConfirmModal
+    v-model="leaveConfirmVisible"
+    @stay="resolveLeaveDecision(false)"
+    @discard="resolveLeaveDecision(true)"
   />
 </template>
 
@@ -1405,6 +1424,19 @@ watch(
   font-size: 15px;
   font-weight: 700;
   line-height: 22px;
+}
+
+.defect-edit-page__dirty-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: #fff3e8;
+  color: #ff7d00;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
 }
 
 .defect-edit-page__back-button {

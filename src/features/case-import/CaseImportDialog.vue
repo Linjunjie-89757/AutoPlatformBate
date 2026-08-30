@@ -270,6 +270,7 @@ async function submitExport() {
       keyword: exportScope.value === 'FILTERED' ? props.filter.keyword : undefined,
       priority: exportScope.value === 'FILTERED' ? props.filter.priority : undefined,
       reviewStatus: exportScope.value === 'FILTERED' ? props.filter.reviewStatus : undefined,
+      sourceType: exportScope.value === 'FILTERED' ? props.filter.sourceType : undefined,
       executionStatus: exportScope.value === 'FILTERED' ? props.filter.executionStatus : undefined,
       executorName: exportScope.value === 'FILTERED' ? props.filter.executorName : undefined,
       createdByName: exportScope.value === 'FILTERED' ? props.filter.createdByName : undefined,

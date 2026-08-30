@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
@@ -173,6 +174,28 @@ class AiGenerationTaskControllerIntegrationTests extends IntegrationTestSupport 
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").isString());
+    }
+
+    @Test
+    void taskCreateRejectsRequirementContentAboveSupportedLimit() throws Exception {
+        String requestBody = objectMapper.writeValueAsString(Map.of(
+                "workspaceCode", WORKSPACE_CODE,
+                "requirementTitle", "Oversized requirement",
+                "requirementContent", "需".repeat(AiGenerationTaskDomainService.MAX_REQUIREMENT_CONTENT_LENGTH + 1),
+                "outputMode", "COMPLETE",
+                "assetIds", List.of(),
+                "ignoredAssetCount", 0
+        ));
+
+        mockMvc.perform(post("/api/cases/ai/tasks")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value(
+                        "需求内容过长，最多支持 200000 个字符，请精简后重试"
+                ));
     }
 
     @Test

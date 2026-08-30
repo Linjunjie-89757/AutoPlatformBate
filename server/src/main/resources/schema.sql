@@ -39,7 +39,6 @@ CREATE TABLE IF NOT EXISTS tb_case_info (
     case_type VARCHAR(64) NOT NULL,
     priority VARCHAR(16) NOT NULL,
     source_type VARCHAR(32) NOT NULL,
-    case_status VARCHAR(32) NOT NULL,
     owner_id BIGINT,
     precondition TEXT,
     steps TEXT,
@@ -156,6 +155,48 @@ CREATE TABLE IF NOT EXISTS tb_param_set (
     param_name VARCHAR(128) NOT NULL,
     content_json TEXT,
     status INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tb_ai_case_candidate (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    candidate_id VARCHAR(64) NOT NULL UNIQUE,
+    task_id VARCHAR(64) NOT NULL,
+    display_index INT NOT NULL,
+    origin VARCHAR(32) NOT NULL,
+    original_case_json TEXT NOT NULL,
+    suggested_case_json TEXT,
+    current_case_json TEXT NOT NULL,
+    review_status VARCHAR(32),
+    suggested_action VARCHAR(32),
+    review_score INT,
+    review_confidence DOUBLE,
+    review_reason VARCHAR(2000),
+    merge_target_candidate_ids_json TEXT,
+    human_decision VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    content_version INT NOT NULL DEFAULT 1,
+    content_hash VARCHAR(64) NOT NULL,
+    suggestion_source_version INT,
+    suggestion_source_hash VARCHAR(64),
+    created_by BIGINT,
+    updated_by BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (task_id, display_index)
+);
+
+CREATE TABLE IF NOT EXISTS tb_ai_case_candidate_audit (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    candidate_id VARCHAR(64) NOT NULL,
+    task_id VARCHAR(64) NOT NULL,
+    action_type VARCHAR(64) NOT NULL,
+    from_version INT,
+    to_version INT,
+    before_case_json TEXT,
+    after_case_json TEXT,
+    metadata_json TEXT,
+    operator_id BIGINT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

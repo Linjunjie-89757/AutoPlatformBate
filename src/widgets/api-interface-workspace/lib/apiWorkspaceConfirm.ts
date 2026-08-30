@@ -1,6 +1,4 @@
-import { ElMessageBox } from 'element-plus'
-
-import { confirmDelete } from '@/shared/ui'
+import { confirmAction, confirmDelete } from '@/shared/ui'
 
 export function confirmApiAction(
   message: string,
@@ -19,13 +17,12 @@ export function confirmApiAction(
     )
   }
 
-  return ElMessageBox.confirm(message, title, {
-    type: 'warning',
-    confirmButtonText: options.confirmText || '确定',
-    cancelButtonText: options.cancelText || '取消',
-    customClass: 'api-soft-message-box',
-    confirmButtonClass: 'api-soft-message-box__primary',
-    cancelButtonClass: 'api-soft-message-box__cancel',
+  return confirmAction({
+    title,
+    message,
+    confirmText: options.confirmText || '确定',
+    cancelText: options.cancelText || '取消',
+    tone: 'warning',
   }).then(
     () => true,
     () => false,

@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CopyDocument, Delete, MagicStick, Plus, Top, Bottom, VideoPlay, View } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import { configApi, type ParamSetItem } from '@/entities/config'
 import {
@@ -49,6 +49,7 @@ import {
   type ValidateWebUiLocatorResponse,
 } from '@/entities/web-ui-automation'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import { artifactFileIdFromInputValue } from '@/entities/web-ui-automation/lib/fileUploadArtifacts'
 import { startLocalRunnerTaskPolling } from '@/entities/web-ui-automation/lib/localRunnerClient'
@@ -888,15 +889,12 @@ async function confirmDraftDebug() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      '当前编辑内容有未保存修改，本次调试会按当前草稿内容执行，但不会自动保存到用例。是否继续？',
-      '调试运行草稿',
-      {
-        type: 'warning',
-        confirmButtonText: '继续调试',
-        cancelButtonText: '先不调试',
-      },
-    )
+    await confirmAction({
+      title: '调试运行草稿',
+      message: '当前编辑内容有未保存修改，本次调试会按当前草稿内容执行，但不会自动保存到用例。是否继续？',
+      confirmText: '继续调试',
+      cancelText: '先不调试',
+    })
     return true
   } catch {
     return false

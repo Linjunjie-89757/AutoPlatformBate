@@ -66,7 +66,7 @@ import {
   type AppTableColumnDefinition,
   useTableColumnSettings,
 } from '@/shared/lib/table'
-import { confirmDelete } from '@/shared/ui'
+import { confirmAction, confirmDelete } from '@/shared/ui'
 import {
   AppFigmaActionColumn,
   getAppFigmaActionColumnWidth,
@@ -1824,10 +1824,11 @@ async function createCiToken() {
 
 async function disableCiToken(token: WebUiCiTokenSummary) {
   try {
-    await ElMessageBox.confirm(`确认禁用 Token "${token.tokenName}" 吗？`, '禁用 CI Token', {
-      confirmButtonText: '禁用',
-      cancelButtonText: '取消',
-      type: 'warning',
+    await confirmAction({
+      title: '禁用 CI Token',
+      message: `确认禁用 Token "${token.tokenName}" 吗？`,
+      confirmText: '禁用',
+      cancelText: '取消',
     })
     await webUiAutomationApi.disableCiToken(props.workspaceCode, token.id)
     ElMessage.success('CI Token 已禁用')
@@ -1841,10 +1842,11 @@ async function disableCiToken(token: WebUiCiTokenSummary) {
 
 async function rotateCiToken(token: WebUiCiTokenSummary) {
   try {
-    await ElMessageBox.confirm(`确认重新生成 Token "${token.tokenName}" 吗？旧 Token 会立即失效。`, '重新生成 CI Token', {
-      confirmButtonText: '重新生成',
-      cancelButtonText: '取消',
-      type: 'warning',
+    await confirmAction({
+      title: '重新生成 CI Token',
+      message: `确认重新生成 Token "${token.tokenName}" 吗？旧 Token 会立即失效。`,
+      confirmText: '重新生成',
+      cancelText: '取消',
     })
     latestCreatedToken.value = await webUiAutomationApi.rotateCiToken(props.workspaceCode, token.id)
     ciTokenDialogVisible.value = true

@@ -566,7 +566,6 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 "FUNCTION",
                 "P1",
                 "MANUAL",
-                "CONFIRMED",
                 ASSIGNEE_ID,
                 "precondition",
                 "steps",

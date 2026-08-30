@@ -44,6 +44,7 @@ import {
   type LocalRunnerPlatformPollStatus,
 } from '@/entities/web-ui-automation/lib/localRunnerClient'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -1032,15 +1033,12 @@ async function cancelTask() {
   }
   const taskIdToCancel = task.value.taskId
   try {
-    await ElMessageBox.confirm(
-      '取消后会停止任务刷新，并尝试关闭当前本地页面。已生成的候选仍可查看。是否继续？',
-      '取消采集任务',
-      {
-        confirmButtonText: '取消任务',
-        cancelButtonText: '继续等待',
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '取消采集任务',
+      message: '取消后会停止任务刷新，并尝试关闭当前本地页面。已生成的候选仍可查看。是否继续？',
+      confirmText: '取消任务',
+      cancelText: '继续等待',
+    })
     const canceled = await webUiAutomationApi.cancelLocalRunnerCollectTask(
       queryWorkspaceCode.value,
       taskIdToCancel,
@@ -1388,10 +1386,10 @@ async function loadDuplicateBaseline(workspaceCode: string, pageId: number) {
 
 async function confirmSaveSummary(summary: ReturnType<typeof buildCollectCandidateSaveSummary>) {
   const planItems = [
-    `已选择 <strong>${summary.selectedCount}</strong> 个候选`,
-    `预计新增 <strong>${summary.createCount}</strong> 个元素`,
-    summary.skippedCount ? `将跳过 <strong>${summary.skippedCount}</strong> 个候选` : '',
-    summary.duplicateCount ? `其中重复元素 / 重复定位器 <strong>${summary.duplicateCount}</strong> 个` : '',
+    `已选择 ${summary.selectedCount} 个候选`,
+    `预计新增 ${summary.createCount} 个元素`,
+    summary.skippedCount ? `将跳过 ${summary.skippedCount} 个候选` : '',
+    summary.duplicateCount ? `其中重复元素 / 重复定位器 ${summary.duplicateCount} 个` : '',
   ].filter(Boolean)
   const riskItems = [
     summary.blockedCount ? `禁止保存：${summary.blockedCount} 个，将不会入库` : '',
@@ -1404,21 +1402,15 @@ async function confirmSaveSummary(summary: ReturnType<typeof buildCollectCandida
       : '',
   ].filter(Boolean)
   const detailItems = [
-    '<h4>保存计划</h4>',
-    ...planItems.map(item => `<p>${item}</p>`),
-    riskItems.length ? '<h4>质量提醒</h4>' : '',
-    ...riskItems.map(item => `<p class="web-ui-ai-save-confirm__risk">${item}</p>`),
+    `保存计划：${planItems.join('；')}`,
+    riskItems.length ? `质量提醒：${riskItems.join('；')}` : '',
   ].filter(Boolean)
-  await ElMessageBox.confirm(
-    `<div class="web-ui-ai-save-confirm">${detailItems.join('')}</div>`,
-    '确认批量保存',
-    {
-      confirmButtonText: '继续保存',
-      cancelButtonText: '取消',
-      dangerouslyUseHTMLString: true,
-      type: summary.blockedCount || summary.abnormalCount || summary.duplicateCount ? 'warning' : 'info',
-    },
-  )
+  await confirmAction({
+    title: '确认批量保存',
+    message: detailItems.join('\n'),
+    confirmText: '继续保存',
+    cancelText: '取消',
+  })
 }
 
 async function saveSelectedCandidates() {

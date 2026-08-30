@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Plus } from '@lucide/vue'
 import type { ApiKeyValueInput } from '@/entities/api-automation'
 import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 
@@ -160,7 +161,7 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
       </button>
     </div>
     <button type="button" class="api-add-row" @click="emit('addRow')">
-      <span class="api-add-row__plus">+</span>
+      <Plus class="api-add-row__plus" :size="12" aria-hidden="true" />
       添加参数
     </button>
   </div>

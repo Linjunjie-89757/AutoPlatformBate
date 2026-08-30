@@ -8,6 +8,7 @@ export interface ConfirmActionOptions {
   confirmText?: string
   cancelText?: string
   tone?: 'success' | 'warning'
+  variant?: 'default' | 'figma-danger'
 }
 
 export function confirmAction(options: ConfirmActionOptions = {}) {
@@ -39,6 +40,7 @@ export function confirmAction(options: ConfirmActionOptions = {}) {
       confirmText: options.confirmText,
       cancelText: options.cancelText,
       tone: options.tone,
+      variant: options.variant,
       onConfirm: () => {
         settle(resolve)
       },

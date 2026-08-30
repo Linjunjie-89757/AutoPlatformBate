@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Plus } from '@lucide/vue'
 
 import type { ApiKeyValueInput, ApiRequestBodyInput, ApiSchemaFieldInput } from '@/entities/api-automation'
 import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
@@ -305,7 +306,7 @@ async function formatRawBody() {
           </button>
         </div>
         <button type="button" class="api-add-row" @click="emit('addRow')">
-          <span class="api-add-row__plus">+</span>
+          <Plus class="api-add-row__plus" :size="12" aria-hidden="true" />
           添加参数
         </button>
       </div>

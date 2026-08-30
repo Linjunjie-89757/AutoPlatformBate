@@ -7,16 +7,18 @@ import {
   Download,
   FolderOpened,
 } from '@element-plus/icons-vue'
-import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, CircleCheckBig, CircleX, Eye, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from '@lucide/vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { AlertCircle, ArrowUpRight, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleCheckBig, CircleX, Eye, Loader2, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from '@lucide/vue'
+import { ElMessage } from 'element-plus'
 
-import { caseAiApi, type AiGenerationTaskEventItem, type AiGenerationTaskItem, type GeneratedAiCaseItem } from '@/entities/case-ai'
-import { caseApi, type CaseDirectoryNode, type SaveCasePayload } from '@/entities/case'
+import { caseAiApi, type AiCaseCandidateItem, type AiGenerationTaskEventItem, type AiGenerationTaskItem, type GeneratedAiCaseItem } from '@/entities/case-ai'
+import { caseApi, type CaseDirectoryNode } from '@/entities/case'
 import { useSession } from '@/entities/session'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction } from '@/shared/ui'
 import AiGenerationLiveLogDialog from '@/shared/ui/ai-live-log/AiGenerationLiveLogDialog.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
+import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -27,9 +29,10 @@ type DetailCaseRow = GeneratedAiCaseItem & {
   index: number
   adopted: boolean
   deleted: boolean
+  candidate: AiCaseCandidateItem | null
 }
 
-type CaseReviewState = 'PENDING' | 'ADOPTED' | 'DISCARDED'
+type CaseReviewState = 'PENDING' | 'ADOPTING' | 'ADOPTED' | 'DISCARDED' | 'ADOPT_FAILED'
 type DetailColumnKey =
   | 'title'
   | 'precondition'
@@ -104,6 +107,8 @@ const outputLogRef = ref<HTMLElement | null>(null)
 const outputAutoFollow = ref(true)
 const previewVisible = ref(false)
 const activeCaseCursor = ref(-1)
+const candidatesByIndex = ref<Record<number, AiCaseCandidateItem>>({})
+const candidateActionIndex = ref<number | null>(null)
 const selectedCaseIndexes = ref<number[]>([])
 const caseSearch = ref('')
 const caseStatusFilter = ref('ALL')
@@ -149,6 +154,22 @@ const adoptPickerDirectoryId = ref<number | null>(null)
 const adoptForm = reactive({
   directoryId: null as number | null,
 })
+
+interface AdoptionFailureItem {
+  index: number
+  title: string
+  reason: string
+}
+
+interface BatchAdoptionResult {
+  success: number
+  failed: AdoptionFailureItem[]
+}
+
+const adoptionStateByIndex = ref<Record<number, { state: Exclude<CaseReviewState, 'PENDING'>; reason?: string }>>({})
+const batchAdoptionResult = ref<BatchAdoptionResult | null>(null)
+const batchResultVisible = ref(false)
+const batchProgress = ref<{ done: number; total: number } | null>(null)
 
 const caseEditing = ref(false)
 const savingCaseEdit = ref(false)
@@ -203,6 +224,7 @@ const detailCases = computed<DetailCaseRow[]>(() => {
     index,
     adopted: adoptedIndexes.has(index),
     deleted: deletedIndexes.has(index),
+    candidate: candidatesByIndex.value[index] || null,
   }))
 })
 const filteredDetailCases = computed(() => {
@@ -216,26 +238,30 @@ const filteredDetailCases = computed(() => {
   })
 })
 const allFilteredCasesSelected = computed(() => (
-  filteredDetailCases.value.length > 0
-  && filteredDetailCases.value.every(row => selectedCaseIndexes.value.includes(row.index))
+  filteredDetailCases.value.some(row => getCaseReviewState(row) !== 'ADOPTING')
+  && filteredDetailCases.value
+    .filter(row => getCaseReviewState(row) !== 'ADOPTING')
+    .every(row => selectedCaseIndexes.value.includes(row.index))
 ))
 
 const activeCase = computed(() => detailCases.value[activeCaseCursor.value] ?? null)
 const canPreviewPreviousCase = computed(() => activeCaseCursor.value > 0)
 const canPreviewNextCase = computed(() => activeCaseCursor.value >= 0 && activeCaseCursor.value < detailCases.value.length - 1)
 const selectedCases = computed(() => detailCases.value.filter(item => selectedCaseIndexes.value.includes(item.index)))
-const selectedAdoptableCases = computed(() => selectedCases.value.filter(item => getCaseReviewState(item) === 'PENDING'))
+const selectedAdoptableCases = computed(() => selectedCases.value.filter(item => getCaseReviewState(item) === 'PENDING' && isCandidateReadyForAdoption(item)))
+const selectedAdoptableCaseCount = computed(() => selectedAdoptableCases.value.length)
 const selectedDiscardableCases = computed(() => selectedCases.value.filter(item => getCaseReviewState(item) === 'PENDING'))
-const adoptableCases = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'PENDING'))
+const adoptableCases = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'PENDING' && isCandidateReadyForAdoption(item)))
 const pendingCaseCount = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'PENDING').length)
 const adoptedCaseCount = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'ADOPTED').length)
 const discardedCaseCount = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'DISCARDED').length)
+const adoptionFailedCaseCount = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'ADOPT_FAILED').length)
 const initialCaseCount = computed(() => detailCases.value.filter(item => item.aiSource === 'INITIAL').length)
-const optimizedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'OPTIMIZED').length)
+const optimizedCaseCount = computed(() => detailCases.value.filter(item => ['OPTIMIZED', 'CHANGE_SUGGESTED'].includes(item.aiReviewStatus || '')).length)
 const supplementedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'SUPPLEMENTED' || item.aiSource === 'REVIEW_SUPPLEMENTED').length)
 const confirmRequiredCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'CONFIRM_REQUIRED').length)
 const notRecommendedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'NOT_RECOMMENDED').length)
-const reviewPassedCaseCount = computed(() => detailCases.value.filter(item => ['APPROVED', 'OPTIMIZED', 'SUPPLEMENTED'].includes(item.aiReviewStatus || '')).length)
+const reviewPassedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'APPROVED').length)
 const outputEvents = computed(() => [...(detailRecord.value?.events ?? [])].sort((left, right) => (left.seq ?? 0) - (right.seq ?? 0)))
 
 const generationModelInfo = computed(() => {
@@ -625,6 +651,10 @@ function getCaseReviewState(row: DetailCaseRow | null | undefined): CaseReviewSt
   if (!row) {
     return 'PENDING'
   }
+  const localState = adoptionStateByIndex.value[row.index]
+  if (localState) {
+    return localState.state
+  }
   // 已入库用例改为放弃时保留 adopted 标记，deleted 代表当前决策并优先展示，避免再次采纳时重复入库。
   if (row.deleted) {
     return 'DISCARDED'
@@ -641,9 +671,15 @@ function getCaseReviewStateLabel(row: DetailCaseRow | null | undefined) {
     return '已采纳'
   }
   if (state === 'DISCARDED') {
-    return '已废弃'
+    return '已放弃'
   }
-  return '待处理'
+  if (state === 'ADOPTING') {
+    return '采纳中'
+  }
+  if (state === 'ADOPT_FAILED') {
+    return '采纳失败'
+  }
+  return '待采纳'
 }
 
 function getCaseReviewStateClass(row: DetailCaseRow | null | undefined) {
@@ -654,43 +690,57 @@ function getCaseReviewStateClass(row: DetailCaseRow | null | undefined) {
   if (state === 'DISCARDED') {
     return 'status-discarded'
   }
+  if (state === 'ADOPTING') {
+    return 'status-info'
+  }
+  if (state === 'ADOPT_FAILED') {
+    return 'status-danger'
+  }
   return 'status-pending'
+}
+
+function getEffectiveReviewStatus(row: DetailCaseRow | null | undefined) {
+  return row?.candidate?.reviewStatus || row?.aiReviewStatus || 'PENDING'
 }
 
 function getAiReviewListLabel(row: DetailCaseRow) {
   const map: Record<string, string> = {
     APPROVED: '通过',
     OPTIMIZED: '已优化',
+    CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '已补充',
     CONFIRM_REQUIRED: '建议确认',
     NOT_RECOMMENDED: '不推荐',
     PENDING: '待评审',
   }
-  return map[row.aiReviewStatus || 'PENDING'] || (row.aiReviewStatus || '待评审')
+  const status = getEffectiveReviewStatus(row)
+  return map[status] || status
 }
 
 function getAiReviewListClass(row: DetailCaseRow) {
   const map: Record<string, string> = {
     APPROVED: 'status-success',
     OPTIMIZED: 'status-success',
+    CHANGE_SUGGESTED: 'status-warning',
     SUPPLEMENTED: 'status-success',
     CONFIRM_REQUIRED: 'status-warning',
     NOT_RECOMMENDED: 'status-danger',
     PENDING: 'status-warning',
   }
-  return map[row.aiReviewStatus || 'PENDING'] || 'status-neutral'
+  return map[getEffectiveReviewStatus(row)] || 'status-neutral'
 }
 
 function getFigmaReviewLabel(row: DetailCaseRow) {
   const map: Record<string, string> = {
     APPROVED: '评审通过',
     OPTIMIZED: '评审通过',
+    CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '评审通过',
     CONFIRM_REQUIRED: '建议确认',
     NOT_RECOMMENDED: '评审未通过',
     PENDING: '待评审',
   }
-  return map[row.aiReviewStatus || 'PENDING'] || getAiReviewListLabel(row)
+  return map[getEffectiveReviewStatus(row)] || getAiReviewListLabel(row)
 }
 
 function getFigmaCaseTags(row: DetailCaseRow) {
@@ -704,12 +754,13 @@ function getFigmaReviewTableLabel(row: DetailCaseRow) {
   const map: Record<string, string> = {
     APPROVED: '评审通过',
     OPTIMIZED: '评审通过',
+    CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '评审通过',
     CONFIRM_REQUIRED: '建议确认',
     NOT_RECOMMENDED: '评审未通过',
     PENDING: '待评审',
   }
-  return map[row.aiReviewStatus || 'PENDING'] || '待评审'
+  return map[getEffectiveReviewStatus(row)] || '待评审'
 }
 
 function getFigmaCaseSubtitle(row: DetailCaseRow) {
@@ -723,14 +774,18 @@ function getFigmaCaseSubtitle(row: DetailCaseRow) {
 }
 
 function getFigmaReviewReason(row: DetailCaseRow) {
-  return row.reviewComment?.trim() || row.aiReviewSummary?.trim() || ''
+  return row.candidate?.reviewReason?.trim()
+    || row.reviewComment?.trim()
+    || row.aiReviewSummary?.trim()
+    || ''
 }
 
 function getFigmaReviewTone(row: DetailCaseRow) {
-  if (row.aiReviewStatus === 'NOT_RECOMMENDED') {
+  const status = getEffectiveReviewStatus(row)
+  if (status === 'NOT_RECOMMENDED') {
     return 'is-danger'
   }
-  if (row.aiReviewStatus === 'CONFIRM_REQUIRED' || row.aiReviewStatus === 'PENDING') {
+  if (status === 'CONFIRM_REQUIRED' || status === 'PENDING') {
     return 'is-warning'
   }
   return 'is-success'
@@ -788,7 +843,9 @@ function toggleCaseSelection(index: number, checked: boolean) {
 }
 
 function toggleAllFilteredCases(checked: boolean) {
-  const filteredIndexes = filteredDetailCases.value.map(row => row.index)
+  const filteredIndexes = filteredDetailCases.value
+    .filter(row => getCaseReviewState(row) !== 'ADOPTING')
+    .map(row => row.index)
   if (checked) {
     selectedCaseIndexes.value = [...new Set([...selectedCaseIndexes.value, ...filteredIndexes])]
     return
@@ -809,7 +866,49 @@ function getFigmaCaseSteps(row: DetailCaseRow) {
 }
 
 function getFigmaReviewSuggestion(row: DetailCaseRow) {
-  return row.warnings?.[0] || row.optimizationReason || row.supplementReason || ''
+  return row.candidate?.reviewReason?.trim()
+    || row.warnings?.[0]
+    || row.optimizationReason
+    || row.supplementReason
+    || ''
+}
+
+function getDrawerOriginalCase(row: DetailCaseRow | null | undefined): GeneratedAiCaseItem | null {
+  if (!row) {
+    return null
+  }
+  return row.candidate?.originalCase || row.originalCaseSnapshot || row
+}
+
+function getDrawerSuggestedCase(row: DetailCaseRow | null | undefined): GeneratedAiCaseItem | null {
+  return row?.candidate?.suggestedCase || null
+}
+
+function getDrawerCurrentCase(row: DetailCaseRow | null | undefined): GeneratedAiCaseItem | null {
+  if (!row) {
+    return null
+  }
+  return row.candidate?.currentCase || row
+}
+
+function hasDrawerSuggestion(row: DetailCaseRow | null | undefined) {
+  return Boolean(getDrawerSuggestedCase(row))
+}
+
+function isCandidateSuggestionApplied(row: DetailCaseRow | null | undefined) {
+  return row?.candidate?.humanDecision === 'APPLIED_SUGGESTION'
+}
+
+function isCandidateOriginalKept(row: DetailCaseRow | null | undefined) {
+  return row?.candidate?.humanDecision === 'KEEP_ORIGINAL'
+}
+
+function isCandidateReadyForAdoption(row: DetailCaseRow | null | undefined) {
+  const candidate = row?.candidate
+  if (!candidate) {
+    return true
+  }
+  return candidate.humanDecision !== 'PENDING' || candidate.reviewStatus === 'APPROVED'
 }
 
 function getAiSourceLabel(row: DetailCaseRow | null | undefined) {
@@ -847,11 +946,12 @@ function escapeHtml(value: string) {
 }
 
 function syncCaseEditForm(row: DetailCaseRow | null) {
-  caseEditForm.title = row?.title || ''
-  caseEditForm.priority = row?.priority || 'P2'
-  caseEditForm.precondition = row?.precondition || ''
-  caseEditForm.steps = row?.steps || ''
-  caseEditForm.expectedResult = row?.expectedResult || ''
+  const current = getDrawerCurrentCase(row)
+  caseEditForm.title = current?.title || ''
+  caseEditForm.priority = current?.priority || 'P2'
+  caseEditForm.precondition = current?.precondition || ''
+  caseEditForm.steps = current?.steps || ''
+  caseEditForm.expectedResult = current?.expectedResult || ''
   caseEditForm.tags = row ? getFigmaCaseTags(row).join(', ') : ''
 }
 
@@ -1005,6 +1105,8 @@ async function loadRecord(options?: { silent?: boolean }) {
 
   try {
     detailRecord.value = await caseAiApi.getTask(resolvedWorkspaceCode.value, taskId)
+    hydrateAdoptionStates(detailRecord.value)
+    await hydrateCandidates(detailRecord.value)
     if (!detailCases.value.length) {
       activeCaseCursor.value = -1
       previewVisible.value = false
@@ -1023,6 +1125,7 @@ async function loadRecord(options?: { silent?: boolean }) {
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
     detailRecord.value = null
+    candidatesByIndex.value = {}
     stopPolling()
     syncEventStream(null)
   } finally {
@@ -1243,6 +1346,159 @@ function getCasesToAdopt() {
   return adoptDialogMode.value === 'selected' ? selectedAdoptableCases.value : adoptableCases.value
 }
 
+function adoptCaseRow(record: AiGenerationTaskItem, row: DetailCaseRow, directoryId: number) {
+  return row.candidate
+    ? caseAiApi.adoptCandidate(record.workspaceCode, record.taskId, row.candidate.candidateCaseId, directoryId)
+    : caseAiApi.adoptCase(record.workspaceCode, record.taskId, row.index, directoryId)
+}
+
+function setAdoptionState(index: number, state: Exclude<CaseReviewState, 'PENDING'>, reason?: string) {
+  adoptionStateByIndex.value = {
+    ...adoptionStateByIndex.value,
+    [index]: { state, reason },
+  }
+}
+
+function clearAdoptionState(index: number) {
+  const next = { ...adoptionStateByIndex.value }
+  delete next[index]
+  adoptionStateByIndex.value = next
+}
+
+function getAdoptionFailureReason(row: DetailCaseRow | null | undefined) {
+  if (!row) {
+    return ''
+  }
+  return adoptionStateByIndex.value[row.index]?.reason || ''
+}
+
+function hydrateAdoptionStates(record: AiGenerationTaskItem | null) {
+  if (!record) {
+    adoptionStateByIndex.value = {}
+    return
+  }
+  const next: typeof adoptionStateByIndex.value = {}
+  for (const adoption of record.adoptions ?? []) {
+    if (adoption.status === 'ADOPTING' || adoption.status === 'ADOPTED' || adoption.status === 'ADOPT_FAILED') {
+      next[adoption.caseIndex] = { state: adoption.status, reason: adoption.failureReason || undefined }
+    }
+  }
+  adoptionStateByIndex.value = next
+}
+
+async function hydrateCandidates(record: AiGenerationTaskItem | null) {
+  if (!record) {
+    candidatesByIndex.value = {}
+    return
+  }
+  try {
+    const candidates = await caseAiApi.listCandidates(record.workspaceCode, record.taskId)
+    candidatesByIndex.value = candidates.reduce<Record<number, AiCaseCandidateItem>>((map, candidate) => {
+      map[candidate.displayIndex] = candidate
+      return map
+    }, {})
+  } catch {
+    // 历史任务可能还没有候选表记录，抽屉继续使用任务快照展示。
+    candidatesByIndex.value = {}
+  }
+}
+
+function replaceGeneratedCase(index: number, currentCase: GeneratedAiCaseItem) {
+  if (!detailRecord.value) {
+    return
+  }
+  detailRecord.value = {
+    ...detailRecord.value,
+    generatedCases: detailRecord.value.generatedCases.map((item, itemIndex) => (
+      itemIndex === index ? currentCase : item
+    )),
+  }
+}
+
+async function chooseCandidateVersion(row: DetailCaseRow, action: 'keep' | 'apply') {
+  const record = detailRecord.value
+  const candidate = row.candidate
+  if (!record || !candidate || candidateActionIndex.value !== null) {
+    return
+  }
+
+  candidateActionIndex.value = row.index
+  try {
+    const payload = {
+      expectedVersion: candidate.contentVersion,
+      expectedContentHash: candidate.contentHash,
+    }
+    const updated = action === 'apply'
+      ? await caseAiApi.applyCandidateSuggestion(record.workspaceCode, record.taskId, candidate.candidateCaseId, payload)
+      : await caseAiApi.keepCandidateOriginal(record.workspaceCode, record.taskId, candidate.candidateCaseId, payload)
+    candidatesByIndex.value = { ...candidatesByIndex.value, [row.index]: updated }
+    replaceGeneratedCase(row.index, updated.currentCase)
+    syncCaseEditForm({ ...row, candidate: updated })
+    ElMessage.success(action === 'apply' ? '已应用 AI 优化版本' : '已保留原始版本')
+  } catch (error) {
+    ElMessage.error(action === 'apply' ? `应用优化失败：${getRequestErrorMessage(error)}` : `保留原版失败：${getRequestErrorMessage(error)}`)
+  } finally {
+    candidateActionIndex.value = null
+  }
+}
+
+function closeBatchResult() {
+  batchResultVisible.value = false
+  batchAdoptionResult.value = null
+}
+
+function retryFailedAdoptions() {
+  const failedRows = batchAdoptionResult.value?.failed
+    .map(item => detailCases.value.find(row => row.index === item.index))
+    .filter((row): row is DetailCaseRow => Boolean(row)) ?? []
+  closeBatchResult()
+  void retryAdoptionRows(failedRows)
+}
+
+async function retryAdoptionRows(rows: DetailCaseRow[]) {
+  if (!detailRecord.value || !rows.length) return
+  const retryable = rows.filter(row => getCaseReviewState(row) === 'ADOPT_FAILED')
+  if (!retryable.length) return
+  adoptSubmitting.value = true
+  batchProgress.value = { done: 0, total: retryable.length }
+  const failed: AdoptionFailureItem[] = []
+  try {
+    for (const [position, row] of retryable.entries()) {
+      const savedDirectoryId = detailRecord.value.adoptions?.find(item => item.caseIndex === row.index)?.directoryId
+        ?? detailRecord.value.directoryId
+      if (savedDirectoryId == null) {
+        const reason = '原保存路径不可用，请重新选择保存路径'
+        setAdoptionState(row.index, 'ADOPT_FAILED', reason)
+        failed.push({ index: row.index, title: row.title, reason })
+      } else {
+        setAdoptionState(row.index, 'ADOPTING')
+        const result = await adoptCaseRow(detailRecord.value, row, savedDirectoryId)
+        if (result.status === 'ADOPTED') {
+          setAdoptionState(row.index, 'ADOPTED')
+        } else {
+          const reason = result.failureReason || '写入用例库失败，请重试'
+          setAdoptionState(row.index, 'ADOPT_FAILED', reason)
+          failed.push({ index: row.index, title: row.title, reason })
+        }
+      }
+      batchProgress.value = { done: position + 1, total: retryable.length }
+    }
+    detailRecord.value = await caseAiApi.getTask(detailRecord.value.workspaceCode, detailRecord.value.taskId)
+    hydrateAdoptionStates(detailRecord.value)
+    if (failed.length) {
+      batchAdoptionResult.value = { success: retryable.length - failed.length, failed }
+      batchResultVisible.value = true
+    } else {
+      ElMessage.success(`已重试采纳 ${retryable.length} 条用例`)
+    }
+  } catch (error) {
+    ElMessage.error(`重试失败：${getRequestErrorMessage(error)}`)
+  } finally {
+    adoptSubmitting.value = false
+    batchProgress.value = null
+  }
+}
+
 async function submitAdoptCases() {
   if (!detailRecord.value) {
     ElMessage.warning('当前任务记录不存在，请刷新后重试')
@@ -1261,62 +1517,70 @@ async function submitAdoptCases() {
   }
 
   adoptSubmitting.value = true
+  batchProgress.value = { done: 0, total: casesToAdopt.length }
+  const failed: AdoptionFailureItem[] = []
+
   try {
-    for (const row of casesToAdopt) {
-      const payload: SaveCasePayload = {
-        directoryId: adoptForm.directoryId,
-        title: row.title,
-        caseType: row.caseType || '功能测试',
-        priority: row.priority || 'P2',
-        sourceType: 'AI生成',
-        caseStatus: '草稿',
-        ownerId: null,
-        precondition: row.precondition || '',
-        steps: row.steps || '',
-        expectedResult: row.expectedResult || '',
+    for (const [position, row] of casesToAdopt.entries()) {
+      setAdoptionState(row.index, 'ADOPTING')
+      try {
+        const result = await adoptCaseRow(detailRecord.value, row, adoptForm.directoryId)
+        if (result.status === 'ADOPTED') {
+          setAdoptionState(row.index, 'ADOPTED')
+        } else {
+          const reason = result.failureReason || '写入用例库失败，请重试'
+          setAdoptionState(row.index, 'ADOPT_FAILED', reason)
+          failed.push({ index: row.index, title: row.title, reason })
+        }
+      } catch (error) {
+        const reason = getRequestErrorMessage(error)
+        setAdoptionState(row.index, 'ADOPT_FAILED', reason)
+        failed.push({ index: row.index, title: row.title, reason })
+      } finally {
+        batchProgress.value = { done: position + 1, total: casesToAdopt.length }
       }
-      await caseApi.createCase(detailRecord.value.workspaceCode, payload)
     }
 
-    const adoptedIndexes = new Set(detailRecord.value.adoptedCaseIndexes ?? [])
-    const deletedIndexes = new Set(detailRecord.value.deletedCaseIndexes ?? [])
-    casesToAdopt.forEach(row => {
-      adoptedIndexes.add(row.index)
-      deletedIndexes.delete(row.index)
-    })
-
-    detailRecord.value = await caseAiApi.updateTask(detailRecord.value.workspaceCode, detailRecord.value.taskId, {
-      directoryId: adoptForm.directoryId,
-      directoryName: adoptDirectoryOptions.value.find(item => item.value === adoptForm.directoryId)?.label ?? detailRecord.value.directoryName,
-      adoptedCaseIndexes: [...adoptedIndexes],
-      deletedCaseIndexes: [...deletedIndexes],
-      savedCaseCount: adoptedIndexes.size,
-    })
-    selectedCaseIndexes.value = selectedCaseIndexes.value.filter(index => !casesToAdopt.some(row => row.index === index))
+    detailRecord.value = await caseAiApi.getTask(detailRecord.value.workspaceCode, detailRecord.value.taskId)
+    hydrateAdoptionStates(detailRecord.value)
+    const failedIndexes = new Set(failed.map(item => item.index))
+    selectedCaseIndexes.value = selectedCaseIndexes.value.filter(index => failedIndexes.has(index))
     adoptDialogVisible.value = false
-    ElMessage.success(`已采纳 ${casesToAdopt.length} 条用例`)
+
+    if (failed.length) {
+      batchAdoptionResult.value = { success: casesToAdopt.length - failed.length, failed }
+      batchResultVisible.value = true
+    } else {
+      ElMessage.success(`已采纳 ${casesToAdopt.length} 条用例`)
+    }
   } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
+    ElMessage.error(`采纳结果保存失败：${getRequestErrorMessage(error)}`)
   } finally {
     adoptSubmitting.value = false
+    batchProgress.value = null
   }
 }
 
 async function discardSingleCase(row: DetailCaseRow) {
   const currentState = getCaseReviewState(row)
-  if (!detailRecord.value || (currentState !== 'PENDING' && currentState !== 'ADOPTED')) {
+  if (!detailRecord.value || currentState !== 'PENDING') {
     return
   }
   const deleted = new Set(detailRecord.value.deletedCaseIndexes ?? [])
   deleted.add(row.index)
-  detailRecord.value = await caseAiApi.updateTask(detailRecord.value.workspaceCode, detailRecord.value.taskId, {
-    deletedCaseIndexes: [...deleted],
-  })
-  ElMessage.success(currentState === 'ADOPTED' ? '已改为放弃' : '用例已放弃')
+  try {
+    detailRecord.value = await caseAiApi.updateTask(detailRecord.value.workspaceCode, detailRecord.value.taskId, {
+      deletedCaseIndexes: [...deleted],
+    })
+    clearAdoptionState(row.index)
+    ElMessage.success('用例已放弃')
+  } catch (error) {
+    ElMessage.error(`放弃失败：${getRequestErrorMessage(error)}`)
+  }
 }
 
 function getRestoreActionLabel(row: DetailCaseRow) {
-  return row.adopted ? '恢复为已采纳' : '恢复为待处理'
+  return row.adopted ? '恢复为已采纳' : '恢复为待采纳'
 }
 
 async function restoreDiscardedCase(row: DetailCaseRow) {
@@ -1334,7 +1598,12 @@ async function restoreDiscardedCase(row: DetailCaseRow) {
       deletedCaseIndexes: [...discarded],
       savedCaseCount: adopted.size,
     })
-    ElMessage.success(row.adopted ? '已恢复为已采纳' : '已恢复为待处理')
+    if (row.adopted) {
+      setAdoptionState(row.index, 'ADOPTED')
+    } else {
+      clearAdoptionState(row.index)
+    }
+    ElMessage.success(row.adopted ? '已恢复为已采纳' : '已恢复为待采纳')
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   }
@@ -1345,19 +1614,21 @@ async function discardSelectedCases() {
     return
   }
   if (!selectedDiscardableCases.value.length) {
-    ElMessage.info(selectedCaseIndexes.value.length ? '当前选中的用例里没有可弃用项' : '请先勾选需要弃用的用例')
+    ElMessage.info(selectedCaseIndexes.value.length ? '当前选中的用例里没有可放弃项' : '请先勾选需要放弃的用例')
     return
   }
 
-  await ElMessageBox.confirm(
-    `确定放弃已选中的 ${selectedDiscardableCases.value.length} 条生成用例吗？放弃后可在查看抽屉中改为采纳。`,
-    '批量放弃用例',
-    {
-      type: 'warning',
-      confirmButtonText: '确认放弃',
-      cancelButtonText: '取消',
-    },
-  )
+  try {
+    await confirmAction({
+      title: '批量放弃用例',
+      message: `确定放弃已选中的 ${selectedDiscardableCases.value.length} 条生成用例吗？放弃后可在查看抽屉中恢复为待采纳。`,
+      confirmText: '确认放弃',
+      cancelText: '取消',
+      tone: 'warning',
+    })
+  } catch {
+    return
+  }
 
   const deleted = new Set(detailRecord.value.deletedCaseIndexes ?? [])
   selectedDiscardableCases.value.forEach(row => deleted.add(row.index))
@@ -1370,40 +1641,33 @@ async function discardSelectedCases() {
 
 async function adoptSingleCase(row: DetailCaseRow) {
   const currentState = getCaseReviewState(row)
-  if (!detailRecord.value || (currentState !== 'PENDING' && currentState !== 'DISCARDED')) {
+  if (!detailRecord.value || (currentState !== 'PENDING' && currentState !== 'DISCARDED' && currentState !== 'ADOPT_FAILED')) {
     return
   }
-  if (!detailRecord.value.directoryId) {
+  const savedDirectoryId = detailRecord.value.adoptions?.find(item => item.caseIndex === row.index)?.directoryId
+    ?? detailRecord.value.directoryId
+  if (savedDirectoryId == null) {
     ElMessage.warning('请先设置保存路径，再采纳用例')
     return
   }
 
-  const payload: SaveCasePayload = {
-    directoryId: detailRecord.value.directoryId,
-    title: row.title,
-    caseType: row.caseType || '功能测试',
-    priority: row.priority || 'P2',
-    sourceType: 'AI生成',
-    caseStatus: '草稿',
-    ownerId: null,
-    precondition: row.precondition || '',
-    steps: row.steps || '',
-    expectedResult: row.expectedResult || '',
+  setAdoptionState(row.index, 'ADOPTING')
+  try {
+    const result = await adoptCaseRow(detailRecord.value, row, savedDirectoryId)
+    if (result.status === 'ADOPTED') {
+      setAdoptionState(row.index, 'ADOPTED')
+      detailRecord.value = await caseAiApi.getTask(detailRecord.value.workspaceCode, detailRecord.value.taskId)
+      hydrateAdoptionStates(detailRecord.value)
+      ElMessage.success('用例已采纳')
+    } else {
+      const reason = result.failureReason || '写入用例库失败，请重试'
+      setAdoptionState(row.index, 'ADOPT_FAILED', reason)
+      ElMessage.error(`采纳失败：${reason}`)
+    }
+  } catch (error) {
+    setAdoptionState(row.index, 'ADOPT_FAILED', getRequestErrorMessage(error))
+    ElMessage.error(`采纳失败：${getRequestErrorMessage(error)}`)
   }
-
-  const adopted = new Set(detailRecord.value.adoptedCaseIndexes ?? [])
-  const discarded = new Set(detailRecord.value.deletedCaseIndexes ?? [])
-  if (!adopted.has(row.index)) {
-    await caseApi.createCase(detailRecord.value.workspaceCode, payload)
-  }
-  adopted.add(row.index)
-  discarded.delete(row.index)
-  detailRecord.value = await caseAiApi.updateTask(detailRecord.value.workspaceCode, detailRecord.value.taskId, {
-    adoptedCaseIndexes: [...adopted],
-    deletedCaseIndexes: [...discarded],
-    savedCaseCount: adopted.size,
-  })
-  ElMessage.success('用例已采纳')
 }
 
 function openCasePreview(row: DetailCaseRow) {
@@ -1459,25 +1723,40 @@ async function saveCaseEdit() {
       .split(/[,，]/)
       .map(item => item.trim().replace(/^#/, ''))
       .filter(Boolean)
-    detailRecord.value = await caseAiApi.updateTask(detailRecord.value.workspaceCode, detailRecord.value.taskId, {
-      generatedCases: detailRecord.value.generatedCases.map((item, index) => (
-        index === targetIndex
-          ? {
-              ...item,
-              title,
-              priority: caseEditForm.priority,
-              precondition: caseEditForm.precondition,
-              steps: caseEditForm.steps,
-              expectedResult: caseEditForm.expectedResult,
-              testAngle: editedTags[0] || '',
-              caseType: editedTags[1] || '',
-              manualEdited: true,
-              manualEditedByName: editorName,
-              manualEditedAt: now,
-            }
-          : item
-      )),
-    })
+    const candidate = activeCase.value.candidate
+    const currentCase = {
+      ...(getDrawerCurrentCase(activeCase.value) || activeCase.value),
+      title,
+      priority: caseEditForm.priority,
+      precondition: caseEditForm.precondition,
+      steps: caseEditForm.steps,
+      expectedResult: caseEditForm.expectedResult,
+      testAngle: editedTags[0] || '',
+      caseType: editedTags[1] || '',
+      manualEdited: true,
+      manualEditedByName: editorName,
+      manualEditedAt: now,
+    }
+    if (candidate) {
+      const updatedCandidate = await caseAiApi.updateCandidateCurrentCase(
+        detailRecord.value.workspaceCode,
+        detailRecord.value.taskId,
+        candidate.candidateCaseId,
+        {
+          expectedVersion: candidate.contentVersion,
+          expectedContentHash: candidate.contentHash,
+          currentCase,
+        },
+      )
+      candidatesByIndex.value = { ...candidatesByIndex.value, [targetIndex]: updatedCandidate }
+      replaceGeneratedCase(targetIndex, updatedCandidate.currentCase)
+    } else {
+      detailRecord.value = await caseAiApi.updateTask(detailRecord.value.workspaceCode, detailRecord.value.taskId, {
+        generatedCases: detailRecord.value.generatedCases.map((item, index) => (
+          index === targetIndex ? currentCase : item
+        )),
+      })
+    }
     caseEditing.value = false
     syncCaseEditForm(activeCase.value)
     ElMessage.success('用例内容已更新')
@@ -1569,6 +1848,10 @@ watch(() => route.params.taskId, () => {
   stopEventStream()
   previewVisible.value = false
   selectedCaseIndexes.value = []
+  adoptionStateByIndex.value = {}
+  batchAdoptionResult.value = null
+  batchResultVisible.value = false
+  batchProgress.value = null
   void loadRecord()
 })
 
@@ -1610,6 +1893,7 @@ onMounted(() => {
   const snapshot = window.history.state?.recordSnapshot as AiGenerationTaskItem | undefined
   if (snapshot?.taskId === route.params.taskId) {
     detailRecord.value = snapshot
+    hydrateAdoptionStates(snapshot)
     loading.value = false
   }
   void loadRecord()
@@ -1656,6 +1940,9 @@ onBeforeUnmount(() => {
               {{ getStatusLabel(detailRecord.status) }}
             </span>
             <strong>{{ detailRecord.requirementTitle }}</strong>
+            <span class="case-ai-record-detail-page__task-models">
+              生成模型：{{ generationModelInfo.model || '-' }} · 评审模型：{{ reviewModelInfo.model || '-' }}
+            </span>
             <span class="case-ai-record-detail-page__task-time">
               {{ formatFigmaDateTime(detailRecord.createdAt) }} · {{ detailRecord.createdByName || detailRecord.updatedByName || '-' }}
             </span>
@@ -1667,10 +1954,10 @@ onBeforeUnmount(() => {
           <div class="case-ai-record-detail-page__task-stats">
             <div><strong>{{ detailCases.length }}</strong><span>生成总数</span></div>
             <div class="is-success"><strong>{{ reviewPassedCaseCount }}</strong><span>评审通过</span></div>
+            <div class="is-warning"><strong>{{ pendingCaseCount }}</strong><span>待采纳</span></div>
             <div class="is-primary"><strong>{{ adoptedCaseCount }}</strong><span>已采纳</span></div>
-            <div class="is-muted"><strong>{{ discardedCaseCount }}</strong><span>已废弃</span></div>
-            <div class="is-model"><strong>{{ generationModelInfo.model || '-' }}</strong><span>生成模型</span></div>
-            <div class="is-model is-review-model"><strong>{{ reviewModelInfo.model || '-' }}</strong><span>评审模型</span></div>
+            <div class="is-muted"><strong>{{ discardedCaseCount }}</strong><span>已放弃</span></div>
+            <div class="is-danger"><strong>{{ adoptionFailedCaseCount }}</strong><span>采纳失败</span></div>
           </div>
         </header>
 
@@ -1689,19 +1976,23 @@ onBeforeUnmount(() => {
             </label>
             <select v-model="caseStatusFilter" class="case-ai-record-detail-page__result-filter">
               <option value="ALL">全部状态</option>
-              <option value="PENDING">待处理</option>
+              <option value="PENDING">待采纳</option>
+              <option value="ADOPTING">采纳中</option>
               <option value="ADOPTED">已采纳</option>
-              <option value="DISCARDED">已废弃</option>
+              <option value="DISCARDED">已放弃</option>
+              <option value="ADOPT_FAILED">采纳失败</option>
             </select>
             <button
               type="button"
               class="case-ai-record-detail-page__batch-adopt"
               :class="{ 'is-batch': selectedCaseIndexes.length > 0 }"
-              :disabled="selectedCaseIndexes.length ? !selectedAdoptableCases.length : !adoptableCases.length"
+              :disabled="Boolean(batchProgress) || (selectedCaseIndexes.length ? !selectedAdoptableCases.length : !adoptableCases.length)"
               @click="openAdoptDialog(selectedCaseIndexes.length ? 'selected' : 'all')"
             >
-              <ThumbsUp :size="11" />
-              {{ selectedCaseIndexes.length ? '批量采纳 (' + selectedCaseIndexes.length + ')' : '全部采纳' }}
+              <Loader2 v-if="batchProgress" :size="11" class="is-spinning" />
+              <ThumbsUp v-else :size="11" />
+              <template v-if="batchProgress">正在采纳 {{ batchProgress.done }}/{{ batchProgress.total }}</template>
+              <template v-else>{{ selectedCaseIndexes.length ? '批量采纳 (' + selectedAdoptableCaseCount + ')' : '全部采纳 (' + adoptableCases.length + ')' }}</template>
             </button>
           </div>
         </div>
@@ -1723,12 +2014,15 @@ onBeforeUnmount(() => {
               :class="{
                 'is-selected': selectedCaseIndexes.includes(row.index),
                 'is-discarded': getCaseReviewState(row) === 'DISCARDED',
+                'is-adopting': getCaseReviewState(row) === 'ADOPTING',
+                'is-adopt-failed': getCaseReviewState(row) === 'ADOPT_FAILED',
               }"
             >
               <label>
                 <input
                   type="checkbox"
                   :checked="selectedCaseIndexes.includes(row.index)"
+                  :disabled="getCaseReviewState(row) === 'ADOPTING'"
                   @change="toggleCaseSelection(row.index, ($event.target as HTMLInputElement).checked)"
                 />
               </label>
@@ -1747,7 +2041,10 @@ onBeforeUnmount(() => {
                 {{ row.priority || 'P2' }}
               </span>
               <span class="case-ai-record-detail-page__review-tag" :class="getAiReviewListClass(row)">{{ getFigmaReviewTableLabel(row) }}</span>
-              <span class="case-ai-record-detail-page__case-state" :class="getCaseReviewStateClass(row)">{{ getCaseReviewStateLabel(row) }}</span>
+              <span class="case-ai-record-detail-page__case-state" :class="getCaseReviewStateClass(row)">
+                <Loader2 v-if="getCaseReviewState(row) === 'ADOPTING'" :size="12" />
+                {{ getCaseReviewStateLabel(row) }}
+              </span>
               <div class="case-ai-record-detail-page__row-actions">
                 <button type="button" aria-label="查看用例" @click="openCasePreview(row)"><Eye :size="14" /></button>
                 <button
@@ -1772,6 +2069,14 @@ onBeforeUnmount(() => {
                   :title="getRestoreActionLabel(row)"
                   @click="restoreDiscardedCase(row)"
                 ><RotateCcw :size="14" /></button>
+                <span v-if="getCaseReviewState(row) === 'ADOPTING'" class="case-ai-record-detail-page__row-progress">采纳中</span>
+                <button
+                  v-if="getCaseReviewState(row) === 'ADOPT_FAILED'"
+                  type="button"
+                  class="is-retry"
+                  aria-label="重试采纳"
+                  @click="adoptSingleCase(row)"
+                ><RotateCcw :size="12" />重试</button>
               </div>
             </div>
 
@@ -1794,6 +2099,9 @@ onBeforeUnmount(() => {
                 </div>
                 <div v-if="getFigmaReviewSuggestion(row)" class="case-ai-record-detail-page__expanded-suggestion">
                   💡 {{ getFigmaReviewSuggestion(row) }}
+                </div>
+                <div v-if="getCaseReviewState(row) === 'ADOPT_FAILED'" class="case-ai-record-detail-page__expanded-adoption-error">
+                  <AlertCircle :size="13" />{{ getAdoptionFailureReason(row) || '写入用例库失败，请重试。' }}
                 </div>
               </section>
             </div>
@@ -1840,7 +2148,7 @@ onBeforeUnmount(() => {
 
     <AppDrawer
       v-model="previewVisible"
-      size="540px"
+      size="680px"
       title="用例详情"
       :drawer-class="caseEditing ? 'case-ai-record-detail-page__result-drawer is-editing' : 'case-ai-record-detail-page__result-drawer'"
     >
@@ -1850,34 +2158,74 @@ onBeforeUnmount(() => {
             <span class="case-ai-record-detail-page__priority-tag" :class="'priority-' + String(activeCase.priority || 'P2').toLowerCase()">{{ activeCase.priority || 'P2' }}</span>
             <span class="case-ai-record-detail-page__type-tag" :class="getCaseTypeClass(activeCase)">{{ getDisplayCaseType(activeCase) }}</span>
             <span class="case-ai-record-detail-page__review-tag" :class="getAiReviewListClass(activeCase)">{{ getFigmaReviewLabel(activeCase) }}</span>
+            <span
+              v-if="activeCase.aiSource === 'REVIEW_SUPPLEMENTED' || activeCase.candidate?.origin === 'REVIEW_SUPPLEMENTED'"
+              class="case-ai-record-detail-page__source-tag"
+            >AI 补充</span>
             <span v-if="caseEditing" class="case-ai-record-detail-page__editing-tag">编辑中</span>
           </div>
           <button v-if="!caseEditing" type="button" class="case-ai-record-detail-page__drawer-edit" @click="startCaseEdit">
             <Pencil :size="13" />编辑
           </button>
           <input v-if="caseEditing" v-model="caseEditForm.title" class="case-ai-record-detail-page__drawer-title-input" />
-          <h2 v-else>{{ activeCase.title }}</h2>
+          <h2 v-else>{{ getDrawerCurrentCase(activeCase)?.title || activeCase.title }}</h2>
           <p>模块：{{ activeCase.directoryName || detailRecord?.directoryName || '-' }} · 评分：{{ getCaseScore(activeCase) ?? '--' }}</p>
         </div>
       </template>
 
       <template v-if="activeCase">
         <div v-if="!caseEditing" class="case-ai-record-detail-page__drawer-content">
+          <section v-if="hasDrawerSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-version is-original">
+            <div class="case-ai-record-detail-page__drawer-version-header">
+              <h4>AI 生成原始版本</h4>
+              <span>原始内容</span>
+            </div>
+            <div class="case-ai-record-detail-page__drawer-version-title">{{ getDrawerOriginalCase(activeCase)?.title }}</div>
+            <dl>
+              <div><dt>前置条件</dt><dd>{{ formatCaseCellText(getDrawerOriginalCase(activeCase)?.precondition) }}</dd></div>
+              <div><dt>测试步骤</dt><dd>{{ formatCaseCellText(getDrawerOriginalCase(activeCase)?.steps) }}</dd></div>
+              <div><dt>预期结果</dt><dd>{{ formatCaseCellText(getDrawerOriginalCase(activeCase)?.expectedResult) }}</dd></div>
+            </dl>
+          </section>
           <section>
-            <h4>前置条件</h4>
-            <div>{{ formatCaseCellText(activeCase.precondition) }}</div>
+            <h4>{{ hasDrawerSuggestion(activeCase) ? '当前采纳版本' : '前置条件' }}</h4>
+            <div>{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.precondition) }}</div>
           </section>
           <section>
             <h4>测试步骤</h4>
-            <div>{{ formatCaseCellText(activeCase.steps) }}</div>
+            <div>{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.steps) }}</div>
           </section>
           <section>
             <h4>预期结果</h4>
-            <div>{{ formatCaseCellText(activeCase.expectedResult) }}</div>
+            <div>{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.expectedResult) }}</div>
           </section>
-          <section v-if="getFigmaReviewSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-suggestion">
+          <section v-if="hasDrawerSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-version is-suggested">
+            <div class="case-ai-record-detail-page__drawer-version-header">
+              <h4>AI 优化建议版本</h4>
+              <span>建议稿</span>
+            </div>
+            <div class="case-ai-record-detail-page__drawer-version-title">{{ getDrawerSuggestedCase(activeCase)?.title }}</div>
+            <dl>
+              <div><dt>前置条件</dt><dd>{{ formatCaseCellText(getDrawerSuggestedCase(activeCase)?.precondition) }}</dd></div>
+              <div><dt>测试步骤</dt><dd>{{ formatCaseCellText(getDrawerSuggestedCase(activeCase)?.steps) }}</dd></div>
+              <div><dt>预期结果</dt><dd>{{ formatCaseCellText(getDrawerSuggestedCase(activeCase)?.expectedResult) }}</dd></div>
+            </dl>
+            <p v-if="getFigmaReviewSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-version-reason">
+              <strong>优化说明：</strong>{{ getFigmaReviewSuggestion(activeCase) }}
+            </p>
+            <div v-if="activeCase.candidate && activeCase.candidate.humanDecision === 'PENDING'" class="case-ai-record-detail-page__drawer-version-actions">
+              <button type="button" class="is-keep" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'keep')">{{ candidateActionIndex === activeCase.index ? '处理中...' : '保留原版' }}</button>
+              <button type="button" class="is-apply" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'apply')">{{ candidateActionIndex === activeCase.index ? '处理中...' : '应用优化版' }}</button>
+            </div>
+            <div v-else-if="isCandidateSuggestionApplied(activeCase)" class="case-ai-record-detail-page__drawer-version-state is-applied"><CheckCircle2 :size="14" />已应用 AI 优化版本</div>
+            <div v-else-if="isCandidateOriginalKept(activeCase)" class="case-ai-record-detail-page__drawer-version-state is-kept"><CheckCircle2 :size="14" />已保留原始版本</div>
+          </section>
+          <section v-if="getFigmaReviewSuggestion(activeCase) && !hasDrawerSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-suggestion">
             <h4>AI 评审建议</h4>
             <p>{{ getFigmaReviewSuggestion(activeCase) }}</p>
+            <div v-if="activeCase.candidate?.reviewStatus === 'CONFIRM_REQUIRED' && activeCase.candidate.humanDecision === 'PENDING'" class="case-ai-record-detail-page__drawer-confirm-actions">
+              <button type="button" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'keep')">{{ candidateActionIndex === activeCase.index ? '处理中...' : '确认保留原版' }}</button>
+            </div>
           </section>
           <section v-if="getFigmaCaseTags(activeCase).length" class="case-ai-record-detail-page__drawer-labels">
             <h4>标签</h4>
@@ -1925,7 +2273,18 @@ onBeforeUnmount(() => {
             </template>
             <template v-else-if="getCaseReviewState(activeCase) === 'PENDING'">
               <button type="button" class="is-discard" @click="discardSingleCase(activeCase)"><ThumbsDown :size="12" />放弃此条</button>
-              <button type="button" class="is-adopt" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />采纳用例</button>
+              <span v-if="!isCandidateReadyForAdoption(activeCase)" class="case-ai-record-detail-page__drawer-decision is-review-pending">请先确认评审结果</span>
+              <button v-else type="button" class="is-adopt" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />采纳用例</button>
+            </template>
+            <template v-else-if="getCaseReviewState(activeCase) === 'ADOPTING'">
+              <span class="case-ai-record-detail-page__drawer-decision is-adopting"><Loader2 :size="14" />采纳中</span>
+            </template>
+            <template v-else-if="getCaseReviewState(activeCase) === 'ADOPT_FAILED'">
+              <div class="case-ai-record-detail-page__drawer-adoption-error">
+                <span><AlertCircle :size="14" />采纳失败</span>
+                <small>{{ getAdoptionFailureReason(activeCase) || '写入用例库失败，请重试。' }}</small>
+              </div>
+              <button type="button" class="is-adopt is-retry" @click="adoptSingleCase(activeCase)"><RotateCcw :size="12" />重试采纳</button>
             </template>
             <template v-else-if="getCaseReviewState(activeCase) === 'DISCARDED'">
               <span class="case-ai-record-detail-page__drawer-decision is-discarded"><CircleX :size="14" />已放弃</span>
@@ -1933,7 +2292,6 @@ onBeforeUnmount(() => {
             </template>
             <template v-else>
               <span class="case-ai-record-detail-page__drawer-decision is-adopted"><CircleCheckBig :size="14" />已采纳</span>
-              <button type="button" class="is-discard" @click="discardSingleCase(activeCase)"><ThumbsDown :size="12" />改为放弃</button>
             </template>
           </div>
         </div>
@@ -2068,6 +2426,49 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </el-dialog>
+
+    <AppDialog
+      v-model="batchResultVisible"
+      width="460px"
+      variant="figma-result"
+      :show-close="false"
+      :destroy-on-close="false"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      dialog-class="case-ai-record-detail-page__batch-result-dialog"
+      @update:model-value="(visible) => { if (!visible) closeBatchResult() }"
+    >
+      <template #header>
+        <div class="case-ai-record-detail-page__batch-result-header">
+          <div class="case-ai-record-detail-page__batch-result-icon" :class="{ 'is-failed': batchAdoptionResult?.failed.length }">
+            <AlertCircle v-if="batchAdoptionResult?.failed.length" :size="18" />
+            <CheckCircle2 v-else :size="18" />
+          </div>
+          <span>批量采纳完成</span>
+        </div>
+      </template>
+      <div v-if="batchAdoptionResult" class="case-ai-record-detail-page__batch-result-body">
+        <div class="case-ai-record-detail-page__batch-result-summary">
+          <div class="is-success"><strong>{{ batchAdoptionResult.success }}</strong><span>成功写入</span></div>
+          <div v-if="batchAdoptionResult.failed.length" class="is-failed"><strong>{{ batchAdoptionResult.failed.length }}</strong><span>采纳失败</span></div>
+        </div>
+        <div v-if="batchAdoptionResult.failed.length" class="case-ai-record-detail-page__batch-result-list">
+          <div class="case-ai-record-detail-page__batch-result-label">失败详情（{{ batchAdoptionResult.failed.length }}）</div>
+          <div v-for="item in batchAdoptionResult.failed" :key="item.index" class="case-ai-record-detail-page__batch-result-item">
+            <AlertCircle :size="13" />
+            <div><strong>{{ item.title }}</strong><span>{{ item.reason }}</span></div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="case-ai-record-detail-page__dialog-footer">
+          <AppButton @click="closeBatchResult">关闭</AppButton>
+          <AppButton v-if="batchAdoptionResult?.failed.length" type="warning" @click="retryFailedAdoptions">
+            <RotateCcw :size="13" />重试失败项
+          </AppButton>
+        </div>
+      </template>
+    </AppDialog>
 
     <el-dialog v-model="adoptPickerVisible" width="720px" destroy-on-close class="case-ai-record-detail-page__dialog">
       <template #header>
@@ -3855,6 +4256,16 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.case-ai-record-detail-page__task-models {
+  max-width: 360px;
+  overflow: hidden;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .case-ai-record-detail-page__task-log {
   display: inline-flex;
   height: 32px;
@@ -3920,6 +4331,14 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__task-stats .is-muted strong {
   color: #86909c;
+}
+
+.case-ai-record-detail-page__task-stats .is-warning strong {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__task-stats .is-danger strong {
+  color: #f53f3f;
 }
 
 .case-ai-record-detail-page__task-stats .is-model {
@@ -4017,7 +4436,7 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__batch-adopt {
   display: inline-flex;
-  width: 95px;
+  width: 115px;
   height: 32px;
   align-items: center;
   gap: 5px;
@@ -4055,6 +4474,10 @@ onBeforeUnmount(() => {
 .case-ai-record-detail-page__batch-adopt:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.case-ai-record-detail-page__batch-adopt .is-spinning {
+  animation: case-ai-record-detail-page-spin 1s linear infinite;
 }
 
 .case-ai-record-detail-page__result-table {
@@ -4300,8 +4723,17 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-record-detail-page__case-state.status-info {
-  color: #c9cdd4;
-  background: transparent;
+  color: #165dff;
+  background: #e8f3ff;
+}
+
+.case-ai-record-detail-page__case-state.status-danger {
+  color: #f53f3f;
+  background: #ffe8e8;
+}
+
+.case-ai-record-detail-page__case-state.status-info svg {
+  animation: case-ai-record-detail-page-spin 1s linear infinite;
 }
 
 .case-ai-record-detail-page__score {
@@ -4355,6 +4787,48 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__row-actions .is-restore:hover {
   color: #86909c;
+}
+
+.case-ai-record-detail-page__result-row.is-adopting {
+  opacity: 0.72;
+}
+
+.case-ai-record-detail-page__result-row.is-adopt-failed {
+  background: #fffafa;
+}
+
+.case-ai-record-detail-page__row-progress {
+  color: #165dff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.case-ai-record-detail-page__row-actions .is-retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: auto;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 1px solid #ff7d00;
+  border-radius: 4px;
+  color: #ff7d00;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.case-ai-record-detail-page__expanded-adoption-error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #f53f3f30;
+  border-radius: 5px;
+  color: #f53f3f;
+  background: #fff7f7;
+  font-size: 12px;
 }
 
 .case-ai-record-detail-page__expanded-row {
@@ -4523,8 +4997,27 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-record-detail-page__editing-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 7px;
+  border-radius: 3px;
   color: #165dff;
   background: #e8f3ff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.case-ai-record-detail-page__source-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 7px;
+  border-radius: 3px;
+  color: #722ed1;
+  background: #f3e8ff;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .case-ai-record-detail-page__drawer-header h2 {
@@ -4851,6 +5344,332 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__drawer-decision.is-discarded {
   color: #86909c;
+}
+
+.case-ai-record-detail-page__drawer-version {
+  padding: 14px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.case-ai-record-detail-page__drawer-version.is-original {
+  background: #f7f8fa;
+}
+
+.case-ai-record-detail-page__drawer-version.is-suggested {
+  border-color: #ffcc99;
+  background: #fffaf0;
+}
+
+.case-ai-record-detail-page__drawer-version-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.case-ai-record-detail-page__drawer-version-header h4 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.case-ai-record-detail-page__drawer-version-header span {
+  color: #86909c;
+  font-size: 11px;
+}
+
+.case-ai-record-detail-page__drawer-version.is-suggested .case-ai-record-detail-page__drawer-version-header h4 {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-version-title {
+  margin-bottom: 10px;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.case-ai-record-detail-page__drawer-version dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.case-ai-record-detail-page__drawer-version dl > div {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.case-ai-record-detail-page__drawer-version dt {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.case-ai-record-detail-page__drawer-version dd {
+  margin: 0;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+
+.case-ai-record-detail-page__drawer-version-reason {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #ffcc99;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.case-ai-record-detail-page__drawer-version-reason strong {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-version-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.case-ai-record-detail-page__drawer-version-actions button {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__drawer-version-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.case-ai-record-detail-page__drawer-version-actions .is-keep {
+  border: 1px solid #d9dce1;
+  color: #4e5969;
+  background: #fff;
+}
+
+.case-ai-record-detail-page__drawer-version-actions .is-apply {
+  border: 1px solid #ff7d00;
+  color: #fff;
+  background: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-version-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.case-ai-record-detail-page__drawer-version-state.is-applied {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-version-state.is-kept {
+  color: #00b42a;
+}
+
+.case-ai-record-detail-page__drawer-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.case-ai-record-detail-page__drawer-confirm-actions button {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #ff7d00;
+  border-radius: 6px;
+  color: #fff;
+  background: #ff7d00;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__drawer-confirm-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.case-ai-record-detail-page__drawer-decision.is-adopting {
+  color: #165dff;
+}
+
+.case-ai-record-detail-page__drawer-decision.is-review-pending {
+  color: #ff7d00;
+  font-size: 12px;
+}
+
+.case-ai-record-detail-page__drawer-decision.is-adopting svg {
+  animation: case-ai-record-detail-page-spin 1s linear infinite;
+}
+
+.case-ai-record-detail-page__drawer-adoption-error {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  color: #f53f3f;
+  font-size: 12px;
+}
+
+.case-ai-record-detail-page__drawer-adoption-error span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+
+.case-ai-record-detail-page__drawer-adoption-error small {
+  overflow: hidden;
+  color: #86909c;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-ai-record-detail-page__drawer-actions .is-retry {
+  border: 1px solid #ff7d00;
+  color: #ff7d00;
+  background: #fff;
+}
+
+.case-ai-record-detail-page__batch-result-dialog .case-ai-record-detail-page__batch-result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22.5px;
+}
+
+.case-ai-record-detail-page__batch-result-dialog .case-ai-record-detail-page__dialog-footer {
+  justify-content: flex-end;
+}
+
+.case-ai-record-detail-page__batch-result-icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #ff7d00;
+  background: #fff3e8;
+}
+
+.case-ai-record-detail-page__batch-result-icon:not(.is-failed) {
+  color: #00b42a;
+  background: #e8ffea;
+}
+
+.case-ai-record-detail-page__batch-result-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.case-ai-record-detail-page__batch-result-list {
+  max-height: min(42vh, 360px);
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.case-ai-record-detail-page__batch-result-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.case-ai-record-detail-page__batch-result-summary > div {
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.case-ai-record-detail-page__batch-result-summary .is-success {
+  color: #00b42a;
+  background: #e8ffea;
+}
+
+.case-ai-record-detail-page__batch-result-summary .is-failed {
+  color: #f53f3f;
+  background: #ffe8e8;
+}
+
+.case-ai-record-detail-page__batch-result-summary strong {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 28px;
+}
+
+.case-ai-record-detail-page__batch-result-summary span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.case-ai-record-detail-page__batch-result-label {
+  margin-bottom: 8px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.case-ai-record-detail-page__batch-result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border: 1px solid #f53f3f20;
+  border-radius: 6px;
+  color: #f53f3f;
+  background: #fff7f7;
+}
+
+.case-ai-record-detail-page__batch-result-item > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.case-ai-record-detail-page__batch-result-item strong {
+  overflow: hidden;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-ai-record-detail-page__batch-result-item span {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+
+@keyframes case-ai-record-detail-page-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 1500px) {

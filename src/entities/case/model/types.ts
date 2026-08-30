@@ -13,7 +13,6 @@ export interface CaseSummaryItem {
   caseType: string
   priority: string
   sourceType: string
-  status: string
   executionStatus: string
   ownerName: string
   executorName: string
@@ -74,7 +73,6 @@ export interface SaveCasePayload {
   caseType: string
   priority: string
   sourceType: string
-  caseStatus: string
   ownerId?: number | null
   precondition?: string
   steps?: string
@@ -129,6 +127,7 @@ export interface CaseExportQuery {
   keyword?: string
   priority?: string
   reviewStatus?: string
+  sourceType?: string
   executionStatus?: string
   executorName?: string
   createdByName?: string
@@ -183,6 +182,8 @@ export interface CaseListQuery {
   keyword?: string
   priority?: string
   reviewStatus?: string
+  sourceType?: string
+  createdByName?: string
   executionStatus?: string
 }
 
@@ -190,8 +191,9 @@ export interface CaseClientFilter {
   keyword: string
   priority: string
   reviewStatus: string
-  executionStatus: string
-  executorName: string
+  executionStatus?: string
+  executorName?: string
+  sourceType: string
   createdByName: string
   workspaceCode: string
 }

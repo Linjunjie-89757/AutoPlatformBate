@@ -89,6 +89,14 @@ public class AiResponseParsingSupport {
             String optimizationReason = firstText(root, "optimizationReason");
             String supplementReason = firstText(root, "supplementReason");
             String coverageGap = firstText(root, "coverageGap");
+            String candidateCaseId = firstText(root, "candidateCaseId", "candidateId");
+            String suggestedAction = firstText(root, "suggestedAction");
+            Integer score = optionalInt(root.path("score"));
+            Double confidence = optionalDouble(root.path("confidence"));
+            String reason = firstText(root, "reason", "reviewReason", "summary");
+            List<String> mergeTargetCandidateIds = stringList(firstPresentNode(root, "mergeTargetCaseIds", "mergeTargetCandidateIds"));
+            Integer sourceVersion = optionalInt(root.path("sourceVersion"));
+            String sourceContentHash = firstText(root, "sourceContentHash");
             GeneratedAiCaseItem supplementCase = parseStreamGeneratedCase(firstPresentNode(root, "supplementCase", "case", "newCase"), "REVIEW_SUPPLEMENTED", "SUPPLEMENTED");
             if ("SUPPLEMENTED".equals(status)) {
                 if (supplementCase == null) {
@@ -97,7 +105,7 @@ public class AiResponseParsingSupport {
                 if (summary == null || summary.isBlank()) {
                     summary = firstNonBlank(supplementReason, coverageGap, "AI review supplemented a missing case.");
                 }
-                AiCaseService.ReviewCaseStreamUpdate update = new AiCaseService.ReviewCaseStreamUpdate(null, status, summary, coverageComment, evidenceComment, reviewComment, optimizationReason, supplementReason, coverageGap, null, supplementCase, rawOutput.toString());
+                AiCaseService.ReviewCaseStreamUpdate update = new AiCaseService.ReviewCaseStreamUpdate(null, status, summary, coverageComment, evidenceComment, reviewComment, optimizationReason, supplementReason, coverageGap, null, supplementCase, rawOutput.toString(), null, null, score, confidence, reason, null, List.of(), null, null);
                 updates.put(-(updates.size() + 1), update);
                 if (reviewConsumer != null) {
                     reviewConsumer.accept(update);
@@ -109,11 +117,15 @@ public class AiResponseParsingSupport {
                 return;
             }
             GeneratedAiCaseItem optimizedCase = parseStreamGeneratedCase(root.path("optimizedCase"), "REVIEW_OPTIMIZED", status);
+            GeneratedAiCaseItem suggestedCase = parseStreamGeneratedCase(root.path("suggestedCase"), "REVIEW_SUGGESTED", status);
+            if (suggestedCase == null) {
+                suggestedCase = optimizedCase;
+            }
             if (summary == null || summary.isBlank()) {
                 summary = switch (status) {
                     case "APPROVED" -> "AI review approved this case.";
                     case "NOT_RECOMMENDED", "REJECTED" -> "AI review does not recommend this case.";
-                    case "OPTIMIZED" -> "AI review optimized this case.";
+                    case "CHANGE_SUGGESTED" -> "AI review suggested changes for this case.";
                     default -> "AI review suggests confirming this case.";
                 };
             }
@@ -123,7 +135,7 @@ public class AiResponseParsingSupport {
             if (evidenceComment == null || evidenceComment.isBlank()) {
                 evidenceComment = firstText(root, "reason", "summary");
             }
-            AiCaseService.ReviewCaseStreamUpdate update = new AiCaseService.ReviewCaseStreamUpdate(caseIndex, status, summary, coverageComment, evidenceComment, reviewComment, optimizationReason, null, coverageGap, optimizedCase, null, rawOutput.toString());
+            AiCaseService.ReviewCaseStreamUpdate update = new AiCaseService.ReviewCaseStreamUpdate(caseIndex, status, summary, coverageComment, evidenceComment, reviewComment, optimizationReason, null, coverageGap, optimizedCase, null, rawOutput.toString(), candidateCaseId, suggestedAction, score, confidence, reason, suggestedCase, mergeTargetCandidateIds, sourceVersion, sourceContentHash);
             updates.put(caseIndex, update);
             if (reviewConsumer != null) {
                 reviewConsumer.accept(update);
@@ -160,7 +172,16 @@ public class AiResponseParsingSupport {
                         item.reviewComment(),
                         item.optimizationReason(),
                         item.coverageGap(),
-                        item.optimizedCase()
+                        item.optimizedCase(),
+                        item.candidateCaseId(),
+                        item.suggestedAction(),
+                        item.score(),
+                        item.confidence(),
+                        item.reason(),
+                        item.suggestedCase(),
+                        item.mergeTargetCandidateIds(),
+                        item.sourceVersion(),
+                        item.sourceContentHash()
                 ))
                 .toList(), updates.values().stream()
                 .filter(item -> "SUPPLEMENTED".equals(item.status()) && item.supplementCase() != null)
@@ -192,7 +213,16 @@ public class AiResponseParsingSupport {
                         decision.coverageGap(),
                         decision.optimizedCase(),
                         null,
-                        rawContent
+                        rawContent,
+                        decision.candidateCaseId(),
+                        decision.suggestedAction(),
+                        decision.score(),
+                        decision.confidence(),
+                        decision.reason(),
+                        decision.suggestedCase(),
+                        decision.mergeTargetCandidateIds(),
+                        decision.sourceVersion(),
+                        decision.sourceContentHash()
                 );
                 updates.put(decision.caseIndex(), update);
                 if (reviewConsumer != null) {
@@ -214,7 +244,16 @@ public class AiResponseParsingSupport {
                         item.coverageGap(),
                         null,
                         item,
-                        rawContent
+                        rawContent,
+                        null,
+                        null,
+                        null,
+                        null,
+                        firstNonBlank(item.aiReviewSummary(), item.supplementReason()),
+                        null,
+                        List.of(),
+                        null,
+                        null
                 );
                 updates.put(-(updates.size() + 1), update);
                 if (reviewConsumer != null) {
@@ -236,7 +275,16 @@ public class AiResponseParsingSupport {
                         null,
                         null,
                         null,
-                        rawContent
+                        rawContent,
+                        null,
+                        null,
+                        null,
+                        null,
+                        reviewResult.summary(),
+                        null,
+                        List.of(),
+                        null,
+                        null
                 );
                 updates.put(index, update);
                 if (reviewConsumer != null) {
@@ -290,6 +338,8 @@ public class AiResponseParsingSupport {
         return normalized.contains("不支持图片")
                 || normalized.contains("图片输入")
                 || normalized.contains("image input")
+                || normalized.contains("does not support image")
+                || normalized.contains("image is not supported")
                 || normalized.contains("vision")
                 || normalized.contains("image_url")
                 || normalized.contains("input_image");
@@ -422,6 +472,36 @@ public class AiResponseParsingSupport {
         return null;
     }
 
+    private Double optionalDouble(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.asDouble();
+        }
+        if (node.isTextual()) {
+            try {
+                return Double.parseDouble(node.asText().trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private List<String> stringList(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            if (item.isTextual() && !item.asText().trim().isBlank()) {
+                values.add(item.asText().trim());
+            }
+        }
+        return values;
+    }
+
     private String firstText(JsonNode root, String... fieldNames) {
         for (String fieldName : fieldNames) {
             JsonNode node = root.path(fieldName);
@@ -458,7 +538,7 @@ public class AiResponseParsingSupport {
         String normalized = status.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
             case "APPROVE", "APPROVED", "PASS", "PASSED" -> "APPROVED";
-            case "OPTIMIZE", "OPTIMIZED", "SUGGESTED", "SUGGEST", "IMPROVED" -> "OPTIMIZED";
+            case "OPTIMIZE", "OPTIMIZED", "SUGGESTED", "SUGGEST", "IMPROVED", "CHANGE_SUGGESTED" -> "CHANGE_SUGGESTED";
             case "SUPPLEMENT", "SUPPLEMENTED", "ADDED" -> "SUPPLEMENTED";
             case "CONFIRM", "CONFIRM_REQUIRED", "NEEDS_CONFIRMATION" -> "CONFIRM_REQUIRED";
             case "NOT_RECOMMENDED", "REJECT", "REJECTED", "FAIL", "FAILED" -> "NOT_RECOMMENDED";

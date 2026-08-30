@@ -57,7 +57,7 @@ import {
   type WebUiCollectCandidateFilter,
 } from '@/entities/web-ui-automation/lib/collectTask'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { confirmDelete } from '@/shared/ui'
+import { confirmAction, confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
@@ -1844,23 +1844,19 @@ async function confirmAiSaveSummary(summary: ReturnType<typeof estimateAiSaveSum
     summary.lowConfidenceCount ? `低稳定性 ${summary.lowConfidenceCount} 个` : '',
   ].filter(Boolean)
   const detailItems = [
-    `已选择 <strong>${summary.selectedCount}</strong> 个候选`,
-    `预计新增 <strong>${summary.createCount}</strong> 个`,
-    `跳过 <strong>${summary.skippedCount}</strong> 个`,
-    `重复 <strong>${summary.duplicateCount}</strong> 个`,
-    summary.aiSupplementCount ? `AI 补充 <strong>${summary.aiSupplementCount}</strong> 个，其中已解锁 <strong>${summary.aiSupplementUnlockedCount}</strong> 个` : '',
+    `已选择 ${summary.selectedCount} 个候选`,
+    `预计新增 ${summary.createCount} 个`,
+    `跳过 ${summary.skippedCount} 个`,
+    `重复 ${summary.duplicateCount} 个`,
+    summary.aiSupplementCount ? `AI 补充 ${summary.aiSupplementCount} 个，其中已解锁 ${summary.aiSupplementUnlockedCount} 个` : '',
     riskParts.length ? `需要注意：${riskParts.join('，')}` : '',
   ].filter(Boolean)
-  await ElMessageBox.confirm(
-    `<div class="web-ui-ai-save-confirm">${detailItems.map(item => `<p>${item}</p>`).join('')}</div>`,
-    '确认批量保存',
-    {
-      confirmButtonText: '继续保存',
-      cancelButtonText: '取消',
-      dangerouslyUseHTMLString: true,
-      type: summary.blockedCount || summary.abnormalCount || summary.duplicateCount ? 'warning' : 'info',
-    },
-  )
+  await confirmAction({
+    title: '确认批量保存',
+    message: detailItems.join('\n'),
+    confirmText: '继续保存',
+    cancelText: '取消',
+  })
 }
 
 async function generateAiCandidates() {
@@ -2246,15 +2242,12 @@ async function clearCurrentLocalRunnerAuth() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      '清空后，下次打开该环境页面将不再自动复用已保存的登录状态。是否继续？',
-      '清空登录状态',
-      {
-        confirmButtonText: '清空登录状态',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '清空登录状态',
+      message: '清空后，下次打开该环境页面将不再自动复用已保存的登录状态。是否继续？',
+      confirmText: '清空登录状态',
+      cancelText: '取消',
+    })
   } catch {
     return
   }
@@ -2286,15 +2279,12 @@ async function releaseCurrentLocalRunnerSession() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      '关闭后不会删除已保存的登录状态。下次采集需要重新打开目标页。是否继续？',
-      '关闭本地页面',
-      {
-        confirmButtonText: '关闭页面',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '关闭本地页面',
+      message: '关闭后不会删除已保存的登录状态。下次采集需要重新打开目标页。是否继续？',
+      confirmText: '关闭页面',
+      cancelText: '取消',
+    })
   } catch {
     return
   }
@@ -2323,15 +2313,12 @@ async function confirmLocalRunnerPageMismatch() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      `本地浏览器当前页面是：${status.currentUrl || '-'}。采集会以当前页面为准，而不是表单里的目标页地址。是否继续？`,
-      '当前页面和目标页不一致',
-      {
-        confirmButtonText: '继续采集当前页',
-        cancelButtonText: '返回检查',
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '当前页面和目标页不一致',
+      message: `本地浏览器当前页面是：${status.currentUrl || '-'}。采集会以当前页面为准，而不是表单里的目标页地址。是否继续？`,
+      confirmText: '继续采集当前页',
+      cancelText: '返回检查',
+    })
     return true
   } catch {
     return false
@@ -2353,15 +2340,12 @@ async function confirmLocalRunnerSessionFreshness() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      '当前本地页面即将过期。继续采集可能在采集或本地验证时失效，建议重新打开目标页。是否仍继续？',
-      '当前页面即将过期',
-      {
-        confirmButtonText: '仍然继续',
-        cancelButtonText: '返回刷新页面',
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '当前页面即将过期',
+      message: '当前本地页面即将过期。继续采集可能在采集或本地验证时失效，建议重新打开目标页。是否仍继续？',
+      confirmText: '仍然继续',
+      cancelText: '返回刷新页面',
+    })
     return true
   } catch {
     return false
@@ -2376,15 +2360,12 @@ async function confirmLocalRunnerTaskAvailable() {
   }
 
   try {
-    await ElMessageBox.confirm(
-      `当前页面正在处理采集任务 #${boundTaskId}。为避免影响正在处理的任务，请先打开当前任务继续处理，或关闭本地页面后重新打开目标页。`,
-      '当前页面已有采集任务',
-      {
-        confirmButtonText: '打开当前任务',
-        cancelButtonText: '返回处理',
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '当前页面已有采集任务',
+      message: `当前页面正在处理采集任务 #${boundTaskId}。为避免影响正在处理的任务，请先打开当前任务继续处理，或关闭本地页面后重新打开目标页。`,
+      confirmText: '打开当前任务',
+      cancelText: '返回处理',
+    })
     openBoundLocalRunnerTask()
   } catch {
     // user cancelled
@@ -2408,10 +2389,11 @@ async function confirmLocalRunnerAuthReadiness() {
     : '当前环境还没有保存登录状态。如果目标页面需要登录，请先打开目标页，在本地浏览器里完成登录，并点击“保存登录状态”。是否仍继续采集当前页面？'
 
   try {
-    await ElMessageBox.confirm(message, title, {
-      confirmButtonText: '仍然继续采集',
-      cancelButtonText: '返回处理登录状态',
-      type: 'warning',
+    await confirmAction({
+      title,
+      message,
+      confirmText: '仍然继续采集',
+      cancelText: '返回处理登录状态',
     })
     return true
   } catch {
@@ -2659,15 +2641,12 @@ async function cancelCurrentCollectTask() {
     return
   }
   try {
-    await ElMessageBox.confirm(
-      '取消后当前采集任务会停止刷新，已生成的候选仍可查看。是否继续？',
-      '取消采集任务',
-      {
-        confirmButtonText: '取消任务',
-        cancelButtonText: '继续等待',
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '取消采集任务',
+      message: '取消后当前采集任务会停止刷新，已生成的候选仍可查看。是否继续？',
+      confirmText: '取消任务',
+      cancelText: '继续等待',
+    })
     const task = await webUiAutomationApi.cancelLocalRunnerCollectTask(
       moduleItem.workspaceCode,
       currentCollectTask.value.taskId,
@@ -3566,15 +3545,12 @@ async function confirmElementImpact(targets: WebUiElementItem[], actionName: str
   const names = summary.elementNames.slice(0, 5).join('、')
   const suffix = summary.elementNames.length > 5 ? ` 等 ${summary.elementNames.length} 个元素` : ''
   try {
-    await ElMessageBox.confirm(
-      `本次${actionName}会影响 ${summary.referenceCount} 个引用步骤，其中用例 ${summary.caseCount} 个、模板 ${summary.templateCount} 个。涉及元素：${names}${suffix}。是否继续？`,
-      '元素引用影响提示',
-      {
-        type: 'warning',
-        confirmButtonText: '继续',
-        cancelButtonText: '取消',
-      },
-    )
+    await confirmAction({
+      title: '元素引用影响提示',
+      message: `本次${actionName}会影响 ${summary.referenceCount} 个引用步骤，其中用例 ${summary.caseCount} 个、模板 ${summary.templateCount} 个。涉及元素：${names}${suffix}。是否继续？`,
+      confirmText: '继续',
+      cancelText: '取消',
+    })
     return true
   } catch {
     return false
@@ -4023,15 +3999,6 @@ function getBatchLocalRunnerTargets(scope: 'SELECTED' | 'ALL_RESULTS' | 'FAILED_
     .filter((item): item is WebUiElementItem => Boolean(item && !seen.has(item.id) && seen.add(item.id)))
 }
 
-function escapeLocalRunnerConfirmHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
 function formatLocalRunnerTraceDateTime(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, '0')
   return [
@@ -4055,23 +4022,19 @@ async function confirmLocalRunnerBatchValidation(options: {
       : '已勾选元素'
   const pageTitle = options.pageTitle?.trim() || '-'
   const message = [
-    `<p>本次会在 <strong>当前本地页面</strong> 上执行本地页面验证，请确认页面是否正确。</p>`,
-    `<p>当前页面：<span class="web-ui-local-runner-confirm-url">${escapeLocalRunnerConfirmHtml(options.currentUrl)}</span></p>`,
-    `<p>页面标题：${escapeLocalRunnerConfirmHtml(pageTitle)}</p>`,
-    `<p>验证范围：${scopeText}，元素 ${options.targetCount} 个，定位器 ${options.locatorCount} 个。</p>`,
-  ].join('')
+    '本次会在当前本地页面上执行本地页面验证，请确认页面是否正确。',
+    `当前页面：${options.currentUrl}`,
+    `页面标题：${pageTitle}`,
+    `验证范围：${scopeText}，元素 ${options.targetCount} 个，定位器 ${options.locatorCount} 个。`,
+  ].join('\n')
 
   try {
-    await ElMessageBox.confirm(
-      `<div class="web-ui-local-runner-confirm">${message}</div>`,
-      '确认本地批量验证',
-      {
-        confirmButtonText: '开始验证',
-        cancelButtonText: '取消',
-        dangerouslyUseHTMLString: true,
-        type: 'warning',
-      },
-    )
+    await confirmAction({
+      title: '确认本地批量验证',
+      message,
+      confirmText: '开始验证',
+      cancelText: '取消',
+    })
     return true
   } catch {
     return false

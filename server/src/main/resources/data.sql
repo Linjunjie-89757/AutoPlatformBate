@@ -22,13 +22,13 @@ MERGE INTO tb_sys_workspace_member KEY(id) VALUES
 (7, 3, 5, 'VIEWER', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 MERGE INTO tb_case_info (
-    id, workspace_id, case_no, title, case_type, priority, source_type, case_status,
+    id, workspace_id, case_no, title, case_type, priority, source_type,
     owner_id, precondition, steps, expected_result, created_at, updated_at
 ) KEY(id) VALUES
-(128, 1, 'CASE-00128', '开户成功主流程', 'FUNCTION', 'P0', 'AI生成', '已确认', 2, '客户信息完整', '提交开户申请', '开户成功', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(129, 1, 'CASE-00129', '开户字段边界长度校验', 'BOUNDARY', 'P1', 'AI追加', '草稿', 3, '验证码已发送', '输入超长字段', '提示字段长度校验失败', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(130, 2, 'CASE-00130', '短信验证码失效处理', 'EXCEPTION', 'P0', '手工创建', '已确认', 4, '验证码过期', '提交验证码', '提示验证码失效', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(131, 3, 'CASE-00131', '多浏览器登录兼容回归', 'REGRESSION', 'P2', '导入', '已归档', 5, 'Chrome/Edge 可用', '执行登录回归', '兼容通过', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+(128, 1, 'CASE-00128', '开户成功主流程', 'FUNCTION', 'P0', 'AI_GENERATED', 2, '客户信息完整', '提交开户申请', '开户成功', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(129, 1, 'CASE-00129', '开户字段边界长度校验', 'BOUNDARY', 'P1', 'AI_GENERATED', 3, '验证码已发送', '输入超长字段', '提示字段长度校验失败', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(130, 2, 'CASE-00130', '短信验证码失效处理', 'EXCEPTION', 'P0', 'MANUAL', 4, '验证码过期', '提交验证码', '提示验证码失效', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(131, 3, 'CASE-00131', '多浏览器登录兼容回归', 'REGRESSION', 'P2', 'IMPORTED', 5, 'Chrome/Edge 可用', '执行登录回归', '兼容通过', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 MERGE INTO tb_exec_task KEY(id) VALUES
 (201, 2, 'api-trade-settlement', 'API', 'SUCCESS', 'UAT 环境下单与结算回归', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

@@ -155,10 +155,6 @@ export const caseApi = {
     return unwrapApiResponse(response)
   },
 
-  async updateCaseStatus(id: number, workspaceCode = 'ALL', payload: SaveCasePayload) {
-    return this.updateCase(id, workspaceCode, payload)
-  },
-
   async deleteCase(id: number, workspaceCode = 'ALL') {
     const response = await httpDelete<ApiResponse<null>>(`/cases/${id}`, {
       headers: workspaceHeaders(workspaceCode),

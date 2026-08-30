@@ -28,15 +28,21 @@ public class AiCaseController {
     private final AiCaseService aiCaseService;
     private final AiGenerationTaskService aiGenerationTaskService;
     private final AiGenerationTaskRunner aiGenerationTaskRunner;
+    private final AiCaseAdoptionService aiCaseAdoptionService;
+    private final AiCaseCandidateService aiCaseCandidateService;
 
     public AiCaseController(
             AiCaseService aiCaseService,
             AiGenerationTaskService aiGenerationTaskService,
-            AiGenerationTaskRunner aiGenerationTaskRunner
+            AiGenerationTaskRunner aiGenerationTaskRunner,
+            AiCaseAdoptionService aiCaseAdoptionService,
+            AiCaseCandidateService aiCaseCandidateService
     ) {
         this.aiCaseService = aiCaseService;
         this.aiGenerationTaskService = aiGenerationTaskService;
         this.aiGenerationTaskRunner = aiGenerationTaskRunner;
+        this.aiCaseAdoptionService = aiCaseAdoptionService;
+        this.aiCaseCandidateService = aiCaseCandidateService;
     }
 
     @GetMapping("/config")
@@ -240,6 +246,99 @@ public class AiCaseController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
     ) {
         return ApiResponse.ok(aiGenerationTaskService.getTask(taskId, workspaceCode));
+    }
+
+    @PostMapping("/tasks/{taskId}/adoptions/{caseIndex}")
+    public ApiResponse<AiCaseAdoptionItem> adoptCase(
+            @PathVariable String taskId,
+            @PathVariable Integer caseIndex,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody AdoptAiCaseRequest request
+    ) {
+        return ApiResponse.ok(
+                aiCaseAdoptionService.adopt(taskId, workspaceCode, caseIndex, request),
+                "AI 用例采纳完成"
+        );
+    }
+
+    @GetMapping("/tasks/{taskId}/candidates")
+    public ApiResponse<java.util.List<AiCaseCandidateItem>> listCandidates(
+            @PathVariable String taskId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.list(taskId, workspaceCode));
+    }
+
+    @GetMapping("/tasks/{taskId}/candidates/{candidateId}")
+    public ApiResponse<AiCaseCandidateItem> getCandidate(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.get(taskId, candidateId, workspaceCode));
+    }
+
+    @PostMapping("/tasks/{taskId}/candidates/{candidateId}/keep-original")
+    public ApiResponse<AiCaseCandidateItem> keepCandidateOriginal(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody AiCaseCandidateVersionRequest request
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.keepOriginal(taskId, candidateId, workspaceCode, request));
+    }
+
+    @PostMapping("/tasks/{taskId}/candidates/{candidateId}/apply-suggestion")
+    public ApiResponse<AiCaseCandidateItem> applyCandidateSuggestion(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody AiCaseCandidateVersionRequest request
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.applySuggestion(taskId, candidateId, workspaceCode, request));
+    }
+
+    @PutMapping("/tasks/{taskId}/candidates/{candidateId}/current-case")
+    public ApiResponse<AiCaseCandidateItem> updateCandidateCurrentCase(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody UpdateAiCaseCandidateRequest request
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.updateCurrentCase(taskId, candidateId, workspaceCode, request));
+    }
+
+    @PostMapping("/tasks/{taskId}/candidates/{candidateId}/exclude")
+    public ApiResponse<AiCaseCandidateItem> excludeCandidate(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody AiCaseCandidateVersionRequest request
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.exclude(taskId, candidateId, workspaceCode, request));
+    }
+
+    @PostMapping("/tasks/{taskId}/candidates/{candidateId}/restore")
+    public ApiResponse<AiCaseCandidateItem> restoreCandidate(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody AiCaseCandidateVersionRequest request
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.restore(taskId, candidateId, workspaceCode, request));
+    }
+
+    @PostMapping("/tasks/{taskId}/candidates/{candidateId}/adopt")
+    public ApiResponse<AiCaseAdoptionItem> adoptCandidate(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody AdoptAiCaseRequest request
+    ) {
+        return ApiResponse.ok(
+                aiCaseAdoptionService.adoptCandidate(taskId, workspaceCode, candidateId, request),
+                "AI 用例采纳完成"
+        );
     }
 
     @GetMapping(value = "/tasks/{taskId}/events/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

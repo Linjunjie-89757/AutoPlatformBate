@@ -20,6 +20,7 @@ import java.util.UUID;
 @Service
 public class AiGenerationTaskDomainService {
 
+    static final int MAX_REQUIREMENT_CONTENT_LENGTH = 200_000;
     private static final List<String> RUNNING_STATUSES = List.of("PENDING", "GENERATING", "REVIEWING");
 
     private final AiGenerationTaskMapper aiGenerationTaskMapper;
@@ -28,6 +29,7 @@ public class AiGenerationTaskDomainService {
     private final AiGenerationTaskResponseSupport responseSupport;
     private final WorkspaceService workspaceService;
     private final CaseDirectoryMapper caseDirectoryMapper;
+    private final AiCaseCandidateService candidateService;
 
     public AiGenerationTaskDomainService(
             AiGenerationTaskMapper aiGenerationTaskMapper,
@@ -35,7 +37,8 @@ public class AiGenerationTaskDomainService {
             AiGenerationTaskEventService eventService,
             AiGenerationTaskResponseSupport responseSupport,
             WorkspaceService workspaceService,
-            CaseDirectoryMapper caseDirectoryMapper
+            CaseDirectoryMapper caseDirectoryMapper,
+            AiCaseCandidateService candidateService
     ) {
         this.aiGenerationTaskMapper = aiGenerationTaskMapper;
         this.aiCaseService = aiCaseService;
@@ -43,23 +46,23 @@ public class AiGenerationTaskDomainService {
         this.responseSupport = responseSupport;
         this.workspaceService = workspaceService;
         this.caseDirectoryMapper = caseDirectoryMapper;
+        this.candidateService = candidateService;
     }
 
     public AiGenerationTaskResponse createTask(String headerWorkspaceCode, CreateAiGenerationTaskRequest request) {
+        String requirementContent = normalizeRequirementContent(request.requirementContent());
         WorkspaceEntity workspace = workspaceService.requireWritableWorkspace(
                 workspaceService.resolveTargetWorkspace(headerWorkspaceCode, request.workspaceCode())
         );
         validateOutputMode(request.outputMode());
         validateDirectory(workspace, request.directoryId());
-        aiCaseService.validateGenerationImageSupport(request.assetIds());
-
         AiGenerationTaskEntity entity = new AiGenerationTaskEntity();
         LocalDateTime now = LocalDateTime.now();
         Long currentUserId = CurrentUserContext.get();
         entity.setTaskId(generateTaskId());
         entity.setWorkspaceId(workspace.getId());
         entity.setRequirementTitle(request.requirementTitle().trim());
-        entity.setRequirementContent(request.requirementContent().trim());
+        entity.setRequirementContent(requirementContent);
         entity.setOutputMode(normalizeOutputMode(request.outputMode()));
         entity.setStatus("PENDING");
         entity.setCurrentStep(1);
@@ -220,6 +223,7 @@ public class AiGenerationTaskDomainService {
             entity.setDirectoryName(blankToNull(request.directoryName()));
         }
         if (request.generatedCases() != null) {
+            candidateService.synchronizeLegacyEdits(entity, request.generatedCases());
             entity.setGeneratedCasesJson(responseSupport.writeValue(request.generatedCases()));
         }
         if (request.adoptedCaseIndexes() != null) {
@@ -334,6 +338,16 @@ public class AiGenerationTaskDomainService {
         if (!"STREAM".equals(normalized) && !"COMPLETE".equals(normalized)) {
             throw new BadRequestException("Output mode must be STREAM or COMPLETE");
         }
+    }
+
+    private String normalizeRequirementContent(String requirementContent) {
+        String normalized = requirementContent == null ? "" : requirementContent.trim();
+        if (normalized.length() > MAX_REQUIREMENT_CONTENT_LENGTH) {
+            throw new BadRequestException(
+                    "需求内容过长，最多支持 " + MAX_REQUIREMENT_CONTENT_LENGTH + " 个字符，请精简后重试"
+            );
+        }
+        return normalized;
     }
 
     private String blankToNull(String value) {

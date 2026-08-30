@@ -509,7 +509,10 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
         return lower.contains("unknown variant")
                 || lower.contains("expected `text`")
                 || (lower.contains("failed to deserialize") && lower.contains("image"))
-                || lower.contains("image_url");
+                || lower.contains("image_url")
+                || lower.contains("does not support image")
+                || lower.contains("image is not supported")
+                || lower.contains("image input is not supported");
     }
 
     protected String mergeStreamingContent(String responseBody) throws IOException {

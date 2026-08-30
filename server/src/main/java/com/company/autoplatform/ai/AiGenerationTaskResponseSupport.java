@@ -1,5 +1,6 @@
 package com.company.autoplatform.ai;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.user.UserEntity;
 import com.company.autoplatform.user.UserService;
@@ -23,13 +24,16 @@ public class AiGenerationTaskResponseSupport {
 
     private final AiGenerationTaskEventService eventService;
     private final UserService userService;
+    private final AiCaseAdoptionMapper adoptionMapper;
 
     public AiGenerationTaskResponseSupport(
             AiGenerationTaskEventService eventService,
-            UserService userService
+            UserService userService,
+            AiCaseAdoptionMapper adoptionMapper
     ) {
         this.eventService = eventService;
         this.userService = userService;
+        this.adoptionMapper = adoptionMapper;
     }
 
     String writeValue(Object value) {
@@ -94,6 +98,15 @@ public class AiGenerationTaskResponseSupport {
                 includeEvents ? eventService.list(entity.getTaskId()) : List.of(),
                 readValue(entity.getAdoptedCaseIndexesJson(), new TypeReference<List<Integer>>() {}, List.of()),
                 readValue(entity.getDeletedCaseIndexesJson(), new TypeReference<List<Integer>>() {}, List.of()),
+                adoptionMapper.selectList(new LambdaQueryWrapper<AiCaseAdoptionEntity>()
+                        .eq(AiCaseAdoptionEntity::getTaskId, entity.getTaskId())
+                        .orderByAsc(AiCaseAdoptionEntity::getCaseIndex)
+                ).stream().map(item -> new AiCaseAdoptionItem(
+                        item.getCaseIndex(), item.getStatus(), item.getFailureReason(), item.getDirectoryId(),
+                        item.getCreatedCaseId(), item.getAttemptCount(),
+                        item.getUpdatedAt() == null ? null : item.getUpdatedAt().toString(),
+                        item.getCandidateId(), item.getAdoptedContentVersion(), item.getAdoptedContentSource(), item.getIdempotencyKey()
+                )).toList(),
                 entity.getCancelRequested() != null && entity.getCancelRequested() == 1,
                 entity.getSourceTaskId(),
                 entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString(),

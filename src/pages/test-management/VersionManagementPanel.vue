@@ -27,6 +27,7 @@ import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { testManagementApi, type TestPlanDefectItem } from '@/entities/test-management'
 import { type UserItem } from '@/entities/user'
 import { useWorkspaceContext, workspaceApi } from '@/entities/workspace'
+import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 import VersionPlanDonutChart from '@/shared/ui/charts/VersionPlanDonutChart.vue'
 
 import {
@@ -525,6 +526,10 @@ const openEditDrawer = (version: ManagedVersion) => {
 const closeDrawer = () => {
   drawerOpen.value = false
   editingId.value = null
+}
+
+const updateDrawerOpen = (value: boolean) => {
+  if (!value) closeDrawer()
 }
 
 const submitVersion = async () => {
@@ -1053,21 +1058,34 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
       </section>
     </template>
 
-    <Transition name="version-management-fade">
-      <div v-if="drawerOpen" class="version-management__overlay" @click.self="closeDrawer">
-        <aside class="version-management__drawer" role="dialog" aria-modal="true" :aria-label="isEditing ? '编辑版本' : '新建版本'">
-          <header><div><h2>{{ isEditing ? '编辑版本' : '新建版本' }}</h2><p>{{ isEditing ? '修改版本基本信息' : '在当前工作区创建一个新版本' }}</p></div><button type="button" aria-label="关闭" @click="closeDrawer"><X :size="16" /></button></header>
-          <div class="version-management__form">
-            <label><span>版本名称 <i>*</i></span><input v-model="versionForm.name" type="text" placeholder="例：v2.5.0"></label>
-            <div class="version-management__form-row"><label><span>版本类型 <i>*</i></span><select v-model="versionForm.type"><option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option></select></label><label><span>负责人 <i>*</i></span><select v-model="versionForm.owner"><option value="">请选择负责人</option><option v-for="owner in versionOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
-            <label v-if="isEditing"><span>当前状态</span><select v-model="versionForm.status"><option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option></select></label>
-            <fieldset><legend>时间节点</legend><label><span>开始日期</span><input v-model="versionForm.startDate" type="date" :class="{ 'is-empty-date': !versionForm.startDate }"></label><label><span>计划提测日期</span><input v-model="versionForm.testDate" type="date" :class="{ 'is-empty-date': !versionForm.testDate }"></label><label><span>计划发布日期</span><input v-model="versionForm.releaseDate" type="date" :class="{ 'is-empty-date': !versionForm.releaseDate }"></label></fieldset>
-            <label><span>版本目标</span><textarea v-model="versionForm.goal" rows="4" placeholder="描述本版本的核心目标和验收标准…" /></label>
-          </div>
-          <footer><button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button><button class="version-management__button is-primary" type="button" :disabled="!canSubmit || isSubmitting || (isEditing ? !canEdit : !canCreate)" @click="submitVersion">{{ isSubmitting ? '保存中...' : isEditing ? '保存修改' : '创建版本' }}</button></footer>
-        </aside>
+    <AppDrawer
+      :model-value="drawerOpen"
+      size="520px"
+      variant="process"
+      drawer-class="version-management__drawer-shell"
+      :show-close="false"
+      destroy-on-close
+      :aria-label="isEditing ? '编辑版本' : '新建版本'"
+      @update:model-value="updateDrawerOpen"
+    >
+      <template #header>
+        <div class="version-management__drawer-header">
+          <div><h2>{{ isEditing ? '编辑版本' : '新建版本' }}</h2><p>{{ isEditing ? '修改版本基本信息' : '在当前工作区创建一个新版本' }}</p></div>
+          <button type="button" aria-label="关闭" @click="closeDrawer"><X :size="16" /></button>
+        </div>
+      </template>
+      <div class="version-management__form">
+        <label><span>版本名称 <i>*</i></span><input v-model="versionForm.name" type="text" placeholder="例：v2.5.0"></label>
+        <div class="version-management__form-row"><label><span>版本类型 <i>*</i></span><select v-model="versionForm.type"><option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option></select></label><label><span>负责人 <i>*</i></span><select v-model="versionForm.owner"><option value="">请选择负责人</option><option v-for="owner in versionOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
+        <label v-if="isEditing"><span>当前状态</span><select v-model="versionForm.status"><option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option></select></label>
+        <fieldset><legend>时间节点</legend><label><span>开始日期</span><input v-model="versionForm.startDate" type="date" :class="{ 'is-empty-date': !versionForm.startDate }"></label><label><span>计划提测日期</span><input v-model="versionForm.testDate" type="date" :class="{ 'is-empty-date': !versionForm.testDate }"></label><label><span>计划发布日期</span><input v-model="versionForm.releaseDate" type="date" :class="{ 'is-empty-date': !versionForm.releaseDate }"></label></fieldset>
+        <label><span>版本目标</span><textarea v-model="versionForm.goal" rows="4" placeholder="描述本版本的核心目标和验收标准…" /></label>
       </div>
-    </Transition>
+      <template #footer>
+        <button class="version-management__button is-ghost" type="button" @click="closeDrawer">取消</button>
+        <button class="version-management__button is-primary" type="button" :disabled="!canSubmit || isSubmitting || (isEditing ? !canEdit : !canCreate)" @click="submitVersion">{{ isSubmitting ? '保存中...' : isEditing ? '保存修改' : '创建版本' }}</button>
+      </template>
+    </AppDrawer>
 
     <Transition name="version-management-fade">
       <div v-if="versionAction && currentVersionActionConfig && selectedVersion" class="version-management__status-overlay" @click.self="closeVersionAction">

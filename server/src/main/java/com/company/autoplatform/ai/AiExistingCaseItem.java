@@ -1,6 +1,9 @@
 package com.company.autoplatform.ai;
 
 public record AiExistingCaseItem(
+        String candidateCaseId,
+        Integer contentVersion,
+        String contentHash,
         String title,
         String caseType,
         String priority,

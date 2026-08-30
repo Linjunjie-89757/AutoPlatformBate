@@ -13,7 +13,6 @@ import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
 import {
   buildSaveCasePayload,
   caseSourceTypeOptions,
-  caseStatusOptions,
   caseTypeOptions,
   createCaseFormFromDetail,
   createCaseFormFromSummary,
@@ -187,17 +186,7 @@ watch(
           </el-select>
         </div>
 
-        <div class="case-dialog__field">
-          <span>状态</span>
-          <el-select v-model="form.caseStatus" class="case-dialog__select">
-            <el-option
-              v-for="item in caseStatusOptions"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-        </div>
+        <div class="case-dialog__field"></div>
       </div>
 
       <div class="case-dialog__grid">

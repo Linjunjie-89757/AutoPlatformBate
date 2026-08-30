@@ -9,6 +9,8 @@ import {
   X as LucideX,
 } from '@lucide/vue'
 
+import AppDialog from '@/shared/ui/app-dialog/AppDialog.vue'
+
 type ApiImportMode = 'swagger' | 'postman' | 'har'
 type ApiImportInputMode = 'url' | 'file'
 
@@ -94,25 +96,27 @@ function handleFileChange(event: Event) {
 </script>
 
 <template>
-  <el-dialog
+  <AppDialog
     v-model="visible"
-    width="520px"
-    append-to-body
+    width="700px"
+    variant="standard"
+    body-padding="flush"
+    dialog-class="api-import-dialog-shell"
+    align-center
     destroy-on-close
     :show-close="false"
-    class="api-import-dialog-shell"
   >
-    <div class="api-import-dialog">
-      <div class="api-import-header">
-        <div class="api-import-title">
-          <LucideUpload class="api-import-title-icon" />
-          <span>导入接口</span>
-        </div>
-        <button type="button" class="api-import-close" @click="emit('close')">
-          <LucideX />
-        </button>
+    <template #header>
+      <div class="api-import-title">
+        <LucideUpload class="api-import-title-icon" />
+        <span>导入接口</span>
       </div>
+      <button type="button" class="api-import-close" aria-label="关闭" @click="emit('close')">
+        <LucideX />
+      </button>
+    </template>
 
+    <div class="api-import-dialog">
       <div class="api-import-body">
         <section class="api-import-section">
           <div class="api-import-section-title">选择导入格式</div>
@@ -193,43 +197,28 @@ function handleFileChange(event: Event) {
         </section>
       </div>
 
+    </div>
+
+    <template #footer>
       <div class="api-import-footer">
         <button type="button" class="api-import-cancel" :disabled="submitting" @click="emit('close')">取消</button>
         <button type="button" class="api-import-submit" :disabled="submitting" @click="emit('submit')">
           {{ submitting ? '导入中...' : '开始导入' }}
         </button>
       </div>
-    </div>
-  </el-dialog>
+    </template>
+  </AppDialog>
 </template>
 
 <style scoped>
 :global(.el-dialog.api-import-dialog-shell),
-:global(.el-dialog.api-import-dialog-shell .el-button),
-:global(.el-dialog.api-import-dialog-shell .el-input__inner),
-:global(.el-dialog.api-import-dialog-shell .el-upload) {
+:global(.el-dialog.api-import-dialog-shell .el-input__inner) {
   font-family: Inter, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;
 }
 
-:global(.el-dialog.api-import-dialog-shell) {
-  overflow: hidden;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  font-size: 16px;
-  line-height: 24px;
-  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.12);
-}
-
-:global(.el-dialog.api-import-dialog-shell .el-dialog__header),
-:global(.el-dialog.api-import-dialog-shell .el-dialog__body) {
-  margin: 0;
-  padding: 0;
-}
-
 :global(.el-dialog.api-import-dialog-shell .el-dialog__header) {
-  display: block;
-  height: 64px;
+  display: flex;
+  align-items: center;
 }
 
 .api-import-dialog {
@@ -242,51 +231,47 @@ function handleFileChange(event: Event) {
   line-height: 21px;
 }
 
-.api-import-header,
 .api-import-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.api-import-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
 .api-import-title {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: #111827;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 24px;
+  flex: 1;
+  gap: 8px;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 22.5px;
 }
 
 .api-import-title-icon {
-  width: 20px;
-  height: 20px;
-  color: #3b82f6;
+  width: 15px;
+  height: 15px;
+  color: #165dff;
 }
 
 .api-import-close {
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
+  padding: 4px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 5px;
   background: transparent;
-  color: #9ca3af;
+  color: #86909c;
   cursor: pointer;
-  line-height: normal;
+  line-height: 0;
 }
 
 .api-import-close:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: #f4f6fa;
+  color: #4e5969;
 }
 
 .api-import-close svg {
@@ -297,7 +282,7 @@ function handleFileChange(event: Event) {
 .api-import-body {
   display: grid;
   gap: 20px;
-  padding: 24px;
+  padding: 20px 24px;
 }
 
 .api-import-section {
@@ -530,43 +515,41 @@ function handleFileChange(event: Event) {
 }
 
 .api-import-footer {
+  width: 100%;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid #f3f4f6;
-  background: #f9fafb;
+  gap: 8px;
 }
 
 .api-import-cancel,
 .api-import-submit {
-  height: 36px;
-  padding: 0 16px;
+  min-height: 34px;
+  padding: 7px 18px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  line-height: normal;
+  line-height: 19px;
 }
 
 .api-import-cancel {
-  border-color: #d1d5db;
+  border-color: #e5e6eb;
   background: #fff;
-  color: #374151;
+  color: #4e5969;
 }
 
 .api-import-cancel:hover {
-  background: #f3f4f6;
+  background: #f4f6fa;
 }
 
 .api-import-submit {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: #165dff;
+  background: #165dff;
   color: #fff;
 }
 
 .api-import-submit:hover {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
+  border-color: #0e4de5;
+  background: #0e4de5;
 }
 </style>

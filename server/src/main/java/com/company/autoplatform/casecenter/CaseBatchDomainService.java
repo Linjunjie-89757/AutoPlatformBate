@@ -144,7 +144,6 @@ public class CaseBatchDomainService {
                 item.getCaseType(),
                 item.getPriority(),
                 item.getSourceType(),
-                item.getCaseStatus(),
                 defaultExecutionStatus(item.getExecutionStatus()),
                 owner == null ? "-" : owner.getDisplayName(),
                 executor == null ? "-" : executor.getDisplayName(),

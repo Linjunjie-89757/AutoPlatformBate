@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 
 import {
   type ApiAutomationEnvironmentItem,
@@ -20,6 +21,8 @@ import {
   type DirectoryNode,
 } from './lib/apiDirectoryTree'
 import { confirmApiAction } from './lib/apiWorkspaceConfirm'
+import { getRequestErrorMessage } from '@/shared/api/error'
+import AppDirectoryOperationDialog from '@/shared/ui/app-directory-dialog/AppDirectoryOperationDialog.vue'
 import {
   pickCaseDetailDefaultRequestTab,
   requestMethodClass,
@@ -172,6 +175,15 @@ const {
   cancel: cancelApiSoftPrompt,
 } = useApiSoftPrompt()
 const caseDetailModuleRef = ref<InstanceType<typeof ApiDefinitionWorkspaceOverlays> | null>(null)
+const directoryDialogVisible = ref(false)
+const directoryDialogMode = ref<'create' | 'rename'>('create')
+const directoryDialogName = ref('')
+const directoryDialogError = ref('')
+const directoryDialogSaving = ref(false)
+const directoryDialogParentId = ref<number | null>(null)
+const directoryDialogNode = ref<DirectoryNode | null>(null)
+const deleteDirectoryTarget = ref<DirectoryNode | null>(null)
+const deleteDirectorySaving = ref(false)
 
 let loadCasesForDefinitionDelegate: (definitionId: number, workspaceCode?: string) => Promise<void> = async () => {}
 let syncAiGeneratedCaseFromPayloadDelegate: (
@@ -485,6 +497,69 @@ const {
   confirmApiAction,
 })
 
+function openCreateDirectoryDialog(parentId: number | null) {
+  if (props.canCreate === false) return
+  directoryDialogMode.value = 'create'
+  directoryDialogParentId.value = parentId
+  directoryDialogNode.value = null
+  directoryDialogName.value = ''
+  directoryDialogError.value = ''
+  directoryDialogVisible.value = true
+}
+
+function openRenameDirectoryDialog(node: DirectoryNode) {
+  if (props.canEdit === false) return
+  directoryDialogMode.value = 'rename'
+  directoryDialogParentId.value = null
+  directoryDialogNode.value = node
+  directoryDialogName.value = node.label.split('/').pop() || node.label
+  directoryDialogError.value = ''
+  directoryDialogVisible.value = true
+}
+
+function openDeleteDirectoryDialog(node: DirectoryNode) {
+  if (props.canDelete === false) return
+  deleteDirectoryTarget.value = node
+}
+
+async function submitDirectoryDialog() {
+  if (directoryDialogSaving.value || !directoryDialogName.value.trim()) {
+    if (!directoryDialogName.value.trim()) directoryDialogError.value = '目录名称不能为空'
+    return
+  }
+  directoryDialogSaving.value = true
+  directoryDialogError.value = ''
+  try {
+    if (directoryDialogMode.value === 'create') {
+      await createModule(directoryDialogParentId.value, directoryDialogName.value)
+      ElMessage.success('目录已创建')
+    } else if (directoryDialogNode.value) {
+      await renameModule(directoryDialogNode.value, directoryDialogName.value)
+      ElMessage.success('目录已重命名')
+    }
+    directoryDialogVisible.value = false
+  } catch (error) {
+    directoryDialogError.value = getRequestErrorMessage(error)
+  } finally {
+    directoryDialogSaving.value = false
+  }
+}
+
+async function confirmDeleteDirectory() {
+  const target = deleteDirectoryTarget.value
+  if (!target || deleteDirectorySaving.value) return
+  deleteDirectorySaving.value = true
+  try {
+    await deleteModule(target)
+    deleteDirectoryTarget.value = null
+    ElMessage.success('目录已删除')
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    deleteDirectorySaving.value = false
+  }
+}
+
 const {
   activeAssertion,
   assertionRowsFor,
@@ -706,10 +781,10 @@ useApiDefinitionWorkspaceLifecycle({
         @node-click="handleDirectorySelect"
         @node-expand="(node: DirectoryNode) => setDirectoryNodeExpanded(node, true)"
         @node-collapse="(node: DirectoryNode) => setDirectoryNodeExpanded(node, false)"
-        @create-module="createModule"
+        @create-module="openCreateDirectoryDialog"
         @create-request-in-directory="createRequestInDirectory"
-        @rename-module="renameModule"
-        @delete-module="deleteModule"
+        @rename-module="openRenameDirectoryDialog"
+        @delete-module="openDeleteDirectoryDialog"
         @rename-request="renameRequest"
         @copy-request="copyRequest"
         @delete-request="deleteRequest"
@@ -918,7 +993,7 @@ useApiDefinitionWorkspaceLifecycle({
       </section>
     </div>
 
-<ApiDefinitionWorkspaceOverlays
+    <ApiDefinitionWorkspaceOverlays
       ref="caseDetailModuleRef"
       v-model:soft-prompt-visible="softPromptVisible"
       v-model:soft-prompt-value="softPromptValue"
@@ -1018,6 +1093,28 @@ useApiDefinitionWorkspaceLifecycle({
       @retry-case-detail="editingCaseItem && openEditCaseDialog(editingCaseItem)"
       @apply-fast-extraction="applyFastExtraction"
       @config-run-environment="goConfigCenterEnv"
+    />
+
+    <AppDirectoryOperationDialog
+      v-model="directoryDialogVisible"
+      :mode="directoryDialogMode"
+      theme="warning"
+      :name="directoryDialogName"
+      :saving="directoryDialogSaving"
+      :error="directoryDialogError"
+      @update:name="directoryDialogName = $event; directoryDialogError = ''"
+      @confirm="submitDirectoryDialog"
+    />
+    <AppDirectoryOperationDialog
+      v-if="deleteDirectoryTarget"
+      :model-value="Boolean(deleteDirectoryTarget)"
+      mode="delete"
+      :target-label="deleteDirectoryTarget.label"
+      :target-count="deleteDirectoryTarget.count"
+      count-unit="个请求"
+      :saving="deleteDirectorySaving"
+      @update:model-value="deleteDirectoryTarget = null"
+      @confirm="confirmDeleteDirectory"
     />
   </section>
 </template>

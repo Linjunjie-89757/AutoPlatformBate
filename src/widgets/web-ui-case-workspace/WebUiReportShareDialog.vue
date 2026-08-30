@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import { CopyDocument, Link, RefreshRight, SwitchButton } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import {
   formatWebUiDateTime,
@@ -12,6 +12,7 @@ import {
   type WebUiReportShareType,
 } from '@/entities/web-ui-automation'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 
 const props = defineProps<{
@@ -116,10 +117,11 @@ async function copyLatestCreated() {
 
 async function revokeShare(share: WebUiReportShareSummary) {
   try {
-    await ElMessageBox.confirm('撤销后，已经发出去的公开链接将无法继续访问。', '撤销公开链接', {
-      type: 'warning',
-      confirmButtonText: '撤销',
-      cancelButtonText: '取消',
+    await confirmAction({
+      title: '撤销公开链接',
+      message: '撤销后，已经发出去的公开链接将无法继续访问。',
+      confirmText: '撤销',
+      cancelText: '取消',
     })
     await webUiAutomationApi.revokeReportShare(props.workspaceCode, share.id)
     ElMessage.success('公开分享链接已撤销')

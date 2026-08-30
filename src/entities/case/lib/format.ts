@@ -26,9 +26,9 @@ export function getCaseReviewStatusMeta(status: string) {
     return { label: '已通过', tone: 'success' as const }
   }
   if (status === 'REJECTED') {
-    return { label: '不通过', tone: 'danger' as const }
+    return { label: '未通过', tone: 'danger' as const }
   }
-  return { label: '未评审', tone: 'default' as const }
+  return { label: '待评审', tone: 'default' as const }
 }
 
 export function getCaseExecutionStatusMeta(status: string) {
@@ -54,7 +54,9 @@ export function matchesCaseClientFilter(
     keyword: string
     priority: string
     reviewStatus: string
-    executionStatus: string
+    sourceType?: string
+    createdByName?: string
+    executionStatus?: string
   },
 ) {
   const keyword = filter.keyword.trim().toLowerCase()
@@ -73,6 +75,12 @@ export function matchesCaseClientFilter(
     return false
   }
   if (filter.reviewStatus && item.reviewStatus !== filter.reviewStatus) {
+    return false
+  }
+  if (filter.sourceType && item.sourceType !== filter.sourceType) {
+    return false
+  }
+  if (filter.createdByName && item.createdByName !== filter.createdByName) {
     return false
   }
   if (filter.executionStatus && item.executionStatus !== filter.executionStatus) {

@@ -7,7 +7,6 @@ public record CaseDetailResponse(
         String caseType,
         String priority,
         String sourceType,
-        String status,
         Long ownerId,
         String ownerName,
         String executionStatus,

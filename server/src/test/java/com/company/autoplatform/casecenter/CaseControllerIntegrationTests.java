@@ -60,7 +60,6 @@ class CaseControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.caseType").value("FUNCTION"))
                 .andExpect(jsonPath("$.data.priority").value("P1"))
                 .andExpect(jsonPath("$.data.sourceType").value("MANUAL"))
-                .andExpect(jsonPath("$.data.status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.data.executionStatus").value("NOT_RUN"))
                 .andExpect(jsonPath("$.data.reviewStatus").value("PENDING"))
                 .andExpect(jsonPath("$.data.workspaceCode").value(WORKSPACE_CODE))
@@ -504,7 +503,6 @@ class CaseControllerIntegrationTests extends IntegrationTestSupport {
                   "caseType": "FUNCTION",
                   "priority": "%s",
                   "sourceType": "MANUAL",
-                  "caseStatus": "CONFIRMED",
                   "ownerId": 11,
                   "precondition": "logged in",
                   "steps": "1. open page\\n2. submit form",

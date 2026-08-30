@@ -20,13 +20,14 @@ import {
   getCaseWorkspaceNodeId,
 } from '@/entities/case'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
+import { userApi } from '@/entities/user'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
-import { confirmDelete } from '@/shared/ui'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
+import AppDirectoryOperationDialog from '@/shared/ui/app-directory-dialog/AppDirectoryOperationDialog.vue'
 import CaseDirectoryTree from '@/widgets/case-directory-tree/CaseDirectoryTree.vue'
 import CaseFilterPanel from '@/widgets/case-filter-panel/CaseFilterPanel.vue'
 import CaseListPanel from '@/widgets/case-list-panel/CaseListPanel.vue'
@@ -41,6 +42,7 @@ const workspaces = ref<WorkspaceItem[]>([])
 const workspaceLoading = ref(false)
 const workspaceReady = ref(false)
 const workspaceErrorMessage = ref('')
+const creatorNames = ref<string[]>([])
 const workspaceSelectorCode = ref('ALL')
 const selectedNodeId = ref('root')
 const selectedDirectoryId = ref<number | null>(null)
@@ -58,6 +60,7 @@ const exportSelectedCaseIds = ref<number[]>([])
 const moduleDialogVisible = ref(false)
 const moduleDialogMode = ref<'create' | 'rename'>('create')
 const moduleSaving = ref(false)
+const moduleValidationError = ref('')
 const activeDirectoryNode = ref<{
   nodeId: string
   workspaceCode: string
@@ -70,12 +73,13 @@ const moduleForm = reactive({
 })
 const moveDialogVisible = ref(false)
 const moveTargetDirectoryId = ref<number | null>(null)
+const deleteDirectoryTarget = ref<{ nodeId: string; workspaceCode: string; directoryId: number; label: string; count: number } | null>(null)
+const deleteDirectorySaving = ref(false)
 const filter = ref<CaseClientFilter>({
   keyword: '',
   priority: '',
   reviewStatus: '',
-  executionStatus: '',
-  executorName: '',
+  sourceType: '',
   createdByName: '',
   workspaceCode: '',
 })
@@ -98,12 +102,9 @@ const workspaceOptions = computed(() => {
 
 const businessWorkspaceOptions = computed(() => workspaceOptions.value.filter(item => item.value !== 'ALL'))
 
-const currentPageUserNames = computed(() => {
+const currentPageCreatorNames = computed(() => {
   const names = new Set<string>()
   currentPageCases.value.forEach((item) => {
-    if (item.executorName) {
-      names.add(item.executorName)
-    }
     if (item.createdByName) {
       names.add(item.createdByName)
     }
@@ -111,9 +112,15 @@ const currentPageUserNames = computed(() => {
   return [...names]
 })
 
-const executorOptions = computed(() => currentPageUserNames.value)
-const creatorOptions = computed(() => currentPageUserNames.value)
-const moduleDialogTitle = computed(() => (moduleDialogMode.value === 'create' ? '新建子模块' : '重命名子模块'))
+const creatorOptions = computed(() => {
+  const names = new Set([...creatorNames.value, ...currentPageCreatorNames.value])
+  return [...names].sort((left, right) => left.localeCompare(right, 'zh-CN'))
+})
+const sourceOptions = [
+  { label: '手工创建', value: 'MANUAL' },
+  { label: '导入', value: 'IMPORTED' },
+  { label: 'AI 生成', value: 'AI_GENERATED' },
+]
 const currentWorkspaceName = computed(() => {
   const workspace = workspaces.value.find(item => item.workspaceCode === workspaceCode.value)
   return workspace?.workspaceName || workspaceCode.value
@@ -403,7 +410,17 @@ function openCreateModule(payload: { nodeId: string; workspaceCode: string; dire
   selectedNodeId.value = payload.nodeId
   moduleDialogMode.value = 'create'
   moduleForm.name = ''
+  moduleValidationError.value = ''
   moduleDialogVisible.value = true
+}
+
+async function loadCreatorNames() {
+  try {
+    const users = await userApi.getUsers()
+    creatorNames.value = users.map(item => item.displayName).filter(Boolean)
+  } catch {
+    creatorNames.value = []
+  }
 }
 
 function openRenameModule(payload: { nodeId: string; workspaceCode: string; directoryId: number; label: string }) {
@@ -415,6 +432,7 @@ function openRenameModule(payload: { nodeId: string; workspaceCode: string; dire
   selectedNodeId.value = payload.nodeId
   moduleDialogMode.value = 'rename'
   moduleForm.name = payload.label
+  moduleValidationError.value = ''
   moduleDialogVisible.value = true
 }
 
@@ -467,8 +485,13 @@ async function submitModule() {
   if (moduleDialogMode.value === 'create' ? !canCreateCases.value : !canEditCases.value) return
   const node = activeDirectoryNode.value
   if (!node || moduleSubmitDisabled.value) {
+    if (!moduleForm.name.trim()) {
+      moduleValidationError.value = '目录名称不能为空'
+    }
     return
   }
+
+  moduleValidationError.value = ''
 
   moduleSaving.value = true
   try {
@@ -486,7 +509,7 @@ async function submitModule() {
         parentId: node.type === 'workspace' ? null : node.directoryId,
         name: moduleForm.name.trim(),
       })
-      ElMessage.success('子模块已创建')
+      ElMessage.success('目录已创建')
     }
     moduleDialogVisible.value = false
     if (moduleDialogMode.value === 'create') {
@@ -526,31 +549,38 @@ async function submitMoveModule() {
   }
 }
 
-async function deleteModule(payload: { nodeId: string; workspaceCode: string; directoryId: number; label: string }) {
+function deleteModule(payload: { nodeId: string; workspaceCode: string; directoryId: number; label: string }) {
   if (!canDeleteCases.value) return
+  deleteDirectoryTarget.value = {
+    ...payload,
+    count: findTreeNode(payload.nodeId)?.count ?? 0,
+  }
+}
+
+async function confirmDeleteModule() {
+  const target = deleteDirectoryTarget.value
+  if (!target || deleteDirectorySaving.value) return
+
+  deleteDirectorySaving.value = true
   try {
-    await confirmDelete({
-      title: '删除模块',
-      message: `确认删除模块“${payload.label}”吗？删除后不可恢复。`,
-      confirmText: '确认删除',
-    })
-    await caseApi.deleteCaseDirectory(payload.directoryId, payload.workspaceCode)
-    if (selectedNodeId.value === payload.nodeId) {
-      selectedNodeId.value = `workspace:${payload.workspaceCode}`
+    await caseApi.deleteCaseDirectory(target.directoryId, target.workspaceCode)
+    if (selectedNodeId.value === target.nodeId) {
+      selectedNodeId.value = `workspace:${target.workspaceCode}`
       selectedDirectoryId.value = null
     }
-    ElMessage.success('子模块已删除')
+    deleteDirectoryTarget.value = null
+    ElMessage.success('目录已删除')
     await refreshCasesAfterDirectoryChange()
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') {
-      ElMessage.error(getRequestErrorMessage(error))
-    }
+    ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    deleteDirectorySaving.value = false
   }
 }
 
 onMounted(() => {
   void (async () => {
-    await loadWorkspaces()
+    await Promise.all([loadWorkspaces(), loadCreatorNames()])
     await loadDirectories()
   })()
 })
@@ -679,7 +709,7 @@ watch(
             <header class="cases-page__toolbar">
               <CaseFilterPanel
                 v-model="filter"
-                :executor-options="executorOptions"
+                :source-options="sourceOptions"
                 :creator-options="creatorOptions"
                 :workspace-options="businessWorkspaceOptions"
                 :show-workspace-filter="workspaceCode === 'ALL'"
@@ -715,35 +745,26 @@ watch(
       </main>
     </div>
 
-    <el-dialog
+    <AppDirectoryOperationDialog
       v-model="moduleDialogVisible"
-      :title="moduleDialogTitle"
-      width="420px"
-      append-to-body
-    >
-      <div class="case-module-dialog">
-        <div class="case-module-dialog__meta">
-          所属位置：{{ activeDirectoryNode?.label || '-' }}
-        </div>
-        <label class="case-module-dialog__field">
-          <span>模块名称</span>
-          <el-input
-            v-model="moduleForm.name"
-            maxlength="30"
-            show-word-limit
-            placeholder="请输入模块名称"
-            @keydown.enter.prevent="submitModule"
-          />
-        </label>
-      </div>
-
-      <template #footer>
-        <AppButton :disabled="moduleSaving" @click="moduleDialogVisible = false">取消</AppButton>
-        <AppButton type="primary" :loading="moduleSaving" :disabled="moduleSubmitDisabled" @click="submitModule">
-          {{ moduleDialogMode === 'create' ? '创建' : '保存' }}
-        </AppButton>
-      </template>
-    </el-dialog>
+      :mode="moduleDialogMode"
+      :name="moduleForm.name"
+      :saving="moduleSaving"
+      :error="moduleValidationError"
+      @update:name="moduleForm.name = $event; moduleValidationError = ''"
+      @confirm="submitModule"
+    />
+    <AppDirectoryOperationDialog
+      v-if="deleteDirectoryTarget"
+      :model-value="Boolean(deleteDirectoryTarget)"
+      mode="delete"
+      :target-label="deleteDirectoryTarget.label"
+      :target-count="deleteDirectoryTarget.count"
+      count-unit="条用例"
+      :saving="deleteDirectorySaving"
+      @update:model-value="deleteDirectoryTarget = null"
+      @confirm="confirmDeleteModule"
+    />
 
     <el-dialog
       v-model="moveDialogVisible"
@@ -752,9 +773,6 @@ watch(
       append-to-body
     >
       <div class="case-module-dialog">
-        <div class="case-module-dialog__meta">
-          当前模块：{{ activeDirectoryNode?.label || '-' }}
-        </div>
         <label class="case-module-dialog__field">
           <span>移动到</span>
           <el-select
@@ -930,28 +948,32 @@ watch(
 .case-module-dialog {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-4);
-}
-
-.case-module-dialog__meta {
-  padding: var(--app-space-2) var(--app-space-3);
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-page);
-  color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
+  gap: 16px;
 }
 
 .case-module-dialog__field {
   display: flex;
   flex-direction: column;
-  gap: var(--app-space-2);
+  gap: 6px;
 }
 
 .case-module-dialog__field span {
   color: var(--app-text-secondary);
-  font-size: var(--app-font-size-sm);
+  font-size: 12px;
   font-weight: 600;
+  line-height: 18px;
+}
+
+.case-module-dialog__required {
+  margin-left: 2px;
+  color: var(--app-danger) !important;
+}
+
+.case-module-dialog__error {
+  color: var(--app-danger) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 18px;
 }
 
 .case-module-dialog__select {

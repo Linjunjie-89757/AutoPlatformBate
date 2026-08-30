@@ -871,12 +871,8 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     await syncDirectoryTreeExpandedState()
   }
 
-  async function createModule(parentId: number | null = null) {
-    const value = await options.openApiSoftPrompt({
-      title: '新建模块',
-      message: '请输入模块名称',
-      requiredMessage: '模块名称不能为空',
-    })
+  async function createModule(parentId: number | null = null, name: string) {
+    const value = name.trim()
     if (!value) return
     const parentModule = parentId == null
       ? null
@@ -891,14 +887,9 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     ElMessage.success('模块已创建')
   }
 
-  async function renameModule(node: DirectoryNode) {
+  async function renameModule(node: DirectoryNode, name: string) {
     if (!node.moduleId) return
-    const value = await options.openApiSoftPrompt({
-      title: '重命名模块',
-      message: '请输入新的模块名称',
-      value: node.label.split('/').pop() || node.label,
-      requiredMessage: '模块名称不能为空',
-    })
+    const value = name.trim()
     if (!value) return
     await apiAutomationApi.updateDefinitionModule(node.workspaceCode, node.moduleId, {
       workspaceCode: node.workspaceCode,
@@ -910,12 +901,6 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
 
   async function deleteModule(node: DirectoryNode) {
     if (!node.moduleId) return
-    if (node.count > 0 || node.children.some(child => child.type === 'module')) {
-      ElMessage.warning('请先移除模块下的请求或子模块')
-      return
-    }
-    const confirmed = await options.confirmApiAction('删除后不可恢复，确认删除该模块吗？', '删除模块', { danger: true })
-    if (!confirmed) return
     await apiAutomationApi.deleteDefinitionModule(node.workspaceCode, node.moduleId)
     await refreshWorkspaceDirectoryData(node.workspaceCode)
     ElMessage.success('模块已删除')
@@ -960,17 +945,6 @@ export function useApiDirectoryWorkspace(options: UseApiDirectoryWorkspaceOption
     }
     selectedDirectoryKey.value = node.key
     options.directoryTreeRef.value?.setCurrentKey?.(node.key)
-    if (node.type === 'module') {
-      setDirectoryNodeExpanded(node, !expandedKeys.value.includes(node.key))
-      return
-    }
-    if (node.type === 'workspace' || node.type === 'root' || node.type === 'unassigned') {
-      const shouldOpen = !expandedKeys.value.includes(node.key)
-      if (shouldOpen) {
-        expandedKeys.value = Array.from(new Set([...expandedKeys.value, node.key]))
-        void keepDirectoryNodeExpanded(node, { force: true })
-      }
-    }
     if (node.type === 'request' && node.definition) {
       if (directorySearchActive.value) {
         void revealDefinition(node.definition)

@@ -201,6 +201,18 @@ class AiProviderClientTests {
     }
 
     @Test
+    void recognizesProviderMessageWhenModelDoesNotSupportImages() {
+        boolean recognized = (boolean) ReflectionTestUtils.invokeMethod(
+                chatAdapter,
+                "requiresImageCapability",
+                "{\"error\":{\"message\":\"This model does not support image\"}}",
+                List.of(new AiProviderClient.ImageInput("a.png", "image/png", new byte[]{1, 2, 3}))
+        );
+
+        assertThat(recognized).isTrue();
+    }
+
+    @Test
     void forwardsImagesToStreamingAdapter() {
         AiProtocolAdapter adapter = mock(AiProtocolAdapter.class);
         when(adapter.protocolType()).thenReturn(AiProviderClient.PROTOCOL_OPENAI_COMPATIBLE_CHAT);

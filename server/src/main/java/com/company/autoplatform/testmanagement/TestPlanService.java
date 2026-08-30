@@ -570,14 +570,18 @@ public class TestPlanService {
         List<Long> linkedIds = planCaseDefectRelationMapper.selectList(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>()
                 .eq(TestPlanCaseDefectRelationEntity::getPlanId, id).eq(TestPlanCaseDefectRelationEntity::getWorkspaceId, plan.getWorkspaceId()))
                 .stream().map(TestPlanCaseDefectRelationEntity::getDefectId).toList();
-        if (linkedIds.isEmpty()) return direct;
+        if (linkedIds.isEmpty()) return hydrateDefectAssigneeNames(direct);
         List<Long> directIds = direct.stream().map(BugEntity::getId).collect(Collectors.toList());
         List<Long> missingIds = linkedIds.stream().filter(item -> !directIds.contains(item)).distinct().toList();
-        if (missingIds.isEmpty()) return direct;
+        if (missingIds.isEmpty()) return hydrateDefectAssigneeNames(direct);
         List<BugEntity> linked = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>().in(BugEntity::getId, missingIds).eq(BugEntity::getWorkspaceId, plan.getWorkspaceId()));
         List<BugEntity> result = new ArrayList<>(direct);
         result.addAll(linked);
-        return result.stream().sorted(Comparator.comparing(BugEntity::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())).thenComparing(BugEntity::getId, Comparator.reverseOrder())).toList();
+        List<BugEntity> sorted = result.stream()
+                .sorted(Comparator.comparing(BugEntity::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(BugEntity::getId, Comparator.reverseOrder()))
+                .toList();
+        return hydrateDefectAssigneeNames(sorted);
     }
 
     public List<BugEntity> listCaseDefects(Long id, Long planCaseId, String workspaceCode) {
@@ -586,13 +590,28 @@ public class TestPlanService {
         List<Long> relationIds = planCaseDefectRelationMapper.selectList(new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>()
                 .eq(TestPlanCaseDefectRelationEntity::getPlanId, id).eq(TestPlanCaseDefectRelationEntity::getPlanCaseId, planCaseId))
                 .stream().map(TestPlanCaseDefectRelationEntity::getDefectId).toList();
-        return bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+        return hydrateDefectAssigneeNames(bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
                 .eq(BugEntity::getWorkspaceId, plan.getWorkspaceId())
                 .and(query -> {
                     query.eq(BugEntity::getTestPlanCaseId, planCaseId);
                     if (!relationIds.isEmpty()) query.or().in(BugEntity::getId, relationIds);
                 })
-                .orderByDesc(BugEntity::getUpdatedAt).orderByDesc(BugEntity::getId));
+                .orderByDesc(BugEntity::getUpdatedAt).orderByDesc(BugEntity::getId)));
+    }
+
+    private List<BugEntity> hydrateDefectAssigneeNames(List<BugEntity> defects) {
+        List<Long> assigneeIds = defects.stream()
+                .map(BugEntity::getAssigneeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (assigneeIds.isEmpty()) return defects;
+        Map<Long, String> names = userMapper.selectBatchIds(assigneeIds).stream()
+                .collect(Collectors.toMap(UserEntity::getId, UserEntity::getDisplayName, (left, right) -> left));
+        defects.forEach(defect -> {
+            if (defect.getAssigneeId() != null) defect.setAssigneeName(names.get(defect.getAssigneeId()));
+        });
+        return defects;
     }
 
     @Transactional

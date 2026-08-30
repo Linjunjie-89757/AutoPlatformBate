@@ -240,6 +240,10 @@ public class AiProviderClient {
             }
             String status = normalizePerCaseReviewStatus(firstText(item, "status", "result", "reviewStatus"));
             GeneratedAiCaseItem optimizedCase = parseGeneratedCaseItem(item.path("optimizedCase"), "REVIEW_OPTIMIZED", status);
+            GeneratedAiCaseItem suggestedCase = parseGeneratedCaseItem(item.path("suggestedCase"), "REVIEW_SUGGESTED", status);
+            if (suggestedCase == null) {
+                suggestedCase = optimizedCase;
+            }
             decisions.add(new AiReviewCaseDecision(
                     caseIndex,
                     status,
@@ -249,7 +253,16 @@ public class AiProviderClient {
                     firstText(item, "reviewComment", "comment"),
                     optionalText(item, "optimizationReason"),
                     optionalText(item, "coverageGap"),
-                    optimizedCase
+                    optimizedCase,
+                    firstText(item, "candidateCaseId", "candidateId"),
+                    optionalText(item, "suggestedAction"),
+                    optionalInt(item.path("score")),
+                    optionalDouble(item.path("confidence")),
+                    firstText(item, "reason", "reviewReason", "summary"),
+                    suggestedCase,
+                    stringList(firstArray(item, "mergeTargetCaseIds", "mergeTargetCandidateIds")),
+                    optionalInt(item.path("sourceVersion")),
+                    optionalText(item, "sourceContentHash")
             ));
         }
         return decisions;
@@ -331,6 +344,23 @@ public class AiProviderClient {
         if (node.isTextual()) {
             try {
                 return Integer.parseInt(node.asText().trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Double optionalDouble(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        if (node.isNumber()) {
+            return node.asDouble();
+        }
+        if (node.isTextual()) {
+            try {
+                return Double.parseDouble(node.asText().trim());
             } catch (NumberFormatException ignored) {
                 return null;
             }
@@ -433,7 +463,7 @@ public class AiProviderClient {
         String normalized = status.trim().toUpperCase();
         return switch (normalized) {
             case "APPROVE", "APPROVED", "PASS", "PASSED" -> "APPROVED";
-            case "OPTIMIZE", "OPTIMIZED", "SUGGESTED", "SUGGEST", "IMPROVED" -> "OPTIMIZED";
+            case "OPTIMIZE", "OPTIMIZED", "SUGGESTED", "SUGGEST", "IMPROVED", "CHANGE_SUGGESTED" -> "CHANGE_SUGGESTED";
             case "SUPPLEMENT", "SUPPLEMENTED", "ADDED" -> "SUPPLEMENTED";
             case "CONFIRM", "CONFIRM_REQUIRED", "NEEDS_CONFIRMATION" -> "CONFIRM_REQUIRED";
             case "NOT_RECOMMENDED", "REJECT", "REJECTED", "FAIL", "FAILED" -> "NOT_RECOMMENDED";
