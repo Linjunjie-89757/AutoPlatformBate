@@ -7,7 +7,7 @@ import {
   Download,
   FolderOpened,
 } from '@element-plus/icons-vue'
-import { AlertCircle, ArrowUpRight, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleCheckBig, CircleX, Eye, Loader2, Pencil, RotateCcw, ThumbsDown, ThumbsUp } from '@lucide/vue'
+import { AlertCircle, ArrowUpRight, Bot, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CircleCheckBig, CirclePlus, CircleX, Eye, Loader2, Pencil, RotateCcw, Save, Sparkles, ThumbsDown, ThumbsUp, X } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 
 import { caseAiApi, type AiCaseCandidateItem, type AiGenerationTaskEventItem, type AiGenerationTaskItem, type GeneratedAiCaseItem } from '@/entities/case-ai'
@@ -177,10 +177,9 @@ const caseEditForm = reactive({
   title: '',
   priority: 'P2',
   precondition: '',
-  steps: '',
   expectedResult: '',
-  tags: '',
 })
+const caseEditSteps = ref<string[]>([''])
 
 let pollingTimer: number | null = null
 const streamConnected = ref(false)
@@ -703,17 +702,21 @@ function getEffectiveReviewStatus(row: DetailCaseRow | null | undefined) {
   return row?.candidate?.reviewStatus || row?.aiReviewStatus || 'PENDING'
 }
 
+function getDisplayedReviewStatus(row: DetailCaseRow | null | undefined) {
+  return getEffectiveReviewStatus(row)
+}
+
 function getAiReviewListLabel(row: DetailCaseRow) {
   const map: Record<string, string> = {
     APPROVED: '通过',
     OPTIMIZED: '已优化',
     CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '已补充',
-    CONFIRM_REQUIRED: '建议确认',
+    CONFIRM_REQUIRED: '待确认',
     NOT_RECOMMENDED: '不推荐',
     PENDING: '待评审',
   }
-  const status = getEffectiveReviewStatus(row)
+  const status = getDisplayedReviewStatus(row)
   return map[status] || status
 }
 
@@ -727,7 +730,7 @@ function getAiReviewListClass(row: DetailCaseRow) {
     NOT_RECOMMENDED: 'status-danger',
     PENDING: 'status-warning',
   }
-  return map[getEffectiveReviewStatus(row)] || 'status-neutral'
+  return map[getDisplayedReviewStatus(row)] || 'status-neutral'
 }
 
 function getFigmaReviewLabel(row: DetailCaseRow) {
@@ -736,18 +739,11 @@ function getFigmaReviewLabel(row: DetailCaseRow) {
     OPTIMIZED: '评审通过',
     CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '评审通过',
-    CONFIRM_REQUIRED: '建议确认',
+    CONFIRM_REQUIRED: '待确认',
     NOT_RECOMMENDED: '评审未通过',
     PENDING: '待评审',
   }
-  return map[getEffectiveReviewStatus(row)] || getAiReviewListLabel(row)
-}
-
-function getFigmaCaseTags(row: DetailCaseRow) {
-  return [
-    row.testAngle || row.sceneFocus || '主流程',
-    row.caseType || '功能',
-  ].filter(Boolean)
+  return map[getDisplayedReviewStatus(row)] || getAiReviewListLabel(row)
 }
 
 function getFigmaReviewTableLabel(row: DetailCaseRow) {
@@ -756,11 +752,11 @@ function getFigmaReviewTableLabel(row: DetailCaseRow) {
     OPTIMIZED: '评审通过',
     CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '评审通过',
-    CONFIRM_REQUIRED: '建议确认',
+    CONFIRM_REQUIRED: '待确认',
     NOT_RECOMMENDED: '评审未通过',
     PENDING: '待评审',
   }
-  return map[getEffectiveReviewStatus(row)] || '待评审'
+  return map[getDisplayedReviewStatus(row)] || '待评审'
 }
 
 function getFigmaCaseSubtitle(row: DetailCaseRow) {
@@ -781,11 +777,11 @@ function getFigmaReviewReason(row: DetailCaseRow) {
 }
 
 function getFigmaReviewTone(row: DetailCaseRow) {
-  const status = getEffectiveReviewStatus(row)
+  const status = getDisplayedReviewStatus(row)
   if (status === 'NOT_RECOMMENDED') {
     return 'is-danger'
   }
-  if (status === 'CONFIRM_REQUIRED' || status === 'PENDING') {
+  if (status === 'CHANGE_SUGGESTED' || status === 'CONFIRM_REQUIRED' || status === 'PENDING') {
     return 'is-warning'
   }
   return 'is-success'
@@ -824,12 +820,6 @@ function getCaseTypeClass(row: DetailCaseRow) {
   return 'type-neutral'
 }
 
-function getCaseScore(row: DetailCaseRow) {
-  const summary = [row.aiReviewSummary, row.reviewComment].filter(Boolean).join(' ')
-  const matched = summary.match(/(?:评分|score)\s*[:：]?\s*(\d{1,3})/i)
-  return matched ? Math.min(100, Number(matched[1])) : null
-}
-
 function toggleCaseExpanded(index: number) {
   expandedCaseIndexes.value = expandedCaseIndexes.value.includes(index)
     ? expandedCaseIndexes.value.filter(item => item !== index)
@@ -866,18 +856,22 @@ function getFigmaCaseSteps(row: DetailCaseRow) {
 }
 
 function getFigmaReviewSuggestion(row: DetailCaseRow) {
-  return row.candidate?.reviewReason?.trim()
-    || row.warnings?.[0]
-    || row.optimizationReason
-    || row.supplementReason
-    || ''
-}
-
-function getDrawerOriginalCase(row: DetailCaseRow | null | undefined): GeneratedAiCaseItem | null {
-  if (!row) {
-    return null
+  const status = getDisplayedReviewStatus(row)
+  if (status === 'CHANGE_SUGGESTED') {
+    return row.optimizationReason?.trim()
+      || row.candidate?.suggestedCase?.optimizationReason?.trim()
+      || row.candidate?.reviewReason?.trim()
+      || ''
   }
-  return row.candidate?.originalCase || row.originalCaseSnapshot || row
+  if (status === 'CONFIRM_REQUIRED') {
+    return row.candidate?.reviewReason?.trim()
+      || row.reviewComment?.trim()
+      || row.aiReviewSummary?.trim()
+      || ''
+  }
+  return row.supplementReason?.trim()
+    || row.warnings?.[0]?.trim()
+    || ''
 }
 
 function getDrawerSuggestedCase(row: DetailCaseRow | null | undefined): GeneratedAiCaseItem | null {
@@ -889,6 +883,17 @@ function getDrawerCurrentCase(row: DetailCaseRow | null | undefined): GeneratedA
     return null
   }
   return row.candidate?.currentCase || row
+}
+
+function getDrawerCaseSteps(caseItem: GeneratedAiCaseItem | null | undefined) {
+  const normalized = caseItem?.steps?.trim()
+  if (!normalized) {
+    return ['暂无步骤']
+  }
+  return normalized
+    .split(/\r?\n|[；;]/)
+    .map(item => item.replace(/^\s*\d+[.、)]?\s*/, '').trim())
+    .filter(Boolean)
 }
 
 function hasDrawerSuggestion(row: DetailCaseRow | null | undefined) {
@@ -950,9 +955,9 @@ function syncCaseEditForm(row: DetailCaseRow | null) {
   caseEditForm.title = current?.title || ''
   caseEditForm.priority = current?.priority || 'P2'
   caseEditForm.precondition = current?.precondition || ''
-  caseEditForm.steps = current?.steps || ''
   caseEditForm.expectedResult = current?.expectedResult || ''
-  caseEditForm.tags = row ? getFigmaCaseTags(row).join(', ') : ''
+  const steps = getDrawerCaseSteps(current).filter(step => step !== '暂无步骤')
+  caseEditSteps.value = steps.length ? steps : ['']
 }
 
 function stopPolling() {
@@ -1442,6 +1447,72 @@ async function chooseCandidateVersion(row: DetailCaseRow, action: 'keep' | 'appl
   }
 }
 
+async function resetCandidateVersionChoice(row: DetailCaseRow) {
+  const record = detailRecord.value
+  const candidate = row.candidate
+  if (!record || !candidate || candidateActionIndex.value !== null) {
+    return
+  }
+
+  candidateActionIndex.value = row.index
+  try {
+    const updated = await caseAiApi.resetCandidateVersionChoice(
+      record.workspaceCode,
+      record.taskId,
+      candidate.candidateCaseId,
+      {
+        expectedVersion: candidate.contentVersion,
+        expectedContentHash: candidate.contentHash,
+      },
+    )
+    candidatesByIndex.value = { ...candidatesByIndex.value, [row.index]: updated }
+    replaceGeneratedCase(row.index, updated.currentCase)
+    syncCaseEditForm({ ...row, candidate: updated })
+    ElMessage.success('已撤销版本选择，请重新确认')
+  } catch (error) {
+    ElMessage.error(`撤销版本选择失败：${getRequestErrorMessage(error)}`)
+  } finally {
+    candidateActionIndex.value = null
+  }
+}
+
+async function confirmAndAdopt(row: DetailCaseRow) {
+  const record = detailRecord.value
+  const candidate = row.candidate
+  if (!record || !candidate || candidateActionIndex.value !== null) {
+    return
+  }
+  const directoryId = record.adoptions?.find(item => item.caseIndex === row.index)?.directoryId ?? record.directoryId
+  if (directoryId == null) {
+    ElMessage.warning('请先设置保存路径，再采纳用例')
+    return
+  }
+  candidateActionIndex.value = row.index
+  try {
+    const confirmed = await caseAiApi.keepCandidateOriginal(record.workspaceCode, record.taskId, candidate.candidateCaseId, {
+      expectedVersion: candidate.contentVersion,
+      expectedContentHash: candidate.contentHash,
+    })
+    candidatesByIndex.value = { ...candidatesByIndex.value, [row.index]: confirmed }
+    replaceGeneratedCase(row.index, confirmed.currentCase)
+    const result = await adoptCaseRow(record, { ...row, candidate: confirmed }, directoryId)
+    if (result.status === 'ADOPTED') {
+      setAdoptionState(row.index, 'ADOPTED')
+      detailRecord.value = await caseAiApi.getTask(record.workspaceCode, record.taskId)
+      hydrateAdoptionStates(detailRecord.value)
+      ElMessage.success('用例已确认并采纳')
+    } else {
+      setAdoptionState(row.index, 'ADOPT_FAILED', result.failureReason || '写入用例库失败，请重试')
+      ElMessage.error(`采纳失败：${result.failureReason || '写入用例库失败，请重试'}`)
+    }
+  } catch (error) {
+    setAdoptionState(row.index, 'ADOPT_FAILED', getRequestErrorMessage(error))
+    ElMessage.error(`采纳失败：${getRequestErrorMessage(error)}`)
+  } finally {
+    candidateActionIndex.value = null
+  }
+}
+
 function closeBatchResult() {
   batchResultVisible.value = false
   batchAdoptionResult.value = null
@@ -1704,6 +1775,22 @@ function cancelCaseEdit() {
   syncCaseEditForm(activeCase.value)
 }
 
+function addCaseEditStep() {
+  caseEditSteps.value.push('')
+  void nextTick(() => {
+    const inputs = document.querySelectorAll<HTMLInputElement>('.case-ai-record-detail-page__edit-step-input')
+    inputs.item(inputs.length - 1)?.focus()
+  })
+}
+
+function removeCaseEditStep(index: number) {
+  if (caseEditSteps.value.length === 1) {
+    caseEditSteps.value = ['']
+    return
+  }
+  caseEditSteps.value.splice(index, 1)
+}
+
 async function saveCaseEdit() {
   if (!detailRecord.value || !activeCase.value) {
     return
@@ -1719,20 +1806,14 @@ async function saveCaseEdit() {
     const targetIndex = activeCase.value.index
     const now = new Date().toISOString()
     const editorName = currentUser.value?.displayName || currentUser.value?.username || detailRecord.value.updatedByName || '当前用户'
-    const editedTags = caseEditForm.tags
-      .split(/[,，]/)
-      .map(item => item.trim().replace(/^#/, ''))
-      .filter(Boolean)
     const candidate = activeCase.value.candidate
     const currentCase = {
       ...(getDrawerCurrentCase(activeCase.value) || activeCase.value),
       title,
       priority: caseEditForm.priority,
       precondition: caseEditForm.precondition,
-      steps: caseEditForm.steps,
+      steps: caseEditSteps.value.map(step => step.trim()).filter(Boolean).join('\n'),
       expectedResult: caseEditForm.expectedResult,
-      testAngle: editedTags[0] || '',
-      caseType: editedTags[1] || '',
       manualEdited: true,
       manualEditedByName: editorName,
       manualEditedAt: now,
@@ -2162,99 +2243,143 @@ onBeforeUnmount(() => {
               v-if="activeCase.aiSource === 'REVIEW_SUPPLEMENTED' || activeCase.candidate?.origin === 'REVIEW_SUPPLEMENTED'"
               class="case-ai-record-detail-page__source-tag"
             >AI 补充</span>
-            <span v-if="caseEditing" class="case-ai-record-detail-page__editing-tag">编辑中</span>
           </div>
           <button v-if="!caseEditing" type="button" class="case-ai-record-detail-page__drawer-edit" @click="startCaseEdit">
             <Pencil :size="13" />编辑
           </button>
-          <input v-if="caseEditing" v-model="caseEditForm.title" class="case-ai-record-detail-page__drawer-title-input" />
-          <h2 v-else>{{ getDrawerCurrentCase(activeCase)?.title || activeCase.title }}</h2>
-          <p>模块：{{ activeCase.directoryName || detailRecord?.directoryName || '-' }} · 评分：{{ getCaseScore(activeCase) ?? '--' }}</p>
+          <h2>{{ caseEditing ? (caseEditForm.title || '（编辑中）') : (getDrawerCurrentCase(activeCase)?.title || activeCase.title) }}</h2>
+          <p>{{ getFigmaCaseSubtitle(activeCase) }}</p>
         </div>
       </template>
 
       <template v-if="activeCase">
         <div v-if="!caseEditing" class="case-ai-record-detail-page__drawer-content">
-          <section v-if="hasDrawerSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-version is-original">
-            <div class="case-ai-record-detail-page__drawer-version-header">
-              <h4>AI 生成原始版本</h4>
-              <span>原始内容</span>
+          <section class="case-ai-record-detail-page__drawer-current-case">
+            <span v-if="isCandidateSuggestionApplied(activeCase)" class="case-ai-record-detail-page__drawer-applied-badge">已应用</span>
+            <div class="case-ai-record-detail-page__drawer-current-label">
+              <h4>{{ hasDrawerSuggestion(activeCase) && isCandidateSuggestionApplied(activeCase) ? 'AI 优化版本' : 'AI 生成用例' }}</h4>
+              <span v-if="hasDrawerSuggestion(activeCase) && isCandidateSuggestionApplied(activeCase)" class="is-applied">已应用</span>
             </div>
-            <div class="case-ai-record-detail-page__drawer-version-title">{{ getDrawerOriginalCase(activeCase)?.title }}</div>
-            <dl>
-              <div><dt>前置条件</dt><dd>{{ formatCaseCellText(getDrawerOriginalCase(activeCase)?.precondition) }}</dd></div>
-              <div><dt>测试步骤</dt><dd>{{ formatCaseCellText(getDrawerOriginalCase(activeCase)?.steps) }}</dd></div>
-              <div><dt>预期结果</dt><dd>{{ formatCaseCellText(getDrawerOriginalCase(activeCase)?.expectedResult) }}</dd></div>
-            </dl>
+            <div class="case-ai-record-detail-page__drawer-current-title">{{ getDrawerCurrentCase(activeCase)?.title }}</div>
+            <section>
+              <h4>前置条件</h4>
+              <div>{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.precondition) }}</div>
+            </section>
+            <section>
+              <h4>测试步骤</h4>
+              <ol class="case-ai-record-detail-page__drawer-step-list">
+                <li v-for="(step, stepIndex) in getDrawerCaseSteps(getDrawerCurrentCase(activeCase))" :key="stepIndex">
+                  <span>{{ stepIndex + 1 }}</span>{{ step }}
+                </li>
+              </ol>
+            </section>
+            <section>
+              <h4>预期结果</h4>
+              <div class="case-ai-record-detail-page__drawer-expected">{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.expectedResult) }}</div>
+            </section>
           </section>
-          <section>
-            <h4>{{ hasDrawerSuggestion(activeCase) ? '当前采纳版本' : '前置条件' }}</h4>
-            <div>{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.precondition) }}</div>
-          </section>
-          <section>
-            <h4>测试步骤</h4>
-            <div>{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.steps) }}</div>
-          </section>
-          <section>
-            <h4>预期结果</h4>
-            <div>{{ formatCaseCellText(getDrawerCurrentCase(activeCase)?.expectedResult) }}</div>
-          </section>
-          <section v-if="hasDrawerSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-version is-suggested">
-            <div class="case-ai-record-detail-page__drawer-version-header">
-              <h4>AI 优化建议版本</h4>
-              <span>建议稿</span>
+
+          <section class="case-ai-record-detail-page__drawer-review-card" :class="getFigmaReviewTone(activeCase)">
+            <div class="case-ai-record-detail-page__drawer-review-header">
+              <Bot :size="13" />
+              <strong>AI 评审结论</strong>
+              <span class="case-ai-record-detail-page__drawer-review-pill">{{ getFigmaReviewLabel(activeCase) }}</span>
             </div>
-            <div class="case-ai-record-detail-page__drawer-version-title">{{ getDrawerSuggestedCase(activeCase)?.title }}</div>
-            <dl>
-              <div><dt>前置条件</dt><dd>{{ formatCaseCellText(getDrawerSuggestedCase(activeCase)?.precondition) }}</dd></div>
-              <div><dt>测试步骤</dt><dd>{{ formatCaseCellText(getDrawerSuggestedCase(activeCase)?.steps) }}</dd></div>
-              <div><dt>预期结果</dt><dd>{{ formatCaseCellText(getDrawerSuggestedCase(activeCase)?.expectedResult) }}</dd></div>
-            </dl>
-            <p v-if="getFigmaReviewSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-version-reason">
+            <p>{{ getFigmaReviewReason(activeCase) || '暂无评审说明' }}</p>
+
+            <div v-if="getDisplayedReviewStatus(activeCase) === 'CHANGE_SUGGESTED' && activeCase.candidate?.humanDecision === 'PENDING' && getFigmaReviewSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-review-optimization">
               <strong>优化说明：</strong>{{ getFigmaReviewSuggestion(activeCase) }}
-            </p>
-            <div v-if="activeCase.candidate && activeCase.candidate.humanDecision === 'PENDING'" class="case-ai-record-detail-page__drawer-version-actions">
-              <button type="button" class="is-keep" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'keep')">{{ candidateActionIndex === activeCase.index ? '处理中...' : '保留原版' }}</button>
-              <button type="button" class="is-apply" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'apply')">{{ candidateActionIndex === activeCase.index ? '处理中...' : '应用优化版' }}</button>
             </div>
-            <div v-else-if="isCandidateSuggestionApplied(activeCase)" class="case-ai-record-detail-page__drawer-version-state is-applied"><CheckCircle2 :size="14" />已应用 AI 优化版本</div>
-            <div v-else-if="isCandidateOriginalKept(activeCase)" class="case-ai-record-detail-page__drawer-version-state is-kept"><CheckCircle2 :size="14" />已保留原始版本</div>
+
+            <div
+              v-else-if="['APPROVED', 'OPTIMIZED', 'SUPPLEMENTED'].includes(getDisplayedReviewStatus(activeCase)) && getFigmaReviewSuggestion(activeCase)"
+              class="case-ai-record-detail-page__drawer-review-suggestion"
+            >
+              <strong>建议：</strong>{{ getFigmaReviewSuggestion(activeCase) }}
+            </div>
+
+            <template v-if="getDisplayedReviewStatus(activeCase) === 'CHANGE_SUGGESTED' && getDrawerSuggestedCase(activeCase) && activeCase.candidate?.humanDecision === 'PENDING'">
+              <div class="case-ai-record-detail-page__drawer-suggestion-panel">
+                <div class="case-ai-record-detail-page__drawer-suggestion-heading">
+                  <strong>AI 优化建议版本</strong>
+                  <span>推荐</span>
+                </div>
+                <div class="case-ai-record-detail-page__drawer-suggestion-title">{{ getDrawerSuggestedCase(activeCase)?.title }}</div>
+                <div class="case-ai-record-detail-page__drawer-suggestion-steps">
+                  <div v-for="(step, stepIndex) in getDrawerCaseSteps(getDrawerSuggestedCase(activeCase))" :key="stepIndex">
+                    <span>{{ stepIndex + 1 }}</span>{{ step }}
+                  </div>
+                </div>
+                <div class="case-ai-record-detail-page__drawer-suggestion-expected">
+                  <strong>预期：</strong>{{ formatCaseCellText(getDrawerSuggestedCase(activeCase)?.expectedResult) }}
+                </div>
+              </div>
+              <div class="case-ai-record-detail-page__drawer-version-actions">
+                <button type="button" class="is-apply" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'apply')"><CheckCircle2 :size="12" />{{ candidateActionIndex === activeCase.index ? '处理中...' : '应用优化版' }}</button>
+                <button type="button" class="is-keep" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'keep')">保留原版</button>
+              </div>
+            </template>
+            <div v-if="getDisplayedReviewStatus(activeCase) === 'CHANGE_SUGGESTED' && isCandidateSuggestionApplied(activeCase)" class="case-ai-record-detail-page__drawer-version-state is-applied">
+              <CheckCircle2 :size="13" />
+              <span>已应用 AI 优化版本</span>
+              <button
+                v-if="getCaseReviewState(activeCase) !== 'ADOPTED' && getCaseReviewState(activeCase) !== 'ADOPTING'"
+                type="button"
+                :disabled="candidateActionIndex === activeCase.index"
+                @click="resetCandidateVersionChoice(activeCase)"
+              >{{ candidateActionIndex === activeCase.index ? '撤销中...' : '撤销' }}</button>
+            </div>
+            <div v-else-if="getDisplayedReviewStatus(activeCase) === 'CHANGE_SUGGESTED' && isCandidateOriginalKept(activeCase)" class="case-ai-record-detail-page__drawer-version-state is-kept">
+              <CheckCircle2 :size="13" />
+              <span>已保留原始版本</span>
+              <button
+                v-if="getCaseReviewState(activeCase) !== 'ADOPTED' && getCaseReviewState(activeCase) !== 'ADOPTING'"
+                type="button"
+                :disabled="candidateActionIndex === activeCase.index"
+                @click="resetCandidateVersionChoice(activeCase)"
+              >{{ candidateActionIndex === activeCase.index ? '处理中...' : '重新选择' }}</button>
+            </div>
+
+            <div v-else-if="getDisplayedReviewStatus(activeCase) === 'CONFIRM_REQUIRED' && activeCase.candidate?.humanDecision === 'PENDING'" class="case-ai-record-detail-page__drawer-confirm-panel">
+              <strong>确认要点：</strong>{{ getFigmaReviewSuggestion(activeCase) || '该用例存在需求不明确之处，请确认内容后再采纳。' }}
+            </div>
+            <div v-else-if="getDisplayedReviewStatus(activeCase) === 'CONFIRM_REQUIRED'" class="case-ai-record-detail-page__drawer-confirmed-state"><CheckCircle2 :size="14" />已确认，可继续采纳</div>
           </section>
-          <section v-if="getFigmaReviewSuggestion(activeCase) && !hasDrawerSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-suggestion">
-            <h4>AI 评审建议</h4>
-            <p>{{ getFigmaReviewSuggestion(activeCase) }}</p>
-            <div v-if="activeCase.candidate?.reviewStatus === 'CONFIRM_REQUIRED' && activeCase.candidate.humanDecision === 'PENDING'" class="case-ai-record-detail-page__drawer-confirm-actions">
-              <button type="button" :disabled="candidateActionIndex === activeCase.index" @click="chooseCandidateVersion(activeCase, 'keep')">{{ candidateActionIndex === activeCase.index ? '处理中...' : '确认保留原版' }}</button>
-            </div>
+
+          <section v-if="activeCase.riskNotes || getDisplayedReviewStatus(activeCase) === 'NOT_RECOMMENDED'" class="case-ai-record-detail-page__drawer-risk-panel" :class="{ 'is-danger': getDisplayedReviewStatus(activeCase) === 'NOT_RECOMMENDED' }">
+            <strong>风险提示：</strong>{{ activeCase.riskNotes || getFigmaReviewReason(activeCase) || '评审未通过，请确认风险后再决定是否采纳。' }}
           </section>
-          <section v-if="getFigmaCaseTags(activeCase).length" class="case-ai-record-detail-page__drawer-labels">
-            <h4>标签</h4>
-            <div>
-              <span v-for="tag in getFigmaCaseTags(activeCase)" :key="tag">#{{ tag }}</span>
-            </div>
+          <section v-if="activeCase.aiSource === 'REVIEW_SUPPLEMENTED' || activeCase.candidate?.origin === 'REVIEW_SUPPLEMENTED'" class="case-ai-record-detail-page__drawer-supplement-panel">
+            <Sparkles :size="13" />
+            <span>此用例由 AI 在评审过程中发现覆盖缺口后自动补充生成，非原始生成用例，请确认是否符合实际业务场景后再采纳。</span>
           </section>
         </div>
 
         <div v-else class="case-ai-record-detail-page__drawer-edit-form">
-          <label>
+          <label class="case-ai-record-detail-page__edit-field">
+            <span>用例标题</span>
+            <input v-model="caseEditForm.title" type="text" placeholder="请输入用例标题" />
+          </label>
+          <label class="case-ai-record-detail-page__edit-field">
             <span>前置条件</span>
-            <textarea v-model="caseEditForm.precondition"></textarea>
+            <textarea v-model="caseEditForm.precondition" placeholder="前置条件（选填）"></textarea>
           </label>
-          <label>
-            <span>测试步骤 <small>每行一步</small></span>
-            <textarea v-model="caseEditForm.steps" class="is-steps"></textarea>
-          </label>
-          <label>
-            <span>预期结果</span>
-            <textarea v-model="caseEditForm.expectedResult" class="is-expected"></textarea>
-          </label>
-          <section v-if="getFigmaReviewSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-suggestion">
-            <h4>AI 评审建议</h4>
-            <p>{{ getFigmaReviewSuggestion(activeCase) }}</p>
+          <section class="case-ai-record-detail-page__edit-steps">
+            <div class="case-ai-record-detail-page__edit-steps-header">
+              <span>测试步骤</span>
+              <button type="button" @click="addCaseEditStep"><CirclePlus :size="12" />添加步骤</button>
+            </div>
+            <div class="case-ai-record-detail-page__edit-step-list">
+              <div v-for="(_, stepIndex) in caseEditSteps" :key="stepIndex" class="case-ai-record-detail-page__edit-step-row">
+                <span>{{ stepIndex + 1 }}</span>
+                <input v-model="caseEditSteps[stepIndex]" type="text" class="case-ai-record-detail-page__edit-step-input" :placeholder="`步骤 ${stepIndex + 1}`" />
+                <button v-if="caseEditSteps.length > 1" type="button" :aria-label="`删除第 ${stepIndex + 1} 步`" @click="removeCaseEditStep(stepIndex)"><X :size="13" /></button>
+              </div>
+            </div>
           </section>
-          <label>
-            <span>标签</span>
-            <input v-model="caseEditForm.tags" type="text" />
+          <label class="case-ai-record-detail-page__edit-field">
+            <span>预期结果</span>
+            <textarea v-model="caseEditForm.expectedResult" class="is-expected" placeholder="描述预期的测试结果"></textarea>
           </label>
         </div>
       </template>
@@ -2269,26 +2394,36 @@ onBeforeUnmount(() => {
           <div class="case-ai-record-detail-page__drawer-actions">
             <template v-if="caseEditing">
               <button type="button" class="is-cancel" @click="cancelCaseEdit">取消</button>
-              <button type="button" class="is-save" :disabled="savingCaseEdit" @click="saveCaseEdit">保存修改</button>
+              <button type="button" class="is-save" :disabled="savingCaseEdit" @click="saveCaseEdit"><Save :size="13" />保存修改</button>
             </template>
             <template v-else-if="getCaseReviewState(activeCase) === 'PENDING'">
               <button type="button" class="is-discard" @click="discardSingleCase(activeCase)"><ThumbsDown :size="12" />放弃此条</button>
-              <span v-if="!isCandidateReadyForAdoption(activeCase)" class="case-ai-record-detail-page__drawer-decision is-review-pending">请先确认评审结果</span>
-              <button v-else type="button" class="is-adopt" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />采纳用例</button>
+              <template v-if="getDisplayedReviewStatus(activeCase) === 'CONFIRM_REQUIRED' && activeCase.candidate?.humanDecision === 'PENDING'">
+                <button type="button" class="is-adopt" :disabled="candidateActionIndex === activeCase.index" @click="confirmAndAdopt(activeCase)"><ThumbsUp :size="13" />{{ candidateActionIndex === activeCase.index ? '处理中...' : '确认并采纳' }}</button>
+              </template>
+              <template v-else-if="getDisplayedReviewStatus(activeCase) === 'NOT_RECOMMENDED' && activeCase.candidate?.humanDecision === 'PENDING'">
+                <button type="button" class="is-adopt" :disabled="candidateActionIndex === activeCase.index" @click="confirmAndAdopt(activeCase)"><ThumbsUp :size="13" />{{ candidateActionIndex === activeCase.index ? '处理中...' : '采纳用例' }}</button>
+              </template>
+              <template v-else>
+                <span v-if="!isCandidateReadyForAdoption(activeCase)" class="case-ai-record-detail-page__drawer-decision is-review-pending">请先确认评审结果</span>
+                <button v-else type="button" class="is-adopt" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />采纳用例</button>
+              </template>
             </template>
             <template v-else-if="getCaseReviewState(activeCase) === 'ADOPTING'">
-              <span class="case-ai-record-detail-page__drawer-decision is-adopting"><Loader2 :size="14" />采纳中</span>
+              <span class="case-ai-record-detail-page__drawer-decision is-adopting"><Loader2 :size="14" />正在写入用例库...</span>
             </template>
             <template v-else-if="getCaseReviewState(activeCase) === 'ADOPT_FAILED'">
               <div class="case-ai-record-detail-page__drawer-adoption-error">
                 <span><AlertCircle :size="14" />采纳失败</span>
                 <small>{{ getAdoptionFailureReason(activeCase) || '写入用例库失败，请重试。' }}</small>
               </div>
+              <button type="button" class="is-discard" @click="discardSingleCase(activeCase)"><ThumbsDown :size="12" />放弃此条</button>
               <button type="button" class="is-adopt is-retry" @click="adoptSingleCase(activeCase)"><RotateCcw :size="12" />重试采纳</button>
             </template>
             <template v-else-if="getCaseReviewState(activeCase) === 'DISCARDED'">
               <span class="case-ai-record-detail-page__drawer-decision is-discarded"><CircleX :size="14" />已放弃</span>
-              <button type="button" class="is-adopt" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />改为采纳</button>
+              <button type="button" class="is-cancel" @click="restoreDiscardedCase(activeCase)">恢复待采纳</button>
+              <button type="button" class="is-adopt" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />重新采纳</button>
             </template>
             <template v-else>
               <span class="case-ai-record-detail-page__drawer-decision is-adopted"><CircleCheckBig :size="14" />已采纳</span>
@@ -4598,8 +4733,7 @@ onBeforeUnmount(() => {
 .case-ai-record-detail-page__type-tag,
 .case-ai-record-detail-page__priority-tag,
 .case-ai-record-detail-page__review-tag,
-.case-ai-record-detail-page__case-state,
-.case-ai-record-detail-page__editing-tag {
+.case-ai-record-detail-page__case-state {
   display: inline-flex;
   width: fit-content;
   min-width: 28px;
@@ -4929,16 +5063,16 @@ onBeforeUnmount(() => {
 
 :global(.case-ai-record-detail-page__result-drawer .el-drawer__header) {
   position: relative;
-  height: 105px;
-  min-height: 105px;
+  height: 103px;
+  min-height: 103px;
   margin: 0;
   padding: 16px 24px;
   border-bottom: 1px solid #e5e6eb;
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .el-drawer__header) {
-  height: 121.5px;
-  min-height: 121.5px;
+  height: 103px;
+  min-height: 103px;
 }
 
 :global(.case-ai-record-detail-page__result-drawer .el-drawer__close-btn) {
@@ -4962,12 +5096,16 @@ onBeforeUnmount(() => {
 }
 
 :global(.case-ai-record-detail-page__result-drawer .el-drawer__footer) {
+  height: 106px;
+  min-height: 106px;
+  flex: 0 0 106px;
   padding: 0;
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .el-drawer__footer) {
-  height: 67px;
-  flex: 0 0 67px;
+  height: 61px;
+  min-height: 61px;
+  flex: 0 0 61px;
 }
 
 :global(.case-ai-record-detail-page__result-drawer .app-drawer__footer) {
@@ -4984,28 +5122,16 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__drawer-tags {
   display: flex;
-  width: 380px;
+  width: 533px;
   height: 21px;
   align-items: center;
   gap: 6px;
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-tags) {
-  width: 454px;
-  height: 27px;
-  align-items: flex-start;
-}
-
-.case-ai-record-detail-page__editing-tag {
-  display: inline-flex;
-  align-items: center;
+  width: 594px;
   height: 21px;
-  padding: 0 7px;
-  border-radius: 3px;
-  color: #165dff;
-  background: #e8f3ff;
-  font-size: 11px;
-  font-weight: 600;
+  align-items: center;
 }
 
 .case-ai-record-detail-page__source-tag {
@@ -5021,8 +5147,8 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-record-detail-page__drawer-header h2 {
-  width: 380px;
-  height: 29px;
+  width: 533px;
+  height: 27px;
   margin: 0;
   padding-top: 6px;
   overflow: hidden;
@@ -5035,7 +5161,7 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-record-detail-page__drawer-header p {
-  width: 380px;
+  width: 533px;
   height: 22px;
   margin: 0;
   padding-top: 4px;
@@ -5046,16 +5172,20 @@ onBeforeUnmount(() => {
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-header p) {
-  width: 454px;
+  width: 594px;
+}
+
+:global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-header h2) {
+  width: 594px;
 }
 
 .case-ai-record-detail-page__drawer-edit {
   position: absolute;
   top: 0;
-  left: 392px;
+  right: 65px;
   display: inline-flex;
-  width: 68px;
-  height: 30px;
+  width: 57px;
+  height: 27px;
   align-items: center;
   justify-content: center;
   gap: 5px;
@@ -5070,23 +5200,385 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-.case-ai-record-detail-page__drawer-title-input {
-  width: 454px;
-  height: 39.5px;
-  padding: 0 10px;
-  border: 1px solid #d9dce1;
-  border-radius: 6px;
-  outline: 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 26px;
-}
-
 .case-ai-record-detail-page__drawer-content,
 .case-ai-record-detail-page__drawer-edit-form {
   display: grid;
-  gap: 20px;
-  padding: 24px 24px 30px;
+  gap: 0;
+  padding: 20px 24px 28px;
+}
+
+.case-ai-record-detail-page__drawer-current-case {
+  padding-bottom: 0;
+}
+
+.case-ai-record-detail-page__drawer-applied-badge {
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 0 8px;
+  border-radius: 3px;
+  color: #ff7d00;
+  background: rgba(255, 125, 0, .09);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.case-ai-record-detail-page__drawer-current-label,
+.case-ai-record-detail-page__drawer-current-title {
+  display: none;
+}
+
+.case-ai-record-detail-page__drawer-review-header,
+.case-ai-record-detail-page__drawer-suggestion-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.case-ai-record-detail-page__drawer-current-label {
+  display: none !important;
+  margin-bottom: 8px;
+}
+
+.case-ai-record-detail-page__drawer-current-label h4 {
+  margin: 0;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.case-ai-record-detail-page__drawer-current-label .is-applied {
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #ff7d00;
+  background: #fff3e8;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.case-ai-record-detail-page__drawer-current-title {
+  margin-bottom: 18px;
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 21px;
+}
+
+.case-ai-record-detail-page__drawer-current-case section + section {
+  margin-top: 20px;
+}
+
+.case-ai-record-detail-page__drawer-step-list,
+.case-ai-record-detail-page__drawer-suggestion-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.case-ai-record-detail-page__drawer-step-list {
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.case-ai-record-detail-page__drawer-step-list li,
+.case-ai-record-detail-page__drawer-suggestion-steps > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e5e6eb;
+  color: #1d2129;
+  background: #f7f8fa;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.case-ai-record-detail-page__drawer-step-list li {
+  gap: 12px;
+}
+
+.case-ai-record-detail-page__drawer-step-list li span {
+  margin-top: 1px;
+}
+
+.case-ai-record-detail-page__drawer-step-list li:first-child,
+.case-ai-record-detail-page__drawer-suggestion-steps > div:first-child {
+  border-radius: 6px 6px 0 0;
+}
+
+.case-ai-record-detail-page__drawer-step-list li:last-child,
+.case-ai-record-detail-page__drawer-suggestion-steps > div:last-child {
+  border-bottom: 0;
+  border-radius: 0 0 6px 6px;
+}
+
+.case-ai-record-detail-page__drawer-step-list li span,
+.case-ai-record-detail-page__drawer-suggestion-steps > div span {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #165dff;
+  background: #e8f0ff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.case-ai-record-detail-page__drawer-expected {
+  padding: 10px 16px !important;
+  border: 1px solid #b7eb8f !important;
+  color: #1d2129 !important;
+  background: #f6ffed !important;
+}
+
+.case-ai-record-detail-page__drawer-review-card {
+  margin-top: 24px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 180, 42, .19);
+  border-radius: 6px;
+  background: rgba(0, 180, 42, .07);
+}
+
+.case-ai-record-detail-page__drawer-review-card.is-warning {
+  border-color: rgba(255, 125, 0, .19);
+  background: rgba(255, 125, 0, .07);
+}
+
+.case-ai-record-detail-page__drawer-review-card.is-danger {
+  border-color: rgba(245, 63, 63, .19);
+  background: rgba(245, 63, 63, .07);
+}
+
+.case-ai-record-detail-page__drawer-review-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  color: #7816ff;
+  font-size: 11px;
+}
+
+.case-ai-record-detail-page__drawer-review-header strong {
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.case-ai-record-detail-page__drawer-review-pill,
+.case-ai-record-detail-page__drawer-suggestion-heading span {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #00b42a;
+  background: #e8ffea;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.case-ai-record-detail-page__drawer-review-card.is-warning .case-ai-record-detail-page__drawer-review-pill,
+.case-ai-record-detail-page__drawer-review-card.is-warning .case-ai-record-detail-page__drawer-suggestion-heading strong {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-review-card.is-danger .case-ai-record-detail-page__drawer-review-pill {
+  color: #f53f3f;
+  background: #fff1f0;
+}
+
+.case-ai-record-detail-page__drawer-review-card > p {
+  margin: 8px 0 0;
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 22.1px;
+  white-space: pre-wrap;
+}
+
+.case-ai-record-detail-page__drawer-review-optimization {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 125, 0, .19);
+  border-radius: 5px;
+  color: #4e5969;
+  background: #fffbf0;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.case-ai-record-detail-page__drawer-review-optimization strong {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-review-suggestion {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 125, 0, .19);
+  border-radius: 5px;
+  color: #4e5969;
+  background: #fffbf0;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.case-ai-record-detail-page__drawer-review-suggestion strong {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-panel {
+  margin-top: 10px;
+  padding: 0 12px 10px;
+  border: 1px solid rgba(255, 125, 0, .25);
+  border-radius: 5px;
+  background: #fff;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-heading {
+  min-height: 27px;
+  margin: 0 -12px;
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(255, 125, 0, .19);
+  background: rgba(255, 125, 0, .08);
+}
+
+.case-ai-record-detail-page__drawer-suggestion-heading strong {
+  color: #ff7d00;
+  font-size: 11px;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-heading span {
+  margin-left: 0;
+  color: #ff7d00;
+  background: #fff3e8;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-title {
+  margin: 10px 0 8px;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-steps > div {
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  color: #4e5969;
+  background: transparent;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-steps > div span {
+  display: inline-block;
+  width: 14px;
+  height: 18px;
+  flex: 0 0 14px;
+  border-radius: 0;
+  color: #c9cdd4;
+  background: transparent;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: left;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-expected {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  color: #00b42a;
+  background: rgba(0, 180, 42, .06);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-reason {
+  margin: 10px 0 0;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.case-ai-record-detail-page__drawer-suggestion-reason strong {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-confirm-panel,
+.case-ai-record-detail-page__drawer-risk-panel,
+.case-ai-record-detail-page__drawer-supplement-panel,
+.case-ai-record-detail-page__drawer-confirmed-state {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border-radius: 5px;
+  color: #4e5969;
+  background: #fff;
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.case-ai-record-detail-page__drawer-confirm-panel {
+  border: 1px solid #e6c30066;
+  background: #fffbe8;
+}
+
+.case-ai-record-detail-page__drawer-confirm-panel strong {
+  color: #886500;
+}
+
+.case-ai-record-detail-page__drawer-confirm-panel button {
+  display: block;
+  height: 30px;
+  margin: 10px 0 0 auto;
+  padding: 0 14px;
+  border: 1px solid #ff7d00;
+  border-radius: 6px;
+  color: #fff;
+  background: #ff7d00;
+  font-size: 12px;
+}
+
+.case-ai-record-detail-page__drawer-confirmed-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #00b42a;
+  background: #f6ffed;
+}
+
+.case-ai-record-detail-page__drawer-risk-panel {
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 125, 0, .19);
+  color: #4e5969;
+  background: rgba(255, 125, 0, .03);
+}
+
+.case-ai-record-detail-page__drawer-risk-panel strong {
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__drawer-risk-panel.is-danger {
+  border-color: rgba(245, 63, 63, .19);
+  background: rgba(245, 63, 63, .03);
+}
+
+.case-ai-record-detail-page__drawer-risk-panel.is-danger strong {
+  color: #f53f3f;
+}
+
+.case-ai-record-detail-page__drawer-supplement-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(120, 22, 255, .14);
+  color: #7816ff;
+  background: rgba(120, 22, 255, .03);
 }
 
 .case-ai-record-detail-page__drawer-edit-form {
@@ -5095,64 +5587,26 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__drawer-content section h4,
 .case-ai-record-detail-page__drawer-edit-form label > span,
-.case-ai-record-detail-page__drawer-suggestion h4 {
+.case-ai-record-detail-page__edit-steps-header > span {
   display: block;
   margin: 0 0 8px;
-  color: #86909c;
-  font-size: 11px;
+  color: #4e5969;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 16.5px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
-
-.case-ai-record-detail-page__drawer-content section > div:not(.case-ai-record-detail-page__drawer-labels div) {
-  min-height: 42px;
-  padding: 10px 14px;
-  border-radius: 6px;
-  color: #1d2129;
-  background: #f2f3f5;
-  font-size: 13px;
-  line-height: 22.1px;
-  white-space: pre-wrap;
-}
-
-.case-ai-record-detail-page__drawer-suggestion {
-  padding: 12px 14px;
-  border: 1px solid #ffcc99;
-  border-radius: 6px;
-  background: #fffaf0;
-}
-
-.case-ai-record-detail-page__drawer-suggestion h4 {
-  margin-bottom: 4px;
-  color: #ff7d00;
+  line-height: 18px;
   letter-spacing: 0;
   text-transform: none;
 }
 
-.case-ai-record-detail-page__drawer-suggestion p {
-  min-height: 20px;
-  margin: 0;
-  color: #4e5969;
-  font-size: 13px;
-  line-height: 20px;
-}
-
-.case-ai-record-detail-page__drawer-labels > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.case-ai-record-detail-page__drawer-labels span {
-  padding: 3px 8px;
-  border: 1px solid #e5e6eb;
-  border-radius: 4px;
-  color: #86909c;
+.case-ai-record-detail-page__drawer-current-case > section > div {
+  min-height: 43px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #1d2129;
   background: #f7f8fa;
-  font-size: 11px;
-  line-height: 16.5px;
+  font-size: 13px;
+  line-height: 22.1px;
+  white-space: pre-wrap;
 }
 
 .case-ai-record-detail-page__drawer-edit-form label {
@@ -5161,22 +5615,11 @@ onBeforeUnmount(() => {
 }
 
 .case-ai-record-detail-page__drawer-edit-form > * + * {
-  padding-top: 20px;
-}
-
-.case-ai-record-detail-page__drawer-edit-form > .case-ai-record-detail-page__drawer-suggestion {
-  margin-top: 20px;
-  padding: 12px 13px;
+  padding-top: 14px;
 }
 
 .case-ai-record-detail-page__drawer-edit-form > label:last-child {
   padding-bottom: 0;
-}
-
-.case-ai-record-detail-page__drawer-edit-form label > span small {
-  margin-left: 5px;
-  color: #c9cdd4;
-  font-weight: 400;
 }
 
 .case-ai-record-detail-page__drawer-edit-form textarea,
@@ -5189,41 +5632,136 @@ onBeforeUnmount(() => {
   color: #1d2129;
   background: #fff;
   font-size: 13px;
-  line-height: 22.1px;
+  line-height: 20.8px;
+  font-family: inherit;
 }
 
 .case-ai-record-detail-page__drawer-edit-form textarea {
-  height: 64px;
-  padding: 9px 12px;
+  height: 58px;
+  padding: 7px 10px;
   resize: vertical;
 }
 
-.case-ai-record-detail-page__drawer-edit-form textarea.is-steps {
-  height: 130px;
-}
-
 .case-ai-record-detail-page__drawer-edit-form textarea.is-expected {
-  height: 86px;
+  height: 79px;
 }
 
 .case-ai-record-detail-page__drawer-edit-form input {
-  height: 42px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 7px 10px;
+  line-height: 19.5px;
+}
+
+.case-ai-record-detail-page__edit-field > span,
+.case-ai-record-detail-page__edit-steps-header > span {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.case-ai-record-detail-page__edit-steps-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 5px;
+}
+
+.case-ai-record-detail-page__edit-steps-header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  color: #165dff;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__edit-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.case-ai-record-detail-page__edit-step-row {
+  display: flex;
+  width: 100%;
+  height: 36px;
+  align-items: center;
+  gap: 6px;
+}
+
+.case-ai-record-detail-page__edit-step-row > span {
+  display: inline-flex;
+  width: 18px;
+  min-width: 18px;
+  align-items: center;
+  justify-content: center;
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16.5px;
+  text-align: center;
+}
+
+.case-ai-record-detail-page__edit-step-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.case-ai-record-detail-page__edit-step-row > button {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  color: #c9cdd4;
+  background: transparent;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__edit-step-row > button:hover,
+.case-ai-record-detail-page__edit-step-row > button:focus-visible {
+  color: #86909c;
+}
+
+.case-ai-record-detail-page__drawer-edit-form input:focus,
+.case-ai-record-detail-page__drawer-edit-form textarea:focus,
+.case-ai-record-detail-page__edit-step-row > button:focus-visible {
+  outline: 0;
+}
+
+.case-ai-record-detail-page__drawer-edit-form input:focus,
+.case-ai-record-detail-page__drawer-edit-form textarea:focus {
+  border-color: #165dff;
 }
 
 .case-ai-record-detail-page__drawer-footer {
-  height: 118px;
+  height: 106px;
+  box-sizing: border-box;
   border-top: 1px solid #e5e6eb;
   background: #fff;
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-footer) {
-  height: 67px;
+  height: 61px;
+}
+
+:global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-actions) {
+  height: 60px;
+  min-height: 60px;
 }
 
 .case-ai-record-detail-page__drawer-nav {
   display: grid;
-  height: 51px;
+  height: 44px;
   grid-template-columns: 79px 1fr 79px;
   align-items: center;
   padding: 0 24px;
@@ -5257,11 +5795,12 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__drawer-actions {
   display: flex;
-  min-height: 66px;
+  height: 62px;
+  min-height: 62px;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 24px;
+  padding: 0 20px;
 }
 
 .case-ai-record-detail-page__drawer-actions button,
@@ -5316,18 +5855,23 @@ onBeforeUnmount(() => {
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-actions button) {
-  height: 38px;
+  height: 36px;
   font-size: 13px;
+  font-weight: 500;
+  line-height: 19.5px;
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-actions .is-cancel) {
-  width: 68px;
+  width: 60px;
   padding: 0;
+  color: #4e5969;
 }
 
 :global(.case-ai-record-detail-page__result-drawer.is-editing .case-ai-record-detail-page__drawer-actions .is-save) {
-  width: 94px;
-  padding: 0;
+  width: 108px;
+  padding: 0 18px;
+  gap: 5px;
+  border: 1px solid #165dff;
 }
 
 .case-ai-record-detail-page__drawer-decision {
@@ -5435,15 +5979,17 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__drawer-version-actions {
   display: flex;
+  height: 34px;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .case-ai-record-detail-page__drawer-version-actions button {
-  height: 30px;
-  padding: 0 14px;
-  border-radius: 6px;
+  height: 34px;
+  flex: 1;
+  padding: 7px 0;
+  border-radius: 5px;
   font-size: 12px;
   cursor: pointer;
 }
@@ -5467,19 +6013,55 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__drawer-version-state {
   display: flex;
+  min-height: 36px;
   align-items: center;
-  gap: 6px;
-  margin-top: 14px;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 5px;
   color: #4e5969;
+  background: #f7f8fa;
   font-size: 12px;
 }
 
+.case-ai-record-detail-page__drawer-version-state span {
+  min-width: 0;
+  flex: 1;
+}
+
+.case-ai-record-detail-page__drawer-version-state button {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
+  color: #86909c;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.case-ai-record-detail-page__drawer-version-state button:hover,
+.case-ai-record-detail-page__drawer-version-state button:focus-visible {
+  border-color: #86909c;
+  color: #1d2129;
+}
+
+.case-ai-record-detail-page__drawer-version-state button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
 .case-ai-record-detail-page__drawer-version-state.is-applied {
+  border-color: rgba(255, 125, 0, .21);
   color: #ff7d00;
+  background: rgba(255, 125, 0, .06);
 }
 
 .case-ai-record-detail-page__drawer-version-state.is-kept {
-  color: #00b42a;
+  color: #86909c;
 }
 
 .case-ai-record-detail-page__drawer-confirm-actions {
@@ -5530,7 +6112,7 @@ onBeforeUnmount(() => {
 .case-ai-record-detail-page__drawer-adoption-error span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-weight: 600;
 }
 

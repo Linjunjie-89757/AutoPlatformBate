@@ -301,6 +301,29 @@ public class AiCaseCandidateService {
     }
 
     @Transactional
+    public AiCaseCandidateItem resetVersionChoice(
+            String taskId,
+            String candidateId,
+            String workspaceCode,
+            AiCaseCandidateVersionRequest request
+    ) {
+        requireWritableTask(taskId, workspaceCode);
+        AiCaseCandidateEntity candidate = requireVersion(requireCandidate(taskId, candidateId), request.expectedVersion(), request.expectedContentHash());
+        if (!"APPLIED_SUGGESTION".equals(candidate.getHumanDecision())
+                && !"KEEP_ORIGINAL".equals(candidate.getHumanDecision())) {
+            throw new BadRequestException("当前候选用例没有可撤销的版本选择");
+        }
+        AiCaseAdoptionEntity adoption = adoptionMapper.selectOne(new LambdaQueryWrapper<AiCaseAdoptionEntity>()
+                .eq(AiCaseAdoptionEntity::getTaskId, taskId)
+                .eq(AiCaseAdoptionEntity::getCaseIndex, candidate.getDisplayIndex())
+                .last("limit 1"));
+        if (adoption != null && ("ADOPTING".equals(adoption.getStatus()) || "ADOPTED".equals(adoption.getStatus()))) {
+            throw new BadRequestException("用例正在采纳或已采纳，不能撤销版本选择");
+        }
+        return resetToPendingOriginal(candidate);
+    }
+
+    @Transactional
     public AiCaseCandidateItem updateCurrentCase(
             String taskId,
             String candidateId,
@@ -487,6 +510,38 @@ public class AiCaseCandidateService {
                 .set(AiCaseCandidateEntity::getUpdatedAt, candidate.getUpdatedAt()));
         requireUpdated(updated);
         appendAudit(candidate, auditAction, candidate.getCurrentCaseJson(), candidate.getCurrentCaseJson(), Map.of(), candidate.getUpdatedBy(), fromVersion, toVersion);
+        return toItem(candidate);
+    }
+
+    private AiCaseCandidateItem resetToPendingOriginal(AiCaseCandidateEntity candidate) {
+        String before = candidate.getCurrentCaseJson();
+        int fromVersion = candidate.getContentVersion();
+        String expectedHash = candidate.getContentHash();
+        int toVersion = fromVersion + 1;
+        String originalCaseJson = candidate.getOriginalCaseJson();
+        String originalHash = hashJson(originalCaseJson);
+        candidate.setCurrentCaseJson(originalCaseJson);
+        candidate.setContentVersion(toVersion);
+        candidate.setContentHash(originalHash);
+        candidate.setHumanDecision("PENDING");
+        candidate.setSuggestionSourceVersion(candidate.getSuggestedCaseJson() == null ? null : toVersion);
+        candidate.setSuggestionSourceHash(candidate.getSuggestedCaseJson() == null ? null : originalHash);
+        candidate.setUpdatedBy(CurrentUserContext.get());
+        candidate.setUpdatedAt(LocalDateTime.now());
+        int updated = candidateMapper.update(null, new LambdaUpdateWrapper<AiCaseCandidateEntity>()
+                .eq(AiCaseCandidateEntity::getId, candidate.getId())
+                .eq(AiCaseCandidateEntity::getContentVersion, fromVersion)
+                .eq(AiCaseCandidateEntity::getContentHash, expectedHash)
+                .set(AiCaseCandidateEntity::getCurrentCaseJson, candidate.getCurrentCaseJson())
+                .set(AiCaseCandidateEntity::getContentVersion, candidate.getContentVersion())
+                .set(AiCaseCandidateEntity::getContentHash, candidate.getContentHash())
+                .set(AiCaseCandidateEntity::getHumanDecision, candidate.getHumanDecision())
+                .set(AiCaseCandidateEntity::getSuggestionSourceVersion, candidate.getSuggestionSourceVersion())
+                .set(AiCaseCandidateEntity::getSuggestionSourceHash, candidate.getSuggestionSourceHash())
+                .set(AiCaseCandidateEntity::getUpdatedBy, candidate.getUpdatedBy())
+                .set(AiCaseCandidateEntity::getUpdatedAt, candidate.getUpdatedAt()));
+        requireUpdated(updated);
+        appendAudit(candidate, "VERSION_CHOICE_RESET", before, originalCaseJson, Map.of(), candidate.getUpdatedBy(), fromVersion, toVersion);
         return toItem(candidate);
     }
 

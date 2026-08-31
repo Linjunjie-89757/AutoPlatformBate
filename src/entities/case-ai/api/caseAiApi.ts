@@ -351,6 +351,20 @@ export const caseAiApi = {
     return unwrapApiResponse(payload)
   },
 
+  async resetCandidateVersionChoice(
+    workspaceCode: string,
+    taskId: string,
+    candidateId: string,
+    data: AiCaseCandidateVersionPayload,
+  ) {
+    const payload = await httpPost<ApiResponse<AiCaseCandidateItem>, AiCaseCandidateVersionPayload>(
+      `/cases/ai/tasks/${taskId}/candidates/${candidateId}/reset-version-choice`,
+      data,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    return unwrapApiResponse(payload)
+  },
+
   async updateCandidateCurrentCase(
     workspaceCode: string,
     taskId: string,

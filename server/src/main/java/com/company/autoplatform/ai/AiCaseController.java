@@ -298,6 +298,16 @@ public class AiCaseController {
         return ApiResponse.ok(aiCaseCandidateService.applySuggestion(taskId, candidateId, workspaceCode, request));
     }
 
+    @PostMapping("/tasks/{taskId}/candidates/{candidateId}/reset-version-choice")
+    public ApiResponse<AiCaseCandidateItem> resetCandidateVersionChoice(
+            @PathVariable String taskId,
+            @PathVariable String candidateId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @Valid @RequestBody AiCaseCandidateVersionRequest request
+    ) {
+        return ApiResponse.ok(aiCaseCandidateService.resetVersionChoice(taskId, candidateId, workspaceCode, request));
+    }
+
     @PutMapping("/tasks/{taskId}/candidates/{candidateId}/current-case")
     public ApiResponse<AiCaseCandidateItem> updateCandidateCurrentCase(
             @PathVariable String taskId,

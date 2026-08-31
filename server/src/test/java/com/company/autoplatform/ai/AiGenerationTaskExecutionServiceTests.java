@@ -209,6 +209,24 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         assertThat(applied.currentCase().title()).isEqualTo(suggestion.title());
         assertThat(applied.humanDecision()).isEqualTo("APPLIED_SUGGESTION");
         assertThat(applied.contentVersion()).isEqualTo(2);
+        AiCaseCandidateItem reset = aiCaseCandidateService.resetVersionChoice(
+                created.taskId(),
+                candidate.candidateCaseId(),
+                WORKSPACE_CODE,
+                new AiCaseCandidateVersionRequest(applied.contentVersion(), applied.contentHash())
+        );
+        assertThat(reset.currentCase().title()).isEqualTo(original.title());
+        assertThat(reset.humanDecision()).isEqualTo("PENDING");
+        assertThat(reset.contentVersion()).isEqualTo(3);
+        AiCaseCandidateItem reapplied = aiCaseCandidateService.applySuggestion(
+                created.taskId(),
+                candidate.candidateCaseId(),
+                WORKSPACE_CODE,
+                new AiCaseCandidateVersionRequest(reset.contentVersion(), reset.contentHash())
+        );
+        assertThat(reapplied.currentCase().title()).isEqualTo(suggestion.title());
+        assertThat(reapplied.humanDecision()).isEqualTo("APPLIED_SUGGESTION");
+        assertThat(reapplied.contentVersion()).isEqualTo(4);
         boolean staleRecorded = aiCaseCandidateService.recordReview(
                 created.taskId(),
                 candidate.candidateCaseId(),
@@ -248,7 +266,7 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         );
         assertThat(adoption.status()).isEqualTo("ADOPTED");
         assertThat(adoption.candidateCaseId()).isEqualTo(candidate.candidateCaseId());
-        assertThat(adoption.adoptedContentVersion()).isEqualTo(2);
+        assertThat(adoption.adoptedContentVersion()).isEqualTo(4);
         assertThat(adoption.adoptedContentSource()).isEqualTo("AI_SUGGESTED");
         assertThat(caseService.getCase(adoption.createdCaseId(), WORKSPACE_CODE).title()).isEqualTo(suggestion.title());
 
