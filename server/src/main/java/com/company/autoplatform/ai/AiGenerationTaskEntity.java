@@ -30,6 +30,18 @@ public class AiGenerationTaskEntity extends BaseEntity {
 
     private String status;
 
+    @TableField("generation_status")
+    private String generationStatus;
+
+    @TableField("review_status")
+    private String reviewStatus;
+
+    @TableField("failed_stage")
+    private String failedStage;
+
+    @TableField("error_code")
+    private String errorCode;
+
     @TableField("current_step")
     private Integer currentStep;
 

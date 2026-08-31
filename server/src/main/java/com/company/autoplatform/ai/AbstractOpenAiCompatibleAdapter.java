@@ -19,6 +19,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
 
@@ -193,7 +199,7 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
                 }
                 throw new BadRequestException("AI 提供方流式请求失败: " + abbreviate(errorBody));
             }
-            String merged = consumeChatStreamingLines(response.body(), deltaConsumer);
+            String merged = consumeChatStreamingLines(response.body(), deltaConsumer, profile.requestTimeoutSeconds());
             if (merged.isBlank()) {
                 throw new BadRequestException("AI 提供方返回了空的流式内容");
             }
@@ -258,7 +264,7 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
                 }
                 throw new BadRequestException("AI 提供方流式请求失败: " + abbreviate(errorBody));
             }
-            String merged = consumeResponsesStreamingLines(response.body(), deltaConsumer);
+            String merged = consumeResponsesStreamingLines(response.body(), deltaConsumer, profile.requestTimeoutSeconds());
             if (merged.isBlank()) {
                 throw new BadRequestException("AI 提供方返回了空的流式内容");
             }
@@ -517,7 +523,7 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
 
     protected String mergeStreamingContent(String responseBody) throws IOException {
         StringBuilder builder = new StringBuilder();
-        String[] lines = responseBody.split("\\r?\\n");
+        String[] lines = responseBody.split("\\n?\\n");
         for (String rawLine : lines) {
             String line = rawLine.trim();
             if (line.isEmpty() || !line.startsWith("data:")) {
@@ -543,20 +549,23 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
 
     protected String consumeChatStreamingLines(
             java.util.stream.Stream<String> lines,
-            Consumer<String> deltaConsumer
+            Consumer<String> deltaConsumer,
+            Integer idleTimeoutSeconds
     ) throws IOException {
         StringBuilder builder = new StringBuilder();
         try (lines) {
             var iterator = lines.iterator();
-            while (iterator.hasNext()) {
-                String rawLine = iterator.next();
-                String delta = extractChatStreamingDelta(rawLine);
-                if (delta == null || delta.isEmpty()) {
-                    continue;
-                }
-                builder.append(delta);
-                if (deltaConsumer != null) {
-                    deltaConsumer.accept(delta);
+            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                while (nextStreamLine(iterator, executor, idleTimeoutSeconds)) {
+                    String rawLine = iterator.next();
+                    String delta = extractChatStreamingDelta(rawLine);
+                    if (delta == null || delta.isEmpty()) {
+                        continue;
+                    }
+                    builder.append(delta);
+                    if (deltaConsumer != null) {
+                        deltaConsumer.accept(delta);
+                    }
                 }
             }
         }
@@ -586,24 +595,51 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
 
     protected String consumeResponsesStreamingLines(
             java.util.stream.Stream<String> lines,
-            Consumer<String> deltaConsumer
+            Consumer<String> deltaConsumer,
+            Integer idleTimeoutSeconds
     ) throws IOException {
         StringBuilder builder = new StringBuilder();
         try (lines) {
             var iterator = lines.iterator();
-            while (iterator.hasNext()) {
-                String rawLine = iterator.next();
-                String delta = extractResponsesStreamingDelta(rawLine);
-                if (delta == null || delta.isEmpty()) {
-                    continue;
-                }
-                builder.append(delta);
-                if (deltaConsumer != null) {
-                    deltaConsumer.accept(delta);
+            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                while (nextStreamLine(iterator, executor, idleTimeoutSeconds)) {
+                    String rawLine = iterator.next();
+                    String delta = extractResponsesStreamingDelta(rawLine);
+                    if (delta == null || delta.isEmpty()) {
+                        continue;
+                    }
+                    builder.append(delta);
+                    if (deltaConsumer != null) {
+                        deltaConsumer.accept(delta);
+                    }
                 }
             }
         }
         return builder.toString();
+    }
+
+    private boolean nextStreamLine(
+            java.util.Iterator<String> iterator,
+            ExecutorService executor,
+            Integer idleTimeoutSeconds
+    ) throws IOException {
+        Future<Boolean> next = executor.submit(iterator::hasNext);
+        try {
+            return next.get(resolveRequestTimeoutSeconds(idleTimeoutSeconds), TimeUnit.SECONDS);
+        } catch (TimeoutException exception) {
+            next.cancel(true);
+            throw new BadRequestException("AI 提供方流式响应空闲超时");
+        } catch (InterruptedException exception) {
+            next.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new BadRequestException("AI 提供方流式读取被中断");
+        } catch (ExecutionException exception) {
+            Throwable cause = exception.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IOException("AI 提供方流式读取失败", cause);
+        }
     }
 
     protected String extractResponsesStreamingDelta(String rawLine) throws IOException {

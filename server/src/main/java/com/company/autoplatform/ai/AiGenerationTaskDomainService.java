@@ -65,6 +65,10 @@ public class AiGenerationTaskDomainService {
         entity.setRequirementContent(requirementContent);
         entity.setOutputMode(normalizeOutputMode(request.outputMode()));
         entity.setStatus("PENDING");
+        entity.setGenerationStatus("PENDING");
+        entity.setReviewStatus("NOT_STARTED");
+        entity.setFailedStage(null);
+        entity.setErrorCode(null);
         entity.setCurrentStep(1);
         entity.setStepMessage("任务已创建，等待开始生成测试用例。");
         entity.setErrorMessage(null);
@@ -174,6 +178,10 @@ public class AiGenerationTaskDomainService {
         entity.setRequirementContent(source.getRequirementContent());
         entity.setOutputMode(source.getOutputMode());
         entity.setStatus("PENDING");
+        entity.setGenerationStatus("PENDING");
+        entity.setReviewStatus("NOT_STARTED");
+        entity.setFailedStage(null);
+        entity.setErrorCode(null);
         entity.setCurrentStep(1);
         entity.setStepMessage("已创建重试任务，等待重新生成测试用例。");
         entity.setErrorMessage(null);
@@ -251,8 +259,18 @@ public class AiGenerationTaskDomainService {
     }
 
     private void markCanceled(AiGenerationTaskEntity entity, String stepMessage) {
+        String previousStatus = entity.getStatus();
         entity.setCancelRequested(1);
         entity.setStatus("CANCELED");
+        if ("REVIEWING".equals(previousStatus)) {
+            entity.setGenerationStatus("SUCCEEDED");
+            entity.setReviewStatus("CANCELED");
+        } else {
+            entity.setGenerationStatus("CANCELED");
+            entity.setReviewStatus("NOT_STARTED");
+        }
+        entity.setFailedStage(null);
+        entity.setErrorCode(null);
         entity.setStepMessage(stepMessage);
         entity.setFinishedAt(entity.getFinishedAt() == null ? LocalDateTime.now() : entity.getFinishedAt());
         entity.setUpdatedAt(LocalDateTime.now());

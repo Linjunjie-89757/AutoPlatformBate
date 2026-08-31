@@ -1,14 +1,17 @@
 package com.company.autoplatform.ai;
 
+import com.company.autoplatform.common.BadRequestException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -236,5 +239,142 @@ class AiProviderClientTests {
         client.streamStructuredContentWithResult(profile, "key", "prompt", images, delta -> { });
 
         verify(adapter).streamStructuredContent(eq(profile), eq("key"), eq("prompt"), eq(images), any());
+    }
+
+    @Test
+    void parsesWrappedGeneratedCasesAndKeepsCoverageMetadata() {
+        AiProviderClient client = new AiProviderClient(List.of());
+        String content = """
+                {
+                  "coverageSummary":"covered login flows",
+                  "remainingCoverageGaps":["rate limiting"],
+                  "cases":[
+                    {"title":"valid login","caseType":"FUNCTION","priority":"P1","steps":"submit valid credentials","expectedResult":"dashboard opens"}
+                  ]
+                }
+                """;
+
+        AiGeneratedCasesResult result = client.parseGeneratedCasesContent(content, 20);
+
+        assertThat(result.generatedCases()).extracting(GeneratedAiCaseItem::title).containsExactly("valid login");
+        assertThat(result.coverageSummary()).isEqualTo("covered login flows");
+        assertThat(result.remainingCoverageGaps()).containsExactly("rate limiting");
+        assertThat(result.rawContent()).isEqualTo(content);
+    }
+
+    @Test
+    void parsesMarkdownAndConsecutiveJsonObjectsWithoutLineBoundaries() {
+        AiProviderClient client = new AiProviderClient(List.of());
+        String content = """
+                Generated cases follow:
+                ```json
+                {"title":"payload with {braces}","caseType":"FUNCTION","priority":"P1","steps":"submit value \\"quoted\\"","expectedResult":"value is saved"}{"title":"empty payload","caseType":"BOUNDARY","priority":"P2","steps":"submit empty value","expectedResult":"validation is shown"}
+                ```
+                Generation complete.
+                """;
+
+        AiGeneratedCasesResult result = client.parseGeneratedCasesContent(content, 20);
+
+        assertThat(result.generatedCases()).extracting(GeneratedAiCaseItem::title)
+                .containsExactly("payload with {braces}", "empty payload");
+        assertThat(result.generatedCases().get(0).steps()).isEqualTo("submit value \"quoted\"");
+    }
+
+    @Test
+    void isolatesMalformedObjectAndContinuesWithLaterValidCase() {
+        AiProviderClient client = new AiProviderClient(List.of());
+        String validCase = "{\"title\":\"valid case\",\"caseType\":\"FUNCTION\",\"priority\":\"P1\",\"steps\":\"run step\",\"expectedResult\":\"success\"}";
+
+        AiGeneratedCasesResult result = client.parseGeneratedCasesContent("{not-json}" + validCase, 20);
+
+        assertThat(result.generatedCases()).extracting(GeneratedAiCaseItem::title).containsExactly("valid case");
+        assertThat(result.invalidCases()).hasSize(1);
+        assertThat(result.invalidCases().get(0).reason()).isEqualTo("Malformed JSON object");
+        assertThat(result.invalidCases().get(0).rawContent()).isEqualTo("{not-json}");
+    }
+
+    @Test
+    void incrementalBoundaryExtractionWaitsForCompleteJsonAcrossDeltas() {
+        StringBuilder buffer = new StringBuilder("prefix {\"title\":\"case with {brace} and ");
+        List<String> extracted = new ArrayList<>();
+
+        AiJsonBoundaryExtractor.drainCompleteValues(buffer, extracted::add);
+        assertThat(extracted).isEmpty();
+
+        buffer.append("\\\"quote\\\"\",\"steps\":\"run\",\"expectedResult\":\"ok\"}");
+        AiJsonBoundaryExtractor.drainCompleteValues(buffer, extracted::add);
+
+        assertThat(extracted).containsExactly("{\"title\":\"case with {brace} and \\\"quote\\\"\",\"steps\":\"run\",\"expectedResult\":\"ok\"}");
+        assertThat(buffer).isEmpty();
+    }
+
+    @Test
+    void rejectsEmptyOrExplanatoryGeneratedContent() {
+        AiProviderClient client = new AiProviderClient(List.of());
+
+        assertThatThrownBy(() -> client.parseGeneratedCasesContent("Generation completed without cases.", 20))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("AI 返回内容无法解析为结构化用例");
+    }
+
+    @Test
+    void parsesReviewEnvelopeWithMarkdownAndLeadingExplanation() {
+        AiProviderClient client = new AiProviderClient(List.of());
+        AiReviewResult result = client.parseReviewResultContent("""
+                Review result:
+                ```json
+                {"result":"SUGGEST","summary":"coverage needs improvement","caseDecisions":[{"caseIndex":0,"status":"CHANGE_SUGGESTED","reason":"missing boundary case"}]}
+                ```
+                """);
+
+        assertThat(result.structured()).isTrue();
+        assertThat(result.result()).isEqualTo("SUGGEST");
+        assertThat(result.caseDecisions()).hasSize(1);
+        assertThat(result.caseDecisions().get(0).status()).isEqualTo("CHANGE_SUGGESTED");
+    }
+
+    @Test
+    void parsesConsecutiveStandaloneReviewObjects() {
+        AiProviderClient client = new AiProviderClient(List.of());
+        AiReviewResult result = client.parseReviewResultContent("""
+                {"caseIndex":0,"status":"APPROVED","summary":"first"}
+                {"caseIndex":1,"status":"NOT_RECOMMENDED","summary":"second"}
+                """);
+
+        assertThat(result.structured()).isTrue();
+        assertThat(result.caseDecisions()).extracting(AiReviewCaseDecision::caseIndex).containsExactly(0, 1);
+    }
+
+    @Test
+    void skipsMalformedReviewValueAndParsesLaterDecisionArray() {
+        AiProviderClient client = new AiProviderClient(List.of());
+
+        AiReviewResult result = client.parseReviewResultContent("""
+                {not-json}
+                [{"caseIndex":0,"status":"APPROVED","summary":"valid decision"}]
+                """);
+
+        assertThat(result.structured()).isTrue();
+        assertThat(result.caseDecisions()).extracting(AiReviewCaseDecision::caseIndex).containsExactly(0);
+    }
+
+    @Test
+    void marksNonStructuredReviewContentAsUnstructured() {
+        AiProviderClient client = new AiProviderClient(List.of());
+
+        AiReviewResult result = client.parseReviewResultContent("The review service returned no JSON.");
+
+        assertThat(result.structured()).isFalse();
+        assertThat(result.caseDecisions()).isEmpty();
+    }
+
+    @Test
+    void genericVisionErrorDoesNotTriggerImageDowngrade() {
+        AiResponseParsingSupport parsingSupport = new AiResponseParsingSupport(new AiProviderClient(List.of()));
+
+        assertThat(parsingSupport.isImageInputUnsupportedError(new BadRequestException("vision service temporarily unavailable")))
+                .isFalse();
+        assertThat(parsingSupport.isImageInputUnsupportedError(new BadRequestException("this is not a vision model")))
+                .isTrue();
     }
 }

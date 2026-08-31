@@ -128,9 +128,15 @@ public class AiCaseCandidateService {
             GeneratedAiCaseItem supplementCase,
             String reviewReason
     ) {
+        if (!isValidSupplement(supplementCase)) {
+            return null;
+        }
         AiCaseCandidateEntity existing = findByTaskAndIndex(task.getTaskId(), displayIndex);
         if (existing != null) {
             return existing;
+        }
+        if (findDuplicateSupplement(task.getTaskId(), supplementCase) != null) {
+            return null;
         }
         LocalDateTime now = LocalDateTime.now();
         AiCaseCandidateEntity candidate = new AiCaseCandidateEntity();
@@ -180,7 +186,7 @@ public class AiCaseCandidateService {
     }
 
     @Transactional
-    public void recordReview(
+    public boolean recordReview(
             String taskId,
             String candidateCaseId,
             Integer displayIndex,
@@ -194,7 +200,19 @@ public class AiCaseCandidateService {
             Integer sourceVersion,
             String sourceContentHash
     ) {
-        AiCaseCandidateEntity candidate = requireReviewTarget(taskId, candidateCaseId, displayIndex);
+        AiCaseCandidateEntity candidate = findReviewTarget(taskId, candidateCaseId, displayIndex);
+        if (candidate == null) {
+            return false;
+        }
+        if (isStaleReview(candidate, sourceVersion, sourceContentHash)) {
+            appendAudit(candidate, "REVIEW_STALE_IGNORED", candidate.getCurrentCaseJson(), candidate.getCurrentCaseJson(), Map.of(
+                    "sourceVersion", sourceVersion == null ? "" : sourceVersion,
+                    "sourceContentHash", firstNonBlank(sourceContentHash, ""),
+                    "currentVersion", candidate.getContentVersion(),
+                    "currentContentHash", firstNonBlank(candidate.getContentHash(), "")
+            ), null, candidate.getContentVersion(), candidate.getContentVersion());
+            return false;
+        }
         String normalizedStatus = normalizeReviewStatus(reviewStatus);
         String normalizedAction = normalizeSuggestedAction(suggestedAction, normalizedStatus, suggestedCase);
         GeneratedAiCaseItem validSuggestion = suggestedCase;
@@ -237,6 +255,7 @@ public class AiCaseCandidateService {
                 "reviewStatus", normalizedStatus == null ? "" : normalizedStatus,
                 "suggestedAction", normalizedAction == null ? "" : normalizedAction
         ), null, candidate.getContentVersion(), candidate.getContentVersion());
+        return true;
     }
 
     public List<AiCaseCandidateItem> list(String taskId, String workspaceCode) {
@@ -498,25 +517,25 @@ public class AiCaseCandidateService {
         }
     }
 
-    private AiCaseCandidateEntity requireReviewTarget(String taskId, String candidateCaseId, Integer displayIndex) {
+    private AiCaseCandidateEntity findReviewTarget(String taskId, String candidateCaseId, Integer displayIndex) {
         if (candidateCaseId != null && !candidateCaseId.isBlank()) {
             AiCaseCandidateEntity candidate = candidateMapper.selectOne(new LambdaQueryWrapper<AiCaseCandidateEntity>()
                     .eq(AiCaseCandidateEntity::getTaskId, taskId)
                     .eq(AiCaseCandidateEntity::getCandidateId, candidateCaseId.trim())
                     .last("limit 1"));
             if (candidate == null) {
-                throw new BadRequestException("AI 评审返回了不属于当前任务的候选用例 ID");
+                return null;
             }
             if (displayIndex != null && !displayIndex.equals(candidate.getDisplayIndex())) {
-                throw new BadRequestException("AI 评审返回的候选用例 ID 与显示序号不一致");
+                appendAudit(candidate, "REVIEW_TARGET_MISMATCH_IGNORED", candidate.getCurrentCaseJson(), candidate.getCurrentCaseJson(), Map.of(
+                        "returnedDisplayIndex", displayIndex,
+                        "currentDisplayIndex", candidate.getDisplayIndex()
+                ), null, candidate.getContentVersion(), candidate.getContentVersion());
+                return null;
             }
             return candidate;
         }
-        AiCaseCandidateEntity legacyTarget = findByTaskAndIndex(taskId, displayIndex);
-        if (legacyTarget == null) {
-            throw new BadRequestException("AI 评审结果无法关联到候选用例");
-        }
-        return legacyTarget;
+        return findByTaskAndIndex(taskId, displayIndex);
     }
 
     private AiCaseCandidateEntity requireCandidate(String taskId, String candidateId) {
@@ -616,6 +635,60 @@ public class AiCaseCandidateService {
         if (item == null || isBlank(item.title()) || isBlank(item.steps()) || isBlank(item.expectedResult())) {
             throw new BadRequestException("用例标题、步骤和预期结果不能为空");
         }
+    }
+
+    private boolean isValidSupplement(GeneratedAiCaseItem item) {
+        if (item == null || isBlank(item.title()) || isBlank(item.steps()) || isBlank(item.expectedResult())) {
+            return false;
+        }
+        return isSupportedCaseType(item.caseType()) && isSupportedPriority(item.priority());
+    }
+
+    private boolean isSupportedCaseType(String value) {
+        return value == null || List.of("FUNCTION", "BOUNDARY", "EXCEPTION", "REGRESSION")
+                .contains(value.trim().toUpperCase(Locale.ROOT));
+    }
+
+    private boolean isSupportedPriority(String value) {
+        return value == null || List.of("P0", "P1", "P2", "P3")
+                .contains(value.trim().toUpperCase(Locale.ROOT));
+    }
+
+    private AiCaseCandidateEntity findDuplicateSupplement(String taskId, GeneratedAiCaseItem supplementCase) {
+        String fingerprint = hashCaseCore(supplementCase);
+        for (AiCaseCandidateEntity candidate : listEntities(taskId)) {
+            if (matchesCaseFingerprint(candidate.getCurrentCaseJson(), fingerprint)
+                    || matchesCaseFingerprint(candidate.getOriginalCaseJson(), fingerprint)
+                    || matchesCaseFingerprint(candidate.getSuggestedCaseJson(), fingerprint)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private boolean matchesCaseFingerprint(String rawCase, String fingerprint) {
+        GeneratedAiCaseItem item = readCaseNullable(rawCase);
+        return item != null && hashCaseCore(item).equals(fingerprint);
+    }
+
+    private String hashCaseCore(GeneratedAiCaseItem item) {
+        return hashJson(writeJson(List.of(
+                normalizeFingerprintValue(item.title()),
+                normalizeFingerprintValue(item.precondition()),
+                normalizeFingerprintValue(item.steps()),
+                normalizeFingerprintValue(item.expectedResult())
+        )));
+    }
+
+    private String normalizeFingerprintValue(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isStaleReview(AiCaseCandidateEntity candidate, Integer sourceVersion, String sourceContentHash) {
+        boolean versionMismatch = sourceVersion != null && !sourceVersion.equals(candidate.getContentVersion());
+        boolean hashMismatch = sourceContentHash != null && !sourceContentHash.isBlank()
+                && !sourceContentHash.trim().equalsIgnoreCase(candidate.getContentHash());
+        return versionMismatch || hashMismatch;
     }
 
     private List<GeneratedAiCaseItem> readCases(String raw) {

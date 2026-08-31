@@ -3,7 +3,11 @@ package com.company.autoplatform.ai;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 
 @Component
 public class AiGenerationTaskResultMergeSupport {
@@ -83,28 +87,64 @@ public class AiGenerationTaskResultMergeSupport {
     }
 
     List<GeneratedAiCaseItem> mergeCompleteReviewResult(List<GeneratedAiCaseItem> generatedCases, AiReviewResult review) {
+        return mergeCompleteReviewResult(generatedCases, null, review);
+    }
+
+    List<GeneratedAiCaseItem> mergeCompleteReviewResult(
+            List<GeneratedAiCaseItem> generatedCases,
+            List<AiCaseCandidateEntity> candidates,
+            AiReviewResult review
+    ) {
         List<GeneratedAiCaseItem> finalCases = new ArrayList<>();
+        Set<String> caseFingerprints = new HashSet<>();
         for (GeneratedAiCaseItem item : generatedCases) {
             finalCases.add(withSource(item, "INITIAL"));
+            caseFingerprints.add(caseFingerprint(item));
         }
         if (review == null) {
             return finalCases;
         }
         for (AiReviewCaseDecision decision : review.caseDecisions() == null ? List.<AiReviewCaseDecision>of() : review.caseDecisions()) {
-            if (decision.caseIndex() == null || decision.caseIndex() < 0 || decision.caseIndex() >= finalCases.size()) {
+            Integer index = resolveDecisionIndex(decision, candidates, finalCases.size());
+            if (index == null) {
                 continue;
             }
-            GeneratedAiCaseItem current = finalCases.get(decision.caseIndex());
+            GeneratedAiCaseItem current = finalCases.get(index);
             GeneratedAiCaseItem next = applyReviewDecision(current, decision);
-            finalCases.set(decision.caseIndex(), next);
+            finalCases.set(index, next);
         }
         for (GeneratedAiCaseItem item : review.supplementCases() == null ? List.<GeneratedAiCaseItem>of() : review.supplementCases()) {
             if (finalCases.size() >= AiCaseService.FINAL_MAX_CASES) {
                 break;
             }
+            if (!isValidSupplement(item) || !caseFingerprints.add(caseFingerprint(item))) {
+                continue;
+            }
             finalCases.add(withSupplementMetadata(item));
         }
         return finalCases;
+    }
+
+    private Integer resolveDecisionIndex(
+            AiReviewCaseDecision decision,
+            List<AiCaseCandidateEntity> candidates,
+            int caseCount
+    ) {
+        if (decision.candidateCaseId() != null && !decision.candidateCaseId().isBlank() && candidates != null) {
+            for (AiCaseCandidateEntity candidate : candidates) {
+                if (decision.candidateCaseId().trim().equals(candidate.getCandidateId())) {
+                    if (decision.caseIndex() != null && !Objects.equals(decision.caseIndex(), candidate.getDisplayIndex())) {
+                        return null;
+                    }
+                    return candidate.getDisplayIndex();
+                }
+            }
+            return null;
+        }
+        if (decision.caseIndex() == null || decision.caseIndex() < 0 || decision.caseIndex() >= caseCount) {
+            return null;
+        }
+        return decision.caseIndex();
     }
 
     private GeneratedAiCaseItem applyReviewDecision(GeneratedAiCaseItem original, AiReviewCaseDecision decision) {
@@ -163,6 +203,30 @@ public class AiGenerationTaskResultMergeSupport {
             }
         }
         return null;
+    }
+
+    private boolean isValidSupplement(GeneratedAiCaseItem item) {
+        return item != null
+                && !isBlank(item.title())
+                && !isBlank(item.steps())
+                && !isBlank(item.expectedResult());
+    }
+
+    private String caseFingerprint(GeneratedAiCaseItem item) {
+        return String.join("\u001f",
+                normalize(item.title()),
+                normalize(item.precondition()),
+                normalize(item.steps()),
+                normalize(item.expectedResult())
+        );
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private String normalizeReviewStatus(String status) {

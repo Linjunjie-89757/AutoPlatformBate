@@ -106,6 +106,10 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(detail.status()).isEqualTo("COMPLETED");
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.reviewStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.failedStage()).isNull();
+        assertThat(detail.errorCode()).isNull();
         assertThat(detail.currentStep()).isEqualTo(4);
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.provider()).isEqualTo("OPENAI_COMPATIBLE_CHAT");
@@ -205,6 +209,26 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         assertThat(applied.currentCase().title()).isEqualTo(suggestion.title());
         assertThat(applied.humanDecision()).isEqualTo("APPLIED_SUGGESTION");
         assertThat(applied.contentVersion()).isEqualTo(2);
+        boolean staleRecorded = aiCaseCandidateService.recordReview(
+                created.taskId(),
+                candidate.candidateCaseId(),
+                candidate.displayIndex(),
+                "NOT_RECOMMENDED",
+                "EXCLUDE",
+                1,
+                0.1,
+                "late review",
+                null,
+                List.of(),
+                candidate.contentVersion(),
+                candidate.contentHash()
+        );
+        assertThat(staleRecorded).isFalse();
+        AiCaseCandidateItem afterStaleReview = aiCaseCandidateService.get(
+                created.taskId(), candidate.candidateCaseId(), WORKSPACE_CODE
+        );
+        assertThat(afterStaleReview.reviewStatus()).isEqualTo("CHANGE_SUGGESTED");
+        assertThat(afterStaleReview.currentCase().title()).isEqualTo(suggestion.title());
         assertThatThrownBy(() -> aiCaseCandidateService.applySuggestion(
                 created.taskId(),
                 candidate.candidateCaseId(),
@@ -253,6 +277,10 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(detail.status()).isEqualTo("FAILED");
+        assertThat(detail.generationStatus()).isEqualTo("FAILED");
+        assertThat(detail.reviewStatus()).isEqualTo("NOT_STARTED");
+        assertThat(detail.failedStage()).isEqualTo("GENERATION");
+        assertThat(detail.errorCode()).isEqualTo("GENERATION_FAILED");
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.errorMessage()).isEqualTo("mock generation failed");
         assertThat(detail.generatedCount()).isZero();
@@ -290,7 +318,11 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
-        assertThat(detail.status()).isEqualTo("FAILED");
+        assertThat(detail.status()).isEqualTo("COMPLETED");
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.reviewStatus()).isEqualTo("FAILED");
+        assertThat(detail.failedStage()).isEqualTo("AI_REVIEW");
+        assertThat(detail.errorCode()).isEqualTo("AI_REVIEW_FAILED");
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.errorMessage()).isEqualTo("mock review failed");
         assertThat(detail.generatedCount()).isEqualTo(1);
@@ -300,7 +332,8 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         assertThat(detail.reviewResult()).isNull();
         assertThat(detail.reviewRawOutput()).isNull();
         assertThat(detail.events()).extracting(AiGenerationTaskEventResponse::eventType)
-                .contains("GENERATION_COMPLETED", "REVIEW_STARTED", "TASK_FAILED");
+                .contains("GENERATION_COMPLETED", "REVIEW_STARTED", "REVIEW_FAILED")
+                .doesNotContain("TASK_FAILED");
     }
 
     @Test
@@ -314,6 +347,8 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(detail.status()).isEqualTo("CANCELED");
+        assertThat(detail.generationStatus()).isEqualTo("CANCELED");
+        assertThat(detail.reviewStatus()).isEqualTo("NOT_STARTED");
         assertThat(detail.cancelRequested()).isTrue();
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.generatedCount()).isZero();
@@ -351,6 +386,8 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(detail.status()).isEqualTo("CANCELED");
+        assertThat(detail.generationStatus()).isEqualTo("CANCELED");
+        assertThat(detail.reviewStatus()).isEqualTo("NOT_STARTED");
         assertThat(detail.cancelRequested()).isTrue();
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.generatedCount()).isZero();
@@ -361,6 +398,57 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         assertThat(detail.events()).extracting(AiGenerationTaskEventResponse::eventType)
                 .contains("TASK_STARTED", "TASK_CANCELED")
                 .doesNotContain("TASK_FAILED", "GENERATION_COMPLETED", "REVIEW_STARTED");
+    }
+
+    @Test
+    void executeCompleteTaskKeepsGenerationSucceededWhenCanceledDuringReview() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("complete-cancel-during-review");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        AtomicReference<String> taskId = new AtomicReference<>();
+        GeneratedAiCaseItem generatedCase = generatedCase(unique + " generated before review cancel");
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(generatedCase),
+                "coverage summary",
+                List.of(),
+                List.of(),
+                List.of(),
+                "{\"cases\":[{\"title\":\"" + unique + " generated before review cancel\"}]}"
+        ));
+        when(aiProviderClient.review(any(), any(), any())).thenAnswer(invocation -> {
+            aiGenerationTaskService.cancelTask(taskId.get(), WORKSPACE_CODE);
+            return new AiReviewResult(
+                    "APPROVE",
+                    "review canceled",
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    List.of(),
+                    "{}",
+                    true
+            );
+        });
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        taskId.set(created.taskId());
+
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+
+        AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(detail.status()).isEqualTo("CANCELED");
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.reviewStatus()).isEqualTo("CANCELED");
+        assertThat(detail.failedStage()).isNull();
+        assertThat(detail.errorCode()).isNull();
+        assertThat(detail.generatedCount()).isEqualTo(1);
+        assertThat(detail.generatedCases()).hasSize(1);
+        assertThat(detail.events()).extracting(AiGenerationTaskEventResponse::eventType)
+                .contains("GENERATION_COMPLETED", "REVIEW_STARTED", "TASK_CANCELED")
+                .doesNotContain("TASK_FAILED", "REVIEW_COMPLETED", "TASK_COMPLETED");
     }
 
     @Test
@@ -424,6 +512,8 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(detail.status()).isEqualTo("COMPLETED");
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.reviewStatus()).isEqualTo("SUCCEEDED");
         assertThat(detail.currentStep()).isEqualTo(4);
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.provider()).isEqualTo("OPENAI_COMPATIBLE_CHAT");
@@ -464,6 +554,10 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(detail.status()).isEqualTo("FAILED");
+        assertThat(detail.generationStatus()).isEqualTo("FAILED");
+        assertThat(detail.reviewStatus()).isEqualTo("NOT_STARTED");
+        assertThat(detail.failedStage()).isEqualTo("GENERATION");
+        assertThat(detail.errorCode()).isEqualTo("GENERATION_FAILED");
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.errorMessage()).isEqualTo("mock stream generation failed");
         assertThat(detail.generatedCount()).isZero();
@@ -508,7 +602,11 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
-        assertThat(detail.status()).isEqualTo("FAILED");
+        assertThat(detail.status()).isEqualTo("COMPLETED");
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.reviewStatus()).isEqualTo("FAILED");
+        assertThat(detail.failedStage()).isEqualTo("AI_REVIEW");
+        assertThat(detail.errorCode()).isEqualTo("AI_REVIEW_FAILED");
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.errorMessage()).isEqualTo("mock stream review failed");
         assertThat(detail.generatedCount()).isEqualTo(1);
@@ -518,7 +616,8 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         assertThat(detail.reviewResult()).isNull();
         assertThat(detail.reviewRawOutput()).isNull();
         assertThat(detail.events()).extracting(AiGenerationTaskEventResponse::eventType)
-                .contains("CASE_GENERATED", "GENERATION_COMPLETED", "REVIEW_STARTED", "TASK_FAILED");
+                .contains("CASE_GENERATED", "GENERATION_COMPLETED", "REVIEW_STARTED", "REVIEW_FAILED")
+                .doesNotContain("TASK_FAILED");
     }
 
     @Test
@@ -557,6 +656,8 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(detail.status()).isEqualTo("COMPLETED");
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.reviewStatus()).isEqualTo("SUCCEEDED");
         assertThat(detail.currentStep()).isEqualTo(4);
         assertThat(detail.finishedAt()).isNotBlank();
         assertThat(detail.generatedCount()).isEqualTo(1);

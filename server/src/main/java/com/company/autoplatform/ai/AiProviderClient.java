@@ -109,19 +109,41 @@ public class AiProviderClient {
     }
 
     public AiGeneratedCasesResult parseGeneratedCasesContent(String normalizedJson, Integer maxCases) {
-        try {
-            JsonNode parsed = objectMapper.readTree(normalizedJson);
-            JsonNode casesNode = parsed.isArray() ? parsed : parsed.path("cases");
-            if (!casesNode.isArray()) {
-                throw new BadRequestException("AI 返回内容无法解析为结构化用例");
+        List<GeneratedAiCaseItem> items = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        List<AiInvalidCaseItem> invalidCases = new ArrayList<>();
+        List<String> remainingCoverageGaps = new ArrayList<>();
+        String coverageSummary = null;
+        int limit = maxCases == null ? Integer.MAX_VALUE : maxCases;
+        int index = 0;
+        for (String candidate : AiJsonBoundaryExtractor.extractCompleteValues(normalizedJson)) {
+            JsonNode parsed;
+            try {
+                parsed = objectMapper.readTree(candidate);
+            } catch (IOException exception) {
+                index += 1;
+                invalidCases.add(new AiInvalidCaseItem(
+                        index,
+                        "Candidate case " + index,
+                        "Malformed JSON object",
+                        candidate
+                ));
+                continue;
             }
-            String coverageSummary = parsed.isArray() ? null : optionalText(parsed, "coverageSummary");
-            List<String> remainingCoverageGaps = parsed.isArray() ? List.of() : stringList(parsed.path("remainingCoverageGaps"));
-            List<GeneratedAiCaseItem> items = new ArrayList<>();
-            List<String> warnings = new ArrayList<>();
-            List<AiInvalidCaseItem> invalidCases = new ArrayList<>();
-            int limit = maxCases == null ? Integer.MAX_VALUE : maxCases;
-            int index = 0;
+            if (!parsed.isArray() && parsed.path("cases").isArray()) {
+                coverageSummary = firstNonBlank(coverageSummary, optionalText(parsed, "coverageSummary"));
+                remainingCoverageGaps.addAll(stringList(parsed.path("remainingCoverageGaps")));
+            }
+            JsonNode casesNode = parsed.isArray()
+                    ? parsed
+                    : parsed.path("cases").isArray()
+                    ? parsed.path("cases")
+                    : looksLikeGeneratedCase(parsed)
+                    ? objectMapper.createArrayNode().add(parsed)
+                    : null;
+            if (casesNode == null) {
+                continue;
+            }
             for (JsonNode item : casesNode) {
                 if (items.size() >= limit) {
                     break;
@@ -132,15 +154,15 @@ public class AiProviderClient {
                 String steps = optionalText(item, "steps");
                 String expectedResult = optionalText(item, "expectedResult");
                 if (title == null || title.isBlank()) {
-                    invalidCases.add(new AiInvalidCaseItem(index, fallbackTitle(item, index), "Missing case title"));
+                    invalidCases.add(new AiInvalidCaseItem(index, fallbackTitle(item, index), "Missing case title", item.toString()));
                     continue;
                 }
                 if (steps == null || steps.isBlank()) {
-                    invalidCases.add(new AiInvalidCaseItem(index, title, "Missing test steps"));
+                    invalidCases.add(new AiInvalidCaseItem(index, title, "Missing test steps", item.toString()));
                     continue;
                 }
                 if (expectedResult == null || expectedResult.isBlank()) {
-                    invalidCases.add(new AiInvalidCaseItem(index, title, "Missing expected result"));
+                    invalidCases.add(new AiInvalidCaseItem(index, title, "Missing expected result", item.toString()));
                     continue;
                 }
                 String normalizedCaseType = normalizeCaseType(optionalText(item, "caseType"), itemWarnings);
@@ -173,18 +195,64 @@ public class AiProviderClient {
                         null
                 ));
             }
-            if (items.isEmpty()) {
-                throw new BadRequestException("AI 返回已解析，但没有得到有效用例");
-            }
-            return new AiGeneratedCasesResult(items, coverageSummary, remainingCoverageGaps, warnings, invalidCases, normalizedJson);
-        } catch (IOException exception) {
+        }
+        if (items.isEmpty()) {
             throw new BadRequestException("AI 返回内容无法解析为结构化用例");
         }
+        return new AiGeneratedCasesResult(
+                items,
+                coverageSummary,
+                remainingCoverageGaps.stream().distinct().toList(),
+                warnings,
+                invalidCases,
+                normalizedJson
+        );
+    }
+
+    private boolean looksLikeGeneratedCase(JsonNode node) {
+        return node != null && node.isObject()
+                && (node.has("title") || node.has("steps") || node.has("expectedResult"));
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return first != null && !first.isBlank() ? first : second;
     }
 
     public AiReviewResult parseReviewResultContent(String normalizedJson) {
         try {
-            JsonNode parsed = objectMapper.readTree(normalizedJson);
+            JsonNode parsed = null;
+            List<AiReviewCaseDecision> standaloneDecisions = new ArrayList<>();
+            for (String value : AiJsonBoundaryExtractor.extractCompleteValues(normalizedJson)) {
+                JsonNode candidate;
+                try {
+                    candidate = objectMapper.readTree(value);
+                } catch (IOException ignored) {
+                    continue;
+                }
+                if (candidate == null || !candidate.isObject()) {
+                    if (candidate != null && candidate.isArray()) {
+                        standaloneDecisions.addAll(parseReviewCaseDecisions(candidate));
+                        if (parsed == null) {
+                            parsed = objectMapper.createObjectNode();
+                        }
+                    }
+                    continue;
+                }
+                if (candidate.has("caseIndex") || candidate.has("itemIndex") || candidate.has("candidateCaseId")) {
+                    standaloneDecisions.addAll(parseReviewCaseDecisions(objectMapper.createArrayNode().add(candidate)));
+                    if (parsed == null) {
+                        parsed = candidate;
+                    }
+                    continue;
+                }
+                if (hasReviewEnvelope(candidate)) {
+                    parsed = candidate;
+                    break;
+                }
+            }
+            if (parsed == null) {
+                throw new IOException("AI review output has no JSON review object");
+            }
             String result = normalizeReviewResult(optionalText(parsed, "result"));
             String summary = optionalText(parsed, "summary");
             List<String> issues = stringList(parsed.path("issues"));
@@ -192,6 +260,9 @@ public class AiProviderClient {
             List<AiReviewCaseDecision> caseDecisions = parseReviewCaseDecisions(parsed.path("caseDecisions"));
             if (caseDecisions.isEmpty()) {
                 caseDecisions = parseReviewCaseDecisions(parsed.path("reviews"));
+            }
+            if (caseDecisions.isEmpty()) {
+                caseDecisions = standaloneDecisions;
             }
             List<GeneratedAiCaseItem> supplementCases = parseGeneratedCaseItems(
                     firstArray(parsed, "supplementCases", "supplementedCases"),
@@ -223,6 +294,12 @@ public class AiProviderClient {
                     false
             );
         }
+    }
+
+    private boolean hasReviewEnvelope(JsonNode node) {
+        return node.has("result") || node.has("summary") || node.has("issues") || node.has("suggestions")
+                || node.has("caseDecisions") || node.has("reviews") || node.has("supplementCases")
+                || node.has("supplementedCases") || node.has("unresolvedCoverageGaps");
     }
 
     private List<AiReviewCaseDecision> parseReviewCaseDecisions(JsonNode node) {

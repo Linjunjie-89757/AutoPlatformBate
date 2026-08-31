@@ -173,8 +173,8 @@ public class AiCaseService {
         Consumer<String> deltaConsumer = delta -> {
             rawOutput.append(delta);
             lineBuffer.append(delta);
-            aiResponseParsingSupport.drainCompleteLines(lineBuffer, line -> aiResponseParsingSupport.emitGeneratedCaseLine(
-                    line,
+            aiResponseParsingSupport.drainCompleteJsonValues(lineBuffer, value -> aiResponseParsingSupport.emitGeneratedCaseValue(
+                    value,
                     effectiveMaxCases,
                     generatedCases,
                     warnings,
@@ -212,20 +212,31 @@ public class AiCaseService {
             );
         }
         String finalContent = streamResult.content();
-        String rawContent = finalContent == null || finalContent.isBlank() ? rawOutput.toString() : finalContent;
-        aiResponseParsingSupport.emitGeneratedCaseLine(
-                lineBuffer.toString(),
-                effectiveMaxCases,
-                generatedCases,
-                warnings,
-                invalidCases,
-                new StringBuilder(rawContent),
-                caseConsumer
-        );
+        if (streamResult.fallbackToComplete()) {
+            generatedCases.clear();
+            warnings.clear();
+            invalidCases.clear();
+            lineBuffer.setLength(0);
+        }
+        String rawContent = streamResult.fallbackToComplete() || rawOutput.isEmpty()
+                ? finalContent
+                : rawOutput.toString();
+        if (rawContent == null) {
+            rawContent = "";
+        }
+        aiResponseParsingSupport.drainCompleteJsonValues(
+                lineBuffer,
+                value -> aiResponseParsingSupport.emitGeneratedCaseValue(
+                        value,
+                        effectiveMaxCases,
+                        generatedCases,
+                        warnings,
+                        invalidCases,
+                        new StringBuilder(rawOutput),
+                        caseConsumer
+                ));
+        AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawContent, effectiveMaxCases);
         if (generatedCases.isEmpty()) {
-            AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawContent, effectiveMaxCases);
-            warnings.addAll(parsed.warnings());
-            invalidCases.addAll(parsed.invalidCases());
             for (GeneratedAiCaseItem item : parsed.generatedCases()) {
                 if (generatedCases.size() >= effectiveMaxCases) {
                     break;
@@ -240,6 +251,12 @@ public class AiCaseService {
                 }
             }
         }
+        generatedCases.clear();
+        generatedCases.addAll(parsed.generatedCases());
+        warnings.clear();
+        warnings.addAll(parsed.warnings());
+        invalidCases.clear();
+        invalidCases.addAll(parsed.invalidCases());
         return new StreamedGenerateCasesResult(
                 workspace.getWorkspaceCode(),
                 workspace.getWorkspaceName(),
@@ -250,8 +267,8 @@ public class AiCaseService {
                 effectiveMaxCases,
                 generatedCases.size(),
                 generatedCases,
-                blankToNull(aiResponseParsingSupport.generationCoverageSummary(rawContent)),
-                aiResponseParsingSupport.generationRemainingCoverageGaps(rawContent),
+                blankToNull(parsed.coverageSummary()),
+                parsed.remainingCoverageGaps(),
                 warnings,
                 invalidCases,
                 rawContent,
@@ -353,12 +370,12 @@ public class AiCaseService {
         String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, true);
         Map<Integer, ReviewCaseStreamUpdate> updates = new LinkedHashMap<>();
         StringBuilder rawOutput = new StringBuilder();
-        StringBuilder lineBuffer = new StringBuilder();
+        StringBuilder jsonBuffer = new StringBuilder();
         Consumer<String> deltaConsumer = delta -> {
             rawOutput.append(delta);
-            lineBuffer.append(delta);
-            aiResponseParsingSupport.drainCompleteLines(lineBuffer, line -> aiResponseParsingSupport.emitReviewLine(
-                    line,
+            jsonBuffer.append(delta);
+            aiResponseParsingSupport.drainCompleteJsonValues(jsonBuffer, value -> aiResponseParsingSupport.emitReviewValue(
+                    value,
                     request.generatedCases().size(),
                     rawOutput,
                     updates,
@@ -374,13 +391,20 @@ public class AiCaseService {
         );
         String finalContent = streamResult.content();
         String rawContent = finalContent == null || finalContent.isBlank() ? rawOutput.toString() : finalContent;
-        aiResponseParsingSupport.emitReviewLine(
-                lineBuffer.toString(),
-                request.generatedCases().size(),
-                new StringBuilder(rawContent),
-                updates,
-                reviewConsumer
-        );
+        if (streamResult.fallbackToComplete()) {
+            // The failed streaming attempt may contain only partial review objects.
+            // The complete response is the sole source of truth in fallback mode.
+            updates.clear();
+            jsonBuffer.setLength(0);
+        } else {
+            aiResponseParsingSupport.drainCompleteJsonValues(jsonBuffer, value -> aiResponseParsingSupport.emitReviewValue(
+                    value,
+                    request.generatedCases().size(),
+                    new StringBuilder(rawContent),
+                    updates,
+                    reviewConsumer
+            ));
+        }
 
         AiReviewResult reviewResult = aiResponseParsingSupport.buildStreamReviewResult(rawContent, updates);
         if (updates.isEmpty() && !request.generatedCases().isEmpty()) {

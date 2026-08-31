@@ -31,6 +31,10 @@ public class AiResponseParsingSupport {
         }
     }
 
+    void drainCompleteJsonValues(StringBuilder buffer, Consumer<String> valueConsumer) {
+        AiJsonBoundaryExtractor.drainCompleteValues(buffer, valueConsumer);
+    }
+
     void emitGeneratedCaseLine(
             String rawLine,
             int maxCases,
@@ -47,24 +51,40 @@ public class AiResponseParsingSupport {
         if (line == null) {
             return;
         }
+        emitGeneratedCaseValue(line, maxCases, generatedCases, warnings, invalidCases, rawOutput, caseConsumer);
+    }
+
+    void emitGeneratedCaseValue(
+            String rawValue,
+            int maxCases,
+            List<GeneratedAiCaseItem> generatedCases,
+            List<String> warnings,
+            List<AiInvalidCaseItem> invalidCases,
+            StringBuilder rawOutput,
+            Consumer<AiCaseService.GeneratedCaseStreamUpdate> caseConsumer
+    ) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return;
+        }
         try {
-            AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent("{\"cases\":[" + line + "]}", 1);
-            if (parsed.generatedCases().isEmpty()) {
-                return;
-            }
+            AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawValue, maxCases - generatedCases.size());
             warnings.addAll(parsed.warnings());
             invalidCases.addAll(parsed.invalidCases());
-            GeneratedAiCaseItem item = parsed.generatedCases().get(0);
-            generatedCases.add(item);
-            if (caseConsumer != null) {
-                caseConsumer.accept(new AiCaseService.GeneratedCaseStreamUpdate(
-                        generatedCases.size() - 1,
-                        item,
-                        rawOutput.toString()
-                ));
+            for (GeneratedAiCaseItem item : parsed.generatedCases()) {
+                if (generatedCases.size() >= maxCases) {
+                    break;
+                }
+                generatedCases.add(item);
+                if (caseConsumer != null) {
+                    caseConsumer.accept(new AiCaseService.GeneratedCaseStreamUpdate(
+                            generatedCases.size() - 1,
+                            item,
+                            rawOutput.toString()
+                    ));
+                }
             }
         } catch (RuntimeException ignored) {
-            // Wait for a later complete line or final full-output fallback.
+            // Keep the raw stream and let the final parser report the complete failure.
         }
     }
 
@@ -75,12 +95,21 @@ public class AiResponseParsingSupport {
             Map<Integer, AiCaseService.ReviewCaseStreamUpdate> updates,
             Consumer<AiCaseService.ReviewCaseStreamUpdate> reviewConsumer
     ) {
-        String line = normalizeStreamJsonLine(rawLine);
-        if (line == null) {
+        emitReviewValue(normalizeStreamJsonLine(rawLine), caseCount, rawOutput, updates, reviewConsumer);
+    }
+
+    void emitReviewValue(
+            String rawValue,
+            int caseCount,
+            StringBuilder rawOutput,
+            Map<Integer, AiCaseService.ReviewCaseStreamUpdate> updates,
+            Consumer<AiCaseService.ReviewCaseStreamUpdate> reviewConsumer
+    ) {
+        if (rawValue == null || rawValue.isBlank()) {
             return;
         }
         try {
-            JsonNode root = OBJECT_MAPPER.readTree(line);
+            JsonNode root = OBJECT_MAPPER.readTree(rawValue);
             String status = normalizePerCaseReviewStatus(firstText(root, "status", "result", "reviewStatus"));
             String summary = firstText(root, "summary", "message", "reason", "suggestion");
             String coverageComment = firstText(root, "coverageComment", "coverage", "coverageReason");
@@ -340,7 +369,8 @@ public class AiResponseParsingSupport {
                 || normalized.contains("image input")
                 || normalized.contains("does not support image")
                 || normalized.contains("image is not supported")
-                || normalized.contains("vision")
+                || normalized.contains("not a vision model")
+                || normalized.contains("vision model required")
                 || normalized.contains("image_url")
                 || normalized.contains("input_image");
     }
