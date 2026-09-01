@@ -1,6 +1,7 @@
 package com.company.autoplatform.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.company.autoplatform.common.BadRequestException;
 import org.springframework.stereotype.Component;
 
@@ -52,7 +53,7 @@ public class AiGenerationTaskExecutionStateSupport {
         aiGenerationTaskMapper.updateById(entity);
     }
 
-    void prepareReviewRetry(AiGenerationTaskEntity entity) {
+    boolean prepareReviewRetry(AiGenerationTaskEntity entity) {
         entity.setStatus("REVIEWING");
         entity.setGenerationStatus("SUCCEEDED");
         entity.setReviewStatus(AiGenerationWorkflowContract.REVIEW_RUNNING);
@@ -63,7 +64,12 @@ public class AiGenerationTaskExecutionStateSupport {
         entity.setErrorMessage(null);
         entity.setFinishedAt(null);
         entity.setUpdatedAt(LocalDateTime.now());
-        aiGenerationTaskMapper.updateById(entity);
+        return aiGenerationTaskMapper.update(entity, new LambdaUpdateWrapper<AiGenerationTaskEntity>()
+                .eq(AiGenerationTaskEntity::getTaskId, entity.getTaskId())
+                .in(AiGenerationTaskEntity::getReviewStatus,
+                        AiGenerationWorkflowContract.REVIEW_FAILED,
+                        AiGenerationWorkflowContract.REVIEW_PARTIAL)
+                .ne(AiGenerationTaskEntity::getStatus, "REVIEWING")) > 0;
     }
 
     void markCompleted(AiGenerationTaskEntity entity, String stepMessage) {

@@ -155,7 +155,7 @@ public class AiGenerationTaskResponseSupport {
                 .collect(Collectors.toMap(UserEntity::getId, Function.identity()));
     }
 
-    private AiReviewResult readReviewResult(String raw) {
+    AiReviewResult readReviewResult(String raw) {
         return readValue(raw, new TypeReference<AiReviewResult>() {}, null);
     }
 }

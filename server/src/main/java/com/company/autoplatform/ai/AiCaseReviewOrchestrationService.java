@@ -54,7 +54,18 @@ public class AiCaseReviewOrchestrationService {
             AiGenerationTaskEntity task,
             List<AiCaseCandidateEntity> candidates
     ) {
+        return execute(workspaceCode, task, candidates, candidates, List.of());
+    }
+
+    private ReviewExecutionResult execute(
+            String workspaceCode,
+            AiGenerationTaskEntity task,
+            List<AiCaseCandidateEntity> candidates,
+            List<AiCaseCandidateEntity> supplementCandidates,
+            List<String> initialCoverageGaps
+    ) {
         List<AiCaseCandidateEntity> safeCandidates = candidates == null ? List.of() : candidates;
+        List<AiCaseCandidateEntity> safeSupplementCandidates = supplementCandidates == null ? List.of() : supplementCandidates;
         String runId = "AIR_" + shortId();
         LocalDateTime startedAt = LocalDateTime.now();
         AiCaseReviewRunEntity run = new AiCaseReviewRunEntity();
@@ -77,7 +88,7 @@ public class AiCaseReviewOrchestrationService {
         List<AiReviewCaseDecision> decisions = new ArrayList<>();
         List<String> issues = new ArrayList<>();
         List<String> suggestions = new ArrayList<>();
-        LinkedHashSet<String> coverageGaps = new LinkedHashSet<>();
+        LinkedHashSet<String> coverageGaps = new LinkedHashSet<>(nonBlank(initialCoverageGaps));
         List<GeneratedAiCaseItem> supplements = new ArrayList<>();
         int completedBatches = 0;
         int failedBatches = 0;
@@ -152,7 +163,7 @@ public class AiCaseReviewOrchestrationService {
                         task.getRequirementContent(),
                         null,
                         List.copyOf(coverageGaps),
-                        safeCandidates.stream().map(candidateService::toReviewItem).toList()
+                        safeSupplementCandidates.stream().map(candidateService::toReviewItem).toList()
                 ));
                 if (supplementResult != null && supplementResult.structured()) {
                     for (GeneratedAiCaseItem supplement : supplementResult.supplementCases() == null
@@ -257,7 +268,17 @@ public class AiCaseReviewOrchestrationService {
         if (retryCandidates.isEmpty()) {
             throw new BadRequestException("失败评审批次中没有可重试的候选用例");
         }
-        return execute(workspaceCode, task, retryCandidates);
+        List<String> existingCoverageGaps = coverageItemMapper.selectList(new LambdaQueryWrapper<AiCaseCoverageItemEntity>()
+                .eq(AiCaseCoverageItemEntity::getTaskId, task.getTaskId())
+                .eq(AiCaseCoverageItemEntity::getCoverageStatus, "GAP")
+        ).stream().map(AiCaseCoverageItemEntity::getTitle).toList();
+        return execute(
+                workspaceCode,
+                task,
+                retryCandidates,
+                candidatesById.values().stream().toList(),
+                existingCoverageGaps
+        );
     }
 
     @Transactional

@@ -312,6 +312,54 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
     }
 
     @Test
+    void reviewRetryPreservesSuccessfulBatchStatistics() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("review-retry-partial");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt", 50);
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        List<GeneratedAiCaseItem> generated = new java.util.ArrayList<>();
+        for (int index = 0; index < 21; index += 1) {
+            generated.add(generatedCase(unique + " case-" + index));
+        }
+        AiReviewResult approved = new AiReviewResult(
+                "APPROVE", "batch approved", List.of(), List.of(), List.of(new AiReviewCaseDecision(
+                        0, "APPROVED", "approved", "covered", "evidence", "reviewed", null, null, null
+                )), List.of(), List.of(), "review raw", true
+        );
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                generated, "coverage", List.of(), List.of(), List.of(), "generation raw"
+        ));
+        when(aiProviderClient.review(any(), any(), any()))
+                .thenReturn(approved)
+                .thenThrow(new IllegalStateException("second batch failed"))
+                .thenReturn(approved);
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+        AiGenerationTaskResponse partial = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(partial.totalReviewBatches()).isEqualTo(2);
+        assertThat(partial.completedReviewBatches()).isEqualTo(1);
+        assertThat(partial.failedReviewBatches()).isEqualTo(1);
+        assertThat(partial.reviewStatus()).isEqualTo("PARTIAL");
+
+        aiGenerationTaskService.retryFailedReviewBatches(created.taskId(), WORKSPACE_CODE);
+        aiGenerationTaskService.executeReviewRetry(created.taskId(), WORKSPACE_CODE);
+
+        AiGenerationTaskResponse completed = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(completed.totalReviewBatches()).isEqualTo(2);
+        assertThat(completed.completedReviewBatches()).isEqualTo(2);
+        assertThat(completed.failedReviewBatches()).isZero();
+        assertThat(completed.reviewStatus()).isEqualTo("SUCCEEDED");
+        List<AiCaseCandidateItem> candidates = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE);
+        assertThat(candidates.get(0).reviewStatus()).isEqualTo("APPROVED");
+        assertThat(candidates.get(20).reviewStatus()).isEqualTo("APPROVED");
+        verify(aiProviderClient).generate(any(), any(), any(), any());
+        verify(aiProviderClient, times(3)).review(any(), any(), any());
+    }
+
+    @Test
     void adoptionRejectsDuplicateFormalCaseBeforeCreatingAnotherCase() {
         reset(aiProviderClient);
         String unique = uniquePrefix("adoption-duplicate");

@@ -127,6 +127,7 @@ const processDialogVisible = ref(false)
 const processLoading = ref(false)
 const processPending = ref(false)
 const processRecord = ref<AiGenerationTaskItem | null>(null)
+const reviewRetrying = ref(false)
 
 const pathDialogVisible = ref(false)
 const pathDialogLoading = ref(false)
@@ -255,6 +256,12 @@ const pendingCaseCount = computed(() => detailCases.value.filter(item => getCase
 const adoptedCaseCount = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'ADOPTED').length)
 const discardedCaseCount = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'DISCARDED').length)
 const adoptionFailedCaseCount = computed(() => detailCases.value.filter(item => getCaseReviewState(item) === 'ADOPT_FAILED').length)
+const canRetryReview = computed(() => Boolean(
+  detailRecord.value
+  && ['FAILED', 'PARTIAL'].includes(detailRecord.value.reviewStatus || '')
+  && (detailRecord.value.failedReviewBatches || 0) > 0
+  && !reviewRetrying.value
+))
 const initialCaseCount = computed(() => detailCases.value.filter(item => item.aiSource === 'INITIAL').length)
 const optimizedCaseCount = computed(() => detailCases.value.filter(item => ['OPTIMIZED', 'CHANGE_SUGGESTED'].includes(item.aiReviewStatus || '')).length)
 const supplementedCaseCount = computed(() => detailCases.value.filter(item => item.aiReviewStatus === 'SUPPLEMENTED' || item.aiSource === 'REVIEW_SUPPLEMENTED').length)
@@ -991,6 +998,7 @@ function shouldRefreshForEvent(event: AiGenerationTaskEventItem) {
   return [
     'CASE_GENERATED',
     'CASE_REVIEWED',
+    'REVIEW_RETRY_STARTED',
     'GENERATION_COMPLETED',
     'TASK_COMPLETED',
     'TASK_FAILED',
@@ -1137,6 +1145,22 @@ async function loadRecord(options?: { silent?: boolean }) {
     if (!options?.silent) {
       loading.value = false
     }
+  }
+}
+
+async function retryFailedReviewBatches() {
+  if (!detailRecord.value || !canRetryReview.value) {
+    return
+  }
+  reviewRetrying.value = true
+  try {
+    await caseAiApi.retryFailedReviewBatches(detailRecord.value.workspaceCode, detailRecord.value.taskId)
+    await loadRecord()
+    ElMessage.success('失败评审批次已重新提交')
+  } catch (error) {
+    ElMessage.error(`评审重试失败：${getRequestErrorMessage(error)}`)
+  } finally {
+    reviewRetrying.value = false
   }
 }
 
@@ -2029,6 +2053,17 @@ onBeforeUnmount(() => {
             </span>
             <button type="button" class="case-ai-record-detail-page__task-log" @click="openProcessDialog">
               <ArrowUpRight :size="12" />查看任务生成日志
+            </button>
+            <button
+              v-if="canRetryReview"
+              type="button"
+              class="case-ai-record-detail-page__task-log case-ai-record-detail-page__task-log--retry"
+              :disabled="reviewRetrying"
+              @click="retryFailedReviewBatches"
+            >
+              <Loader2 v-if="reviewRetrying" :size="12" class="is-spinning" />
+              <RotateCcw v-else :size="12" />
+              {{ reviewRetrying ? '正在重试评审' : `重试失败评审（${detailRecord.failedReviewBatches || 0}）` }}
             </button>
           </div>
 
@@ -4422,6 +4457,21 @@ onBeforeUnmount(() => {
 .case-ai-record-detail-page__task-log:hover {
   border-color: #165dff;
   color: #165dff;
+}
+
+.case-ai-record-detail-page__task-log--retry {
+  border-color: #ff7d00;
+  color: #ff7d00;
+}
+
+.case-ai-record-detail-page__task-log--retry:hover {
+  border-color: #d25f00;
+  color: #d25f00;
+}
+
+.case-ai-record-detail-page__task-log:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .case-ai-record-detail-page__task-stats {

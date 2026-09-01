@@ -8,6 +8,8 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -83,7 +85,9 @@ public class AiGenerationTaskService {
             throw new BadRequestException("当前任务没有可重试的失败评审批次");
         }
         AiGenerationTaskEntity entity = requireTask(taskId);
-        stateSupport.prepareReviewRetry(entity);
+        if (!stateSupport.prepareReviewRetry(entity)) {
+            throw new BadRequestException("评审重试已由其他请求提交，请刷新任务状态");
+        }
         appendEvent(taskId, "REVIEW_RETRY_STARTED", "REVIEWING", "INFO", "开始重试失败的 AI 评审批次。", null, null, entity.getReviewProvider(), entity.getReviewModel(), null);
         return taskDomainService.getTask(taskId, workspaceCode);
     }
@@ -98,6 +102,11 @@ public class AiGenerationTaskService {
                 entity.getGeneratedCasesJson(), new TypeReference<List<GeneratedAiCaseItem>>() {}, List.of()
         );
         List<AiCaseCandidateEntity> candidates = candidateService.listEntities(taskId);
+        int previousTotalBatches = valueOrZero(entity.getTotalReviewBatches());
+        int previousCompletedBatches = valueOrZero(entity.getCompletedReviewBatches());
+        int previousReviewedCaseCount = valueOrZero(entity.getReviewedCaseCount());
+        int previousSupplementedCaseCount = valueOrZero(entity.getSupplementedCaseCount());
+        AiReviewResult previousReview = responseSupport.readReviewResult(entity.getReviewResultJson());
         AiCaseReviewOrchestrationService.ReviewExecutionResult reviewExecution;
         try {
             reviewExecution = reviewOrchestrationService.retryFailedBatches(workspaceCode, entity);
@@ -112,18 +121,22 @@ public class AiGenerationTaskService {
             return;
         }
         List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(generatedCases, candidates, reviewExecution.reviewResult());
+        AiReviewResult mergedReview = mergeReviewResults(previousReview, reviewExecution.reviewResult());
         persistReviewSupplementCandidates(entity, generatedCases.size(), finalCases);
         entity.setGeneratedCasesJson(responseSupport.writeValue(finalCases));
         entity.setGeneratedCount(finalCases.size());
-        entity.setReviewResultJson(responseSupport.writeValue(reviewExecution.reviewResult()));
+        entity.setReviewResultJson(responseSupport.writeValue(mergedReview));
         entity.setReviewRawOutput(stateSupport.limitRawOutput(reviewExecution.rawContent()));
-        entity.setTotalReviewBatches(reviewExecution.completedBatches() + reviewExecution.failedBatches());
-        entity.setCompletedReviewBatches(reviewExecution.completedBatches());
+        entity.setTotalReviewBatches(Math.max(
+                previousTotalBatches,
+                previousCompletedBatches + reviewExecution.completedBatches() + reviewExecution.failedBatches()
+        ));
+        entity.setCompletedReviewBatches(previousCompletedBatches + reviewExecution.completedBatches());
         entity.setFailedReviewBatches(reviewExecution.failedBatches());
-        entity.setReviewedCaseCount(reviewExecution.reviewedCaseCount());
-        entity.setSupplementedCaseCount(reviewExecution.supplementCases().size());
+        entity.setReviewedCaseCount(previousReviewedCaseCount + reviewExecution.reviewedCaseCount());
+        entity.setSupplementedCaseCount(previousSupplementedCaseCount + reviewExecution.supplementCases().size());
         entity.setCoverageCompleteness(reviewExecution.failedBatches() == 0
-                ? (reviewExecution.reviewResult().unresolvedCoverageGaps() == null || reviewExecution.reviewResult().unresolvedCoverageGaps().isEmpty() ? "COMPLETE" : "INCOMPLETE")
+                ? (mergedReview.unresolvedCoverageGaps() == null || mergedReview.unresolvedCoverageGaps().isEmpty() ? "COMPLETE" : "INCOMPLETE")
                 : "UNKNOWN");
         entity.setUpdatedAt(LocalDateTime.now());
         aiGenerationTaskMapper.updateById(entity);
@@ -134,7 +147,7 @@ public class AiGenerationTaskService {
         } else {
             stateSupport.markCompleted(entity, "评审批次重试完成，可在记录详情中查看结果并继续处理。");
         }
-        appendCompleteReviewEvents(taskId, finalCases, reviewExecution.reviewResult(), entity.getReviewProvider(), entity.getReviewModel());
+        appendCompleteReviewEvents(taskId, finalCases, mergedReview, entity.getReviewProvider(), entity.getReviewModel());
         appendEvent(taskId, "TASK_COMPLETED", "DONE", reviewExecution.failedBatches() > 0 ? "WARN" : "SUCCESS", "评审重试流程已完成。", null, null, entity.getReviewProvider(), entity.getReviewModel(), null);
     }
 
@@ -653,6 +666,60 @@ public class AiGenerationTaskService {
                     firstNonBlank(supplement.aiReviewSummary(), supplement.supplementReason(), supplement.coverageGap())
             );
         }
+    }
+
+    private AiReviewResult mergeReviewResults(AiReviewResult previous, AiReviewResult current) {
+        if (previous == null) {
+            return current;
+        }
+        if (current == null) {
+            return previous;
+        }
+        Map<String, AiReviewCaseDecision> decisions = new LinkedHashMap<>();
+        addReviewDecisions(decisions, previous.caseDecisions());
+        addReviewDecisions(decisions, current.caseDecisions());
+        LinkedHashSet<String> issues = new LinkedHashSet<>();
+        issues.addAll(previous.issues() == null ? List.of() : previous.issues());
+        issues.addAll(current.issues() == null ? List.of() : current.issues());
+        LinkedHashSet<String> suggestions = new LinkedHashSet<>();
+        suggestions.addAll(previous.suggestions() == null ? List.of() : previous.suggestions());
+        suggestions.addAll(current.suggestions() == null ? List.of() : current.suggestions());
+        LinkedHashSet<String> gaps = new LinkedHashSet<>();
+        gaps.addAll(previous.unresolvedCoverageGaps() == null ? List.of() : previous.unresolvedCoverageGaps());
+        gaps.addAll(current.unresolvedCoverageGaps() == null ? List.of() : current.unresolvedCoverageGaps());
+        List<GeneratedAiCaseItem> supplements = new ArrayList<>();
+        supplements.addAll(previous.supplementCases() == null ? List.of() : previous.supplementCases());
+        supplements.addAll(current.supplementCases() == null ? List.of() : current.supplementCases());
+        return new AiReviewResult(
+                current.result(),
+                current.summary(),
+                List.copyOf(issues),
+                List.copyOf(suggestions),
+                List.copyOf(decisions.values()),
+                supplements,
+                List.copyOf(gaps),
+                firstNonBlank(previous.rawContent(), current.rawContent()),
+                previous.structured() && current.structured()
+        );
+    }
+
+    private void addReviewDecisions(Map<String, AiReviewCaseDecision> target, List<AiReviewCaseDecision> source) {
+        if (source == null) {
+            return;
+        }
+        for (AiReviewCaseDecision decision : source) {
+            if (decision == null) {
+                continue;
+            }
+            String key = decision.candidateCaseId() == null || decision.candidateCaseId().isBlank()
+                    ? "index:" + decision.caseIndex()
+                    : "candidate:" + decision.candidateCaseId();
+            target.put(key, decision);
+        }
+    }
+
+    private int valueOrZero(Integer value) {
+        return value == null ? 0 : value;
     }
 
     private String reviewEventLevel(String status) {

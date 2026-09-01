@@ -278,6 +278,18 @@ export const caseAiApi = {
     return unwrapApiResponse(payload)
   },
 
+  async retryFailedReviewBatches(workspaceCode: string, taskId: string) {
+    const payload = await httpPost<ApiResponse<AiGenerationTaskItem>, undefined>(
+      `/cases/ai/tasks/${taskId}/review/retry`,
+      undefined,
+      {
+        headers: workspaceHeaders(workspaceCode),
+      },
+    )
+
+    return unwrapApiResponse(payload)
+  },
+
   async deleteTask(workspaceCode: string, taskId: string) {
     const payload = await httpDelete<ApiResponse<null>>(`/cases/ai/tasks/${taskId}`, {
       headers: workspaceHeaders(workspaceCode),
