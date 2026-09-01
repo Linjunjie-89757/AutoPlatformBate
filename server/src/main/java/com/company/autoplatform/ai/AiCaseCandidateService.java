@@ -85,7 +85,8 @@ public class AiCaseCandidateService {
             candidate.setCandidateId(generateCandidateId());
             candidate.setTaskId(task.getTaskId());
             candidate.setDisplayIndex(index);
-            candidate.setOrigin(isSupplement(legacyItem) ? "REVIEW_SUPPLEMENTED" : "GENERATOR");
+            candidate.setOrigin(isCoverageReviewSupplement(legacyItem) ? "REVIEW_SUPPLEMENTED" : "GENERATOR");
+            candidate.setSourceType(sourceTypeOf(legacyItem));
             candidate.setOriginalCaseJson(writeJson(originalCase));
             candidate.setSuggestedCaseJson(suggestedCase == null ? null : writeJson(suggestedCase));
             candidate.setCurrentCaseJson(writeJson(currentCase));
@@ -101,6 +102,15 @@ public class AiCaseCandidateService {
             candidate.setHumanDecision(adopted && suggestedCase != null ? "APPLIED_SUGGESTION" : "PENDING");
             candidate.setContentVersion(1);
             candidate.setContentHash(hashCase(currentCase));
+            candidate.setValidationStatus(AiGenerationWorkflowContract.VALIDATION_VALID);
+            candidate.setCoverageStatus(isSupplement(legacyItem)
+                    ? AiGenerationWorkflowContract.COVERAGE_EXPECTED
+                    : AiGenerationWorkflowContract.COVERAGE_UNREVIEWED);
+            candidate.setVerificationStatus(isSupplement(legacyItem)
+                    ? AiGenerationWorkflowContract.VERIFICATION_UNVERIFIED_BY_SECOND_REVIEW
+                    : AiGenerationWorkflowContract.VERIFICATION_UNVERIFIED);
+            candidate.setSupplementBasis(supplementBasisOf(legacyItem));
+            candidate.setSupplementTruncated(0);
             if (suggestedCase != null) {
                 candidate.setSuggestionSourceVersion(1);
                 candidate.setSuggestionSourceHash(hashCase(originalCase));
@@ -144,6 +154,7 @@ public class AiCaseCandidateService {
         candidate.setTaskId(task.getTaskId());
         candidate.setDisplayIndex(displayIndex);
         candidate.setOrigin("REVIEW_SUPPLEMENTED");
+        candidate.setSourceType(AiGenerationWorkflowContract.SOURCE_COVERAGE_REVIEW_SUPPLEMENT);
         candidate.setOriginalCaseJson(writeJson(supplementCase));
         candidate.setCurrentCaseJson(writeJson(supplementCase));
         candidate.setReviewStatus("CONFIRM_REQUIRED");
@@ -153,6 +164,11 @@ public class AiCaseCandidateService {
         candidate.setHumanDecision("PENDING");
         candidate.setContentVersion(1);
         candidate.setContentHash(hashCase(supplementCase));
+        candidate.setValidationStatus(AiGenerationWorkflowContract.VALIDATION_VALID);
+        candidate.setCoverageStatus(AiGenerationWorkflowContract.COVERAGE_EXPECTED);
+        candidate.setVerificationStatus(AiGenerationWorkflowContract.VERIFICATION_UNVERIFIED_BY_SECOND_REVIEW);
+        candidate.setSupplementBasis("COVERAGE_REVIEW");
+        candidate.setSupplementTruncated(0);
         candidate.setCreatedBy(task.getCreatedBy());
         candidate.setUpdatedBy(task.getUpdatedBy());
         candidate.setCreatedAt(now);
@@ -564,6 +580,12 @@ public class AiCaseCandidateService {
     }
 
     private void validateAdoptable(AiCaseCandidateEntity candidate) {
+        if (AiGenerationWorkflowContract.VALIDATION_FAILED.equals(candidate.getValidationStatus())) {
+            throw new BadRequestException("校验失败的候选用例不能直接采纳，请修改后重新校验");
+        }
+        if (AiGenerationWorkflowContract.VALIDATION_DUPLICATE.equals(candidate.getValidationStatus())) {
+            throw new BadRequestException("重复候选用例不能直接采纳");
+        }
         if ("EXCLUDED".equals(candidate.getHumanDecision()) || "MERGED".equals(candidate.getHumanDecision())) {
             throw new BadRequestException("已放弃或已合并的候选用例不能采纳");
         }
@@ -641,6 +663,7 @@ public class AiCaseCandidateService {
                 entity.getCandidateId(),
                 entity.getDisplayIndex(),
                 entity.getOrigin(),
+                entity.getSourceType(),
                 readCase(entity.getOriginalCaseJson()),
                 readCaseNullable(entity.getSuggestedCaseJson()),
                 readCase(entity.getCurrentCaseJson()),
@@ -653,6 +676,13 @@ public class AiCaseCandidateService {
                 entity.getHumanDecision(),
                 entity.getContentVersion(),
                 entity.getContentHash(),
+                entity.getValidationStatus(),
+                readStringList(entity.getValidationIssuesJson()),
+                entity.getDuplicateOfCandidateId(),
+                entity.getCoverageStatus(),
+                entity.getVerificationStatus(),
+                entity.getSupplementBasis(),
+                entity.getSupplementTruncated() != null && entity.getSupplementTruncated() == 1,
                 entity.getSuggestionSourceVersion(),
                 entity.getSuggestionSourceHash(),
                 entity.getCreatedAt() == null ? null : entity.getCreatedAt().toString(),
@@ -813,7 +843,31 @@ public class AiCaseCandidateService {
     }
 
     private boolean isSupplement(GeneratedAiCaseItem item) {
-        return "REVIEW_SUPPLEMENTED".equals(item.aiSource()) || "SUPPLEMENTED".equals(item.aiReviewStatus());
+        return item != null && ("REVIEW_SUPPLEMENTED".equals(item.aiSource())
+                || "SELF_REVIEW_SUPPLEMENT".equals(item.aiSource())
+                || "SUPPLEMENTED".equals(item.aiReviewStatus()));
+    }
+
+    private boolean isCoverageReviewSupplement(GeneratedAiCaseItem item) {
+        return item != null && ("REVIEW_SUPPLEMENTED".equals(item.aiSource())
+                || "SUPPLEMENTED".equals(item.aiReviewStatus()));
+    }
+
+    private String sourceTypeOf(GeneratedAiCaseItem item) {
+        if (item != null && "SELF_REVIEW_SUPPLEMENT".equals(item.aiSource())) {
+            return AiGenerationWorkflowContract.SOURCE_SELF_REVIEW_SUPPLEMENT;
+        }
+        if (isCoverageReviewSupplement(item)) {
+            return AiGenerationWorkflowContract.SOURCE_COVERAGE_REVIEW_SUPPLEMENT;
+        }
+        return AiGenerationWorkflowContract.SOURCE_INITIAL_GENERATION;
+    }
+
+    private String supplementBasisOf(GeneratedAiCaseItem item) {
+        if (item != null && "SELF_REVIEW_SUPPLEMENT".equals(item.aiSource())) {
+            return "SELF_REVIEW";
+        }
+        return isCoverageReviewSupplement(item) ? "LEGACY_REVIEW_RESULT" : null;
     }
 
     private String normalizeReviewStatus(String status) {

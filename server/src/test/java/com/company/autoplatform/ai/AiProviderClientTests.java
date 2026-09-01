@@ -263,6 +263,37 @@ class AiProviderClientTests {
     }
 
     @Test
+    void parsesGenerationSelfCheckEnvelope() {
+        AiProviderClient client = new AiProviderClient(List.of());
+
+        AiGenerationSelfCheckResult result = client.parseSelfCheckResultContent("""
+                {
+                  "is_complete": false,
+                  "missing_coverage_items": ["invalid credentials", "session timeout"],
+                  "duplicate_case_indexes": [1, "2"],
+                  "supplement_guidance": "补充认证失败和会话超时场景"
+                }
+                """);
+
+        assertThat(result.structured()).isTrue();
+        assertThat(result.complete()).isFalse();
+        assertThat(result.missingCoverageGaps()).containsExactly("invalid credentials", "session timeout");
+        assertThat(result.duplicateCaseIndexes()).containsExactly(1, 2);
+        assertThat(result.supplementGuidance()).isEqualTo("补充认证失败和会话超时场景");
+    }
+
+    @Test
+    void marksIncompleteGenerationSelfCheckAsUnstructured() {
+        AiProviderClient client = new AiProviderClient(List.of());
+
+        AiGenerationSelfCheckResult result = client.parseSelfCheckResultContent("{\"missing_coverage_items\": [\"gap\"]}");
+
+        assertThat(result.structured()).isTrue();
+        assertThat(result.complete()).isFalse();
+        assertThat(result.missingCoverageGaps()).containsExactly("gap");
+    }
+
+    @Test
     void parsesMarkdownAndConsecutiveJsonObjectsWithoutLineBoundaries() {
         AiProviderClient client = new AiProviderClient(List.of());
         String content = """

@@ -65,6 +65,21 @@ public class AiGenerationTaskExecutionStateSupport {
         aiGenerationTaskMapper.updateById(entity);
     }
 
+    void markReviewPartial(AiGenerationTaskEntity entity, String stepMessage, String errorMessage) {
+        entity.setStatus("COMPLETED");
+        entity.setGenerationStatus("SUCCEEDED");
+        entity.setReviewStatus(AiGenerationWorkflowContract.REVIEW_PARTIAL);
+        entity.setFailedStage("AI_REVIEW");
+        entity.setErrorCode("AI_REVIEW_PARTIAL");
+        entity.setCurrentStep(3);
+        entity.setStepMessage(stepMessage);
+        entity.setErrorMessage(errorMessage);
+        entity.setFinishedAt(LocalDateTime.now());
+        entity.setUpdatedAt(LocalDateTime.now());
+        entity.setHasWarnings(1);
+        aiGenerationTaskMapper.updateById(entity);
+    }
+
     void markCanceled(AiGenerationTaskEntity entity, String stepMessage) {
         String previousStatus = entity.getStatus();
         entity.setCancelRequested(1);

@@ -215,6 +215,7 @@ export interface AiCaseCandidateItem {
   candidateCaseId: string
   displayIndex: number
   origin: 'GENERATOR' | 'REVIEW_SUPPLEMENTED'
+  sourceType?: 'INITIAL_GENERATION' | 'SELF_REVIEW_SUPPLEMENT' | 'COVERAGE_REVIEW_SUPPLEMENT'
   originalCase: GeneratedAiCaseItem
   suggestedCase: GeneratedAiCaseItem | null
   currentCase: GeneratedAiCaseItem
@@ -227,6 +228,13 @@ export interface AiCaseCandidateItem {
   humanDecision: AiCandidateHumanDecision
   contentVersion: number
   contentHash: string
+  validationStatus?: 'VALID' | 'WARNING' | 'FAILED' | 'DUPLICATE'
+  validationIssues?: string[]
+  duplicateOfCandidateId?: string | null
+  coverageStatus?: 'UNREVIEWED' | 'COVERED' | 'GAP' | 'EXPECTED_COVERAGE'
+  verificationStatus?: 'UNVERIFIED' | 'VERIFIED' | 'UNVERIFIED_BY_SECOND_REVIEW'
+  supplementBasis?: string | null
+  supplementTruncated?: boolean
   suggestionSourceVersion: number | null
   suggestionSourceHash: string | null
   createdAt: string | null
@@ -250,6 +258,20 @@ export interface AiGenerationTaskItem {
   requirementContent: string
   outputMode: string
   status: string
+  generationStatus?: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL' | 'FAILED' | 'EMPTY' | 'CANCELED'
+  reviewStatus?: 'NOT_STARTED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL' | 'FAILED' | 'CANCELED'
+  selfCheckStatus?: 'NOT_STARTED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMED_OUT'
+  selfCheckAttemptCount?: number
+  failedStage?: 'GENERATION' | 'AI_REVIEW' | 'ADOPTION' | null
+  errorCode?: string | null
+  hasWarnings?: boolean
+  warningCodes?: string[]
+  totalReviewBatches?: number
+  completedReviewBatches?: number
+  failedReviewBatches?: number
+  reviewedCaseCount?: number
+  supplementedCaseCount?: number
+  coverageCompleteness?: 'COMPLETE' | 'PARTIAL' | 'UNKNOWN'
   currentStep: number | null
   stepMessage: string | null
   errorMessage: string | null
@@ -259,6 +281,23 @@ export interface AiGenerationTaskItem {
   updatedByName: string | null
   provider: string | null
   model: string | null
+  generationProvider?: string | null
+  generationModel?: string | null
+  generationPromptVersion?: string | null
+  generationPromptHash?: string | null
+  generationTemperature?: number | null
+  reviewProvider?: string | null
+  reviewModel?: string | null
+  reviewPromptVersion?: string | null
+  reviewPromptHash?: string | null
+  reviewTemperature?: number | null
+  inputMode?: 'TEXT' | 'MULTIMODAL' | 'TEXT_ONLY_FALLBACK' | null
+  imageDigest?: string | null
+  imageCount?: number
+  inputTokenCount?: number | null
+  outputTokenCount?: number | null
+  reviewInputTokenCount?: number | null
+  reviewOutputTokenCount?: number | null
   generatedCount: number | null
   estimatedCaseCount?: number | null
   savedCaseCount: number | null

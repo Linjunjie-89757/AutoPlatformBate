@@ -25,6 +25,7 @@ public class AiCaseService {
     public static final int DEFAULT_MAX_CASES = 50;
     public static final int SYSTEM_MAX_CASES = 200;
     public static final int FINAL_MAX_CASES = 200;
+    private static final int MAX_SELF_SUPPLEMENT_CASES = 20;
 
     private final AiCaseConfigDomainService aiCaseConfigDomainService;
     private final AiRequirementAssetDomainService aiRequirementAssetDomainService;
@@ -33,6 +34,7 @@ public class AiCaseService {
     private final WorkspaceService workspaceService;
     private final AiProviderClient aiProviderClient;
     private final AiProviderDomainService aiProviderDomainService;
+    private final AiGenerationCaseQualityService generationCaseQualityService;
 
     public AiCaseService(
             AiCaseConfigDomainService aiCaseConfigDomainService,
@@ -41,7 +43,8 @@ public class AiCaseService {
             AiResponseParsingSupport aiResponseParsingSupport,
             WorkspaceService workspaceService,
             AiProviderClient aiProviderClient,
-            AiProviderDomainService aiProviderDomainService
+            AiProviderDomainService aiProviderDomainService,
+            AiGenerationCaseQualityService generationCaseQualityService
     ) {
         this.aiCaseConfigDomainService = aiCaseConfigDomainService;
         this.aiRequirementAssetDomainService = aiRequirementAssetDomainService;
@@ -50,6 +53,7 @@ public class AiCaseService {
         this.workspaceService = workspaceService;
         this.aiProviderClient = aiProviderClient;
         this.aiProviderDomainService = aiProviderDomainService;
+        this.generationCaseQualityService = generationCaseQualityService;
     }
 
     public AiCaseConfigResponse getConfig(String headerWorkspaceCode, String targetWorkspaceCode) {
@@ -123,6 +127,13 @@ public class AiCaseService {
                     List.of()
             );
         }
+        GenerationEnhancement enhancement = enhanceGeneratedCases(
+                resolved,
+                config,
+                request,
+                result,
+                effectiveMaxCases
+        );
         return new GenerateAiCasesResponse(
                 workspace.getWorkspaceCode(),
                 workspace.getWorkspaceName(),
@@ -131,14 +142,16 @@ public class AiCaseService {
                 systemMaxCases,
                 requestedMaxCases,
                 effectiveMaxCases,
-                result.generatedCases().size(),
-                result.generatedCases(),
+                enhancement.cases().size(),
+                enhancement.cases(),
                 result.coverageSummary(),
                 result.remainingCoverageGaps(),
-                result.warnings(),
-                result.invalidCases(),
+                enhancement.warnings(),
+                enhancement.invalidCases(),
                 result.rawContent(),
-                ignoredImages
+                ignoredImages,
+                enhancement.selfCheck(),
+                enhancement.selfSupplementCases()
         );
     }
 
@@ -257,6 +270,20 @@ public class AiCaseService {
         warnings.addAll(parsed.warnings());
         invalidCases.clear();
         invalidCases.addAll(parsed.invalidCases());
+        GenerationEnhancement enhancement = enhanceGeneratedCases(
+                resolved,
+                config,
+                request,
+                new AiGeneratedCasesResult(
+                        generatedCases,
+                        parsed.coverageSummary(),
+                        parsed.remainingCoverageGaps(),
+                        warnings,
+                        invalidCases,
+                        rawContent
+                ),
+                effectiveMaxCases
+        );
         return new StreamedGenerateCasesResult(
                 workspace.getWorkspaceCode(),
                 workspace.getWorkspaceName(),
@@ -265,17 +292,128 @@ public class AiCaseService {
                 systemMaxCases,
                 requestedMaxCases,
                 effectiveMaxCases,
-                generatedCases.size(),
-                generatedCases,
+                enhancement.cases().size(),
+                enhancement.cases(),
                 blankToNull(parsed.coverageSummary()),
                 parsed.remainingCoverageGaps(),
-                warnings,
-                invalidCases,
+                enhancement.warnings(),
+                enhancement.invalidCases(),
                 rawContent,
                 streamResult.fallbackToComplete(),
                 streamResult.fallbackReason(),
-                ignoredImages
+                ignoredImages,
+                enhancement.selfCheck(),
+                enhancement.selfSupplementCases()
         );
+    }
+
+    private GenerationEnhancement enhanceGeneratedCases(
+            ResolvedRoleConfig resolved,
+            AiCaseConfigEntity config,
+            GenerateAiCasesRequest request,
+            AiGeneratedCasesResult initialResult,
+            int effectiveMaxCases
+    ) {
+        List<String> warnings = new ArrayList<>(initialResult.warnings() == null ? List.of() : initialResult.warnings());
+        List<AiInvalidCaseItem> invalidCases = new ArrayList<>(initialResult.invalidCases() == null ? List.of() : initialResult.invalidCases());
+        List<GeneratedAiCaseItem> initialCases = new ArrayList<>(initialResult.generatedCases() == null ? List.of() : initialResult.generatedCases());
+        AiGenerationSelfCheckResult selfCheck;
+        try {
+            selfCheck = aiProviderClient.selfCheck(
+                    resolved.profileWithMaxCases(effectiveMaxCases),
+                    resolved.apiKey(),
+                    aiPromptBuilderSupport.buildGenerationSelfCheckPrompt(config, request, initialCases)
+            );
+        } catch (RuntimeException exception) {
+            warnings.add("生成模型自检失败，已保留初始生成用例：" + safeMessage(exception));
+            AiGenerationCaseQualityService.QualityResult quality = generationCaseQualityService
+                    .validateNormalizeAndDeduplicate(initialCases, invalidCases, effectiveMaxCases);
+            warnings.addAll(quality.warnings());
+            return new GenerationEnhancement(
+                    quality.cases(),
+                    warnings,
+                    quality.invalidCases(),
+                    AiGenerationSelfCheckResult.failed(exception.getMessage()),
+                    List.of()
+            );
+        }
+
+        if (selfCheck == null || !selfCheck.structured()) {
+            warnings.add("生成模型自检返回内容无法解析，已保留初始生成用例。");
+        }
+
+        List<GeneratedAiCaseItem> selfSupplementCases = new ArrayList<>();
+        List<String> missingGaps = selfCheck == null ? List.of() : selfCheck.missingCoverageGaps();
+        int supplementLimit = Math.min(
+                MAX_SELF_SUPPLEMENT_CASES,
+                Math.max(0, effectiveMaxCases - initialCases.size())
+        );
+        if (selfCheck != null && selfCheck.structured() && !selfCheck.complete()
+                && !missingGaps.isEmpty() && supplementLimit > 0) {
+            try {
+                AiGeneratedCasesResult supplement = aiProviderClient.generateSupplement(
+                        resolved.profileWithMaxCases(supplementLimit),
+                        resolved.apiKey(),
+                        aiPromptBuilderSupport.buildGenerationSupplementPrompt(
+                                config,
+                                request,
+                                initialCases,
+                                missingGaps,
+                                selfCheck.supplementGuidance(),
+                                supplementLimit
+                        ),
+                        supplementLimit
+                );
+                for (GeneratedAiCaseItem item : supplement.generatedCases() == null ? List.<GeneratedAiCaseItem>of() : supplement.generatedCases()) {
+                    if (selfSupplementCases.size() >= supplementLimit) {
+                        break;
+                    }
+                    selfSupplementCases.add(withAiSource(item, "SELF_REVIEW_SUPPLEMENT"));
+                }
+                warnings.addAll(supplement.warnings() == null ? List.of() : supplement.warnings());
+                invalidCases.addAll(supplement.invalidCases() == null ? List.of() : supplement.invalidCases());
+            } catch (RuntimeException exception) {
+                warnings.add("生成模型自补失败，已保留初始生成用例：" + safeMessage(exception));
+            }
+        }
+
+        List<GeneratedAiCaseItem> combined = new ArrayList<>(initialCases);
+        combined.addAll(selfSupplementCases);
+        AiGenerationCaseQualityService.QualityResult quality = generationCaseQualityService
+                .validateNormalizeAndDeduplicate(combined, invalidCases, effectiveMaxCases);
+        warnings.addAll(quality.warnings());
+        return new GenerationEnhancement(
+                quality.cases(),
+                warnings,
+                quality.invalidCases(),
+                selfCheck,
+                selfSupplementCases
+        );
+    }
+
+    private GeneratedAiCaseItem withAiSource(GeneratedAiCaseItem item, String aiSource) {
+        return new GeneratedAiCaseItem(
+                item.title(), item.caseType(), item.priority(), item.precondition(), item.steps(), item.expectedResult(),
+                item.riskNotes(), item.testAngle(), item.generationReason(), item.requirementEvidence(), aiSource,
+                item.reviewComment(), item.optimizationReason(), item.supplementReason(), item.coverageGap(),
+                item.originalCaseSnapshot(), item.warnings(), item.aiReviewStatus(), item.aiReviewSummary(),
+                item.manualEdited(), item.manualEditedByName(), item.manualEditedAt()
+        );
+    }
+
+    private String safeMessage(RuntimeException exception) {
+        return exception.getMessage() == null || exception.getMessage().isBlank()
+                ? exception.getClass().getSimpleName()
+                : exception.getMessage();
+    }
+
+    private record GenerationEnhancement(
+            List<GeneratedAiCaseItem> cases,
+            List<String> warnings,
+            List<AiInvalidCaseItem> invalidCases,
+            AiGenerationSelfCheckResult selfCheck,
+            List<GeneratedAiCaseItem> selfSupplementCases
+    ) {
     }
 
     public List<AiProviderConnectionItem> getProviders(String headerWorkspaceCode) {
@@ -350,9 +488,32 @@ public class AiCaseService {
     }
 
     public AiReviewResult reviewGeneratedCases(String headerWorkspaceCode, ReviewAiGeneratedCasesRequest request) {
+        return reviewGeneratedCases(headerWorkspaceCode, request, true);
+    }
+
+    public AiReviewResult reviewGeneratedCasesBatch(String headerWorkspaceCode, ReviewAiGeneratedCasesRequest request) {
+        return reviewGeneratedCases(headerWorkspaceCode, request, false);
+    }
+
+    private AiReviewResult reviewGeneratedCases(
+            String headerWorkspaceCode,
+            ReviewAiGeneratedCasesRequest request,
+            boolean allowSupplement
+    ) {
         ResolvedRoleConfig resolved = aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_REVIEWER);
         AiCaseConfigEntity config = resolved.roleConfig();
-        String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, false);
+        String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, false, allowSupplement);
+        return aiProviderClient.review(resolved.profile(), resolved.apiKey(), prompt);
+    }
+
+    public AiReviewResult reviewCoverageSupplement(String headerWorkspaceCode, ReviewAiGeneratedCasesRequest request) {
+        ResolvedRoleConfig resolved = aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_REVIEWER);
+        AiCaseConfigEntity config = resolved.roleConfig();
+        String prompt = aiPromptBuilderSupport.buildGeneratedCasesCoverageSupplementPrompt(
+                config,
+                request,
+                request.remainingCoverageGaps()
+        );
         return aiProviderClient.review(resolved.profile(), resolved.apiKey(), prompt);
     }
 
@@ -362,12 +523,22 @@ public class AiCaseService {
             Consumer<AiStreamModelInfo> modelConsumer,
             Consumer<ReviewCaseStreamUpdate> reviewConsumer
     ) {
+        return streamReviewGeneratedCases(headerWorkspaceCode, request, modelConsumer, reviewConsumer, true);
+    }
+
+    public StreamedReviewResult streamReviewGeneratedCases(
+            String headerWorkspaceCode,
+            ReviewAiGeneratedCasesRequest request,
+            Consumer<AiStreamModelInfo> modelConsumer,
+            Consumer<ReviewCaseStreamUpdate> reviewConsumer,
+            boolean allowSupplement
+    ) {
         ResolvedRoleConfig resolved = aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_REVIEWER);
         AiCaseConfigEntity config = resolved.roleConfig();
         if (modelConsumer != null) {
             modelConsumer.accept(new AiStreamModelInfo(resolved.profile().provider(), config.getModel()));
         }
-        String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, true);
+        String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, true, allowSupplement);
         Map<Integer, ReviewCaseStreamUpdate> updates = new LinkedHashMap<>();
         StringBuilder rawOutput = new StringBuilder();
         StringBuilder jsonBuffer = new StringBuilder();
@@ -502,7 +673,9 @@ public class AiCaseService {
             String rawContent,
             boolean fallbackToComplete,
             String fallbackReason,
-            boolean ignoredImages
+            boolean ignoredImages,
+            AiGenerationSelfCheckResult selfCheck,
+            List<GeneratedAiCaseItem> selfSupplementCases
     ) {
     }
 

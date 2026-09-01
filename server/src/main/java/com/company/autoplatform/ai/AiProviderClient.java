@@ -42,6 +42,21 @@ public class AiProviderClient {
         return parseReviewResultContent(content);
     }
 
+    public AiGenerationSelfCheckResult selfCheck(AiProviderRequestProfile profile, String apiKey, String prompt) {
+        String content = adapter(profile.protocolType()).requestStructuredContent(profile, apiKey, prompt, List.of());
+        return parseSelfCheckResultContent(content);
+    }
+
+    public AiGeneratedCasesResult generateSupplement(
+            AiProviderRequestProfile profile,
+            String apiKey,
+            String prompt,
+            Integer maxCases
+    ) {
+        String content = adapter(profile.protocolType()).requestStructuredContent(profile, apiKey, prompt, List.of());
+        return parseGeneratedCasesContent(content, maxCases);
+    }
+
     public String requestStructuredContent(AiProviderRequestProfile profile, String apiKey, String prompt) {
         return adapter(profile.protocolType()).requestStructuredContent(profile, apiKey, prompt, List.of());
     }
@@ -207,6 +222,47 @@ public class AiProviderClient {
                 invalidCases,
                 normalizedJson
         );
+    }
+
+    public AiGenerationSelfCheckResult parseSelfCheckResultContent(String normalizedJson) {
+        if (normalizedJson == null || normalizedJson.isBlank()) {
+            return AiGenerationSelfCheckResult.failed(normalizedJson);
+        }
+        try {
+            JsonNode root = objectMapper.readTree(normalizedJson);
+            if (root == null || !root.isObject()
+                    || !(root.has("is_complete") || root.has("isComplete") || root.has("complete")
+                    || root.has("missing_coverage_items") || root.has("missingCoverageItems")
+                    || root.has("missingCoverageGaps"))) {
+                return AiGenerationSelfCheckResult.failed(normalizedJson);
+            }
+            boolean complete = root.path("is_complete").asBoolean(
+                    root.path("isComplete").asBoolean(root.path("complete").asBoolean(false))
+            );
+            List<String> gaps = stringList(firstArray(root, "missing_coverage_items", "missingCoverageItems", "missingCoverageGaps", "gaps"));
+            List<Integer> duplicateIndexes = intList(firstArray(root, "duplicate_case_indexes", "duplicateCaseIndexes", "duplicates"));
+            String guidance = firstText(root, "supplement_guidance", "supplementGuidance", "guidance");
+            return new AiGenerationSelfCheckResult(true, complete, gaps, duplicateIndexes, guidance, normalizedJson);
+        } catch (IOException exception) {
+            return AiGenerationSelfCheckResult.failed(normalizedJson);
+        }
+    }
+
+    private List<Integer> intList(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        List<Integer> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            if (item.isInt() || item.isLong() || item.isTextual()) {
+                try {
+                    values.add(Integer.valueOf(item.asText()));
+                } catch (NumberFormatException ignored) {
+                    // Ignore malformed indexes from the model.
+                }
+            }
+        }
+        return values.stream().distinct().toList();
     }
 
     private boolean looksLikeGeneratedCase(JsonNode node) {

@@ -22,6 +22,9 @@ public class AiCaseCandidateEntity extends BaseEntity {
 
     private String origin;
 
+    @TableField("source_type")
+    private String sourceType;
+
     @TableField("original_case_json")
     private String originalCaseJson;
 
@@ -57,6 +60,27 @@ public class AiCaseCandidateEntity extends BaseEntity {
 
     @TableField("content_hash")
     private String contentHash;
+
+    @TableField("validation_status")
+    private String validationStatus;
+
+    @TableField("validation_issues_json")
+    private String validationIssuesJson;
+
+    @TableField("duplicate_of_candidate_id")
+    private String duplicateOfCandidateId;
+
+    @TableField("coverage_status")
+    private String coverageStatus;
+
+    @TableField("verification_status")
+    private String verificationStatus;
+
+    @TableField("supplement_basis")
+    private String supplementBasis;
+
+    @TableField("supplement_truncated")
+    private Integer supplementTruncated;
 
     @TableField("suggestion_source_version")
     private Integer suggestionSourceVersion;

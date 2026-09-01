@@ -25,6 +25,7 @@ public class AiGenerationTaskService {
     private final AiGenerationTaskSseSupport sseSupport;
     private final AiGenerationTaskExecutionStateSupport stateSupport;
     private final AiCaseCandidateService candidateService;
+    private final AiCaseReviewOrchestrationService reviewOrchestrationService;
 
     public AiGenerationTaskService(
             AiGenerationTaskMapper aiGenerationTaskMapper,
@@ -36,7 +37,8 @@ public class AiGenerationTaskService {
             AiGenerationTaskEventMessageSupport eventMessageSupport,
             AiGenerationTaskSseSupport sseSupport,
             AiGenerationTaskExecutionStateSupport stateSupport,
-            AiCaseCandidateService candidateService
+            AiCaseCandidateService candidateService,
+            AiCaseReviewOrchestrationService reviewOrchestrationService
     ) {
         this.aiGenerationTaskMapper = aiGenerationTaskMapper;
         this.taskDomainService = taskDomainService;
@@ -48,6 +50,7 @@ public class AiGenerationTaskService {
         this.sseSupport = sseSupport;
         this.stateSupport = stateSupport;
         this.candidateService = candidateService;
+        this.reviewOrchestrationService = reviewOrchestrationService;
     }
 
     public AiGenerationTaskResponse createTask(String headerWorkspaceCode, CreateAiGenerationTaskRequest request) {
@@ -124,11 +127,14 @@ public class AiGenerationTaskService {
 
         entity.setProvider(generation.provider());
         entity.setModel(generation.model());
+        entity.setGenerationProvider(generation.provider());
+        entity.setGenerationModel(generation.model());
         entity.setGeneratedCount(generation.actualGeneratedCount() == null ? 0 : generation.actualGeneratedCount());
         entity.setWarningsJson(responseSupport.writeValue(generation.warnings()));
         entity.setInvalidCasesJson(responseSupport.writeValue(generation.invalidCases()));
         entity.setGeneratedCasesJson(responseSupport.writeValue(generation.generatedCases()));
         entity.setGenerationRawOutput(stateSupport.limitRawOutput(generation.rawContent()));
+        persistSelfCheckResult(entity, generation.selfCheck(), generation.warnings());
         entity.setUpdatedAt(LocalDateTime.now());
         aiGenerationTaskMapper.updateById(entity);
         List<AiCaseCandidateEntity> candidates = candidateService.materializeGeneratedCases(entity, generation.generatedCases());
@@ -138,18 +144,13 @@ public class AiGenerationTaskService {
         } else if (!assetIds.isEmpty()) {
             appendEvent(entity.getTaskId(), "IMAGE_ASSETS_ACCEPTED", "GENERATING", "SUCCESS", "图片素材已被模型接受，继续生成。", null, null, generation.provider(), generation.model(), null);
         }
+        appendSelfCheckEvents(entity.getTaskId(), generation.selfCheck(), generation.selfSupplementCases(), generation.provider(), generation.model());
         appendEvent(entity.getTaskId(), "GENERATION_COMPLETED", "GENERATING", "SUCCESS", "用例生成完成，共 " + generation.generatedCases().size() + " 条。", null, null, generation.provider(), generation.model(), null);
         appendEvent(entity.getTaskId(), "REVIEW_STARTED", "REVIEWING", "INFO", "开始执行 AI 自动评审", null, null, null, null, null);
 
-        AiReviewResult review;
+        AiCaseReviewOrchestrationService.ReviewExecutionResult reviewExecution;
         try {
-            review = aiCaseService.reviewGeneratedCases(workspaceCode, new ReviewAiGeneratedCasesRequest(
-                    entity.getRequirementTitle(),
-                    entity.getRequirementContent(),
-                    null,
-                    generation.remainingCoverageGaps(),
-                    candidates.stream().map(candidateService::toReviewItem).toList()
-            ));
+            reviewExecution = reviewOrchestrationService.execute(workspaceCode, entity, candidates);
         } catch (TaskCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -161,18 +162,43 @@ public class AiGenerationTaskService {
         if (stateSupport.isCanceled(entity)) {
             throw new TaskCanceledException("任务已取消，评审结果未继续写入。");
         }
-        if (review == null || !review.structured()) {
-            stateSupport.markReviewFailed(entity.getTaskId(), new IllegalStateException("AI 评审返回内容无法解析为结构化结果"));
+        if (reviewExecution.reviewResult() == null) {
+            entity.setTotalReviewBatches(reviewExecution.completedBatches() + reviewExecution.failedBatches());
+            entity.setCompletedReviewBatches(reviewExecution.completedBatches());
+            entity.setFailedReviewBatches(reviewExecution.failedBatches());
+            entity.setReviewedCaseCount(reviewExecution.reviewedCaseCount());
+            entity.setSupplementedCaseCount(0);
+            entity.setUpdatedAt(LocalDateTime.now());
+            aiGenerationTaskMapper.updateById(entity);
+            stateSupport.markReviewFailed(entity.getTaskId(), new IllegalStateException(
+                    firstNonBlank(reviewExecution.errorMessage(), "AI 评审批次全部失败")
+            ));
             return;
         }
-
+        AiReviewResult review = reviewExecution.reviewResult();
         List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(generation.generatedCases(), candidates, review);
-        persistCompleteReviewCandidates(entity, generation.generatedCases().size(), finalCases, review);
+        persistReviewSupplementCandidates(entity, generation.generatedCases().size(), finalCases);
         entity.setGeneratedCasesJson(responseSupport.writeValue(finalCases));
         entity.setGeneratedCount(finalCases.size());
         entity.setReviewResultJson(responseSupport.writeValue(review));
         entity.setReviewRawOutput(stateSupport.limitRawOutput(review.rawContent()));
-        stateSupport.markCompleted(entity, "任务已完成，可在记录详情中查看生成结果并继续处理。");
+        entity.setTotalReviewBatches(reviewExecution.completedBatches() + reviewExecution.failedBatches());
+        entity.setCompletedReviewBatches(reviewExecution.completedBatches());
+        entity.setFailedReviewBatches(reviewExecution.failedBatches());
+        entity.setReviewedCaseCount(reviewExecution.reviewedCaseCount());
+        entity.setSupplementedCaseCount(reviewExecution.supplementCases().size());
+        entity.setCoverageCompleteness(reviewExecution.failedBatches() == 0
+                ? (review.unresolvedCoverageGaps() == null || review.unresolvedCoverageGaps().isEmpty() ? "COMPLETE" : "INCOMPLETE")
+                : "UNKNOWN");
+        entity.setUpdatedAt(LocalDateTime.now());
+        aiGenerationTaskMapper.updateById(entity);
+        if (reviewExecution.failedBatches() > 0 && reviewExecution.completedBatches() > 0) {
+            stateSupport.markReviewPartial(entity, "用例已生成，部分 AI 评审批次失败，成功结果仍可查看和采纳。", "失败批次：" + reviewExecution.failedBatches());
+        } else if (reviewExecution.failedBatches() > 0) {
+            stateSupport.markReviewFailed(entity.getTaskId(), new IllegalStateException("AI 评审批次全部失败"));
+        } else {
+            stateSupport.markCompleted(entity, "任务已完成，可在记录详情中查看生成结果并继续处理。");
+        }
         appendCompleteReviewEvents(entity.getTaskId(), finalCases, review, generation.provider(), generation.model());
         appendEvent(entity.getTaskId(), "TASK_COMPLETED", "DONE", "SUCCESS", "生成与评审已完成。", null, null, generation.provider(), generation.model(), null);
     }
@@ -226,11 +252,14 @@ public class AiGenerationTaskService {
         generatedCases.addAll(generation.generatedCases());
         entity.setProvider(generation.provider());
         entity.setModel(generation.model());
+        entity.setGenerationProvider(generation.provider());
+        entity.setGenerationModel(generation.model());
         entity.setGeneratedCount(generation.actualGeneratedCount() == null ? generatedCases.size() : generation.actualGeneratedCount());
         entity.setWarningsJson(responseSupport.writeValue(generation.warnings()));
         entity.setInvalidCasesJson(responseSupport.writeValue(generation.invalidCases()));
         entity.setGeneratedCasesJson(responseSupport.writeValue(generatedCases));
         entity.setGenerationRawOutput(stateSupport.limitRawOutput(generation.rawContent()));
+        persistSelfCheckResult(entity, generation.selfCheck(), generation.warnings());
         entity.setUpdatedAt(LocalDateTime.now());
         aiGenerationTaskMapper.updateById(entity);
         List<AiCaseCandidateEntity> candidates = candidateService.materializeGeneratedCases(entity, generatedCases);
@@ -254,95 +283,96 @@ public class AiGenerationTaskService {
                     responseSupport.writeValue(Map.of("reason", blankToNull(generation.fallbackReason()) == null ? "" : generation.fallbackReason()))
             );
         }
+        appendSelfCheckEvents(taskId, generation.selfCheck(), generation.selfSupplementCases(), generation.provider(), generation.model());
         appendEvent(taskId, "GENERATION_COMPLETED", "GENERATING", "SUCCESS", "用例生成完成，共 " + generatedCases.size() + " 条。", null, null, generation.provider(), generation.model(), null);
 
         final String[] reviewProvider = new String[]{null};
         final String[] reviewModel = new String[]{null};
-        AiCaseService.StreamedReviewResult review;
+        AiCaseReviewOrchestrationService.StreamReviewExecutionResult reviewExecution;
         try {
-            review = aiCaseService.streamReviewGeneratedCases(
+            reviewExecution = reviewOrchestrationService.executeStreaming(
                     workspaceCode,
-                    new ReviewAiGeneratedCasesRequest(
-                            entity.getRequirementTitle(),
-                            entity.getRequirementContent(),
-                            null,
-                            generation.remainingCoverageGaps(),
-                            candidates.stream().map(candidateService::toReviewItem).toList()
-                    ),
+                    entity,
+                    candidates,
                     modelInfo -> {
                         reviewProvider[0] = modelInfo.provider();
                         reviewModel[0] = modelInfo.model();
+                        AiGenerationTaskEntity latest = requireTask(taskId);
+                        latest.setReviewProvider(modelInfo.provider());
+                        latest.setReviewModel(modelInfo.model());
+                        latest.setUpdatedAt(LocalDateTime.now());
+                        aiGenerationTaskMapper.updateById(latest);
                         appendEvent(taskId, "REVIEW_STARTED", "REVIEWING", "INFO", "评审模型已就绪：" + modelInfo.model(), null, null, modelInfo.provider(), modelInfo.model(), null);
                     },
                     update -> {
-                    AiGenerationTaskEntity latest = requireTask(taskId);
-                    if (stateSupport.isCanceled(latest)) {
-                        throw new TaskCanceledException("任务已取消，停止接收评审流。");
-                    }
-                    if ("SUPPLEMENTED".equals(update.status()) && update.supplementCase() != null) {
-                        if (generatedCases.size() >= AiCaseService.FINAL_MAX_CASES) {
+                        AiGenerationTaskEntity latest = requireTask(taskId);
+                        if (stateSupport.isCanceled(latest)) {
+                            throw new TaskCanceledException("任务已取消，停止接收评审流。");
+                        }
+                        if ("SUPPLEMENTED".equals(update.status()) && update.supplementCase() != null) {
+                            if (generatedCases.size() >= AiCaseService.FINAL_MAX_CASES) {
+                                return;
+                            }
+                            GeneratedAiCaseItem supplemented = resultMergeSupport.withStreamSupplementMetadata(update);
+                            AiCaseCandidateEntity supplementCandidate = candidateService.appendSupplement(
+                                    latest,
+                                    generatedCases.size(),
+                                    supplemented,
+                                    firstNonBlank(update.reason(), update.summary(), update.supplementReason(), update.coverageGap())
+                            );
+                            if (supplementCandidate == null) {
+                                return;
+                            }
+                            generatedCases.add(supplemented);
+                            latest.setGeneratedCasesJson(responseSupport.writeValue(generatedCases));
+                            latest.setGeneratedCount(generatedCases.size());
+                            latest.setReviewRawOutput(stateSupport.limitRawOutput(update.rawOutput()));
+                            latest.setUpdatedAt(LocalDateTime.now());
+                            aiGenerationTaskMapper.updateById(latest);
+                            int itemIndex = generatedCases.size() - 1;
+                            appendEvent(taskId, "CASE_SUPPLEMENTED", "REVIEWING", "SUCCESS", eventMessageSupport.buildSupplementedCaseEventMessage(itemIndex, supplemented), itemIndex, supplemented.title(), reviewProvider[0], reviewModel[0], responseSupport.writeValue(Map.of(
+                                    "status", update.status(),
+                                    "summary", update.summary() == null ? "" : update.summary(),
+                                    "supplementReason", update.supplementReason() == null ? "" : update.supplementReason(),
+                                    "coverageGap", update.coverageGap() == null ? "" : update.coverageGap()
+                            )));
                             return;
                         }
-                        GeneratedAiCaseItem supplemented = resultMergeSupport.withStreamSupplementMetadata(update);
-                        AiCaseCandidateEntity supplementCandidate = candidateService.appendSupplement(
-                                latest,
-                                generatedCases.size(),
-                                supplemented,
-                                firstNonBlank(update.reason(), update.summary(), update.supplementReason(), update.coverageGap())
+                        if (update.itemIndex() == null || update.itemIndex() < 0 || update.itemIndex() >= generatedCases.size()) {
+                            return;
+                        }
+                        GeneratedAiCaseItem reviewed = resultMergeSupport.applyReviewUpdate(generatedCases.get(update.itemIndex()), update);
+                        boolean reviewRecorded = candidateService.recordReview(
+                                taskId,
+                                update.candidateCaseId(),
+                                update.itemIndex(),
+                                update.status(),
+                                update.suggestedAction(),
+                                update.score(),
+                                update.confidence(),
+                                firstNonBlank(update.reason(), update.summary(), update.reviewComment()),
+                                update.suggestedCase(),
+                                update.mergeTargetCandidateIds(),
+                                update.sourceVersion(),
+                                update.sourceContentHash()
                         );
-                        if (supplementCandidate == null) {
+                        if (!reviewRecorded) {
                             return;
                         }
-                        generatedCases.add(supplemented);
+                        generatedCases.set(update.itemIndex(), reviewed);
                         latest.setGeneratedCasesJson(responseSupport.writeValue(generatedCases));
-                        latest.setGeneratedCount(generatedCases.size());
                         latest.setReviewRawOutput(stateSupport.limitRawOutput(update.rawOutput()));
                         latest.setUpdatedAt(LocalDateTime.now());
                         aiGenerationTaskMapper.updateById(latest);
-                        int itemIndex = generatedCases.size() - 1;
-                        appendEvent(taskId, "CASE_SUPPLEMENTED", "REVIEWING", "SUCCESS", eventMessageSupport.buildSupplementedCaseEventMessage(itemIndex, supplemented), itemIndex, supplemented.title(), reviewProvider[0], reviewModel[0], responseSupport.writeValue(Map.of(
+                        appendEvent(taskId, "CASE_REVIEWED", "REVIEWING", reviewEventLevel(update.status()), eventMessageSupport.buildReviewedCaseEventMessage(update.itemIndex(), reviewed.title(), update.status(), update.summary(), update.coverageComment(), update.evidenceComment()), update.itemIndex(), reviewed.title(), reviewProvider[0], reviewModel[0], responseSupport.writeValue(Map.of(
                                 "status", update.status(),
                                 "summary", update.summary() == null ? "" : update.summary(),
-                                "supplementReason", update.supplementReason() == null ? "" : update.supplementReason(),
+                                "coverageComment", update.coverageComment() == null ? "" : update.coverageComment(),
+                                "evidenceComment", update.evidenceComment() == null ? "" : update.evidenceComment(),
+                                "reviewComment", update.reviewComment() == null ? "" : update.reviewComment(),
+                                "optimizationReason", update.optimizationReason() == null ? "" : update.optimizationReason(),
                                 "coverageGap", update.coverageGap() == null ? "" : update.coverageGap()
                         )));
-                        return;
-                    }
-                    if (update.itemIndex() == null || update.itemIndex() < 0 || update.itemIndex() >= generatedCases.size()) {
-                        return;
-                    }
-                    GeneratedAiCaseItem reviewed = resultMergeSupport.applyReviewUpdate(generatedCases.get(update.itemIndex()), update);
-                    boolean reviewRecorded = candidateService.recordReview(
-                            taskId,
-                            update.candidateCaseId(),
-                            update.itemIndex(),
-                            update.status(),
-                            update.suggestedAction(),
-                            update.score(),
-                            update.confidence(),
-                            firstNonBlank(update.reason(), update.summary(), update.reviewComment()),
-                            update.suggestedCase(),
-                            update.mergeTargetCandidateIds(),
-                            update.sourceVersion(),
-                            update.sourceContentHash()
-                    );
-                    if (!reviewRecorded) {
-                        return;
-                    }
-                    generatedCases.set(update.itemIndex(), reviewed);
-                    latest.setGeneratedCasesJson(responseSupport.writeValue(generatedCases));
-                    latest.setReviewRawOutput(stateSupport.limitRawOutput(update.rawOutput()));
-                    latest.setUpdatedAt(LocalDateTime.now());
-                    aiGenerationTaskMapper.updateById(latest);
-                    appendEvent(taskId, "CASE_REVIEWED", "REVIEWING", reviewEventLevel(update.status()), eventMessageSupport.buildReviewedCaseEventMessage(update.itemIndex(), reviewed.title(), update.status(), update.summary(), update.coverageComment(), update.evidenceComment()), update.itemIndex(), reviewed.title(), reviewProvider[0], reviewModel[0], responseSupport.writeValue(Map.of(
-                            "status", update.status(),
-                            "summary", update.summary() == null ? "" : update.summary(),
-                            "coverageComment", update.coverageComment() == null ? "" : update.coverageComment(),
-                            "evidenceComment", update.evidenceComment() == null ? "" : update.evidenceComment(),
-                            "reviewComment", update.reviewComment() == null ? "" : update.reviewComment(),
-                            "optimizationReason", update.optimizationReason() == null ? "" : update.optimizationReason(),
-                            "coverageGap", update.coverageGap() == null ? "" : update.coverageGap()
-                    )));
                     }
             );
         } catch (TaskCanceledException exception) {
@@ -356,35 +386,43 @@ public class AiGenerationTaskService {
         if (stateSupport.isCanceled(entity)) {
             throw new TaskCanceledException("任务已取消，评审结果未继续写入。");
         }
-        if (review == null || review.reviewResult() == null || !review.reviewResult().structured()) {
-            stateSupport.markReviewFailed(taskId, new IllegalStateException("AI 评审返回内容无法解析为结构化结果"));
+        if (reviewExecution == null || reviewExecution.reviewResult() == null) {
+            entity.setTotalReviewBatches(reviewExecution == null ? 0 : reviewExecution.completedBatches() + reviewExecution.failedBatches());
+            entity.setCompletedReviewBatches(reviewExecution == null ? 0 : reviewExecution.completedBatches());
+            entity.setFailedReviewBatches(reviewExecution == null ? 0 : reviewExecution.failedBatches());
+            entity.setReviewedCaseCount(reviewExecution == null ? 0 : reviewExecution.reviewedCaseCount());
+            entity.setUpdatedAt(LocalDateTime.now());
+            aiGenerationTaskMapper.updateById(entity);
+            stateSupport.markReviewFailed(taskId, new IllegalStateException(firstNonBlank(
+                    reviewExecution == null ? null : reviewExecution.errorMessage(),
+                    "AI 评审批次全部失败"
+            )));
             return;
         }
-        if (review.fallbackToComplete()) {
-            generatedCases.clear();
-            generatedCases.addAll(resultMergeSupport.mergeCompleteReviewResult(generation.generatedCases(), candidates, review.reviewResult()));
-        }
+        AiReviewResult review = reviewExecution.reviewResult();
         entity.setGeneratedCasesJson(responseSupport.writeValue(generatedCases));
         entity.setGeneratedCount(generatedCases.size());
-        entity.setReviewResultJson(responseSupport.writeValue(review.reviewResult()));
-        entity.setReviewRawOutput(stateSupport.limitRawOutput(review.rawContent()));
-        stateSupport.markCompleted(entity, "任务已完成，可在记录详情中查看生成结果并继续处理。");
-        if (review.fallbackToComplete()) {
-            appendEvent(
-                    taskId,
-                    "REVIEW_STREAM_FALLBACK",
-                    "REVIEWING",
-                    "WARN",
-                    "当前评审模型不支持实时流式或流式请求失败，已降级为完整输出。",
-                    null,
-                    null,
-                    review.provider(),
-                    review.model(),
-                    responseSupport.writeValue(Map.of("reason", blankToNull(review.fallbackReason()) == null ? "" : review.fallbackReason()))
-            );
+        entity.setReviewResultJson(responseSupport.writeValue(review));
+        entity.setReviewRawOutput(stateSupport.limitRawOutput(reviewExecution.rawContent()));
+        entity.setTotalReviewBatches(reviewExecution.completedBatches() + reviewExecution.failedBatches());
+        entity.setCompletedReviewBatches(reviewExecution.completedBatches());
+        entity.setFailedReviewBatches(reviewExecution.failedBatches());
+        entity.setReviewedCaseCount(reviewExecution.reviewedCaseCount());
+        entity.setSupplementedCaseCount(reviewExecution.supplementCases().size());
+        entity.setCoverageCompleteness(reviewExecution.failedBatches() == 0
+                ? (review.unresolvedCoverageGaps() == null || review.unresolvedCoverageGaps().isEmpty() ? "COMPLETE" : "INCOMPLETE")
+                : "UNKNOWN");
+        entity.setUpdatedAt(LocalDateTime.now());
+        aiGenerationTaskMapper.updateById(entity);
+        if (reviewExecution.failedBatches() > 0 && reviewExecution.completedBatches() > 0) {
+            stateSupport.markReviewPartial(entity, "用例已生成，部分 AI 评审批次失败，成功结果仍可查看和采纳。", "失败批次：" + reviewExecution.failedBatches());
+        } else if (reviewExecution.failedBatches() > 0) {
+            stateSupport.markReviewFailed(taskId, new IllegalStateException("AI 评审批次全部失败"));
+        } else {
+            stateSupport.markCompleted(entity, "任务已完成，可在记录详情中查看生成结果并继续处理。");
         }
-        appendEvent(taskId, "REVIEW_COMPLETED", "REVIEWING", "SUCCESS", "AI 评审完成。", null, null, review.provider(), review.model(), null);
-        appendEvent(taskId, "TASK_COMPLETED", "DONE", "SUCCESS", "生成与评审已完成。", null, null, review.provider(), review.model(), null);
+        appendCompleteReviewEvents(taskId, generatedCases, review, firstNonBlank(reviewProvider[0], reviewExecution.provider()), firstNonBlank(reviewModel[0], reviewExecution.model()));
+        appendEvent(taskId, "TASK_COMPLETED", "DONE", reviewExecution.failedBatches() > 0 ? "WARN" : "SUCCESS", "生成与评审已完成。", null, null, firstNonBlank(reviewProvider[0], reviewExecution.provider()), firstNonBlank(reviewModel[0], reviewExecution.model()), null);
     }
 
     public StreamingResponseBody streamTaskEvents(String taskId, String workspaceCode) {
@@ -393,7 +431,8 @@ public class AiGenerationTaskService {
 
     private void appendCompleteReviewEvents(String taskId, List<GeneratedAiCaseItem> finalCases, AiReviewResult review, String provider, String model) {
         long optimized = finalCases.stream().filter(item -> "CHANGE_SUGGESTED".equals(item.aiReviewStatus())).count();
-        long supplemented = finalCases.stream().filter(item -> "REVIEW_SUPPLEMENTED".equals(item.aiSource())).count();
+        long supplemented = finalCases.stream().filter(item -> "REVIEW_SUPPLEMENTED".equals(item.aiSource())
+                || "SELF_REVIEW_SUPPLEMENT".equals(item.aiSource())).count();
         long notRecommended = finalCases.stream().filter(item -> "NOT_RECOMMENDED".equals(item.aiReviewStatus())).count();
         long approved = finalCases.stream().filter(item -> "APPROVED".equals(item.aiReviewStatus())).count();
         long needsAttention = finalCases.size() - approved;
@@ -405,6 +444,73 @@ public class AiGenerationTaskService {
                 "unresolvedCoverageGaps", review == null || review.unresolvedCoverageGaps() == null ? List.of() : review.unresolvedCoverageGaps()
         )));
         appendEvent(taskId, "FINAL_CASES_READY", "DONE", "SUCCESS", "可用用例已准备完成，共 " + finalCases.size() + " 条。", null, null, provider, model, null);
+    }
+
+    private void persistSelfCheckResult(
+            AiGenerationTaskEntity entity,
+            AiGenerationSelfCheckResult selfCheck,
+            List<String> warnings
+    ) {
+        if (selfCheck == null) {
+            entity.setSelfCheckStatus(AiGenerationWorkflowContract.SELF_CHECK_FAILED);
+            entity.setSelfCheckResultJson(null);
+            entity.setSelfCheckAttemptCount(1);
+        } else {
+            entity.setSelfCheckStatus(selfCheck.structured()
+                    ? AiGenerationWorkflowContract.SELF_CHECK_SUCCEEDED
+                    : AiGenerationWorkflowContract.SELF_CHECK_FAILED);
+            entity.setSelfCheckResultJson(responseSupport.writeValue(selfCheck));
+            entity.setSelfCheckAttemptCount(1);
+        }
+        List<String> warningValues = warnings == null ? List.of() : warnings;
+        entity.setHasWarnings(warningValues.isEmpty() ? 0 : 1);
+        entity.setWarningCodesJson(responseSupport.writeValue(warningValues.stream()
+                .map(this::warningCode)
+                .distinct()
+                .toList()));
+    }
+
+    private void appendSelfCheckEvents(
+            String taskId,
+            AiGenerationSelfCheckResult selfCheck,
+            List<GeneratedAiCaseItem> supplements,
+            String provider,
+            String model
+    ) {
+        if (selfCheck == null) {
+            return;
+        }
+        appendEvent(taskId, "GENERATION_SELF_CHECK_COMPLETED", "GENERATING",
+                selfCheck.structured() ? "SUCCESS" : "WARN",
+                selfCheck.structured()
+                        ? (selfCheck.complete() ? "生成模型自检完成，未发现明显遗漏。" : "生成模型自检完成，发现待补充覆盖项。")
+                        : "生成模型自检结果无法解析，已保留初始生成用例。",
+                null, null, provider, model, responseSupport.writeValue(selfCheck));
+        if (supplements != null && !supplements.isEmpty()) {
+            appendEvent(taskId, "GENERATION_SELF_SUPPLEMENTED", "GENERATING", "SUCCESS",
+                    "生成模型根据自检缺口补充 " + supplements.size() + " 条用例。",
+                    null, null, provider, model, responseSupport.writeValue(supplements));
+        }
+    }
+
+    private String warningCode(String warning) {
+        if (warning == null) {
+            return "GENERATION_WARNING";
+        }
+        String normalized = warning.toLowerCase(Locale.ROOT);
+        if (normalized.contains("自检") || normalized.contains("self")) {
+            return "SELF_CHECK_WARNING";
+        }
+        if (normalized.contains("自补") || normalized.contains("supplement")) {
+            return "SELF_SUPPLEMENT_WARNING";
+        }
+        if (normalized.contains("duplicate") || normalized.contains("重复")) {
+            return "DUPLICATE_CASE_WARNING";
+        }
+        if (normalized.contains("maximum") || normalized.contains("上限")) {
+            return "CASE_LIMIT_WARNING";
+        }
+        return "GENERATION_WARNING";
     }
 
     private AiGenerationTaskEventResponse appendEvent(
@@ -468,6 +574,22 @@ public class AiGenerationTaskService {
         }
     }
 
+    private void persistReviewSupplementCandidates(
+            AiGenerationTaskEntity task,
+            int generatedCaseCount,
+            List<GeneratedAiCaseItem> finalCases
+    ) {
+        for (int index = generatedCaseCount; index < finalCases.size(); index += 1) {
+            GeneratedAiCaseItem supplement = finalCases.get(index);
+            candidateService.appendSupplement(
+                    task,
+                    index,
+                    supplement,
+                    firstNonBlank(supplement.aiReviewSummary(), supplement.supplementReason(), supplement.coverageGap())
+            );
+        }
+    }
+
     private String reviewEventLevel(String status) {
         if ("APPROVED".equals(status) || "SUPPLEMENTED".equals(status)) {
             return "SUCCESS";
@@ -511,8 +633,8 @@ public class AiGenerationTaskService {
         return null;
     }
 
-    private static class TaskCanceledException extends RuntimeException {
-        private TaskCanceledException(String message) {
+    static class TaskCanceledException extends RuntimeException {
+        TaskCanceledException(String message) {
             super(message);
         }
     }

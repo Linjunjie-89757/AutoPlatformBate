@@ -42,6 +42,15 @@ public class AiGenerationTaskEntity extends BaseEntity {
     @TableField("error_code")
     private String errorCode;
 
+    @TableField("self_check_status")
+    private String selfCheckStatus;
+
+    @TableField("self_check_result_json")
+    private String selfCheckResultJson;
+
+    @TableField("self_check_attempt_count")
+    private Integer selfCheckAttemptCount;
+
     @TableField("current_step")
     private Integer currentStep;
 
@@ -67,8 +76,59 @@ public class AiGenerationTaskEntity extends BaseEntity {
 
     private String model;
 
+    @TableField("generation_provider")
+    private String generationProvider;
+
+    @TableField("generation_model")
+    private String generationModel;
+
+    @TableField("generation_prompt_version")
+    private String generationPromptVersion;
+
+    @TableField("generation_prompt_hash")
+    private String generationPromptHash;
+
+    @TableField("generation_temperature")
+    private Double generationTemperature;
+
+    @TableField("review_provider")
+    private String reviewProvider;
+
+    @TableField("review_model")
+    private String reviewModel;
+
+    @TableField("review_prompt_version")
+    private String reviewPromptVersion;
+
+    @TableField("review_prompt_hash")
+    private String reviewPromptHash;
+
+    @TableField("review_temperature")
+    private Double reviewTemperature;
+
     @TableField("asset_ids_json")
     private String assetIdsJson;
+
+    @TableField("input_mode")
+    private String inputMode;
+
+    @TableField("image_digest")
+    private String imageDigest;
+
+    @TableField("image_count")
+    private Integer imageCount;
+
+    @TableField("input_token_count")
+    private Integer inputTokenCount;
+
+    @TableField("output_token_count")
+    private Integer outputTokenCount;
+
+    @TableField("review_input_token_count")
+    private Integer reviewInputTokenCount;
+
+    @TableField("review_output_token_count")
+    private Integer reviewOutputTokenCount;
 
     @TableField("warnings_json")
     private String warningsJson;
@@ -87,6 +147,30 @@ public class AiGenerationTaskEntity extends BaseEntity {
 
     @TableField("review_raw_output")
     private String reviewRawOutput;
+
+    @TableField("warning_codes_json")
+    private String warningCodesJson;
+
+    @TableField("has_warnings")
+    private Integer hasWarnings;
+
+    @TableField("total_review_batches")
+    private Integer totalReviewBatches;
+
+    @TableField("completed_review_batches")
+    private Integer completedReviewBatches;
+
+    @TableField("failed_review_batches")
+    private Integer failedReviewBatches;
+
+    @TableField("reviewed_case_count")
+    private Integer reviewedCaseCount;
+
+    @TableField("supplemented_case_count")
+    private Integer supplementedCaseCount;
+
+    @TableField("coverage_completeness")
+    private String coverageCompleteness;
 
     @TableField("adopted_case_indexes_json")
     private String adoptedCaseIndexesJson;

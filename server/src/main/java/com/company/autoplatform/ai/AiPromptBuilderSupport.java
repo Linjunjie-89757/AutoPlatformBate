@@ -131,6 +131,15 @@ public class AiPromptBuilderSupport {
     }
 
     String buildGeneratedCasesReviewPrompt(AiCaseConfigEntity config, ReviewAiGeneratedCasesRequest request, boolean streamMode) {
+        return buildGeneratedCasesReviewPrompt(config, request, streamMode, true);
+    }
+
+    String buildGeneratedCasesReviewPrompt(
+            AiCaseConfigEntity config,
+            ReviewAiGeneratedCasesRequest request,
+            boolean streamMode,
+            boolean allowSupplement
+    ) {
         StringBuilder builder = new StringBuilder();
         builder.append(config.getPromptTemplate()).append("\n\n");
         builder.append("[Requirement Title] ").append(request.requirementTitle().trim()).append('\n');
@@ -146,6 +155,9 @@ public class AiPromptBuilderSupport {
                 }
             }
             builder.append("Use these gaps as input, but independently verify coverage against the requirement.\n\n");
+        }
+        if (!allowSupplement) {
+            builder.append("[Batch Review Rule]\n本次只评审当前批次已有用例，不要输出 supplementCases，也不要在本批次直接补充新用例。所有缺口只写入 unresolvedCoverageGaps，待全部批次汇总后统一处理。\n\n");
         }
         builder.append("[Candidate Cases To Review]\n");
         int index = 0;
@@ -254,6 +266,158 @@ public class AiPromptBuilderSupport {
                     """);
         }
         return builder.toString();
+    }
+
+    String buildGenerationSelfCheckPrompt(
+            AiCaseConfigEntity config,
+            GenerateAiCasesRequest request,
+            List<GeneratedAiCaseItem> generatedCases
+    ) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(config.getPromptTemplate()).append("\n\n");
+        builder.append("[Generation Self-Check]\n");
+        builder.append("检查已经生成的测试用例是否遗漏需求中的重要测试覆盖。只检查，不修改已有用例。\n");
+        builder.append("[Requirement Title] ").append(request.requirementTitle().trim()).append('\n');
+        builder.append("[Requirement Content]\n").append(request.requirementContent().trim()).append("\n\n");
+        builder.append("[Generated Cases]\n");
+        appendCaseSummary(builder, generatedCases);
+        builder.append("""
+                [Output Requirements]
+                Return JSON only:
+                {
+                  "is_complete": true,
+                  "missing_coverage_items": ["具体遗漏点"],
+                  "duplicate_case_indexes": [0],
+                  "supplement_guidance": "仅描述需要补充的场景和原因"
+                }
+                Rules:
+                - is_complete means no obvious high-value gap was found, not proof of complete coverage.
+                - Only report meaningful gaps that can become executable test cases.
+                - Do not output test case objects in this response.
+                - Do not treat minor wording differences as missing coverage or duplicates.
+                """);
+        return builder.toString();
+    }
+
+    String buildGeneratedCasesCoverageSupplementPrompt(
+            AiCaseConfigEntity config,
+            ReviewAiGeneratedCasesRequest request,
+            List<String> coverageGaps
+    ) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(config.getPromptTemplate()).append("\n\n");
+        builder.append("[Coverage Review Supplement]\n");
+        builder.append("根据全部评审批次汇总出的缺口，只补充重要且可执行的新测试用例。不要修改已有用例，不要重复已有用例。\n");
+        builder.append("[Requirement Title] ").append(request.requirementTitle().trim()).append('\n');
+        builder.append("[Requirement Content]\n").append(request.requirementContent().trim()).append("\n\n");
+        builder.append("[Global Coverage Gaps]\n");
+        for (String gap : coverageGaps == null ? List.<String>of() : coverageGaps) {
+            if (blankToNull(gap) != null) {
+                builder.append("- ").append(gap.trim()).append('\n');
+            }
+        }
+        builder.append("\n[Existing Cases To Avoid]\n");
+        appendCaseSummary(builder, request.generatedCases().stream().map(this::toGeneratedCaseSummary).toList());
+        builder.append("""
+                [Output Requirements]
+                Return JSON only:
+                {
+                  "supplementCases":[{
+                    "title":"...",
+                    "caseType":"FUNCTION|BOUNDARY|EXCEPTION|REGRESSION",
+                    "priority":"P0|P1|P2|P3",
+                    "precondition":"...",
+                    "steps":"...",
+                    "expectedResult":"...",
+                    "riskNotes":"...",
+                    "testAngle":"...",
+                    "generationReason":"why this case is needed",
+                    "requirementEvidence":"requirement text, image/prototype evidence, or risk inference",
+                    "supplementReason":"what missing coverage this case fills",
+                    "coverageGap":"the gap being covered"
+                  }],
+                  "unresolvedCoverageGaps":["gap that remains unresolved"]
+                }
+                Rules:
+                - Output at most 20 supplement cases.
+                - Only output cases that directly address the listed global gaps.
+                - Do not output caseDecisions or explanatory prose.
+                """);
+        return builder.toString();
+    }
+
+    private GeneratedAiCaseItem toGeneratedCaseSummary(AiExistingCaseItem item) {
+        return new GeneratedAiCaseItem(
+                item.title(), item.caseType(), item.priority(), item.precondition(), item.steps(), item.expectedResult(),
+                null, item.testAngle(), item.generationReason(), item.requirementEvidence(), null, null, null, null,
+                null, null, null, null, null, null, null, null
+        );
+    }
+
+    String buildGenerationSupplementPrompt(
+            AiCaseConfigEntity config,
+            GenerateAiCasesRequest request,
+            List<GeneratedAiCaseItem> generatedCases,
+            List<String> missingGaps,
+            String supplementGuidance,
+            int maxCases
+    ) {
+        StringBuilder builder = new StringBuilder();
+        builder.append(config.getPromptTemplate()).append("\n\n");
+        builder.append("[Generation Targeted Supplement]\n");
+        builder.append("只针对明确缺口补充新的高价值测试用例，不要重复或修改已有用例。\n");
+        builder.append("[Requirement Title] ").append(request.requirementTitle().trim()).append('\n');
+        builder.append("[Requirement Content]\n").append(request.requirementContent().trim()).append("\n\n");
+        builder.append("[Missing Coverage Items]\n");
+        for (String gap : missingGaps == null ? List.<String>of() : missingGaps) {
+            if (blankToNull(gap) != null) {
+                builder.append("- ").append(gap.trim()).append('\n');
+            }
+        }
+        if (blankToNull(supplementGuidance) != null) {
+            builder.append("[Supplement Guidance]\n").append(supplementGuidance.trim()).append("\n");
+        }
+        builder.append("[Existing Cases To Avoid]\n");
+        appendCaseSummary(builder, generatedCases);
+        builder.append("""
+                [Output Requirements]
+                Return JSON only:
+                {
+                  "cases": [{
+                    "title":"...",
+                    "caseType":"FUNCTION|BOUNDARY|EXCEPTION|REGRESSION",
+                    "priority":"P0|P1|P2|P3",
+                    "precondition":"...",
+                    "steps":"...",
+                    "expectedResult":"...",
+                    "riskNotes":"...",
+                    "testAngle":"...",
+                    "generationReason":"...",
+                    "requirementEvidence":"...",
+                    "supplementReason":"补充原因",
+                    "coverageGap":"对应缺口"
+                  }]
+                }
+                Rules:
+                - Output at most the requested supplement limit.
+                - Output only cases that directly address the listed gaps.
+                - Do not output explanations outside JSON.
+                """);
+        builder.append("[Supplement Limit] ").append(maxCases).append('\n');
+        return builder.toString();
+    }
+
+    private void appendCaseSummary(StringBuilder builder, List<GeneratedAiCaseItem> cases) {
+        int index = 0;
+        for (GeneratedAiCaseItem item : cases == null ? List.<GeneratedAiCaseItem>of() : cases) {
+            builder.append(index++).append(". ")
+                    .append(nullSafe(item.title())).append(" / ")
+                    .append(nullSafe(item.caseType())).append(" / ")
+                    .append(nullSafe(item.priority())).append('\n')
+                    .append("   Precondition: ").append(nullSafe(item.precondition())).append('\n')
+                    .append("   Steps: ").append(nullSafe(item.steps())).append('\n')
+                    .append("   Expected: ").append(nullSafe(item.expectedResult())).append('\n');
+        }
     }
 
     String buildSavedCaseReviewPrompt(AiCaseConfigEntity config, CaseDetailResponse detail) {
