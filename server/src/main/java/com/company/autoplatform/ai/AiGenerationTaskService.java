@@ -144,11 +144,14 @@ public class AiGenerationTaskService {
             stateSupport.markReviewPartial(entity, "部分失败评审批次重试完成，仍有失败批次。", "失败批次：" + reviewExecution.failedBatches());
         } else if (reviewExecution.failedBatches() > 0) {
             stateSupport.markReviewFailed(taskId, new IllegalStateException("AI 评审批次重试全部失败"));
+        } else if (reviewExecution.supplementFailed()) {
+            stateSupport.markReviewCompletedWithWarnings(entity, "评审重试完成，但覆盖缺口补充失败，仍可查看和采纳。", "AI_REVIEW_SUPPLEMENT_FAILED", reviewExecution.supplementFailureMessage());
         } else {
             stateSupport.markCompleted(entity, "评审批次重试完成，可在记录详情中查看结果并继续处理。");
         }
-        appendCompleteReviewEvents(taskId, finalCases, mergedReview, entity.getReviewProvider(), entity.getReviewModel());
-        appendEvent(taskId, "TASK_COMPLETED", "DONE", reviewExecution.failedBatches() > 0 ? "WARN" : "SUCCESS", "评审重试流程已完成。", null, null, entity.getReviewProvider(), entity.getReviewModel(), null);
+        boolean reviewWarning = reviewExecution.failedBatches() > 0 || reviewExecution.supplementFailed();
+        appendCompleteReviewEvents(taskId, finalCases, mergedReview, entity.getReviewProvider(), entity.getReviewModel(), reviewWarning);
+        appendEvent(taskId, "TASK_COMPLETED", "DONE", reviewWarning ? "WARN" : "SUCCESS", reviewWarning ? "评审重试流程已完成，但存在评审警告。" : "评审重试流程已完成。", null, null, entity.getReviewProvider(), entity.getReviewModel(), null);
     }
 
     public AiGenerationTaskResponse updateTask(String taskId, String workspaceCode, UpdateAiGenerationTaskRequest request) {
@@ -183,6 +186,7 @@ public class AiGenerationTaskService {
         appendEvent(entity.getTaskId(), "TASK_STARTED", "SETUP", "INFO", "任务开始执行完整输出链路", null, null, null, null, null);
         stateSupport.transitionToGenerating(entity);
         List<Long> assetIds = responseSupport.readValue(entity.getAssetIdsJson(), new TypeReference<List<Long>>() {}, List.of());
+        syncImageAudit(entity, assetIds);
         if (!assetIds.isEmpty()) {
             appendEvent(entity.getTaskId(), "IMAGE_ASSETS_SENT", "GENERATING", "INFO", "已提交 " + assetIds.size() + " 个图片素材，开始图文生成。", null, null, null, null, null);
         }
@@ -213,6 +217,7 @@ public class AiGenerationTaskService {
         entity.setGeneratedCasesJson(responseSupport.writeValue(generation.generatedCases()));
         entity.setGenerationRawOutput(stateSupport.limitRawOutput(generation.rawContent()));
         persistSelfCheckResult(entity, generation.selfCheck(), generation.warnings());
+        applyImageFallbackAudit(entity, generation.ignoredImages());
         entity.setUpdatedAt(LocalDateTime.now());
         aiGenerationTaskMapper.updateById(entity);
         List<AiCaseCandidateEntity> candidates = candidateService.materializeGeneratedCases(entity, generation.generatedCases());
@@ -254,6 +259,8 @@ public class AiGenerationTaskService {
             return;
         }
         AiReviewResult review = reviewExecution.reviewResult();
+        entity.setReviewProvider(reviewExecution.provider());
+        entity.setReviewModel(reviewExecution.model());
         List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(generation.generatedCases(), candidates, review);
         persistReviewSupplementCandidates(entity, generation.generatedCases().size(), finalCases);
         entity.setGeneratedCasesJson(responseSupport.writeValue(finalCases));
@@ -274,11 +281,14 @@ public class AiGenerationTaskService {
             stateSupport.markReviewPartial(entity, "用例已生成，部分 AI 评审批次失败，成功结果仍可查看和采纳。", "失败批次：" + reviewExecution.failedBatches());
         } else if (reviewExecution.failedBatches() > 0) {
             stateSupport.markReviewFailed(entity.getTaskId(), new IllegalStateException("AI 评审批次全部失败"));
+        } else if (reviewExecution.supplementFailed()) {
+            stateSupport.markReviewCompletedWithWarnings(entity, "评审完成，但覆盖缺口补充失败，仍可查看和采纳。", "AI_REVIEW_SUPPLEMENT_FAILED", reviewExecution.supplementFailureMessage());
         } else {
             stateSupport.markCompleted(entity, "任务已完成，可在记录详情中查看生成结果并继续处理。");
         }
-        appendCompleteReviewEvents(entity.getTaskId(), finalCases, review, generation.provider(), generation.model());
-        appendEvent(entity.getTaskId(), "TASK_COMPLETED", "DONE", "SUCCESS", "生成与评审已完成。", null, null, generation.provider(), generation.model(), null);
+        boolean reviewWarning = reviewExecution.failedBatches() > 0 || reviewExecution.supplementFailed();
+        appendCompleteReviewEvents(entity.getTaskId(), finalCases, review, generation.provider(), generation.model(), reviewWarning);
+        appendEvent(entity.getTaskId(), "TASK_COMPLETED", "DONE", reviewWarning ? "WARN" : "SUCCESS", reviewWarning ? "生成与评审已完成，但存在评审警告。" : "生成与评审已完成。", null, null, generation.provider(), generation.model(), null);
     }
 
     private void executeStreamTask(AiGenerationTaskEntity entity, String workspaceCode) {
@@ -286,6 +296,7 @@ public class AiGenerationTaskService {
         appendEvent(taskId, "TASK_STARTED", "SETUP", "INFO", "任务开始执行实时流式输出链路", null, null, null, null, null);
         stateSupport.transitionToGenerating(entity);
         List<Long> assetIds = responseSupport.readValue(entity.getAssetIdsJson(), new TypeReference<List<Long>>() {}, List.of());
+        syncImageAudit(entity, assetIds);
         if (!assetIds.isEmpty()) {
             appendEvent(taskId, "IMAGE_ASSETS_SENT", "GENERATING", "INFO", "已提交 " + assetIds.size() + " 个图片素材，开始图文生成。", null, null, null, null, null);
         }
@@ -338,6 +349,7 @@ public class AiGenerationTaskService {
         entity.setGeneratedCasesJson(responseSupport.writeValue(generatedCases));
         entity.setGenerationRawOutput(stateSupport.limitRawOutput(generation.rawContent()));
         persistSelfCheckResult(entity, generation.selfCheck(), generation.warnings());
+        applyImageFallbackAudit(entity, generation.ignoredImages());
         entity.setUpdatedAt(LocalDateTime.now());
         aiGenerationTaskMapper.updateById(entity);
         List<AiCaseCandidateEntity> candidates = candidateService.materializeGeneratedCases(entity, generatedCases);
@@ -478,6 +490,8 @@ public class AiGenerationTaskService {
             return;
         }
         AiReviewResult review = reviewExecution.reviewResult();
+        entity.setReviewProvider(firstNonBlank(reviewProvider[0], reviewExecution.provider()));
+        entity.setReviewModel(firstNonBlank(reviewModel[0], reviewExecution.model()));
         entity.setGeneratedCasesJson(responseSupport.writeValue(generatedCases));
         entity.setGeneratedCount(generatedCases.size());
         entity.setReviewResultJson(responseSupport.writeValue(review));
@@ -496,25 +510,57 @@ public class AiGenerationTaskService {
             stateSupport.markReviewPartial(entity, "用例已生成，部分 AI 评审批次失败，成功结果仍可查看和采纳。", "失败批次：" + reviewExecution.failedBatches());
         } else if (reviewExecution.failedBatches() > 0) {
             stateSupport.markReviewFailed(taskId, new IllegalStateException("AI 评审批次全部失败"));
+        } else if (reviewExecution.supplementFailed()) {
+            stateSupport.markReviewCompletedWithWarnings(entity, "评审完成，但覆盖缺口补充失败，仍可查看和采纳。", "AI_REVIEW_SUPPLEMENT_FAILED", reviewExecution.supplementFailureMessage());
         } else {
             stateSupport.markCompleted(entity, "任务已完成，可在记录详情中查看生成结果并继续处理。");
         }
-        appendCompleteReviewEvents(taskId, generatedCases, review, firstNonBlank(reviewProvider[0], reviewExecution.provider()), firstNonBlank(reviewModel[0], reviewExecution.model()));
-        appendEvent(taskId, "TASK_COMPLETED", "DONE", reviewExecution.failedBatches() > 0 ? "WARN" : "SUCCESS", "生成与评审已完成。", null, null, firstNonBlank(reviewProvider[0], reviewExecution.provider()), firstNonBlank(reviewModel[0], reviewExecution.model()), null);
+        boolean reviewWarning = reviewExecution.failedBatches() > 0 || reviewExecution.supplementFailed();
+        appendCompleteReviewEvents(taskId, generatedCases, review, firstNonBlank(reviewProvider[0], reviewExecution.provider()), firstNonBlank(reviewModel[0], reviewExecution.model()), reviewWarning);
+        appendEvent(taskId, "TASK_COMPLETED", "DONE", reviewWarning ? "WARN" : "SUCCESS", reviewWarning ? "生成与评审已完成，但存在评审警告。" : "生成与评审已完成。", null, null, firstNonBlank(reviewProvider[0], reviewExecution.provider()), firstNonBlank(reviewModel[0], reviewExecution.model()), null);
     }
 
     public StreamingResponseBody streamTaskEvents(String taskId, String workspaceCode) {
         return sseSupport.streamTaskEvents(taskId, workspaceCode);
     }
 
-    private void appendCompleteReviewEvents(String taskId, List<GeneratedAiCaseItem> finalCases, AiReviewResult review, String provider, String model) {
+    private void syncImageAudit(AiGenerationTaskEntity entity, List<Long> assetIds) {
+        int imageCount = assetIds == null ? 0 : assetIds.size();
+        if (imageCount == 0) {
+            return;
+        }
+        entity.setImageCount(imageCount);
+        entity.setInputMode("MULTIMODAL");
+        entity.setUpdatedAt(LocalDateTime.now());
+        aiGenerationTaskMapper.updateById(entity);
+    }
+
+    private void applyImageFallbackAudit(AiGenerationTaskEntity entity, boolean ignoredImages) {
+        if (ignoredImages) {
+            entity.setInputMode("TEXT_ONLY_FALLBACK");
+            entity.setHasWarnings(1);
+            List<String> warnings = responseSupport.readValue(
+                    entity.getWarningsJson(), new TypeReference<List<String>>() {}, new ArrayList<>()
+            );
+            if (warnings.stream().noneMatch(item -> item.contains("图片素材"))) {
+                warnings.add("图片素材未被当前模型支持，已降级为纯文本生成。");
+            }
+            entity.setWarningsJson(responseSupport.writeValue(warnings));
+            entity.setWarningCodesJson(responseSupport.writeValue(warnings.stream()
+                    .map(this::warningCode)
+                    .distinct()
+                    .toList()));
+        }
+    }
+
+    private void appendCompleteReviewEvents(String taskId, List<GeneratedAiCaseItem> finalCases, AiReviewResult review, String provider, String model, boolean warning) {
         long optimized = finalCases.stream().filter(item -> "CHANGE_SUGGESTED".equals(item.aiReviewStatus())).count();
         long supplemented = finalCases.stream().filter(item -> "REVIEW_SUPPLEMENTED".equals(item.aiSource())
                 || "SELF_REVIEW_SUPPLEMENT".equals(item.aiSource())).count();
         long notRecommended = finalCases.stream().filter(item -> "NOT_RECOMMENDED".equals(item.aiReviewStatus())).count();
         long approved = finalCases.stream().filter(item -> "APPROVED".equals(item.aiReviewStatus())).count();
         long needsAttention = finalCases.size() - approved;
-        appendEvent(taskId, "REVIEW_COMPLETED", "REVIEWING", "SUCCESS", "AI 评审完成：通过 " + approved + " 条，待人工处理 " + needsAttention + " 条。", null, null, provider, model, responseSupport.writeValue(Map.of(
+        appendEvent(taskId, "REVIEW_COMPLETED", "REVIEWING", warning ? "WARN" : "SUCCESS", "AI 评审完成：通过 " + approved + " 条，待人工处理 " + needsAttention + " 条。", null, null, provider, model, responseSupport.writeValue(Map.of(
                 "approved", approved,
                 "optimized", optimized,
                 "supplemented", supplemented,

@@ -102,14 +102,15 @@ public class AiCaseService {
                 ? (config.getMaxCases() == null ? DEFAULT_MAX_CASES : config.getMaxCases())
                 : request.maxCases();
         int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
+        int initialMaxCases = initialGenerationLimit(effectiveMaxCases);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
         List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         boolean ignoredImages = false;
-        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, effectiveMaxCases, assets, false);
+        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, assets, false);
         AiGeneratedCasesResult result;
         try {
             result = aiProviderClient.generate(
-                    resolved.profileWithMaxCases(effectiveMaxCases),
+                    resolved.profileWithMaxCases(initialMaxCases),
                     resolved.apiKey(),
                     prompt,
                     imageInputs
@@ -119,9 +120,9 @@ public class AiCaseService {
                 throw exception;
             }
             ignoredImages = true;
-            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, effectiveMaxCases, List.of(), false);
+            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, List.of(), false);
             result = aiProviderClient.generate(
-                    resolved.profileWithMaxCases(effectiveMaxCases),
+                    resolved.profileWithMaxCases(initialMaxCases),
                     resolved.apiKey(),
                     prompt,
                     List.of()
@@ -171,13 +172,14 @@ public class AiCaseService {
                 ? (config.getMaxCases() == null ? DEFAULT_MAX_CASES : config.getMaxCases())
                 : request.maxCases();
         int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
+        int initialMaxCases = initialGenerationLimit(effectiveMaxCases);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
         List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         if (modelConsumer != null) {
             modelConsumer.accept(new AiStreamModelInfo(resolved.profile().provider(), config.getModel()));
         }
         boolean ignoredImages = false;
-        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, effectiveMaxCases, assets, true);
+        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, assets, true);
         List<GeneratedAiCaseItem> generatedCases = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<AiInvalidCaseItem> invalidCases = new ArrayList<>();
@@ -188,7 +190,7 @@ public class AiCaseService {
             lineBuffer.append(delta);
             aiResponseParsingSupport.drainCompleteJsonValues(lineBuffer, value -> aiResponseParsingSupport.emitGeneratedCaseValue(
                     value,
-                    effectiveMaxCases,
+                    initialMaxCases,
                     generatedCases,
                     warnings,
                     invalidCases,
@@ -200,7 +202,7 @@ public class AiCaseService {
         AiProviderClient.StreamContentResult streamResult;
         try {
             streamResult = streamStructuredContentWithImages(
-                    resolved.profileWithMaxCases(effectiveMaxCases),
+                    resolved.profileWithMaxCases(initialMaxCases),
                     resolved.apiKey(),
                     prompt,
                     imageInputs,
@@ -216,9 +218,9 @@ public class AiCaseService {
             generatedCases.clear();
             warnings.clear();
             invalidCases.clear();
-            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, effectiveMaxCases, List.of(), true);
+            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, List.of(), true);
             streamResult = aiProviderClient.streamStructuredContentWithResult(
-                    resolved.profileWithMaxCases(effectiveMaxCases),
+                    resolved.profileWithMaxCases(initialMaxCases),
                     resolved.apiKey(),
                     prompt,
                     deltaConsumer
@@ -241,17 +243,17 @@ public class AiCaseService {
                 lineBuffer,
                 value -> aiResponseParsingSupport.emitGeneratedCaseValue(
                         value,
-                        effectiveMaxCases,
+                        initialMaxCases,
                         generatedCases,
                         warnings,
                         invalidCases,
                         new StringBuilder(rawOutput),
                         caseConsumer
                 ));
-        AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawContent, effectiveMaxCases);
+        AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawContent, initialMaxCases);
         if (generatedCases.isEmpty()) {
             for (GeneratedAiCaseItem item : parsed.generatedCases()) {
-                if (generatedCases.size() >= effectiveMaxCases) {
+                if (generatedCases.size() >= initialMaxCases) {
                     break;
                 }
                 generatedCases.add(item);
@@ -305,6 +307,17 @@ public class AiCaseService {
                 enhancement.selfCheck(),
                 enhancement.selfSupplementCases()
         );
+    }
+
+    private int initialGenerationLimit(int effectiveMaxCases) {
+        if (effectiveMaxCases <= 1) {
+            return effectiveMaxCases;
+        }
+        int reservedForSelfSupplement = Math.min(
+                MAX_SELF_SUPPLEMENT_CASES,
+                Math.max(1, effectiveMaxCases / 5)
+        );
+        return Math.max(1, effectiveMaxCases - reservedForSelfSupplement);
     }
 
     private GenerationEnhancement enhanceGeneratedCases(
@@ -491,8 +504,15 @@ public class AiCaseService {
         return reviewGeneratedCases(headerWorkspaceCode, request, true);
     }
 
-    public AiReviewResult reviewGeneratedCasesBatch(String headerWorkspaceCode, ReviewAiGeneratedCasesRequest request) {
-        return reviewGeneratedCases(headerWorkspaceCode, request, false);
+    public ReviewedCasesResult reviewGeneratedCasesBatch(String headerWorkspaceCode, ReviewAiGeneratedCasesRequest request) {
+        ResolvedRoleConfig resolved = aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_REVIEWER);
+        AiCaseConfigEntity config = resolved.roleConfig();
+        String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, false, false);
+        return new ReviewedCasesResult(
+                resolved.profile().provider(),
+                config.getModel(),
+                aiProviderClient.review(resolved.profile(), resolved.apiKey(), prompt)
+        );
     }
 
     private AiReviewResult reviewGeneratedCases(
@@ -686,6 +706,13 @@ public class AiCaseService {
             String rawContent,
             boolean fallbackToComplete,
             String fallbackReason
+    ) {
+    }
+
+    public record ReviewedCasesResult(
+            String provider,
+            String model,
+            AiReviewResult reviewResult
     ) {
     }
 }

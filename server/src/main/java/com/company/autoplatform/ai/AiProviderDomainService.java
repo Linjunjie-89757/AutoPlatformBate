@@ -153,7 +153,13 @@ public class AiProviderDomainService {
         entity.setLastTestMessage(null);
         entity.setLastVerifiedAt(verifiedAt);
         entity.setUpdatedAt(verifiedAt);
-        aiProviderConnectionMapper.updateById(entity);
+        aiProviderConnectionMapper.update(null, new LambdaUpdateWrapper<AiProviderConnectionEntity>()
+                .eq(AiProviderConnectionEntity::getId, entity.getId())
+                .set(AiProviderConnectionEntity::getLastTestAt, verifiedAt)
+                .set(AiProviderConnectionEntity::getLastTestStatus, "SUCCESS")
+                .set(AiProviderConnectionEntity::getLastTestMessage, null)
+                .set(AiProviderConnectionEntity::getLastVerifiedAt, verifiedAt)
+                .set(AiProviderConnectionEntity::getUpdatedAt, verifiedAt));
         return new TestAiProviderConnectionResponse(
                 true,
                 entity.getId(),

@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.common.BadRequestException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -48,7 +47,6 @@ public class AiCaseReviewOrchestrationService {
         this.responseSupport = responseSupport;
     }
 
-    @Transactional
     public ReviewExecutionResult execute(
             String workspaceCode,
             AiGenerationTaskEntity task,
@@ -98,6 +96,8 @@ public class AiCaseReviewOrchestrationService {
         String reviewResultValue = null;
         String reviewSummary = null;
         String firstFailureMessage = null;
+        boolean supplementFailed = false;
+        String supplementFailureMessage = null;
         StringBuilder rawContent = new StringBuilder();
 
         for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += REVIEW_BATCH_SIZE, batchNo += 1) {
@@ -105,13 +105,14 @@ public class AiCaseReviewOrchestrationService {
             List<AiCaseCandidateEntity> batchCandidates = safeCandidates.subList(start, end);
             AiCaseReviewBatchEntity batch = createBatch(task, runId, batchNo, batchCandidates);
             try {
-                AiReviewResult result = aiCaseService.reviewGeneratedCasesBatch(workspaceCode, new ReviewAiGeneratedCasesRequest(
+                AiCaseService.ReviewedCasesResult reviewedCases = aiCaseService.reviewGeneratedCasesBatch(workspaceCode, new ReviewAiGeneratedCasesRequest(
                         task.getRequirementTitle(),
                         task.getRequirementContent(),
                         null,
                         List.copyOf(coverageGaps),
                         batchCandidates.stream().map(candidateService::toReviewItem).toList()
                 ));
+                AiReviewResult result = reviewedCases == null ? null : reviewedCases.reviewResult();
                 if (result == null || !result.structured()) {
                     throw new BadRequestException("AI 评审返回内容无法解析为结构化结果");
                 }
@@ -134,8 +135,10 @@ public class AiCaseReviewOrchestrationService {
                     }
                     rawContent.append(result.rawContent());
                 }
-                firstProvider = firstNonBlank(firstProvider, "reviewer");
-                firstModel = firstNonBlank(firstModel, "reviewer");
+                firstProvider = firstNonBlank(firstProvider, reviewedCases.provider());
+                firstModel = firstNonBlank(firstModel, reviewedCases.model());
+                batch.setProvider(reviewedCases.provider());
+                batch.setModel(reviewedCases.model());
                 batch.setStatus("SUCCEEDED");
                 batch.setResultJson(responseSupport.writeValue(result));
                 batch.setRawOutput(limitRawOutput(result.rawContent()));
@@ -176,18 +179,26 @@ public class AiCaseReviewOrchestrationService {
                     coverageGaps.addAll(nonBlank(supplementResult.unresolvedCoverageGaps()));
                 }
             } catch (RuntimeException exception) {
-                issues.add("评审补充失败：" + safeMessage(exception));
+                supplementFailed = true;
+                supplementFailureMessage = safeMessage(exception);
+                issues.add("评审补充失败：" + supplementFailureMessage);
             }
         }
 
         List<String> normalizedGaps = List.copyOf(coverageGaps);
         persistCoverageItems(task, normalizedGaps);
-        run.setStatus(failedBatches == 0 ? "SUCCEEDED" : (completedBatches == 0 ? "FAILED" : "PARTIAL"));
+        run.setStatus(failedBatches == 0
+                ? (supplementFailed ? "SUCCEEDED_WITH_WARNINGS" : "SUCCEEDED")
+                : (completedBatches == 0 ? "FAILED" : "PARTIAL"));
         run.setCompletedBatches(completedBatches);
         run.setFailedBatches(failedBatches);
         run.setReviewedCaseCount(reviewedCaseCount);
         run.setSupplementedCaseCount(supplements.size());
         run.setCoverageCompleteness(failedBatches == 0 ? (normalizedGaps.isEmpty() ? "COMPLETE" : "INCOMPLETE") : "UNKNOWN");
+        run.setProvider(firstProvider);
+        run.setModel(firstModel);
+        run.setErrorCode(supplementFailed ? "AI_REVIEW_SUPPLEMENT_FAILED" : null);
+        run.setErrorMessage(supplementFailureMessage);
         run.setGlobalResultJson(responseSupport.writeValue(Map.of(
                 "issues", issues,
                 "suggestions", suggestions,
@@ -207,7 +218,11 @@ public class AiCaseReviewOrchestrationService {
                     supplements,
                     runId,
                     firstFailureMessage,
-                    rawContent.toString()
+                    rawContent.toString(),
+                    supplementFailed,
+                    supplementFailureMessage,
+                    firstProvider,
+                    firstModel
             );
         }
         return new ReviewExecutionResult(
@@ -228,11 +243,14 @@ public class AiCaseReviewOrchestrationService {
                 supplements,
                 runId,
                 firstFailureMessage,
-                rawContent.toString()
+                rawContent.toString(),
+                supplementFailed,
+                supplementFailureMessage,
+                firstProvider,
+                firstModel
         );
     }
 
-    @Transactional
     public ReviewExecutionResult retryFailedBatches(String workspaceCode, AiGenerationTaskEntity task) {
         AiCaseReviewRunEntity latestRun = reviewRunMapper.selectOne(new LambdaQueryWrapper<AiCaseReviewRunEntity>()
                 .eq(AiCaseReviewRunEntity::getTaskId, task.getTaskId())
@@ -281,7 +299,6 @@ public class AiCaseReviewOrchestrationService {
         );
     }
 
-    @Transactional
     public StreamReviewExecutionResult executeStreaming(
             String workspaceCode,
             AiGenerationTaskEntity task,
@@ -322,6 +339,8 @@ public class AiCaseReviewOrchestrationService {
         String reviewResultValue = null;
         String reviewSummary = null;
         String firstFailureMessage = null;
+        boolean supplementFailed = false;
+        String supplementFailureMessage = null;
         StringBuilder rawContent = new StringBuilder();
 
         for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += REVIEW_BATCH_SIZE, batchNo += 1) {
@@ -366,6 +385,8 @@ public class AiCaseReviewOrchestrationService {
                 reviewSummary = firstNonBlank(reviewSummary, result.summary());
                 firstProvider = firstNonBlank(firstProvider, streamed.provider());
                 firstModel = firstNonBlank(firstModel, streamed.model());
+                batch.setProvider(streamed.provider());
+                batch.setModel(streamed.model());
                 appendRaw(rawContent, streamed.rawContent());
                 batch.setStatus("SUCCEEDED");
                 batch.setResultJson(responseSupport.writeValue(result));
@@ -437,18 +458,26 @@ public class AiCaseReviewOrchestrationService {
                     reviewSummary = firstNonBlank(reviewSummary, supplementResult.summary());
                 }
             } catch (RuntimeException exception) {
-                issues.add("评审补充失败：" + safeMessage(exception));
+                supplementFailed = true;
+                supplementFailureMessage = safeMessage(exception);
+                issues.add("评审补充失败：" + supplementFailureMessage);
             }
         }
 
         List<String> normalizedGaps = List.copyOf(coverageGaps);
         persistCoverageItems(task, normalizedGaps);
-        run.setStatus(failedBatches == 0 ? "SUCCEEDED" : (completedBatches == 0 ? "FAILED" : "PARTIAL"));
+        run.setStatus(failedBatches == 0
+                ? (supplementFailed ? "SUCCEEDED_WITH_WARNINGS" : "SUCCEEDED")
+                : (completedBatches == 0 ? "FAILED" : "PARTIAL"));
+        run.setProvider(firstProvider);
+        run.setModel(firstModel);
         run.setCompletedBatches(completedBatches);
         run.setFailedBatches(failedBatches);
         run.setReviewedCaseCount(reviewedCaseCount);
         run.setSupplementedCaseCount(supplements.size());
         run.setCoverageCompleteness(failedBatches == 0 ? (normalizedGaps.isEmpty() ? "COMPLETE" : "INCOMPLETE") : "UNKNOWN");
+        run.setErrorCode(supplementFailed ? "AI_REVIEW_SUPPLEMENT_FAILED" : null);
+        run.setErrorMessage(supplementFailureMessage);
         run.setGlobalResultJson(responseSupport.writeValue(Map.of(
                 "issues", issues,
                 "suggestions", suggestions,
@@ -461,14 +490,15 @@ public class AiCaseReviewOrchestrationService {
         reviewRunMapper.updateById(run);
         if (failedBatches > 0 && completedBatches == 0) {
             return new StreamReviewExecutionResult(null, completedBatches, failedBatches, reviewedCaseCount,
-                    supplements, runId, firstFailureMessage, rawContent.toString(), firstProvider, firstModel);
+                    supplements, runId, firstFailureMessage, rawContent.toString(), firstProvider, firstModel,
+                    supplementFailed, supplementFailureMessage);
         }
         return new StreamReviewExecutionResult(new AiReviewResult(
                 failedBatches == 0 ? firstNonBlank(reviewResultValue, normalizedGaps.isEmpty() ? "APPROVE" : "SUGGEST") : "SUGGEST",
                 failedBatches == 0 ? firstNonBlank(reviewSummary, "评审批次已完成") : "评审批次部分失败，已保留成功批次结果",
                 issues, suggestions, decisions, supplements, normalizedGaps, rawContent.toString(), true
         ), completedBatches, failedBatches, reviewedCaseCount, supplements, runId, firstFailureMessage,
-                rawContent.toString(), firstProvider, firstModel);
+                rawContent.toString(), firstProvider, firstModel, supplementFailed, supplementFailureMessage);
     }
 
     private AiCaseService.ReviewCaseStreamUpdate rebaseStreamUpdate(
@@ -702,7 +732,11 @@ public class AiCaseReviewOrchestrationService {
             List<GeneratedAiCaseItem> supplementCases,
             String reviewRunId,
             String errorMessage,
-            String rawContent
+            String rawContent,
+            boolean supplementFailed,
+            String supplementFailureMessage,
+            String provider,
+            String model
     ) {
     }
 
@@ -716,7 +750,9 @@ public class AiCaseReviewOrchestrationService {
             String errorMessage,
             String rawContent,
             String provider,
-            String model
+            String model,
+            boolean supplementFailed,
+            String supplementFailureMessage
     ) {
     }
 }

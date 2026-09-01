@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -239,6 +240,35 @@ class AiProviderClientTests {
         client.streamStructuredContentWithResult(profile, "key", "prompt", images, delta -> { });
 
         verify(adapter).streamStructuredContent(eq(profile), eq("key"), eq("prompt"), eq(images), any());
+    }
+
+    @Test
+    void doesNotRetryNonCapabilityStreamingFailureWithCompleteRequest() {
+        AiProtocolAdapter adapter = mock(AiProtocolAdapter.class);
+        when(adapter.protocolType()).thenReturn(AiProviderClient.PROTOCOL_OPENAI_COMPATIBLE_CHAT);
+        when(adapter.supportsStructuredStreaming()).thenReturn(true);
+        when(adapter.streamStructuredContent(any(), any(), any(), any(), any()))
+                .thenThrow(new BadRequestException("AI 提供方认证失败"));
+        AiProviderClient client = new AiProviderClient(List.of(adapter));
+
+        assertThatThrownBy(() -> client.streamStructuredContentWithResult(
+                new AiProviderRequestProfile(
+                        AiProviderClient.PROTOCOL_OPENAI_COMPATIBLE_CHAT,
+                        "OPENAI_COMPATIBLE_CHAT",
+                        "qwen3.8-max",
+                        "https://proxy.example/v1",
+                        0.3,
+                        0.9,
+                        20,
+                        60
+                ),
+                "key",
+                "prompt",
+                delta -> { }
+        )).isInstanceOf(BadRequestException.class)
+                .hasMessage("AI 提供方认证失败");
+
+        verify(adapter, never()).requestStructuredContent(any(), any(), any(), any());
     }
 
     @Test

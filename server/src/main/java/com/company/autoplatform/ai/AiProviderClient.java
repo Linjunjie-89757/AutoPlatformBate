@@ -98,9 +98,26 @@ public class AiProviderClient {
                     null
             );
         } catch (RuntimeException exception) {
+            if (!isStreamCapabilityError(exception)) {
+                throw exception;
+            }
             String content = adapter.requestStructuredContent(profile, apiKey, prompt, images);
             return new StreamContentResult(content, true, exception.getMessage());
         }
+    }
+
+    private boolean isStreamCapabilityError(RuntimeException exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        String normalized = message.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("不支持实时流式")
+                || normalized.contains("stream is not supported")
+                || normalized.contains("streaming is not supported")
+                || normalized.contains("does not support stream")
+                || normalized.contains("only support stream mode")
+                || normalized.contains("enable the stream parameter");
     }
 
     public void testConnection(AiProviderRequestProfile profile, String apiKey) {
