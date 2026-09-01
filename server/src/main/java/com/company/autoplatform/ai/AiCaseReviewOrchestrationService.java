@@ -2,11 +2,13 @@ package com.company.autoplatform.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.common.BadRequestException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -217,6 +219,45 @@ public class AiCaseReviewOrchestrationService {
                 firstFailureMessage,
                 rawContent.toString()
         );
+    }
+
+    @Transactional
+    public ReviewExecutionResult retryFailedBatches(String workspaceCode, AiGenerationTaskEntity task) {
+        AiCaseReviewRunEntity latestRun = reviewRunMapper.selectOne(new LambdaQueryWrapper<AiCaseReviewRunEntity>()
+                .eq(AiCaseReviewRunEntity::getTaskId, task.getTaskId())
+                .orderByDesc(AiCaseReviewRunEntity::getRunNo)
+                .last("limit 1"));
+        if (latestRun == null) {
+            throw new BadRequestException("当前任务没有可重试的 AI 评审运行记录");
+        }
+        List<AiCaseReviewBatchEntity> failedBatches = reviewBatchMapper.selectList(new LambdaQueryWrapper<AiCaseReviewBatchEntity>()
+                .eq(AiCaseReviewBatchEntity::getReviewRunId, latestRun.getReviewRunId())
+                .eq(AiCaseReviewBatchEntity::getStatus, "FAILED")
+                .orderByAsc(AiCaseReviewBatchEntity::getBatchNo));
+        if (failedBatches.isEmpty()) {
+            throw new BadRequestException("当前任务没有失败的 AI 评审批次");
+        }
+
+        Map<String, AiCaseCandidateEntity> candidatesById = new LinkedHashMap<>();
+        for (AiCaseCandidateEntity candidate : candidateService.listEntities(task.getTaskId())) {
+            candidatesById.put(candidate.getCandidateId(), candidate);
+        }
+        List<AiCaseCandidateEntity> retryCandidates = new ArrayList<>();
+        for (AiCaseReviewBatchEntity batch : failedBatches) {
+            List<String> candidateIds = responseSupport.readValue(
+                    batch.getCandidateIdsJson(), new TypeReference<List<String>>() {}, List.of()
+            );
+            for (String candidateId : candidateIds) {
+                AiCaseCandidateEntity candidate = candidatesById.get(candidateId);
+                if (candidate != null && retryCandidates.stream().noneMatch(item -> item.getCandidateId().equals(candidateId))) {
+                    retryCandidates.add(candidate);
+                }
+            }
+        }
+        if (retryCandidates.isEmpty()) {
+            throw new BadRequestException("失败评审批次中没有可重试的候选用例");
+        }
+        return execute(workspaceCode, task, retryCandidates);
     }
 
     @Transactional

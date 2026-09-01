@@ -460,6 +460,10 @@ public class AiCaseCandidateService {
         return readCase(candidate.getCurrentCaseJson());
     }
 
+    void validateCurrentCaseForAdoption(AiCaseCandidateEntity candidate) {
+        validateCase(readCurrentCase(candidate));
+    }
+
     void appendAdoptionAudit(AiCaseCandidateEntity candidate, String action, Map<String, Object> metadata, Long operatorId) {
         appendAudit(
                 candidate,

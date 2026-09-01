@@ -52,6 +52,20 @@ public class AiGenerationTaskExecutionStateSupport {
         aiGenerationTaskMapper.updateById(entity);
     }
 
+    void prepareReviewRetry(AiGenerationTaskEntity entity) {
+        entity.setStatus("REVIEWING");
+        entity.setGenerationStatus("SUCCEEDED");
+        entity.setReviewStatus(AiGenerationWorkflowContract.REVIEW_RUNNING);
+        entity.setFailedStage(null);
+        entity.setErrorCode(null);
+        entity.setCurrentStep(3);
+        entity.setStepMessage("正在重试失败的 AI 评审批次。");
+        entity.setErrorMessage(null);
+        entity.setFinishedAt(null);
+        entity.setUpdatedAt(LocalDateTime.now());
+        aiGenerationTaskMapper.updateById(entity);
+    }
+
     void markCompleted(AiGenerationTaskEntity entity, String stepMessage) {
         entity.setStatus("COMPLETED");
         entity.setGenerationStatus("SUCCEEDED");

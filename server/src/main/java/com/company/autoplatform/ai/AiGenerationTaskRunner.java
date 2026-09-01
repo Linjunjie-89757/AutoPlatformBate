@@ -16,4 +16,9 @@ public class AiGenerationTaskRunner {
     public void runTask(String taskId, String workspaceCode) {
         aiGenerationTaskService.executeTask(taskId, workspaceCode);
     }
+
+    @Async("aiGenerationTaskExecutor")
+    public void runReviewRetry(String taskId, String workspaceCode) {
+        aiGenerationTaskService.executeReviewRetry(taskId, workspaceCode);
+    }
 }

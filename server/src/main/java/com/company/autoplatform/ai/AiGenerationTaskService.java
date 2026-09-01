@@ -73,6 +73,71 @@ public class AiGenerationTaskService {
         return taskDomainService.retryTask(taskId, workspaceCode);
     }
 
+    public AiGenerationTaskResponse retryFailedReviewBatches(String taskId, String workspaceCode) {
+        AiGenerationTaskResponse current = taskDomainService.getTask(taskId, workspaceCode);
+        if (!AiGenerationWorkflowContract.REVIEW_FAILED.equals(current.reviewStatus())
+                && !AiGenerationWorkflowContract.REVIEW_PARTIAL.equals(current.reviewStatus())) {
+            throw new BadRequestException("当前任务没有可重试的失败评审批次");
+        }
+        if (current.failedReviewBatches() == null || current.failedReviewBatches() <= 0) {
+            throw new BadRequestException("当前任务没有可重试的失败评审批次");
+        }
+        AiGenerationTaskEntity entity = requireTask(taskId);
+        stateSupport.prepareReviewRetry(entity);
+        appendEvent(taskId, "REVIEW_RETRY_STARTED", "REVIEWING", "INFO", "开始重试失败的 AI 评审批次。", null, null, entity.getReviewProvider(), entity.getReviewModel(), null);
+        return taskDomainService.getTask(taskId, workspaceCode);
+    }
+
+    public void executeReviewRetry(String taskId, String workspaceCode) {
+        AiGenerationTaskEntity entity = requireTask(taskId);
+        if (stateSupport.isCanceled(entity)) {
+            stateSupport.markCanceled(entity, "任务已取消，评审重试未执行。");
+            return;
+        }
+        List<GeneratedAiCaseItem> generatedCases = responseSupport.readValue(
+                entity.getGeneratedCasesJson(), new TypeReference<List<GeneratedAiCaseItem>>() {}, List.of()
+        );
+        List<AiCaseCandidateEntity> candidates = candidateService.listEntities(taskId);
+        AiCaseReviewOrchestrationService.ReviewExecutionResult reviewExecution;
+        try {
+            reviewExecution = reviewOrchestrationService.retryFailedBatches(workspaceCode, entity);
+        } catch (Exception exception) {
+            stateSupport.markReviewFailed(taskId, exception);
+            return;
+        }
+        if (reviewExecution.reviewResult() == null) {
+            stateSupport.markReviewFailed(taskId, new IllegalStateException(firstNonBlank(
+                    reviewExecution.errorMessage(), "AI 评审批次重试失败"
+            )));
+            return;
+        }
+        List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(generatedCases, candidates, reviewExecution.reviewResult());
+        persistReviewSupplementCandidates(entity, generatedCases.size(), finalCases);
+        entity.setGeneratedCasesJson(responseSupport.writeValue(finalCases));
+        entity.setGeneratedCount(finalCases.size());
+        entity.setReviewResultJson(responseSupport.writeValue(reviewExecution.reviewResult()));
+        entity.setReviewRawOutput(stateSupport.limitRawOutput(reviewExecution.rawContent()));
+        entity.setTotalReviewBatches(reviewExecution.completedBatches() + reviewExecution.failedBatches());
+        entity.setCompletedReviewBatches(reviewExecution.completedBatches());
+        entity.setFailedReviewBatches(reviewExecution.failedBatches());
+        entity.setReviewedCaseCount(reviewExecution.reviewedCaseCount());
+        entity.setSupplementedCaseCount(reviewExecution.supplementCases().size());
+        entity.setCoverageCompleteness(reviewExecution.failedBatches() == 0
+                ? (reviewExecution.reviewResult().unresolvedCoverageGaps() == null || reviewExecution.reviewResult().unresolvedCoverageGaps().isEmpty() ? "COMPLETE" : "INCOMPLETE")
+                : "UNKNOWN");
+        entity.setUpdatedAt(LocalDateTime.now());
+        aiGenerationTaskMapper.updateById(entity);
+        if (reviewExecution.failedBatches() > 0 && reviewExecution.completedBatches() > 0) {
+            stateSupport.markReviewPartial(entity, "部分失败评审批次重试完成，仍有失败批次。", "失败批次：" + reviewExecution.failedBatches());
+        } else if (reviewExecution.failedBatches() > 0) {
+            stateSupport.markReviewFailed(taskId, new IllegalStateException("AI 评审批次重试全部失败"));
+        } else {
+            stateSupport.markCompleted(entity, "评审批次重试完成，可在记录详情中查看结果并继续处理。");
+        }
+        appendCompleteReviewEvents(taskId, finalCases, reviewExecution.reviewResult(), entity.getReviewProvider(), entity.getReviewModel());
+        appendEvent(taskId, "TASK_COMPLETED", "DONE", reviewExecution.failedBatches() > 0 ? "WARN" : "SUCCESS", "评审重试流程已完成。", null, null, entity.getReviewProvider(), entity.getReviewModel(), null);
+    }
+
     public AiGenerationTaskResponse updateTask(String taskId, String workspaceCode, UpdateAiGenerationTaskRequest request) {
         return taskDomainService.updateTask(taskId, workspaceCode, request);
     }

@@ -395,6 +395,16 @@ public class AiCaseController {
         return ApiResponse.ok(response, "AI generation task retried");
     }
 
+    @PostMapping("/tasks/{taskId}/review/retry")
+    public ApiResponse<AiGenerationTaskResponse> retryFailedReviewBatches(
+            @PathVariable String taskId,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        AiGenerationTaskResponse response = aiGenerationTaskService.retryFailedReviewBatches(taskId, workspaceCode);
+        aiGenerationTaskRunner.runReviewRetry(response.taskId(), response.workspaceCode());
+        return ApiResponse.ok(response, "AI 评审批次重试已提交");
+    }
+
     @PostMapping("/requirement-import")
     public ApiResponse<ImportRequirementDocumentResponse> importRequirementDocument(
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,

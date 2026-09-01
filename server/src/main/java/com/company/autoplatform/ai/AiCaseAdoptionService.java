@@ -3,6 +3,8 @@ package com.company.autoplatform.ai;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.casecenter.CaseService;
+import com.company.autoplatform.casecenter.CaseEntity;
+import com.company.autoplatform.casecenter.CaseMapper;
 import com.company.autoplatform.casecenter.CreateCaseRequest;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.workspace.WorkspaceEntity;
@@ -24,6 +26,7 @@ public class AiCaseAdoptionService {
     private final AiGenerationTaskResponseSupport responseSupport;
     private final WorkspaceService workspaceService;
     private final CaseService caseService;
+    private final CaseMapper caseMapper;
     private final AiCaseCandidateService candidateService;
     private final TransactionTemplate transactionTemplate;
 
@@ -33,6 +36,7 @@ public class AiCaseAdoptionService {
             AiGenerationTaskResponseSupport responseSupport,
             WorkspaceService workspaceService,
             CaseService caseService,
+            CaseMapper caseMapper,
             AiCaseCandidateService candidateService,
             PlatformTransactionManager transactionManager
     ) {
@@ -41,6 +45,7 @@ public class AiCaseAdoptionService {
         this.responseSupport = responseSupport;
         this.workspaceService = workspaceService;
         this.caseService = caseService;
+        this.caseMapper = caseMapper;
         this.candidateService = candidateService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -186,7 +191,9 @@ public class AiCaseAdoptionService {
         if (!latestCandidate.getContentVersion().equals(adoption.getAdoptedContentVersion())) {
             throw new BadRequestException("候选用例在采纳过程中已更新，请重新确认后重试");
         }
+        candidateService.validateCurrentCaseForAdoption(latestCandidate);
         GeneratedAiCaseItem item = candidateService.readCurrentCase(latestCandidate);
+        rejectFormalDuplicate(workspace, directoryId, item);
         var created = caseService.createCase(workspace.getWorkspaceCode(), new CreateCaseRequest(
                 workspace.getWorkspaceCode(),
                 directoryId,
@@ -217,6 +224,27 @@ public class AiCaseAdoptionService {
                 "contentSource", adoption.getAdoptedContentSource()
         ), userId);
         return toItem(adoption);
+    }
+
+    private void rejectFormalDuplicate(WorkspaceEntity workspace, Long directoryId, GeneratedAiCaseItem item) {
+        var query = new LambdaQueryWrapper<CaseEntity>()
+                .select(CaseEntity::getId, CaseEntity::getTitle)
+                .eq(CaseEntity::getWorkspaceId, workspace.getId());
+        if (directoryId == null) {
+            query.isNull(CaseEntity::getCaseDirectoryId);
+        } else {
+            query.eq(CaseEntity::getCaseDirectoryId, directoryId);
+        }
+        String titleKey = normalizeTitle(item.title());
+        boolean duplicate = caseMapper.selectList(query).stream()
+                .anyMatch(existing -> titleKey.equals(normalizeTitle(existing.getTitle())));
+        if (duplicate) {
+            throw new BadRequestException("正式用例库中已存在同目录同标题用例，不能重复采纳");
+        }
+    }
+
+    private String normalizeTitle(String value) {
+        return value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     private AiCaseAdoptionItem markAdoptionFailed(

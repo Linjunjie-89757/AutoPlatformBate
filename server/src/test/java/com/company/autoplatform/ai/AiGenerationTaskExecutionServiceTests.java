@@ -272,6 +272,84 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
     }
 
     @Test
+    void failedReviewBatchesCanBeRetriedWithoutRegeneratingCases() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("review-retry");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        GeneratedAiCaseItem generatedCase = generatedCase(unique + " generated case");
+        AiReviewResult approved = new AiReviewResult(
+                "APPROVE", "retry approved", List.of(), List.of(), List.of(new AiReviewCaseDecision(
+                        0, "APPROVED", "approved after retry", "covered", "evidence", "reviewed", null, null, null
+                )), List.of(), List.of(), "retry raw", true
+        );
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(generatedCase), "coverage", List.of(), List.of(), List.of(), "generation raw"
+        ));
+        when(aiProviderClient.review(any(), any(), any()))
+                .thenThrow(new IllegalStateException("first review failed"))
+                .thenReturn(approved);
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+        AiGenerationTaskResponse failed = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(failed.reviewStatus()).isEqualTo("FAILED");
+        assertThat(failed.failedReviewBatches()).isEqualTo(1);
+
+        AiGenerationTaskResponse retrying = aiGenerationTaskService.retryFailedReviewBatches(created.taskId(), WORKSPACE_CODE);
+        assertThat(retrying.status()).isEqualTo("REVIEWING");
+        assertThat(retrying.reviewStatus()).isEqualTo("RUNNING");
+        aiGenerationTaskService.executeReviewRetry(created.taskId(), WORKSPACE_CODE);
+
+        AiGenerationTaskResponse completed = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(completed.status()).isEqualTo("COMPLETED");
+        assertThat(completed.reviewStatus()).isEqualTo("SUCCEEDED");
+        assertThat(completed.generatedCases().get(0).aiReviewStatus()).isEqualTo("APPROVED");
+        verify(aiProviderClient).generate(any(), any(), any(), any());
+        verify(aiProviderClient, times(2)).review(any(), any(), any());
+    }
+
+    @Test
+    void adoptionRejectsDuplicateFormalCaseBeforeCreatingAnotherCase() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("adoption-duplicate");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        GeneratedAiCaseItem generatedCase = generatedCase(unique + " duplicate title");
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(generatedCase), "coverage", List.of(), List.of(), List.of(), "generation raw"
+        ));
+        when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
+                "APPROVE", "approved", List.of(), List.of(), List.of(new AiReviewCaseDecision(
+                        0, "APPROVED", "approved", "covered", "evidence", "reviewed", null, null, null
+                )), List.of(), List.of(), "review raw", true
+        ));
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+        AiCaseCandidateItem candidate = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE).get(0);
+        var directory = caseService.createDirectory(
+                WORKSPACE_CODE,
+                new CreateCaseDirectoryRequest(WORKSPACE_CODE, null, unique + " duplicate directory")
+        );
+        caseService.createCase(WORKSPACE_CODE, new com.company.autoplatform.casecenter.CreateCaseRequest(
+                WORKSPACE_CODE, directory.id(), generatedCase.title(), generatedCase.caseType(), generatedCase.priority(),
+                "MANUAL", null, generatedCase.precondition(), generatedCase.steps(), generatedCase.expectedResult()
+        ));
+
+        AiCaseAdoptionItem adoption = aiCaseAdoptionService.adoptCandidate(
+                created.taskId(), WORKSPACE_CODE, candidate.candidateCaseId(), new AdoptAiCaseRequest(directory.id())
+        );
+        assertThat(adoption.status()).isEqualTo("ADOPT_FAILED");
+        assertThat(adoption.failureReason()).contains("已存在");
+        assertThat(adoption.createdCaseId()).isNull();
+    }
+
+    @Test
     void reviewSuggestionNeverOverwritesOriginalOrCurrentCandidate() {
         reset(aiProviderClient);
         String unique = uniquePrefix("human-confirmation");
