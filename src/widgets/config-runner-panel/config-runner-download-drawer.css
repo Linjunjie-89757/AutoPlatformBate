@@ -17,7 +17,7 @@
   display: flex;
   min-height: 68.25px;
   flex: 0 0 auto;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 12.25px 17.5px;
@@ -352,7 +352,7 @@
   align-items: flex-start;
   gap: 7px;
   padding: 8.75px 10.5px;
-  border: 1px solid rgba(2, 132, 199, 0.3);
+  border: 1px solid rgba(2, 132, 199, 0.19);
   border-radius: 7px;
   background: #e0f2fe;
   color: #0284c7;

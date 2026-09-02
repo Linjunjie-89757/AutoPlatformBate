@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { DocumentCopy } from '@element-plus/icons-vue'
-import { Download, RefreshCw, Shield, X } from '@lucide/vue'
+import { Download, Shield, X } from '@lucide/vue'
 
 const props = defineProps<{
   releaseVersion: string
@@ -10,17 +10,13 @@ const props = defineProps<{
   downloadUrl: string
   releaseLoading: boolean
   releaseErrorMessage: string
-  platformApiBaseUrl: string
   runnerStartCommand: string
-  runnerLoading: boolean
 }>()
 
 const visible = defineModel<boolean>({ required: true })
 
 const emit = defineEmits<{
-  copyPlatformAddress: []
   copyRunnerCommand: []
-  refreshConnection: []
 }>()
 
 type RunnerPlatform = 'linux' | 'macos' | 'windows'
@@ -180,17 +176,6 @@ function selectArchitecture(architecture: 'amd64' | 'arm64') {
           <span>Runner 启动后，前往「注册节点」生成一次性注册码，完成节点与平台的绑定。</span>
         </div>
 
-        <div class="config-runner-download-platform">
-          <code>{{ platformApiBaseUrl }}</code>
-          <button type="button" @click="emit('copyPlatformAddress')">
-            <el-icon><DocumentCopy /></el-icon>
-            复制地址
-          </button>
-          <button type="button" :disabled="runnerLoading" @click="emit('refreshConnection')">
-            <RefreshCw :size="12" :stroke-width="1.8" />
-            刷新状态
-          </button>
-        </div>
       </div>
     </div>
   </el-drawer>

@@ -48,8 +48,6 @@ const {
   loadRunners,
   copyRunnerCommand,
   openRunnerGuide,
-  copyPlatformAddress,
-  refreshRunnerConnection,
   openRunnerDetail,
   openFirstRunnerTask,
   notifyUnsupportedRunnerAction,
@@ -183,12 +181,8 @@ const {
       :download-url="runnerDownloadUrl"
       :release-loading="runnerReleaseLoading"
       :release-error-message="runnerReleaseErrorMessage"
-      :platform-api-base-url="platformApiBaseUrl"
       :runner-start-command="runnerStartCommand"
-      :runner-loading="loading"
-      @copy-platform-address="copyPlatformAddress"
       @copy-runner-command="copyRunnerCommand"
-      @refresh-connection="refreshRunnerConnection"
     />
 
     <ConfigRunnerTaskDetailDrawer
