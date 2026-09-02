@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { RefreshRight } from '@element-plus/icons-vue'
 import {
-  AlertTriangle,
   Download,
   RefreshCw,
   Search,
@@ -20,7 +19,6 @@ import { useConfigRunnerManagement } from './useConfigRunnerManagement'
 const {
   runners,
   loading,
-  scanning,
   errorMessage,
   guideVisible,
   runnerReleaseLoading,
@@ -41,6 +39,7 @@ const {
   runnerStartCommand,
   platformApiBaseUrl,
   runnerReleaseVersion,
+  runnerReleaseFileName,
   runnerReleaseSize,
   runnerDownloadUrl,
   stats,
@@ -51,7 +50,6 @@ const {
   openRunnerGuide,
   copyPlatformAddress,
   refreshRunnerConnection,
-  triggerOfflineScan,
   openRunnerDetail,
   openFirstRunnerTask,
   notifyUnsupportedRunnerAction,
@@ -113,10 +111,6 @@ const {
           <Download :size="13" :stroke-width="1.8" />
           下载 Runner
         </button>
-        <button type="button" class="config-runner-secondary-button" :disabled="scanning" @click="triggerOfflineScan">
-          <AlertTriangle :size="13" :stroke-width="1.8" />
-          离线扫描
-        </button>
         <button type="button" class="config-runner-primary-button" @click="openRunnerEditor('create')">
           <img :src="figmaConfigRunnerIcons.action.plus" alt="">
           注册节点
@@ -177,12 +171,14 @@ const {
       v-model="runnerEditorVisible"
       :mode="runnerEditorMode"
       :target="runnerEditorTarget"
+      :platform-api-base-url="platformApiBaseUrl"
       @unsupported="notifyUnsupportedRunnerAction"
     />
 
     <ConfigRunnerDownloadDrawer
       v-model="guideVisible"
       :release-version="runnerReleaseVersion"
+      :release-file-name="runnerReleaseFileName"
       :release-size="runnerReleaseSize"
       :download-url="runnerDownloadUrl"
       :release-loading="runnerReleaseLoading"

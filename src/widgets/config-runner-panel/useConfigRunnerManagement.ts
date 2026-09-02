@@ -59,6 +59,7 @@ export function useConfigRunnerManagement() {
     return version ? `v${version.replace(/^v/i, '')}` : '版本检查中'
   })
   const runnerReleaseSize = computed(() => formatFileSize(runnerRelease.value?.fileSize ?? 0))
+  const runnerReleaseFileName = computed(() => runnerRelease.value?.fileName ?? '')
   const runnerDownloadUrl = computed(() => (
     runnerRelease.value?.available ? runnerRelease.value.downloadUrl : ''
   ))
@@ -210,7 +211,9 @@ export function useConfigRunnerManagement() {
 
   function openRunnerEditor(mode: 'create' | 'edit', row?: RunnerNodeSummary) {
     if (mode === 'create') {
-      openRunnerGuide()
+      runnerEditorMode.value = 'create'
+      runnerEditorTarget.value = null
+      runnerEditorVisible.value = true
       return
     }
     notifyUnsupportedRunnerAction(`编辑「${row ? formatRunnerName(row) : 'Runner'}」`)
@@ -292,6 +295,7 @@ export function useConfigRunnerManagement() {
     runnerStartCommand,
     platformApiBaseUrl,
     runnerReleaseVersion,
+    runnerReleaseFileName,
     runnerReleaseSize,
     runnerDownloadUrl,
     stats,
