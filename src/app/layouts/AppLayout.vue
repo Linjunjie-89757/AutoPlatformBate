@@ -26,6 +26,7 @@ const route = useRoute()
 const { currentUser } = useSession()
 const { loading: logoutLoading, errorMessage: logoutErrorMessage, logout } = useLogout()
 const { selectedWorkspaceCode, setSelectedWorkspaceCode } = useWorkspaceContext()
+const routeViewCacheLimit = 8
 const switchableWorkspaces = ref<WorkspaceItem[]>([])
 const userMenuOpen = ref(false)
 const userMenuRef = ref<HTMLElement | null>(null)
@@ -478,7 +479,19 @@ onBeforeUnmount(() => {
       </nav>
 
       <main class="app-layout__main">
-        <RouterView />
+        <RouterView v-slot="{ Component, route: viewRoute }">
+          <KeepAlive v-if="viewRoute.meta.keepAlivePage === true" :max="routeViewCacheLimit">
+            <component
+              :is="Component"
+              :key="String(viewRoute.name)"
+            />
+          </KeepAlive>
+          <component
+            v-else
+            :is="Component"
+            :key="viewRoute.fullPath"
+          />
+        </RouterView>
       </main>
     </section>
   </div>

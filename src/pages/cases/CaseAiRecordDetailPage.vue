@@ -719,7 +719,7 @@ function getAiReviewListLabel(row: DetailCaseRow) {
     OPTIMIZED: '已优化',
     CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '已补充',
-    CONFIRM_REQUIRED: '待确认',
+    CONFIRM_REQUIRED: '建议确认',
     NOT_RECOMMENDED: '不推荐',
     PENDING: '待评审',
   }
@@ -746,7 +746,7 @@ function getFigmaReviewLabel(row: DetailCaseRow) {
     OPTIMIZED: '评审通过',
     CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '评审通过',
-    CONFIRM_REQUIRED: '待确认',
+    CONFIRM_REQUIRED: '建议确认',
     NOT_RECOMMENDED: '评审未通过',
     PENDING: '待评审',
   }
@@ -759,7 +759,7 @@ function getFigmaReviewTableLabel(row: DetailCaseRow) {
     OPTIMIZED: '评审通过',
     CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '评审通过',
-    CONFIRM_REQUIRED: '待确认',
+    CONFIRM_REQUIRED: '建议确认',
     NOT_RECOMMENDED: '评审未通过',
     PENDING: '待评审',
   }
@@ -862,23 +862,15 @@ function getFigmaCaseSteps(row: DetailCaseRow) {
     .slice(0, 4)
 }
 
-function getFigmaReviewSuggestion(row: DetailCaseRow) {
-  const status = getDisplayedReviewStatus(row)
-  if (status === 'CHANGE_SUGGESTED') {
-    return row.optimizationReason?.trim()
-      || row.candidate?.suggestedCase?.optimizationReason?.trim()
-      || row.candidate?.reviewReason?.trim()
-      || ''
-  }
-  if (status === 'CONFIRM_REQUIRED') {
-    return row.candidate?.reviewReason?.trim()
-      || row.reviewComment?.trim()
-      || row.aiReviewSummary?.trim()
-      || ''
-  }
-  return row.supplementReason?.trim()
-    || row.warnings?.[0]?.trim()
+function getFigmaOptimizationReason(row: DetailCaseRow) {
+  const optimizationReason = row.optimizationReason?.trim()
+    || row.candidate?.suggestedCase?.optimizationReason?.trim()
     || ''
+  const reviewReason = getFigmaReviewReason(row)
+  if (!optimizationReason || optimizationReason.replace(/\s+/g, ' ') === reviewReason.replace(/\s+/g, ' ')) {
+    return ''
+  }
+  return optimizationReason
 }
 
 function getDrawerSuggestedCase(row: DetailCaseRow | null | undefined): GeneratedAiCaseItem | null {
@@ -1500,43 +1492,6 @@ async function resetCandidateVersionChoice(row: DetailCaseRow) {
   }
 }
 
-async function confirmAndAdopt(row: DetailCaseRow) {
-  const record = detailRecord.value
-  const candidate = row.candidate
-  if (!record || !candidate || candidateActionIndex.value !== null) {
-    return
-  }
-  const directoryId = record.adoptions?.find(item => item.caseIndex === row.index)?.directoryId ?? record.directoryId
-  if (directoryId == null) {
-    ElMessage.warning('请先设置保存路径，再采纳用例')
-    return
-  }
-  candidateActionIndex.value = row.index
-  try {
-    const confirmed = await caseAiApi.keepCandidateOriginal(record.workspaceCode, record.taskId, candidate.candidateCaseId, {
-      expectedVersion: candidate.contentVersion,
-      expectedContentHash: candidate.contentHash,
-    })
-    candidatesByIndex.value = { ...candidatesByIndex.value, [row.index]: confirmed }
-    replaceGeneratedCase(row.index, confirmed.currentCase)
-    const result = await adoptCaseRow(record, { ...row, candidate: confirmed }, directoryId)
-    if (result.status === 'ADOPTED') {
-      setAdoptionState(row.index, 'ADOPTED')
-      detailRecord.value = await caseAiApi.getTask(record.workspaceCode, record.taskId)
-      hydrateAdoptionStates(detailRecord.value)
-      ElMessage.success('用例已确认并采纳')
-    } else {
-      setAdoptionState(row.index, 'ADOPT_FAILED', result.failureReason || '写入用例库失败，请重试')
-      ElMessage.error(`采纳失败：${result.failureReason || '写入用例库失败，请重试'}`)
-    }
-  } catch (error) {
-    setAdoptionState(row.index, 'ADOPT_FAILED', getRequestErrorMessage(error))
-    ElMessage.error(`采纳失败：${getRequestErrorMessage(error)}`)
-  } finally {
-    candidateActionIndex.value = null
-  }
-}
-
 function closeBatchResult() {
   batchResultVisible.value = false
   batchAdoptionResult.value = null
@@ -1748,7 +1703,20 @@ async function adoptSingleCase(row: DetailCaseRow) {
 
   setAdoptionState(row.index, 'ADOPTING')
   try {
-    const result = await adoptCaseRow(detailRecord.value, row, savedDirectoryId)
+    let adoptionRow = row
+    const reviewStatus = getDisplayedReviewStatus(row)
+    if (row.candidate
+      && row.candidate.humanDecision === 'PENDING'
+      && ['CONFIRM_REQUIRED', 'NOT_RECOMMENDED'].includes(reviewStatus)) {
+      const confirmed = await caseAiApi.keepCandidateOriginal(detailRecord.value.workspaceCode, detailRecord.value.taskId, row.candidate.candidateCaseId, {
+        expectedVersion: row.candidate.contentVersion,
+        expectedContentHash: row.candidate.contentHash,
+      })
+      candidatesByIndex.value = { ...candidatesByIndex.value, [row.index]: confirmed }
+      replaceGeneratedCase(row.index, confirmed.currentCase)
+      adoptionRow = { ...row, candidate: confirmed }
+    }
+    const result = await adoptCaseRow(detailRecord.value, adoptionRow, savedDirectoryId)
     if (result.status === 'ADOPTED') {
       setAdoptionState(row.index, 'ADOPTED')
       detailRecord.value = await caseAiApi.getTask(detailRecord.value.workspaceCode, detailRecord.value.taskId)
@@ -2213,8 +2181,8 @@ onBeforeUnmount(() => {
                 >
                   <strong>评审：</strong>{{ getFigmaReviewReason(row) }}
                 </div>
-                <div v-if="getFigmaReviewSuggestion(row)" class="case-ai-record-detail-page__expanded-suggestion">
-                  💡 {{ getFigmaReviewSuggestion(row) }}
+                <div v-if="getDisplayedReviewStatus(row) === 'CHANGE_SUGGESTED' && getFigmaOptimizationReason(row)" class="case-ai-record-detail-page__expanded-suggestion">
+                  <strong>优化说明：</strong>{{ getFigmaOptimizationReason(row) }}
                 </div>
                 <div v-if="getCaseReviewState(row) === 'ADOPT_FAILED'" class="case-ai-record-detail-page__expanded-adoption-error">
                   <AlertCircle :size="13" />{{ getAdoptionFailureReason(row) || '写入用例库失败，请重试。' }}
@@ -2314,7 +2282,7 @@ onBeforeUnmount(() => {
             </section>
           </section>
 
-          <section class="case-ai-record-detail-page__drawer-review-card" :class="getFigmaReviewTone(activeCase)">
+          <section v-if="getDisplayedReviewStatus(activeCase) !== 'APPROVED'" class="case-ai-record-detail-page__drawer-review-card" :class="getFigmaReviewTone(activeCase)">
             <div class="case-ai-record-detail-page__drawer-review-header">
               <Bot :size="13" />
               <strong>AI 评审结论</strong>
@@ -2322,15 +2290,8 @@ onBeforeUnmount(() => {
             </div>
             <p>{{ getFigmaReviewReason(activeCase) || '暂无评审说明' }}</p>
 
-            <div v-if="getDisplayedReviewStatus(activeCase) === 'CHANGE_SUGGESTED' && activeCase.candidate?.humanDecision === 'PENDING' && getFigmaReviewSuggestion(activeCase)" class="case-ai-record-detail-page__drawer-review-optimization">
-              <strong>优化说明：</strong>{{ getFigmaReviewSuggestion(activeCase) }}
-            </div>
-
-            <div
-              v-else-if="['APPROVED', 'OPTIMIZED', 'SUPPLEMENTED'].includes(getDisplayedReviewStatus(activeCase)) && getFigmaReviewSuggestion(activeCase)"
-              class="case-ai-record-detail-page__drawer-review-suggestion"
-            >
-              <strong>建议：</strong>{{ getFigmaReviewSuggestion(activeCase) }}
+            <div v-if="getDisplayedReviewStatus(activeCase) === 'CHANGE_SUGGESTED' && activeCase.candidate?.humanDecision === 'PENDING' && getFigmaOptimizationReason(activeCase)" class="case-ai-record-detail-page__drawer-review-optimization">
+              <strong>优化说明：</strong>{{ getFigmaOptimizationReason(activeCase) }}
             </div>
 
             <template v-if="getDisplayedReviewStatus(activeCase) === 'CHANGE_SUGGESTED' && getDrawerSuggestedCase(activeCase) && activeCase.candidate?.humanDecision === 'PENDING'">
@@ -2375,10 +2336,6 @@ onBeforeUnmount(() => {
               >{{ candidateActionIndex === activeCase.index ? '处理中...' : '重新选择' }}</button>
             </div>
 
-            <div v-else-if="getDisplayedReviewStatus(activeCase) === 'CONFIRM_REQUIRED' && activeCase.candidate?.humanDecision === 'PENDING'" class="case-ai-record-detail-page__drawer-confirm-panel">
-              <strong>确认要点：</strong>{{ getFigmaReviewSuggestion(activeCase) || '该用例存在需求不明确之处，请确认内容后再采纳。' }}
-            </div>
-            <div v-else-if="getDisplayedReviewStatus(activeCase) === 'CONFIRM_REQUIRED'" class="case-ai-record-detail-page__drawer-confirmed-state"><CheckCircle2 :size="14" />已确认，可继续采纳</div>
           </section>
 
           <section v-if="activeCase.riskNotes || getDisplayedReviewStatus(activeCase) === 'NOT_RECOMMENDED'" class="case-ai-record-detail-page__drawer-risk-panel" :class="{ 'is-danger': getDisplayedReviewStatus(activeCase) === 'NOT_RECOMMENDED' }">
@@ -2434,10 +2391,10 @@ onBeforeUnmount(() => {
             <template v-else-if="getCaseReviewState(activeCase) === 'PENDING'">
               <button type="button" class="is-discard" @click="discardSingleCase(activeCase)"><ThumbsDown :size="12" />放弃此条</button>
               <template v-if="getDisplayedReviewStatus(activeCase) === 'CONFIRM_REQUIRED' && activeCase.candidate?.humanDecision === 'PENDING'">
-                <button type="button" class="is-adopt" :disabled="candidateActionIndex === activeCase.index" @click="confirmAndAdopt(activeCase)"><ThumbsUp :size="13" />{{ candidateActionIndex === activeCase.index ? '处理中...' : '确认并采纳' }}</button>
+                <button type="button" class="is-adopt" :disabled="candidateActionIndex === activeCase.index" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />{{ candidateActionIndex === activeCase.index ? '处理中...' : '采纳用例' }}</button>
               </template>
               <template v-else-if="getDisplayedReviewStatus(activeCase) === 'NOT_RECOMMENDED' && activeCase.candidate?.humanDecision === 'PENDING'">
-                <button type="button" class="is-adopt" :disabled="candidateActionIndex === activeCase.index" @click="confirmAndAdopt(activeCase)"><ThumbsUp :size="13" />{{ candidateActionIndex === activeCase.index ? '处理中...' : '采纳用例' }}</button>
+                <button type="button" class="is-adopt" :disabled="candidateActionIndex === activeCase.index" @click="adoptSingleCase(activeCase)"><ThumbsUp :size="13" />{{ candidateActionIndex === activeCase.index ? '处理中...' : '采纳用例' }}</button>
               </template>
               <template v-else>
                 <span v-if="!isCandidateReadyForAdoption(activeCase)" class="case-ai-record-detail-page__drawer-decision is-review-pending">请先确认评审结果</span>
@@ -5465,21 +5422,6 @@ onBeforeUnmount(() => {
   color: #ff7d00;
 }
 
-.case-ai-record-detail-page__drawer-review-suggestion {
-  margin-top: 8px;
-  padding: 7px 10px;
-  border: 1px solid rgba(255, 125, 0, .19);
-  border-radius: 5px;
-  color: #4e5969;
-  background: #fffbf0;
-  font-size: 12px;
-  line-height: 19px;
-}
-
-.case-ai-record-detail-page__drawer-review-suggestion strong {
-  color: #ff7d00;
-}
-
 .case-ai-record-detail-page__drawer-suggestion-panel {
   margin-top: 10px;
   padding: 0 12px 10px;
@@ -5559,10 +5501,8 @@ onBeforeUnmount(() => {
   color: #ff7d00;
 }
 
-.case-ai-record-detail-page__drawer-confirm-panel,
 .case-ai-record-detail-page__drawer-risk-panel,
-.case-ai-record-detail-page__drawer-supplement-panel,
-.case-ai-record-detail-page__drawer-confirmed-state {
+.case-ai-record-detail-page__drawer-supplement-panel {
   margin-top: 12px;
   padding: 9px 10px;
   border-radius: 5px;
@@ -5570,35 +5510,6 @@ onBeforeUnmount(() => {
   background: #fff;
   font-size: 12px;
   line-height: 19px;
-}
-
-.case-ai-record-detail-page__drawer-confirm-panel {
-  border: 1px solid #e6c30066;
-  background: #fffbe8;
-}
-
-.case-ai-record-detail-page__drawer-confirm-panel strong {
-  color: #886500;
-}
-
-.case-ai-record-detail-page__drawer-confirm-panel button {
-  display: block;
-  height: 30px;
-  margin: 10px 0 0 auto;
-  padding: 0 14px;
-  border: 1px solid #ff7d00;
-  border-radius: 6px;
-  color: #fff;
-  background: #ff7d00;
-  font-size: 12px;
-}
-
-.case-ai-record-detail-page__drawer-confirmed-state {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #00b42a;
-  background: #f6ffed;
 }
 
 .case-ai-record-detail-page__drawer-risk-panel {

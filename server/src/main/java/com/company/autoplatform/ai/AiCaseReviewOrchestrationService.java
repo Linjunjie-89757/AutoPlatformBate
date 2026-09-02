@@ -18,9 +18,6 @@ import java.util.function.Consumer;
 @Service
 public class AiCaseReviewOrchestrationService {
 
-    static final int REVIEW_BATCH_SIZE = 20;
-    static final int MAX_REVIEW_SUPPLEMENT_CASES = 20;
-
     private final AiCaseService aiCaseService;
     private final AiCaseCandidateService candidateService;
     private final AiCaseReviewRunMapper reviewRunMapper;
@@ -72,7 +69,7 @@ public class AiCaseReviewOrchestrationService {
         run.setRunNo(nextRunNo(task.getTaskId()));
         run.setStatus("RUNNING");
         run.setTriggerType("TASK_EXECUTION");
-        run.setTotalBatches((safeCandidates.size() + REVIEW_BATCH_SIZE - 1) / REVIEW_BATCH_SIZE);
+        run.setTotalBatches(safeCandidates.isEmpty() ? 0 : 1);
         run.setCompletedBatches(0);
         run.setFailedBatches(0);
         run.setReviewedCaseCount(0);
@@ -100,8 +97,9 @@ public class AiCaseReviewOrchestrationService {
         String supplementFailureMessage = null;
         StringBuilder rawContent = new StringBuilder();
 
-        for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += REVIEW_BATCH_SIZE, batchNo += 1) {
-            int end = Math.min(start + REVIEW_BATCH_SIZE, safeCandidates.size());
+        int reviewRequestSize = Math.max(1, safeCandidates.size());
+        for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += reviewRequestSize, batchNo += 1) {
+            int end = safeCandidates.size();
             List<AiCaseCandidateEntity> batchCandidates = safeCandidates.subList(start, end);
             AiCaseReviewBatchEntity batch = createBatch(task, runId, batchNo, batchCandidates);
             try {
@@ -159,7 +157,8 @@ public class AiCaseReviewOrchestrationService {
         }
 
         boolean allBatchesSucceeded = failedBatches == 0;
-        if (allBatchesSucceeded && !coverageGaps.isEmpty() && !safeCandidates.isEmpty()) {
+        int supplementLimit = Math.max(0, taskCaseTotalLimit(task) - safeSupplementCandidates.size());
+        if (allBatchesSucceeded && !coverageGaps.isEmpty() && !safeCandidates.isEmpty() && supplementLimit > 0) {
             try {
                 AiReviewResult supplementResult = aiCaseService.reviewCoverageSupplement(workspaceCode, new ReviewAiGeneratedCasesRequest(
                         task.getRequirementTitle(),
@@ -171,7 +170,7 @@ public class AiCaseReviewOrchestrationService {
                 if (supplementResult != null && supplementResult.structured()) {
                     for (GeneratedAiCaseItem supplement : supplementResult.supplementCases() == null
                             ? List.<GeneratedAiCaseItem>of() : supplementResult.supplementCases()) {
-                        if (supplements.size() >= MAX_REVIEW_SUPPLEMENT_CASES) {
+                        if (supplements.size() >= supplementLimit) {
                             break;
                         }
                         supplements.add(supplement);
@@ -315,7 +314,7 @@ public class AiCaseReviewOrchestrationService {
         run.setRunNo(nextRunNo(task.getTaskId()));
         run.setStatus("RUNNING");
         run.setTriggerType("TASK_EXECUTION_STREAM");
-        run.setTotalBatches((safeCandidates.size() + REVIEW_BATCH_SIZE - 1) / REVIEW_BATCH_SIZE);
+        run.setTotalBatches(safeCandidates.isEmpty() ? 0 : 1);
         run.setCompletedBatches(0);
         run.setFailedBatches(0);
         run.setReviewedCaseCount(0);
@@ -343,8 +342,9 @@ public class AiCaseReviewOrchestrationService {
         String supplementFailureMessage = null;
         StringBuilder rawContent = new StringBuilder();
 
-        for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += REVIEW_BATCH_SIZE, batchNo += 1) {
-            int end = Math.min(start + REVIEW_BATCH_SIZE, safeCandidates.size());
+        int reviewRequestSize = Math.max(1, safeCandidates.size());
+        for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += reviewRequestSize, batchNo += 1) {
+            int end = safeCandidates.size();
             List<AiCaseCandidateEntity> batchCandidates = safeCandidates.subList(start, end);
             AiCaseReviewBatchEntity batch = createBatch(task, runId, batchNo, batchCandidates);
             try {
@@ -410,7 +410,8 @@ public class AiCaseReviewOrchestrationService {
         }
 
         boolean allBatchesSucceeded = failedBatches == 0;
-        if (allBatchesSucceeded && !coverageGaps.isEmpty() && !safeCandidates.isEmpty()) {
+        int supplementLimit = Math.max(0, taskCaseTotalLimit(task) - safeCandidates.size());
+        if (allBatchesSucceeded && !coverageGaps.isEmpty() && !safeCandidates.isEmpty() && supplementLimit > 0) {
             try {
                 AiReviewResult supplementResult = aiCaseService.reviewCoverageSupplement(workspaceCode, new ReviewAiGeneratedCasesRequest(
                         task.getRequirementTitle(),
@@ -422,7 +423,7 @@ public class AiCaseReviewOrchestrationService {
                 if (supplementResult != null && supplementResult.structured()) {
                     for (GeneratedAiCaseItem supplement : supplementResult.supplementCases() == null
                             ? List.<GeneratedAiCaseItem>of() : supplementResult.supplementCases()) {
-                        if (supplements.size() >= MAX_REVIEW_SUPPLEMENT_CASES) {
+                        if (supplements.size() >= supplementLimit) {
                             break;
                         }
                         supplements.add(supplement);
@@ -526,7 +527,9 @@ public class AiCaseReviewOrchestrationService {
                 update.evidenceComment(), update.reviewComment(), update.optimizationReason(), update.supplementReason(),
                 update.coverageGap(), update.optimizedCase(), update.supplementCase(), update.rawOutput(),
                 target.getCandidateId(), update.suggestedAction(), update.score(), update.confidence(), update.reason(),
-                update.suggestedCase(), update.mergeTargetCandidateIds(), update.sourceVersion(), update.sourceContentHash()
+                update.suggestedCase(), update.mergeTargetCandidateIds(),
+                update.sourceVersion() == null ? target.getContentVersion() : update.sourceVersion(),
+                firstNonBlank(update.sourceContentHash(), target.getContentHash())
         );
     }
 
@@ -630,7 +633,8 @@ public class AiCaseReviewOrchestrationService {
                 decision.evidenceComment(), decision.reviewComment(), decision.optimizationReason(), decision.coverageGap(),
                 decision.optimizedCase(), target.getCandidateId(), decision.suggestedAction(), decision.score(),
                 decision.confidence(), decision.reason(), decision.suggestedCase(), decision.mergeTargetCandidateIds(),
-                decision.sourceVersion(), decision.sourceContentHash()
+                decision.sourceVersion() == null ? target.getContentVersion() : decision.sourceVersion(),
+                firstNonBlank(decision.sourceContentHash(), target.getContentHash())
         );
     }
 
@@ -698,6 +702,13 @@ public class AiCaseReviewOrchestrationService {
         return exception.getMessage() == null || exception.getMessage().isBlank()
                 ? exception.getClass().getSimpleName()
                 : exception.getMessage();
+    }
+
+    private int taskCaseTotalLimit(AiGenerationTaskEntity task) {
+        Integer limit = task.getCaseGenerationLimit();
+        return limit == null
+                ? AiCaseService.DEFAULT_MAX_CASES
+                : Math.max(1, Math.min(limit, AiCaseService.SYSTEM_MAX_CASES));
     }
 
     private String mergeReviewResultValue(String current, String next) {

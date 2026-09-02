@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
+const caseTabCacheLimit = 8
 
 const caseCenterTabs = [
   { label: '用例管理', routeName: 'cases-manage' },
@@ -39,7 +40,19 @@ const tabQuery = computed(() => {
     </nav>
 
     <div class="case-center-page__content">
-      <RouterView />
+      <RouterView v-slot="{ Component, route: viewRoute }">
+        <KeepAlive v-if="viewRoute.meta.keepAliveTab === true" :max="caseTabCacheLimit">
+          <component
+            :is="Component"
+            :key="String(viewRoute.name)"
+          />
+        </KeepAlive>
+        <component
+          v-else
+          :is="Component"
+          :key="viewRoute.fullPath"
+        />
+      </RouterView>
     </div>
   </section>
 </template>

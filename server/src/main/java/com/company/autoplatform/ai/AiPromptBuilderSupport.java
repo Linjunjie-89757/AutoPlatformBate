@@ -13,7 +13,6 @@ public class AiPromptBuilderSupport {
             AiCaseConfigEntity config,
             GenerateAiCasesRequest request,
             WorkspaceEntity workspace,
-            int maxCases,
             List<AiRequirementAssetEntity> assets,
             boolean streamMode
     ) {
@@ -53,15 +52,12 @@ public class AiPromptBuilderSupport {
             }
         }
         builder.append("[Smart Generation Policy]\n");
-        builder.append("- ").append(maxCases).append(" is a hard maximum cap. There is no mandatory minimum case count.\n");
         builder.append("- Quantity must come from full test-design decomposition, not from padding. Do not fabricate meaningless, duplicate, or hypothetical business scenarios just to reach a number.\n");
         builder.append("- Before writing cases, traverse all relevant coverage dimensions and split every distinguishable valid test point into an independent case: normal flows, exception flows, boundary values, equivalence classes, state transitions, multi-condition combinations/decision tables, error guessing, missing required data, multi-role differences, data dependencies, scheduled-task timing anomalies, third-party interaction exceptions, end-to-end links, non-functional risks, and test data initialization/cleanup.\n");
         builder.append("- Never return only one happy-path case when the requirement contains any branch, parameter, state, role, external dependency, scheduled behavior, UI/API flow, or abnormal condition.\n");
         builder.append("- For every explicit judgment rule, parameter validation, and state switch, generate positive matching, negative mismatch, boundary threshold, and missing-field variants when they are meaningful.\n");
         builder.append("- Cases with the same core trigger condition, execution steps, and expected result are duplicates. Minor changes to irrelevant field values cannot be treated as independent cases.\n");
         builder.append("- If the requirement is thin and only contains limited distinguishable test points, output all valid high-value cases truthfully even if the total is small. When the output format supports remainingCoverageGaps, explain that no more expandable scenarios exist.\n");
-        builder.append("- If all distinguishable valid scenarios exceed ").append(maxCases).append(", output the highest-value ")
-                .append(maxCases).append(" cases first, prioritizing high business risk, exception/boundary/state/combination coverage, third-party or scheduled-task failures, then normal and non-functional risks. When supported, report omitted branches in remainingCoverageGaps.\n");
         if (config.getReviewChecklist() != null && !config.getReviewChecklist().isBlank()) {
             builder.append("[Extra Checklist]\n").append(config.getReviewChecklist().trim()).append("\n\n");
         }
@@ -90,7 +86,7 @@ public class AiPromptBuilderSupport {
                        - Do not fabricate exact requirement wording. If unsure, summarize instead of quoting.
                     7. Keep titles, steps, expected results, generationReason, and requirementEvidence concrete, executable, and verifiable.
                     8. Cover useful test points first. Do not pad with duplicate or low-value cases.
-                    9. There is no fixed minimum count. The only hard quantity rule is the maximum cap in Smart Generation Policy; however, all relevant coverage dimensions must be decomposed into independent cases, and a single happy-path-only answer is not acceptable when expandable test points exist.
+                    9. There is no fixed minimum count. Decompose all relevant coverage dimensions into independent cases, and do not return only a happy-path case when expandable test points exist.
                     10. When text and images both provide information, combine them and do not ignore key UI or flow details.
                     """);
         } else {
@@ -157,23 +153,17 @@ public class AiPromptBuilderSupport {
             builder.append("Use these gaps as input, but independently verify coverage against the requirement.\n\n");
         }
         if (!allowSupplement) {
-            builder.append("[Batch Review Rule]\n本次只评审当前批次已有用例，不要输出 supplementCases，也不要在本批次直接补充新用例。所有缺口只写入 unresolvedCoverageGaps，待全部批次汇总后统一处理。\n\n");
+            builder.append("[Review Scope Rule]\n本次只评审上方全部已有用例，不要直接输出补充用例。所有缺口只在最后的 SUMMARY.unresolvedCoverageGaps 中汇总，后端将在评审完成后统一确认和补充。\n\n");
         }
         builder.append("[Candidate Cases To Review]\n");
         int index = 0;
         for (AiExistingCaseItem item : request.generatedCases()) {
-            builder.append("[Candidate ID ").append(nullSafe(item.candidateCaseId()))
-                    .append(", Index ").append(index++).append("] Title: ").append(nullSafe(item.title())).append('\n');
-            builder.append("   Content Version: ").append(item.contentVersion() == null ? 1 : item.contentVersion())
-                    .append(", Content Hash: ").append(nullSafe(item.contentHash())).append('\n');
+            builder.append("[Candidate Index ").append(index++).append("] Title: ").append(nullSafe(item.title())).append('\n');
             builder.append("   Type: ").append(nullSafe(item.caseType()))
                     .append(", Priority: ").append(nullSafe(item.priority())).append('\n');
             builder.append("   Precondition: ").append(nullSafe(item.precondition())).append('\n');
             builder.append("   Steps: ").append(nullSafe(item.steps())).append('\n');
-            builder.append("   Expected Result: ").append(nullSafe(item.expectedResult())).append('\n');
-            builder.append("   Test Angle: ").append(nullSafe(item.testAngle())).append('\n');
-            builder.append("   Generation Reason: ").append(nullSafe(item.generationReason())).append('\n');
-            builder.append("   Requirement Evidence: ").append(nullSafe(item.requirementEvidence())).append("\n\n");
+            builder.append("   Expected Result: ").append(nullSafe(item.expectedResult())).append("\n\n");
         }
         if (config.getReviewChecklist() != null && !config.getReviewChecklist().isBlank()) {
             builder.append("[Extra Review Checklist]\n").append(config.getReviewChecklist().trim()).append("\n\n");
@@ -183,38 +173,16 @@ public class AiPromptBuilderSupport {
                     [Output Requirements]
                     1. Return NDJSON only. Do not return markdown, explanation, JSON array wrappers, or extra prose.
                     2. You have the full candidate case set above. First evaluate overall coverage, duplicates, gaps, and priorities internally, then output results line by line.
-                    3. Output one complete JSON object per line. Flush each line immediately after the decision is ready. Do not wait until all lines are complete before emitting.
-                    4. Output reviewed existing-case lines in ascending caseIndex order, then output any supplement lines. candidateCaseId is the primary mapping key; caseIndex is compatibility and display information only.
-                    5. Reviewed existing-case lines must contain:
-                       - candidateCaseId: the exact Candidate ID shown above
-                       - caseIndex: the zero-based Index shown above, for compatibility only
-                       - reviewStatus: APPROVED, CHANGE_SUGGESTED, CONFIRM_REQUIRED, or NOT_RECOMMENDED
-                       - suggestedAction: KEEP, MODIFY, EXCLUDE, or MERGE
-                       - summary: one short actionable review summary. Do not mention internal labels such as "Index 0", "caseIndex", or "itemIndex"; refer to the case title or user-facing case number when needed.
-                       - reason: specific reason supporting the status and action
-                       - score: integer from 0 to 100
-                       - confidence: number from 0 to 1
-                       - coverageComment: explain whether this case covers the intended requirement, risk, boundary, or scenario
-                       - evidenceComment: judge whether requirementEvidence clearly maps to requirement text, business rule, image/prototype information, or a reasonable risk-based inference
-                       - reviewComment: final quality judgment for this case
-                       - suggestedCase: required when suggestedAction is MODIFY or MERGE, containing the full suggested case fields
-                       - mergeTargetCaseIds: required when suggestedAction is MERGE
-                       - sourceVersion: the exact Content Version shown above
-                       - sourceContentHash: the exact Content Hash shown above
-                       - coverageGap: optional gap this case relates to
-                    6. Supplement lines must contain:
-                       - status: SUPPLEMENTED
-                       - summary: one short reason for adding the case
-                       - supplementCase: the full new case fields
-                       - supplementReason: what missing coverage this case fills
-                       - coverageGap: the gap being covered
-                    7. Use APPROVED + KEEP when the case can be kept unchanged.
-                    8. Use CHANGE_SUGGESTED + MODIFY when the case is valuable but should be changed; include suggestedCase.
-                    9. Do not use MODIFY or MERGE without a complete suggestedCase. If you cannot provide a reliable full suggestion, use CONFIRM_REQUIRED.
-                    10. Use CONFIRM_REQUIRED when requirement ambiguity or merge uncertainty requires a human decision.
-                    11. Use NOT_RECOMMENDED when the case is duplicated, low-value, unexecutable, or misaligned.
-                    12. Add SUPPLEMENTED lines only for important missing coverage. Do not pad the count.
-                    13. Never state that a suggestion has already been applied. You only provide a review conclusion and a read-only suggestion for human confirmation.
+                    3. Output one complete JSON object per line and flush it immediately. Use the supplied Candidate Index as caseIndex and review existing cases in ascending caseIndex order.
+                    4. Return exactly one decision line for every existing case. Never omit a case and never treat an omitted case as approved.
+                    5. Keep APPROVED lines minimal. The exact schema is {"caseIndex":0,"status":"APPROVED"}. Do not repeat case content, reason, summary, score, confidence, comments, or suggestions.
+                    6. For CHANGE_SUGGESTED, return {"caseIndex":0,"status":"CHANGE_SUGGESTED","reason":"specific actionable reason","suggestedCase":{...full case fields...}}.
+                    7. For CONFIRM_REQUIRED, return {"caseIndex":0,"status":"CONFIRM_REQUIRED","reason":"risk or requirement ambiguity that needs human confirmation"}. Do not modify the case.
+                    8. For NOT_RECOMMENDED, return {"caseIndex":0,"status":"NOT_RECOMMENDED","reasonCode":"DUPLICATE|LOW_VALUE|UNEXECUTABLE|MISALIGNED|OTHER","reason":"specific reason"}. Do not return suggestedCase.
+                    9. After all decision lines, output exactly one final line: {"type":"SUMMARY","reviewedCount":<number of decision lines>,"unresolvedCoverageGaps":["confirmed global gap"],"result":"APPROVE|REJECT|SUGGEST"}.
+                    10. reviewedCount must equal the total number of candidate cases. Only put globally missing coverage in unresolvedCoverageGaps; do not mistake a case that appears later in the supplied candidate set for a gap.
+                    11. Do not output SUPPLEMENTED lines in this review. Coverage supplementation is a separate backend step after SUMMARY.
+                    12. Never state that a suggestion has already been applied. Suggestions are read-only until human confirmation.
                     """);
         } else {
             builder.append("""
@@ -307,7 +275,7 @@ public class AiPromptBuilderSupport {
         StringBuilder builder = new StringBuilder();
         builder.append(config.getPromptTemplate()).append("\n\n");
         builder.append("[Coverage Review Supplement]\n");
-        builder.append("根据全部评审批次汇总出的缺口，只补充重要且可执行的新测试用例。不要修改已有用例，不要重复已有用例。\n");
+        builder.append("以下是各评审批次汇总出的疑似缺口。先结合全部已有用例确认是否真的缺失，只针对确认缺失的覆盖点补充重要且可执行的新测试用例。不要修改已有用例，不要重复已有用例。\n");
         builder.append("[Requirement Title] ").append(request.requirementTitle().trim()).append('\n');
         builder.append("[Requirement Content]\n").append(request.requirementContent().trim()).append("\n\n");
         builder.append("[Global Coverage Gaps]\n");
@@ -339,8 +307,8 @@ public class AiPromptBuilderSupport {
                   "unresolvedCoverageGaps":["gap that remains unresolved"]
                 }
                 Rules:
-                - Output at most 20 supplement cases.
-                - Only output cases that directly address the listed global gaps.
+                - First verify every listed gap against all existing cases. If an existing case already covers it, do not supplement it.
+                - Only output the necessary cases that directly address confirmed global gaps. Do not target or pad to any case count.
                 - Do not output caseDecisions or explanatory prose.
                 """);
         return builder.toString();
@@ -359,8 +327,7 @@ public class AiPromptBuilderSupport {
             GenerateAiCasesRequest request,
             List<GeneratedAiCaseItem> generatedCases,
             List<String> missingGaps,
-            String supplementGuidance,
-            int maxCases
+            String supplementGuidance
     ) {
         StringBuilder builder = new StringBuilder();
         builder.append(config.getPromptTemplate()).append("\n\n");
@@ -399,11 +366,9 @@ public class AiPromptBuilderSupport {
                   }]
                 }
                 Rules:
-                - Output at most the requested supplement limit.
-                - Output only cases that directly address the listed gaps.
+                - Output only cases needed for the listed gaps. Do not target or pad to any case count.
                 - Do not output explanations outside JSON.
                 """);
-        builder.append("[Supplement Limit] ").append(maxCases).append('\n');
         return builder.toString();
     }
 

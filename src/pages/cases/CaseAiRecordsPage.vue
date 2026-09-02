@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type HistoryState } from 'vue-router'
 import { FolderOpened } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -103,6 +103,7 @@ const adoptForm = reactive({
 })
 
 let pollingTimer: number | null = null
+let initialActivationHandled = false
 let tableFrameObserver: ResizeObserver | null = null
 
 const runningStatuses: TaskStatus[] = ['PENDING', 'GENERATING', 'REVIEWING']
@@ -652,6 +653,18 @@ watch(resolvedWorkspaceCode, () => {
 onMounted(() => {
   restoreListContext()
   void loadRecords()
+})
+
+onActivated(() => {
+  if (!initialActivationHandled) {
+    initialActivationHandled = true
+    return
+  }
+  void loadRecords({ silent: true })
+})
+
+onDeactivated(() => {
+  stopPolling()
 })
 
 watch(tableFrameRef, (element) => {

@@ -8,7 +8,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -272,6 +274,34 @@ class AiProviderClientTests {
     }
 
     @Test
+    void doesNotFallbackWhenConsumerStopsStreamAfterReachingCaseLimit() {
+        AiProtocolAdapter adapter = mock(AiProtocolAdapter.class);
+        when(adapter.protocolType()).thenReturn(AiProviderClient.PROTOCOL_OPENAI_COMPATIBLE_CHAT);
+        when(adapter.supportsStructuredStreaming()).thenReturn(true);
+        when(adapter.streamStructuredContent(any(), any(), any(), any(), any()))
+                .thenThrow(new AiStreamLimitReachedException());
+        AiProviderClient client = new AiProviderClient(List.of(adapter));
+
+        assertThatThrownBy(() -> client.streamStructuredContentWithResult(
+                new AiProviderRequestProfile(
+                        AiProviderClient.PROTOCOL_OPENAI_COMPATIBLE_CHAT,
+                        "OPENAI_COMPATIBLE_CHAT",
+                        "qwen3.8-max",
+                        "https://proxy.example/v1",
+                        0.3,
+                        0.9,
+                        20,
+                        60
+                ),
+                "key",
+                "prompt",
+                delta -> { }
+        )).isInstanceOf(AiStreamLimitReachedException.class);
+
+        verify(adapter, never()).requestStructuredContent(any(), any(), any(), any());
+    }
+
+    @Test
     void parsesWrappedGeneratedCasesAndKeepsCoverageMetadata() {
         AiProviderClient client = new AiProviderClient(List.of());
         String content = """
@@ -427,6 +457,48 @@ class AiProviderClientTests {
 
         assertThat(result.structured()).isFalse();
         assertThat(result.caseDecisions()).isEmpty();
+    }
+
+    @Test
+    void parsesCompactApprovedReviewAndGlobalSummary() {
+        AiResponseParsingSupport parsingSupport = new AiResponseParsingSupport(new AiProviderClient(List.of()));
+        String rawContent = """
+                {"caseIndex":0,"status":"APPROVED"}
+                {"caseIndex":1,"status":"CONFIRM_REQUIRED","reason":"permission scope is unclear"}
+                {"type":"SUMMARY","reviewedCount":2,"unresolvedCoverageGaps":["timeout recovery"],"result":"SUGGEST"}
+                """;
+        Map<Integer, AiCaseService.ReviewCaseStreamUpdate> updates = new LinkedHashMap<>();
+        StringBuilder buffer = new StringBuilder(rawContent);
+        parsingSupport.drainCompleteJsonValues(buffer, value -> parsingSupport.emitReviewValue(
+                value, 2, new StringBuilder(rawContent), updates, null
+        ));
+
+        AiReviewResult result = parsingSupport.buildStreamReviewResult(rawContent, updates);
+        parsingSupport.validateReviewCompleteness(result, 2, rawContent);
+
+        assertThat(result.caseDecisions()).hasSize(2);
+        assertThat(result.caseDecisions().get(0).status()).isEqualTo("APPROVED");
+        assertThat(result.caseDecisions().get(0).summary()).isNull();
+        assertThat(result.unresolvedCoverageGaps()).containsExactly("timeout recovery");
+    }
+
+    @Test
+    void rejectsCompactReviewWhenAnyCandidateDecisionIsMissing() {
+        AiResponseParsingSupport parsingSupport = new AiResponseParsingSupport(new AiProviderClient(List.of()));
+        String rawContent = """
+                {"caseIndex":0,"status":"APPROVED"}
+                {"type":"SUMMARY","reviewedCount":1,"unresolvedCoverageGaps":[],"result":"APPROVE"}
+                """;
+        Map<Integer, AiCaseService.ReviewCaseStreamUpdate> updates = new LinkedHashMap<>();
+        StringBuilder buffer = new StringBuilder(rawContent);
+        parsingSupport.drainCompleteJsonValues(buffer, value -> parsingSupport.emitReviewValue(
+                value, 2, new StringBuilder(rawContent), updates, null
+        ));
+        AiReviewResult result = parsingSupport.buildStreamReviewResult(rawContent, updates);
+
+        assertThatThrownBy(() -> parsingSupport.validateReviewCompleteness(result, 2, rawContent))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("应返回 2 条逐条结论");
     }
 
     @Test

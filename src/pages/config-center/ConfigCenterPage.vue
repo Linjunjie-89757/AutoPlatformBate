@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { aiProviderApi } from '@/entities/ai-provider'
@@ -18,6 +18,7 @@ import ConfigRunnerPanel from '@/widgets/config-runner-panel/ConfigRunnerPanel.v
 import { figmaConfigOverviewIcons } from '@/shared/assets/figma-icons'
 
 type ConfigCenterView = ConfigCenterTab | 'overview' | 'ai'
+type ConfigPanelView = 'dbConnection' | 'env' | 'param' | 'notification' | 'runner' | 'ai' | 'mock'
 
 interface ConfigTabItem {
   key: ConfigCenterView
@@ -68,6 +69,15 @@ const configTabs: ConfigTabItem[] = [
 ]
 
 const configTabKeys = new Set<ConfigCenterView>(configTabs.map(item => item.key))
+const configPanelComponents: Record<ConfigPanelView, Component> = {
+  dbConnection: ConfigDbPanel,
+  env: ConfigEnvironmentFigmaWorkspace,
+  param: ConfigVariableFigmaWorkspace,
+  notification: ConfigNotificationPanel,
+  runner: ConfigRunnerPanel,
+  ai: ConfigAiPanel,
+  mock: ConfigMockPanel,
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -92,6 +102,12 @@ const workspaceCode = computed({
   set: (value: string) => setSelectedWorkspaceCode(value),
 })
 const canManageConfig = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'config.manage'))
+const activeConfigPanel = computed<Component | null>(() => (
+  activeTab.value === 'overview' ? null : configPanelComponents[activeTab.value as ConfigPanelView]
+))
+const activeConfigPanelProps = computed(() => (
+  activeTab.value === 'runner' ? {} : { workspaceCode: workspaceCode.value }
+))
 const pageErrorMessage = computed(() => (
   workspaceErrorMessage.value
   || (activeTab.value === 'overview' ? overviewErrorMessage.value : '')
@@ -404,13 +420,12 @@ watch(
         </div>
 
         <fieldset class="config-center-page__panel" :disabled="!canManageConfig">
-          <ConfigDbPanel v-if="activeTab === 'dbConnection'" :workspace-code="workspaceCode" />
-          <ConfigEnvironmentFigmaWorkspace v-else-if="activeTab === 'env'" :workspace-code="workspaceCode" />
-          <ConfigVariableFigmaWorkspace v-else-if="activeTab === 'param'" :workspace-code="workspaceCode" />
-          <ConfigMockPanel v-else-if="activeTab === 'mock'" :workspace-code="workspaceCode" />
-          <ConfigNotificationPanel v-else-if="activeTab === 'notification'" :workspace-code="workspaceCode" />
-          <ConfigRunnerPanel v-else-if="activeTab === 'runner'" />
-          <ConfigAiPanel v-else-if="activeTab === 'ai'" :workspace-code="workspaceCode" />
+          <KeepAlive :max="8">
+            <component
+              :is="activeConfigPanel"
+              v-bind="activeConfigPanelProps"
+            />
+          </KeepAlive>
         </fieldset>
       </template>
     </main>

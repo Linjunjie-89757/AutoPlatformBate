@@ -20,18 +20,30 @@ class AiCaseConfigDomainServiceTests {
     );
 
     @Test
-    void maxCasesDefaultsToFifty() {
-        assertEquals(50, service.normalizeRoleMaxCases(null));
+    void maxCasesDefaultsToTwoHundred() {
+        assertEquals(200, service.normalizeRoleMaxCases(null));
     }
 
     @Test
-    void maxCasesAllowsTwoHundred() {
-        assertEquals(200, service.normalizeRoleMaxCases(200));
+    void maxCasesAllowsFiveHundred() {
+        assertEquals(500, service.normalizeRoleMaxCases(500));
     }
 
     @Test
-    void maxCasesRejectsValuesAboveTwoHundred() {
-        assertThrows(BadRequestException.class, () -> service.normalizeRoleMaxCases(201));
+    void generatorMaxCasesRejectsValuesBelowOneHundred() {
+        assertThrows(BadRequestException.class, () -> service.normalizeRoleMaxCases(
+                AiCaseConfigDomainService.ROLE_GENERATOR, 99
+        ));
+    }
+
+    @Test
+    void reviewerMaxCasesKeepsLegacyMinimum() {
+        assertEquals(50, service.normalizeRoleMaxCases(AiCaseConfigDomainService.ROLE_REVIEWER, 50));
+    }
+
+    @Test
+    void maxCasesRejectsValuesAboveFiveHundred() {
+        assertThrows(BadRequestException.class, () -> service.normalizeRoleMaxCases(501));
     }
 
     @Test

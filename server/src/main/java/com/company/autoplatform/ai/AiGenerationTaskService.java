@@ -101,6 +101,7 @@ public class AiGenerationTaskService {
         List<GeneratedAiCaseItem> generatedCases = responseSupport.readValue(
                 entity.getGeneratedCasesJson(), new TypeReference<List<GeneratedAiCaseItem>>() {}, List.of()
         );
+        int caseGenerationLimit = taskCaseTotalLimit(entity);
         List<AiCaseCandidateEntity> candidates = candidateService.listEntities(taskId);
         int previousTotalBatches = valueOrZero(entity.getTotalReviewBatches());
         int previousCompletedBatches = valueOrZero(entity.getCompletedReviewBatches());
@@ -120,7 +121,9 @@ public class AiGenerationTaskService {
             )));
             return;
         }
-        List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(generatedCases, candidates, reviewExecution.reviewResult());
+        List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(
+                generatedCases, candidates, reviewExecution.reviewResult(), caseGenerationLimit
+        );
         AiReviewResult mergedReview = mergeReviewResults(previousReview, reviewExecution.reviewResult());
         persistReviewSupplementCandidates(entity, generatedCases.size(), finalCases);
         entity.setGeneratedCasesJson(responseSupport.writeValue(finalCases));
@@ -199,7 +202,7 @@ public class AiGenerationTaskService {
                 assetIds,
                 List.of(),
                 null,
-                null
+                taskGenerationStageLimit(entity)
         ));
 
         entity = requireTask(entity.getTaskId());
@@ -261,7 +264,9 @@ public class AiGenerationTaskService {
         AiReviewResult review = reviewExecution.reviewResult();
         entity.setReviewProvider(reviewExecution.provider());
         entity.setReviewModel(reviewExecution.model());
-        List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(generation.generatedCases(), candidates, review);
+        List<GeneratedAiCaseItem> finalCases = resultMergeSupport.mergeCompleteReviewResult(
+                generation.generatedCases(), candidates, review, taskCaseTotalLimit(entity)
+        );
         persistReviewSupplementCandidates(entity, generation.generatedCases().size(), finalCases);
         entity.setGeneratedCasesJson(responseSupport.writeValue(finalCases));
         entity.setGeneratedCount(finalCases.size());
@@ -312,7 +317,7 @@ public class AiGenerationTaskService {
                         assetIds,
                         List.of(),
                         null,
-                        null
+                        taskGenerationStageLimit(entity)
                 ),
                 modelInfo -> {
                     AiGenerationTaskEntity latest = requireTask(taskId);
@@ -373,6 +378,23 @@ public class AiGenerationTaskService {
                     responseSupport.writeValue(Map.of("reason", blankToNull(generation.fallbackReason()) == null ? "" : generation.fallbackReason()))
             );
         }
+        if (generation.generationLimitReached()) {
+            appendEvent(
+                    taskId,
+                    "GENERATION_LIMIT_REACHED",
+                    "GENERATING",
+                    "WARN",
+                    "已达到生成阶段有效候选上限，模型流式输出已正常提前结束。",
+                    null,
+                    null,
+                    generation.provider(),
+                    generation.model(),
+                    responseSupport.writeValue(Map.of(
+                            "acceptedCaseCount", generatedCases.size(),
+                            "generationStageLimit", generation.effectiveMaxCases()
+                    ))
+            );
+        }
         appendSelfCheckEvents(taskId, generation.selfCheck(), generation.selfSupplementCases(), generation.provider(), generation.model());
         appendEvent(taskId, "GENERATION_COMPLETED", "GENERATING", "SUCCESS", "用例生成完成，共 " + generatedCases.size() + " 条。", null, null, generation.provider(), generation.model(), null);
 
@@ -400,7 +422,7 @@ public class AiGenerationTaskService {
                             throw new TaskCanceledException("任务已取消，停止接收评审流。");
                         }
                         if ("SUPPLEMENTED".equals(update.status()) && update.supplementCase() != null) {
-                            if (generatedCases.size() >= AiCaseService.FINAL_MAX_CASES) {
+                            if (generatedCases.size() >= taskCaseTotalLimit(latest)) {
                                 return;
                             }
                             GeneratedAiCaseItem supplemented = resultMergeSupport.withStreamSupplementMetadata(update);
@@ -533,6 +555,17 @@ public class AiGenerationTaskService {
         entity.setInputMode("MULTIMODAL");
         entity.setUpdatedAt(LocalDateTime.now());
         aiGenerationTaskMapper.updateById(entity);
+    }
+
+    private int taskCaseTotalLimit(AiGenerationTaskEntity entity) {
+        Integer limit = entity.getCaseGenerationLimit();
+        return limit == null
+                ? AiCaseService.DEFAULT_MAX_CASES
+                : Math.max(1, Math.min(limit, AiCaseService.SYSTEM_MAX_CASES));
+    }
+
+    private int taskGenerationStageLimit(AiGenerationTaskEntity entity) {
+        return AiCaseService.generationStageLimit(taskCaseTotalLimit(entity));
     }
 
     private void applyImageFallbackAudit(AiGenerationTaskEntity entity, boolean ignoredImages) {

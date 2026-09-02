@@ -257,6 +257,7 @@ export interface AiGenerationTaskItem {
   requirementTitle: string
   requirementContent: string
   outputMode: string
+  caseGenerationLimit?: number | null
   status: string
   generationStatus?: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL' | 'FAILED' | 'EMPTY' | 'CANCELED'
   reviewStatus?: 'NOT_STARTED' | 'RUNNING' | 'SUCCEEDED' | 'PARTIAL' | 'FAILED' | 'CANCELED'

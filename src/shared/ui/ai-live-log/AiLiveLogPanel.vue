@@ -378,7 +378,7 @@ function buildReviewCompletedLine(event: AiGenerationTaskEventItem, record: AiGe
   const notRecommended = payload?.notRecommended ?? record.generatedCases.filter(item => item.aiReviewStatus === 'NOT_RECOMMENDED').length
   const confirmRequired = record.generatedCases.filter(item => item.aiReviewStatus === 'CONFIRM_REQUIRED').length
   const passed = record.generatedCases.filter(item => ['APPROVED', 'OPTIMIZED', 'SUPPLEMENTED'].includes(item.aiReviewStatus || '')).length
-  return buildTimedSystemLine(event, `AI评审完成: 通过 ${passed} 条，已优化 ${optimized} 条，需优化 ${confirmRequired} 条，补充 ${supplemented} 条，不建议 ${notRecommended} 条`, 'green', '✓')
+  return buildTimedSystemLine(event, `AI评审完成: 通过 ${passed} 条，已优化 ${optimized} 条，建议确认 ${confirmRequired} 条，补充 ${supplemented} 条，不建议 ${notRecommended} 条`, 'green', '✓')
 }
 
 function buildFailureLines(event: AiGenerationTaskEventItem, record: AiGenerationTaskItem): ConsoleLine[] {
@@ -402,12 +402,12 @@ function getReviewStatusLabel(status?: string | null) {
   const map: Record<string, string> = {
     APPROVED: '通过',
     OPTIMIZED: '已优化',
-    CONFIRM_REQUIRED: '需优化',
+    CONFIRM_REQUIRED: '建议确认',
     NOT_RECOMMENDED: '不建议',
     REJECTED: '不建议',
     SUPPLEMENTED: '补充',
   }
-  return status ? (map[status] ?? status) : '待确认'
+  return status ? (map[status] ?? status) : '待评审'
 }
 
 function getReviewTone(status?: string | null): ConsoleTone {

@@ -16,7 +16,7 @@ public record GenerateAiCasesRequest(
         List<AiExistingCaseItem> existingCases,
         Long ownerId,
         @Min(value = 1, message = "Max cases must be >= 1")
-        @Max(value = 200, message = "Max cases must be <= 200")
+        @Max(value = 500, message = "Max cases must be <= 500")
         Integer maxCases
 ) {
 }

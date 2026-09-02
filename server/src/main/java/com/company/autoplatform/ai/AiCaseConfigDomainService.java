@@ -18,8 +18,10 @@ public class AiCaseConfigDomainService {
     private static final long PERSONAL_SCOPE_WORKSPACE_ID = 0L;
     private static final String PERSONAL_SCOPE_WORKSPACE_CODE = "PERSONAL";
     private static final String PERSONAL_SCOPE_WORKSPACE_NAME = "我的配置";
-    private static final int DEFAULT_MAX_CASES = 50;
-    private static final int SYSTEM_MAX_CASES = 200;
+    private static final int DEFAULT_GENERATOR_MAX_CASES = 200;
+    private static final int DEFAULT_REVIEWER_MAX_CASES = 50;
+    private static final int MIN_CONFIG_MAX_CASES = 100;
+    private static final int SYSTEM_MAX_CASES = 500;
     private static final double DEFAULT_GENERATOR_TOP_P = 0.9;
     private static final double DEFAULT_REVIEWER_TOP_P = 0.7;
 
@@ -188,7 +190,7 @@ public class AiCaseConfigDomainService {
         entity.setReviewChecklist(blankToNull(request.reviewChecklist()));
         entity.setTemperature(request.temperature());
         entity.setTopP(normalizeTopP(entity.getRoleType(), request.topP()));
-        entity.setMaxCases(normalizeRoleMaxCases(request.maxCases()));
+        entity.setMaxCases(normalizeRoleMaxCases(entity.getRoleType(), request.maxCases()));
         entity.setStatus(normalizeStatus(request.status()));
         AiProviderConnectionEntity connection = aiProviderDomainService.resolveRequestedConnection(request, existing, creating);
         entity.setProviderConnectionId(connection.getId());
@@ -380,9 +382,9 @@ public class AiCaseConfigDomainService {
         Double topP = request.topP() == null
                 ? (existing == null ? defaultTopPForRole(roleType) : normalizeTopP(roleType, existing.getTopP()))
                 : normalizeTopP(roleType, request.topP());
-        Integer maxCases = request.maxCases() == null
-                ? (existing == null ? DEFAULT_MAX_CASES : existing.getMaxCases())
-                : request.maxCases();
+        Integer maxCases = normalizeRoleMaxCases(roleType, request.maxCases() == null
+                ? (existing == null ? null : existing.getMaxCases())
+                : request.maxCases());
         return new AiProviderRequestProfile(
                 protocolType,
                 aiProviderDomainService.providerForProtocolType(protocolType),
@@ -414,11 +416,21 @@ public class AiCaseConfigDomainService {
     }
 
     Integer normalizeRoleMaxCases(Integer maxCases) {
+        return normalizeRoleMaxCases(ROLE_GENERATOR, maxCases);
+    }
+
+    Integer normalizeRoleMaxCases(String roleType, Integer maxCases) {
+        String normalizedRoleType = normalizeRoleType(roleType);
         if (maxCases == null) {
-            return DEFAULT_MAX_CASES;
+            return ROLE_GENERATOR.equals(normalizedRoleType)
+                    ? DEFAULT_GENERATOR_MAX_CASES
+                    : DEFAULT_REVIEWER_MAX_CASES;
         }
-        if (maxCases < 1 || maxCases > SYSTEM_MAX_CASES) {
-            throw new BadRequestException("Max cases must be between 1 and 200");
+        int minimum = ROLE_GENERATOR.equals(normalizedRoleType) ? MIN_CONFIG_MAX_CASES : 1;
+        if (maxCases < minimum || maxCases > SYSTEM_MAX_CASES) {
+            throw new BadRequestException(ROLE_GENERATOR.equals(normalizedRoleType)
+                    ? "Generator max cases must be between 100 and 500"
+                    : "Reviewer max cases must be between 1 and 500");
         }
         return maxCases;
     }

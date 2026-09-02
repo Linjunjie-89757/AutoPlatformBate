@@ -116,7 +116,7 @@ function createDefaultForm(roleType: RoleType): RoleFormState {
     reviewChecklist: roleType === 'CASE_GENERATOR' ? DEFAULT_GENERATOR_CHECKLIST : DEFAULT_REVIEW_CHECKLIST,
     temperature: roleType === 'CASE_GENERATOR' ? 0.7 : 0.5,
     topP: roleType === 'CASE_GENERATOR' ? 0.9 : 0.7,
-    maxCases: 50,
+    maxCases: roleType === 'CASE_GENERATOR' ? 200 : 50,
     supportsImageInput: null,
   }
 }
@@ -143,7 +143,9 @@ function applyConfig(roleType: RoleType, config: AiCaseConfigItem | null) {
       : (roleType === 'CASE_GENERATOR' ? DEFAULT_GENERATOR_CHECKLIST : DEFAULT_REVIEW_CHECKLIST),
     temperature: config.temperature ?? (roleType === 'CASE_GENERATOR' ? 0.7 : 0.5),
     topP: config.topP ?? (roleType === 'CASE_GENERATOR' ? 0.9 : 0.7),
-    maxCases: config.maxCases ?? 50,
+    maxCases: roleType === 'CASE_GENERATOR'
+      ? Math.min(500, Math.max(100, config.maxCases ?? 200))
+      : (config.maxCases ?? 50),
     supportsImageInput: config.capabilityOverride?.imageInput ?? null,
   })
 }

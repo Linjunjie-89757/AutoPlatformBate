@@ -74,12 +74,12 @@ public class AiGenerationCaseQualityService {
         return allowed.contains(normalized) ? normalized : null;
     }
 
-    private String fingerprint(GeneratedAiCaseItem item) {
+    static String fingerprint(GeneratedAiCaseItem item) {
         return normalizeText(item.title()) + "|" + normalizeText(item.precondition()) + "|"
                 + normalizeText(item.steps()) + "|" + normalizeText(item.expectedResult());
     }
 
-    private String normalizeText(String value) {
+    private static String normalizeText(String value) {
         return value == null ? "" : value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 

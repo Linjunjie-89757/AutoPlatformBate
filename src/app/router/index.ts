@@ -211,6 +211,7 @@ const routes: RouteRecordRaw[] = [
           title: '配置中心',
           description: '后续保持公共配置边界，迁移环境、参数、数据库连接配置。',
           permissionCode: 'config.view',
+          keepAlivePage: true,
         },
       },
       {
@@ -233,6 +234,7 @@ const routes: RouteRecordRaw[] = [
               title: '用例中心',
               description: '按旧项目方向重建用例管理页。',
               permissionCode: 'cases.view',
+              keepAliveTab: true,
             },
           },
           {
@@ -253,6 +255,7 @@ const routes: RouteRecordRaw[] = [
               title: '用例中心',
               description: 'AI 用例生成页面将按旧项目方向后续补齐。',
               permissionCode: 'cases.create',
+              keepAliveTab: true,
             },
           },
           {
@@ -262,6 +265,7 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: '用例中心',
               description: 'AI 生成记录页面将按旧项目方向后续补齐。',
+              keepAliveTab: true,
             },
           },
           {
@@ -280,6 +284,7 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: '用例中心',
               description: 'AI 配置页面将按旧项目方向后续补齐。',
+              keepAliveTab: true,
             },
           },
         ],
@@ -368,6 +373,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '接口管理',
           description: '管理接口定义、接口用例、导入和调试运行。',
+          keepAlivePage: true,
         },
       },
       {
@@ -377,6 +383,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '接口场景',
           description: '编排接口用例、测试数据和场景运行结果。',
+          keepAlivePage: true,
         },
       },
       {
@@ -386,6 +393,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '执行套件',
           description: '编排接口用例和场景，维护定时任务、CI/CD 和运行结果。',
+          keepAlivePage: true,
         },
       },
       {
@@ -399,6 +407,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '接口自动化设置',
           description: '维护接口自动化运行、通知和全局策略设置。',
+          keepAlivePage: true,
         },
       },
       {
@@ -412,6 +421,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 用例管理',
           description: '管理 Web UI 自动化用例、步骤和调试运行。',
+          keepAlivePage: true,
         },
       },
       {
@@ -430,6 +440,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 自动化',
           description: '维护页面对象、元素定位器、验证结果和用例引用关系。',
+          keepAlivePage: true,
         },
       },
       {
@@ -439,6 +450,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 自动化',
           description: '按 Figma 维护 Web UI 执行套件、用例编排和运行配置。',
+          keepAlivePage: true,
         },
       },
       {
@@ -457,6 +469,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 模板库',
           description: '沉淀和维护常用 Web UI 用例模板。',
+          keepAlivePage: true,
         },
       },
       {
@@ -466,6 +479,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 执行记录',
           description: '查看单次运行报告、失败步骤和截图证据。',
+          keepAlivePage: true,
         },
       },
       {
@@ -475,6 +489,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 批次报告',
           description: '查看批量运行、CI 触发和批次结果。',
+          keepAlivePage: true,
         },
       },
       {
@@ -484,6 +499,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 环境配置',
           description: '管理 Web UI 运行环境和默认变量集。',
+          keepAlivePage: true,
         },
       },
       {
@@ -493,6 +509,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Web UI 变量集设置',
           description: '维护 Web UI 用例运行、调试和采集使用的变量集。',
+          keepAlivePage: true,
         },
       },
       {

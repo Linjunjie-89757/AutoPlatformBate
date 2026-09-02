@@ -1,13 +1,16 @@
 package com.company.autoplatform.ai;
 
+import com.company.autoplatform.common.BadRequestException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 
 @Component
@@ -66,25 +69,34 @@ public class AiResponseParsingSupport {
         if (rawValue == null || rawValue.isBlank()) {
             return;
         }
+        AiGeneratedCasesResult parsed;
         try {
-            AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawValue, maxCases - generatedCases.size());
-            warnings.addAll(parsed.warnings());
-            invalidCases.addAll(parsed.invalidCases());
-            for (GeneratedAiCaseItem item : parsed.generatedCases()) {
-                if (generatedCases.size() >= maxCases) {
-                    break;
-                }
-                generatedCases.add(item);
-                if (caseConsumer != null) {
-                    caseConsumer.accept(new AiCaseService.GeneratedCaseStreamUpdate(
-                            generatedCases.size() - 1,
-                            item,
-                            rawOutput.toString()
-                    ));
-                }
-            }
+            parsed = aiProviderClient.parseGeneratedCasesContent(rawValue, maxCases - generatedCases.size());
         } catch (RuntimeException ignored) {
             // Keep the raw stream and let the final parser report the complete failure.
+            return;
+        }
+        warnings.addAll(parsed.warnings());
+        invalidCases.addAll(parsed.invalidCases());
+        for (GeneratedAiCaseItem item : parsed.generatedCases()) {
+            if (generatedCases.size() >= maxCases) {
+                break;
+            }
+            String fingerprint = AiGenerationCaseQualityService.fingerprint(item);
+            boolean duplicate = generatedCases.stream()
+                    .anyMatch(existing -> AiGenerationCaseQualityService.fingerprint(existing).equals(fingerprint));
+            if (duplicate) {
+                warnings.add("Streamed candidate duplicated an accepted candidate and was ignored");
+                continue;
+            }
+            generatedCases.add(item);
+            if (caseConsumer != null) {
+                caseConsumer.accept(new AiCaseService.GeneratedCaseStreamUpdate(
+                        generatedCases.size() - 1,
+                        item,
+                        rawOutput.toString()
+                ));
+            }
         }
     }
 
@@ -123,6 +135,10 @@ public class AiResponseParsingSupport {
             Integer score = optionalInt(root.path("score"));
             Double confidence = optionalDouble(root.path("confidence"));
             String reason = firstText(root, "reason", "reviewReason", "summary");
+            String reasonCode = firstText(root, "reasonCode");
+            if ("NOT_RECOMMENDED".equals(status) && reasonCode != null) {
+                reason = reason == null ? reasonCode : reasonCode + ": " + reason;
+            }
             List<String> mergeTargetCandidateIds = stringList(firstPresentNode(root, "mergeTargetCaseIds", "mergeTargetCandidateIds"));
             Integer sourceVersion = optionalInt(root.path("sourceVersion"));
             String sourceContentHash = firstText(root, "sourceContentHash");
@@ -150,15 +166,14 @@ public class AiResponseParsingSupport {
             if (suggestedCase == null) {
                 suggestedCase = optimizedCase;
             }
-            if (summary == null || summary.isBlank()) {
+            if ((summary == null || summary.isBlank()) && !"APPROVED".equals(status)) {
                 summary = switch (status) {
-                    case "APPROVED" -> "AI review approved this case.";
                     case "NOT_RECOMMENDED", "REJECTED" -> "AI review does not recommend this case.";
                     case "CHANGE_SUGGESTED" -> "AI review suggested changes for this case.";
                     default -> "AI review suggests confirming this case.";
                 };
             }
-            if (coverageComment == null || coverageComment.isBlank()) {
+            if ((coverageComment == null || coverageComment.isBlank()) && !"APPROVED".equals(status)) {
                 coverageComment = summary;
             }
             if (evidenceComment == null || evidenceComment.isBlank()) {
@@ -178,9 +193,12 @@ public class AiResponseParsingSupport {
         if (updates.isEmpty()) {
             return aiProviderClient.parseReviewResultContent(rawContent);
         }
+        ReviewStreamSummary streamSummary = parseReviewStreamSummary(rawContent);
         boolean hasRejected = updates.values().stream().anyMatch(item -> "NOT_RECOMMENDED".equals(item.status()));
         boolean hasSuggested = updates.values().stream().anyMatch(item -> !"APPROVED".equals(item.status()));
-        String result = hasRejected ? "REJECT" : hasSuggested ? "SUGGEST" : "APPROVE";
+        String result = streamSummary == null || streamSummary.result() == null
+                ? (hasRejected ? "REJECT" : hasSuggested ? "SUGGEST" : "APPROVE")
+                : normalizeReviewResult(streamSummary.result());
         List<String> issues = updates.values().stream()
                 .filter(item -> "NOT_RECOMMENDED".equals(item.status()))
                 .map(item -> "Case " + (item.itemIndex() + 1) + ": " + item.summary())
@@ -189,7 +207,10 @@ public class AiResponseParsingSupport {
                 .filter(item -> item.itemIndex() != null && !"APPROVED".equals(item.status()) && !"NOT_RECOMMENDED".equals(item.status()) && !"SUPPLEMENTED".equals(item.status()))
                 .map(item -> "Case " + (item.itemIndex() + 1) + ": " + item.summary())
                 .toList();
-        String summary = "AI review completed for " + updates.size() + " generated cases.";
+        long reviewedCount = updates.values().stream().filter(item -> item.itemIndex() != null).count();
+        String summary = streamSummary == null || streamSummary.summary() == null
+                ? "AI review completed for " + reviewedCount + " generated cases."
+                : streamSummary.summary();
         return new AiReviewResult(result, summary, issues, suggestions, updates.values().stream()
                 .filter(item -> !"SUPPLEMENTED".equals(item.status()))
                 .map(item -> new AiReviewCaseDecision(
@@ -215,7 +236,72 @@ public class AiResponseParsingSupport {
                 .toList(), updates.values().stream()
                 .filter(item -> "SUPPLEMENTED".equals(item.status()) && item.supplementCase() != null)
                 .map(item -> withSupplementReviewMetadata(item.supplementCase(), item.summary(), item.supplementReason(), item.coverageGap()))
-                .toList(), List.of(), rawContent, true);
+                .toList(), streamSummary == null ? List.of() : streamSummary.unresolvedCoverageGaps(), rawContent, true);
+    }
+
+    void validateReviewCompleteness(AiReviewResult reviewResult, int expectedCaseCount, String rawContent) {
+        if (expectedCaseCount <= 0) {
+            return;
+        }
+        Set<Integer> reviewedIndexes = new HashSet<>();
+        if (reviewResult != null && reviewResult.caseDecisions() != null) {
+            for (AiReviewCaseDecision decision : reviewResult.caseDecisions()) {
+                if (decision.caseIndex() != null && decision.caseIndex() >= 0 && decision.caseIndex() < expectedCaseCount) {
+                    reviewedIndexes.add(decision.caseIndex());
+                }
+            }
+        }
+        if (reviewedIndexes.size() != expectedCaseCount) {
+            throw new BadRequestException("AI 评审结果不完整：应返回 " + expectedCaseCount
+                    + " 条逐条结论，实际返回 " + reviewedIndexes.size() + " 条");
+        }
+        ReviewStreamSummary streamSummary = parseReviewStreamSummary(rawContent);
+        if (streamSummary != null && streamSummary.reviewedCount() != null
+                && streamSummary.reviewedCount() != expectedCaseCount) {
+            throw new BadRequestException("AI 评审汇总数量不一致：应为 " + expectedCaseCount
+                    + " 条，SUMMARY 返回 " + streamSummary.reviewedCount() + " 条");
+        }
+    }
+
+    private ReviewStreamSummary parseReviewStreamSummary(String rawContent) {
+        if (rawContent == null || rawContent.isBlank()) {
+            return null;
+        }
+        ReviewStreamSummary[] found = new ReviewStreamSummary[]{null};
+        StringBuilder buffer = new StringBuilder(rawContent);
+        drainCompleteJsonValues(buffer, value -> {
+            try {
+                findReviewStreamSummary(OBJECT_MAPPER.readTree(value), found);
+            } catch (Exception ignored) {
+                // Legacy detailed review output may not use the compact SUMMARY record.
+            }
+        });
+        return found[0];
+    }
+
+    private void findReviewStreamSummary(JsonNode node, ReviewStreamSummary[] found) {
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (node.isArray()) {
+            for (JsonNode child : node) {
+                findReviewStreamSummary(child, found);
+            }
+            return;
+        }
+        if (!node.isObject()) {
+            return;
+        }
+        String type = firstText(node, "type");
+        if (!"SUMMARY".equalsIgnoreCase(type == null ? "" : type) && !node.has("reviewedCount")) {
+            return;
+        }
+        found[0] = new ReviewStreamSummary(
+                optionalInt(node.path("reviewedCount")),
+                stringList(firstPresentNode(node, "unresolvedCoverageGaps", "coverageGaps")),
+                firstText(node, "result"),
+                firstText(node, "summary", "message")
+        );
     }
 
     void emitCompleteReviewResultAsUpdates(
@@ -574,6 +660,24 @@ public class AiResponseParsingSupport {
             case "NOT_RECOMMENDED", "REJECT", "REJECTED", "FAIL", "FAILED" -> "NOT_RECOMMENDED";
             default -> "CONFIRM_REQUIRED";
         };
+    }
+
+    private String normalizeReviewResult(String result) {
+        if (result == null || result.isBlank()) {
+            return "SUGGEST";
+        }
+        return switch (result.trim().toUpperCase(Locale.ROOT)) {
+            case "APPROVE", "REJECT", "SUGGEST" -> result.trim().toUpperCase(Locale.ROOT);
+            default -> "SUGGEST";
+        };
+    }
+
+    private record ReviewStreamSummary(
+            Integer reviewedCount,
+            List<String> unresolvedCoverageGaps,
+            String result,
+            String summary
+    ) {
     }
 
     private String normalizeCaseType(String caseType) {

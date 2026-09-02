@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import {
@@ -265,6 +265,14 @@ export function useConfigRunnerManagement() {
   onMounted(() => {
     void loadRunners()
     restartAutoRefresh()
+  })
+
+  onActivated(() => {
+    restartAutoRefresh()
+  })
+
+  onDeactivated(() => {
+    stopAutoRefresh()
   })
 
   onBeforeUnmount(() => {

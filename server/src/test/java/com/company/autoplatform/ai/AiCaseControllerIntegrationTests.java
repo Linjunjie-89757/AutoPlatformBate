@@ -111,7 +111,7 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.promptTemplate").value(unique + " prompt"))
                 .andExpect(jsonPath("$.data.temperature").value(0.3))
                 .andExpect(jsonPath("$.data.topP").value(0.9))
-                .andExpect(jsonPath("$.data.maxCases").value(12))
+                .andExpect(jsonPath("$.data.maxCases").value(100))
                 .andExpect(jsonPath("$.data.supportsImageInput").isBoolean())
                 .andExpect(jsonPath("$.data.status").value(1))
                 .andReturn()
@@ -133,7 +133,7 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
         mockMvc.perform(put("/api/cases/ai/config/{id}", configId)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
                         .contentType("application/json")
-                        .content(configRequest(providerId, "CASE_GENERATOR", "gpt-5.1", unique + " prompt updated", 0)))
+                         .content(configRequest(providerId, "CASE_GENERATOR", "gpt-5.1", unique + " prompt updated", 0)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.id").value(configId.intValue()))
@@ -493,7 +493,7 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.workspaceCode").value(WORKSPACE_CODE))
                 .andExpect(jsonPath("$.data.provider").value("OPENAI_COMPATIBLE_CHAT"))
                 .andExpect(jsonPath("$.data.model").value("gpt-4o-mini"))
-                .andExpect(jsonPath("$.data.systemMaxCases").value(200))
+                .andExpect(jsonPath("$.data.systemMaxCases").value(500))
                 .andExpect(jsonPath("$.data.requestedMaxCases").value(2))
                 .andExpect(jsonPath("$.data.effectiveMaxCases").value(2))
                 .andExpect(jsonPath("$.data.actualGeneratedCount").value(1))
@@ -672,10 +672,11 @@ class AiCaseControllerIntegrationTests extends IntegrationTestSupport {
                   "reviewChecklist": "review checklist",
                   "temperature": 0.3,
                   "topP": 0.9,
-                  "maxCases": 12,
+                  "maxCases": %d,
                   "status": %d%s
                 }
-                """.formatted(WORKSPACE_CODE, roleType, providerId, model, promptTemplate, status, supportsImageInputField);
+                """.formatted(WORKSPACE_CODE, roleType, providerId, model, promptTemplate,
+                "CASE_GENERATOR".equals(roleType) ? 100 : 12, status, supportsImageInputField);
     }
 
     private AiModelCapabilities capabilities(boolean stableAvailable, boolean streamOutput, boolean imageInput) {

@@ -156,7 +156,7 @@ function appendVariable(variable: string) {
 }
 
 function updateMaxCases(value: number) {
-  emit('update:max-cases', Math.min(200, Math.max(5, value)))
+  emit('update:max-cases', Math.min(500, Math.max(100, value)))
 }
 </script>
 
@@ -352,21 +352,21 @@ function updateMaxCases(value: number) {
 
           <div class="figma-ai-config__parameter-body">
             <div class="figma-ai-config__parameter-row is-count">
-              <div class="figma-ai-config__parameter-label">预期生成数量</div>
+              <div class="figma-ai-config__parameter-label">任务候选用例总上限</div>
               <div class="figma-ai-config__count-control">
                 <input
                   :value="maxCases"
                   type="range"
-                  min="5"
-                  max="200"
+                  min="100"
+                  max="500"
                   @input="updateMaxCases(Number(($event.target as HTMLInputElement).value))"
                 >
                 <div class="figma-ai-config__stepper">
-                  <button type="button" aria-label="减少生成数量" @click="updateMaxCases(maxCases - 1)">−</button>
+                  <button type="button" aria-label="减少任务候选用例总上限" @click="updateMaxCases(maxCases - 1)">−</button>
                   <strong>{{ maxCases }}</strong>
-                  <button type="button" aria-label="增加生成数量" @click="updateMaxCases(maxCases + 1)">+</button>
+                  <button type="button" aria-label="增加任务候选用例总上限" @click="updateMaxCases(maxCases + 1)">+</button>
                 </div>
-                <span>条（5 - 200）</span>
+                <span>条（100 - 500，生成阶段最多使用 80%）</span>
               </div>
             </div>
 

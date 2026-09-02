@@ -28,6 +28,9 @@ public class AiGenerationTaskEntity extends BaseEntity {
     @TableField("output_mode")
     private String outputMode;
 
+    @TableField("case_generation_limit")
+    private Integer caseGenerationLimit;
+
     private String status;
 
     @TableField("generation_status")

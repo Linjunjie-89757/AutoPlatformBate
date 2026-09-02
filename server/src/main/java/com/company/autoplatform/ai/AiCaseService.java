@@ -22,9 +22,11 @@ public class AiCaseService {
 
     private static final String ROLE_GENERATOR = AiCaseConfigDomainService.ROLE_GENERATOR;
     private static final String ROLE_REVIEWER = AiCaseConfigDomainService.ROLE_REVIEWER;
-    public static final int DEFAULT_MAX_CASES = 50;
-    public static final int SYSTEM_MAX_CASES = 200;
-    public static final int FINAL_MAX_CASES = 200;
+    public static final int DEFAULT_MAX_CASES = 200;
+    public static final int SYSTEM_MAX_CASES = 500;
+    public static final int FINAL_MAX_CASES = 500;
+    private static final int GENERATION_CAPACITY_PARTS = 4;
+    private static final int TOTAL_CAPACITY_PARTS = 5;
     private static final int MAX_SELF_SUPPLEMENT_CASES = 20;
 
     private final AiCaseConfigDomainService aiCaseConfigDomainService;
@@ -91,6 +93,15 @@ public class AiCaseService {
         }
     }
 
+    AiCaseConfigEntity requireGeneratorConfig() {
+        return aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_GENERATOR).roleConfig();
+    }
+
+    static int generationStageLimit(int taskTotalLimit) {
+        int normalizedTotalLimit = Math.max(1, Math.min(taskTotalLimit, SYSTEM_MAX_CASES));
+        return Math.max(1, normalizedTotalLimit * GENERATION_CAPACITY_PARTS / TOTAL_CAPACITY_PARTS);
+    }
+
     public GenerateAiCasesResponse generateCases(String headerWorkspaceCode, GenerateAiCasesRequest request) {
         WorkspaceEntity workspace = workspaceService.requireWritableWorkspace(
                 workspaceService.resolveTargetWorkspace(headerWorkspaceCode, request.workspaceCode())
@@ -102,15 +113,14 @@ public class AiCaseService {
                 ? (config.getMaxCases() == null ? DEFAULT_MAX_CASES : config.getMaxCases())
                 : request.maxCases();
         int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
-        int initialMaxCases = initialGenerationLimit(effectiveMaxCases);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
         List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         boolean ignoredImages = false;
-        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, assets, false);
+        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, assets, false);
         AiGeneratedCasesResult result;
         try {
             result = aiProviderClient.generate(
-                    resolved.profileWithMaxCases(initialMaxCases),
+                    resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
                     imageInputs
@@ -120,9 +130,9 @@ public class AiCaseService {
                 throw exception;
             }
             ignoredImages = true;
-            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, List.of(), false);
+            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, List.of(), false);
             result = aiProviderClient.generate(
-                    resolved.profileWithMaxCases(initialMaxCases),
+                    resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
                     List.of()
@@ -172,14 +182,13 @@ public class AiCaseService {
                 ? (config.getMaxCases() == null ? DEFAULT_MAX_CASES : config.getMaxCases())
                 : request.maxCases();
         int effectiveMaxCases = Math.min(requestedMaxCases, SYSTEM_MAX_CASES);
-        int initialMaxCases = initialGenerationLimit(effectiveMaxCases);
         List<AiRequirementAssetEntity> assets = aiRequirementAssetDomainService.loadRequirementAssets(request.assetIds());
         List<AiProviderClient.ImageInput> imageInputs = aiRequirementAssetDomainService.toImageInputs(assets);
         if (modelConsumer != null) {
             modelConsumer.accept(new AiStreamModelInfo(resolved.profile().provider(), config.getModel()));
         }
         boolean ignoredImages = false;
-        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, assets, true);
+        String prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, assets, true);
         List<GeneratedAiCaseItem> generatedCases = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<AiInvalidCaseItem> invalidCases = new ArrayList<>();
@@ -190,24 +199,31 @@ public class AiCaseService {
             lineBuffer.append(delta);
             aiResponseParsingSupport.drainCompleteJsonValues(lineBuffer, value -> aiResponseParsingSupport.emitGeneratedCaseValue(
                     value,
-                    initialMaxCases,
+                    effectiveMaxCases,
                     generatedCases,
                     warnings,
                     invalidCases,
                     rawOutput,
                     caseConsumer
             ));
+            if (generatedCases.size() >= effectiveMaxCases) {
+                throw new AiStreamLimitReachedException();
+            }
         };
 
         AiProviderClient.StreamContentResult streamResult;
+        boolean generationLimitReached = false;
         try {
             streamResult = streamStructuredContentWithImages(
-                    resolved.profileWithMaxCases(initialMaxCases),
+                    resolved.profileWithMaxCases(effectiveMaxCases),
                     resolved.apiKey(),
                     prompt,
                     imageInputs,
                     deltaConsumer
             );
+        } catch (AiStreamLimitReachedException exception) {
+            generationLimitReached = true;
+            streamResult = new AiProviderClient.StreamContentResult(rawOutput.toString(), false, null);
         } catch (BadRequestException exception) {
             if (assets.isEmpty() || !aiResponseParsingSupport.isImageInputUnsupportedError(exception)) {
                 throw exception;
@@ -218,13 +234,18 @@ public class AiCaseService {
             generatedCases.clear();
             warnings.clear();
             invalidCases.clear();
-            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, initialMaxCases, List.of(), true);
-            streamResult = aiProviderClient.streamStructuredContentWithResult(
-                    resolved.profileWithMaxCases(initialMaxCases),
-                    resolved.apiKey(),
-                    prompt,
-                    deltaConsumer
-            );
+            prompt = aiPromptBuilderSupport.buildGeneratorPrompt(config, request, workspace, List.of(), true);
+            try {
+                streamResult = aiProviderClient.streamStructuredContentWithResult(
+                        resolved.profileWithMaxCases(effectiveMaxCases),
+                        resolved.apiKey(),
+                        prompt,
+                        deltaConsumer
+                );
+            } catch (AiStreamLimitReachedException limitException) {
+                generationLimitReached = true;
+                streamResult = new AiProviderClient.StreamContentResult(rawOutput.toString(), false, null);
+            }
         }
         String finalContent = streamResult.content();
         if (streamResult.fallbackToComplete()) {
@@ -243,17 +264,17 @@ public class AiCaseService {
                 lineBuffer,
                 value -> aiResponseParsingSupport.emitGeneratedCaseValue(
                         value,
-                        initialMaxCases,
+                        effectiveMaxCases,
                         generatedCases,
                         warnings,
                         invalidCases,
                         new StringBuilder(rawOutput),
                         caseConsumer
                 ));
-        AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawContent, initialMaxCases);
+        AiGeneratedCasesResult parsed = aiProviderClient.parseGeneratedCasesContent(rawContent, effectiveMaxCases);
         if (generatedCases.isEmpty()) {
             for (GeneratedAiCaseItem item : parsed.generatedCases()) {
-                if (generatedCases.size() >= initialMaxCases) {
+                if (generatedCases.size() >= effectiveMaxCases) {
                     break;
                 }
                 generatedCases.add(item);
@@ -266,11 +287,10 @@ public class AiCaseService {
                 }
             }
         }
-        generatedCases.clear();
-        generatedCases.addAll(parsed.generatedCases());
-        warnings.clear();
         warnings.addAll(parsed.warnings());
-        invalidCases.clear();
+        if (generationLimitReached) {
+            warnings.add("已达到生成阶段有效候选上限，已主动结束模型流式输出。");
+        }
         invalidCases.addAll(parsed.invalidCases());
         GenerationEnhancement enhancement = enhanceGeneratedCases(
                 resolved,
@@ -303,21 +323,11 @@ public class AiCaseService {
                 rawContent,
                 streamResult.fallbackToComplete(),
                 streamResult.fallbackReason(),
+                generationLimitReached,
                 ignoredImages,
                 enhancement.selfCheck(),
                 enhancement.selfSupplementCases()
         );
-    }
-
-    private int initialGenerationLimit(int effectiveMaxCases) {
-        if (effectiveMaxCases <= 1) {
-            return effectiveMaxCases;
-        }
-        int reservedForSelfSupplement = Math.min(
-                MAX_SELF_SUPPLEMENT_CASES,
-                Math.max(1, effectiveMaxCases / 5)
-        );
-        return Math.max(1, effectiveMaxCases - reservedForSelfSupplement);
     }
 
     private GenerationEnhancement enhanceGeneratedCases(
@@ -372,8 +382,7 @@ public class AiCaseService {
                                 request,
                                 initialCases,
                                 missingGaps,
-                                selfCheck.supplementGuidance(),
-                                supplementLimit
+                                selfCheck.supplementGuidance()
                         ),
                         supplementLimit
                 );
@@ -601,6 +610,7 @@ public class AiCaseService {
         if (updates.isEmpty() && !request.generatedCases().isEmpty()) {
             aiResponseParsingSupport.emitCompleteReviewResultAsUpdates(reviewResult, rawContent, request.generatedCases().size(), updates, reviewConsumer);
         }
+        aiResponseParsingSupport.validateReviewCompleteness(reviewResult, request.generatedCases().size(), rawContent);
         return new StreamedReviewResult(
                 resolved.profile().provider(),
                 config.getModel(),
@@ -693,6 +703,7 @@ public class AiCaseService {
             String rawContent,
             boolean fallbackToComplete,
             String fallbackReason,
+            boolean generationLimitReached,
             boolean ignoredImages,
             AiGenerationSelfCheckResult selfCheck,
             List<GeneratedAiCaseItem> selfSupplementCases

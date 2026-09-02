@@ -9,6 +9,7 @@ public record AiGenerationTaskResponse(
         String requirementTitle,
         String requirementContent,
         String outputMode,
+        Integer caseGenerationLimit,
         String status,
         String generationStatus,
         String reviewStatus,

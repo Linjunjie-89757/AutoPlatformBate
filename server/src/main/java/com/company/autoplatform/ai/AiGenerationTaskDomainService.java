@@ -56,6 +56,7 @@ public class AiGenerationTaskDomainService {
         );
         validateOutputMode(request.outputMode());
         validateDirectory(workspace, request.directoryId());
+        int caseGenerationLimit = resolveCaseGenerationLimit();
         AiGenerationTaskEntity entity = new AiGenerationTaskEntity();
         LocalDateTime now = LocalDateTime.now();
         Long currentUserId = CurrentUserContext.get();
@@ -64,6 +65,7 @@ public class AiGenerationTaskDomainService {
         entity.setRequirementTitle(request.requirementTitle().trim());
         entity.setRequirementContent(requirementContent);
         entity.setOutputMode(normalizeOutputMode(request.outputMode()));
+        entity.setCaseGenerationLimit(caseGenerationLimit);
         entity.setStatus("PENDING");
         entity.setGenerationStatus("PENDING");
         entity.setReviewStatus("NOT_STARTED");
@@ -205,6 +207,9 @@ public class AiGenerationTaskDomainService {
         entity.setRequirementTitle(source.getRequirementTitle());
         entity.setRequirementContent(source.getRequirementContent());
         entity.setOutputMode(source.getOutputMode());
+        entity.setCaseGenerationLimit(source.getCaseGenerationLimit() == null
+                ? AiCaseService.DEFAULT_MAX_CASES
+                : source.getCaseGenerationLimit());
         entity.setStatus("PENDING");
         entity.setGenerationStatus("PENDING");
         entity.setReviewStatus("NOT_STARTED");
@@ -405,6 +410,15 @@ public class AiGenerationTaskDomainService {
 
     private String normalizeOutputMode(String outputMode) {
         return outputMode == null ? "STREAM" : outputMode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private int resolveCaseGenerationLimit() {
+        AiCaseConfigEntity config = aiCaseService.requireGeneratorConfig();
+        Integer configured = config.getMaxCases();
+        if (configured == null) {
+            return AiCaseService.DEFAULT_MAX_CASES;
+        }
+        return Math.max(100, Math.min(configured, AiCaseService.SYSTEM_MAX_CASES));
     }
 
     private void validateOutputMode(String outputMode) {

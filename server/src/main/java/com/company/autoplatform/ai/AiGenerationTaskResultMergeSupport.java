@@ -87,13 +87,22 @@ public class AiGenerationTaskResultMergeSupport {
     }
 
     List<GeneratedAiCaseItem> mergeCompleteReviewResult(List<GeneratedAiCaseItem> generatedCases, AiReviewResult review) {
-        return mergeCompleteReviewResult(generatedCases, null, review);
+        return mergeCompleteReviewResult(generatedCases, null, review, AiCaseService.FINAL_MAX_CASES);
     }
 
     List<GeneratedAiCaseItem> mergeCompleteReviewResult(
             List<GeneratedAiCaseItem> generatedCases,
             List<AiCaseCandidateEntity> candidates,
             AiReviewResult review
+    ) {
+        return mergeCompleteReviewResult(generatedCases, candidates, review, AiCaseService.FINAL_MAX_CASES);
+    }
+
+    List<GeneratedAiCaseItem> mergeCompleteReviewResult(
+            List<GeneratedAiCaseItem> generatedCases,
+            List<AiCaseCandidateEntity> candidates,
+            AiReviewResult review,
+            int maxCases
     ) {
         List<GeneratedAiCaseItem> finalCases = new ArrayList<>();
         Set<String> caseFingerprints = new HashSet<>();
@@ -114,7 +123,7 @@ public class AiGenerationTaskResultMergeSupport {
             finalCases.set(index, next);
         }
         for (GeneratedAiCaseItem item : review.supplementCases() == null ? List.<GeneratedAiCaseItem>of() : review.supplementCases()) {
-            if (finalCases.size() >= AiCaseService.FINAL_MAX_CASES) {
+            if (finalCases.size() >= maxCases) {
                 break;
             }
             if (!isValidSupplement(item) || !caseFingerprints.add(caseFingerprint(item))) {

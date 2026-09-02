@@ -148,6 +148,7 @@ public class AiProviderClient {
         String coverageSummary = null;
         int limit = maxCases == null ? Integer.MAX_VALUE : maxCases;
         int index = 0;
+        boolean limitReached = false;
         for (String candidate : AiJsonBoundaryExtractor.extractCompleteValues(normalizedJson)) {
             JsonNode parsed;
             try {
@@ -178,6 +179,10 @@ public class AiProviderClient {
             }
             for (JsonNode item : casesNode) {
                 if (items.size() >= limit) {
+                    if (!limitReached) {
+                        warnings.add("AI 返回用例已达到程序设定上限，后续用例已停止接收");
+                        limitReached = true;
+                    }
                     break;
                 }
                 index += 1;

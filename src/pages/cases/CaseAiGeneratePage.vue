@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   AlertTriangle,
@@ -113,6 +113,7 @@ let taskPollingTimer: number | null = null
 let streamAbortController: AbortController | null = null
 let streamTaskId: string | null = null
 let streamRefreshTimer: number | null = null
+let initialActivationHandled = false
 let navigatedCompletedTaskId = ''
 let syncingManualDirectoryPath = false
 let syncingDocumentDirectoryPath = false
@@ -1239,6 +1240,23 @@ watch(
 onMounted(async () => {
   await loadWorkspaces()
   await refreshPageData()
+})
+
+onActivated(() => {
+  if (!initialActivationHandled) {
+    initialActivationHandled = true
+    return
+  }
+  void refreshLatestTaskRecord()
+})
+
+onDeactivated(() => {
+  stopTaskPolling()
+  stopEventStream()
+  if (streamRefreshTimer != null) {
+    window.clearTimeout(streamRefreshTimer)
+    streamRefreshTimer = null
+  }
 })
 
 onBeforeUnmount(() => {
@@ -4121,6 +4139,67 @@ button.figma-ai-case-generation__dropzone:hover {
   border: 1px solid #d9dce1;
   color: #165dff;
   background: #fff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button),
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__ghost-button),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__primary-button),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__ghost-button) {
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__primary-button) {
+  border-color: #165dff;
+  color: #fff;
+  background: #165dff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__ghost-button),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__ghost-button) {
+  border-color: #d9dce1;
+  color: #165dff;
+  background: #fff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button:hover:not(:disabled)),
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button:focus-visible:not(:disabled)),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__primary-button:hover:not(:disabled)),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__primary-button:focus-visible:not(:disabled)) {
+  border-color: #165dff;
+  color: #fff;
+  background: #165dff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__ghost-button:hover:not(:disabled)),
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__ghost-button:focus-visible:not(:disabled)),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__ghost-button:hover:not(:disabled)),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__ghost-button:focus-visible:not(:disabled)) {
+  border-color: #d9dce1;
+  color: #165dff;
+  background: #fff;
+}
+
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__primary-button:disabled),
+:global(.figma-ai-case-generation-path-dialog .figma-ai-case-generation__ghost-button:disabled),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__primary-button:disabled),
+:global(.figma-ai-case-generation-confirm-dialog .figma-ai-case-generation__ghost-button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 @keyframes figma-ai-spin {

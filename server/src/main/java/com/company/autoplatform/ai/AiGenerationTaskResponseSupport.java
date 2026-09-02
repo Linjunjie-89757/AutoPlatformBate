@@ -77,6 +77,7 @@ public class AiGenerationTaskResponseSupport {
                 entity.getRequirementTitle(),
                 entity.getRequirementContent(),
                 entity.getOutputMode(),
+                entity.getCaseGenerationLimit(),
                 entity.getStatus(),
                 entity.getGenerationStatus(),
                 entity.getReviewStatus(),
