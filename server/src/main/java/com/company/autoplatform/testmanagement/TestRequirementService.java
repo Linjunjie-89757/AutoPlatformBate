@@ -277,35 +277,8 @@ public class TestRequirementService {
 
     @Transactional
     public TestRequirementResponse startReview(Long id, String workspaceCode, StartRequirementReviewRequest request) {
-        TestRequirementEntity requirement = requireWritable(id, workspaceCode);
-        requireExpectedVersion(requirement.getLockVersion(), request.expectedVersion());
-        requireEditableVersion(requirement.getVersionId(), requirement.getWorkspaceId());
-        List<TestRequirementCaseEntity> relations = relations(id);
-        if (relations.isEmpty()) throw TestManagementException.reviewRequired("请先关联至少一个用例", Map.of("requirementId", id));
-        Map<Long, CaseEntity> cases = loadCases(relations.stream().map(TestRequirementCaseEntity::getCaseId).toList());
-        LocalDateTime now = LocalDateTime.now();
-        boolean changed = false;
-        for (TestRequirementCaseEntity relation : relations) {
-            CaseEntity testCase = cases.get(relation.getCaseId());
-            boolean outdated = relation.getReviewStatus() == RequirementReviewStatus.PASSED
-                    && testCase != null && testCase.getUpdatedAt() != null
-                    && (relation.getCaseUpdatedAtWhenReviewed() == null || testCase.getUpdatedAt().isAfter(relation.getCaseUpdatedAtWhenReviewed()));
-            if (relation.getReviewStatus() != RequirementReviewStatus.PASSED || outdated) {
-                relation.setReviewStatus(RequirementReviewStatus.REVIEWING);
-                relation.setUpdatedAt(now);
-                requirementCaseMapper.updateById(relation);
-                changed = true;
-            }
-        }
-        if (!changed) {
-            throw TestManagementException.reviewRequired("没有需要重新评审的用例", Map.of("requirementId", id));
-        }
-        touchRequirement(requirement, request.expectedVersion());
-        activityLogService.record(
-                requirement.getWorkspaceId(), ActivityEntityType.REQUIREMENT, id,
-                "REQUIREMENT_REVIEW_STARTED", "发起需求用例评审", null
-        );
-        return get(id, workspaceCode);
+        requireWritable(id, workspaceCode);
+        throw TestManagementException.validation("需求管理不再单独评审，请在用例中心评审关联用例");
     }
 
     @Transactional
@@ -315,39 +288,8 @@ public class TestRequirementService {
             String workspaceCode,
             ReviewRequirementCaseRequest request
     ) {
-        TestRequirementEntity requirement = requireWritable(id, workspaceCode);
-        requireExpectedVersion(requirement.getLockVersion(), request.expectedVersion());
-        requireEditableVersion(requirement.getVersionId(), requirement.getWorkspaceId());
-        if (request.decision() != RequirementReviewStatus.PASSED && request.decision() != RequirementReviewStatus.REJECTED) {
-            throw TestManagementException.validation("评审结论只能是通过或驳回");
-        }
-        if (request.decision() == RequirementReviewStatus.REJECTED && blankToNull(request.comment()) == null) {
-            throw TestManagementException.validation("驳回评审必须填写原因");
-        }
-        TestRequirementCaseEntity relation = requirementCaseMapper.selectOne(new LambdaQueryWrapper<TestRequirementCaseEntity>()
-                .eq(TestRequirementCaseEntity::getRequirementId, id)
-                .eq(TestRequirementCaseEntity::getCaseId, caseId));
-        if (relation == null) throw TestManagementException.notFound("需求关联用例", caseId);
-        if (relation.getReviewStatus() != RequirementReviewStatus.REVIEWING) {
-            throw TestManagementException.invalidTransition("需求用例评审", relation.getReviewStatus(), request.decision());
-        }
-        CaseEntity testCase = caseMapper.selectById(caseId);
-        if (testCase == null || !requirement.getWorkspaceId().equals(testCase.getWorkspaceId())) {
-            throw TestManagementException.notFound("用例", caseId);
-        }
-        relation.setReviewStatus(request.decision());
-        relation.setReviewNote(blankToNull(request.comment()));
-        relation.setReviewerId(CurrentUserContext.get());
-        relation.setReviewedAt(LocalDateTime.now());
-        relation.setCaseUpdatedAtWhenReviewed(testCase.getUpdatedAt());
-        relation.setUpdatedAt(LocalDateTime.now());
-        requirementCaseMapper.updateById(relation);
-        touchRequirement(requirement, request.expectedVersion());
-        activityLogService.record(
-                requirement.getWorkspaceId(), ActivityEntityType.REQUIREMENT, id,
-                "REQUIREMENT_CASE_REVIEWED", "评审需求用例", Map.of("caseId", caseId, "decision", request.decision())
-        );
-        return get(id, workspaceCode);
+        requireWritable(id, workspaceCode);
+        throw TestManagementException.validation("需求管理不再单独评审，请在用例中心评审关联用例");
     }
 
     public PageResponse<TestActivityItem> listActivities(Long id, String workspaceCode, Integer pageNo, Integer pageSize) {
@@ -378,7 +320,9 @@ public class TestRequirementService {
         Map<Long, CaseEntity> cases = loadCases(relations.stream().map(TestRequirementCaseEntity::getCaseId).toList());
         List<Long> userIds = java.util.stream.Stream.concat(
                         entities.stream().map(TestRequirementEntity::getAssigneeId),
-                        relations.stream().map(TestRequirementCaseEntity::getReviewerId))
+                        java.util.stream.Stream.concat(
+                                relations.stream().map(TestRequirementCaseEntity::getReviewerId),
+                                cases.values().stream().map(CaseEntity::getReviewedBy)))
                 .filter(Objects::nonNull)
                 .toList();
         Map<Long, UserEntity> users = loadUsers(userIds);
@@ -393,24 +337,23 @@ public class TestRequirementService {
             List<TestRequirementCaseEntity> requirementRelations = relationsByRequirement.getOrDefault(entity.getId(), List.of());
             List<RequirementCaseResponse> relationResponses = requirementRelations.stream().map(relation -> {
                 CaseEntity testCase = cases.get(relation.getCaseId());
-                UserEntity reviewer = relation.getReviewerId() == null ? null : users.get(relation.getReviewerId());
-                boolean outdated = relation.getReviewStatus() == RequirementReviewStatus.PASSED
-                        && testCase != null && testCase.getUpdatedAt() != null
-                        && (relation.getCaseUpdatedAtWhenReviewed() == null || testCase.getUpdatedAt().isAfter(relation.getCaseUpdatedAtWhenReviewed()));
+                RequirementReviewStatus caseReviewStatus = caseReviewStatus(testCase);
+                Long reviewerId = testCase == null ? null : testCase.getReviewedBy();
+                UserEntity reviewer = reviewerId == null ? null : users.get(reviewerId);
                 return new RequirementCaseResponse(
                         relation.getId(), relation.getCaseId(), testCase == null ? null : testCase.getCaseNo(),
                         testCase == null ? null : testCase.getTitle(), testCase == null ? null : testCase.getPriority(),
-                        relation.getReviewStatus(), relation.getReviewNote(), relation.getReviewerId(),
-                        reviewer == null ? null : reviewer.getDisplayName(), relation.getReviewedAt(), outdated
+                        caseReviewStatus, testCase == null ? null : testCase.getReviewComment(), reviewerId,
+                        reviewer == null ? null : reviewer.getDisplayName(), testCase == null ? null : testCase.getReviewedAt(), false
                 );
             }).toList();
             UserEntity assignee = entity.getAssigneeId() == null ? null : users.get(entity.getAssigneeId());
             TestVersionEntity version = versions.get(entity.getVersionId());
             WorkspaceEntity workspace = workspaceMap.get(entity.getWorkspaceId());
-            String reviewStatus = aggregateReviewStatus(requirementRelations);
-            String qualityStatus = qualityStatus(requirementRelations, passedPlanCases.getOrDefault(entity.getId(), Set.of()));
-            int reviewed = (int) requirementRelations.stream().filter(item -> item.getReviewStatus() == RequirementReviewStatus.PASSED || item.getReviewStatus() == RequirementReviewStatus.REJECTED).count();
-            int passed = (int) requirementRelations.stream().filter(item -> item.getReviewStatus() == RequirementReviewStatus.PASSED).count();
+            String reviewStatus = aggregateReviewStatus(relationResponses);
+            String qualityStatus = qualityStatus(relationResponses, passedPlanCases.getOrDefault(entity.getId(), Set.of()));
+            int reviewed = (int) relationResponses.stream().filter(item -> item.reviewStatus() == RequirementReviewStatus.PASSED || item.reviewStatus() == RequirementReviewStatus.REJECTED).count();
+            int passed = (int) relationResponses.stream().filter(item -> item.reviewStatus() == RequirementReviewStatus.PASSED).count();
             return new TestRequirementResponse(
                     entity.getId(), entity.getRequirementNo(), entity.getVersionId(), version == null ? null : version.getName(),
                     entity.getTitle(), entity.getPriority(), entity.getSourceType(), entity.getSourceRef(),
@@ -428,10 +371,10 @@ public class TestRequirementService {
         if (normalized == null) return;
         String table = "tb_test_requirement.id";
         switch (normalized) {
-            case PENDING -> query.apply("NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = " + table + ")");
-            case REJECTED -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = " + table + " AND rc.review_status = 'REJECTED')");
-            case REVIEWING -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = " + table + " AND rc.review_status IN ('PENDING','REVIEWING'))");
-            case PASSED -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = " + table + ") AND NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = " + table + " AND rc.review_status <> 'PASSED')");
+            case PENDING -> query.apply("NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = " + table + ") OR EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = " + table + " AND COALESCE(c.review_status, 'PENDING') IN ('PENDING','REVIEWING'))");
+            case REJECTED -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = " + table + " AND c.review_status = 'REJECTED')");
+            case REVIEWING -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = " + table + " AND COALESCE(c.review_status, 'PENDING') IN ('PENDING','REVIEWING'))");
+            case PASSED -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = " + table + ") AND NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = " + table + " AND c.review_status <> 'PASSED')");
         }
     }
 
@@ -440,9 +383,9 @@ public class TestRequirementService {
         if (normalized == null || "ALL".equalsIgnoreCase(normalized)) return;
         switch (normalized.toUpperCase(Locale.ROOT)) {
             case "UNCOVERED" -> query.apply("NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id)");
-            case "PARTIAL" -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id AND rc.review_status <> 'PASSED')");
-            case "COVERED" -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id) AND NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id AND rc.review_status <> 'PASSED') AND EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id AND NOT " + latestExecutionPassedSql() + ")");
-            case "PASSED" -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id) AND NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id AND (rc.review_status <> 'PASSED' OR NOT " + latestExecutionPassedSql() + "))");
+            case "PARTIAL" -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = tb_test_requirement.id AND COALESCE(c.review_status, 'PENDING') <> 'PASSED')");
+            case "COVERED" -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = tb_test_requirement.id) AND NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = tb_test_requirement.id AND COALESCE(c.review_status, 'PENDING') <> 'PASSED') AND EXISTS (SELECT 1 FROM tb_test_requirement_case rc WHERE rc.requirement_id = tb_test_requirement.id AND NOT " + latestExecutionPassedSql() + ")");
+            case "PASSED" -> query.apply("EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = tb_test_requirement.id) AND NOT EXISTS (SELECT 1 FROM tb_test_requirement_case rc JOIN tb_case_info c ON c.id = rc.case_id WHERE rc.requirement_id = tb_test_requirement.id AND (COALESCE(c.review_status, 'PENDING') <> 'PASSED' OR NOT " + latestExecutionPassedSql() + "))");
             default -> throw TestManagementException.validation("需求状态不合法: " + qualityStatus);
         }
     }
@@ -518,18 +461,42 @@ public class TestRequirementService {
     private record RequirementSourceCaseKey(Long requirementId, Long sourceCaseId) {
     }
 
-    private String qualityStatus(List<TestRequirementCaseEntity> relations, Set<Long> passedPlanCaseIds) {
+    private String relationQualityStatus(List<TestRequirementCaseEntity> relations, Set<Long> passedPlanCaseIds) {
         if (relations.isEmpty()) return "UNCOVERED";
         if (relations.stream().anyMatch(item -> item.getReviewStatus() != RequirementReviewStatus.PASSED)) return "PARTIAL";
         if (passedPlanCaseIds.size() < relations.size()) return "COVERED";
         return "PASSED";
     }
 
-    private String aggregateReviewStatus(List<TestRequirementCaseEntity> relations) {
+    private String qualityStatus(List<RequirementCaseResponse> cases, Set<Long> passedPlanCaseIds) {
+        if (cases.isEmpty()) return "UNCOVERED";
+        if (cases.stream().anyMatch(item -> item.reviewStatus() != RequirementReviewStatus.PASSED)) return "PARTIAL";
+        if (passedPlanCaseIds.size() < cases.size()) return "COVERED";
+        return "PASSED";
+    }
+
+    private String relationReviewStatus(List<TestRequirementCaseEntity> relations) {
         if (relations.isEmpty()) return RequirementReviewStatus.PENDING.name();
         if (relations.stream().anyMatch(item -> item.getReviewStatus() == RequirementReviewStatus.REJECTED)) return RequirementReviewStatus.REJECTED.name();
         if (relations.stream().anyMatch(item -> item.getReviewStatus() == RequirementReviewStatus.PENDING || item.getReviewStatus() == RequirementReviewStatus.REVIEWING)) return RequirementReviewStatus.REVIEWING.name();
         return RequirementReviewStatus.PASSED.name();
+    }
+
+    private String aggregateReviewStatus(List<RequirementCaseResponse> cases) {
+        if (cases.isEmpty()) return RequirementReviewStatus.PENDING.name();
+        if (cases.stream().anyMatch(item -> item.reviewStatus() == RequirementReviewStatus.REJECTED)) return RequirementReviewStatus.REJECTED.name();
+        if (cases.stream().anyMatch(item -> item.reviewStatus() == RequirementReviewStatus.PENDING || item.reviewStatus() == RequirementReviewStatus.REVIEWING)) return RequirementReviewStatus.REVIEWING.name();
+        return RequirementReviewStatus.PASSED.name();
+    }
+
+    private RequirementReviewStatus caseReviewStatus(CaseEntity testCase) {
+        if (testCase == null || testCase.getReviewStatus() == null) return RequirementReviewStatus.PENDING;
+        return switch (testCase.getReviewStatus().trim().toUpperCase(Locale.ROOT)) {
+            case "PASSED", "APPROVED" -> RequirementReviewStatus.PASSED;
+            case "REJECTED", "NOT_RECOMMENDED" -> RequirementReviewStatus.REJECTED;
+            case "REVIEWING", "RUNNING" -> RequirementReviewStatus.REVIEWING;
+            default -> RequirementReviewStatus.PENDING;
+        };
     }
 
     private List<TestRequirementCaseEntity> relations(Long requirementId) {

@@ -220,6 +220,13 @@ public class AiCaseCandidateService {
         if (candidate == null) {
             return false;
         }
+        AiGenerationTaskEntity task = taskMapper.selectOne(new LambdaQueryWrapper<AiGenerationTaskEntity>()
+                .eq(AiGenerationTaskEntity::getTaskId, taskId)
+                .last("FOR UPDATE"));
+        if (task == null || !"REVIEWING".equals(task.getStatus())
+                || !AiGenerationWorkflowContract.REVIEW_RUNNING.equals(task.getReviewStatus())) {
+            return false;
+        }
         if (isStaleReview(candidate, sourceVersion, sourceContentHash)) {
             appendAudit(candidate, "REVIEW_STALE_IGNORED", candidate.getCurrentCaseJson(), candidate.getCurrentCaseJson(), Map.of(
                     "sourceVersion", sourceVersion == null ? "" : sourceVersion,
@@ -420,7 +427,9 @@ public class AiCaseCandidateService {
         if ("EXCLUDED".equals(candidate.getHumanDecision()) || "MERGED".equals(candidate.getHumanDecision())) {
             throw new BadRequestException("已放弃或已合并的候选用例不能采纳");
         }
-        if ("PENDING".equals(candidate.getHumanDecision()) && !"APPROVED".equals(candidate.getReviewStatus())) {
+        if ("PENDING".equals(candidate.getHumanDecision())
+                && !"APPROVED".equals(candidate.getReviewStatus())
+                && !"CHANGE_SUGGESTED".equals(candidate.getReviewStatus())) {
             int fromVersion = candidate.getContentVersion();
             String expectedHash = candidate.getContentHash();
             candidate.setHumanDecision("KEEP_ORIGINAL");
@@ -454,6 +463,31 @@ public class AiCaseCandidateService {
         AiCaseCandidateEntity candidate = requireCandidate(taskId, candidateId);
         validateAdoptable(candidate);
         return candidate;
+    }
+
+    @Transactional
+    AiCaseCandidateEntity prepareManualAdoptionAfterReviewFailure(
+            String taskId,
+            String candidateId
+    ) {
+        AiCaseCandidateEntity candidate = requireCandidate(taskId, candidateId);
+        AiGenerationTaskEntity task = taskMapper.selectOne(new LambdaQueryWrapper<AiGenerationTaskEntity>()
+                .eq(AiGenerationTaskEntity::getTaskId, taskId)
+                .last("limit 1"));
+        if (task == null
+                || !"SUCCEEDED".equals(task.getGenerationStatus())
+                || !AiGenerationWorkflowContract.REVIEW_FAILED.equals(task.getReviewStatus())
+                || !"PENDING".equals(candidate.getHumanDecision())
+                || !AiGenerationWorkflowContract.canAdopt(candidate.getValidationStatus())) {
+            return candidate;
+        }
+        updateCurrent(
+                candidate,
+                candidate.getOriginalCaseJson(),
+                "KEEP_ORIGINAL",
+                "MANUAL_TAKEOVER_ORIGINAL"
+        );
+        return requireCandidate(taskId, candidateId);
     }
 
     GeneratedAiCaseItem readCurrentCase(AiCaseCandidateEntity candidate) {
@@ -593,7 +627,9 @@ public class AiCaseCandidateService {
         if ("EXCLUDED".equals(candidate.getHumanDecision()) || "MERGED".equals(candidate.getHumanDecision())) {
             throw new BadRequestException("已放弃或已合并的候选用例不能采纳");
         }
-        if ("PENDING".equals(candidate.getHumanDecision()) && !"APPROVED".equals(candidate.getReviewStatus())) {
+        if ("PENDING".equals(candidate.getHumanDecision())
+                && !"APPROVED".equals(candidate.getReviewStatus())
+                && !"CHANGE_SUGGESTED".equals(candidate.getReviewStatus())) {
             throw new BadRequestException("该候选用例仍需人工确认后才能采纳");
         }
     }
@@ -876,7 +912,7 @@ public class AiCaseCandidateService {
 
     private String normalizeReviewStatus(String status) {
         if (status == null || status.isBlank() || "PENDING_REVIEW".equals(status)) {
-            return null;
+            return "PENDING";
         }
         return switch (status.trim().toUpperCase(Locale.ROOT)) {
             case "OPTIMIZED" -> "CHANGE_SUGGESTED";

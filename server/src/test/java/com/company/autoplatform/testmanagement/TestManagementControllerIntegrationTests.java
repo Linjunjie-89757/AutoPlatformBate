@@ -170,35 +170,34 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
                         .contentType("application/json")
                         .content(json(Map.of("caseIds", List.of(testCase.getId()), "expectedVersion", 0))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.reviewStatus").value("REVIEWING"))
+                .andExpect(jsonPath("$.data.reviewStatus").value("PASSED"))
                 .andExpect(jsonPath("$.data.caseTotal").value(1))
                 .andReturn());
         assertThat(requirement.path("lockVersion").asInt()).isEqualTo(1);
 
-        mockMvc.perform(post("/api/test-management/requirements/{id}/cases/{caseId}/review", requirementId, testCase.getId())
-                        .header("X-Workspace-Code", WORKSPACE_CODE)
-                        .contentType("application/json")
-                        .content(json(Map.of("decision", "PASSED", "expectedVersion", 1))))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("TM_INVALID_TRANSITION"));
-
-        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/review/start", requirementId)
+        mockMvc.perform(post("/api/test-management/requirements/{id}/review/start", requirementId)
                         .header("X-Workspace-Code", WORKSPACE_CODE)
                         .contentType("application/json")
                         .content(json(Map.of("expectedVersion", 1))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.cases[0].reviewStatus").value("REVIEWING"))
-                .andReturn());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TM_VALIDATION_FAILED"));
 
-        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/cases/{caseId}/review", requirementId, testCase.getId())
+        mockMvc.perform(post("/api/cases/{id}/review", testCase.getId())
                         .header("X-Workspace-Code", WORKSPACE_CODE)
                         .contentType("application/json")
-                        .content(json(Map.of("decision", "PASSED", "comment", "覆盖充分", "expectedVersion", 2))))
+                        .content(json(Map.of("reviewStatus", "PASSED", "reviewComment", "覆盖充分"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reviewStatus").value("PASSED"));
+
+        requirement = data(mockMvc.perform(get("/api/test-management/requirements/{id}", requirementId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.reviewStatus").value("PASSED"))
+                .andExpect(jsonPath("$.data.cases[0].reviewStatus").value("PASSED"))
+                .andExpect(jsonPath("$.data.cases[0].reviewNote").value("覆盖充分"))
                 .andExpect(jsonPath("$.data.qualityStatus").value("COVERED"))
                 .andReturn());
-        assertThat(requirement.path("lockVersion").asInt()).isEqualTo(3);
+        assertThat(requirement.path("lockVersion").asInt()).isEqualTo(1);
 
         version = transitionVersion(versionId, "TESTING", 2, false, null, 200);
         assertThat(version.path("status").asText()).isEqualTo("TESTING");
@@ -271,19 +270,17 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
                         .content(json(Map.of("caseIds", List.of(testCase.getId()), "expectedVersion", 0))))
                 .andExpect(status().isOk())
                 .andReturn());
-        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/review/start", requirementId)
-                        .header("X-Workspace-Code", WORKSPACE_CODE)
-                        .contentType("application/json")
-                        .content(json(Map.of("expectedVersion", requirement.path("lockVersion").asInt()))))
-                .andExpect(status().isOk())
-                .andReturn());
-        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/cases/{caseId}/review", requirementId, testCase.getId())
+        mockMvc.perform(post("/api/cases/{id}/review", testCase.getId())
                         .header("X-Workspace-Code", WORKSPACE_CODE)
                         .contentType("application/json")
                         .content(json(Map.of(
-                                "decision", "PASSED",
-                                "expectedVersion", requirement.path("lockVersion").asInt()
+                                "reviewStatus", "PASSED",
+                                "reviewComment", "覆盖充分"
                         ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reviewStatus").value("PASSED"));
+        requirement = data(mockMvc.perform(get("/api/test-management/requirements/{id}", requirementId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(requirement.path("reviewStatus").asText()).isEqualTo("PASSED");
@@ -771,21 +768,20 @@ class TestManagementControllerIntegrationTests extends IntegrationTestSupport {
                         .content(json(Map.of("caseIds", List.of(testCase.getId()), "expectedVersion", 0))))
                 .andExpect(status().isOk())
                 .andReturn());
-        requirement = data(mockMvc.perform(post("/api/test-management/requirements/{id}/review/start", requirementId)
-                        .header("X-Workspace-Code", WORKSPACE_CODE)
-                        .contentType("application/json")
-                        .content(json(Map.of("expectedVersion", requirement.path("lockVersion").asInt()))))
-                .andExpect(status().isOk())
-                .andReturn());
-        mockMvc.perform(post("/api/test-management/requirements/{id}/cases/{caseId}/review", requirementId, testCase.getId())
+        mockMvc.perform(post("/api/cases/{id}/review", testCase.getId())
                         .header("X-Workspace-Code", WORKSPACE_CODE)
                         .contentType("application/json")
                         .content(json(Map.of(
-                                "decision", "PASSED",
-                                "expectedVersion", requirement.path("lockVersion").asInt()
+                                "reviewStatus", "PASSED",
+                                "reviewComment", "覆盖充分"
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.reviewStatus").value("PASSED"));
+        requirement = data(mockMvc.perform(get("/api/test-management/requirements/{id}", requirementId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andReturn());
+        assertThat(requirement.path("reviewStatus").asText()).isEqualTo("PASSED");
 
         TestPlanEntity plan = createPlanExecution(
                 versionId, requirementId, testCase, PlanCaseExecutionStatus.PASSED, LocalDateTime.now());

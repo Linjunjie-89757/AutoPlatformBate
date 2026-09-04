@@ -175,14 +175,14 @@ public class AiGenerationTaskExecutionStateSupport {
         latest.setGenerationStatus("SUCCEEDED");
         latest.setReviewStatus("FAILED");
         latest.setFailedStage("AI_REVIEW");
-        latest.setErrorCode("AI_REVIEW_FAILED");
+        latest.setErrorCode(exception instanceof AiReviewTimeoutException ? "AI_REVIEW_TIMEOUT" : "AI_REVIEW_FAILED");
         latest.setCurrentStep(3);
         latest.setStepMessage("用例已生成，但 AI 评审失败，仍可查看和采纳。");
         latest.setErrorMessage(exception.getMessage());
         latest.setFinishedAt(LocalDateTime.now());
         latest.setUpdatedAt(LocalDateTime.now());
         aiGenerationTaskMapper.updateById(latest);
-        appendEvent(taskId, "REVIEW_FAILED", "REVIEWING", "ERROR", exception.getMessage(), null, null, latest.getProvider(), latest.getModel(), null);
+        appendEvent(taskId, "REVIEW_FAILED", "REVIEWING", "ERROR", exception.getMessage(), null, null, latest.getReviewProvider(), latest.getReviewModel(), null);
     }
 
     void persistGeneratedCasesSnapshot(AiGenerationTaskEntity entity, List<GeneratedAiCaseItem> generatedCases, String rawOutput) {

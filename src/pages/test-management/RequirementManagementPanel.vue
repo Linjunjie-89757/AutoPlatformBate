@@ -891,7 +891,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
       <div v-else class="requirement-management__table-wrap">
         <table class="requirement-management__table">
           <thead>
-            <tr><th>需求ID</th><th>标题</th><th>版本</th><th>优先级</th><th>来源</th><th>用例覆盖</th><th>评审</th><th>状态</th><th>负责人</th><th>操作</th></tr>
+            <tr><th>需求ID</th><th>标题</th><th>版本</th><th>优先级</th><th>来源</th><th>用例覆盖</th><th>用例评审</th><th>状态</th><th>负责人</th><th>操作</th></tr>
           </thead>
           <tbody>
             <tr v-for="requirement in filteredRequirements" :key="requirement.id" tabindex="0" @click="openRequirement(requirement)" @keydown.enter="openRequirement(requirement)">
@@ -990,7 +990,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
               <dl>
                 <div><dt>所属版本</dt><dd>{{ currentVersion?.name || '—' }}</dd></div>
                 <div><dt>优先级</dt><dd><span class="requirement-management__badge is-priority" :style="priorityStyle(selectedRequirement.priority)">{{ selectedRequirement.priority }}</span></dd></div>
-                <div><dt>评审状态</dt><dd><span class="requirement-management__badge" :style="reviewStyle(selectedRequirement.reviewStatus)">{{ reviewStatusConfig[selectedRequirement.reviewStatus].label }}</span></dd></div>
+                <div><dt>关联用例评审</dt><dd><span class="requirement-management__badge" :style="reviewStyle(selectedRequirement.reviewStatus)">{{ reviewStatusConfig[selectedRequirement.reviewStatus].label }}</span></dd></div>
                 <div><dt>覆盖状态</dt><dd><span class="requirement-management__badge" :style="statusStyle(selectedRequirement.status)">{{ requirementStatusConfig[selectedRequirement.status].label }}</span></dd></div>
                 <div><dt>来源</dt><dd><span class="requirement-management__badge" :style="sourceStyle(selectedRequirement.source)">{{ sourceConfig[selectedRequirement.source].label }}<template v-if="selectedRequirement.sourceRef"> · {{ selectedRequirement.sourceRef }}</template></span></dd></div>
                 <div><dt>负责人</dt><dd>{{ selectedRequirement.assignee || '—' }}</dd></div>

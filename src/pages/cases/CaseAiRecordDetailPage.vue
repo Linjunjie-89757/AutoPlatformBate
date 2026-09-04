@@ -912,7 +912,14 @@ function isCandidateReadyForAdoption(row: DetailCaseRow | null | undefined) {
   if (!candidate) {
     return true
   }
-  return candidate.humanDecision !== 'PENDING' || candidate.reviewStatus === 'APPROVED'
+  if (['FAILED', 'DUPLICATE'].includes(candidate.validationStatus || '')) {
+    return false
+  }
+  const reviewFailedAfterGeneration = detailRecord.value?.generationStatus === 'SUCCEEDED'
+    && detailRecord.value?.reviewStatus === 'FAILED'
+  return candidate.humanDecision !== 'PENDING'
+    || ['APPROVED', 'CHANGE_SUGGESTED'].includes(candidate.reviewStatus || '')
+    || reviewFailedAfterGeneration
 }
 
 function getAiSourceLabel(row: DetailCaseRow | null | undefined) {
@@ -1707,7 +1714,7 @@ async function adoptSingleCase(row: DetailCaseRow) {
     const reviewStatus = getDisplayedReviewStatus(row)
     if (row.candidate
       && row.candidate.humanDecision === 'PENDING'
-      && ['CONFIRM_REQUIRED', 'NOT_RECOMMENDED'].includes(reviewStatus)) {
+      && ['CHANGE_SUGGESTED', 'CONFIRM_REQUIRED', 'NOT_RECOMMENDED'].includes(reviewStatus)) {
       const confirmed = await caseAiApi.keepCandidateOriginal(detailRecord.value.workspaceCode, detailRecord.value.taskId, row.candidate.candidateCaseId, {
         expectedVersion: row.candidate.contentVersion,
         expectedContentHash: row.candidate.contentHash,

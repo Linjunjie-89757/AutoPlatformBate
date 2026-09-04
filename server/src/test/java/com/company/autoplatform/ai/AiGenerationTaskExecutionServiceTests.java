@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
+@TestPropertySource(properties = "app.ai.review-task-timeout-seconds=1")
 class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
     @Autowired
@@ -622,6 +624,138 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
                 new AdoptAiCaseRequest(directory.id())
         );
         assertThat(repeated.createdCaseId()).isEqualTo(adoption.createdCaseId());
+    }
+
+    @Test
+    void changeSuggestedCandidateAdoptsOriginalWhenSuggestionWasNotApplied() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("change-suggested-default-original");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+
+        GeneratedAiCaseItem original = generatedCase(unique + " original case");
+        GeneratedAiCaseItem suggestion = generatedCase(unique + " suggested case");
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(original), "coverage", List.of(), List.of(), List.of(), "generation raw"
+        ));
+        when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
+                "SUGGEST", "review suggestion", List.of(), List.of(), List.of(new AiReviewCaseDecision(
+                        0, "CHANGE_SUGGESTED", "可优化", "覆盖基本完整", "存在优化空间", "建议优化断言",
+                        null, null, null, null, "MODIFY", 78, 0.9, "建议优化断言", suggestion,
+                        List.of(), 1, null
+                )), List.of(), List.of(), "review raw", true
+        ));
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+        AiCaseCandidateItem candidate = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE).get(0);
+        var directory = caseService.createDirectory(
+                WORKSPACE_CODE,
+                new CreateCaseDirectoryRequest(WORKSPACE_CODE, null, unique + " adopted directory")
+        );
+
+        AiCaseAdoptionItem adoption = aiCaseAdoptionService.adoptCandidate(
+                created.taskId(), WORKSPACE_CODE, candidate.candidateCaseId(), new AdoptAiCaseRequest(directory.id())
+        );
+
+        assertThat(adoption.status()).isEqualTo("ADOPTED");
+        assertThat(adoption.adoptedContentSource()).isEqualTo("ORIGINAL");
+        assertThat(caseService.getCase(adoption.createdCaseId(), WORKSPACE_CODE).title()).isEqualTo(original.title());
+        assertThat(aiCaseCandidateService.get(created.taskId(), candidate.candidateCaseId(), WORKSPACE_CODE).humanDecision())
+                .isEqualTo("KEEP_ORIGINAL");
+    }
+
+    @Test
+    void reviewTimeoutConvergesTaskAndIgnoresLateReviewResult() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("review-timeout");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        GeneratedAiCaseItem generatedCase = generatedCase(unique + " generated case");
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(generatedCase), "coverage", List.of(), List.of(), List.of(), "generation raw"
+        ));
+        when(aiProviderClient.review(any(), any(), any())).thenAnswer(invocation -> {
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            return new AiReviewResult(
+                    "APPROVE", "late review", List.of(), List.of(), List.of(new AiReviewCaseDecision(
+                            0, "APPROVED", "late approval", "covered", "evidence", "late result",
+                            null, null, null
+                    )), List.of(), List.of(), "late raw", true
+            );
+        });
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+
+        AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(detail.status()).isEqualTo("COMPLETED");
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.reviewStatus()).isEqualTo("FAILED");
+        assertThat(detail.failedStage()).isEqualTo("AI_REVIEW");
+        assertThat(detail.errorCode()).isEqualTo("AI_REVIEW_TIMEOUT");
+        assertThat(detail.errorMessage()).contains("1 秒");
+        assertThat(detail.generatedCases()).hasSize(1);
+        assertThat(detail.generatedCases().get(0).aiReviewStatus()).isEqualTo("PENDING_REVIEW");
+        assertThat(detail.events()).extracting(AiGenerationTaskEventResponse::eventType)
+                .contains("GENERATION_COMPLETED", "REVIEW_STARTED", "REVIEW_FAILED")
+                .doesNotContain("REVIEW_COMPLETED", "TASK_FAILED");
+
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+        assertThat(aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE).get(0).reviewStatus())
+                .isEqualTo("PENDING");
+    }
+
+    @Test
+    void reviewFailureAllowsManualTakeoverAdoptionUsingOriginalCase() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("review-failure-manual-takeover");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        GeneratedAiCaseItem original = generatedCase(unique + " original case");
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(original), "coverage", List.of(), List.of(), List.of(), "generation raw"
+        ));
+        when(aiProviderClient.review(any(), any(), any()))
+                .thenThrow(new IllegalStateException("review provider unavailable"));
+
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+
+        AiCaseCandidateItem candidate = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE).get(0);
+        assertThat(candidate.humanDecision()).isEqualTo("PENDING");
+        assertThat(candidate.reviewStatus()).isEqualTo("PENDING");
+
+        var directory = caseService.createDirectory(
+                WORKSPACE_CODE,
+                new CreateCaseDirectoryRequest(WORKSPACE_CODE, null, unique + " adoption directory")
+        );
+        AiCaseAdoptionItem adoption = aiCaseAdoptionService.adoptCandidate(
+                created.taskId(), WORKSPACE_CODE, candidate.candidateCaseId(), new AdoptAiCaseRequest(directory.id())
+        );
+
+        assertThat(adoption.status()).isEqualTo("ADOPTED");
+        assertThat(adoption.adoptedContentSource()).isEqualTo("ORIGINAL");
+        assertThat(caseService.getCase(adoption.createdCaseId(), WORKSPACE_CODE).title()).isEqualTo(original.title());
+        AiCaseCandidateItem takenOver = aiCaseCandidateService.get(
+                created.taskId(), candidate.candidateCaseId(), WORKSPACE_CODE
+        );
+        assertThat(takenOver.humanDecision()).isEqualTo("KEEP_ORIGINAL");
+        assertThat(takenOver.reviewStatus()).isEqualTo("PENDING");
     }
 
     @Test

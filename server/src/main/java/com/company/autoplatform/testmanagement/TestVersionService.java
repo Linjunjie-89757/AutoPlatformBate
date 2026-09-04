@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.bug.BugEntity;
 import com.company.autoplatform.bug.BugMapper;
+import com.company.autoplatform.casecenter.CaseEntity;
+import com.company.autoplatform.casecenter.CaseMapper;
 import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.user.UserEntity;
 import com.company.autoplatform.user.UserMapper;
@@ -39,6 +41,7 @@ public class TestVersionService {
     private final TestVersionMapper versionMapper;
     private final TestRequirementMapper requirementMapper;
     private final TestRequirementCaseMapper requirementCaseMapper;
+    private final CaseMapper caseMapper;
     private final TestPlanMapper planMapper;
     private final TestPlanCaseMapper planCaseMapper;
     private final TestPlanReportMapper planReportMapper;
@@ -56,6 +59,7 @@ public class TestVersionService {
             TestVersionMapper versionMapper,
             TestRequirementMapper requirementMapper,
             TestRequirementCaseMapper requirementCaseMapper,
+            CaseMapper caseMapper,
             TestPlanMapper planMapper,
             TestPlanCaseMapper planCaseMapper,
             TestPlanReportMapper planReportMapper,
@@ -72,6 +76,7 @@ public class TestVersionService {
         this.versionMapper = versionMapper;
         this.requirementMapper = requirementMapper;
         this.requirementCaseMapper = requirementCaseMapper;
+        this.caseMapper = caseMapper;
         this.planMapper = planMapper;
         this.planCaseMapper = planCaseMapper;
         this.planReportMapper = planReportMapper;
@@ -344,6 +349,13 @@ public class TestVersionService {
                 : requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>()
                         .in(TestRequirementCaseEntity::getRequirementId, requirementIds))
                 .stream().collect(Collectors.groupingBy(TestRequirementCaseEntity::getRequirementId));
+        Map<Long, CaseEntity> casesById = requirementCases.values().stream()
+                .flatMap(List::stream)
+                .map(TestRequirementCaseEntity::getCaseId)
+                .distinct()
+                .collect(Collectors.collectingAndThen(Collectors.toList(), ids -> ids.isEmpty()
+                        ? Map.of()
+                        : caseMapper.selectBatchIds(ids).stream().collect(Collectors.toMap(CaseEntity::getId, Function.identity()))));
         List<TestPlanEntity> plans = planMapper.selectList(
                 new LambdaQueryWrapper<TestPlanEntity>()
                         .in(TestPlanEntity::getVersionId, versionIds)
@@ -389,6 +401,7 @@ public class TestVersionService {
                     casesByPlan,
                     versionBugs,
                     requirementCases,
+                    casesById,
                     signedPlanIds
             );
             return new TestVersionResponse(
@@ -429,6 +442,13 @@ public class TestVersionService {
                 : requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>()
                         .in(TestRequirementCaseEntity::getRequirementId, requirementIds))
                 .stream().collect(Collectors.groupingBy(TestRequirementCaseEntity::getRequirementId));
+        Map<Long, CaseEntity> casesById = requirementCases.values().stream()
+                .flatMap(List::stream)
+                .map(TestRequirementCaseEntity::getCaseId)
+                .distinct()
+                .collect(Collectors.collectingAndThen(Collectors.toList(), ids -> ids.isEmpty()
+                        ? Map.of()
+                        : caseMapper.selectBatchIds(ids).stream().collect(Collectors.toMap(CaseEntity::getId, Function.identity()))));
         List<TestPlanEntity> plans = planMapper.selectList(new LambdaQueryWrapper<TestPlanEntity>()
                 .eq(TestPlanEntity::getVersionId, version.getId())
                 .isNull(TestPlanEntity::getDeletedAt));
@@ -446,7 +466,7 @@ public class TestVersionService {
                 .stream().map(TestPlanReportEntity::getPlanId).collect(Collectors.toSet());
         List<BugEntity> bugs = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
                 .eq(BugEntity::getTestVersionId, version.getId()));
-        return buildQualityGateChecks(requirements, plans, casesByPlan, bugs, requirementCases, signedPlanIds);
+        return buildQualityGateChecks(requirements, plans, casesByPlan, bugs, requirementCases, casesById, signedPlanIds);
     }
 
     private List<TestQualityGateCheck> buildQualityGateChecks(
@@ -455,6 +475,7 @@ public class TestVersionService {
             Map<Long, List<TestPlanCaseEntity>> casesByPlan,
             List<BugEntity> bugs,
             Map<Long, List<TestRequirementCaseEntity>> requirementCases,
+            Map<Long, CaseEntity> casesById,
             Set<Long> signedPlanIds
     ) {
         List<TestPlanEntity> activePlans = plans.stream()
@@ -464,7 +485,7 @@ public class TestVersionService {
         long signedReports = activePlans.stream().filter(plan -> signedPlanIds.contains(plan.getId())).count();
         long coveredRequirements = requirements.stream().filter(requirement -> {
             List<TestRequirementCaseEntity> relations = requirementCases.getOrDefault(requirement.getId(), List.of());
-            return !relations.isEmpty() && relations.stream().allMatch(item -> item.getReviewStatus() == RequirementReviewStatus.PASSED);
+            return !relations.isEmpty() && relations.stream().allMatch(item -> isCaseReviewPassed(casesById.get(item.getCaseId())));
         }).count();
         BigDecimal requirementCoverRate = rate(coveredRequirements, requirements.size());
         List<TestPlanCaseEntity> cases = activePlans.stream()
@@ -491,6 +512,12 @@ public class TestVersionService {
                 qualityCheck("OPEN_P0_DEFECTS", "P0 缺陷", 0, p0, p0 == 0),
                 qualityCheck("OPEN_P1_DEFECTS", "P1 缺陷", 3, p1, p1 <= 3)
         );
+    }
+
+    private boolean isCaseReviewPassed(CaseEntity testCase) {
+        if (testCase == null || testCase.getReviewStatus() == null) return false;
+        String status = testCase.getReviewStatus().trim().toUpperCase(Locale.ROOT);
+        return "PASSED".equals(status) || "APPROVED".equals(status);
     }
 
     private TestQualityGateCheck qualityCheck(String key, String label, Object target, Object actual, boolean passed) {

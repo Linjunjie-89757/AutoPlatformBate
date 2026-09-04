@@ -1121,9 +1121,30 @@ public class TestPlanService {
     private RequirementReviewStatus aggregateReviewStatus(Long requirementId) {
         List<TestRequirementCaseEntity> relations = requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>().eq(TestRequirementCaseEntity::getRequirementId, requirementId));
         if (relations.isEmpty()) return RequirementReviewStatus.PENDING;
-        if (relations.stream().anyMatch(item -> item.getReviewStatus() == RequirementReviewStatus.REJECTED)) return RequirementReviewStatus.REJECTED;
-        if (relations.stream().anyMatch(item -> item.getReviewStatus() != RequirementReviewStatus.PASSED)) return RequirementReviewStatus.REVIEWING;
+        Map<Long, CaseEntity> cases = caseMapper.selectBatchIds(relations.stream()
+                        .map(TestRequirementCaseEntity::getCaseId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList())
+                .stream()
+                .collect(Collectors.toMap(CaseEntity::getId, Function.identity()));
+        if (relations.stream().anyMatch(relation -> caseReviewStatus(cases.get(relation.getCaseId())) == RequirementReviewStatus.REJECTED)) {
+            return RequirementReviewStatus.REJECTED;
+        }
+        if (relations.stream().anyMatch(relation -> caseReviewStatus(cases.get(relation.getCaseId())) != RequirementReviewStatus.PASSED)) {
+            return RequirementReviewStatus.REVIEWING;
+        }
         return RequirementReviewStatus.PASSED;
+    }
+
+    private RequirementReviewStatus caseReviewStatus(CaseEntity testCase) {
+        if (testCase == null || testCase.getReviewStatus() == null) return RequirementReviewStatus.PENDING;
+        return switch (testCase.getReviewStatus().trim().toUpperCase(Locale.ROOT)) {
+            case "PASSED", "APPROVED" -> RequirementReviewStatus.PASSED;
+            case "REJECTED", "NOT_RECOMMENDED" -> RequirementReviewStatus.REJECTED;
+            case "REVIEWING", "RUNNING" -> RequirementReviewStatus.REVIEWING;
+            default -> RequirementReviewStatus.PENDING;
+        };
     }
 
     private TestPlanReportEntity generateReportInternal(TestPlanEntity plan) {

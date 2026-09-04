@@ -3,6 +3,9 @@ package com.company.autoplatform.ai;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.common.BadRequestException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
@@ -13,10 +16,17 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class AiGenerationTaskService {
 
+    private final long reviewTaskTimeoutSeconds;
     private final AiGenerationTaskMapper aiGenerationTaskMapper;
     private final AiGenerationTaskDomainService taskDomainService;
     private final AiCaseService aiCaseService;
@@ -40,7 +50,8 @@ public class AiGenerationTaskService {
             AiGenerationTaskSseSupport sseSupport,
             AiGenerationTaskExecutionStateSupport stateSupport,
             AiCaseCandidateService candidateService,
-            AiCaseReviewOrchestrationService reviewOrchestrationService
+            AiCaseReviewOrchestrationService reviewOrchestrationService,
+            @Value("${app.ai.review-task-timeout-seconds:300}") long reviewTaskTimeoutSeconds
     ) {
         this.aiGenerationTaskMapper = aiGenerationTaskMapper;
         this.taskDomainService = taskDomainService;
@@ -53,6 +64,7 @@ public class AiGenerationTaskService {
         this.stateSupport = stateSupport;
         this.candidateService = candidateService;
         this.reviewOrchestrationService = reviewOrchestrationService;
+        this.reviewTaskTimeoutSeconds = Math.max(1, reviewTaskTimeoutSeconds);
     }
 
     public AiGenerationTaskResponse createTask(String headerWorkspaceCode, CreateAiGenerationTaskRequest request) {
@@ -110,9 +122,9 @@ public class AiGenerationTaskService {
         AiReviewResult previousReview = responseSupport.readReviewResult(entity.getReviewResultJson());
         AiCaseReviewOrchestrationService.ReviewExecutionResult reviewExecution;
         try {
-            reviewExecution = reviewOrchestrationService.retryFailedBatches(workspaceCode, entity);
+            reviewExecution = executeReviewWithTimeout(workspaceCode, entity, null);
         } catch (Exception exception) {
-            stateSupport.markReviewFailed(taskId, exception);
+            markReviewFailedIfActive(taskId, exception);
             return;
         }
         if (reviewExecution.reviewResult() == null) {
@@ -236,11 +248,11 @@ public class AiGenerationTaskService {
 
         AiCaseReviewOrchestrationService.ReviewExecutionResult reviewExecution;
         try {
-            reviewExecution = reviewOrchestrationService.execute(workspaceCode, entity, candidates);
+            reviewExecution = executeReviewWithTimeout(workspaceCode, entity, candidates);
         } catch (TaskCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
-            stateSupport.markReviewFailed(entity.getTaskId(), exception);
+            markReviewFailedIfActive(entity.getTaskId(), exception);
             return;
         }
 
@@ -402,7 +414,7 @@ public class AiGenerationTaskService {
         final String[] reviewModel = new String[]{null};
         AiCaseReviewOrchestrationService.StreamReviewExecutionResult reviewExecution;
         try {
-            reviewExecution = reviewOrchestrationService.executeStreaming(
+            reviewExecution = executeStreamingReviewWithTimeout(
                     workspaceCode,
                     entity,
                     candidates,
@@ -420,6 +432,10 @@ public class AiGenerationTaskService {
                         AiGenerationTaskEntity latest = requireTask(taskId);
                         if (stateSupport.isCanceled(latest)) {
                             throw new TaskCanceledException("任务已取消，停止接收评审流。");
+                        }
+                        if (!"REVIEWING".equals(latest.getStatus())
+                                || !AiGenerationWorkflowContract.REVIEW_RUNNING.equals(latest.getReviewStatus())) {
+                            throw new IllegalStateException("AI 评审任务已结束，忽略迟到的评审结果。");
                         }
                         if ("SUPPLEMENTED".equals(update.status()) && update.supplementCase() != null) {
                             if (generatedCases.size() >= taskCaseTotalLimit(latest)) {
@@ -490,7 +506,7 @@ public class AiGenerationTaskService {
         } catch (TaskCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
-            stateSupport.markReviewFailed(taskId, exception);
+            markReviewFailedIfActive(taskId, exception);
             return;
         }
 
@@ -544,6 +560,86 @@ public class AiGenerationTaskService {
 
     public StreamingResponseBody streamTaskEvents(String taskId, String workspaceCode) {
         return sseSupport.streamTaskEvents(taskId, workspaceCode);
+    }
+
+    private AiCaseReviewOrchestrationService.ReviewExecutionResult executeReviewWithTimeout(
+            String workspaceCode,
+            AiGenerationTaskEntity task,
+            List<AiCaseCandidateEntity> candidates
+    ) {
+        if (candidates == null) {
+            return executeWithReviewTimeout(task.getTaskId(), () -> reviewOrchestrationService.retryFailedBatches(workspaceCode, task));
+        }
+        return executeWithReviewTimeout(task.getTaskId(), () -> reviewOrchestrationService.execute(workspaceCode, task, candidates));
+    }
+
+    private AiCaseReviewOrchestrationService.StreamReviewExecutionResult executeStreamingReviewWithTimeout(
+            String workspaceCode,
+            AiGenerationTaskEntity task,
+            List<AiCaseCandidateEntity> candidates,
+            java.util.function.Consumer<AiCaseService.AiStreamModelInfo> modelConsumer,
+            java.util.function.Consumer<AiCaseService.ReviewCaseStreamUpdate> updateConsumer
+    ) {
+        return executeWithReviewTimeout(task.getTaskId(), () -> reviewOrchestrationService.executeStreaming(
+                workspaceCode, task, candidates, modelConsumer, updateConsumer
+        ));
+    }
+
+    private <T> T executeWithReviewTimeout(String taskId, Callable<T> operation) {
+        var executor = Executors.newVirtualThreadPerTaskExecutor();
+        SecurityContext callerContext = SecurityContextHolder.getContext();
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(reviewTaskTimeoutSeconds);
+        Future<T> future = executor.submit(() -> {
+            SecurityContext previousContext = SecurityContextHolder.getContext();
+            SecurityContextHolder.setContext(callerContext);
+            try {
+                return operation.call();
+            } finally {
+                SecurityContextHolder.setContext(previousContext);
+            }
+        });
+        try {
+            T result = future.get(reviewTaskTimeoutSeconds, TimeUnit.SECONDS);
+            if (System.nanoTime() >= deadlineNanos) {
+                AiReviewTimeoutException timeout = new AiReviewTimeoutException(reviewTaskTimeoutSeconds);
+                stateSupport.markReviewFailed(taskId, timeout);
+                future.cancel(true);
+                throw timeout;
+            }
+            return result;
+        } catch (TimeoutException exception) {
+            AiReviewTimeoutException timeout = new AiReviewTimeoutException(reviewTaskTimeoutSeconds);
+            stateSupport.markReviewFailed(taskId, timeout);
+            future.cancel(true);
+            throw timeout;
+        } catch (InterruptedException exception) {
+            AiReviewTimeoutException timeout = new AiReviewTimeoutException(reviewTaskTimeoutSeconds);
+            stateSupport.markReviewFailed(taskId, timeout);
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw timeout;
+        } catch (ExecutionException exception) {
+            Throwable cause = exception.getCause();
+            if (cause instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new IllegalStateException("AI 评审执行失败", cause);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private void markReviewFailedIfActive(String taskId, Exception exception) {
+        AiGenerationTaskEntity latest = aiGenerationTaskMapper.selectOne(new LambdaQueryWrapper<AiGenerationTaskEntity>()
+                .eq(AiGenerationTaskEntity::getTaskId, taskId)
+                .last("limit 1"));
+        if (latest == null) {
+            return;
+        }
+        if ("REVIEWING".equals(latest.getStatus())
+                && AiGenerationWorkflowContract.REVIEW_RUNNING.equals(latest.getReviewStatus())) {
+            stateSupport.markReviewFailed(taskId, exception);
+        }
     }
 
     private void syncImageAudit(AiGenerationTaskEntity entity, List<Long> assetIds) {

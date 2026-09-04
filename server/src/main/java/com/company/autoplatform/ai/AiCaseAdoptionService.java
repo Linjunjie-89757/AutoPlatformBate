@@ -85,7 +85,8 @@ public class AiCaseAdoptionService {
                 task.getGeneratedCasesJson(), new TypeReference<List<GeneratedAiCaseItem>>() {}, List.of()
         );
         candidateService.materializeGeneratedCases(task, generatedCases);
-        AiCaseCandidateEntity candidate = candidateService.requireForAdoption(taskId, candidateId);
+        AiCaseCandidateEntity candidate = candidateService.prepareManualAdoptionAfterReviewFailure(taskId, candidateId);
+        candidate = candidateService.requireForAdoption(taskId, candidate.getCandidateId());
         return adoptCandidate(task, workspace, candidate, request);
     }
 
@@ -102,9 +103,21 @@ public class AiCaseAdoptionService {
         if (!workspace.getId().equals(directory.getWorkspaceId())) {
             throw new BadRequestException("保存目录不属于当前工作空间");
         }
+        AiCaseCandidateEntity adoptionCandidate = candidate;
+        if ("PENDING".equals(adoptionCandidate.getHumanDecision())
+                && "CHANGE_SUGGESTED".equals(candidate.getReviewStatus())) {
+            candidateService.keepOriginal(
+                    task.getTaskId(),
+                    adoptionCandidate.getCandidateId(),
+                    workspace.getWorkspaceCode(),
+                    new AiCaseCandidateVersionRequest(adoptionCandidate.getContentVersion(), adoptionCandidate.getContentHash())
+            );
+            adoptionCandidate = candidateService.requireForAdoption(task.getTaskId(), adoptionCandidate.getCandidateId());
+        }
+        AiCaseCandidateEntity candidateForAdoption = adoptionCandidate;
         Long userId = CurrentUserContext.get();
         AiCaseAdoptionEntity prepared = transactionTemplate.execute(status -> prepareAdoption(
-                task, candidate, request.directoryId(), userId
+                task, candidateForAdoption, request.directoryId(), userId
         ));
         if (prepared == null) {
             throw new BadRequestException("无法创建采纳记录，请重试");
@@ -114,7 +127,7 @@ public class AiCaseAdoptionService {
         }
         try {
             AiCaseAdoptionItem completed = transactionTemplate.execute(status -> completeAdoption(
-                    prepared.getId(), workspace, candidate, request.directoryId(), userId
+                    prepared.getId(), workspace, candidateForAdoption, request.directoryId(), userId
             ));
             if (completed == null) {
                 throw new BadRequestException("采纳事务未完成，请重试");
@@ -122,7 +135,7 @@ public class AiCaseAdoptionService {
             return completed;
         } catch (Exception exception) {
             AiCaseAdoptionItem failed = transactionTemplate.execute(status -> markAdoptionFailed(
-                    prepared.getId(), candidate, errorMessage(exception), userId
+                    prepared.getId(), candidateForAdoption, errorMessage(exception), userId
             ));
             if (failed == null) {
                 throw new BadRequestException(errorMessage(exception));
