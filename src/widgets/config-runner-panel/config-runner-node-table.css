@@ -255,11 +255,20 @@
   display: block;
   width: 13px;
   height: 13px;
+  transition: filter 160ms ease;
+}
+
+.config-runner-row-actions button:hover:not(:disabled) img {
+  filter: var(--app-action-icon-hover-filter);
 }
 
 .config-runner-row-actions button.is-danger:hover {
   background: #fff0f0;
   color: #f53f3f;
+}
+
+.config-runner-row-actions button.is-danger:hover:not(:disabled) img {
+  filter: var(--app-action-icon-danger-hover-filter);
 }
 
 .config-runner-warning-strip {

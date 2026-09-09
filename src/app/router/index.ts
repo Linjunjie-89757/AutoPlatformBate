@@ -363,6 +363,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'reports/share',
+        name: 'report-internal-share',
+        component: ReportSharePage,
+        meta: {
+          title: '报告中心',
+          description: '在后台查看报告分享预览。',
+          permissionCode: 'reports.view',
+        },
+      },
+      {
         path: 'automation/api',
         redirect: to => ({ path: '/automation/api/interfaces', query: to.query, hash: to.hash }),
       },

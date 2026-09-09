@@ -102,6 +102,10 @@ const columnClass = computed(() => [
   cursor: pointer;
 }
 
+.app-figma-action-column__actions :slotted(button) img {
+  transition: filter 150ms ease;
+}
+
 .app-figma-action-column__actions :slotted(button:hover),
 .app-figma-action-column__actions :slotted(button:focus-visible) {
   background: #f2f3f5;
@@ -109,10 +113,20 @@ const columnClass = computed(() => [
   outline: 0;
 }
 
+.app-figma-action-column__actions :slotted(button:hover:not(:disabled)) img,
+.app-figma-action-column__actions :slotted(button:focus-visible:not(:disabled)) img {
+  filter: var(--app-action-icon-hover-filter);
+}
+
 .app-figma-action-column__actions :slotted(button[data-danger="true"]:hover),
 .app-figma-action-column__actions :slotted(button[data-danger="true"]:focus-visible) {
   background: #fff0f0;
   color: #f53f3f;
+}
+
+.app-figma-action-column__actions :slotted(button[data-danger="true"]:hover:not(:disabled)) img,
+.app-figma-action-column__actions :slotted(button[data-danger="true"]:focus-visible:not(:disabled)) img {
+  filter: var(--app-action-icon-danger-hover-filter);
 }
 
 .app-figma-action-column__actions :slotted(button:disabled) {

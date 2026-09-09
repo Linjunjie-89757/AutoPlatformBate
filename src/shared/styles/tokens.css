@@ -48,6 +48,9 @@
   --app-text-inverse: #ffffff;
   --app-text-code: #dbeafe;
 
+  --app-action-icon-hover-filter: brightness(0) saturate(100%) invert(11%) sepia(12%) saturate(1551%) hue-rotate(180deg) brightness(95%) contrast(91%);
+  --app-action-icon-danger-hover-filter: brightness(0) saturate(100%) invert(35%) sepia(96%) saturate(4547%) hue-rotate(343deg) brightness(95%) contrast(98%);
+
   --app-sidebar-bg: #ffffff;
   --app-sidebar-bg-hover: #f2f3f5;
   --app-sidebar-bg-active: #e8f3ff;

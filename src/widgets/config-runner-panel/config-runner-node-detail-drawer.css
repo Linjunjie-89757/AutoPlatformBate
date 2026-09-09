@@ -428,6 +428,11 @@
   display: block;
   width: 13px;
   height: 13px;
+  transition: filter 160ms ease;
+}
+
+.config-runner-node-task-actions button:hover:not(:disabled) img {
+  filter: var(--app-action-icon-hover-filter);
 }
 
 .config-runner-node-log-list {

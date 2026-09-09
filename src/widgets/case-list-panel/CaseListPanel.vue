@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { ClipboardCheck } from '@lucide/vue'
+import { ClipboardCheck, RotateCcw } from '@lucide/vue'
 
 import {
   type CaseDetail,
@@ -273,10 +273,6 @@ function formatColumnValue(row: CaseSummaryItem, key: string) {
     default:
       return '-'
   }
-}
-
-function isAiGeneratedCase(item: CaseSummaryItem) {
-  return item.sourceType === 'AI_GENERATED' || item.sourceType === 'AI'
 }
 
 function getReviewStatusVisual(status: string) {
@@ -638,17 +634,29 @@ function navigateReviewDrawer(item: CaseSummaryItem) {
   reviewingCase.value = item
 }
 
-async function saveReviewCase(payload: ReviewCasePayload) {
+async function saveReviewCase(payload: ReviewCasePayload, continueReview = false) {
   if (!reviewingCase.value || reviewingCaseId.value !== null) {
     return
   }
 
+  const currentItem = reviewingCase.value
   reviewingCaseId.value = reviewingCase.value.id
   try {
-    await reviewCase(reviewingCase.value, props.workspaceCode, payload)
+    const result = await reviewCase(currentItem, props.workspaceCode, payload)
     ElMessage.success('用例评审已更新')
-    reviewDialogVisible.value = false
     await loadCases()
+
+    const nextItem = continueReview
+      ? cases.value.find(item => item.id !== currentItem.id && item.reviewStatus !== 'PASSED')
+      : null
+
+    if (nextItem) {
+      reviewingCase.value = nextItem
+    } else if (continueReview) {
+      reviewDialogVisible.value = false
+    } else {
+      reviewingCase.value = { ...currentItem, ...result }
+    }
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
@@ -790,16 +798,13 @@ defineExpose({
               >
                 {{ formatColumnValue(item, column.key) }}
               </button>
-              <el-tooltip
-                v-else-if="column.key === 'title'"
-                :content="formatColumnValue(item, column.key)"
-                placement="top"
-              >
-                <span class="case-list-panel__title-wrap">
+                <el-tooltip
+                  v-else-if="column.key === 'title'"
+                  :content="formatColumnValue(item, column.key)"
+                  placement="top"
+                >
                   <span class="case-list-panel__title">{{ formatColumnValue(item, column.key) }}</span>
-                  <span v-if="isAiGeneratedCase(item)" class="case-list-panel__ai-mark">AI</span>
-                </span>
-              </el-tooltip>
+                </el-tooltip>
               <span
                 v-else-if="column.key === 'priority'"
                 class="case-list-panel__priority"
@@ -846,12 +851,18 @@ defineExpose({
               <button
                 v-if="canEdit"
                 type="button"
-                title="评审用例"
-                aria-label="评审用例"
+                :title="item.reviewStatus === 'PASSED' || item.reviewStatus === 'REJECTED' ? '重新评审' : '评审用例'"
+                :aria-label="item.reviewStatus === 'PASSED' || item.reviewStatus === 'REJECTED' ? '重新评审' : '评审用例'"
                 :disabled="deletingCaseId === item.id || togglingCaseId === item.id || reviewingCaseId === item.id"
                 @click.stop="openReviewDrawer(item)"
               >
-                <ClipboardCheck class="case-list-panel__action-icon-svg" :size="13" :stroke-width="1.8" />
+                <RotateCcw
+                  v-if="item.reviewStatus === 'PASSED' || item.reviewStatus === 'REJECTED'"
+                  class="case-list-panel__action-icon-svg"
+                  :size="13"
+                  :stroke-width="1.8"
+                />
+                <ClipboardCheck v-else class="case-list-panel__action-icon-svg" :size="13" :stroke-width="1.8" />
               </button>
               <button
                 v-if="canDelete"
@@ -1310,25 +1321,6 @@ defineExpose({
   font-weight: 500;
 }
 
-.case-list-panel__title-wrap {
-  display: flex;
-  min-width: 0;
-  width: 100%;
-  align-items: center;
-  gap: 5px;
-}
-
-.case-list-panel__ai-mark {
-  flex: 0 0 auto;
-  padding: 0 3px;
-  border-radius: 3px;
-  background: #f5e8ff;
-  color: #7816ff;
-  font-size: 9px;
-  line-height: 14px;
-  font-weight: 600;
-}
-
 .case-list-panel__cell-text {
   color: #4e5969;
   font-size: 13px;
@@ -1371,7 +1363,7 @@ defineExpose({
 }
 
 .case-list-panel__priority.is-p3 {
-  background: #86909c;
+  background: #165dff;
   color: #ffffff;
 }
 

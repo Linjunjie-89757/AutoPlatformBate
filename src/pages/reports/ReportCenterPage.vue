@@ -359,7 +359,14 @@ async function createReportShare(item?: unknown, openPage = true) {
     const created = await reportApi.createReportShare(target.workspaceCode || selectedWorkspaceCode.value || 'ALL', target.reportId)
     await loadReportShares()
     if (openPage) {
-      await router.push({ name: 'report-shared-report', query: { token: created.token } })
+      await router.push({
+        name: 'report-internal-share',
+        query: {
+          reportId: String(target.reportId),
+          workspace: target.workspaceCode || selectedWorkspaceCode.value || 'ALL',
+          token: created.token,
+        },
+      })
       return
     }
     await copyText(absoluteShareUrl(created.shareUrl))
@@ -413,7 +420,14 @@ async function regenerateReportShare(item: ReportShareSummary) {
   try {
     const created = await reportApi.regenerateReportShare(item.workspaceCode, item.id)
     await loadReportShares()
-    await router.push({ name: 'report-shared-report', query: { token: created.token } })
+    await router.push({
+      name: 'report-internal-share',
+      query: {
+        reportId: String(item.reportId),
+        workspace: item.workspaceCode,
+        token: created.token,
+      },
+    })
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   }

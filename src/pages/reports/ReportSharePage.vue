@@ -3,20 +3,15 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Check } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { reportApi, type ReportAttachmentItem, type SharedReport } from '@/entities/report'
+import { reportApi, type ReportAttachmentItem, type ReportDetail, type SharedReport } from '@/entities/report'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { figmaGlobalNavIcons, figmaReportIcons } from '@/shared/assets/figma-icons'
-
-interface ShareNavItem {
-  key: string
-  icon: string
-  active?: boolean
-  separated?: boolean
-}
+import { figmaReportIcons } from '@/shared/assets/figma-icons'
 
 const route = useRoute()
 const router = useRouter()
+const isInternal = computed(() => route.name === 'report-internal-share')
 const sharedReport = ref<SharedReport | null>(null)
+const internalReport = ref<ReportDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
 const shareLinkCopied = ref(false)
@@ -25,20 +20,7 @@ let requestSeq = 0
 let shareLinkResetTimer: ReturnType<typeof window.setTimeout> | null = null
 const copiedResetTimers = new Map<string, ReturnType<typeof window.setTimeout>>()
 
-const navItems: ShareNavItem[] = [
-  { key: 'dashboard', icon: figmaGlobalNavIcons.dashboard },
-  { key: 'case', icon: figmaGlobalNavIcons.case },
-  { key: 'config', icon: figmaGlobalNavIcons.config },
-  { key: 'bug', icon: figmaGlobalNavIcons.bug },
-  { key: 'api', icon: figmaGlobalNavIcons.api },
-  { key: 'web', icon: figmaGlobalNavIcons.web },
-  { key: 'app', icon: figmaGlobalNavIcons.app },
-  { key: 'task', icon: figmaGlobalNavIcons.task },
-  { key: 'report', icon: figmaGlobalNavIcons.report, active: true, separated: true },
-  { key: 'setting', icon: figmaGlobalNavIcons.setting },
-]
-
-const report = computed(() => sharedReport.value?.report || null)
+const report = computed(() => (isInternal.value ? internalReport.value : sharedReport.value?.report) || null)
 const reportStatus = computed(() => {
   const result = String(report.value?.result || '').toUpperCase()
   if (result === 'SUCCESS') return { label: '成功', tone: 'success' }
@@ -54,6 +36,19 @@ const summaryStats = [
 const token = computed(() => {
   const value = Array.isArray(route.query.token) ? route.query.token[0] : route.query.token
   return typeof value === 'string' ? value.trim() : ''
+})
+const internalReportId = computed(() => {
+  const value = Array.isArray(route.query.reportId) ? route.query.reportId[0] : route.query.reportId
+  const reportId = Number(value)
+  return Number.isInteger(reportId) && reportId > 0 ? reportId : 0
+})
+const internalWorkspaceCode = computed(() => {
+  const value = Array.isArray(route.query.workspace) ? route.query.workspace[0] : route.query.workspace
+  return typeof value === 'string' && value.trim() ? value.trim() : 'ALL'
+})
+const publicShareUrl = computed(() => {
+  if (!token.value) return ''
+  return new URL(`/share/report?token=${encodeURIComponent(token.value)}`, window.location.origin).toString()
 })
 const reportSource = computed(() => {
   const labels: Record<string, string> = {
@@ -87,36 +82,45 @@ function attachmentUrl(item: ReportAttachmentItem) {
   return item.downloadUrl || '#'
 }
 
-async function loadSharedReport() {
+async function loadReport() {
   const currentToken = token.value
   const currentRequest = ++requestSeq
   sharedReport.value = null
+  internalReport.value = null
   error.value = ''
-  if (!currentToken) {
+  if (isInternal.value) {
+    if (!internalReportId.value) {
+      error.value = '报告链接缺少有效 reportId'
+      return
+    }
+  } else if (!currentToken) {
     error.value = '分享链接缺少有效 token'
     return
   }
 
   loading.value = true
   try {
-    const result = await reportApi.getSharedReport(currentToken)
+    const result = isInternal.value
+      ? await reportApi.getReport(internalWorkspaceCode.value, internalReportId.value)
+      : await reportApi.getSharedReport(currentToken)
     if (currentRequest !== requestSeq) return
-    sharedReport.value = result
+    if (isInternal.value) internalReport.value = result as ReportDetail
+    else sharedReport.value = result as SharedReport
   } catch (reason) {
     if (currentRequest !== requestSeq) return
     const status = reason && typeof reason === 'object' && 'status' in reason
       ? Number((reason as { status?: number }).status)
       : 0
-    error.value = status === 404
-      ? '分享链接无效、已过期或已撤销'
-      : getRequestErrorMessage(reason) || '分享报告加载失败'
+    error.value = isInternal.value
+      ? (status === 404 ? '报告不存在或已删除' : getRequestErrorMessage(reason) || '报告加载失败')
+      : (status === 404 ? '分享链接无效、已过期或已撤销' : getRequestErrorMessage(reason) || '分享报告加载失败')
   } finally {
     if (currentRequest === requestSeq) loading.value = false
   }
 }
 
 async function copyCurrentUrl() {
-  await copyText(window.location.href)
+  await copyText(isInternal.value ? publicShareUrl.value : window.location.href)
   shareLinkCopied.value = true
 
   if (shareLinkResetTimer) window.clearTimeout(shareLinkResetTimer)
@@ -159,6 +163,10 @@ async function copyText(text = '') {
 }
 
 function enterBackend() {
+  if (isInternal.value) {
+    void router.push({ path: '/reports', query: { workspace: internalWorkspaceCode.value } })
+    return
+  }
   const current = report.value
   if (!current) {
     void router.push('/reports')
@@ -177,8 +185,8 @@ function exportPdf() {
   window.print()
 }
 
-watch(token, () => {
-  void loadSharedReport()
+watch([token, internalReportId, internalWorkspaceCode, isInternal], () => {
+  void loadReport()
 }, { immediate: true })
 
 onBeforeUnmount(() => {
@@ -190,35 +198,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="report-share-shell">
-    <aside class="report-share-nav" aria-label="主导航">
-      <div class="report-share-logo">
-        <img :src="figmaReportIcons.sharePage.logo" alt="">
-      </div>
-
-      <div class="report-share-nav__list">
-        <template v-for="item in navItems" :key="item.key">
-          <i v-if="item.separated" class="report-share-nav__divider"></i>
-          <button type="button" class="report-share-nav__item" :class="{ 'is-active': item.active }">
-            <img :src="item.icon" alt="">
-          </button>
-        </template>
-      </div>
-
-      <div class="report-share-avatar">访</div>
-    </aside>
-
+  <section class="report-share-shell" :class="{ 'is-internal': isInternal }">
     <main class="report-share-app">
-      <header class="report-share-topbar">
-        <strong>报告中心</strong>
-        <div class="report-share-topbar__right">
-          <span class="report-share-user">
-            <em>访</em>
-            <span>访客</span>
-          </span>
-        </div>
-      </header>
-
       <div class="report-share-page">
         <header class="report-share-toolbar">
           <div class="report-share-toolbar__inner">
@@ -230,7 +211,12 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="report-share-actions">
-              <button type="button" :class="{ 'is-copied': shareLinkCopied }" @click="copyCurrentUrl">
+              <button
+                type="button"
+                :disabled="!report || (isInternal && !publicShareUrl)"
+                :class="{ 'is-copied': shareLinkCopied }"
+                @click="copyCurrentUrl"
+              >
                 <Check v-if="shareLinkCopied" :size="11" :stroke-width="2" />
                 <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
                 <span>{{ shareLinkCopied ? '已复制' : '复制链接' }}</span>
@@ -240,7 +226,7 @@ onBeforeUnmount(() => {
                 <span>导出 PDF</span>
               </button>
               <button type="button" class="is-primary" @click="enterBackend">
-                <span>进入后台</span>
+                <span>{{ isInternal ? '返回报告中心' : '进入后台' }}</span>
               </button>
             </div>
           </div>
@@ -255,7 +241,7 @@ onBeforeUnmount(() => {
             <img :src="figmaReportIcons.emptyAi" alt="">
             <strong>报告暂时无法查看</strong>
             <span>{{ error }}</span>
-            <button v-if="token" type="button" @click="loadSharedReport">重新加载</button>
+            <button type="button" @click="loadReport">重新加载</button>
           </div>
 
           <template v-else-if="report">
@@ -356,6 +342,10 @@ onBeforeUnmount(() => {
   font-family: var(--app-font-family);
 }
 
+.report-share-shell.is-internal {
+  height: 100%;
+}
+
 .report-share-nav {
   display: flex;
   width: 56px;
@@ -442,6 +432,10 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
+}
+
+.report-share-shell.is-internal .report-share-app {
+  width: 100%;
 }
 
 .report-share-topbar {

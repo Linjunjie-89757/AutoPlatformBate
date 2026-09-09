@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { CheckCircle2, ChevronLeft, ChevronRight, X, XCircle } from '@lucide/vue'
+import { CheckCircle2, ChevronLeft, ChevronRight, RotateCcw, X, XCircle } from '@lucide/vue'
 
 import {
   caseApi,
   type CaseDetail,
   type CaseSummaryItem,
   type ReviewCasePayload,
+  formatCaseDateTime,
 } from '@/entities/case'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
@@ -29,21 +30,27 @@ const props = withDefaults(
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   navigate: [item: CaseSummaryItem]
-  submit: [payload: ReviewCasePayload]
+  submit: [payload: ReviewCasePayload, continueReview: boolean]
 }>()
 
 const detail = ref<CaseDetail | null>(null)
 const loading = ref(false)
 const detailError = ref('')
-const rejectEditorOpen = ref(false)
 const rejectNote = ref('')
 const formError = ref('')
+const autoNext = ref(true)
 let detailRequestSeq = 0
 
 const currentStatus = computed(() => detail.value?.reviewStatus || props.caseItem?.reviewStatus || 'PENDING')
 const currentReviewComment = computed(() => detail.value?.reviewComment || props.caseItem?.reviewComment || '')
+const currentReviewer = computed(() => detail.value?.reviewedByName || props.caseItem?.reviewedByName || '')
+const currentReviewedAt = computed(() => formatCaseDateTime(detail.value?.reviewedAt || props.caseItem?.reviewedAt))
+const canAct = computed(() => currentStatus.value === 'PENDING' || currentStatus.value === 'REVIEWING')
+const isRejected = computed(() => currentStatus.value === 'REJECTED')
+const isPassed = computed(() => currentStatus.value === 'PASSED')
 const navigationItems = computed(() => {
-  if (props.caseItems.length) return props.caseItems
+  const reviewableItems = props.caseItems.filter(item => item.reviewStatus !== 'PASSED')
+  if (reviewableItems.length) return reviewableItems
   return props.caseItem ? [props.caseItem] : []
 })
 const currentIndex = computed(() => navigationItems.value.findIndex(item => item.id === props.caseItem?.id))
@@ -55,25 +62,25 @@ const reviewStatusVisual = computed(() => {
   if (currentStatus.value === 'REJECTED') {
     return { label: '已驳回', className: 'is-rejected' }
   }
-  return { label: '未评审', className: 'is-pending' }
+  return { label: '待评审', className: 'is-pending' }
 })
 
-const reviewStepRows = computed(() => {
+const reviewSteps = computed(() => {
   if (!detail.value) return []
 
   const steps = plainCaseText(detail.value.steps)
     .split(/\r?\n/)
     .map(item => item.trim())
     .filter(Boolean)
-  const expectedResult = plainCaseText(detail.value.expectedResult) || '—'
 
-  if (!steps.length) return [{ action: '—', expected: expectedResult }]
-
-  return steps.map((action, index) => ({
-    action,
-    expected: index === steps.length - 1 ? expectedResult : '按步骤描述继续执行',
-  }))
+  return steps.length ? steps.map(removeStepMarker) : ['—']
 })
+
+const hasReviewRecord = computed(() => isPassed.value || isRejected.value)
+
+function removeStepMarker(step: string) {
+  return step.replace(/^\s*\d+[.、)]\s*/, '').trim() || '—'
+}
 
 function plainCaseText(content: string | null | undefined) {
   if (!content) return ''
@@ -99,22 +106,16 @@ function navigateCase(offset: number) {
   emit('navigate', nextItem)
 }
 
-function openRejectEditor() {
-  rejectNote.value = ''
-  formError.value = ''
-  rejectEditorOpen.value = true
-}
-
-function closeRejectEditor() {
-  rejectEditorOpen.value = false
-  rejectNote.value = ''
-  formError.value = ''
-}
-
 function submitPassed() {
   if (props.saving) return
   formError.value = ''
-  emit('submit', { reviewStatus: 'PASSED', reviewComment: '' })
+  emit('submit', { reviewStatus: 'PASSED', reviewComment: rejectNote.value.trim() }, autoNext.value)
+}
+
+function submitReReview() {
+  if (props.saving) return
+  resetState()
+  emit('submit', { reviewStatus: 'PENDING', reviewComment: '' }, false)
 }
 
 function submitRejected() {
@@ -127,13 +128,13 @@ function submitRejected() {
   }
 
   formError.value = ''
-  emit('submit', { reviewStatus: 'REJECTED', reviewComment: comment })
+  emit('submit', { reviewStatus: 'REJECTED', reviewComment: comment }, autoNext.value)
 }
 
 function resetState() {
-  rejectEditorOpen.value = false
   rejectNote.value = ''
   formError.value = ''
+  autoNext.value = true
 }
 
 async function loadDetail() {
@@ -154,7 +155,7 @@ async function loadDetail() {
 }
 
 watch(
-  () => [props.modelValue, props.caseItem?.id, props.workspaceCode] as const,
+  () => [props.modelValue, props.caseItem?.id, props.caseItem, props.workspaceCode] as const,
   ([visible]) => {
     if (visible) {
       resetState()
@@ -170,7 +171,7 @@ watch(
 <template>
   <AppDrawer
     :model-value="modelValue"
-    size="480px"
+    size="600px"
     :with-header="false"
     drawer-class="case-review-drawer-host"
     @update:model-value="handleDrawerVisibleChange"
@@ -189,9 +190,16 @@ watch(
             >
               {{ detail?.priority || caseItem?.priority || 'P2' }}
             </span>
-            <small>{{ detail?.directoryName || caseItem?.directoryName || '空间根目录' }}</small>
+            <small>{{ detail?.caseType || caseItem?.caseType || '功能' }}</small>
           </p>
           <h2>{{ detail?.title || caseItem?.title || '-' }}</h2>
+          <div class="case-review-drawer__meta">
+            <span>{{ detail?.directoryName || caseItem?.directoryName || '空间根目录' }}</span>
+            <span>·</span>
+            <span>创建人：{{ detail?.createdByName || caseItem?.createdByName || '-' }}</span>
+            <span>·</span>
+            <span>{{ formatCaseDateTime(detail?.updatedAt || caseItem?.updatedAt) }}</span>
+          </div>
         </div>
         <button type="button" aria-label="关闭" :disabled="saving" @click="closeDrawer">
           <X :size="15" />
@@ -214,79 +222,102 @@ watch(
           <section>
             <h3><i />测试步骤</h3>
             <div class="case-review-drawer__steps">
-              <div>
-                <strong>#</strong>
-                <strong>操作步骤</strong>
-                <strong>预期结果</strong>
-              </div>
-              <div v-for="(step, index) in reviewStepRows" :key="`${index}-${step.action}`">
+              <div v-for="(step, index) in reviewSteps" :key="`${index}-${step}`">
                 <b>{{ index + 1 }}</b>
-                <span>{{ step.action }}</span>
-                <span>{{ step.expected }}</span>
+                <span>{{ step }}</span>
               </div>
             </div>
           </section>
 
-          <p
-            v-if="currentStatus === 'REJECTED' && currentReviewComment && !rejectEditorOpen"
-            class="case-review-drawer__rejection-note"
-          >
-            <XCircle :size="13" />
-            <span>{{ currentReviewComment }}</span>
-          </p>
+          <section class="is-expected">
+            <h3><i />预期结果</h3>
+            <p>{{ plainCaseText(detail.expectedResult) || '—' }}</p>
+          </section>
 
-          <section v-if="rejectEditorOpen" class="case-review-drawer__reject-editor">
-            <h3>驳回原因</h3>
-            <textarea
-              v-model="rejectNote"
-              rows="3"
-              maxlength="300"
-              placeholder="请说明驳回原因，帮助用例作者修改…"
-              autofocus
-              @input="formError = ''"
-            />
-            <p v-if="formError" class="case-review-drawer__form-error" role="alert">{{ formError }}</p>
-            <div>
-              <button class="case-review-drawer__button is-ghost is-small" type="button" :disabled="saving" @click="closeRejectEditor">取消</button>
-              <button class="case-review-drawer__button is-danger is-small" type="button" :disabled="saving" @click="submitRejected">
-                {{ saving ? '提交中...' : '确认驳回' }}
-              </button>
+          <section v-if="hasReviewRecord" class="case-review-drawer__review-history">
+            <h3>评审记录</h3>
+            <div class="case-review-drawer__review-entry">
+              <div class="case-review-drawer__review-icon" :class="reviewStatusVisual.className">
+                <CheckCircle2 v-if="isPassed" :size="13" />
+                <XCircle v-else :size="13" />
+              </div>
+              <div class="case-review-drawer__review-body">
+                <div class="case-review-drawer__review-meta">
+                  <strong>{{ currentReviewer || '—' }}</strong>
+                  <span class="case-review-drawer__review-status" :class="reviewStatusVisual.className">
+                    {{ isPassed ? '评审通过' : '评审驳回' }}
+                  </span>
+                  <small>{{ currentReviewedAt }}</small>
+                </div>
+                <p v-if="currentReviewComment">{{ currentReviewComment }}</p>
+              </div>
             </div>
           </section>
         </template>
       </div>
 
       <footer v-if="detail && !loading && !detailError">
-        <div class="case-review-drawer__navigation">
-          <button type="button" :disabled="saving || currentIndex <= 0" @click="navigateCase(-1)">
-            <ChevronLeft :size="13" />上一条
-          </button>
-          <span>{{ currentIndex >= 0 ? currentIndex + 1 : 1 }} / {{ navigationItems.length || 1 }}</span>
-          <button
-            type="button"
-            :disabled="saving || currentIndex < 0 || currentIndex >= navigationItems.length - 1"
-            @click="navigateCase(1)"
-          >
-            下一条<ChevronRight :size="13" />
-          </button>
+        <div v-if="canAct" class="case-review-drawer__opinion">
+          <h3>审核意见 <span v-if="formError">（驳回必填）</span></h3>
+          <textarea
+            v-model="rejectNote"
+            rows="3"
+            maxlength="300"
+            placeholder="填写审核意见，驳回时必填…"
+            :class="{ 'is-error': formError }"
+            @input="formError = ''"
+          />
+          <p v-if="formError" class="case-review-drawer__form-error" role="alert">{{ formError }}</p>
         </div>
-        <div class="case-review-drawer__actions" :class="reviewStatusVisual.className">
-          <template v-if="currentStatus === 'PASSED'">
-            <p><CheckCircle2 :size="15" />已通过评审</p>
+        <div class="case-review-drawer__footer-row">
+          <template v-if="!isPassed">
+            <div class="case-review-drawer__navigation">
+              <button type="button" :disabled="saving || currentIndex <= 0" @click="navigateCase(-1)">
+                <ChevronLeft :size="13" />上一条
+              </button>
+              <span>{{ currentIndex >= 0 ? currentIndex + 1 : 1 }} / {{ navigationItems.length || 1 }}</span>
+              <button
+                type="button"
+                :disabled="saving || currentIndex < 0 || currentIndex >= navigationItems.length - 1"
+                @click="navigateCase(1)"
+              >
+                下一条<ChevronRight :size="13" />
+              </button>
+            </div>
+            <div class="case-review-drawer__auto-next">
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="autoNext"
+                aria-label="自动跳转"
+                :class="{ 'is-on': autoNext }"
+                @click="autoNext = !autoNext"
+              ><span /></button>
+              <span>自动跳转</span>
+            </div>
           </template>
-          <template v-else-if="currentStatus === 'REJECTED'">
-            <p><XCircle :size="15" />已驳回</p>
-            <button class="case-review-drawer__button is-ghost is-small" type="button" :disabled="saving" @click="submitPassed">
-              {{ saving ? '提交中...' : '撤回并通过' }}
-            </button>
-          </template>
-          <template v-else>
-            <p>请审阅上方步骤后操作</p>
-            <button class="case-review-drawer__button is-reject" type="button" :disabled="saving || rejectEditorOpen" @click="openRejectEditor">驳回</button>
-            <button class="case-review-drawer__button is-success" type="button" :disabled="saving" @click="submitPassed">
-              {{ saving ? '提交中...' : '通过' }}
-            </button>
-          </template>
+
+          <div class="case-review-drawer__footer-spacer" />
+          <div class="case-review-drawer__actions" :class="reviewStatusVisual.className">
+            <template v-if="isRejected">
+              <p><XCircle :size="15" />已驳回</p>
+              <button class="case-review-drawer__button is-ghost" type="button" :disabled="saving" @click="submitPassed">
+                <CheckCircle2 :size="12" />{{ saving ? '提交中...' : '撤销并通过' }}
+              </button>
+            </template>
+            <template v-else-if="isPassed">
+              <p><CheckCircle2 :size="15" />已通过</p>
+              <button class="case-review-drawer__button is-ghost" type="button" :disabled="saving" @click="submitReReview">
+                <RotateCcw :size="12" />{{ saving ? '提交中...' : '发起重新评审' }}
+              </button>
+            </template>
+            <template v-else>
+              <button class="case-review-drawer__button is-reject" type="button" :disabled="saving" @click="submitRejected">驳回</button>
+              <button class="case-review-drawer__button is-success" type="button" :disabled="saving" @click="submitPassed">
+                {{ saving ? '提交中...' : '通过' }}
+              </button>
+            </template>
+          </div>
         </div>
       </footer>
     </div>
@@ -300,12 +331,12 @@ watch(
   --case-review-danger: #f53f3f;
   --case-review-muted: #86909c;
   --case-review-placeholder: #c9cdd4;
-  --case-review-primary: #0ea5e9;
+  --case-review-primary: #165dff;
   --case-review-secondary: #4e5969;
   --case-review-success: #00b42a;
   --case-review-text: #1d2129;
   background: #fff;
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  box-shadow: -4px 0 28px rgba(0, 0, 0, 0.13);
 }
 
 :global(.case-review-drawer-host .el-drawer__body) {
@@ -355,6 +386,29 @@ watch(
   line-height: 1.4;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.case-review-drawer__meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--case-review-muted);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.case-review-drawer__meta span {
+  flex: 0 0 auto;
+}
+
+.case-review-drawer__meta span:first-child,
+.case-review-drawer__meta span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .case-review-drawer__header code {
@@ -430,23 +484,23 @@ watch(
 }
 
 .case-review-drawer__badge.is-p0 {
-  color: var(--case-review-danger);
-  background: #ffecec;
+  color: #ffffff;
+  background: var(--case-review-danger);
 }
 
 .case-review-drawer__badge.is-p1 {
-  color: #ff7d00;
-  background: #fff3e8;
+  color: #ffffff;
+  background: #ff7d00;
 }
 
 .case-review-drawer__badge.is-p2 {
-  color: var(--case-review-primary);
-  background: #e0f5fe;
+  color: #ffffff;
+  background: #ffb400;
 }
 
 .case-review-drawer__badge.is-p3 {
-  color: var(--case-review-muted);
-  background: #f2f3f5;
+  color: #ffffff;
+  background: var(--case-review-primary);
 }
 
 .case-review-drawer__content {
@@ -488,6 +542,16 @@ watch(
   white-space: pre-wrap;
 }
 
+.case-review-drawer__content > section.is-expected > h3 i {
+  background: var(--case-review-success);
+}
+
+.case-review-drawer__content > section.is-expected > p {
+  border: 1px solid #b7eb8f;
+  color: var(--case-review-text);
+  background: #f6ffed;
+}
+
 .case-review-drawer__steps {
   display: block;
   margin: 0;
@@ -498,8 +562,11 @@ watch(
 }
 
 .case-review-drawer__steps > div {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1fr);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 40px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--case-review-border);
 }
 
@@ -507,99 +574,37 @@ watch(
   border-bottom: 0;
 }
 
-.case-review-drawer__steps > div:first-child {
-  background: #f7f8fa;
-}
-
-.case-review-drawer__steps > div:nth-child(odd):not(:first-child) {
+.case-review-drawer__steps > div:nth-child(odd) {
   background: #fafbfe;
 }
 
-.case-review-drawer__steps strong {
-  padding: 8px 12px;
-  color: var(--case-review-muted);
+.case-review-drawer__steps b {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--case-review-primary);
+  background: rgba(22, 93, 255, 0.08);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  line-height: 20px;
 }
 
-.case-review-drawer__steps b,
 .case-review-drawer__steps span {
   min-width: 0;
-  padding: 10px 12px;
-  border-right: 1px solid var(--case-review-border);
+  flex: 1;
+  padding: 0;
   color: var(--case-review-text);
   font-size: 13px;
+  line-height: 1.6;
   font-weight: 400;
-  line-height: 1.6;
   overflow-wrap: anywhere;
-}
-
-.case-review-drawer__steps b {
-  color: var(--case-review-placeholder);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.case-review-drawer__steps span:last-child {
-  border-right: 0;
-  color: var(--case-review-secondary);
-}
-
-.case-review-drawer__rejection-note {
-  display: flex;
-  gap: 8px;
-  margin: 16px 0 0;
-  padding: 10px 14px;
-  border: 1px solid rgba(245, 63, 63, 0.18);
-  border-radius: 8px;
-  color: var(--case-review-danger);
-  background: rgba(245, 63, 63, 0.02);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.case-review-drawer__rejection-note svg {
-  flex: 0 0 auto;
-  margin-top: 3px;
-}
-
-.case-review-drawer__reject-editor {
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid rgba(245, 63, 63, 0.18);
-  border-radius: 10px;
-  background: rgba(245, 63, 63, 0.01);
-}
-
-.case-review-drawer__reject-editor h3 {
-  margin: 0 0 8px;
-  color: var(--case-review-danger);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.case-review-drawer__reject-editor textarea {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid rgba(245, 63, 63, 0.25);
-  border-radius: 8px;
-  outline: none;
-  color: var(--case-review-text);
-  resize: none;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.case-review-drawer__reject-editor textarea:focus {
-  border-color: var(--case-review-danger);
-}
-
-.case-review-drawer__reject-editor > div {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 10px;
 }
 
 .case-review-drawer__form-error {
@@ -642,6 +647,199 @@ watch(
   gap: 8px;
   padding: 10px 20px;
   border-bottom: 1px solid var(--case-review-border);
+}
+
+.case-review-drawer__opinion {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--case-review-border);
+  background: #f7f8fa;
+}
+
+.case-review-drawer__opinion h3 {
+  margin: 0 0 7px;
+  color: var(--case-review-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.case-review-drawer__opinion h3 span {
+  color: var(--case-review-danger);
+  font-weight: 400;
+}
+
+.case-review-drawer__opinion textarea {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 1px solid var(--case-review-border);
+  border-radius: 7px;
+  outline: none;
+  color: var(--case-review-text);
+  background: #fff;
+  resize: none;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.case-review-drawer__opinion textarea:focus {
+  border-color: rgba(22, 93, 255, 0.5);
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.08);
+}
+
+.case-review-drawer__opinion textarea.is-error {
+  border-color: var(--case-review-danger);
+}
+
+.case-review-drawer__footer-row {
+  display: flex;
+  min-height: 57px;
+  align-items: center;
+  padding: 0 20px;
+}
+
+.case-review-drawer__footer-row .case-review-drawer__navigation {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.case-review-drawer__footer-row > .case-review-drawer__actions {
+  min-height: 0;
+  padding: 0;
+}
+
+.case-review-drawer__auto-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  color: var(--case-review-success);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.case-review-drawer__auto-next button {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  flex: 0 0 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: var(--case-review-placeholder);
+  cursor: pointer;
+}
+
+.case-review-drawer__auto-next button.is-on {
+  background: var(--case-review-success);
+}
+
+.case-review-drawer__auto-next button span {
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: left 150ms ease;
+}
+
+.case-review-drawer__auto-next button.is-on span {
+  left: 14px;
+}
+
+.case-review-drawer__auto-next button:focus-visible {
+  outline: 2px solid rgba(22, 93, 255, 0.35);
+  outline-offset: 2px;
+}
+
+.case-review-drawer__footer-spacer {
+  flex: 1;
+}
+
+.case-review-drawer__review-history {
+  margin-bottom: 0 !important;
+}
+
+.case-review-drawer__review-entry {
+  display: flex;
+  gap: 12px;
+}
+
+.case-review-drawer__review-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.case-review-drawer__review-icon.is-passed {
+  color: var(--case-review-success);
+  background: rgba(0, 180, 42, 0.08);
+}
+
+.case-review-drawer__review-icon.is-rejected {
+  color: var(--case-review-danger);
+  background: rgba(245, 63, 63, 0.08);
+}
+
+.case-review-drawer__review-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.case-review-drawer__review-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.case-review-drawer__review-meta strong {
+  color: var(--case-review-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.case-review-drawer__review-meta small {
+  color: var(--case-review-placeholder);
+  font-size: 11px;
+}
+
+.case-review-drawer__review-status {
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.case-review-drawer__review-status.is-passed {
+  color: var(--case-review-success);
+  background: rgba(0, 180, 42, 0.08);
+}
+
+.case-review-drawer__review-status.is-rejected {
+  color: var(--case-review-danger);
+  background: rgba(245, 63, 63, 0.08);
+}
+
+.case-review-drawer__review-body p {
+  margin: 0;
+  color: var(--case-review-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .case-review-drawer__navigation button {

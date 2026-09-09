@@ -587,6 +587,15 @@ function getDbLastTestMeta(dbConnection: DbConnectionItem) {
   display: block;
   width: 13px;
   height: 13px;
+  transition: filter 160ms ease;
+}
+
+.config-db-icon-button:hover:not(:disabled) img {
+  filter: var(--app-action-icon-hover-filter);
+}
+
+.config-db-icon-button.is-danger:hover:not(:disabled) img {
+  filter: var(--app-action-icon-danger-hover-filter);
 }
 
 .config-db-secondary-button,
