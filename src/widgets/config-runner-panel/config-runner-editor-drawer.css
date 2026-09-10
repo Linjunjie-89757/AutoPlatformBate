@@ -221,6 +221,66 @@
 
 .config-runner-register-primary:hover { filter: brightness(1.08); }
 
+.config-runner-register-primary:disabled { cursor: wait; opacity: 0.6; }
+
+.config-runner-register-code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 7px;
+  background: #f0fdf4;
+}
+
+.config-runner-register-code div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.config-runner-register-code span {
+  color: #166534;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.config-runner-register-code code {
+  color: #15803d;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.config-runner-register-code button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #15803d;
+  cursor: pointer;
+}
+
+.config-runner-register-code button:hover { background: #dcfce7; }
+
+.config-runner-register-code small,
+.config-runner-register-footnote {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #4ade80;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.config-runner-register-footnote { color: #86909c; }
+
 .config-runner-editor-field {
   display: grid;
   gap: 5.25px;

@@ -11,6 +11,13 @@ public final class LocalRunnerModels {
     private LocalRunnerModels() {
     }
 
+    public record RunnerRegistrationCodeResponse(
+            String pairingCode,
+            LocalDateTime expiresAt,
+            Integer validSeconds
+    ) {
+    }
+
     public record RunnerRegisterRequest(
             @NotBlank(message = "installId cannot be blank") String installId,
             String pairingCode,

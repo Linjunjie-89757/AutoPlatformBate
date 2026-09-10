@@ -5,6 +5,7 @@ import type {
   LocalRunnerReleaseInfo,
   LocalRunnerTaskDetailResponse,
   RunnerNodeSummary,
+  RunnerRegistrationCode,
   RunnerOfflineScanResult,
   RunnerTaskAckResponse,
 } from '../model/types'
@@ -31,6 +32,13 @@ function resolveDownloadUrl(downloadPath: string) {
 }
 
 export const localRunnerApi = {
+  async createRegistrationCode() {
+    const response = await httpPost<ApiResponse<RunnerRegistrationCode>>(
+      '/local-runner/nodes/registration-codes',
+    )
+    return unwrapApiResponse(response)
+  },
+
   async getLatestWindowsRelease(): Promise<LocalRunnerReleaseInfo> {
     const response = await httpGet<ApiResponse<LocalRunnerReleasePayload>>(
       '/local-runner/releases/latest/windows-x64',

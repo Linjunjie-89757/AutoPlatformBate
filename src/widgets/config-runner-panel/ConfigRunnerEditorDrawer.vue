@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { RunnerNodeSummary } from '@/entities/local-runner'
 import { figmaConfigRunnerIcons } from '@/shared/assets/figma-icons'
-import { Link, Shield } from '@lucide/vue'
+import { Copy, Link, Shield } from '@lucide/vue'
 import {
   capabilityPills,
   formatRunnerName,
@@ -20,12 +20,18 @@ const props = defineProps<{
   mode: 'create' | 'edit'
   target: RunnerNodeSummary | null
   platformApiBaseUrl: string
+  registrationCode: string
+  registrationCodeExpiresAt: string
+  registrationCodeLoading: boolean
 }>()
 
 const visible = defineModel<boolean>({ required: true })
 
 const emit = defineEmits<{
   unsupported: [action: string]
+  createRegistrationCode: []
+  copyPlatformAddress: []
+  copyRegistrationCode: []
 }>()
 
 function isCapabilitySelected(capability: string) {
@@ -78,9 +84,26 @@ function isCapabilitySelected(capability: string) {
               <p>Runner 将连接到此地址，请确保网络可达。</p>
             </div>
 
-            <button type="button" class="config-runner-register-primary" @click="emit('unsupported', '生成注册码')">
-              生成注册码
+            <div v-if="registrationCode" class="config-runner-register-code">
+              <div>
+                <span>注册码</span>
+                <code>{{ registrationCode }}</code>
+              </div>
+              <button type="button" aria-label="复制注册码" @click="emit('copyRegistrationCode')">
+                <Copy :size="13" :stroke-width="1.8" aria-hidden="true" />
+              </button>
+              <small>有效期至 {{ registrationCodeExpiresAt }}</small>
+            </div>
+
+            <button
+              type="button"
+              class="config-runner-register-primary"
+              :disabled="registrationCodeLoading"
+              @click="emit('createRegistrationCode')"
+            >
+              {{ registrationCodeLoading ? '生成中...' : registrationCode ? '重新生成注册码' : '生成注册码' }}
             </button>
+            <p class="config-runner-register-footnote">在 Runner 客户端中输入注册码并点击“连接平台”，连接成功后节点会自动出现在列表中。</p>
           </section>
         </template>
 

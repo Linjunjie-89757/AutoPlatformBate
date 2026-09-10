@@ -25,7 +25,6 @@ import {
 
 export type RunnerDetailTab = 'info' | 'tasks' | 'logs'
 
-const runnerStartCommand = 'npm.cmd run runner'
 const platformApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api').trim()
 
 export function useConfigRunnerManagement() {
@@ -37,6 +36,9 @@ export function useConfigRunnerManagement() {
   const runnerRelease = ref<LocalRunnerReleaseInfo | null>(null)
   const runnerReleaseLoading = ref(false)
   const runnerReleaseErrorMessage = ref('')
+  const registrationCode = ref('')
+  const registrationCodeExpiresAt = ref('')
+  const registrationCodeLoading = ref(false)
   const taskDetailVisible = ref(false)
   const taskDetailLoading = ref(false)
   const taskDetailErrorMessage = ref('')
@@ -143,13 +145,23 @@ export function useConfigRunnerManagement() {
     }
   }
 
-  async function copyRunnerCommand() {
-    await copyText(runnerStartCommand, '启动命令已复制')
-  }
-
   function openRunnerGuide() {
     guideVisible.value = true
     void loadRunnerRelease()
+  }
+
+  async function createRegistrationCode() {
+    registrationCodeLoading.value = true
+    try {
+      const result = await localRunnerApi.createRegistrationCode()
+      registrationCode.value = result.pairingCode
+      registrationCodeExpiresAt.value = result.expiresAt
+      ElMessage.success('注册码已生成，有效期 5 分钟')
+    } catch (error) {
+      ElMessage.error(getRequestErrorMessage(error))
+    } finally {
+      registrationCodeLoading.value = false
+    }
   }
 
   async function loadRunnerRelease() {
@@ -168,6 +180,12 @@ export function useConfigRunnerManagement() {
 
   async function copyPlatformAddress() {
     await copyText(platformApiBaseUrl, '平台地址已复制')
+  }
+
+  async function copyRegistrationCode() {
+    if (registrationCode.value) {
+      await copyText(registrationCode.value, '注册码已复制')
+    }
   }
 
   async function refreshRunnerConnection() {
@@ -287,6 +305,9 @@ export function useConfigRunnerManagement() {
     guideVisible,
     runnerReleaseLoading,
     runnerReleaseErrorMessage,
+    registrationCode,
+    registrationCodeExpiresAt,
+    registrationCodeLoading,
     taskDetailVisible,
     taskDetailLoading,
     taskDetailErrorMessage,
@@ -300,7 +321,6 @@ export function useConfigRunnerManagement() {
     runnerKeyword,
     runnerStatusFilter,
     runnerEnvFilter,
-    runnerStartCommand,
     platformApiBaseUrl,
     runnerReleaseVersion,
     runnerReleaseFileName,
@@ -310,9 +330,10 @@ export function useConfigRunnerManagement() {
     envOptions,
     filteredRunners,
     loadRunners,
-    copyRunnerCommand,
     openRunnerGuide,
+    createRegistrationCode,
     copyPlatformAddress,
+    copyRegistrationCode,
     refreshRunnerConnection,
     triggerOfflineScan,
     openRunnerDetail,

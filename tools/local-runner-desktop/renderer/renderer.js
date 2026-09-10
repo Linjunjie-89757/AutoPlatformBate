@@ -22,6 +22,7 @@ const refs = {
   pidText: document.querySelector('#pidText'),
   lastSyncText: document.querySelector('#lastSyncText'),
   apiBaseUrlInput: document.querySelector('#apiBaseUrlInput'),
+  pairingCodeInput: document.querySelector('#pairingCodeInput'),
   runnerNameInput: document.querySelector('#runnerNameInput'),
   portInput: document.querySelector('#portInput'),
   autoStartInput: document.querySelector('#autoStartInput'),
@@ -57,6 +58,7 @@ let previousConnected = false;
 function configFromForm() {
   return {
     apiBaseUrl: refs.apiBaseUrlInput.value,
+    pairingCode: refs.pairingCodeInput.value,
     runnerName: refs.runnerNameInput.value,
     port: Number(refs.portInput.value),
     autoStart: refs.autoStartInput.checked,
@@ -122,6 +124,7 @@ function applyState(state) {
 
   if (!touched) {
     refs.apiBaseUrlInput.value = state?.config?.apiBaseUrl || '';
+    refs.pairingCodeInput.value = state?.config?.pairingCode || '';
     refs.runnerNameInput.value = state?.config?.runnerName || '';
     refs.portInput.value = state?.config?.port || '';
     refs.autoStartInput.checked = state?.config?.autoStart !== false;
@@ -244,7 +247,7 @@ async function refresh() {
   applyState(await api.getState());
 }
 
-for (const input of [refs.apiBaseUrlInput, refs.runnerNameInput, refs.portInput]) {
+for (const input of [refs.apiBaseUrlInput, refs.pairingCodeInput, refs.runnerNameInput, refs.portInput]) {
   input.addEventListener('input', () => { touched = true; });
 }
 refs.autoStartInput.addEventListener('change', () => { touched = true; });

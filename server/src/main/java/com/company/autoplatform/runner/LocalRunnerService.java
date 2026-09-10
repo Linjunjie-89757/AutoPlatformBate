@@ -1,18 +1,25 @@
 package com.company.autoplatform.runner;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.company.autoplatform.auth.CurrentUserContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +36,11 @@ public class LocalRunnerService {
     private static final String PENDING = "PENDING";
     private static final String ASSIGNED = "ASSIGNED";
     private static final String RUNNING = "RUNNING";
+    private static final String REGISTRATION_CODE_ACTIVE = "ACTIVE";
+    private static final String REGISTRATION_CODE_USED = "USED";
+    private static final int REGISTRATION_CODE_VALID_SECONDS = 300;
+    private static final String REGISTRATION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final SecureRandom REGISTRATION_CODE_RANDOM = new SecureRandom();
     private static final List<String> TERMINAL_STATUSES = List.of(
             "SUCCESS",
             "FAILED",
@@ -42,9 +54,28 @@ public class LocalRunnerService {
     private final LocalRunnerNodeMapper nodeMapper;
     private final LocalRunnerTaskMapper taskMapper;
     private final LocalRunnerTaskLogMapper taskLogMapper;
+    private final LocalRunnerRegistrationCodeMapper registrationCodeMapper;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
 
+    @Autowired
+    public LocalRunnerService(
+            LocalRunnerNodeMapper nodeMapper,
+            LocalRunnerTaskMapper taskMapper,
+            LocalRunnerTaskLogMapper taskLogMapper,
+            LocalRunnerRegistrationCodeMapper registrationCodeMapper,
+            ObjectMapper objectMapper,
+            ApplicationEventPublisher eventPublisher
+    ) {
+        this.nodeMapper = nodeMapper;
+        this.taskMapper = taskMapper;
+        this.taskLogMapper = taskLogMapper;
+        this.registrationCodeMapper = registrationCodeMapper;
+        this.objectMapper = objectMapper;
+        this.eventPublisher = eventPublisher;
+    }
+
+    /** Keeps old unit tests and command-line integrations source-compatible during the migration. */
     public LocalRunnerService(
             LocalRunnerNodeMapper nodeMapper,
             LocalRunnerTaskMapper taskMapper,
@@ -52,11 +83,25 @@ public class LocalRunnerService {
             ObjectMapper objectMapper,
             ApplicationEventPublisher eventPublisher
     ) {
-        this.nodeMapper = nodeMapper;
-        this.taskMapper = taskMapper;
-        this.taskLogMapper = taskLogMapper;
-        this.objectMapper = objectMapper;
-        this.eventPublisher = eventPublisher;
+        this(nodeMapper, taskMapper, taskLogMapper, null, objectMapper, eventPublisher);
+    }
+
+    @Transactional
+    public RunnerRegistrationCodeResponse createRegistrationCode() {
+        if (registrationCodeMapper == null) {
+            throw new IllegalStateException("Runner registration code storage is unavailable");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        String pairingCode = generateRegistrationCode();
+        LocalRunnerRegistrationCodeEntity entity = new LocalRunnerRegistrationCodeEntity();
+        entity.setCodeHash(hashRegistrationCode(pairingCode));
+        entity.setStatus(REGISTRATION_CODE_ACTIVE);
+        entity.setExpiresAt(now.plusSeconds(REGISTRATION_CODE_VALID_SECONDS));
+        entity.setCreatedBy(CurrentUserContext.get());
+        entity.setCreatedAt(now);
+        entity.setUpdatedAt(now);
+        registrationCodeMapper.insert(entity);
+        return new RunnerRegistrationCodeResponse(pairingCode, entity.getExpiresAt(), REGISTRATION_CODE_VALID_SECONDS);
     }
 
     @Transactional
@@ -68,6 +113,16 @@ public class LocalRunnerService {
                 .last("LIMIT 1"));
         if (entity == null) {
             entity = new LocalRunnerNodeEntity();
+            entity.setRunnerId("runner_" + UUID.randomUUID().toString().replace("-", ""));
+            entity.setRunnerToken(UUID.randomUUID().toString().replace("-", ""));
+            entity.setInstallId(installId);
+            entity.setCreatedAt(now);
+        }
+        String pairingCode = blankToNull(request.pairingCode());
+        if (pairingCode != null) {
+            consumeRegistrationCode(pairingCode, entity.getRunnerId(), now);
+        }
+        if (entity.getRunnerId() == null) {
             entity.setRunnerId("runner_" + UUID.randomUUID().toString().replace("-", ""));
             entity.setRunnerToken(UUID.randomUUID().toString().replace("-", ""));
             entity.setInstallId(installId);
@@ -94,6 +149,47 @@ public class LocalRunnerService {
                 true,
                 "Runner registered"
         );
+    }
+
+    private void consumeRegistrationCode(String pairingCode, String runnerId, LocalDateTime now) {
+        if (registrationCodeMapper == null) {
+            throw new BadRequestException("注册码暂不可用，请重启平台后重试");
+        }
+        String codeHash = hashRegistrationCode(pairingCode);
+        int updated = registrationCodeMapper.update(null, new LambdaUpdateWrapper<LocalRunnerRegistrationCodeEntity>()
+                .set(LocalRunnerRegistrationCodeEntity::getStatus, REGISTRATION_CODE_USED)
+                .set(LocalRunnerRegistrationCodeEntity::getUsedAt, now)
+                .set(LocalRunnerRegistrationCodeEntity::getUsedRunnerId, runnerId)
+                .set(LocalRunnerRegistrationCodeEntity::getUpdatedAt, now)
+                .eq(LocalRunnerRegistrationCodeEntity::getCodeHash, codeHash)
+                .eq(LocalRunnerRegistrationCodeEntity::getStatus, REGISTRATION_CODE_ACTIVE)
+                .gt(LocalRunnerRegistrationCodeEntity::getExpiresAt, now));
+        if (updated != 1) {
+            throw new BadRequestException("注册码无效或已过期");
+        }
+    }
+
+    private String generateRegistrationCode() {
+        String code;
+        do {
+            StringBuilder builder = new StringBuilder(8);
+            for (int index = 0; index < 8; index += 1) {
+                builder.append(REGISTRATION_CODE_ALPHABET.charAt(
+                        REGISTRATION_CODE_RANDOM.nextInt(REGISTRATION_CODE_ALPHABET.length())));
+            }
+            code = builder.toString();
+        } while (registrationCodeMapper.selectCount(new LambdaQueryWrapper<LocalRunnerRegistrationCodeEntity>()
+                .eq(LocalRunnerRegistrationCodeEntity::getCodeHash, hashRegistrationCode(code))) > 0);
+        return code;
+    }
+
+    private String hashRegistrationCode(String code) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(code.trim().toUpperCase().getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
     }
 
     @Transactional

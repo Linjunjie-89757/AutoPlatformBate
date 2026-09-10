@@ -36,7 +36,6 @@ const {
   runnerKeyword,
   runnerStatusFilter,
   runnerEnvFilter,
-  runnerStartCommand,
   platformApiBaseUrl,
   runnerReleaseVersion,
   runnerReleaseFileName,
@@ -46,8 +45,13 @@ const {
   envOptions,
   filteredRunners,
   loadRunners,
-  copyRunnerCommand,
   openRunnerGuide,
+  copyPlatformAddress,
+  copyRegistrationCode,
+  registrationCode,
+  registrationCodeExpiresAt,
+  registrationCodeLoading,
+  createRegistrationCode,
   openRunnerDetail,
   openFirstRunnerTask,
   notifyUnsupportedRunnerAction,
@@ -170,7 +174,13 @@ const {
       :mode="runnerEditorMode"
       :target="runnerEditorTarget"
       :platform-api-base-url="platformApiBaseUrl"
+      :registration-code="registrationCode"
+      :registration-code-expires-at="registrationCodeExpiresAt"
+      :registration-code-loading="registrationCodeLoading"
       @unsupported="notifyUnsupportedRunnerAction"
+      @create-registration-code="createRegistrationCode"
+      @copy-platform-address="copyPlatformAddress"
+      @copy-registration-code="copyRegistrationCode"
     />
 
     <ConfigRunnerDownloadDrawer
@@ -181,8 +191,6 @@ const {
       :download-url="runnerDownloadUrl"
       :release-loading="runnerReleaseLoading"
       :release-error-message="runnerReleaseErrorMessage"
-      :runner-start-command="runnerStartCommand"
-      @copy-runner-command="copyRunnerCommand"
     />
 
     <ConfigRunnerTaskDetailDrawer

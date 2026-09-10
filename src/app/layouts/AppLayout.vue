@@ -2,7 +2,7 @@
 import {
   ChevronDown,
   ChevronRight,
-  ClipboardCheck,
+  FlaskConical,
   KeyRound,
   LogOut,
   Search,
@@ -136,6 +136,7 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   { path: '/', label: '工作台', icon: figmaGlobalNavIcons.dashboard, color: '#165DFF', lightBg: '#E8F3FF' },
   { path: '/config-center', label: '配置中心', icon: figmaGlobalNavIcons.config, color: '#4E5AC8', lightBg: '#EEF0FA', permissionCode: 'config.view' },
+  { path: '/test-management', label: '测试管理', componentIcon: FlaskConical, color: '#0EA5E9', lightBg: '#E0F5FE', permissionCode: 'test_management.view' },
   {
     path: '/cases',
     label: '用例中心',
@@ -151,7 +152,6 @@ const navigationItems: NavigationItem[] = [
     ],
   },
   { path: '/bugs', label: '缺陷管理', icon: figmaGlobalNavIcons.bug, color: '#F53F3F', lightBg: '#FFE8E8', permissionCode: 'bugs.view' },
-  { path: '/test-management', label: '测试管理', componentIcon: ClipboardCheck, color: '#0E7490', lightBg: '#ECFEFF', permissionCode: 'test_management.view' },
   {
     path: '/automation/api',
     label: '接口自动化',

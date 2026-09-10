@@ -16,6 +16,12 @@ export interface RunnerNodeSummary {
   unselectableReason?: string | null
 }
 
+export interface RunnerRegistrationCode {
+  pairingCode: string
+  expiresAt: string
+  validSeconds: number
+}
+
 export interface RunnerActiveTaskSummary {
   runId: string
   taskType: string | null

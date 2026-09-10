@@ -65,6 +65,7 @@ export function createRunnerTaskPoller(options = {}) {
     stop('replaced');
     poller = {
       apiBaseUrl,
+      pairingCode: optionalString(payload.pairingCode).toUpperCase(),
       installId: optionalString(payload.installId) || defaultInstallId,
       runnerId: optionalString(payload.runnerId),
       runnerToken: optionalString(payload.runnerToken),
@@ -851,6 +852,7 @@ export function createRunnerTaskPoller(options = {}) {
   async function registerRunner(current, machineHint) {
     const registered = await postPlatformJson(current, '/public/local-runner/register', {
       installId: current.installId,
+      pairingCode: current.pairingCode,
       runnerVersion: current.runnerVersion,
       protocolVersion: current.protocolVersion,
       machineHint,

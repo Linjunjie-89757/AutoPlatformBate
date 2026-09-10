@@ -35,6 +35,7 @@ const runnerScriptPath = () => join(projectRootPath(), 'tools', 'web-ui-runner',
 
 const defaultConfig = () => ({
   apiBaseUrl: DEFAULT_API_BASE_URL,
+  pairingCode: '',
   port: DEFAULT_PORT,
   runnerName: `${hostname()} Local Runner`,
   autoStart: true,
@@ -55,6 +56,7 @@ function normalizeConfig(input = {}) {
   const port = Number.parseInt(String(input.port || ''), 10);
   return {
     apiBaseUrl: normalizeUrl(input.apiBaseUrl) || fallback.apiBaseUrl,
+    pairingCode: typeof input.pairingCode === 'string' ? input.pairingCode.trim().toUpperCase() : '',
     port: Number.isFinite(port) && port > 0 ? port : fallback.port,
     runnerName: typeof input.runnerName === 'string' && input.runnerName.trim()
       ? input.runnerName.trim()
@@ -277,6 +279,7 @@ async function connectPlatform() {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       apiBaseUrl: config.apiBaseUrl,
+      pairingCode: config.pairingCode,
       runnerName: config.runnerName,
     }),
   });

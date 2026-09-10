@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { DocumentCopy } from '@element-plus/icons-vue'
 import { Download, Shield, X } from '@lucide/vue'
 
 const props = defineProps<{
@@ -10,14 +9,9 @@ const props = defineProps<{
   downloadUrl: string
   releaseLoading: boolean
   releaseErrorMessage: string
-  runnerStartCommand: string
 }>()
 
 const visible = defineModel<boolean>({ required: true })
-
-const emit = defineEmits<{
-  copyRunnerCommand: []
-}>()
 
 type RunnerPlatform = 'linux' | 'macos' | 'windows'
 
@@ -93,9 +87,9 @@ function selectArchitecture(architecture: 'amd64' | 'arm64') {
           <div class="config-runner-segmented-control">
             <button
               v-for="platform in [
-                { key: 'linux', label: 'Linux' },
-                { key: 'macos', label: 'macOS' },
                 { key: 'windows', label: 'Windows' },
+                { key: 'macos', label: 'macOS' },
+                { key: 'linux', label: 'Linux' },
               ]"
               :key="platform.key"
               type="button"
@@ -160,20 +154,16 @@ function selectArchitecture(architecture: 'amd64' | 'arm64') {
         </section>
 
         <section class="config-runner-install-section">
-          <h4>安装与启动</h4>
+          <h4>安装</h4>
           <div class="config-runner-code-block">
-            <button type="button" class="config-runner-code-block__copy" @click="emit('copyRunnerCommand')">
-              <el-icon><DocumentCopy /></el-icon>
-              复制
-            </button>
-            <code># 解压安装包后，在项目根目录执行</code>
-            <code>{{ props.runnerStartCommand }}</code>
+            <code>1. 解压后运行 Auto Platform Local Runner.exe</code>
+            <code>2. 在“注册节点”抽屉获取注册码并完成连接</code>
           </div>
         </section>
 
         <div class="config-runner-download-hint">
           <Shield :size="13" :stroke-width="1.8" aria-hidden="true" />
-          <span>Runner 启动后，前往「注册节点」生成一次性注册码，完成节点与平台的绑定。</span>
+          <span>Runner 启动后会自动向平台注册并发送心跳，节点上线后即可在此页面查看。</span>
         </div>
 
       </div>
