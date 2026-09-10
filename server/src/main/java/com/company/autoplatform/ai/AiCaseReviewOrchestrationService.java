@@ -1,18 +1,10 @@
 package com.company.autoplatform.ai;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.company.autoplatform.common.BadRequestException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 @Service
@@ -20,486 +12,64 @@ public class AiCaseReviewOrchestrationService {
 
     private final AiCaseService aiCaseService;
     private final AiCaseCandidateService candidateService;
-    private final AiCaseReviewRunMapper reviewRunMapper;
-    private final AiCaseReviewBatchMapper reviewBatchMapper;
-    private final AiCaseCandidateReviewSnapshotMapper snapshotMapper;
-    private final AiCaseCoverageItemMapper coverageItemMapper;
-    private final AiGenerationTaskResponseSupport responseSupport;
 
-    public AiCaseReviewOrchestrationService(
-            AiCaseService aiCaseService,
-            AiCaseCandidateService candidateService,
-            AiCaseReviewRunMapper reviewRunMapper,
-            AiCaseReviewBatchMapper reviewBatchMapper,
-            AiCaseCandidateReviewSnapshotMapper snapshotMapper,
-            AiCaseCoverageItemMapper coverageItemMapper,
-            AiGenerationTaskResponseSupport responseSupport
-    ) {
+    public AiCaseReviewOrchestrationService(AiCaseService aiCaseService, AiCaseCandidateService candidateService) {
         this.aiCaseService = aiCaseService;
         this.candidateService = candidateService;
-        this.reviewRunMapper = reviewRunMapper;
-        this.reviewBatchMapper = reviewBatchMapper;
-        this.snapshotMapper = snapshotMapper;
-        this.coverageItemMapper = coverageItemMapper;
-        this.responseSupport = responseSupport;
     }
 
-    public ReviewExecutionResult execute(
-            String workspaceCode,
-            AiGenerationTaskEntity task,
-            List<AiCaseCandidateEntity> candidates
-    ) {
-        return execute(workspaceCode, task, candidates, candidates, List.of());
-    }
-
-    private ReviewExecutionResult execute(
-            String workspaceCode,
-            AiGenerationTaskEntity task,
-            List<AiCaseCandidateEntity> candidates,
-            List<AiCaseCandidateEntity> supplementCandidates,
-            List<String> initialCoverageGaps
-    ) {
-        List<AiCaseCandidateEntity> safeCandidates = candidates == null ? List.of() : candidates;
-        List<AiCaseCandidateEntity> safeSupplementCandidates = supplementCandidates == null ? List.of() : supplementCandidates;
-        String runId = "AIR_" + shortId();
-        LocalDateTime startedAt = LocalDateTime.now();
-        AiCaseReviewRunEntity run = new AiCaseReviewRunEntity();
-        run.setReviewRunId(runId);
-        run.setTaskId(task.getTaskId());
-        run.setRunNo(nextRunNo(task.getTaskId()));
-        run.setStatus("RUNNING");
-        run.setTriggerType("TASK_EXECUTION");
-        run.setTotalBatches(safeCandidates.isEmpty() ? 0 : 1);
-        run.setCompletedBatches(0);
-        run.setFailedBatches(0);
-        run.setReviewedCaseCount(0);
-        run.setSupplementedCaseCount(0);
-        run.setCoverageCompleteness("UNKNOWN");
-        run.setStartedAt(startedAt);
-        run.setCreatedAt(startedAt);
-        run.setUpdatedAt(startedAt);
-        reviewRunMapper.insert(run);
-
-        List<AiReviewCaseDecision> decisions = new ArrayList<>();
-        List<String> issues = new ArrayList<>();
-        List<String> suggestions = new ArrayList<>();
-        LinkedHashSet<String> coverageGaps = new LinkedHashSet<>(nonBlank(initialCoverageGaps));
-        List<GeneratedAiCaseItem> supplements = new ArrayList<>();
-        int completedBatches = 0;
-        int failedBatches = 0;
-        int reviewedCaseCount = 0;
-        String firstProvider = null;
-        String firstModel = null;
-        String reviewResultValue = null;
-        String reviewSummary = null;
-        String firstFailureMessage = null;
-        boolean supplementFailed = false;
-        String supplementFailureMessage = null;
-        StringBuilder rawContent = new StringBuilder();
-
-        int reviewRequestSize = Math.max(1, safeCandidates.size());
-        for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += reviewRequestSize, batchNo += 1) {
-            int end = safeCandidates.size();
-            List<AiCaseCandidateEntity> batchCandidates = safeCandidates.subList(start, end);
-            AiCaseReviewBatchEntity batch = createBatch(task, runId, batchNo, batchCandidates);
-            try {
-                AiCaseService.ReviewedCasesResult reviewedCases = aiCaseService.reviewGeneratedCasesBatch(workspaceCode, new ReviewAiGeneratedCasesRequest(
-                        task.getRequirementTitle(),
-                        task.getRequirementContent(),
-                        null,
-                        List.copyOf(coverageGaps),
-                        batchCandidates.stream().map(candidateService::toReviewItem).toList()
-                ));
-                AiReviewResult result = reviewedCases == null ? null : reviewedCases.reviewResult();
-                if (result == null || !result.structured()) {
-                    throw new BadRequestException("AI 评审返回内容无法解析为结构化结果");
-                }
-                for (AiReviewCaseDecision decision : result.caseDecisions() == null ? List.<AiReviewCaseDecision>of() : result.caseDecisions()) {
-                    AiReviewCaseDecision globalDecision = rebaseDecision(batchCandidates, decision);
-                    if (globalDecision != null && recordDecision(task, batchCandidates, globalDecision)) {
-                        decisions.add(globalDecision);
-                        reviewedCaseCount += 1;
-                    }
-                }
-                issues.addAll(nonBlank(result.issues()));
-                suggestions.addAll(nonBlank(result.suggestions()));
-                coverageGaps.addAll(nonBlank(result.unresolvedCoverageGaps()));
-                coverageGaps.addAll(decisionGaps(result));
-                reviewResultValue = mergeReviewResultValue(reviewResultValue, result.result());
-                reviewSummary = firstNonBlank(reviewSummary, result.summary());
-                if (result.rawContent() != null && !result.rawContent().isBlank()) {
-                    if (!rawContent.isEmpty()) {
-                        rawContent.append("\n");
-                    }
-                    rawContent.append(result.rawContent());
-                }
-                firstProvider = firstNonBlank(firstProvider, reviewedCases.provider());
-                firstModel = firstNonBlank(firstModel, reviewedCases.model());
-                batch.setProvider(reviewedCases.provider());
-                batch.setModel(reviewedCases.model());
-                batch.setStatus("SUCCEEDED");
-                batch.setResultJson(responseSupport.writeValue(result));
-                batch.setRawOutput(limitRawOutput(result.rawContent()));
-                batch.setFinishedAt(LocalDateTime.now());
-                batch.setUpdatedAt(LocalDateTime.now());
-                reviewBatchMapper.updateById(batch);
-                completedBatches += 1;
-            } catch (RuntimeException exception) {
-                firstFailureMessage = firstNonBlank(firstFailureMessage, safeMessage(exception));
-                batch.setStatus("FAILED");
-                batch.setErrorCode("AI_REVIEW_BATCH_FAILED");
-                batch.setErrorMessage(exception.getMessage());
-                batch.setFinishedAt(LocalDateTime.now());
-                batch.setUpdatedAt(LocalDateTime.now());
-                reviewBatchMapper.updateById(batch);
-                failedBatches += 1;
-            }
+    public ReviewExecutionResult execute(String workspaceCode, AiGenerationTaskEntity task,
+                                         List<AiCaseCandidateEntity> candidates) {
+        AiCaseService.ReviewedCasesResult response = aiCaseService.reviewGeneratedCasesBatch(
+                workspaceCode, reviewRequest(task, candidates));
+        AiReviewResult result = normalizeResult(candidates, response.reviewResult());
+        int recorded = 0;
+        for (AiReviewCaseDecision decision : result.caseDecisions()) {
+            if (recordDecision(task, candidates, decision)) recorded++;
         }
-
-        boolean allBatchesSucceeded = failedBatches == 0;
-        int supplementLimit = Math.max(0, taskCaseTotalLimit(task) - safeSupplementCandidates.size());
-        if (allBatchesSucceeded && !coverageGaps.isEmpty() && !safeCandidates.isEmpty() && supplementLimit > 0) {
-            try {
-                AiReviewResult supplementResult = aiCaseService.reviewCoverageSupplement(workspaceCode, new ReviewAiGeneratedCasesRequest(
-                        task.getRequirementTitle(),
-                        task.getRequirementContent(),
-                        null,
-                        List.copyOf(coverageGaps),
-                        safeSupplementCandidates.stream().map(candidateService::toReviewItem).toList()
-                ));
-                if (supplementResult != null && supplementResult.structured()) {
-                    for (GeneratedAiCaseItem supplement : supplementResult.supplementCases() == null
-                            ? List.<GeneratedAiCaseItem>of() : supplementResult.supplementCases()) {
-                        if (supplements.size() >= supplementLimit) {
-                            break;
-                        }
-                        supplements.add(supplement);
-                    }
-                    coverageGaps.addAll(nonBlank(supplementResult.unresolvedCoverageGaps()));
-                }
-            } catch (RuntimeException exception) {
-                supplementFailed = true;
-                supplementFailureMessage = safeMessage(exception);
-                issues.add("评审补充失败：" + supplementFailureMessage);
-            }
-        }
-
-        List<String> normalizedGaps = List.copyOf(coverageGaps);
-        persistCoverageItems(task, normalizedGaps);
-        run.setStatus(failedBatches == 0
-                ? (supplementFailed ? "SUCCEEDED_WITH_WARNINGS" : "SUCCEEDED")
-                : (completedBatches == 0 ? "FAILED" : "PARTIAL"));
-        run.setCompletedBatches(completedBatches);
-        run.setFailedBatches(failedBatches);
-        run.setReviewedCaseCount(reviewedCaseCount);
-        run.setSupplementedCaseCount(supplements.size());
-        run.setCoverageCompleteness(failedBatches == 0 ? (normalizedGaps.isEmpty() ? "COMPLETE" : "INCOMPLETE") : "UNKNOWN");
-        run.setProvider(firstProvider);
-        run.setModel(firstModel);
-        run.setErrorCode(supplementFailed ? "AI_REVIEW_SUPPLEMENT_FAILED" : null);
-        run.setErrorMessage(supplementFailureMessage);
-        run.setGlobalResultJson(responseSupport.writeValue(Map.of(
-                "issues", issues,
-                "suggestions", suggestions,
-                "unresolvedCoverageGaps", normalizedGaps,
-                "caseDecisions", decisions,
-                "supplementCases", supplements
-        )));
-        run.setFinishedAt(LocalDateTime.now());
-        run.setUpdatedAt(LocalDateTime.now());
-        reviewRunMapper.updateById(run);
-        if (failedBatches > 0 && completedBatches == 0) {
-            return new ReviewExecutionResult(
-                    null,
-                    completedBatches,
-                    failedBatches,
-                    reviewedCaseCount,
-                    supplements,
-                    runId,
-                    firstFailureMessage,
-                    rawContent.toString(),
-                    supplementFailed,
-                    supplementFailureMessage,
-                    firstProvider,
-                    firstModel
-            );
-        }
-        return new ReviewExecutionResult(
-                new AiReviewResult(
-                        failedBatches == 0 ? firstNonBlank(reviewResultValue, normalizedGaps.isEmpty() ? "APPROVE" : "SUGGEST") : "SUGGEST",
-                        failedBatches == 0 ? firstNonBlank(reviewSummary, "评审批次已完成") : (completedBatches == 0 ? "评审批次全部失败" : "评审批次部分失败，已保留成功批次结果"),
-                        issues,
-                        suggestions,
-                        decisions,
-                        supplements,
-                        normalizedGaps,
-                        rawContent.toString(),
-                        true
-                ),
-                completedBatches,
-                failedBatches,
-                reviewedCaseCount,
-                supplements,
-                runId,
-                firstFailureMessage,
-                rawContent.toString(),
-                supplementFailed,
-                supplementFailureMessage,
-                firstProvider,
-                firstModel
-        );
+        // Batch counters remain zero for new tasks; legacy database records are untouched.
+        return new ReviewExecutionResult(result, 0, 0, recorded, result.supplementCases(),
+                null, null, result.rawContent(), false, null, response.provider(), response.model());
     }
 
     public ReviewExecutionResult retryFailedBatches(String workspaceCode, AiGenerationTaskEntity task) {
-        AiCaseReviewRunEntity latestRun = reviewRunMapper.selectOne(new LambdaQueryWrapper<AiCaseReviewRunEntity>()
-                .eq(AiCaseReviewRunEntity::getTaskId, task.getTaskId())
-                .orderByDesc(AiCaseReviewRunEntity::getRunNo)
-                .last("limit 1"));
-        if (latestRun == null) {
-            throw new BadRequestException("当前任务没有可重试的 AI 评审运行记录");
-        }
-        List<AiCaseReviewBatchEntity> failedBatches = reviewBatchMapper.selectList(new LambdaQueryWrapper<AiCaseReviewBatchEntity>()
-                .eq(AiCaseReviewBatchEntity::getReviewRunId, latestRun.getReviewRunId())
-                .eq(AiCaseReviewBatchEntity::getStatus, "FAILED")
-                .orderByAsc(AiCaseReviewBatchEntity::getBatchNo));
-        if (failedBatches.isEmpty()) {
-            throw new BadRequestException("当前任务没有失败的 AI 评审批次");
-        }
-
-        Map<String, AiCaseCandidateEntity> candidatesById = new LinkedHashMap<>();
-        for (AiCaseCandidateEntity candidate : candidateService.listEntities(task.getTaskId())) {
-            candidatesById.put(candidate.getCandidateId(), candidate);
-        }
-        List<AiCaseCandidateEntity> retryCandidates = new ArrayList<>();
-        for (AiCaseReviewBatchEntity batch : failedBatches) {
-            List<String> candidateIds = responseSupport.readValue(
-                    batch.getCandidateIdsJson(), new TypeReference<List<String>>() {}, List.of()
-            );
-            for (String candidateId : candidateIds) {
-                AiCaseCandidateEntity candidate = candidatesById.get(candidateId);
-                if (candidate != null && retryCandidates.stream().noneMatch(item -> item.getCandidateId().equals(candidateId))) {
-                    retryCandidates.add(candidate);
-                }
-            }
-        }
-        if (retryCandidates.isEmpty()) {
-            throw new BadRequestException("失败评审批次中没有可重试的候选用例");
-        }
-        List<String> existingCoverageGaps = coverageItemMapper.selectList(new LambdaQueryWrapper<AiCaseCoverageItemEntity>()
-                .eq(AiCaseCoverageItemEntity::getTaskId, task.getTaskId())
-                .eq(AiCaseCoverageItemEntity::getCoverageStatus, "GAP")
-        ).stream().map(AiCaseCoverageItemEntity::getTitle).toList();
-        return execute(
-                workspaceCode,
-                task,
-                retryCandidates,
-                candidatesById.values().stream().toList(),
-                existingCoverageGaps
-        );
+        return execute(workspaceCode, task, candidateService.listEntities(task.getTaskId()));
     }
 
-    public StreamReviewExecutionResult executeStreaming(
-            String workspaceCode,
-            AiGenerationTaskEntity task,
-            List<AiCaseCandidateEntity> candidates,
-            Consumer<AiCaseService.AiStreamModelInfo> modelConsumer,
-            Consumer<AiCaseService.ReviewCaseStreamUpdate> updateConsumer
-    ) {
-        List<AiCaseCandidateEntity> safeCandidates = candidates == null ? List.of() : candidates;
-        String runId = "AIR_" + shortId();
-        LocalDateTime startedAt = LocalDateTime.now();
-        AiCaseReviewRunEntity run = new AiCaseReviewRunEntity();
-        run.setReviewRunId(runId);
-        run.setTaskId(task.getTaskId());
-        run.setRunNo(nextRunNo(task.getTaskId()));
-        run.setStatus("RUNNING");
-        run.setTriggerType("TASK_EXECUTION_STREAM");
-        run.setTotalBatches(safeCandidates.isEmpty() ? 0 : 1);
-        run.setCompletedBatches(0);
-        run.setFailedBatches(0);
-        run.setReviewedCaseCount(0);
-        run.setSupplementedCaseCount(0);
-        run.setCoverageCompleteness("UNKNOWN");
-        run.setStartedAt(startedAt);
-        run.setCreatedAt(startedAt);
-        run.setUpdatedAt(startedAt);
-        reviewRunMapper.insert(run);
+    public StreamReviewExecutionResult executeStreaming(String workspaceCode, AiGenerationTaskEntity task,
+            List<AiCaseCandidateEntity> candidates, Consumer<AiCaseService.AiStreamModelInfo> modelConsumer,
+            Consumer<AiCaseService.ReviewCaseStreamUpdate> updateConsumer) {
+        AiCaseService.StreamedReviewResult response = aiCaseService.streamReviewGeneratedCases(
+                workspaceCode, reviewRequest(task, candidates), modelConsumer, update -> {
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new AiGenerationTaskService.TaskCanceledException("评审执行已停止");
+                    }
+                    AiCaseService.ReviewCaseStreamUpdate mapped = "SUPPLEMENTED".equals(update.status())
+                            ? update : rebaseStreamUpdate(candidates, update);
+                    if (mapped != null && updateConsumer != null) updateConsumer.accept(mapped);
+                }, true);
+        AiReviewResult result = normalizeResult(candidates, response.reviewResult());
+        return new StreamReviewExecutionResult(result, 0, 0, result.caseDecisions().size(), result.supplementCases(),
+                null, null, result.rawContent(), response.provider(), response.model(), false, null);
+    }
 
+    private ReviewAiGeneratedCasesRequest reviewRequest(AiGenerationTaskEntity task, List<AiCaseCandidateEntity> candidates) {
+        if (candidates == null || candidates.isEmpty()) throw new BadRequestException("没有可评审的候选用例");
+        return new ReviewAiGeneratedCasesRequest(task.getRequirementTitle(), task.getRequirementContent(),
+                null, List.of(), candidates.stream().map(candidateService::toReviewItem).toList());
+    }
+
+    private AiReviewResult normalizeResult(List<AiCaseCandidateEntity> candidates, AiReviewResult result) {
+        if (result == null || !result.structured()) throw new BadRequestException("AI 评审结果无法解析");
         List<AiReviewCaseDecision> decisions = new ArrayList<>();
-        List<String> issues = new ArrayList<>();
-        List<String> suggestions = new ArrayList<>();
-        LinkedHashSet<String> coverageGaps = new LinkedHashSet<>();
-        List<GeneratedAiCaseItem> supplements = new ArrayList<>();
-        int completedBatches = 0;
-        int failedBatches = 0;
-        int reviewedCaseCount = 0;
-        String firstProvider = null;
-        String firstModel = null;
-        String reviewResultValue = null;
-        String reviewSummary = null;
-        String firstFailureMessage = null;
-        boolean supplementFailed = false;
-        String supplementFailureMessage = null;
-        StringBuilder rawContent = new StringBuilder();
-
-        int reviewRequestSize = Math.max(1, safeCandidates.size());
-        for (int start = 0, batchNo = 1; start < safeCandidates.size(); start += reviewRequestSize, batchNo += 1) {
-            int end = safeCandidates.size();
-            List<AiCaseCandidateEntity> batchCandidates = safeCandidates.subList(start, end);
-            AiCaseReviewBatchEntity batch = createBatch(task, runId, batchNo, batchCandidates);
-            try {
-                AiCaseService.StreamedReviewResult streamed = aiCaseService.streamReviewGeneratedCases(
-                        workspaceCode,
-                        new ReviewAiGeneratedCasesRequest(
-                                task.getRequirementTitle(),
-                                task.getRequirementContent(),
-                                null,
-                                List.copyOf(coverageGaps),
-                                batchCandidates.stream().map(candidateService::toReviewItem).toList()
-                        ),
-                        modelConsumer,
-                        update -> {
-                            AiCaseService.ReviewCaseStreamUpdate rebased = rebaseStreamUpdate(batchCandidates, update);
-                            if (rebased != null && updateConsumer != null) {
-                                updateConsumer.accept(rebased);
-                            }
-                        },
-                        false
-                );
-                if (streamed == null || streamed.reviewResult() == null || !streamed.reviewResult().structured()) {
-                    throw new BadRequestException("AI 评审返回内容无法解析为结构化结果");
-                }
-                AiReviewResult result = streamed.reviewResult();
-                for (AiReviewCaseDecision decision : result.caseDecisions() == null ? List.<AiReviewCaseDecision>of() : result.caseDecisions()) {
-                    AiReviewCaseDecision globalDecision = rebaseDecision(batchCandidates, decision);
-                    if (globalDecision != null) {
-                        decisions.add(globalDecision);
-                        reviewedCaseCount += 1;
-                    }
-                }
-                issues.addAll(nonBlank(result.issues()));
-                suggestions.addAll(nonBlank(result.suggestions()));
-                coverageGaps.addAll(nonBlank(result.unresolvedCoverageGaps()));
-                coverageGaps.addAll(decisionGaps(result));
-                reviewResultValue = mergeReviewResultValue(reviewResultValue, result.result());
-                reviewSummary = firstNonBlank(reviewSummary, result.summary());
-                firstProvider = firstNonBlank(firstProvider, streamed.provider());
-                firstModel = firstNonBlank(firstModel, streamed.model());
-                batch.setProvider(streamed.provider());
-                batch.setModel(streamed.model());
-                appendRaw(rawContent, streamed.rawContent());
-                batch.setStatus("SUCCEEDED");
-                batch.setResultJson(responseSupport.writeValue(result));
-                batch.setRawOutput(limitRawOutput(streamed.rawContent()));
-                batch.setFinishedAt(LocalDateTime.now());
-                batch.setUpdatedAt(LocalDateTime.now());
-                reviewBatchMapper.updateById(batch);
-                completedBatches += 1;
-            } catch (AiGenerationTaskService.TaskCanceledException exception) {
-                throw exception;
-            } catch (RuntimeException exception) {
-                firstFailureMessage = firstNonBlank(firstFailureMessage, safeMessage(exception));
-                batch.setStatus("FAILED");
-                batch.setErrorCode("AI_REVIEW_BATCH_FAILED");
-                batch.setErrorMessage(exception.getMessage());
-                batch.setFinishedAt(LocalDateTime.now());
-                batch.setUpdatedAt(LocalDateTime.now());
-                reviewBatchMapper.updateById(batch);
-                failedBatches += 1;
-            }
+        for (AiReviewCaseDecision decision : result.caseDecisions() == null ? List.<AiReviewCaseDecision>of() : result.caseDecisions()) {
+            AiReviewCaseDecision mapped = rebaseDecision(candidates, decision);
+            if (mapped == null) throw new BadRequestException("AI 评审返回了未知候选用例");
+            decisions.add(mapped);
         }
-
-        boolean allBatchesSucceeded = failedBatches == 0;
-        int supplementLimit = Math.max(0, taskCaseTotalLimit(task) - safeCandidates.size());
-        if (allBatchesSucceeded && !coverageGaps.isEmpty() && !safeCandidates.isEmpty() && supplementLimit > 0) {
-            try {
-                AiReviewResult supplementResult = aiCaseService.reviewCoverageSupplement(workspaceCode, new ReviewAiGeneratedCasesRequest(
-                        task.getRequirementTitle(),
-                        task.getRequirementContent(),
-                        null,
-                        List.copyOf(coverageGaps),
-                        safeCandidates.stream().map(candidateService::toReviewItem).toList()
-                ));
-                if (supplementResult != null && supplementResult.structured()) {
-                    for (GeneratedAiCaseItem supplement : supplementResult.supplementCases() == null
-                            ? List.<GeneratedAiCaseItem>of() : supplementResult.supplementCases()) {
-                        if (supplements.size() >= supplementLimit) {
-                            break;
-                        }
-                        supplements.add(supplement);
-                        if (updateConsumer != null) {
-                            updateConsumer.accept(new AiCaseService.ReviewCaseStreamUpdate(
-                                    null,
-                                    "SUPPLEMENTED",
-                                    firstNonBlank(supplement.aiReviewSummary(), supplement.supplementReason(), supplement.coverageGap()),
-                                    null,
-                                    null,
-                                    supplement.reviewComment(),
-                                    null,
-                                    supplement.supplementReason(),
-                                    supplement.coverageGap(),
-                                    null,
-                                    supplement,
-                                    supplementResult.rawContent(),
-                                    null,
-                                    null,
-                                    null,
-                                    null,
-                                    null,
-                                    null,
-                                    List.of(),
-                                    null,
-                                    null
-                            ));
-                        }
-                    }
-                    coverageGaps.addAll(nonBlank(supplementResult.unresolvedCoverageGaps()));
-                    appendRaw(rawContent, supplementResult.rawContent());
-                    reviewResultValue = mergeReviewResultValue(reviewResultValue, supplementResult.result());
-                    reviewSummary = firstNonBlank(reviewSummary, supplementResult.summary());
-                }
-            } catch (RuntimeException exception) {
-                supplementFailed = true;
-                supplementFailureMessage = safeMessage(exception);
-                issues.add("评审补充失败：" + supplementFailureMessage);
-            }
-        }
-
-        List<String> normalizedGaps = List.copyOf(coverageGaps);
-        persistCoverageItems(task, normalizedGaps);
-        run.setStatus(failedBatches == 0
-                ? (supplementFailed ? "SUCCEEDED_WITH_WARNINGS" : "SUCCEEDED")
-                : (completedBatches == 0 ? "FAILED" : "PARTIAL"));
-        run.setProvider(firstProvider);
-        run.setModel(firstModel);
-        run.setCompletedBatches(completedBatches);
-        run.setFailedBatches(failedBatches);
-        run.setReviewedCaseCount(reviewedCaseCount);
-        run.setSupplementedCaseCount(supplements.size());
-        run.setCoverageCompleteness(failedBatches == 0 ? (normalizedGaps.isEmpty() ? "COMPLETE" : "INCOMPLETE") : "UNKNOWN");
-        run.setErrorCode(supplementFailed ? "AI_REVIEW_SUPPLEMENT_FAILED" : null);
-        run.setErrorMessage(supplementFailureMessage);
-        run.setGlobalResultJson(responseSupport.writeValue(Map.of(
-                "issues", issues,
-                "suggestions", suggestions,
-                "unresolvedCoverageGaps", normalizedGaps,
-                "caseDecisions", decisions,
-                "supplementCases", supplements
-        )));
-        run.setFinishedAt(LocalDateTime.now());
-        run.setUpdatedAt(LocalDateTime.now());
-        reviewRunMapper.updateById(run);
-        if (failedBatches > 0 && completedBatches == 0) {
-            return new StreamReviewExecutionResult(null, completedBatches, failedBatches, reviewedCaseCount,
-                    supplements, runId, firstFailureMessage, rawContent.toString(), firstProvider, firstModel,
-                    supplementFailed, supplementFailureMessage);
-        }
-        return new StreamReviewExecutionResult(new AiReviewResult(
-                failedBatches == 0 ? firstNonBlank(reviewResultValue, normalizedGaps.isEmpty() ? "APPROVE" : "SUGGEST") : "SUGGEST",
-                failedBatches == 0 ? firstNonBlank(reviewSummary, "评审批次已完成") : "评审批次部分失败，已保留成功批次结果",
-                issues, suggestions, decisions, supplements, normalizedGaps, rawContent.toString(), true
-        ), completedBatches, failedBatches, reviewedCaseCount, supplements, runId, firstFailureMessage,
-                rawContent.toString(), firstProvider, firstModel, supplementFailed, supplementFailureMessage);
+        return new AiReviewResult(result.result(), result.summary(), result.issues(), result.suggestions(),
+                decisions, result.supplementCases() == null ? List.of() : result.supplementCases(),
+                result.unresolvedCoverageGaps(), result.rawContent(), true);
     }
 
     private AiCaseService.ReviewCaseStreamUpdate rebaseStreamUpdate(
@@ -516,7 +86,7 @@ public class AiCaseReviewOrchestrationService {
                     .findFirst()
                     .orElse(null);
         }
-        if (target == null && update.itemIndex() != null && update.itemIndex() >= 0 && update.itemIndex() < batchCandidates.size()) {
+        else if (update.itemIndex() != null && update.itemIndex() >= 0 && update.itemIndex() < batchCandidates.size()) {
             target = batchCandidates.get(update.itemIndex());
         }
         if (target == null) {
@@ -533,60 +103,12 @@ public class AiCaseReviewOrchestrationService {
         );
     }
 
-    private void appendRaw(StringBuilder rawContent, String value) {
-        if (value == null || value.isBlank()) {
-            return;
-        }
-        if (!rawContent.isEmpty()) {
-            rawContent.append("\n");
-        }
-        rawContent.append(value);
-    }
-
-    private AiCaseReviewBatchEntity createBatch(
-            AiGenerationTaskEntity task,
-            String runId,
-            int batchNo,
-            List<AiCaseCandidateEntity> candidates
-    ) {
-        LocalDateTime now = LocalDateTime.now();
-        AiCaseReviewBatchEntity batch = new AiCaseReviewBatchEntity();
-        batch.setReviewBatchId("AIB_" + shortId());
-        batch.setReviewRunId(runId);
-        batch.setTaskId(task.getTaskId());
-        batch.setBatchNo(batchNo);
-        batch.setStatus("RUNNING");
-        batch.setCandidateIdsJson(responseSupport.writeValue(candidates.stream().map(AiCaseCandidateEntity::getCandidateId).toList()));
-        batch.setCoverageItemIdsJson(responseSupport.writeValue(List.of()));
-        batch.setSnapshotId(null);
-        batch.setAttemptCount(1);
-        batch.setStartedAt(now);
-        batch.setCreatedAt(now);
-        batch.setUpdatedAt(now);
-        for (AiCaseCandidateEntity candidate : candidates) {
-            AiCaseCandidateReviewSnapshotEntity snapshot = new AiCaseCandidateReviewSnapshotEntity();
-            snapshot.setSnapshotId("AIS_" + shortId());
-            snapshot.setCandidateId(candidate.getCandidateId());
-            snapshot.setTaskId(task.getTaskId());
-            snapshot.setReviewRunId(runId);
-            snapshot.setReviewBatchId(batch.getReviewBatchId());
-            snapshot.setContentVersion(candidate.getContentVersion() == null ? 1 : candidate.getContentVersion());
-            snapshot.setContentHash(candidate.getContentHash());
-            snapshot.setCaseJson(candidate.getCurrentCaseJson());
-            snapshot.setCreatedAt(now);
-            snapshot.setUpdatedAt(now);
-            snapshotMapper.insert(snapshot);
-        }
-        reviewBatchMapper.insert(batch);
-        return batch;
-    }
-
     private boolean recordDecision(
             AiGenerationTaskEntity task,
             List<AiCaseCandidateEntity> batchCandidates,
             AiReviewCaseDecision decision
     ) {
-        if (decision == null) {
+        if (decision == null || Thread.currentThread().isInterrupted()) {
             return false;
         }
         boolean belongsToBatch = batchCandidates.stream().anyMatch(candidate ->
@@ -638,101 +160,9 @@ public class AiCaseReviewOrchestrationService {
         );
     }
 
-    private void persistCoverageItems(AiGenerationTaskEntity task, List<String> gaps) {
-        int nextNo = coverageItemMapper.selectList(new LambdaQueryWrapper<AiCaseCoverageItemEntity>()
-                .eq(AiCaseCoverageItemEntity::getTaskId, task.getTaskId())).size() + 1;
-        for (String gap : gaps) {
-            String normalized = gap.trim();
-            AiCaseCoverageItemEntity existing = coverageItemMapper.selectOne(new LambdaQueryWrapper<AiCaseCoverageItemEntity>()
-                    .eq(AiCaseCoverageItemEntity::getTaskId, task.getTaskId())
-                    .eq(AiCaseCoverageItemEntity::getTitle, normalized)
-                    .last("limit 1"));
-            if (existing != null) {
-                continue;
-            }
-            AiCaseCoverageItemEntity item = new AiCaseCoverageItemEntity();
-            LocalDateTime now = LocalDateTime.now();
-            item.setCoverageItemId("AICOV_" + shortId());
-            item.setTaskId(task.getTaskId());
-            item.setItemNo(nextNo++);
-            item.setTitle(normalized);
-            item.setDescription(normalized);
-            item.setCoverageStatus("GAP");
-            item.setCoveredCandidateIdsJson(responseSupport.writeValue(List.of()));
-            item.setEvidenceJson(responseSupport.writeValue(List.of()));
-            item.setIssuesJson(responseSupport.writeValue(List.of()));
-            item.setCreatedAt(now);
-            item.setUpdatedAt(now);
-            coverageItemMapper.insert(item);
-        }
-    }
-
-    private int nextRunNo(String taskId) {
-        AiCaseReviewRunEntity latest = reviewRunMapper.selectOne(new LambdaQueryWrapper<AiCaseReviewRunEntity>()
-                .eq(AiCaseReviewRunEntity::getTaskId, taskId)
-                .orderByDesc(AiCaseReviewRunEntity::getRunNo)
-                .last("limit 1"));
-        return latest == null || latest.getRunNo() == null ? 1 : latest.getRunNo() + 1;
-    }
-
-    private List<String> decisionGaps(AiReviewResult result) {
-        List<String> gaps = new ArrayList<>();
-        for (AiReviewCaseDecision decision : result.caseDecisions() == null ? List.<AiReviewCaseDecision>of() : result.caseDecisions()) {
-            if (decision.coverageGap() != null && !decision.coverageGap().isBlank()) {
-                gaps.add(decision.coverageGap());
-            }
-        }
-        return gaps;
-    }
-
-    private List<String> nonBlank(List<String> values) {
-        return values == null ? List.of() : values.stream().filter(item -> item != null && !item.isBlank()).map(String::trim).toList();
-    }
-
     private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value.trim();
-            }
-        }
+        for (String value : values) if (value != null && !value.isBlank()) return value;
         return null;
-    }
-
-    private String safeMessage(RuntimeException exception) {
-        return exception.getMessage() == null || exception.getMessage().isBlank()
-                ? exception.getClass().getSimpleName()
-                : exception.getMessage();
-    }
-
-    private int taskCaseTotalLimit(AiGenerationTaskEntity task) {
-        Integer limit = task.getCaseGenerationLimit();
-        return limit == null
-                ? AiCaseService.DEFAULT_MAX_CASES
-                : Math.max(1, Math.min(limit, AiCaseService.SYSTEM_MAX_CASES));
-    }
-
-    private String mergeReviewResultValue(String current, String next) {
-        if (next == null || next.isBlank()) {
-            return current;
-        }
-        if (current == null || current.isBlank()) {
-            return next.trim();
-        }
-        if ("REJECT".equalsIgnoreCase(current) || "SUGGEST".equalsIgnoreCase(current)) {
-            return current;
-        }
-        return next.trim();
-    }
-
-    private String limitRawOutput(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.length() <= 12000 ? value : value.substring(value.length() - 12000);
-    }
-
-    private String shortId() {
-        return UUID.randomUUID().toString().replace("-", "").substring(0, 20).toUpperCase(Locale.ROOT);
     }
 
     public record ReviewExecutionResult(

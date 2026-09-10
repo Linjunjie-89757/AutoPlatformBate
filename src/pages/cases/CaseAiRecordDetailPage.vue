@@ -259,7 +259,6 @@ const adoptionFailedCaseCount = computed(() => detailCases.value.filter(item => 
 const canRetryReview = computed(() => Boolean(
   detailRecord.value
   && ['FAILED', 'PARTIAL'].includes(detailRecord.value.reviewStatus || '')
-  && (detailRecord.value.failedReviewBatches || 0) > 0
   && !reviewRetrying.value
 ))
 const initialCaseCount = computed(() => detailCases.value.filter(item => item.aiSource === 'INITIAL').length)
@@ -706,22 +705,27 @@ function getCaseReviewStateClass(row: DetailCaseRow | null | undefined) {
 }
 
 function getEffectiveReviewStatus(row: DetailCaseRow | null | undefined) {
-  return row?.candidate?.reviewStatus || row?.aiReviewStatus || 'PENDING'
+  return row?.candidate ? (row.candidate.reviewStatus || 'PENDING') : (row?.aiReviewStatus || 'PENDING')
 }
 
 function getDisplayedReviewStatus(row: DetailCaseRow | null | undefined) {
-  return getEffectiveReviewStatus(row)
+  const status = getEffectiveReviewStatus(row)
+  if (['PENDING', 'PENDING_REVIEW'].includes(status) && !isRunningRecord(detailRecord.value)) return 'REVIEW_INCOMPLETE'
+  return status
 }
 
 function getAiReviewListLabel(row: DetailCaseRow) {
+  if (row.candidate?.origin === 'REVIEW_SUPPLEMENTED' && getDisplayedReviewStatus(row) === 'CONFIRM_REQUIRED') return '补充待确认'
   const map: Record<string, string> = {
     APPROVED: '通过',
     OPTIMIZED: '已优化',
     CHANGE_SUGGESTED: '建议优化',
     SUPPLEMENTED: '已补充',
-    CONFIRM_REQUIRED: '建议确认',
+    CONFIRM_REQUIRED: '需要确认',
     NOT_RECOMMENDED: '不推荐',
     PENDING: '待评审',
+    PENDING_REVIEW: '待评审',
+    REVIEW_INCOMPLETE: '评审未完成',
   }
   const status = getDisplayedReviewStatus(row)
   return map[status] || status
@@ -736,32 +740,39 @@ function getAiReviewListClass(row: DetailCaseRow) {
     CONFIRM_REQUIRED: 'status-warning',
     NOT_RECOMMENDED: 'status-danger',
     PENDING: 'status-warning',
+    REVIEW_INCOMPLETE: 'status-warning',
   }
   return map[getDisplayedReviewStatus(row)] || 'status-neutral'
 }
 
 function getFigmaReviewLabel(row: DetailCaseRow) {
+  if (row.candidate?.origin === 'REVIEW_SUPPLEMENTED' && getDisplayedReviewStatus(row) === 'CONFIRM_REQUIRED') return '补充待确认'
   const map: Record<string, string> = {
     APPROVED: '评审通过',
     OPTIMIZED: '评审通过',
     CHANGE_SUGGESTED: '建议优化',
-    SUPPLEMENTED: '评审通过',
-    CONFIRM_REQUIRED: '建议确认',
-    NOT_RECOMMENDED: '评审未通过',
+    SUPPLEMENTED: '补充待确认',
+    CONFIRM_REQUIRED: '需要确认',
+    NOT_RECOMMENDED: '不建议采纳',
     PENDING: '待评审',
+    PENDING_REVIEW: '待评审',
+    REVIEW_INCOMPLETE: '评审未完成',
   }
   return map[getDisplayedReviewStatus(row)] || getAiReviewListLabel(row)
 }
 
 function getFigmaReviewTableLabel(row: DetailCaseRow) {
+  if (row.candidate?.origin === 'REVIEW_SUPPLEMENTED' && getDisplayedReviewStatus(row) === 'CONFIRM_REQUIRED') return '补充待确认'
   const map: Record<string, string> = {
     APPROVED: '评审通过',
     OPTIMIZED: '评审通过',
     CHANGE_SUGGESTED: '建议优化',
-    SUPPLEMENTED: '评审通过',
-    CONFIRM_REQUIRED: '建议确认',
-    NOT_RECOMMENDED: '评审未通过',
+    SUPPLEMENTED: '补充待确认',
+    CONFIRM_REQUIRED: '需要确认',
+    NOT_RECOMMENDED: '不建议采纳',
     PENDING: '待评审',
+    PENDING_REVIEW: '待评审',
+    REVIEW_INCOMPLETE: '评审未完成',
   }
   return map[getDisplayedReviewStatus(row)] || '待评审'
 }
@@ -788,7 +799,7 @@ function getFigmaReviewTone(row: DetailCaseRow) {
   if (status === 'NOT_RECOMMENDED') {
     return 'is-danger'
   }
-  if (status === 'CHANGE_SUGGESTED' || status === 'CONFIRM_REQUIRED' || status === 'PENDING') {
+  if (['CHANGE_SUGGESTED', 'CONFIRM_REQUIRED', 'PENDING', 'PENDING_REVIEW', 'REVIEW_INCOMPLETE'].includes(status)) {
     return 'is-warning'
   }
   return 'is-success'
@@ -851,15 +862,7 @@ function toggleAllFilteredCases(checked: boolean) {
 }
 
 function getFigmaCaseSteps(row: DetailCaseRow) {
-  const normalized = row.steps?.trim()
-  if (!normalized) {
-    return ['暂无步骤']
-  }
-  return normalized
-    .split(/\r?\n|[；;]/)
-    .map(item => item.replace(/^\s*\d+[.、)]?\s*/, '').trim())
-    .filter(Boolean)
-    .slice(0, 4)
+  return splitCaseSteps(row.steps).slice(0, 4)
 }
 
 function getFigmaOptimizationReason(row: DetailCaseRow) {
@@ -885,13 +888,19 @@ function getDrawerCurrentCase(row: DetailCaseRow | null | undefined): GeneratedA
 }
 
 function getDrawerCaseSteps(caseItem: GeneratedAiCaseItem | null | undefined) {
-  const normalized = caseItem?.steps?.trim()
+  return splitCaseSteps(caseItem?.steps)
+}
+
+function splitCaseSteps(value: string | null | undefined) {
+  const normalized = value?.trim()
   if (!normalized) {
     return ['暂无步骤']
   }
+
   return normalized
     .split(/\r?\n|[；;]/)
-    .map(item => item.replace(/^\s*\d+[.、)]?\s*/, '').trim())
+    .flatMap(item => item.split(/\s+(?=\d+[.、)](?:\s|$))/))
+    .map(item => item.replace(/^\s*\d+[.、)](?:\s+)?/, '').trim())
     .filter(Boolean)
 }
 
@@ -930,6 +939,10 @@ function getAiSourceLabel(row: DetailCaseRow | null | undefined) {
     REVIEW_SUPPLEMENTED: '评审补充',
   }
   return map[source] || source
+}
+
+function isReviewSupplement(row: DetailCaseRow | null | undefined) {
+  return row?.aiSource === 'REVIEW_SUPPLEMENTED' || row?.candidate?.origin === 'REVIEW_SUPPLEMENTED'
 }
 
 function getCaseSavedDirectoryName(row: DetailCaseRow) {
@@ -1155,7 +1168,7 @@ async function retryFailedReviewBatches() {
   try {
     await caseAiApi.retryFailedReviewBatches(detailRecord.value.workspaceCode, detailRecord.value.taskId)
     await loadRecord()
-    ElMessage.success('失败评审批次已重新提交')
+    ElMessage.success('已重新提交评审，将使用现有用例重新评审')
   } catch (error) {
     ElMessage.error(`评审重试失败：${getRequestErrorMessage(error)}`)
   } finally {
@@ -2038,7 +2051,7 @@ onBeforeUnmount(() => {
             >
               <Loader2 v-if="reviewRetrying" :size="12" class="is-spinning" />
               <RotateCcw v-else :size="12" />
-              {{ reviewRetrying ? '正在重试评审' : `重试失败评审（${detailRecord.failedReviewBatches || 0}）` }}
+              {{ reviewRetrying ? '正在重试评审' : '重试评审' }}
             </button>
           </div>
 
@@ -2131,7 +2144,10 @@ onBeforeUnmount(() => {
               <span class="case-ai-record-detail-page__priority-tag" :class="'priority-' + String(row.priority || 'P2').toLowerCase()">
                 {{ row.priority || 'P2' }}
               </span>
-              <span class="case-ai-record-detail-page__review-tag" :class="getAiReviewListClass(row)">{{ getFigmaReviewTableLabel(row) }}</span>
+              <div class="case-ai-record-detail-page__review-cell">
+                <span class="case-ai-record-detail-page__review-tag" :class="getAiReviewListClass(row)">{{ getFigmaReviewTableLabel(row) }}</span>
+                <span v-if="isReviewSupplement(row)" class="case-ai-record-detail-page__source-tag">AI 补充</span>
+              </div>
               <span class="case-ai-record-detail-page__case-state" :class="getCaseReviewStateClass(row)">
                 <Loader2 v-if="getCaseReviewState(row) === 'ADOPTING'" :size="12" />
                 {{ getCaseReviewStateLabel(row) }}
@@ -2250,7 +2266,7 @@ onBeforeUnmount(() => {
             <span class="case-ai-record-detail-page__type-tag" :class="getCaseTypeClass(activeCase)">{{ getDisplayCaseType(activeCase) }}</span>
             <span class="case-ai-record-detail-page__review-tag" :class="getAiReviewListClass(activeCase)">{{ getFigmaReviewLabel(activeCase) }}</span>
             <span
-              v-if="activeCase.aiSource === 'REVIEW_SUPPLEMENTED' || activeCase.candidate?.origin === 'REVIEW_SUPPLEMENTED'"
+              v-if="isReviewSupplement(activeCase)"
               class="case-ai-record-detail-page__source-tag"
             >AI 补充</span>
           </div>
@@ -4764,7 +4780,6 @@ onBeforeUnmount(() => {
 
 .case-ai-record-detail-page__result-row > .case-ai-record-detail-page__type-tag,
 .case-ai-record-detail-page__result-row > .case-ai-record-detail-page__priority-tag,
-.case-ai-record-detail-page__result-row > .case-ai-record-detail-page__review-tag,
 .case-ai-record-detail-page__result-row > .case-ai-record-detail-page__case-state {
   height: 18px;
   min-width: 0;
@@ -5517,6 +5532,24 @@ onBeforeUnmount(() => {
   background: #fff;
   font-size: 12px;
   line-height: 19px;
+}
+
+.case-ai-record-detail-page__review-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-self: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.case-ai-record-detail-page__review-cell .case-ai-record-detail-page__review-tag,
+.case-ai-record-detail-page__review-cell .case-ai-record-detail-page__source-tag {
+  height: 18px;
+  min-width: 0;
+  padding-right: 6px;
+  padding-left: 6px;
+  font-weight: 600;
+  line-height: 16.5px;
 }
 
 .case-ai-record-detail-page__drawer-risk-panel {

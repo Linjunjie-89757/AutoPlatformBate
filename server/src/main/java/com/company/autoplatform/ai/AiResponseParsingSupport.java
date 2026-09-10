@@ -74,10 +74,13 @@ public class AiResponseParsingSupport {
             parsed = aiProviderClient.parseGeneratedCasesContent(rawValue, maxCases - generatedCases.size());
         } catch (RuntimeException ignored) {
             // Keep the raw stream and let the final parser report the complete failure.
+            AiStreamDiagnostics.invalid("Generation parser exception: " + ignored.getClass().getSimpleName(), rawValue);
             return;
         }
         warnings.addAll(parsed.warnings());
         invalidCases.addAll(parsed.invalidCases());
+        for (AiInvalidCaseItem item : parsed.invalidCases()) AiStreamDiagnostics.invalid(item.reason(), rawValue);
+        if (parsed.generatedCases().isEmpty() && parsed.invalidCases().isEmpty()) AiStreamDiagnostics.invalid("JSON contains no case", rawValue);
         for (GeneratedAiCaseItem item : parsed.generatedCases()) {
             if (generatedCases.size() >= maxCases) {
                 break;
@@ -86,10 +89,12 @@ public class AiResponseParsingSupport {
             boolean duplicate = generatedCases.stream()
                     .anyMatch(existing -> AiGenerationCaseQualityService.fingerprint(existing).equals(fingerprint));
             if (duplicate) {
+                AiStreamDiagnostics.duplicate();
                 warnings.add("Streamed candidate duplicated an accepted candidate and was ignored");
                 continue;
             }
             generatedCases.add(item);
+            AiStreamDiagnostics.parsed("CASE");
             if (caseConsumer != null) {
                 caseConsumer.accept(new AiCaseService.GeneratedCaseStreamUpdate(
                         generatedCases.size() - 1,
@@ -145,6 +150,7 @@ public class AiResponseParsingSupport {
             GeneratedAiCaseItem supplementCase = parseStreamGeneratedCase(firstPresentNode(root, "supplementCase", "case", "newCase"), "REVIEW_SUPPLEMENTED", "SUPPLEMENTED");
             if ("SUPPLEMENTED".equals(status)) {
                 if (supplementCase == null) {
+                    AiStreamDiagnostics.invalid("Supplement contains no valid case", rawValue);
                     return;
                 }
                 if (summary == null || summary.isBlank()) {
@@ -152,6 +158,7 @@ public class AiResponseParsingSupport {
                 }
                 AiCaseService.ReviewCaseStreamUpdate update = new AiCaseService.ReviewCaseStreamUpdate(null, status, summary, coverageComment, evidenceComment, reviewComment, optimizationReason, supplementReason, coverageGap, null, supplementCase, rawOutput.toString(), null, null, score, confidence, reason, null, List.of(), null, null);
                 updates.put(-(updates.size() + 1), update);
+                AiStreamDiagnostics.parsed("SUPPLEMENT");
                 if (reviewConsumer != null) {
                     reviewConsumer.accept(update);
                 }
@@ -159,6 +166,8 @@ public class AiResponseParsingSupport {
             }
             Integer caseIndex = parseReviewCaseIndex(root, caseCount);
             if (caseIndex == null) {
+                if (!"SUMMARY".equalsIgnoreCase(root.path("type").asText()) && !root.has("caseDecisions"))
+                    AiStreamDiagnostics.invalid("Review index missing or out of range", rawValue);
                 return;
             }
             GeneratedAiCaseItem optimizedCase = parseStreamGeneratedCase(root.path("optimizedCase"), "REVIEW_OPTIMIZED", status);
@@ -180,12 +189,15 @@ public class AiResponseParsingSupport {
                 evidenceComment = firstText(root, "reason", "summary");
             }
             AiCaseService.ReviewCaseStreamUpdate update = new AiCaseService.ReviewCaseStreamUpdate(caseIndex, status, summary, coverageComment, evidenceComment, reviewComment, optimizationReason, null, coverageGap, optimizedCase, null, rawOutput.toString(), candidateCaseId, suggestedAction, score, confidence, reason, suggestedCase, mergeTargetCandidateIds, sourceVersion, sourceContentHash);
+            if (updates.containsKey(caseIndex)) AiStreamDiagnostics.duplicate();
+            else AiStreamDiagnostics.parsed("DECISION");
             updates.put(caseIndex, update);
             if (reviewConsumer != null) {
                 reviewConsumer.accept(update);
             }
         } catch (Exception ignored) {
             // Wait for a later complete line or final full-output fallback.
+            AiStreamDiagnostics.invalid("Review processing exception: " + ignored.getClass().getSimpleName(), rawValue);
         }
     }
 
@@ -243,11 +255,13 @@ public class AiResponseParsingSupport {
         if (expectedCaseCount <= 0) {
             return;
         }
+        if (reviewResult == null || !reviewResult.structured()) throw new BadRequestException("AI 评审结果无法解析");
         Set<Integer> reviewedIndexes = new HashSet<>();
         if (reviewResult != null && reviewResult.caseDecisions() != null) {
             for (AiReviewCaseDecision decision : reviewResult.caseDecisions()) {
-                if (decision.caseIndex() != null && decision.caseIndex() >= 0 && decision.caseIndex() < expectedCaseCount) {
-                    reviewedIndexes.add(decision.caseIndex());
+                if (decision.caseIndex() == null || decision.caseIndex() < 0 || decision.caseIndex() >= expectedCaseCount
+                        || !reviewedIndexes.add(decision.caseIndex())) {
+                    throw new BadRequestException("AI 评审存在重复或无效的用例索引");
                 }
             }
         }
@@ -339,6 +353,8 @@ public class AiResponseParsingSupport {
                         decision.sourceVersion(),
                         decision.sourceContentHash()
                 );
+                if (updates.containsKey(decision.caseIndex())) AiStreamDiagnostics.duplicate();
+                else AiStreamDiagnostics.parsed("DECISION");
                 updates.put(decision.caseIndex(), update);
                 if (reviewConsumer != null) {
                     reviewConsumer.accept(update);
@@ -371,6 +387,7 @@ public class AiResponseParsingSupport {
                         null
                 );
                 updates.put(-(updates.size() + 1), update);
+                AiStreamDiagnostics.parsed("SUPPLEMENT");
                 if (reviewConsumer != null) {
                     reviewConsumer.accept(update);
                 }

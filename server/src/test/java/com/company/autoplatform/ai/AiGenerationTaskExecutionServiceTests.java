@@ -24,9 +24,12 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
-@TestPropertySource(properties = "app.ai.review-task-timeout-seconds=1")
+@TestPropertySource(properties = {"app.ai.review-task-timeout-seconds=1", "app.ai.generation-task-timeout-seconds=1",
+        "app.ai.complete-task-timeout-seconds=1",
+        "app.ai.stream-diagnostics-root=./target/test-ai-stream-diagnostics"})
 class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
 
     @Autowired
@@ -142,45 +145,28 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
     }
 
     @Test
-    void selfCheckSupplementIsGeneratedOnceAndStoredAsCandidateSource() {
+    void generationDoesNotTriggerSelfCheckOrExtraSupplementCalls() {
         reset(aiProviderClient);
-        String unique = uniquePrefix("self-supplement");
-        String model = unique + "-model";
-        AiProviderConnectionItem provider = createProvider(unique, model);
-        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
-        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
-
-        GeneratedAiCaseItem initial = generatedCase(unique + " initial");
-        GeneratedAiCaseItem supplement = generatedCase(unique + " exception");
+        String unique = uniquePrefix("simple-flow");
+        AiProviderConnectionItem provider = createProvider(unique, unique);
+        upsertConfig("CASE_GENERATOR", provider.id(), unique, "generator");
+        upsertConfig("CASE_REVIEWER", provider.id(), unique, "reviewer");
         when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
-                List.of(initial), "coverage", List.of(), List.of(), List.of(), "initial raw"
-        ));
-        when(aiProviderClient.selfCheck(any(), any(), any())).thenReturn(new AiGenerationSelfCheckResult(
-                true, false, List.of("invalid credentials"), List.of(), "补充认证失败场景", "self check raw"
-        ));
-        when(aiProviderClient.generateSupplement(any(), any(), any(), anyInt())).thenReturn(new AiGeneratedCasesResult(
-                List.of(supplement), "supplement coverage", List.of(), List.of(), List.of(), "supplement raw"
-        ));
+                List.of(generatedCase(unique)), "coverage", List.of("possible gap"), List.of(), List.of(), "raw"));
         when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
-                "APPROVE", "review complete", List.of(), List.of(), List.of(), List.of(), List.of(), "review raw", true
-        ));
-
+                "APPROVE", "complete", List.of(), List.of(), approvedDecisions(1), List.of(), List.of("unresolved gap"), "review raw", true));
         AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
         aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
-
-        AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
-        assertThat(detail.status()).isEqualTo("COMPLETED");
-        assertThat(detail.selfCheckStatus()).isEqualTo(AiGenerationWorkflowContract.SELF_CHECK_SUCCEEDED);
-        assertThat(detail.generatedCases()).hasSize(2);
-        assertThat(detail.generatedCases().get(1).aiSource()).isEqualTo("SELF_REVIEW_SUPPLEMENT");
-        assertThat(detail.events()).extracting(AiGenerationTaskEventResponse::eventType)
-                .contains("GENERATION_SELF_CHECK_COMPLETED", "GENERATION_SELF_SUPPLEMENTED");
-
-        List<AiCaseCandidateItem> candidates = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE);
-        assertThat(candidates).hasSize(2);
-        assertThat(candidates.get(1).sourceType())
-                .isEqualTo(AiGenerationWorkflowContract.SOURCE_SELF_REVIEW_SUPPLEMENT);
-        verify(aiProviderClient).generateSupplement(any(), any(), any(), anyInt());
+        AiGenerationTaskResponse result = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(result.reviewStatus()).isEqualTo("SUCCEEDED");
+        assertThat(result.generatedCases()).hasSize(1);
+        assertThat(result.coverageCompleteness()).isEqualTo("UNKNOWN");
+        assertThat(result.events()).extracting(AiGenerationTaskEventResponse::eventType)
+                .doesNotContain("GENERATION_SELF_CHECK_COMPLETED", "GENERATION_SELF_SUPPLEMENTED");
+        verify(aiProviderClient).generate(any(), any(), any(), any());
+        verify(aiProviderClient).review(any(), any(), any());
+        verify(aiProviderClient, never()).selfCheck(any(), any(), any());
+        verify(aiProviderClient, never()).generateSupplement(any(), any(), any(), anyInt());
     }
 
     @Test
@@ -200,14 +186,7 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
                 generated, "coverage", List.of(), List.of(), List.of(), "generation raw"
         ));
         when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
-                "APPROVE", "review approved", List.of(), List.of(), List.of(
-                        new AiReviewCaseDecision(
-                                0, "APPROVED", "approved", "covered", "evidence", "reviewed", null, null, null
-                        ),
-                        new AiReviewCaseDecision(
-                                20, "APPROVED", "approved", "covered", "evidence", "reviewed", null, null, null
-                        )
-                ), List.of(), List.of(), "review raw", true
+                "APPROVE", "review approved", List.of(), List.of(), approvedDecisions(21), List.of(), List.of(), "review raw", true
         ));
 
         AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
@@ -220,8 +199,8 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         verify(aiProviderClient).review(any(), any(), any());
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
-        assertThat(detail.totalReviewBatches()).isEqualTo(1);
-        assertThat(detail.completedReviewBatches()).isEqualTo(1);
+        assertThat(detail.totalReviewBatches()).isZero();
+        assertThat(detail.completedReviewBatches()).isZero();
         assertThat(detail.failedReviewBatches()).isZero();
         assertThat(detail.reviewStatus()).isEqualTo("SUCCEEDED");
     }
@@ -242,7 +221,7 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
                 true, true, List.of(), List.of(), null, "self check raw"
         ));
         when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
-                "APPROVE", "review complete", List.of(), List.of(), List.of(), List.of(), List.of(), "review raw", true
+                "APPROVE", "review complete", List.of(), List.of(), approvedDecisions(1), List.of(), List.of(), "review raw", true
         ));
 
         AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
@@ -280,16 +259,9 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         when(aiProviderClient.selfCheck(any(), any(), any())).thenReturn(new AiGenerationSelfCheckResult(
                 true, true, List.of(), List.of(), null, "self check raw"
         ));
-        AiReviewResult batchReview = new AiReviewResult(
-                "APPROVE", "batch complete", List.of(), List.of(), List.of(), List.of(),
-                List.of("confirmed global gap"), "batch raw", true
-        );
-        AiReviewResult supplementReview = new AiReviewResult(
-                "SUGGEST", "supplement complete", List.of(), List.of(), List.of(), supplements,
-                List.of(), "supplement raw", true
-        );
-        when(aiProviderClient.review(any(), any(), any()))
-                .thenReturn(batchReview, supplementReview);
+        when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
+                "SUGGEST", "review and supplement", List.of(), List.of(), approvedDecisions(21), supplements,
+                List.of(), "review raw", true));
 
         AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
         aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
@@ -298,7 +270,10 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         assertThat(detail.caseGenerationLimit()).isEqualTo(100);
         assertThat(detail.generatedCases()).hasSize(46);
         assertThat(detail.supplementedCaseCount()).isEqualTo(25);
-        verify(aiProviderClient, times(2)).review(any(), any(), any());
+        assertThat(aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE).stream()
+                .filter(item -> "REVIEW_SUPPLEMENTED".equals(item.origin())))
+                .allMatch(item -> "CONFIRM_REQUIRED".equals(item.reviewStatus()) && "PENDING".equals(item.humanDecision()));
+        verify(aiProviderClient).review(any(), any(), any());
     }
 
     @Test
@@ -320,6 +295,10 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         String reviewContent = java.util.stream.IntStream.range(0, 21)
                 .mapToObj(index -> "{\"caseIndex\":" + index + ",\"status\":\"APPROVED\"}")
                 .collect(java.util.stream.Collectors.joining("\n"))
+                + "\n{\"status\":\"SUPPLEMENTED\",\"reason\":\"Missing logout coverage\",\"supplementCase\":{"
+                + "\"title\":\"Logout invalidates session\",\"caseType\":\"FUNCTION\",\"priority\":\"P1\","
+                + "\"precondition\":\"User is logged in\",\"steps\":\"1. Log out\\n2. Refresh protected page\","
+                + "\"expectedResult\":\"Redirected to login\",\"requirementEvidence\":\"Logout requirement\"}}"
                 + "\n{\"type\":\"SUMMARY\",\"reviewedCount\":21,\"unresolvedCoverageGaps\":[],\"result\":\"APPROVE\"}\n";
         when(aiProviderClient.parseGeneratedCasesContent(anyString(), anyInt())).thenReturn(new AiGeneratedCasesResult(
                 generated, "coverage summary", List.of(), List.of(), List.of(), generationLine
@@ -340,20 +319,23 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
 
         List<AiCaseCandidateItem> candidates = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE);
-        assertThat(candidates).hasSize(21);
+        assertThat(candidates).hasSize(22);
         assertThat(candidates.get(0).reviewStatus()).isEqualTo("APPROVED");
         assertThat(candidates.get(20).reviewStatus()).isEqualTo("APPROVED");
+        assertThat(candidates.get(21).reviewStatus()).isEqualTo("CONFIRM_REQUIRED");
+        assertThat(candidates.get(21).origin()).isEqualTo("REVIEW_SUPPLEMENTED");
+        assertThat(candidates.get(21).humanDecision()).isEqualTo("PENDING");
         verify(aiProviderClient, times(2)).streamStructuredContentWithResult(any(), any(), any(), any());
 
         AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
-        assertThat(detail.totalReviewBatches()).isEqualTo(1);
-        assertThat(detail.completedReviewBatches()).isEqualTo(1);
+        assertThat(detail.totalReviewBatches()).isZero();
+        assertThat(detail.completedReviewBatches()).isZero();
         assertThat(detail.failedReviewBatches()).isZero();
         assertThat(detail.reviewStatus()).isEqualTo("SUCCEEDED");
     }
 
     @Test
-    void failedReviewBatchesCanBeRetriedWithoutRegeneratingCases() {
+    void failedReviewCanBeRetriedWithoutRegeneratingCases() {
         reset(aiProviderClient);
         String unique = uniquePrefix("review-retry");
         String model = unique + "-model";
@@ -377,7 +359,7 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
         AiGenerationTaskResponse failed = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
         assertThat(failed.reviewStatus()).isEqualTo("FAILED");
-        assertThat(failed.failedReviewBatches()).isEqualTo(1);
+        assertThat(failed.failedReviewBatches()).isZero();
 
         AiGenerationTaskResponse retrying = aiGenerationTaskService.retryFailedReviewBatches(created.taskId(), WORKSPACE_CODE);
         assertThat(retrying.status()).isEqualTo("REVIEWING");
@@ -405,14 +387,7 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
             generated.add(generatedCase(unique + " case-" + index));
         }
         AiReviewResult approved = new AiReviewResult(
-                "APPROVE", "review approved", List.of(), List.of(), List.of(
-                        new AiReviewCaseDecision(
-                                0, "APPROVED", "approved", "covered", "evidence", "reviewed", null, null, null
-                        ),
-                        new AiReviewCaseDecision(
-                                20, "APPROVED", "approved", "covered", "evidence", "reviewed", null, null, null
-                        )
-                ), List.of(), List.of(), "review raw", true
+                "APPROVE", "review approved", List.of(), List.of(), approvedDecisions(21), List.of(), List.of(), "review raw", true
         );
         when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
                 generated, "coverage", List.of(), List.of(), List.of(), "generation raw"
@@ -424,17 +399,17 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
         aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
         AiGenerationTaskResponse failed = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
-        assertThat(failed.totalReviewBatches()).isEqualTo(1);
+        assertThat(failed.totalReviewBatches()).isZero();
         assertThat(failed.completedReviewBatches()).isZero();
-        assertThat(failed.failedReviewBatches()).isEqualTo(1);
+        assertThat(failed.failedReviewBatches()).isZero();
         assertThat(failed.reviewStatus()).isEqualTo("FAILED");
 
         aiGenerationTaskService.retryFailedReviewBatches(created.taskId(), WORKSPACE_CODE);
         aiGenerationTaskService.executeReviewRetry(created.taskId(), WORKSPACE_CODE);
 
         AiGenerationTaskResponse completed = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
-        assertThat(completed.totalReviewBatches()).isEqualTo(1);
-        assertThat(completed.completedReviewBatches()).isEqualTo(1);
+        assertThat(completed.totalReviewBatches()).isZero();
+        assertThat(completed.completedReviewBatches()).isZero();
         assertThat(completed.failedReviewBatches()).isZero();
         assertThat(completed.reviewStatus()).isEqualTo("SUCCEEDED");
         List<AiCaseCandidateItem> candidates = aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE);
@@ -716,6 +691,130 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
         }
         assertThat(aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE).get(0).reviewStatus())
                 .isEqualTo("PENDING");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void generationTimeoutOrCancelPreservesStreamedCasesAndStopsLateOutput(boolean cancel) throws Exception {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("generation-timeout");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        String line = "{\"title\":\"First complete case\",\"caseType\":\"FUNCTION\",\"priority\":\"P1\","
+                + "\"precondition\":\"User has valid account\",\"steps\":\"1. Log in\","
+                + "\"expectedResult\":\"Dashboard is visible\"}\n";
+        java.util.concurrent.CountDownLatch stopped = new java.util.concurrent.CountDownLatch(1);
+        AiGenerationTaskResponse created = createTask(unique, "STREAM");
+        when(aiProviderClient.parseGeneratedCasesContent(anyString(), anyInt())).thenAnswer(invocation -> {
+            String content = invocation.getArgument(0);
+            return new AiGeneratedCasesResult(List.of(generatedCase(content.contains("Late case") ? "Late case" : "First complete case")),
+                    "coverage", List.of(), List.of(), List.of(), content);
+        });
+        when(aiProviderClient.streamStructuredContentWithResult(any(), any(), any(), any())).thenAnswer(invocation -> {
+            Consumer<String> consumer = invocation.getArgument(3);
+            try {
+                consumer.accept(line);
+                consumer.accept("{\"title\":\"Unfinished next case");
+                if (cancel) aiGenerationTaskService.cancelTask(created.taskId(), WORKSPACE_CODE);
+                try { Thread.sleep(5000); }
+                catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
+                consumer.accept(line.replace("First complete case", "Late case"));
+                return new AiProviderClient.StreamContentResult(line, false, null);
+            } finally { stopped.countDown(); }
+        });
+        long started = System.nanoTime();
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(java.time.Duration.ofNanos(System.nanoTime() - started).toSeconds()).isLessThan(3);
+        try { assertThat(stopped.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue(); }
+        catch (InterruptedException exception) { throw new AssertionError(exception); }
+        AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(detail.status()).isEqualTo(cancel ? "CANCELED" : "FAILED");
+        assertThat(detail.reviewStatus()).isEqualTo("NOT_STARTED");
+        if (!cancel) assertThat(detail.errorMessage()).contains("1 秒");
+        assertThat(detail.generatedCases()).extracting(GeneratedAiCaseItem::title).containsExactly("First complete case");
+        if (!cancel) assertThat(detail.events()).filteredOn(e -> "TASK_FAILED".equals(e.eventType())).hasSize(1);
+        AiGenerationTaskEventResponse diagnosticEvent = detail.events().stream()
+                .filter(event -> "STREAM_DIAGNOSTICS_SAVED".equals(event.eventType())).findFirst().orElseThrow();
+        var diagnostic = new com.fasterxml.jackson.databind.ObjectMapper().readTree(diagnosticEvent.payloadJson());
+        assertThat(diagnostic.path("outcome").asText()).isEqualTo(cancel ? "CANCELED" : "TIMED_OUT");
+        java.nio.file.Path diagnosticDirectory = java.nio.file.Path.of(diagnostic.path("directory").asText());
+        assertThat(java.nio.file.Files.readString(diagnosticDirectory.resolve("content-1.txt")))
+                .contains("First complete case", "Unfinished next case").doesNotContain("Late case");
+        assertThat(java.nio.file.Files.readString(diagnosticDirectory.resolve("pending-1.txt")))
+                .contains("Unfinished next case");
+        verify(aiProviderClient, times(1)).streamStructuredContentWithResult(any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"SUCCESS", "DUPLICATE_REVIEW", "FRAGMENTS", "UNKNOWN_REVIEW"})
+    void streamProgressExtendsEachStageButInvalidOrRepeatedOutputCannotExtendReview(String scenario) throws Exception {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("idle-progress");
+        String model = unique + "-model";
+        AiProviderConnectionItem provider = createProvider(unique, model);
+        upsertConfig("CASE_GENERATOR", provider.id(), model, unique + " generator prompt");
+        upsertConfig("CASE_REVIEWER", provider.id(), model, unique + " reviewer prompt");
+        List<GeneratedAiCaseItem> generated = java.util.stream.IntStream.range(0, 3)
+                .mapToObj(index -> generatedCase(unique + " case " + index)).toList();
+        when(aiProviderClient.parseGeneratedCasesContent(anyString(), anyInt())).thenReturn(new AiGeneratedCasesResult(
+                generated, "coverage", List.of(), List.of(), List.of(), "generation raw"));
+        AtomicInteger calls = new AtomicInteger();
+        when(aiProviderClient.streamStructuredContentWithResult(any(), any(), any(), any())).thenAnswer(invocation -> {
+            Consumer<String> consumer = invocation.getArgument(3);
+            StringBuilder raw = new StringBuilder();
+            if (calls.getAndIncrement() == 0) {
+                for (int index = 0; index < 3; index++) {
+                    Thread.sleep(450);
+                    String line = "{\"title\":\"" + generated.get(index).title() + "\",\"caseType\":\"FUNCTION\",\"priority\":\"P1\","
+                            + "\"precondition\":\"User has valid account\",\"steps\":\"1. Log in\","
+                            + "\"expectedResult\":\"Dashboard is visible\"}\n";
+                    raw.append(line);
+                    consumer.accept(line);
+                }
+            } else if ("SUCCESS".equals(scenario)) {
+                for (int index = 0; index < 3; index++) {
+                    Thread.sleep(450);
+                    String line = "{\"caseIndex\":" + index + ",\"status\":\"APPROVED\"}\n";
+                    raw.append(line);
+                    consumer.accept(line);
+                }
+                String summary = "{\"type\":\"SUMMARY\",\"reviewedCount\":3,\"result\":\"APPROVE\"}\n";
+                raw.append(summary);
+                consumer.accept(summary);
+            } else {
+                consumer.accept("{\"caseIndex\":0,\"status\":\"APPROVED\"}\n");
+                for (int index = 0; index < 20; index++) {
+                    Thread.sleep(100);
+                    consumer.accept(switch (scenario) {
+                        case "DUPLICATE_REVIEW" -> "{\"caseIndex\":0,\"status\":\"APPROVED\"}\n";
+                        case "UNKNOWN_REVIEW" -> "{\"caseIndex\":999,\"status\":\"APPROVED\"}\n";
+                        default -> index == 0 ? "{\"summary\":\"unfinished" : " more text";
+                    });
+                }
+                throw new AssertionError("Output without new valid results kept the review alive");
+            }
+            return new AiProviderClient.StreamContentResult(raw.toString(), false, null);
+        });
+        AiGenerationTaskResponse created = createTask(unique, "STREAM");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+        AiGenerationTaskResponse detail = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(detail.generationStatus()).isEqualTo("SUCCEEDED");
+        assertThat(detail.generatedCases()).hasSize(3);
+        if ("SUCCESS".equals(scenario)) {
+            assertThat(detail.reviewStatus()).isEqualTo("SUCCEEDED");
+            assertThat(detail.reviewedCaseCount()).isEqualTo(3);
+        } else {
+            assertThat(detail.reviewStatus()).isEqualTo("FAILED");
+            assertThat(detail.errorCode()).isEqualTo("AI_REVIEW_TIMEOUT");
+            assertThat(detail.errorMessage()).contains("连续 1 秒未新增有效评审结果");
+            assertThat(aiCaseCandidateService.list(created.taskId(), WORKSPACE_CODE))
+                    .filteredOn(candidate -> "APPROVED".equals(candidate.reviewStatus())).hasSize(1);
+        }
+        verify(aiProviderClient, times(2)).streamStructuredContentWithResult(any(), any(), any(), any());
+        verify(aiProviderClient, never()).generate(any(), any(), any(), any());
+        verify(aiProviderClient, never()).review(any(), any(), any());
     }
 
     @Test
@@ -1259,6 +1358,30 @@ class AiGenerationTaskExecutionServiceTests extends IntegrationTestSupport {
                 List.of(),
                 0
         ));
+    }
+
+    private List<AiReviewCaseDecision> approvedDecisions(int count) {
+        return java.util.stream.IntStream.range(0, count).mapToObj(index ->
+                new AiReviewCaseDecision(index, "APPROVED", "approved", null, null, null, null, null, null)).toList();
+    }
+
+    @Test
+    void missingCompleteReviewDecisionsFailInsteadOfApprovingTask() {
+        reset(aiProviderClient);
+        String unique = uniquePrefix("missing-decision");
+        AiProviderConnectionItem provider = createProvider(unique, unique);
+        upsertConfig("CASE_GENERATOR", provider.id(), unique, "generator");
+        upsertConfig("CASE_REVIEWER", provider.id(), unique, "reviewer");
+        when(aiProviderClient.generate(any(), any(), any(), any())).thenReturn(new AiGeneratedCasesResult(
+                List.of(generatedCase(unique + " first"), generatedCase(unique + " second")), "coverage", List.of(), List.of(), List.of(), "raw"));
+        when(aiProviderClient.review(any(), any(), any())).thenReturn(new AiReviewResult(
+                "APPROVE", "incomplete", List.of(), List.of(), approvedDecisions(1), List.of(), List.of(), "raw", true));
+        AiGenerationTaskResponse created = createTask(unique, "COMPLETE");
+        aiGenerationTaskService.executeTask(created.taskId(), WORKSPACE_CODE);
+        AiGenerationTaskResponse result = aiGenerationTaskService.getTask(created.taskId(), WORKSPACE_CODE);
+        assertThat(result.reviewStatus()).isEqualTo("FAILED");
+        assertThat(result.generatedCases()).hasSize(2);
+        assertThat(result.errorMessage()).contains("不完整");
     }
 
     private void upsertConfig(String roleType, Long providerId, String model, String promptTemplate) {

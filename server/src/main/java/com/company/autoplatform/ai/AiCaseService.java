@@ -27,7 +27,6 @@ public class AiCaseService {
     public static final int FINAL_MAX_CASES = 500;
     private static final int GENERATION_CAPACITY_PARTS = 4;
     private static final int TOTAL_CAPACITY_PARTS = 5;
-    private static final int MAX_SELF_SUPPLEMENT_CASES = 20;
 
     private final AiCaseConfigDomainService aiCaseConfigDomainService;
     private final AiRequirementAssetDomainService aiRequirementAssetDomainService;
@@ -195,20 +194,23 @@ public class AiCaseService {
         StringBuilder rawOutput = new StringBuilder();
         StringBuilder lineBuffer = new StringBuilder();
         Consumer<String> deltaConsumer = delta -> {
+            AiStreamDiagnostics.content(delta);
             rawOutput.append(delta);
             lineBuffer.append(delta);
-            aiResponseParsingSupport.drainCompleteJsonValues(lineBuffer, value -> aiResponseParsingSupport.emitGeneratedCaseValue(
-                    value,
-                    effectiveMaxCases,
-                    generatedCases,
-                    warnings,
-                    invalidCases,
-                    rawOutput,
-                    caseConsumer
-            ));
-            if (generatedCases.size() >= effectiveMaxCases) {
-                throw new AiStreamLimitReachedException();
-            }
+            try {
+                aiResponseParsingSupport.drainCompleteJsonValues(lineBuffer, value -> aiResponseParsingSupport.emitGeneratedCaseValue(
+                        value,
+                        effectiveMaxCases,
+                        generatedCases,
+                        warnings,
+                        invalidCases,
+                        rawOutput,
+                        caseConsumer
+                ));
+                if (generatedCases.size() >= effectiveMaxCases) {
+                    throw new AiStreamLimitReachedException();
+                }
+            } finally { AiStreamDiagnostics.pending(lineBuffer.toString()); }
         };
 
         AiProviderClient.StreamContentResult streamResult;
@@ -229,6 +231,7 @@ public class AiCaseService {
                 throw exception;
             }
             ignoredImages = true;
+            AiStreamDiagnostics.attempt("IMAGE_INPUT_UNSUPPORTED");
             rawOutput.setLength(0);
             lineBuffer.setLength(0);
             generatedCases.clear();
@@ -249,6 +252,8 @@ public class AiCaseService {
         }
         String finalContent = streamResult.content();
         if (streamResult.fallbackToComplete()) {
+            AiStreamDiagnostics.attempt("COMPLETE_OUTPUT_FALLBACK");
+            AiStreamDiagnostics.content(finalContent);
             generatedCases.clear();
             warnings.clear();
             invalidCases.clear();
@@ -337,96 +342,11 @@ public class AiCaseService {
             AiGeneratedCasesResult initialResult,
             int effectiveMaxCases
     ) {
-        List<String> warnings = new ArrayList<>(initialResult.warnings() == null ? List.of() : initialResult.warnings());
-        List<AiInvalidCaseItem> invalidCases = new ArrayList<>(initialResult.invalidCases() == null ? List.of() : initialResult.invalidCases());
-        List<GeneratedAiCaseItem> initialCases = new ArrayList<>(initialResult.generatedCases() == null ? List.of() : initialResult.generatedCases());
-        AiGenerationSelfCheckResult selfCheck;
-        try {
-            selfCheck = aiProviderClient.selfCheck(
-                    resolved.profileWithMaxCases(effectiveMaxCases),
-                    resolved.apiKey(),
-                    aiPromptBuilderSupport.buildGenerationSelfCheckPrompt(config, request, initialCases)
-            );
-        } catch (RuntimeException exception) {
-            warnings.add("生成模型自检失败，已保留初始生成用例：" + safeMessage(exception));
-            AiGenerationCaseQualityService.QualityResult quality = generationCaseQualityService
-                    .validateNormalizeAndDeduplicate(initialCases, invalidCases, effectiveMaxCases);
-            warnings.addAll(quality.warnings());
-            return new GenerationEnhancement(
-                    quality.cases(),
-                    warnings,
-                    quality.invalidCases(),
-                    AiGenerationSelfCheckResult.failed(exception.getMessage()),
-                    List.of()
-            );
-        }
-
-        if (selfCheck == null || !selfCheck.structured()) {
-            warnings.add("生成模型自检返回内容无法解析，已保留初始生成用例。");
-        }
-
-        List<GeneratedAiCaseItem> selfSupplementCases = new ArrayList<>();
-        List<String> missingGaps = selfCheck == null ? List.of() : selfCheck.missingCoverageGaps();
-        int supplementLimit = Math.min(
-                MAX_SELF_SUPPLEMENT_CASES,
-                Math.max(0, effectiveMaxCases - initialCases.size())
-        );
-        if (selfCheck != null && selfCheck.structured() && !selfCheck.complete()
-                && !missingGaps.isEmpty() && supplementLimit > 0) {
-            try {
-                AiGeneratedCasesResult supplement = aiProviderClient.generateSupplement(
-                        resolved.profileWithMaxCases(supplementLimit),
-                        resolved.apiKey(),
-                        aiPromptBuilderSupport.buildGenerationSupplementPrompt(
-                                config,
-                                request,
-                                initialCases,
-                                missingGaps,
-                                selfCheck.supplementGuidance()
-                        ),
-                        supplementLimit
-                );
-                for (GeneratedAiCaseItem item : supplement.generatedCases() == null ? List.<GeneratedAiCaseItem>of() : supplement.generatedCases()) {
-                    if (selfSupplementCases.size() >= supplementLimit) {
-                        break;
-                    }
-                    selfSupplementCases.add(withAiSource(item, "SELF_REVIEW_SUPPLEMENT"));
-                }
-                warnings.addAll(supplement.warnings() == null ? List.of() : supplement.warnings());
-                invalidCases.addAll(supplement.invalidCases() == null ? List.of() : supplement.invalidCases());
-            } catch (RuntimeException exception) {
-                warnings.add("生成模型自补失败，已保留初始生成用例：" + safeMessage(exception));
-            }
-        }
-
-        List<GeneratedAiCaseItem> combined = new ArrayList<>(initialCases);
-        combined.addAll(selfSupplementCases);
         AiGenerationCaseQualityService.QualityResult quality = generationCaseQualityService
-                .validateNormalizeAndDeduplicate(combined, invalidCases, effectiveMaxCases);
+                .validateNormalizeAndDeduplicate(initialResult.generatedCases(), initialResult.invalidCases(), effectiveMaxCases);
+        List<String> warnings = new ArrayList<>(initialResult.warnings() == null ? List.of() : initialResult.warnings());
         warnings.addAll(quality.warnings());
-        return new GenerationEnhancement(
-                quality.cases(),
-                warnings,
-                quality.invalidCases(),
-                selfCheck,
-                selfSupplementCases
-        );
-    }
-
-    private GeneratedAiCaseItem withAiSource(GeneratedAiCaseItem item, String aiSource) {
-        return new GeneratedAiCaseItem(
-                item.title(), item.caseType(), item.priority(), item.precondition(), item.steps(), item.expectedResult(),
-                item.riskNotes(), item.testAngle(), item.generationReason(), item.requirementEvidence(), aiSource,
-                item.reviewComment(), item.optimizationReason(), item.supplementReason(), item.coverageGap(),
-                item.originalCaseSnapshot(), item.warnings(), item.aiReviewStatus(), item.aiReviewSummary(),
-                item.manualEdited(), item.manualEditedByName(), item.manualEditedAt()
-        );
-    }
-
-    private String safeMessage(RuntimeException exception) {
-        return exception.getMessage() == null || exception.getMessage().isBlank()
-                ? exception.getClass().getSimpleName()
-                : exception.getMessage();
+        return new GenerationEnhancement(quality.cases(), warnings, quality.invalidCases(), null, List.of());
     }
 
     private record GenerationEnhancement(
@@ -516,12 +436,10 @@ public class AiCaseService {
     public ReviewedCasesResult reviewGeneratedCasesBatch(String headerWorkspaceCode, ReviewAiGeneratedCasesRequest request) {
         ResolvedRoleConfig resolved = aiCaseConfigDomainService.requireResolvedRoleConfig(ROLE_REVIEWER);
         AiCaseConfigEntity config = resolved.roleConfig();
-        String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, false, false);
-        return new ReviewedCasesResult(
-                resolved.profile().provider(),
-                config.getModel(),
-                aiProviderClient.review(resolved.profile(), resolved.apiKey(), prompt)
-        );
+        String prompt = aiPromptBuilderSupport.buildGeneratedCasesReviewPrompt(config, request, false, true);
+        AiReviewResult result = aiProviderClient.review(resolved.profile(), resolved.apiKey(), prompt);
+        aiResponseParsingSupport.validateReviewCompleteness(result, request.generatedCases().size(), result.rawContent());
+        return new ReviewedCasesResult(resolved.profile().provider(), config.getModel(), result);
     }
 
     private AiReviewResult reviewGeneratedCases(
@@ -572,15 +490,18 @@ public class AiCaseService {
         StringBuilder rawOutput = new StringBuilder();
         StringBuilder jsonBuffer = new StringBuilder();
         Consumer<String> deltaConsumer = delta -> {
+            AiStreamDiagnostics.content(delta);
             rawOutput.append(delta);
             jsonBuffer.append(delta);
-            aiResponseParsingSupport.drainCompleteJsonValues(jsonBuffer, value -> aiResponseParsingSupport.emitReviewValue(
-                    value,
-                    request.generatedCases().size(),
-                    rawOutput,
-                    updates,
-                    reviewConsumer
-            ));
+            try {
+                aiResponseParsingSupport.drainCompleteJsonValues(jsonBuffer, value -> aiResponseParsingSupport.emitReviewValue(
+                        value,
+                        request.generatedCases().size(),
+                        rawOutput,
+                        updates,
+                        reviewConsumer
+                ));
+            } finally { AiStreamDiagnostics.pending(jsonBuffer.toString()); }
         };
 
         AiProviderClient.StreamContentResult streamResult = aiProviderClient.streamStructuredContentWithResult(
@@ -594,6 +515,8 @@ public class AiCaseService {
         if (streamResult.fallbackToComplete()) {
             // The failed streaming attempt may contain only partial review objects.
             // The complete response is the sole source of truth in fallback mode.
+            AiStreamDiagnostics.attempt("COMPLETE_OUTPUT_FALLBACK");
+            AiStreamDiagnostics.content(rawContent);
             updates.clear();
             jsonBuffer.setLength(0);
         } else {

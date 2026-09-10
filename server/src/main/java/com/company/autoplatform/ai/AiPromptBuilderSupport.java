@@ -51,6 +51,10 @@ public class AiPromptBuilderSupport {
                 }
             }
         }
+        int maxCases = Math.min(request.maxCases() == null
+                ? (config.getMaxCases() == null ? 200 : config.getMaxCases()) : request.maxCases(), 500);
+        builder.append("[Maximum Cases] ").append(maxCases)
+                .append(". Stop at this limit; prioritize valuable coverage and report remaining gaps when the format supports it.\n");
         builder.append("[Smart Generation Policy]\n");
         builder.append("- Quantity must come from full test-design decomposition, not from padding. Do not fabricate meaningless, duplicate, or hypothetical business scenarios just to reach a number.\n");
         builder.append("- Before writing cases, traverse all relevant coverage dimensions and split every distinguishable valid test point into an independent case: normal flows, exception flows, boundary values, equivalence classes, state transitions, multi-condition combinations/decision tables, error guessing, missing required data, multi-role differences, data dependencies, scheduled-task timing anomalies, third-party interaction exceptions, end-to-end links, non-functional risks, and test data initialization/cleanup.\n");
@@ -172,7 +176,7 @@ public class AiPromptBuilderSupport {
             builder.append("""
                     [Output Requirements]
                     1. Return NDJSON only. Do not return markdown, explanation, JSON array wrappers, or extra prose.
-                    2. You have the full candidate case set above. First evaluate overall coverage, duplicates, gaps, and priorities internally, then output results line by line.
+                    2. Review each candidate against the requirement and emit its decision as soon as ready. Report global gaps only after all existing-case decisions.
                     3. Output one complete JSON object per line and flush it immediately. Use the supplied Candidate Index as caseIndex and review existing cases in ascending caseIndex order.
                     4. Return exactly one decision line for every existing case. Never omit a case and never treat an omitted case as approved.
                     5. Keep APPROVED lines minimal. The exact schema is {"caseIndex":0,"status":"APPROVED"}. Do not repeat case content, reason, summary, score, confidence, comments, or suggestions.
@@ -181,7 +185,7 @@ public class AiPromptBuilderSupport {
                     8. For NOT_RECOMMENDED, return {"caseIndex":0,"status":"NOT_RECOMMENDED","reasonCode":"DUPLICATE|LOW_VALUE|UNEXECUTABLE|MISALIGNED|OTHER","reason":"specific reason"}. Do not return suggestedCase.
                     9. After all decision lines, output exactly one final line: {"type":"SUMMARY","reviewedCount":<number of decision lines>,"unresolvedCoverageGaps":["confirmed global gap"],"result":"APPROVE|REJECT|SUGGEST"}.
                     10. reviewedCount must equal the total number of candidate cases. Only put globally missing coverage in unresolvedCoverageGaps; do not mistake a case that appears later in the supplied candidate set for a gap.
-                    11. Do not output SUPPLEMENTED lines in this review. Coverage supplementation is a separate backend step after SUMMARY.
+                    11. Before SUMMARY, you may output important missing cases as {"status":"SUPPLEMENTED","supplementCase":{...full case fields...},"supplementReason":"specific gap"}. These are new drafts requiring human confirmation, not independently approved cases. Do not pad the count.
                     12. Never state that a suggestion has already been applied. Suggestions are read-only until human confirmation.
                     """);
         } else {
@@ -195,22 +199,11 @@ public class AiPromptBuilderSupport {
                          \"issues\":[\"issue 1\",\"issue 2\"],
                          \"suggestions\":[\"suggestion 1\",\"suggestion 2\"],
                          \"caseDecisions\":[{
-                           \"candidateCaseId\":\"AIC_...\",
                            \"caseIndex\":0,
                            \"reviewStatus\":\"APPROVED|CHANGE_SUGGESTED|CONFIRM_REQUIRED|NOT_RECOMMENDED\",
-                           \"suggestedAction\":\"KEEP|MODIFY|EXCLUDE|MERGE\",
                            \"summary\":\"short summary\",
                            \"reason\":\"specific review reason\",
-                           \"score\":85,
-                           \"confidence\":0.92,
-                           \"coverageComment\":\"coverage judgment\",
-                           \"evidenceComment\":\"evidence judgment\",
-                           \"reviewComment\":\"quality judgment\",
-                           \"coverageGap\":\"related gap if any\",
-                           \"suggestedCase\":{ \"title\":\"...\", \"caseType\":\"FUNCTION|BOUNDARY|EXCEPTION|REGRESSION\", \"priority\":\"P0|P1|P2|P3\", \"precondition\":\"...\", \"steps\":\"...\", \"expectedResult\":\"...\", \"riskNotes\":\"...\", \"testAngle\":\"...\", \"generationReason\":\"...\", \"requirementEvidence\":\"...\" },
-                           \"mergeTargetCaseIds\":[],
-                           \"sourceVersion\":1,
-                           \"sourceContentHash\":\"sha256...\"
+                           \"suggestedCase\":{ \"title\":\"...\", \"caseType\":\"FUNCTION|BOUNDARY|EXCEPTION|REGRESSION\", \"priority\":\"P0|P1|P2|P3\", \"precondition\":\"...\", \"steps\":\"...\", \"expectedResult\":\"...\", \"riskNotes\":\"...\", \"testAngle\":\"...\", \"generationReason\":\"...\", \"requirementEvidence\":\"...\" }
                          }],
                          \"supplementCases\":[{
                            \"title\":\"...\",
@@ -228,7 +221,7 @@ public class AiPromptBuilderSupport {
                          }],
                          \"unresolvedCoverageGaps\":[\"gap still not covered because of ambiguity or final limit\"]
                        }
-                    3. Use issues to point out missing coverage, duplicates, ambiguity, or non-executable content.
+                    3. Return exactly one caseDecision per candidate. For APPROVED, return only caseIndex and reviewStatus. Include suggestedCase only for CHANGE_SUGGESTED. Use issues for specific gaps or ambiguity.
                     4. Review must provide suggestions for useful weak cases and supplement important missing cases. It must never apply a suggestion or claim that candidate content has been changed.
                     5. Do not add low-value supplement cases. Total final cases should stay within the product limit.
                     """);

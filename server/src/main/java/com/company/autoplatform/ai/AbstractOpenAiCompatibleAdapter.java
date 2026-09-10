@@ -358,8 +358,8 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
             throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
-                .timeout(Duration.ofSeconds(resolveRequestTimeoutSeconds(requestTimeoutSeconds)))
                 .header("Content-Type", "application/json");
+        applyRequestTimeout(builder, requestTimeoutSeconds);
         applyAuthHeader(builder, apiKey);
         if ("GET".equalsIgnoreCase(method)) {
             return httpClient.send(builder.GET().build(), HttpResponse.BodyHandlers.ofString());
@@ -378,14 +378,22 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
     ) throws IOException, InterruptedException {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
-                .timeout(Duration.ofSeconds(resolveRequestTimeoutSeconds(requestTimeoutSeconds)))
                 .header("Content-Type", "application/json")
                 .header("Accept", "text/event-stream");
+        applyRequestTimeout(builder, requestTimeoutSeconds);
         applyAuthHeader(builder, apiKey);
         return httpClient.send(
                 builder.POST(HttpRequest.BodyPublishers.ofString(requestBody == null ? "" : requestBody)).build(),
                 HttpResponse.BodyHandlers.ofLines()
         );
+    }
+
+    private void applyRequestTimeout(HttpRequest.Builder builder, Integer requestTimeoutSeconds) {
+        // Generation tasks own cancellation and timing, including non-streaming requests.
+        // A provider's shorter timeout must not cut off a healthy task or its first response.
+        if (AiTaskTimeout.current() == null) {
+            builder.timeout(Duration.ofSeconds(resolveRequestTimeoutSeconds(requestTimeoutSeconds)));
+        }
     }
 
     protected long resolveRequestTimeoutSeconds(Integer requestTimeoutSeconds) {
@@ -552,24 +560,7 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
             Consumer<String> deltaConsumer,
             Integer idleTimeoutSeconds
     ) throws IOException {
-        StringBuilder builder = new StringBuilder();
-        try (lines) {
-            var iterator = lines.iterator();
-            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-                while (nextStreamLine(iterator, executor, idleTimeoutSeconds)) {
-                    String rawLine = iterator.next();
-                    String delta = extractChatStreamingDelta(rawLine);
-                    if (delta == null || delta.isEmpty()) {
-                        continue;
-                    }
-                    builder.append(delta);
-                    if (deltaConsumer != null) {
-                        deltaConsumer.accept(delta);
-                    }
-                }
-            }
-        }
-        return builder.toString();
+        return consumeStreamingLines(lines, deltaConsumer, idleTimeoutSeconds, false);
     }
 
     protected String extractChatStreamingDelta(String rawLine) throws IOException {
@@ -593,53 +584,76 @@ abstract class AbstractOpenAiCompatibleAdapter implements AiProtocolAdapter {
         return extractContent(contentNode);
     }
 
-    protected String consumeResponsesStreamingLines(
-            java.util.stream.Stream<String> lines,
-            Consumer<String> deltaConsumer,
-            Integer idleTimeoutSeconds
-    ) throws IOException {
-        StringBuilder builder = new StringBuilder();
-        try (lines) {
-            var iterator = lines.iterator();
-            try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-                while (nextStreamLine(iterator, executor, idleTimeoutSeconds)) {
-                    String rawLine = iterator.next();
-                    String delta = extractResponsesStreamingDelta(rawLine);
-                    if (delta == null || delta.isEmpty()) {
-                        continue;
-                    }
-                    builder.append(delta);
-                    if (deltaConsumer != null) {
-                        deltaConsumer.accept(delta);
-                    }
-                }
-            }
-        }
-        return builder.toString();
+    protected String consumeResponsesStreamingLines(java.util.stream.Stream<String> lines,
+            Consumer<String> deltaConsumer, Integer idleTimeoutSeconds) throws IOException {
+        return consumeStreamingLines(lines, deltaConsumer, idleTimeoutSeconds, true);
     }
 
-    private boolean nextStreamLine(
-            java.util.Iterator<String> iterator,
-            ExecutorService executor,
-            Integer idleTimeoutSeconds
-    ) throws IOException {
-        Future<Boolean> next = executor.submit(iterator::hasNext);
+    private String consumeStreamingLines(java.util.stream.Stream<String> lines, Consumer<String> deltaConsumer,
+            Integer idleTimeoutSeconds, boolean responses) throws IOException {
+        StringBuilder content = new StringBuilder();
+        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        Future<Boolean> pending = null;
+        long idleNanos = TimeUnit.SECONDS.toNanos(resolveRequestTimeoutSeconds(idleTimeoutSeconds));
+        long lastContentAt = System.nanoTime();
+        AiTaskTimeout taskTimeout = AiTaskTimeout.current();
         try {
-            return next.get(resolveRequestTimeoutSeconds(idleTimeoutSeconds), TimeUnit.SECONDS);
+            var iterator = lines.iterator();
+            while (true) {
+                if (Thread.currentThread().isInterrupted()) throw new BadRequestException("AI 提供方流式读取被中断");
+                long remaining = taskTimeout == null
+                        ? idleNanos - (System.nanoTime() - lastContentAt) : taskTimeout.remainingNanos();
+                if (remaining <= 0) {
+                    if (taskTimeout != null) throw taskTimeout.failure();
+                    throw new BadRequestException("AI 提供方流式响应有效输出空闲超时");
+                }
+                pending = executor.submit(iterator::hasNext);
+                if (!pending.get(remaining, TimeUnit.NANOSECONDS)) break;
+                String line = iterator.next();
+                if (isTerminalStreamLine(line, responses)) break;
+                String delta = responses ? extractResponsesStreamingDelta(line) : extractChatStreamingDelta(line);
+                if (delta == null || delta.isEmpty()) continue;
+                lastContentAt = System.nanoTime();
+                content.append(delta);
+                if (content.length() > 1_000_000) throw new BadRequestException("AI 输出超过安全长度，已保留已解析内容");
+                if (deltaConsumer != null) deltaConsumer.accept(delta);
+            }
+            return content.toString();
         } catch (TimeoutException exception) {
-            next.cancel(true);
-            throw new BadRequestException("AI 提供方流式响应空闲超时");
+            if (taskTimeout != null) throw taskTimeout.failure();
+            throw new BadRequestException("AI 提供方流式响应有效输出空闲超时");
         } catch (InterruptedException exception) {
-            next.cancel(true);
             Thread.currentThread().interrupt();
             throw new BadRequestException("AI 提供方流式读取被中断");
         } catch (ExecutionException exception) {
-            Throwable cause = exception.getCause();
-            if (cause instanceof RuntimeException runtimeException) {
-                throw runtimeException;
-            }
-            throw new IOException("AI 提供方流式读取失败", cause);
+            if (exception.getCause() instanceof RuntimeException runtime) throw runtime;
+            throw new IOException("AI 提供方流式读取失败", exception.getCause());
+        } finally {
+            if (pending != null) pending.cancel(true);
+            // Close the body before releasing the executor: an idle socket read may ignore interruption.
+            try { lines.close(); } finally { executor.shutdownNow(); }
         }
+    }
+
+    private boolean isTerminalStreamLine(String rawLine, boolean responses) throws IOException {
+        String line = rawLine == null ? "" : rawLine.trim();
+        if (!line.startsWith("data:")) {
+            if (!line.isBlank()) AiStreamDiagnostics.wire(0, null);
+            return false;
+        }
+        String payload = line.substring(5).trim();
+        if ("[DONE]".equals(payload)) { AiStreamDiagnostics.wire(0, "DONE"); return true; }
+        if (payload.isEmpty()) return false;
+        JsonNode event = objectMapper.readTree(payload);
+        String type = event.path("type").asText("");
+        String finishReason = event.path("choices").path(0).path("finish_reason").asText("");
+        AiStreamDiagnostics.wire(event.path("choices").path(0).path("delta").path("reasoning_content").asText("").length(),
+                finishReason.isBlank() ? ("response.completed".equals(type) ? type : null) : finishReason);
+        if (event.has("error") || "response.failed".equals(type) || "response.incomplete".equals(type)
+                || "length".equals(finishReason) || "content_filter".equals(finishReason)) {
+            throw new BadRequestException("AI 响应未正常完成，已保留已解析内容");
+        }
+        return responses && "response.completed".equals(type);
     }
 
     protected String extractResponsesStreamingDelta(String rawLine) throws IOException {

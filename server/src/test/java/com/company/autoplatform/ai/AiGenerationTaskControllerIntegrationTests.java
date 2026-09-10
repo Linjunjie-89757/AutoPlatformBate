@@ -51,6 +51,17 @@ class AiGenerationTaskControllerIntegrationTests extends IntegrationTestSupport 
     @MockitoBean
     private AiGenerationTaskRunner aiGenerationTaskRunner;
 
+    @MockitoBean
+    private AiCaseConfigDomainService aiCaseConfigDomainService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void configureGeneratorLimit() {
+        AiCaseConfigEntity config = new AiCaseConfigEntity();
+        config.setMaxCases(200);
+        org.mockito.Mockito.when(aiCaseConfigDomainService.requireResolvedRoleConfig("CASE_GENERATOR"))
+                .thenReturn(new AiCaseConfigDomainService.ResolvedRoleConfig(config, null, null, null, null, null));
+    }
+
     @Test
     void taskCreateListGetUpdateCancelRetryAndDeleteKeepMainFlow() throws Exception {
         reset(aiProviderClient, aiGenerationTaskRunner);

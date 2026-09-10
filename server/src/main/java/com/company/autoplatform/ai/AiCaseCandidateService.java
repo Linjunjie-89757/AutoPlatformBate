@@ -216,6 +216,7 @@ public class AiCaseCandidateService {
             Integer sourceVersion,
             String sourceContentHash
     ) {
+        if (Thread.currentThread().isInterrupted()) return false;
         AiCaseCandidateEntity candidate = findReviewTarget(taskId, candidateCaseId, displayIndex);
         if (candidate == null) {
             return false;

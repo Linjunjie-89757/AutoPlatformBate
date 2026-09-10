@@ -60,7 +60,7 @@ public class AiGenerationTaskExecutionStateSupport {
         entity.setFailedStage(null);
         entity.setErrorCode(null);
         entity.setCurrentStep(3);
-        entity.setStepMessage("正在重试失败的 AI 评审批次。");
+        entity.setStepMessage("正在重新评审已有用例。");
         entity.setErrorMessage(null);
         entity.setFinishedAt(null);
         entity.setUpdatedAt(LocalDateTime.now());
