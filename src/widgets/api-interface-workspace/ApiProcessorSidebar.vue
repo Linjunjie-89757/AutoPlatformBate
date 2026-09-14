@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, CopyDocument, Delete } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ChevronDown, Plus } from '@lucide/vue'
 
 import type { ApiProcessorOption, ApiProcessorPanelRow } from './apiProcessorTypes'
@@ -16,8 +16,6 @@ const emit = defineEmits<{
   add: [command: string | number | object]
   select: [processor: ApiProcessorPanelRow]
   move: [index: number, direction: -1 | 1]
-  copy: [index: number]
-  remove: [index: number]
   dirty: []
 }>()
 
@@ -94,12 +92,6 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
           </button>
           <button type="button" class="api-processor-list-action" :disabled="index === rows.length - 1" aria-label="下移" title="下移" @click.stop="emit('move', index, 1)">
             <el-icon><ArrowDown /></el-icon>
-          </button>
-          <button type="button" class="api-processor-list-action" aria-label="复制" title="复制" @click.stop="emit('copy', index)">
-            <el-icon><CopyDocument /></el-icon>
-          </button>
-          <button type="button" class="api-processor-list-action is-danger" aria-label="删除" title="删除" @click.stop="emit('remove', index)">
-            <el-icon><Delete /></el-icon>
           </button>
         </span>
       </button>

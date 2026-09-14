@@ -366,6 +366,22 @@ function getActualResult(value: DefectDetail | null) {
   return readSourceContextText(value, ['actualResult', 'actual', 'actualBehavior'])
 }
 
+const defectSourceTypeLabels: Record<string, string> = {
+  MANUAL: '手动发现',
+  CASE: '用例执行',
+  REPORT: '测试报告',
+  AI_DETECTION: 'AI 检测',
+  CODE_REVIEW: '代码审查',
+}
+
+function getSourceTypeLabel(value: DefectDetail | null) {
+  if (!value?.sourceType) {
+    return '-'
+  }
+
+  return defectSourceTypeLabels[value.sourceType] || value.sourceType
+}
+
 function isImageAttachment(attachment: DefectAttachment) {
   if (attachment.contentType?.startsWith('image/')) {
     return true
@@ -855,20 +871,20 @@ onBeforeUnmount(() => {
           <section v-show="activeTab === 'detail'" class="defect-detail-drawer__pane">
             <dl class="defect-detail-drawer__figma-meta">
               <div>
-                <dt>所属工作空间</dt>
-                <dd>{{ displayText(detail.workspaceName || detail.workspaceCode) }}</dd>
+                <dt>发现环境</dt>
+                <dd>{{ displayText(detail.environmentName) }}</dd>
               </div>
               <div>
-                <dt>负责人</dt>
-                <dd>{{ displayText(detail.assigneeName) }}</dd>
+                <dt>影响版本</dt>
+                <dd>{{ displayText(detail.versionName) }}</dd>
               </div>
               <div>
-                <dt>创建人</dt>
-                <dd>{{ displayText(detail.reporterName) }}</dd>
+                <dt>Bug 类型</dt>
+                <dd>{{ displayText(detail.bugType) }}</dd>
               </div>
               <div>
-                <dt>创建时间</dt>
-                <dd>{{ formatDefectDateTime(detail.createdAt) }}</dd>
+                <dt>来源类型</dt>
+                <dd>{{ getSourceTypeLabel(detail) }}</dd>
               </div>
               <div>
                 <dt>最后更新</dt>

@@ -67,8 +67,6 @@ function activeIndex() {
         @add="emit('addFromCommand', stage, $event)"
         @select="emit('select', $event)"
         @move="(index, direction) => emit('move', stage, index, direction)"
-        @copy="emit('copy', stage, $event)"
-        @remove="emit('remove', stage, $event)"
         @dirty="emit('dirty')"
       />
       <ApiProcessorDetail

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowDown, ArrowUp, CopyDocument, Delete, MagicStick } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, MagicStick } from '@element-plus/icons-vue'
 import { ChevronDown, Plus, Zap } from '@lucide/vue'
 import ApiCodeEditor from './ApiCodeEditor.vue'
 
@@ -177,12 +177,6 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
             </button>
             <button type="button" class="api-assertion-ghost-action" :disabled="index === rows.length - 1" aria-label="下移" title="下移" @click.stop="emit('move', index, 1)">
               <el-icon><ArrowDown /></el-icon>
-            </button>
-            <button type="button" class="api-assertion-ghost-action" aria-label="复制" title="复制" @click.stop="emit('copy', index)">
-              <el-icon><CopyDocument /></el-icon>
-            </button>
-            <button type="button" class="api-assertion-ghost-action is-danger" aria-label="删除" title="删除" @click.stop="emit('remove', index)">
-              <el-icon><Delete /></el-icon>
             </button>
           </span>
         </button>
