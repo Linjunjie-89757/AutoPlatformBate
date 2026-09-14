@@ -14,6 +14,7 @@ import {
   figmaConfigNotificationIcons,
   type FigmaConfigNotificationChannelIcon,
 } from '@/shared/assets/figma-icons'
+import AppSwitch from '@/shared/ui/app-switch/AppSwitch.vue'
 
 type DialogMode = 'create' | 'edit'
 
@@ -223,12 +224,10 @@ function formatTime(value: string | null) {
             <strong>启用此渠道</strong>
             <span>停用后该渠道将不再接收任何通知</span>
           </div>
-          <button
-            type="button"
-            class="notification-rule-toggle"
-            :class="{ 'is-on': channelForm.status === 1 }"
-            :aria-pressed="channelForm.status === 1"
-            @click="emit('toggleChannelStatus')"
+          <AppSwitch
+            :model-value="channelForm.status === 1"
+            label="启用此渠道"
+            @update:model-value="emit('toggleChannelStatus')"
           />
         </article>
 
@@ -339,12 +338,10 @@ function formatTime(value: string | null) {
         <div class="notification-rule-drawer__divider" />
         <article class="notification-rule-content-card">
           <div><strong>启用此规则</strong><span>停用后该规则不会触发任何通知</span></div>
-          <button
-            type="button"
-            class="notification-rule-toggle"
-            :class="{ 'is-on': ruleForm.status === 1 }"
-            :aria-pressed="ruleForm.status === 1"
-            @click="emit('toggleRuleStatus')"
+          <AppSwitch
+            :model-value="ruleForm.status === 1"
+            label="启用此规则"
+            @update:model-value="emit('toggleRuleStatus')"
           />
         </article>
       </div>

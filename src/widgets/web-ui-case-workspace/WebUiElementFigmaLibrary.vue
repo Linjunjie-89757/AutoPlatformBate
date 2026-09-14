@@ -28,6 +28,7 @@ import {
   useTableColumnSettings,
 } from '@/shared/lib/table'
 import { confirmDelete } from '@/shared/ui'
+import AppSwitch from '@/shared/ui/app-switch/AppSwitch.vue'
 import {
   AppFigmaActionColumn,
   getAppFigmaActionColumnWidth,
@@ -759,7 +760,7 @@ function confidenceClass(confidence: number) {
         <aside class="figma-elements__capture-side">
           <section class="figma-elements__capture-url"><label>目标页面地址</label><input v-model="captureUrl" /><p>确保测试环境 / Runner 可访问该地址</p></section>
           <section class="figma-elements__capture-scope"><label>采集范围</label><label v-for="scope in ['全页可操作元素', '仅表单元素', '按钮与链接']" :key="scope" class="figma-elements__scope-option" :class="{ 'is-active': captureScope === scope }"><input v-model="captureScope" type="radio" :value="scope" /><span>{{ scope }}</span></label></section>
-          <section class="figma-elements__advanced"><label>高级选项</label><div><span>包含 iframe 内元素</span><button class="figma-elements__iframe-toggle" :class="{ 'is-active': includeIframe }" type="button" :aria-pressed="includeIframe" @click="includeIframe = !includeIframe"><i /></button></div><div><span>等待动态渲染 (ms)</span><input v-model.number="waitForIdle" type="number" /></div><div><span>最大采集元素数</span><input v-model.number="maxElements" type="number" /></div></section>
+          <section class="figma-elements__advanced"><label>高级选项</label><div><span>包含 iframe 内元素</span><AppSwitch v-model="includeIframe" label="包含 iframe 内元素" active-color="#14c9c1" /></div><div><span>等待动态渲染 (ms)</span><input v-model.number="waitForIdle" type="number" /></div><div><span>最大采集元素数</span><input v-model.number="maxElements" type="number" /></div></section>
           <button class="figma-elements__start" :disabled="state === 'scanning'" type="button" @click="startCapture"><Sparkles />{{ state === 'scanning' ? 'AI 采集中...' : '开始 AI 采集' }}</button>
           <section v-if="state !== 'config'" class="figma-elements__progress"><header><b>采集进度</b><small>{{ state === 'result' ? '已完成' : scanSteps[scanStep] }}</small></header><div v-for="(step, index) in scanSteps" :key="step" :class="{ 'is-done': state === 'result' || index < scanStep, 'is-current': state === 'scanning' && index === scanStep }"><span>{{ state === 'result' || index < scanStep ? '✓' : index + 1 }}</span>{{ step }}</div></section>
           <section v-if="state === 'result'" class="figma-elements__capture-stats"><div class="is-high"><strong>{{ highCount }}</strong><span>高置信度</span></div><div class="is-medium"><strong>{{ mediumCount }}</strong><span>中置信度</span></div><div class="is-low"><strong>{{ lowCount }}</strong><span>低置信度</span></div></section>
@@ -850,10 +851,6 @@ function confidenceClass(confidence: number) {
 .figma-elements__start { background:linear-gradient(135deg,#0fc6c2,#165dff); }
 .figma-elements__capture-side { width:300px; flex-basis:300px; }
 .figma-elements__capture-head h1 { color:#1d2129; line-height:20px; }
-.figma-elements__iframe-toggle { position:relative; width:32px; height:16px; padding:0; border:0; border-radius:999px; background:#c9cdd4; transition:background-color .2s ease; }
-.figma-elements__iframe-toggle i { position:absolute; top:2px; left:2px; display:block; width:12px; height:12px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgb(29 33 41 / 16%); transition:left .2s ease; }
-.figma-elements__iframe-toggle.is-active { background:#165dff; }
-.figma-elements__iframe-toggle.is-active i { left:18px; }
 .figma-elements__candidate-scroll article { min-height:0; padding:16px 20px; border-radius:16px; }
 .figma-elements__confidence-wrap { display:flex; flex:0 0 48px; flex-direction:column; align-items:center; padding-top:2px; }
 .figma-elements__confidence { flex:0 0 48px; align-content:normal; place-items:center; }

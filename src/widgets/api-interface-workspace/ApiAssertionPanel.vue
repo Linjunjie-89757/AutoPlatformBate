@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, MagicStick } from '@element-plus/icons-vue'
 import { ChevronDown, Plus, Zap } from '@lucide/vue'
+
+import { AppSwitch } from '@/shared/ui'
+
 import ApiCodeEditor from './ApiCodeEditor.vue'
 
 interface AssertionOption {
@@ -151,14 +154,12 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
           @click="emit('select', assertion)"
         >
           <span class="api-assertion-list-item__main">
-            <span
-              :class="['api-figma-switch', { 'is-on': assertion.enabled !== false }]"
-              role="switch"
-              :aria-checked="assertion.enabled !== false"
-              @click.stop="toggleAssertion(assertion)"
-            >
-              <span></span>
-            </span>
+            <AppSwitch
+              :model-value="assertion.enabled !== false"
+              :label="assertion.enabled === false ? '启用断言' : '停用断言'"
+              @click.stop
+              @update:model-value="toggleAssertion(assertion)"
+            />
             <span class="api-assertion-list-copy">
               <span class="api-assertion-list-row">
                 <span
@@ -193,14 +194,11 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
             <button type="button" class="api-row-remove" @click="emit('remove', activeIndex(rows, activeAssertion))">删除</button>
           </div>
           <label class="api-figma-enable">
-            <span
-              :class="['api-figma-switch', { 'is-on': activeAssertion.enabled !== false }]"
-              role="switch"
-              :aria-checked="activeAssertion.enabled !== false"
-              @click="toggleAssertion(activeAssertion)"
-            >
-              <span></span>
-            </span>
+            <AppSwitch
+              :model-value="activeAssertion.enabled !== false"
+              :label="activeAssertion.enabled === false ? '启用断言' : '停用断言'"
+              @update:model-value="toggleAssertion(activeAssertion)"
+            />
             <em>启用</em>
           </label>
         </div>

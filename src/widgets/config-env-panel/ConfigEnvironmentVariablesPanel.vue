@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, ChevronRight, Edit2 as Edit, Eye, Minus, Plus, Tras
 import type { ParamSetItem } from '@/entities/config'
 import type { ConfigEnvLocalVariableForm } from '@/features/config-env-create-edit'
 import { parseWebUiVariables } from '@/features/config-param-create-edit'
-import { AppFigmaSwitch } from '@/shared/ui'
+import { AppSwitch } from '@/shared/ui'
 
 defineProps<{
   variableSets: ParamSetItem[]
@@ -56,7 +56,7 @@ const emit = defineEmits<{
             <div><strong>{{ item.paramName }}</strong><span>{{ scopeLabel(item) }}</span><span v-if="hasSensitive(item)" class="is-sensitive">含敏感变量</span></div>
             <p>{{ parseWebUiVariables(item.contentJson).length }} 个变量 <i>·</i> <code>{{ versionLabel(item) }}</code></p>
           </div>
-          <AppFigmaSwitch :model-value="isEnabled(item)" :label="isEnabled(item) ? '停用变量集' : '启用变量集'" :title="isEnabled(item) ? '停用变量集' : '启用变量集'" @update:model-value="emit('toggleSet', item)" />
+          <AppSwitch :model-value="isEnabled(item)" :label="isEnabled(item) ? '停用变量集' : '启用变量集'" :title="isEnabled(item) ? '停用变量集' : '启用变量集'" @update:model-value="emit('toggleSet', item)" />
           <span class="figma-env__variable-order-actions">
             <button type="button" title="上移" :disabled="index === 0" @click="emit('moveSet', index, -1)"><el-icon><ArrowUp /></el-icon></button>
             <button type="button" title="下移" :disabled="index === variableSets.length - 1" @click="emit('moveSet', index, 1)"><el-icon><ArrowDown /></el-icon></button>
@@ -88,7 +88,7 @@ const emit = defineEmits<{
               <td><code :class="{ 'is-masked': variable.sensitive }">{{ variable.sensitive ? '••••••••' : variable.value }}</code></td>
               <td><span>{{ variable.valueType || (variable.sensitive ? 'secret' : 'string') }}</span></td>
               <td>{{ variable.description || '—' }}</td>
-              <td><AppFigmaSwitch :model-value="variable.enabled !== false" :label="variable.enabled === false ? '启用变量' : '停用变量'" :title="variable.enabled === false ? '启用变量' : '停用变量'" @update:model-value="emit('toggleLocal', index)" /></td>
+              <td><AppSwitch :model-value="variable.enabled !== false" :label="variable.enabled === false ? '启用变量' : '停用变量'" :title="variable.enabled === false ? '启用变量' : '停用变量'" @update:model-value="emit('toggleLocal', index)" /></td>
               <td><span class="figma-env__row-actions"><button type="button" title="编辑" @click="emit('editLocal', index)"><el-icon><Edit /></el-icon></button><button type="button" title="删除" @click="emit('deleteLocal', index)"><el-icon><Delete /></el-icon></button></span></td>
             </tr>
           </tbody>

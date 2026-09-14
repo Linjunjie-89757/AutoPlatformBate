@@ -23,7 +23,7 @@ import {
   getAppFigmaActionColumnWidth,
 } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
-import { confirmDelete } from '@/shared/ui'
+import { AppSwitch, confirmDelete } from '@/shared/ui'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
@@ -775,16 +775,14 @@ onBeforeUnmount(() => {
                     </span>
                   </span>
 
-                  <button
+                  <AppSwitch
                     v-else-if="column.key === 'enabled'"
-                    type="button"
-                    class="task-switch"
-                    :class="{ 'is-on': item.enabled }"
+                    :model-value="item.enabled"
+                    label="切换任务启用状态"
                     :disabled="!canEditTasks"
-                    :aria-pressed="item.enabled"
                     :title="canEditTasks ? '切换任务启用状态' : '当前角色无编辑权限'"
-                    aria-label="切换任务启用状态"
-                    @click.stop="toggleTaskEnabled"
+                    @click.stop
+                    @change="toggleTaskEnabled"
                   />
 
                   <mark v-else-if="column.key === 'result'" class="task-result-badge" :class="`is-${item.resultTone}`">
@@ -2149,39 +2147,6 @@ onBeforeUnmount(() => {
   line-height: 16.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.task-switch {
-  position: relative;
-  display: inline-block;
-  width: 28px;
-  height: 14px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: #c9cdd4;
-  cursor: pointer;
-  vertical-align: middle;
-}
-
-.task-switch::after {
-  position: absolute;
-  top: 1.75px;
-  left: 1.75px;
-  width: 10.5px;
-  height: 10.5px;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 10%), 0 1px 2px rgb(0 0 0 / 10%);
-  content: '';
-}
-
-.task-switch.is-on {
-  background: #165dff;
-}
-
-.task-switch.is-on::after {
-  left: 14px;
 }
 
 .task-result-badge {

@@ -10,6 +10,7 @@ import {
   formatCaseDateTime,
 } from '@/entities/case'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { AppSwitch } from '@/shared/ui'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
 
 const props = withDefaults(
@@ -285,14 +286,7 @@ watch(
               </button>
             </div>
             <div class="case-review-drawer__auto-next">
-              <button
-                type="button"
-                role="switch"
-                :aria-checked="autoNext"
-                aria-label="自动跳转"
-                :class="{ 'is-on': autoNext }"
-                @click="autoNext = !autoNext"
-              ><span /></button>
+              <AppSwitch v-model="autoNext" label="自动跳转" tone="success" />
               <span>自动跳转</span>
             </div>
           </template>
@@ -720,43 +714,6 @@ watch(
   color: var(--case-review-success);
   font-size: 12px;
   white-space: nowrap;
-}
-
-.case-review-drawer__auto-next button {
-  position: relative;
-  width: 30px;
-  height: 17px;
-  flex: 0 0 30px;
-  padding: 0;
-  border: 0;
-  border-radius: 9px;
-  background: var(--case-review-placeholder);
-  cursor: pointer;
-}
-
-.case-review-drawer__auto-next button.is-on {
-  background: var(--case-review-success);
-}
-
-.case-review-drawer__auto-next button span {
-  position: absolute;
-  top: 1.5px;
-  left: 1.5px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-  transition: left 150ms ease;
-}
-
-.case-review-drawer__auto-next button.is-on span {
-  left: 14px;
-}
-
-.case-review-drawer__auto-next button:focus-visible {
-  outline: 2px solid rgba(22, 93, 255, 0.35);
-  outline-offset: 2px;
 }
 
 .case-review-drawer__footer-spacer {

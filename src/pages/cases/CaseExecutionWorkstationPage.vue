@@ -42,7 +42,7 @@ import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
-import { AttachmentFileWall, confirmAction, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
+import { AppSwitch, AttachmentFileWall, confirmAction, confirmDelete, type AttachmentFileWallItem } from '@/shared/ui'
 import DefectDetailDrawer from '@/widgets/defect-detail-drawer/DefectDetailDrawer.vue'
 
 const route = useRoute()
@@ -1651,16 +1651,7 @@ onBeforeUnmount(() => {
               </button>
               <span class="case-execution-page__footer-separator" />
               <label class="case-execution-page__auto-next">
-                <button
-                  type="button"
-                  class="case-execution-page__auto-switch"
-                  :class="{ 'is-on': autoNext }"
-                  role="switch"
-                  :aria-checked="autoNext"
-                  @click="autoNext = !autoNext"
-                >
-                  <span />
-                </button>
+                <AppSwitch v-model="autoNext" label="自动下一条" tone="success" />
                 <span>自动下一条</span>
               </label>
             </div>
@@ -2943,39 +2934,6 @@ onBeforeUnmount(() => {
   color: var(--exec-text-muted);
   font-size: 12px;
   line-height: 18px;
-}
-
-.case-execution-page__auto-switch {
-  position: relative;
-  width: 32px;
-  height: 16px;
-  flex: 0 0 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: #c9cdd4;
-  cursor: pointer;
-  transition: background 0.16s ease;
-}
-
-.case-execution-page__auto-switch span {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(29, 33, 41, 0.12);
-  transition: transform 0.16s ease;
-}
-
-.case-execution-page__auto-switch.is-on {
-  background: var(--exec-success);
-}
-
-.case-execution-page__auto-switch.is-on span {
-  transform: translateX(16px);
 }
 
 .case-execution-page__status-button.is-blocked {

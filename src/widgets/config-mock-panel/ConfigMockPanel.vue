@@ -22,7 +22,7 @@ import {
   type MockScenarioItem,
 } from '@/entities/config'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { AppFigmaSwitch } from '@/shared/ui'
+import { AppSwitch } from '@/shared/ui'
 import ConfigReferenceDrawer from '@/widgets/config-reference-drawer/ConfigReferenceDrawer.vue'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -421,7 +421,7 @@ onMounted(() => {
         </div>
         <div class="figma-mock-credential-field">
           <div><strong>启用访问凭据</strong><p>启用后调用 Mock 接口需携带 Token，提升安全性</p></div>
-          <AppFigmaSwitch :model-value="false" label="启用访问凭据" disabled title="后端暂未提供应用级 Token 配置字段" />
+          <AppSwitch :model-value="false" label="启用访问凭据" disabled title="后端暂未提供应用级 Token 配置字段" />
         </div>
         <label v-if="appDialogMode === 'edit'">
           <span>状态</span>

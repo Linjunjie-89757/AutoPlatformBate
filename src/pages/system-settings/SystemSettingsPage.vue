@@ -54,7 +54,7 @@ import {
   getAppFigmaActionColumnWidth,
 } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
-import { confirmDelete } from '@/shared/ui'
+import { AppSwitch, confirmDelete } from '@/shared/ui'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
@@ -1271,28 +1271,22 @@ async function savePermissions() {
               <strong>企业微信通知</strong>
               <small>启用后，告警和报告将通过企业微信发送</small>
             </span>
-            <button
-              class="settings-switch"
-              :class="{ 'is-on': workspaceForm.notifyEnabled }"
-              type="button"
-              @click="notifyUnsupportedWorkspaceSetting('企业微信通知')"
-            >
-              <span />
-            </button>
+            <AppSwitch
+              :model-value="workspaceForm.notifyEnabled"
+              label="企业微信通知"
+              @update:model-value="notifyUnsupportedWorkspaceSetting('企业微信通知')"
+            />
           </div>
           <div class="settings-toggle-card">
             <span>
               <strong>AI 能力</strong>
               <small>启用 AI 用例生成、智能分析和调度建议</small>
             </span>
-            <button
-              class="settings-switch"
-              :class="{ 'is-on': workspaceForm.aiEnabled }"
-              type="button"
-              @click="notifyUnsupportedWorkspaceSetting('AI 能力')"
-            >
-              <span />
-            </button>
+            <AppSwitch
+              :model-value="workspaceForm.aiEnabled"
+              label="AI 能力"
+              @update:model-value="notifyUnsupportedWorkspaceSetting('AI 能力')"
+            />
           </div>
           <div class="settings-card-footer">
             <button class="settings-primary-button" type="button" @click="saveWorkspace">
@@ -1835,15 +1829,12 @@ async function savePermissions() {
           </label>
           <div class="settings-toggle-card">
             <span><strong>成员启用</strong></span>
-            <button
-              class="settings-switch"
-              :class="{ 'is-on': inviteForm.active }"
-              type="button"
+            <AppSwitch
+              :model-value="inviteForm.active"
+              label="成员启用"
               :disabled="!canManageCurrentWorkspace || editingUser?.memberId == null || editingUser.memberId < 0 || editingUser.memberType === 'OWNER' || editingUser.accountStatus === 'disabled'"
-              @click="canManageCurrentWorkspace && editingUser?.memberId != null && editingUser.memberId > 0 && editingUser.memberType !== 'OWNER' && editingUser.accountStatus === 'active' && (inviteForm.active = !inviteForm.active)"
-            >
-              <span />
-            </button>
+              @update:model-value="inviteForm.active = $event"
+            />
           </div>
         </div>
         <footer>
@@ -2556,41 +2547,6 @@ async function savePermissions() {
   margin-top: 2px;
   color: #86909c;
   font-size: 12px;
-}
-
-.settings-switch {
-  position: relative;
-  width: 32px;
-  height: 16px;
-  border: 0;
-  border-radius: 999px;
-  background: #c9cdd4;
-  cursor: pointer;
-}
-
-.settings-switch span {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
-  transition: left 160ms ease;
-}
-
-.settings-switch.is-on {
-  background: #165dff;
-}
-
-.settings-switch.is-on span {
-  left: 18px;
-}
-
-.settings-switch:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
 }
 
 .settings-card-footer {

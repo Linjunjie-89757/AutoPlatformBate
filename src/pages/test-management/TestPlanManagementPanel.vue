@@ -40,6 +40,7 @@ import {
   type TestRequirementItem,
 } from '@/entities/test-management'
 import { useWorkspaceContext, workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
+import { AppSwitch } from '@/shared/ui'
 
 import {
   type CaseDirectory,
@@ -1956,8 +1957,8 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
 
           <template v-else>
             <section class="test-plan-management__card test-plan-management__quality-card"><h3>执行完成率与通过率</h3><div><label><span>最低用例执行率（%）</span><input v-model.number="form.minExecuteRate" type="number" min="0" max="100"></label><label><span>最低用例通过率（%）</span><input v-model.number="form.minPassRate" type="number" min="0" max="100"></label></div></section>
-            <section class="test-plan-management__card test-plan-management__quality-card is-tight"><h3>缺陷限制</h3><div class="test-plan-management__switch-row"><div><strong>允许存在 P0 缺陷</strong><small v-if="!form.allowP0">推荐：否</small></div><button type="button" :class="{ 'is-on is-danger': form.allowP0 }" role="switch" :aria-checked="form.allowP0" @click="form.allowP0 = !form.allowP0"><i /></button></div><label><span>允许存在的最大 P1 缺陷数</span><input v-model.number="form.maxP1" type="number" min="0"></label></section>
-            <section class="test-plan-management__card test-plan-management__quality-card is-tight"><h3>完成设置</h3><div class="test-plan-management__switch-row"><strong>完成后自动生成汇总报告</strong><button type="button" :class="{ 'is-on': form.autoReport }" role="switch" :aria-checked="form.autoReport" @click="form.autoReport = !form.autoReport"><i /></button></div><div class="test-plan-management__switch-row"><strong>报告需负责人签字确认</strong><button type="button" :class="{ 'is-on': form.ownerConfirm }" role="switch" :aria-checked="form.ownerConfirm" @click="form.ownerConfirm = !form.ownerConfirm"><i /></button></div></section>
+            <section class="test-plan-management__card test-plan-management__quality-card is-tight"><h3>缺陷限制</h3><div class="test-plan-management__switch-row"><div><strong>允许存在 P0 缺陷</strong><small v-if="!form.allowP0">推荐：否</small></div><AppSwitch v-model="form.allowP0" label="允许存在 P0 缺陷" size="regular" tone="danger" /></div><label><span>允许存在的最大 P1 缺陷数</span><input v-model.number="form.maxP1" type="number" min="0"></label></section>
+            <section class="test-plan-management__card test-plan-management__quality-card is-tight"><h3>完成设置</h3><div class="test-plan-management__switch-row"><strong>完成后自动生成汇总报告</strong><AppSwitch v-model="form.autoReport" label="完成后自动生成汇总报告" size="regular" /></div><div class="test-plan-management__switch-row"><strong>报告需负责人签字确认</strong><AppSwitch v-model="form.ownerConfirm" label="报告需负责人签字确认" size="regular" /></div></section>
           </template>
         </div>
       </div>

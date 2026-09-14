@@ -23,7 +23,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { useSession } from '@/entities/session'
-import { AppFigmaSwitch } from '@/shared/ui'
+import { AppSwitch } from '@/shared/ui'
 
 type ProfileTab = 'profile' | 'security' | 'preferences' | 'notifications' | 'appearance'
 type ThemeMode = 'light' | 'dark' | 'system'
@@ -397,9 +397,9 @@ function offlineDevice() {
             <div class="profile-field"><label>默认工作区<small>登录后首先进入的模块</small></label><select v-model="defaultModule"><option v-for="item in moduleOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></div>
             <div class="profile-field"><label>界面语言</label><select v-model="language"><option value="zh">简体中文</option><option value="zh-tw">繁體中文</option><option value="en">English</option></select></div>
             <div class="profile-field"><label>列表分页数量</label><select v-model="pageSize"><option v-for="size in ['10', '20', '50', '100']" :key="size" :value="size">每页 {{ size }} 条</option></select></div>
-            <div class="profile-field"><label>记住侧边栏状态</label><div class="profile-toggle-row"><AppFigmaSwitch v-model="rememberSidebar" label="记住侧边栏状态" class="profile-large-switch" /><span>刷新后保留折叠 / 展开状态</span></div></div>
-            <div class="profile-field"><label>删除前二次确认</label><div class="profile-toggle-row"><AppFigmaSwitch v-model="confirmBeforeDelete" label="删除前二次确认" class="profile-large-switch" /><span>删除操作弹出确认提示</span></div></div>
-            <div class="profile-field"><label>自动保存草稿</label><div class="profile-toggle-row"><AppFigmaSwitch v-model="autoSaveDraft" label="自动保存草稿" class="profile-large-switch" /><span>编辑内容定期自动保存</span></div></div>
+            <div class="profile-field"><label>记住侧边栏状态</label><div class="profile-toggle-row"><AppSwitch v-model="rememberSidebar" label="记住侧边栏状态" size="regular" /><span>刷新后保留折叠 / 展开状态</span></div></div>
+            <div class="profile-field"><label>删除前二次确认</label><div class="profile-toggle-row"><AppSwitch v-model="confirmBeforeDelete" label="删除前二次确认" size="regular" /><span>删除操作弹出确认提示</span></div></div>
+            <div class="profile-field"><label>自动保存草稿</label><div class="profile-toggle-row"><AppSwitch v-model="autoSaveDraft" label="自动保存草稿" size="regular" /><span>编辑内容定期自动保存</span></div></div>
             <div class="profile-card__actions"><button class="profile-primary-button" type="button" @click="saveLocalSettings('偏好设置已保存')"><Save />保存偏好</button></div>
           </div>
         </section>
@@ -409,7 +409,7 @@ function offlineDevice() {
           <div class="profile-card__body">
             <div v-for="item in notificationItems" :key="item.label" class="profile-notification-row">
               <div><strong>{{ item.label }}</strong><span>{{ item.description }}</span></div>
-              <AppFigmaSwitch v-model="item.value.value" :label="item.label" class="profile-large-switch" />
+              <AppSwitch v-model="item.value.value" :label="item.label" size="regular" />
             </div>
             <div class="profile-card__actions profile-card__actions--notifications"><button class="profile-primary-button" type="button" @click="saveLocalSettings('通知设置已保存')"><Save />保存设置</button></div>
           </div>
@@ -666,8 +666,6 @@ function offlineDevice() {
 }
 
 .profile-toggle-row { display: flex; height: 37.5px; align-items: center; gap: 10px; color: #4e5969; font-size: 13px; line-height: 19.5px; }
-.profile-large-switch { --switch-width: 36px; --switch-height: 20px; --switch-thumb-size: 16px; --switch-thumb-left: 2px; --switch-thumb-top: 2px; --switch-thumb-shift: 16px; }
-
 .profile-card--preferences {
   height: 448px;
 }

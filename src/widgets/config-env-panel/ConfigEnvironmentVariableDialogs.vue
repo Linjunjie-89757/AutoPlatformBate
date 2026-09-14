@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Check, X as Close } from '@lucide/vue'
 import type { ParamSetItem } from '@/entities/config'
 import type { ConfigEnvLocalVariableForm } from '@/features/config-env-create-edit'
 import { parseWebUiVariables } from '@/features/config-param-create-edit'
-import { AppFigmaSwitch } from '@/shared/ui'
+import { AppSwitch } from '@/shared/ui'
 
 import type { LocalVariableEditorForm } from './configEnvironmentPanel.types'
 
@@ -92,10 +92,10 @@ const emit = defineEmits<{
           <label><span>值</span><input v-model="localEditor.value" :type="localEditor.sensitive ? 'password' : 'text'" :placeholder="localEditor.valueType === 'secret' ? '输入后将按敏感变量存储' : ''"></label>
           <div class="figma-env-modal__row figma-env-modal__row--local-variable">
             <label><span>类型</span><select v-model="localEditor.valueType" @change="emit('syncLocalType')"><option v-for="option in localTypeOptions" :key="option" :value="option">{{ option }}</option></select></label>
-            <div class="figma-env-modal__default"><span>敏感变量</span><AppFigmaSwitch v-model="localEditor.sensitive" label="敏感变量" /></div>
+            <div class="figma-env-modal__default"><span>敏感变量</span><AppSwitch v-model="localEditor.sensitive" label="敏感变量" /></div>
           </div>
           <label><span>说明</span><input v-model="localEditor.description" type="text" placeholder="简要描述此变量的用途"></label>
-          <div class="figma-env-modal__local-enabled"><span>是否启用</span><AppFigmaSwitch v-model="localEditor.enabled" label="是否启用" /></div>
+          <div class="figma-env-modal__local-enabled"><span>是否启用</span><AppSwitch v-model="localEditor.enabled" label="是否启用" /></div>
         </div>
         <footer><button type="button" @click="emit('closeLocal')">取消</button><button class="is-primary" type="button" :disabled="saving" @click="emit('submitLocal')">保存</button></footer>
       </section>

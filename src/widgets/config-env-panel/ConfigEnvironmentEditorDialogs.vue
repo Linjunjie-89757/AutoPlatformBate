@@ -2,7 +2,7 @@
 import { Activity as Connection, AlertTriangle as Warning, Layers, Link2 as Link, Monitor, X as Close, XCircle as CircleClose } from '@lucide/vue'
 
 import type { ConfigAutomationType } from '@/features/config-env-create-edit'
-import { AppFigmaSwitch } from '@/shared/ui'
+import { AppSwitch } from '@/shared/ui'
 
 import type { EnvironmentEditorForm, ServiceEditorForm } from './configEnvironmentPanel.types'
 
@@ -68,8 +68,8 @@ const emit = defineEmits<{
         <div class="figma-env-modal__body">
           <label><span>服务名称 <b>*</b></span><input v-model="serviceEditor.name" type="text" placeholder="例：订单服务"></label>
           <label><span>Base URL <b>*</b></span><div class="figma-env-modal__url"><input v-model="serviceEditor.baseUrl" type="text" placeholder="https://api.example.com"><button type="button" @click="emit('testService')"><el-icon><Connection /></el-icon>连接测试</button></div></label>
-          <div class="figma-env-modal__row"><label><span>连接超时 (ms)</span><input v-model.number="serviceEditor.timeoutMs" type="number" min="1000" max="120000"></label><div class="figma-env-modal__default"><span>设为默认入口</span><AppFigmaSwitch v-model="serviceEditor.isDefault" label="设为默认入口" size="regular" /></div></div>
-          <div class="figma-env-modal__enabled"><span><strong>是否启用</strong><small>停用后此服务地址不参与执行</small></span><AppFigmaSwitch v-model="serviceEditor.enabled" label="是否启用" size="regular" /></div>
+          <div class="figma-env-modal__row"><label><span>连接超时 (ms)</span><input v-model.number="serviceEditor.timeoutMs" type="number" min="1000" max="120000"></label><div class="figma-env-modal__default"><span>设为默认入口</span><AppSwitch v-model="serviceEditor.isDefault" label="设为默认入口" size="regular" /></div></div>
+          <div class="figma-env-modal__enabled"><span><strong>是否启用</strong><small>停用后此服务地址不参与执行</small></span><AppSwitch v-model="serviceEditor.enabled" label="是否启用" size="regular" /></div>
         </div>
         <footer><button type="button" @click="emit('closeService')">取消</button><button class="is-primary" type="button" :disabled="saving" @click="emit('submitService')">保存</button></footer>
       </section>

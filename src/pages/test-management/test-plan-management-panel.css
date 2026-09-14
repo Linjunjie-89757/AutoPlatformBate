@@ -336,12 +336,6 @@
 .test-plan-management__switch-row { display: flex; min-height: 46px; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--tp-border); border-radius: 8px; background: #fafbfe; }
 .test-plan-management__switch-row strong { color: var(--tp-text); font-size: 13px; font-weight: 400; }
 .test-plan-management__switch-row small { display: block; margin-top: 2px; color: var(--tp-danger); font-size: 11px; }
-.test-plan-management__switch-row > button { position: relative; width: 36px; height: 20px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 10px; background: var(--tp-placeholder); cursor: pointer; transition: background-color 200ms ease; }
-.test-plan-management__switch-row > button i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 15%); transition: left 200ms ease; }
-.test-plan-management__switch-row > button.is-on { background: var(--tp-primary); }
-.test-plan-management__switch-row > button.is-on.is-danger { background: var(--tp-danger); }
-.test-plan-management__switch-row > button.is-on i { left: 18px; }
-
 .test-plan-management__wizard-footer { display: flex; height: 53px; align-items: center; gap: 8px; padding: 12px 24px; border-top: 1px solid var(--tp-border); background: #fff; }
 .test-plan-management__wizard-footer > span { flex: 1; }
 

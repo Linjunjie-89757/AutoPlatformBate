@@ -2,6 +2,8 @@
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ChevronDown, Plus } from '@lucide/vue'
 
+import { AppSwitch } from '@/shared/ui'
+
 import type { ApiProcessorOption, ApiProcessorPanelRow } from './apiProcessorTypes'
 
 const props = defineProps<{
@@ -61,14 +63,12 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
         @click="emit('select', processor)"
       >
         <span class="api-processor-list-item__main">
-          <span
-            :class="['api-figma-switch', { 'is-on': processor.enabled !== false }]"
-            role="switch"
-            :aria-checked="processor.enabled !== false"
-            @click.stop="toggleProcessor(processor)"
-          >
-            <span></span>
-          </span>
+          <AppSwitch
+            :model-value="processor.enabled !== false"
+            :label="processor.enabled === false ? '启用处理器' : '停用处理器'"
+            @click.stop
+            @update:model-value="toggleProcessor(processor)"
+          />
           <span class="api-processor-list-copy">
             <span class="api-processor-list-row">
               <span

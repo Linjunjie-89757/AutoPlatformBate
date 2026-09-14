@@ -63,7 +63,7 @@ import { AppFigmaActionColumn } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
-import { confirmDelete } from '@/shared/ui'
+import { AppSwitch, confirmDelete } from '@/shared/ui'
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
@@ -1114,7 +1114,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
           <fieldset><legend>运行模式</legend><div class="figma-suite__radio-row"><label><input v-model="activeSuite.runMode" class="figma-suite__radio-input" type="radio" value="serial" />串行</label><label><input v-model="activeSuite.runMode" class="figma-suite__radio-input" type="radio" value="parallel" />并行</label></div></fieldset>
           <div class="figma-suite__config-field is-location"><span>运行于</span><label class="figma-suite__select-shell"><select v-model="activeSuite.runLocation"><option value="server">服务端执行</option><option value="runner">本地执行器</option></select><ChevronDown aria-hidden="true" /></label></div>
           <section v-if="activeSuite.runLocation === 'runner'" class="figma-suite__runners"><label v-for="runner in runnerNodes" :key="runner.runnerId" :title="runnerUnselectableReason(runner, API_SUITE_RUNNER_TASK_TYPE)"><i :class="{ 'is-online': isRunnerOnline(runner) }" /><span><b>{{ runnerDisplayName(runner) }}</b><small>{{ runner.runnerId }} · {{ runnerStatusText(runner) }}</small></span><input v-model="activeSuite.runner" :value="runner.runnerId" :disabled="!isRunnerSelectable(runner, API_SUITE_RUNNER_TASK_TYPE)" name="runner" type="radio" /></label></section>
-          <div class="figma-suite__notify"><span>运行通知</span><button :class="{ 'is-on': activeSuite.notify }" type="button" @click="activeSuite.notify = !activeSuite.notify"><i /></button></div>
+            <div class="figma-suite__notify"><span>运行通知</span><AppSwitch v-model="activeSuite.notify" label="运行通知" /></div>
           <section v-if="activeSuite.lastRun" class="figma-suite__last-run"><p>上次运行结果</p><span class="figma-suite__status" :class="`is-${activeSuite.lastResult}`"><i />{{ activeSuite.lastResult === 'pass' ? '通过' : '失败' }}</span><small>{{ activeSuite.lastRun }}</small></section>
         </div>
       </aside>
@@ -1238,7 +1238,6 @@ button { cursor:pointer; }
 .figma-suite__runners input[type="radio"]:checked::after { position:absolute; top:1.5px; left:1.5px; width:8px; height:8px; border-radius:50%; background:#155dfc; content:""; }
 .figma-suite__runners { padding:8px 10px; margin:0 0 10.5px; border:1px solid #e5e6eb; border-radius:10px; }.figma-suite__runners label { display:flex; align-items:center; gap:8px; padding:4px 0; }.figma-suite__runners i { width:6px; height:6px; border-radius:50%; background:#c9cdd4; }.figma-suite__runners i.is-online { background:#00b42a; }.figma-suite__runners label > span { min-width:0; flex:1; }.figma-suite__runners b,.figma-suite__runners small { display:block; }.figma-suite__runners b { color:#1d2129; font-size:11px; font-weight:500; }.figma-suite__runners small { color:#86909c; font-size:10px; }
 .figma-suite__notify { display:flex; box-sizing:border-box; width:198px; height:28.5px; align-items:flex-end; justify-content:space-between; padding-top:10.5px; color:#4e5969; font-size:12px; font-weight:500; line-height:18px; }
-.figma-suite__notify button { position:relative; width:28px; height:16px; flex:0 0 28px; padding:0; border:0; border-radius:8px; background:#c9cdd4; }.figma-suite__notify button.is-on { background:#165dff; }.figma-suite__notify button i { position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; transition:left .15s; }.figma-suite__notify button.is-on i { left:14px; }
 .figma-suite__last-run { box-sizing:border-box; height:67.75px; margin-top:10.5px; padding-top:10.5px; border-top:1px solid #e5e6eb; }
 .figma-suite__last-run p { height:18px; margin:0; color:#4e5969; font-size:12px; font-weight:500; line-height:18px; }
 .figma-suite__last-run > .figma-suite__status { box-sizing:border-box; width:100%; height:21.5px; padding-top:3.5px; }

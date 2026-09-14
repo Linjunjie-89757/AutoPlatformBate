@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { AiProviderConnectionItem, AiProviderType } from '@/entities/ai-provider'
 import { figmaConfigAiIcons } from '@/shared/assets/figma-icons'
+import AppSwitch from '@/shared/ui/app-switch/AppSwitch.vue'
 
 import {
   AI_ACCENT,
@@ -209,14 +210,11 @@ function testConnection() {
               <strong>启用此连接</strong>
               <p>停用后该连接不会被平台调用</p>
             </div>
-            <button
-              class="config-ai-toggle"
-              :class="{ 'is-on': form.status === 1 }"
-              type="button"
-              @click="form.status = form.status === 1 ? 0 : 1"
-            >
-              <span />
-            </button>
+            <AppSwitch
+              :model-value="form.status === 1"
+              label="启用此连接"
+              @update:model-value="form.status = $event ? 1 : 0"
+            />
           </section>
         </div>
 
@@ -546,36 +544,6 @@ function testConnection() {
   color: #86909c;
   font-size: 12px;
   line-height: 18px;
-}
-
-.config-ai-toggle {
-  position: relative;
-  width: 28px;
-  height: 14px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: #c9cdd4;
-  cursor: pointer;
-}
-
-.config-ai-toggle span {
-  position: absolute;
-  top: 1.75px;
-  left: 2px;
-  width: 10.5px;
-  height: 10.5px;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.config-ai-toggle.is-on {
-  background: #165dff;
-}
-
-.config-ai-toggle.is-on span {
-  left: 14px;
 }
 
 .config-ai-edit__foot {

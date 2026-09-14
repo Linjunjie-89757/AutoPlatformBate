@@ -2,7 +2,7 @@
 import { AlertTriangle as Warning, Code2, Minus, Plus, RefreshCw } from '@lucide/vue'
 
 import type { MockApplicationItem, MockReleaseItem } from '@/entities/config'
-import { AppFigmaSwitch } from '@/shared/ui'
+import { AppSwitch } from '@/shared/ui'
 
 defineProps<{
   productionEnvironment: boolean
@@ -44,7 +44,7 @@ const emit = defineEmits<{
       <article class="figma-env__mock-card">
         <header>
           <div>
-            <AppFigmaSwitch :model-value="mockEnabled" :label="mockEnabled ? '停用 Mock' : '启用 Mock'" @update:model-value="emit('toggleEnabled')" />
+            <AppSwitch :model-value="mockEnabled" :label="mockEnabled ? '停用 Mock' : '启用 Mock'" @update:model-value="emit('toggleEnabled')" />
             <strong>{{ mockEnabled ? 'Mock 已启用，接口请求将被拦截' : 'Mock 已停用，接口请求将直接到达真实服务' }}</strong>
           </div>
           <button type="button" @click="emit('viewMock')">前往 Mock 服务查看详情 →</button>

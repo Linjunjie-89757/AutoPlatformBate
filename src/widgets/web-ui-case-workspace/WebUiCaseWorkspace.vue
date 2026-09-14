@@ -75,6 +75,7 @@ import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppLoadingState from '@/shared/ui/app-loading-state/AppLoadingState.vue'
+import AppSwitch from '@/shared/ui/app-switch/AppSwitch.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
 
@@ -3138,7 +3139,7 @@ watch(
             type="button"
             @click="selectedRecordedStepId = step.id"
           >
-            <span class="web-ui-figma-switch" :class="{ 'is-on': step.enabled }" @click.stop="toggleRecordedStepEnabled(step)"><i /></span>
+            <AppSwitch :model-value="step.enabled" label="启用录制步骤" @click.stop @update:model-value="toggleRecordedStepEnabled(step)" />
             <span class="web-ui-record-step-order">{{ step.order }}</span>
             <span class="web-ui-record-confirm-step__main">
               <span>
@@ -3272,11 +3273,11 @@ watch(
             <section class="web-ui-record-ai-options">
               <h4>AI 辅助选项</h4>
               <label>
-                <span class="web-ui-figma-switch" :class="{ 'is-on': recordingConfig.autoCapture }" @click="recordingConfig.autoCapture = !recordingConfig.autoCapture"><i /></span>
+                <AppSwitch v-model="recordingConfig.autoCapture" label="自动采集页面元素" />
                 <span><strong>自动采集页面元素</strong><small>录制过程中自动识别并采集页面元素，录制完成后同步到元素库</small></span>
               </label>
               <label>
-                <span class="web-ui-figma-switch" :class="{ 'is-on': recordingConfig.autoAssert }" @click="recordingConfig.autoAssert = !recordingConfig.autoAssert"><i /></span>
+                <AppSwitch v-model="recordingConfig.autoAssert" label="自动生成断言建议" />
                 <span><strong>自动生成断言建议</strong><small>AI 根据页面状态变化推荐断言规则，在步骤确认页显示</small></span>
               </label>
             </section>
@@ -4952,38 +4953,6 @@ watch(
   height: 7px;
   border-radius: 50%;
   background: #ffffff;
-}
-
-.web-ui-figma-switch {
-  display: inline-flex;
-  position: relative;
-  width: 28px;
-  height: 14px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: #c9cdd4;
-  cursor: pointer;
-  transition: background .16s ease;
-}
-
-.web-ui-figma-switch i {
-  position: absolute;
-  top: 1.75px;
-  left: 1.75px;
-  width: 10.5px;
-  height: 10.5px;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
-  transition: left .16s ease;
-}
-
-.web-ui-figma-switch.is-on {
-  background: #165dff;
-}
-
-.web-ui-figma-switch.is-on i {
-  left: 14px;
 }
 
 @keyframes web-ui-record-pulse {

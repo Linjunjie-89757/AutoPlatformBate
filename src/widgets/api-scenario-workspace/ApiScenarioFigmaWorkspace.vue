@@ -38,7 +38,7 @@ import { AppFigmaActionColumn } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
-import { confirmDelete } from '@/shared/ui'
+import { AppSwitch, confirmDelete } from '@/shared/ui'
 
 import {
   createEmptyRequestConfig,
@@ -1344,7 +1344,12 @@ function addChildStep(parent: ScenarioStep) {
                 <article class="figma-api-scenarios__step-row" :class="{ 'is-disabled': !step.enabled, 'is-controller': isControllerStep(step.type) }" :style="{ '--step-color': stepTypeConfig[step.type].color }">
                   <div class="figma-api-scenarios__step-row-main">
                     <GripVertical class="figma-api-scenarios__drag-handle" />
-                    <button class="figma-api-scenarios__step-toggle" :class="{ 'is-on': step.enabled }" type="button" :disabled="!canEdit && !isNewScenario" @click="step.enabled = !step.enabled"><i /></button>
+                    <AppSwitch
+                      :model-value="step.enabled"
+                      label="启用场景步骤"
+                      :disabled="!canEdit && !isNewScenario"
+                      @update:model-value="step.enabled = $event"
+                    />
                     <span class="figma-api-scenarios__step-index">{{ index + 1 }}</span>
                     <b class="figma-api-scenarios__step-type" :style="{ color: stepTypeConfig[step.type].color, background: stepTypeConfig[step.type].background }">{{ stepTypeLabel(step.type) }}</b>
                     <b v-if="step.method" class="figma-api-scenarios__method" :class="`is-${step.method.toLowerCase()}`">{{ step.method }}</b>
@@ -1358,7 +1363,11 @@ function addChildStep(parent: ScenarioStep) {
                 <template v-if="isControllerStep(step.type)">
                   <article v-for="(child, childIndex) in step.children" :key="child.id" class="figma-api-scenarios__step-row figma-api-scenarios__step-row--child" :class="{ 'is-disabled': !child.enabled }">
                     <CornerDownRight class="figma-api-scenarios__child-indent" />
-                    <button class="figma-api-scenarios__step-toggle" :class="{ 'is-on': child.enabled }" type="button" @click="child.enabled = !child.enabled"><i /></button>
+                    <AppSwitch
+                      :model-value="child.enabled"
+                      label="启用子步骤"
+                      @update:model-value="child.enabled = $event"
+                    />
                     <span class="figma-api-scenarios__step-index">{{ childIndex + 1 }}</span>
                     <b class="figma-api-scenarios__step-type" :style="{ color: stepTypeConfig[child.type].color, background: stepTypeConfig[child.type].background }">{{ stepTypeLabel(child.type) }}</b>
                     <b v-if="child.method" class="figma-api-scenarios__method" :class="`is-${child.method.toLowerCase()}`">{{ child.method }}</b>
@@ -1372,12 +1381,12 @@ function addChildStep(parent: ScenarioStep) {
             <div v-else class="figma-api-scenarios__step-empty"><Layers /><p>还没有步骤，点击添加开始编排</p><button v-if="canEdit || isNewScenario" type="button" @click="showAddStep = true"><Plus />添加步骤</button></div>
             </div>
           <div v-else-if="activeEditorTab === 'test-data'" class="figma-api-scenarios__test-data">
-            <aside class="figma-api-scenarios__dataset-list"><div class="figma-api-scenarios__dataset-list-head"><b>数据集列表</b><button type="button" @click="addDataset()"><Plus /></button></div><div v-for="dataset in datasets" :key="dataset.id" :class="{ 'is-active': selectedDataset === dataset.id }" class="figma-api-scenarios__dataset-item"><button type="button" @click="selectedDataset = dataset.id"><i :class="{ 'is-on': dataset.enabled }" @click.stop="dataset.enabled = !dataset.enabled"><span /></i><span><b>{{ dataset.name }}</b><small>{{ dataset.rows.length }} 行数据</small></span></button><button class="figma-api-scenarios__dataset-more" type="button" title="操作" @click.stop><MoreHorizontal /></button></div></aside>
+            <aside class="figma-api-scenarios__dataset-list"><div class="figma-api-scenarios__dataset-list-head"><b>数据集列表</b><button type="button" @click="addDataset()"><Plus /></button></div><div v-for="dataset in datasets" :key="dataset.id" :class="{ 'is-active': selectedDataset === dataset.id }" class="figma-api-scenarios__dataset-item"><button type="button" @click="selectedDataset = dataset.id"><AppSwitch :model-value="dataset.enabled" label="启用数据集" @click.stop @update:model-value="dataset.enabled = $event" /><span class="figma-api-scenarios__dataset-name"><b>{{ dataset.name }}</b><small>{{ dataset.rows.length }} 行数据</small></span></button><button class="figma-api-scenarios__dataset-more" type="button" title="操作" @click.stop><MoreHorizontal /></button></div></aside>
             <section class="figma-api-scenarios__dataset-editor"><header><b>{{ activeDataset?.name || '请选择或新建数据集' }}</b><div><button type="button" @click="selectCsvDatasetFile"><Upload />导入 CSV</button><button type="button" @click="selectJsonDatasetFile"><Database />导入 JSON</button><i /><button type="button" :disabled="!activeDataset" @click="exportDatasetCsv"><Database />导出 CSV</button><button type="button" :disabled="!activeDataset" @click="addDatasetColumn()">添加变量列</button><button class="is-primary" type="button" :disabled="!activeDataset" @click="addDatasetRow()"><Plus />添加数据行</button></div></header><div class="figma-api-scenarios__dataset-table-scroll"><table v-if="activeDataset"><colgroup><col class="figma-api-scenarios__dataset-index-column" /><col v-for="column in datasetColumns" :key="column" class="figma-api-scenarios__dataset-value-column" /><col class="figma-api-scenarios__dataset-action-column" /></colgroup><thead><tr><th>#</th><th v-for="(column, columnIndex) in datasetColumns" :key="`${activeDataset.id}-${columnIndex}`">{{ column }} <button type="button" title="删除列" @click="removeDatasetColumn(columnIndex)"><Trash2 /></button></th><th /></tr></thead><tbody><tr v-for="(row, rowIndex) in datasetRows" :key="`${activeDataset.id}-${rowIndex}`"><td>{{ rowIndex + 1 }}</td><td v-for="(_, columnIndex) in datasetColumns" :key="columnIndex"><input v-model="row[columnIndex]" /></td><td><button type="button" title="删除行" @click="removeDatasetRow(rowIndex)"><Trash2 /></button></td></tr></tbody></table></div></section>
           </div>
           <div v-else class="figma-api-scenarios__settings">
             <div class="figma-api-scenarios__settings-panel">
-              <article><p><b>失败后继续执行</b><span>单步失败后继续执行后续步骤</span></p><button :class="{ 'is-on': sceneSettings.continueOnFailure }" type="button" @click="sceneSettings.continueOnFailure = !sceneSettings.continueOnFailure"><i /></button></article>
+              <article><p><b>失败后继续执行</b><span>单步失败后继续执行后续步骤</span></p><AppSwitch v-model="sceneSettings.continueOnFailure" label="失败后继续执行" size="regular" /></article>
               <article><p><b>全局超时时间 (ms)</b><span>整个场景的最大执行时间</span></p><input v-model.number="sceneSettings.timeout" type="number" /></article>
               <article><p><b>步骤失败重试次数</b><span>单步失败时自动重试次数，0 表示不重试</span></p><input v-model.number="sceneSettings.retryCount" type="number" /></article>
               <article><p><b>步骤间默认等待 (ms)</b><span>每个步骤执行前的默认等待时间</span></p><input v-model.number="sceneSettings.waitTime" type="number" /></article>
@@ -1508,11 +1517,7 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__dataset-list-head svg { width: 13px; height: 13px; }
 .figma-api-scenarios__dataset-list > button { display: flex; box-sizing: border-box; width: 100%; align-items: center; gap: 8px; padding: 10px; border: 0; border-radius: 7px; background: transparent; color: #1d2129; cursor: pointer; text-align: left; }
 .figma-api-scenarios__dataset-list > button.is-active { background: #e8f3ff; }
-.figma-api-scenarios__dataset-list > button > i { position: relative; width: 28px; height: 16px; flex: 0 0 28px; border-radius: 8px; background: #c9cdd4; }
-.figma-api-scenarios__dataset-list > button > i.is-on { background: #165dff; }
-.figma-api-scenarios__dataset-list > button > i span { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
-.figma-api-scenarios__dataset-list > button > i.is-on span { left: 14px; }
-.figma-api-scenarios__dataset-list > button > span { min-width: 0; flex: 1; }
+.figma-api-scenarios__dataset-list > button > .figma-api-scenarios__dataset-name { min-width: 0; flex: 1; }
 .figma-api-scenarios__dataset-list > button b, .figma-api-scenarios__dataset-list > button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .figma-api-scenarios__dataset-list > button b { color: #1d2129; font-size: 12px; font-weight: 500; line-height: 18px; }
 .figma-api-scenarios__dataset-list > button.is-active b { color: #165dff; }
@@ -1578,10 +1583,6 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__step-row { height: 48px; gap: 8px; padding: 0 10px; transition: border-color .15s ease, box-shadow .15s ease; }
 .figma-api-scenarios__step-row:hover { border-color: #bfd4ff; box-shadow: 0 1px 3px rgba(22, 93, 255, .08); }
 .figma-api-scenarios__step-row.is-disabled { background: #fafafa; opacity: .62; }
-.figma-api-scenarios__step-toggle { position: relative; width: 28px; height: 16px; flex: 0 0 28px; padding: 0 !important; border-radius: 9px !important; background: #c9cdd4 !important; }
-.figma-api-scenarios__step-toggle.is-on { background: #165dff !important; }
-.figma-api-scenarios__step-toggle i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .15s ease; }
-.figma-api-scenarios__step-toggle.is-on i { left: 14px; }
 .figma-api-scenarios__step-row p { display: flex; min-width: 0; align-items: baseline; gap: 7px; }
 .figma-api-scenarios__step-row p strong { overflow: hidden; color: #4e5969; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .figma-api-scenarios__step-row p small { overflow: hidden; color: #86909c; font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
@@ -1595,11 +1596,7 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__dataset-item { display: flex; align-items: center; border-radius: 7px; }
 .figma-api-scenarios__dataset-item.is-active { background: #e8f3ff; }
 .figma-api-scenarios__dataset-item > button:first-child { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; padding: 10px; border: 0; border-radius: 7px; background: transparent; color: #1d2129; cursor: pointer; text-align: left; }
-.figma-api-scenarios__dataset-item > button:first-child > i { position: relative; width: 28px; height: 16px; flex: 0 0 28px; border-radius: 8px; background: #c9cdd4; }
-.figma-api-scenarios__dataset-item > button:first-child > i.is-on { background: #165dff; }
-.figma-api-scenarios__dataset-item > button:first-child > i span { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
-.figma-api-scenarios__dataset-item > button:first-child > i.is-on span { left: 14px; }
-.figma-api-scenarios__dataset-item > button:first-child > span { min-width: 0; flex: 1; }
+.figma-api-scenarios__dataset-item > button:first-child > .figma-api-scenarios__dataset-name { min-width: 0; flex: 1; }
 .figma-api-scenarios__dataset-item > button:first-child b, .figma-api-scenarios__dataset-item > button:first-child small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .figma-api-scenarios__dataset-item > button:first-child b { color: #1d2129; font-size: 12px; font-weight: 500; line-height: 18px; }
 .figma-api-scenarios__dataset-item.is-active > button:first-child b { color: #165dff; }

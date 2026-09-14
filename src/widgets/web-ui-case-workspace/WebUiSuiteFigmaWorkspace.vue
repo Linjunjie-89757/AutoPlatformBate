@@ -36,6 +36,7 @@ import {
   type RunnerNodeSummary,
 } from '@/entities/local-runner'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { AppSwitch } from '@/shared/ui'
 import WebUiModuleTabs from './WebUiModuleTabs.vue'
 
 const props = withDefaults(defineProps<{
@@ -510,14 +511,11 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
             </select>
           </label>
           <label class="web-ui-suite-notify">通知
-            <button
-              class="web-ui-suite-switch"
-              :class="{ 'is-on': selectedSuite.notify }"
-              type="button"
-              role="switch"
-              :aria-checked="selectedSuite.notify"
-              @click="updateSuite({ notify: !selectedSuite.notify })"
-            ><i /></button>
+            <AppSwitch
+              :model-value="selectedSuite.notify"
+              label="通知"
+              @update:model-value="updateSuite({ notify: $event })"
+            />
           </label>
           <button v-if="canEdit" class="web-ui-suite-save" type="button" :disabled="loading || running" @click="saveSuite"><Save />保存</button>
           <button v-if="canExecute" class="web-ui-suite-run" type="button" :disabled="loading || running" @click="runSuite"><Play />{{ running ? '运行中' : '运行' }}</button>
@@ -543,7 +541,11 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
                   :class="{ 'is-disabled': !suiteCase.enabled }"
                 >
                   <GripVertical class="web-ui-suite-case__grip" />
-                  <button class="web-ui-suite-switch" :class="{ 'is-on': suiteCase.enabled }" type="button" role="switch" :aria-checked="suiteCase.enabled" @click="toggleSuiteCase(suiteCase.id)"><i /></button>
+                  <AppSwitch
+                    :model-value="suiteCase.enabled"
+                    :label="suiteCase.enabled ? '停用用例' : '启用用例'"
+                    @update:model-value="toggleSuiteCase(suiteCase.id)"
+                  />
                   <span class="web-ui-suite-case__order">{{ index + 1 }}</span>
                   <b class="web-ui-suite-case__priority" :style="priorityStyle(suiteCase.priority)">{{ suiteCase.priority }}</b>
                   <strong>{{ suiteCase.name }}</strong>
@@ -670,10 +672,6 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
 .web-ui-suite-toolbar-select select { width: 101px; padding: 0; border: 0; outline: 0; background: transparent; color: #4e5969; font: 500 12px/17px Inter, "Noto Sans SC", sans-serif; }
 .web-ui-suite-toolbar-select--browser svg { width: 12px; height: 12px; color: #86909c; }
 .web-ui-suite-notify { display: inline-flex; align-items: center; gap: 5px; color: #86909c; font: 400 11px/17px Inter, "Noto Sans SC", sans-serif; }
-.web-ui-suite-switch { position: relative; display: inline-flex; box-sizing: border-box; width: 28px; height: 14px; flex: 0 0 auto; padding: 0; border: 0; border-radius: 99px; background: #c9cdd4; cursor: pointer; transition: background .15s ease; }
-.web-ui-suite-switch i { position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: #fff; transition: transform .15s ease; }
-.web-ui-suite-switch.is-on { background: #165dff; }
-.web-ui-suite-switch.is-on i { transform: translateX(14px); }
 .web-ui-suite-save, .web-ui-suite-run { display: inline-flex; box-sizing: border-box; height: 28px; align-items: center; gap: 5px; border-radius: 7px; cursor: pointer; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }
 .web-ui-suite-save { padding: 0 11.5px; border: 1px solid #e5e6eb; background: #fff; color: #1d2129; }
 .web-ui-suite-save svg { width: 13px; height: 13px; }

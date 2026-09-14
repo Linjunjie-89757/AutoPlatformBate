@@ -21,8 +21,7 @@ import { useRouter } from 'vue-router'
 
 import { platformAdminApi } from '@/entities/platform-admin'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import notificationToggleOff from '@/shared/assets/figma-icons/platform-admin/notification-toggle-off.svg'
-import notificationToggleOn from '@/shared/assets/figma-icons/platform-admin/notification-toggle-on.svg'
+import { AppSwitch } from '@/shared/ui'
 
 interface NavigationItem {
   key: 'overview' | 'workspaces' | 'accounts' | 'requests' | 'audit' | 'notify'
@@ -349,21 +348,11 @@ onBeforeUnmount(() => {
                 </div>
                 <p>{{ rule.description }}</p>
               </div>
-              <button
-                type="button"
-                class="platform-notify-page__toggle"
-                :class="{ 'is-on': rule.enabled }"
-                role="switch"
-                :aria-checked="rule.enabled"
-                :aria-label="`${rule.label}${rule.enabled ? '已开启' : '已关闭'}`"
-                @click="rule.enabled = !rule.enabled"
-              >
-                <img
-                  :src="rule.enabled ? notificationToggleOn : notificationToggleOff"
-                  alt=""
-                  aria-hidden="true"
-                />
-              </button>
+              <AppSwitch
+                v-model="rule.enabled"
+                :label="`${rule.label}${rule.enabled ? '已开启' : '已关闭'}`"
+                active-color="#db2777"
+              />
             </div>
           </div>
         </section>
@@ -947,29 +936,6 @@ button.platform-notify-page__save-button:hover {
   line-height: 16.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.platform-notify-page__toggle {
-  display: inline-flex;
-  width: 26px;
-  height: 27px;
-  flex: 0 0 26px;
-  margin-top: 0;
-  padding: 1px 0 0;
-  border: 0;
-  background: transparent;
-  color: #c9cdd4;
-  cursor: pointer;
-}
-
-.platform-notify-page__toggle.is-on {
-  color: #db2777;
-}
-
-.platform-notify-page__toggle img {
-  display: block;
-  width: 26px;
-  height: 26px;
 }
 
 @media (max-width: 1100px) {

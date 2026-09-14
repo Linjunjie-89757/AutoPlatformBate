@@ -484,38 +484,6 @@
   line-height: 18px;
 }
 
-.api-figma-switch {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-  width: 28px;
-  height: 14px;
-  border-radius: 999px;
-  background: #c9cdd4;
-  cursor: pointer;
-  transition: background-color .15s ease;
-}
-
-.api-figma-switch > span {
-  position: absolute;
-  top: 1.5px;
-  left: 1.5px;
-  width: 11px;
-  height: 11px;
-  border-radius: 999px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 1px 2px rgba(0, 0, 0, .1);
-  transition: transform .15s ease;
-}
-
-.api-figma-switch.is-on {
-  background: #165dff;
-}
-
-.api-figma-switch.is-on > span {
-  transform: translateX(14px);
-}
-
 .api-row-remove {
   color: #165dff;
   font-size: 12px;

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { MagicStick, MoreFilled } from '@element-plus/icons-vue'
 
+import { AppSwitch } from '@/shared/ui'
+
 import ApiCodeEditor from './ApiCodeEditor.vue'
 import type {
   ApiProcessorExtractItemRow,
@@ -65,14 +67,11 @@ function setMoreSettingsVisible(index: number, visible: boolean) {
           <button type="button" class="api-row-remove" @click="emit('remove')">删除</button>
         </div>
         <label class="api-figma-enable">
-          <span
-            :class="['api-figma-switch', { 'is-on': activeProcessor.enabled !== false }]"
-            role="switch"
-            :aria-checked="activeProcessor.enabled !== false"
-            @click="toggleProcessor"
-          >
-            <span></span>
-          </span>
+          <AppSwitch
+            :model-value="activeProcessor.enabled !== false"
+            :label="activeProcessor.enabled === false ? '启用处理器' : '停用处理器'"
+            @update:model-value="toggleProcessor"
+          />
           <em>启用</em>
         </label>
       </div>
