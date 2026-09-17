@@ -71,6 +71,12 @@ import notificationPlus from './config-center/notification/plus.svg'
 import notificationTabChannel from './config-center/notification/tab-channel.svg'
 import notificationTabHistory from './config-center/notification/tab-history.svg'
 import notificationTabRule from './config-center/notification/tab-rule.svg'
+import apiAuthInfo from './api-interface/auth-info.svg'
+import apiAuthUser from './api-interface/auth-user.svg'
+import apiAuthKey from './api-interface/auth-key.svg'
+import apiAuthEye from './api-interface/auth-eye.svg'
+import apiAuthNone from './api-interface/auth-none.svg'
+import apiAuthWarning from './api-interface/auth-warning.svg'
 import runnerActionDetail from './config-center/runner/runner-17.svg'
 import runnerActionEdit from './config-center/runner/runner-18.svg'
 import runnerActionLog from './config-center/runner/runner-16.svg'
@@ -302,6 +308,12 @@ export const figmaApiInterfaceIcons = {
   send: apiInterfaceSend,
   save: apiInterfaceSave,
   aiGenerate: apiInterfaceAiGenerate,
+  authInfo: apiAuthInfo,
+  authUser: apiAuthUser,
+  authKey: apiAuthKey,
+  authEye: apiAuthEye,
+  authNone: apiAuthNone,
+  authWarning: apiAuthWarning,
 } as const
 
 export const figmaCaseIcons = {

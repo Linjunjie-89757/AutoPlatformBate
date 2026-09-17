@@ -44,6 +44,7 @@ function startsWithVariable(path: string) {
 export function useApiRunEnvironmentWorkspace(options: UseApiRunEnvironmentWorkspaceOptions) {
   const router = useRouter()
   const selectedEnvironmentId = ref<number | null>(null)
+  const selectedServiceKey = ref<string | null>(null)
   const selectedVariableSetId = ref<number | null>(null)
   const selectedMockBusinessScenarioId = ref<number | null>(null)
   const runEnvironmentDrawerVisible = ref(false)
@@ -68,6 +69,12 @@ export function useApiRunEnvironmentWorkspace(options: UseApiRunEnvironmentWorks
       : selectedEnvironment.value?.baseUrl
         ? [{ key: 'default', name: '默认服务', baseUrl: selectedEnvironment.value.baseUrl, isDefault: true }]
         : [],
+  )
+  const selectedService = computed(() =>
+    runEnvironmentServices.value.find(item => item.key === selectedServiceKey.value)
+      || runEnvironmentServices.value.find(item => item.isDefault)
+      || runEnvironmentServices.value[0]
+      || null,
   )
   const runEnvironmentDefaultVariableSetId = computed(() => {
     const value = runEnvironmentConfigJson.value.defaultVariableSetId
@@ -108,6 +115,7 @@ export function useApiRunEnvironmentWorkspace(options: UseApiRunEnvironmentWorks
   function restoreRunOptions() {
     const environmentId = Number(localStorage.getItem(runOptionStorageKey('environment')) || '')
     selectedEnvironmentId.value = environmentId && options.environments.value.some(item => item.id === environmentId) ? environmentId : null
+    selectedServiceKey.value = null
     selectedVariableSetId.value = null
     selectedMockBusinessScenarioId.value = null
     localStorage.removeItem(runOptionStorageKey('variableSet'))
@@ -126,6 +134,7 @@ export function useApiRunEnvironmentWorkspace(options: UseApiRunEnvironmentWorks
       workspaceCode: options.workspaceCode.value === 'ALL' ? undefined : options.workspaceCode.value,
       environmentId: selectedEnvironmentId.value || null,
       variableSetId: null,
+      serviceKey: selectedService.value?.key || null,
       mockBusinessScenarioId: selectedMockBusinessScenarioId.value || null,
     }
   }
@@ -189,6 +198,23 @@ export function useApiRunEnvironmentWorkspace(options: UseApiRunEnvironmentWorks
     }
   }
 
+  async function loadRunEnvironmentServiceConfig() {
+    const environment = selectedEnvironment.value
+    if (!environment) {
+      return
+    }
+    const environmentId = environment.id
+    try {
+      const workspaceCode = environment.workspaceCode || options.workspaceCode.value
+      const envPage = await configApi.getSettingsEnvs(workspaceCode, { keyword: environment.name })
+      if (selectedEnvironmentId.value === environmentId) {
+        runEnvironmentConfig.value = envPage.items.find(item => item.id === environmentId) || null
+      }
+    } catch {
+      // Keep the environment's primary Base URL as a safe fallback when service details cannot be loaded.
+    }
+  }
+
   async function openRunEnvironmentDrawer() {
     if (!selectedEnvironment.value) {
       ElMessage.info('请先选择运行环境')
@@ -203,13 +229,21 @@ export function useApiRunEnvironmentWorkspace(options: UseApiRunEnvironmentWorks
   }
 
   watch(selectedEnvironmentId, () => {
+    selectedServiceKey.value = null
     selectedMockBusinessScenarioId.value = null
     runEnvironmentConfig.value = null
     runEnvironmentMockBusinessScenarios.value = []
+    void loadRunEnvironmentServiceConfig()
   })
+
+  function setSelectedServiceKey(value: string | null) {
+    selectedServiceKey.value = value && runEnvironmentServices.value.some(item => item.key === value) ? value : null
+  }
 
   return {
     selectedEnvironmentId,
+    selectedServiceKey,
+    selectedService,
     selectedVariableSetId,
     selectedMockBusinessScenarioId,
     runEnvironmentDrawerVisible,
@@ -239,6 +273,7 @@ export function useApiRunEnvironmentWorkspace(options: UseApiRunEnvironmentWorks
     currentVariableSetName,
     restoreRunOptions,
     persistRunOptions,
+    setSelectedServiceKey,
     currentRunPayload,
     guardRunEnvironmentForPath,
     openRunEnvironmentDrawer,

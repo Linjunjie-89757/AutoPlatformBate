@@ -42,8 +42,15 @@ public final class ApiAutomationModels {
     public record ApiAuthConfigInput(
             String authType,
             ApiAuthCredentialInput basicAuth,
-            ApiAuthCredentialInput digestAuth
+            ApiAuthCredentialInput digestAuth,
+            String bearerToken,
+            String apiKeyName,
+            String apiKeyValue,
+            String apiKeyLocation
     ) {
+        public ApiAuthConfigInput(String authType, ApiAuthCredentialInput basicAuth, ApiAuthCredentialInput digestAuth) {
+            this(authType, basicAuth, digestAuth, null, null, null, null);
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -1097,6 +1104,7 @@ public final class ApiAutomationModels {
             String workspaceCode,
             Long environmentId,
             Long variableSetId,
+            String serviceKey,
             String branchName,
             String triggerSource,
             String runOn,
@@ -1112,7 +1120,7 @@ public final class ApiAutomationModels {
             Long mockReleaseId
     ) {
         public ApiRunRequest(String workspaceCode, Long environmentId, Long variableSetId, String branchName, String triggerSource) {
-            this(workspaceCode, environmentId, variableSetId, branchName, triggerSource, null, null, null, null, null, null, null, null, null, null, null);
+            this(workspaceCode, environmentId, variableSetId, null, branchName, triggerSource, null, null, null, null, null, null, null, null, null, null, null);
         }
 
         public ApiRunRequest(
@@ -1132,9 +1140,32 @@ public final class ApiAutomationModels {
                 Map<String, String> rowVariables,
                 String runnerId
         ) {
-            this(workspaceCode, environmentId, variableSetId, branchName, triggerSource, runOn, testDatasetEnabled,
+            this(workspaceCode, environmentId, variableSetId, null, branchName, triggerSource, runOn, testDatasetEnabled,
                     testDatasetId, loopCount, threadCount, mockEnabled, mockApplicationId, mockBusinessScenarioId,
                     rowVariables, runnerId, null);
+        }
+
+        public ApiRunRequest(
+                String workspaceCode,
+                Long environmentId,
+                Long variableSetId,
+                String branchName,
+                String triggerSource,
+                String runOn,
+                Boolean testDatasetEnabled,
+                Long testDatasetId,
+                Integer loopCount,
+                Integer threadCount,
+                Boolean mockEnabled,
+                Long mockApplicationId,
+                Long mockBusinessScenarioId,
+                Map<String, String> rowVariables,
+                String runnerId,
+                Long mockReleaseId
+        ) {
+            this(workspaceCode, environmentId, variableSetId, null, branchName, triggerSource, runOn,
+                    testDatasetEnabled, testDatasetId, loopCount, threadCount, mockEnabled, mockApplicationId,
+                    mockBusinessScenarioId, rowVariables, runnerId, mockReleaseId);
         }
     }
 
@@ -1149,6 +1180,7 @@ public final class ApiAutomationModels {
             List<ApiProcessorInput> postProcessors,
             Long environmentId,
             Long variableSetId,
+            String serviceKey,
             Boolean mockEnabled,
             Long mockApplicationId,
             Long mockBusinessScenarioId
@@ -1168,7 +1200,7 @@ public final class ApiAutomationModels {
                 Long mockApplicationId
         ) {
             this(workspaceCode, definitionId, name, requestConfig, assertions, extractors, preProcessors, postProcessors,
-                    environmentId, variableSetId, mockEnabled, mockApplicationId, null);
+                    environmentId, variableSetId, null, mockEnabled, mockApplicationId, null);
         }
     }
 

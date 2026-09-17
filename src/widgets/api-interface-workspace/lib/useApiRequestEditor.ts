@@ -28,6 +28,7 @@ export interface EditorTab {
   dirty: boolean
   activeTab: RequestContentTab
   responseTab: ResponseTab
+  responseCollapsed?: boolean
   detail: ApiDefinitionDetail
   runResult: ApiRunResult | null
   runError: string
@@ -140,6 +141,7 @@ export function useApiRequestEditor(options: UseApiRequestEditorOptions) {
       dirty: Boolean(source),
       activeTab: 'body',
       responseTab: 'body',
+      responseCollapsed: false,
       detail,
       runResult: null,
       runError: '',
@@ -184,6 +186,7 @@ export function useApiRequestEditor(options: UseApiRequestEditorOptions) {
       dirty: false,
       activeTab: 'body',
       responseTab: 'body',
+      responseCollapsed: false,
       detail: draft,
       runResult: null,
       runError: '',

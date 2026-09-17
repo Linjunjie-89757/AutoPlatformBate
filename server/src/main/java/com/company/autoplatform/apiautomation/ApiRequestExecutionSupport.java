@@ -5,6 +5,8 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
@@ -118,6 +120,8 @@ public class ApiRequestExecutionSupport {
                 );
             }
             case "BASIC" -> sendBasicAuthRequest(request, config, environment, variables, authConfig);
+            case "BEARER" -> sendBearerAuthRequest(request, config, environment, variables, authConfig);
+            case "API_KEY" -> sendApiKeyRequest(request, config, environment, variables, authConfig);
             case "DIGEST" -> sendDigestAuthRequest(request, config, environment, variables, authConfig);
             default -> throw new BadRequestException("Unsupported auth type: " + authType);
         };
@@ -198,6 +202,88 @@ public class ApiRequestExecutionSupport {
                 httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
                 flattenHeaders(httpRequest.headers().map())
         );
+    }
+
+    private SentRequestResult sendBearerAuthRequest(
+            ResolvedRequest request,
+            ApiRequestConfigInput config,
+            ApiExecutionRuntimeModels.ResolvedEnvironment environment,
+            Map<String, String> variables,
+            ApiAuthConfigInput authConfig
+    ) throws IOException, InterruptedException {
+        String token = requireAuthValue(variableResolver.replaceVariables(authConfig.bearerToken(), variables), "Bearer token");
+        HttpRequest httpRequest = buildHttpRequest(request, config, environment, "Bearer " + token);
+        return new SentRequestResult(
+                httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
+                flattenHeaders(httpRequest.headers().map())
+        );
+    }
+
+    private SentRequestResult sendApiKeyRequest(
+            ResolvedRequest request,
+            ApiRequestConfigInput config,
+            ApiExecutionRuntimeModels.ResolvedEnvironment environment,
+            Map<String, String> variables,
+            ApiAuthConfigInput authConfig
+    ) throws IOException, InterruptedException {
+        String name = requireAuthValue(variableResolver.replaceVariables(authConfig.apiKeyName(), variables), "API key name");
+        String value = requireAuthValue(variableResolver.replaceVariables(authConfig.apiKeyValue(), variables), "API key value");
+        String location = Optional.ofNullable(authConfig.apiKeyLocation()).orElse("header").trim().toLowerCase();
+        ResolvedRequest authenticatedRequest;
+        if ("query".equals(location)) {
+            authenticatedRequest = new ResolvedRequest(
+                    request.method(),
+                    appendOrReplaceQueryParameter(request.url(), name, value),
+                    request.headers(),
+                    request.body(),
+                    request.bodyConfig(),
+                    request.authConfig()
+            );
+        } else if ("header".equals(location)) {
+            LinkedHashMap<String, String> headers = new LinkedHashMap<>(request.headers());
+            headers.entrySet().removeIf(entry -> name.equalsIgnoreCase(entry.getKey()));
+            headers.put(name, value);
+            authenticatedRequest = new ResolvedRequest(
+                    request.method(), request.url(), headers, request.body(), request.bodyConfig(), request.authConfig()
+            );
+        } else {
+            throw new BadRequestException("API key location must be header or query");
+        }
+        HttpRequest httpRequest = buildHttpRequest(authenticatedRequest, config, environment);
+        return new SentRequestResult(
+                httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
+                flattenHeaders(httpRequest.headers().map())
+        );
+    }
+
+    private String requireAuthValue(String value, String label) {
+        String normalized = Optional.ofNullable(value).orElse("").trim();
+        if (normalized.isEmpty()) {
+            throw new BadRequestException(label + " cannot be blank");
+        }
+        return normalized;
+    }
+
+    private String appendOrReplaceQueryParameter(String url, String name, String value) {
+        int fragmentIndex = url.indexOf('#');
+        String fragment = fragmentIndex >= 0 ? url.substring(fragmentIndex) : "";
+        String withoutFragment = fragmentIndex >= 0 ? url.substring(0, fragmentIndex) : url;
+        int queryIndex = withoutFragment.indexOf('?');
+        String base = queryIndex >= 0 ? withoutFragment.substring(0, queryIndex) : withoutFragment;
+        String rawQuery = queryIndex >= 0 ? withoutFragment.substring(queryIndex + 1) : "";
+        List<String> parts = new ArrayList<>();
+        if (!rawQuery.isBlank()) {
+            for (String part : rawQuery.split("&")) {
+                String rawName = part.contains("=") ? part.substring(0, part.indexOf('=')) : part;
+                if (!URLDecoder.decode(rawName, StandardCharsets.UTF_8).equals(name)) {
+                    parts.add(part);
+                }
+            }
+        }
+        String encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8).replace("+", "%20");
+        String encodedValue = URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+        parts.add(encodedName + "=" + encodedValue);
+        return base + "?" + String.join("&", parts) + fragment;
     }
 
     private SentRequestResult sendDigestAuthRequest(

@@ -1,12 +1,15 @@
 package com.company.autoplatform.apiautomation;
 
 import com.company.autoplatform.common.BadRequestException;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetSocketAddress;
 import java.net.http.HttpRequest;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static com.company.autoplatform.apiautomation.ApiExecutionRuntimeModelFixtures.resolvedEnvironment;
 import static com.company.autoplatform.apiautomation.ApiAutomationModels.*;
@@ -77,6 +80,45 @@ class ApiRequestExecutionSupportTests {
     }
 
     @Test
+    void sendRequestAppliesBearerAndApiKeyAuthentication() throws Exception {
+        AtomicReference<String> bearerHeader = new AtomicReference<>();
+        AtomicReference<String> apiKeyHeader = new AtomicReference<>();
+        AtomicReference<String> apiKeyQuery = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", exchange -> {
+            switch (exchange.getRequestURI().getPath()) {
+                case "/bearer" -> bearerHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                case "/api-key-header" -> apiKeyHeader.set(exchange.getRequestHeaders().getFirst("X-API-Key"));
+                case "/api-key-query" -> apiKeyQuery.set(exchange.getRequestURI().getRawQuery());
+                default -> {
+                }
+            }
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            String baseUrl = "http://localhost:" + server.getAddress().getPort();
+            sendRequest(baseUrl + "/bearer", new ApiAuthConfigInput(
+                    "BEARER", null, null, "{{token}}", null, null, null
+            ), Map.of("token", "abc-123"));
+            sendRequest(baseUrl + "/api-key-header", new ApiAuthConfigInput(
+                    "API_KEY", null, null, null, "X-API-Key", "{{secret}}", "header"
+            ), Map.of("secret", "header-secret"));
+            sendRequest(baseUrl + "/api-key-query?keep=1&access_key=old", new ApiAuthConfigInput(
+                    "API_KEY", null, null, null, "access_key", "{{secret}}", "query"
+            ), Map.of("secret", "s3 cr&et"));
+        } finally {
+            server.stop(0);
+        }
+
+        assertThat(bearerHeader.get()).isEqualTo("Bearer abc-123");
+        assertThat(apiKeyHeader.get()).isEqualTo("header-secret");
+        assertThat(apiKeyQuery.get()).isEqualTo("keep=1&access_key=s3%20cr%26et");
+    }
+
+    @Test
     void resolveRequestKeepsMissingVariableFailureBehavior() {
         assertThatThrownBy(() -> requestSupport.resolveRequest(
                 new ApiRequestConfigInput("GET", "/orders/{{missing}}", 1000, List.of(), List.of(), List.of(),
@@ -91,6 +133,16 @@ class ApiRequestExecutionSupportTests {
 
     private ApiExecutionRuntimeModels.ResolvedEnvironment environment(String baseUrl, List<ApiKeyValueInput> headers) {
         return resolvedEnvironment(baseUrl, headers, noneAuth());
+    }
+
+    private void sendRequest(String url, ApiAuthConfigInput auth, Map<String, String> variables) throws Exception {
+        ApiRequestConfigInput config = new ApiRequestConfigInput(
+                "GET", url, 1000, List.of(), List.of(), List.of(),
+                new ApiRequestBodyInput("NONE", null, List.of(), null, null, null), auth
+        );
+        ApiExecutionRuntimeModels.ResolvedEnvironment environment = environment("", List.of());
+        ApiRequestExecutionSupport.ResolvedRequest request = requestSupport.resolveRequest(config, environment, variables, auth);
+        requestSupport.sendRequest(request, config, environment, variables);
     }
 
     private ApiAuthConfigInput noneAuth() {

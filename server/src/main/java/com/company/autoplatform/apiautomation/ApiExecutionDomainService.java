@@ -69,7 +69,10 @@ public class ApiExecutionDomainService {
         workspaceScopeSupport.validateReadable(definition.getWorkspaceId(), workspaceCode, "Current workspace cannot run the definition");
         workspaceService.requireWritableWorkspace(workspaceService.requireWorkspaceById(definition.getWorkspaceId()).getWorkspaceCode());
 
-        ApiExecutionRuntimeModels.ExecutionContext context = executionEngine.buildExecutionContext(definition.getWorkspaceId(), request.environmentId(), request.variableSetId(), request.rowVariables(), request.mockApplicationId(), request.mockEnabled(), request.mockBusinessScenarioId(), request.mockReleaseId());
+        ApiExecutionRuntimeModels.ExecutionContext context = executionEngine.buildExecutionContext(
+                definition.getWorkspaceId(), request.environmentId(), request.variableSetId(), request.rowVariables(),
+                request.mockApplicationId(), request.mockEnabled(), request.mockBusinessScenarioId(), request.mockReleaseId(),
+                request.serviceKey());
         ApiExecutionRuntimeModels.RunEnvelope envelope = executionEngine.createRunEnvelope(definition.getWorkspaceId(), "API", "接口调试", definition.getDefinitionName());
         ApiExecutionRuntimeModels.RunStepComputation step = executionEngine.executeDefinition(definition, definition.getDefinitionName(), 1, context.variables(), context.environment());
         executionEngine.persistStep(envelope.report(), definition.getWorkspaceId(), step);
@@ -239,7 +242,9 @@ public class ApiExecutionDomainService {
         draftDefinition.setPostprocessorsJson(ApiAutomationJsonSupport.toJson(normalizePostProcessors(request.postProcessors(), request.extractors()),
                 "Failed to serialize post-processors"));
 
-        ApiExecutionRuntimeModels.ExecutionContext context = executionEngine.buildExecutionContext(workspace.getId(), request.environmentId(), request.variableSetId(), null, request.mockApplicationId(), request.mockEnabled(), request.mockBusinessScenarioId());
+        ApiExecutionRuntimeModels.ExecutionContext context = executionEngine.buildExecutionContext(
+                workspace.getId(), request.environmentId(), request.variableSetId(), request.mockApplicationId(),
+                request.mockEnabled(), request.mockBusinessScenarioId(), null, request.serviceKey());
         ApiExecutionRuntimeModels.RunEnvelope envelope = executionEngine.createRunEnvelope(workspace.getId(), "API", "接口调试", draftDefinition.getDefinitionName());
         ApiExecutionRuntimeModels.RunStepComputation step = executionEngine.executeDefinition(draftDefinition, draftDefinition.getDefinitionName(), 1, context.variables(), context.environment());
         executionEngine.persistStep(envelope.report(), workspace.getId(), step);

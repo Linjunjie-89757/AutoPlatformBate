@@ -47,6 +47,10 @@ export interface ApiAuthConfigInput {
   authType: string
   basicAuth?: ApiAuthCredentialInput | null
   digestAuth?: ApiAuthCredentialInput | null
+  bearerToken?: string | null
+  apiKeyName?: string | null
+  apiKeyValue?: string | null
+  apiKeyLocation?: 'header' | 'query' | string | null
 }
 
 export interface ApiRequestBodyInput {
@@ -537,6 +541,7 @@ export interface ApiRunPayload {
   workspaceCode?: string
   environmentId?: number | null
   variableSetId?: number | null
+  serviceKey?: string | null
   branchName?: string | null
   triggerSource?: string | null
   runOn?: string | null

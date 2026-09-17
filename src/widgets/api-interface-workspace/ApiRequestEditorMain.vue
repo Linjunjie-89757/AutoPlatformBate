@@ -14,6 +14,8 @@ type AnyFn = (...args: any[]) => any
 defineProps<{
   activeEditor: any
   environments: any[]
+  serviceKey: string | null
+  services: any[]
   selectedEnvironment: any
   runOptionsLoading: boolean
   sending: boolean
@@ -108,6 +110,7 @@ defineProps<{
   promptImportCurl: AnyFn
   openRunEnvironmentDrawer: AnyFn
   persistRunOptions: AnyFn
+  setSelectedServiceKey: AnyFn
   sendActiveEditor: AnyFn
   saveActiveEditor: AnyFn
   saveAsCase: AnyFn
@@ -182,6 +185,8 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
   :definition-id="activeEditor.definitionId"
   :environment-id="selectedEnvironmentId"
   :environments="environments"
+  :service-key="serviceKey"
+  :services="services"
   :environment-selected="Boolean(selectedEnvironment)"
   :run-options-loading="runOptionsLoading"
   :sending="sending"
@@ -193,6 +198,7 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
   @update:method="activeEditor.detail.requestConfig.method = $event"
   @update:path="activeEditor.detail.requestConfig.path = $event"
   @update:environment-id="selectedEnvironmentId = $event"
+  @update:service-key="setSelectedServiceKey($event)"
   @dirty="markDirty"
   @import-curl="promptImportCurl"
   @open-environment="openRunEnvironmentDrawer"
@@ -392,6 +398,7 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
     v-if="shouldShowResponsePanel"
     :min-height="responsePanelHeight"
     :show-empty="showResponseEmpty"
+    :collapsed="Boolean(activeEditor.responseCollapsed)"
     :active-tab="activeEditor.responseTab"
     :assertion-presentation="responseAssertionPresentation"
     :status="responseStatus"
@@ -409,6 +416,7 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
     :assertion-result-class="assertionResultClass"
     :assertion-result-label="assertionResultLabel"
     @resize-start="startResponseResize"
+    @toggle-collapsed="activeEditor.responseCollapsed = !activeEditor.responseCollapsed"
     @update:active-tab="activeEditor.responseTab = $event"
   />
   </template>

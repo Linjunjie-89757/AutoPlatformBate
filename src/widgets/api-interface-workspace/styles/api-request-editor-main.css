@@ -30,6 +30,11 @@
   overflow: hidden;
 }
 
+/* Auth owns the 20px Design padding; do not add the request body's 14px inset. */
+.api-request-body.is-auth {
+  padding: 0;
+}
+
 .api-request-body.is-pre,
 .api-request-body.is-post,
 .api-request-body.is-tests,

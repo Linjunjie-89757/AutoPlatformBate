@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown } from '@lucide/vue'
 import type { ApiAssertionResult } from '@/entities/api-automation'
 import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 import ApiCodeEditor from './ApiCodeEditor.vue'
@@ -6,6 +7,7 @@ import type { ResponseTab } from './apiInterfaceTypes'
 
 defineProps<{
   minHeight: number
+  collapsed: boolean
   showEmpty: boolean
   activeTab: ResponseTab
   assertionPresentation: { visible: boolean; label: string; tone: string }
@@ -27,15 +29,19 @@ defineProps<{
 
 const emit = defineEmits<{
   resizeStart: [event: PointerEvent]
+  toggleCollapsed: []
   'update:activeTab': [value: ResponseTab]
 }>()
 </script>
 
 <template>
-  <div class="api-response-shell" :style="{ minHeight: `${minHeight}px` }">
-    <div class="api-response-resizer" title="拖拽调整响应区高度" @pointerdown="emit('resizeStart', $event)"></div>
-    <div class="api-response-header">
-      <strong>响应内容</strong>
+  <div :class="['api-response-shell', { 'is-collapsed': collapsed }]" :style="{ minHeight: collapsed ? '40px' : `${minHeight}px` }">
+    <div v-if="!collapsed" class="api-response-resizer" title="拖拽调整响应区高度" @pointerdown="emit('resizeStart', $event)"></div>
+    <div class="api-response-header" role="button" tabindex="0" :aria-expanded="!collapsed" @click="emit('toggleCollapsed')" @keydown.enter="emit('toggleCollapsed')">
+      <div class="api-response-title">
+        <ChevronDown :class="['api-response-collapse-icon', { 'is-collapsed': collapsed }]" :size="13" :stroke-width="1.8" aria-hidden="true" />
+        <strong>响应内容</strong>
+      </div>
       <div class="api-response-header__right">
         <div v-if="!showEmpty" class="api-response-metrics">
           <span
@@ -48,7 +54,7 @@ const emit = defineEmits<{
           <span>耗时 {{ duration ?? '-' }}<template v-if="duration !== null"> ms</template></span>
           <span>大小 {{ size }}</span>
         </div>
-        <div class="api-response-tabs">
+        <div v-if="!collapsed" class="api-response-tabs" @click.stop>
           <button :class="{ 'is-active': activeTab === 'body' }" @click="emit('update:activeTab', 'body')">响应体</button>
           <button :class="{ 'is-active': activeTab === 'header' }" @click="emit('update:activeTab', 'header')">Headers</button>
           <button :class="{ 'is-active': activeTab === 'cookies' }" @click="emit('update:activeTab', 'cookies')">Cookies</button>
@@ -56,7 +62,7 @@ const emit = defineEmits<{
         </div>
       </div>
     </div>
-    <div class="api-response-content">
+    <div v-if="!collapsed" class="api-response-content">
       <div v-if="showEmpty" class="api-response-empty">
         <img class="api-response-empty__icon" :src="figmaApiInterfaceIcons.responseEmpty" alt="" />
         <p>点击「发送」获取响应内容</p>
@@ -151,9 +157,15 @@ const emit = defineEmits<{
   flex: 1 1 280px;
   flex-direction: column;
   height: auto;
-  border-top: 2px solid #e5e6eb;
+  border-top: 1px solid #e5e6eb;
   background: #ffffff;
   overflow: hidden;
+}
+
+.api-response-shell.is-collapsed {
+  min-height: 40px;
+  height: 40px;
+  flex: 0 0 40px;
 }
 
 .api-response-resizer {
@@ -182,7 +194,37 @@ const emit = defineEmits<{
   gap: 12px;
   padding: 0 14px;
   border-bottom: 1px solid #e5e6eb;
-  background: #fafafa;
+  background: #ffffff;
+  cursor: pointer;
+  user-select: none;
+}
+
+.api-response-shell.is-collapsed .api-response-header {
+  border-bottom: 0;
+  background: #ffffff;
+}
+
+.api-response-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-response-collapse-icon {
+  display: inline-flex;
+  width: 13px;
+  height: 13px;
+  align-items: center;
+  justify-content: center;
+  color: #86909c;
+  font-size: 15px;
+  line-height: 13px;
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+}
+
+.api-response-collapse-icon.is-collapsed {
+  transform: rotate(-90deg);
 }
 
 .api-response-header strong {
@@ -299,8 +341,8 @@ const emit = defineEmits<{
 
 .api-response-tabs {
   display: flex;
-  height: 28px;
-  min-height: 28px;
+  height: 31.5px;
+  min-height: 31.5px;
   align-items: center;
   gap: 0;
   overflow: hidden;
@@ -313,7 +355,7 @@ const emit = defineEmits<{
   position: relative;
   display: inline-flex;
   box-sizing: border-box;
-  height: 28px;
+  height: 31.5px;
   align-items: center;
   gap: 6px;
   border: 0;

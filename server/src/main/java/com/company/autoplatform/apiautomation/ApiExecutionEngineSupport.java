@@ -159,7 +159,11 @@ public class ApiExecutionEngineSupport {
     }
 
     ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId) {
-        ResolvedEnvironment environment = resolveEnvironment(workspaceId, environmentId);
+        return buildExecutionContext(workspaceId, environmentId, variableSetId, mockApplicationId, mockEnabled, mockBusinessScenarioId, mockReleaseId, null);
+    }
+
+    ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId, String serviceKey) {
+        ResolvedEnvironment environment = resolveEnvironment(workspaceId, environmentId, serviceKey);
         environment = resolveMockEnvironment(workspaceId, environment, mockApplicationId, mockEnabled, mockBusinessScenarioId, mockReleaseId);
         Map<String, String> variables = new LinkedHashMap<>();
         List<RuntimeVariableSetSnapshot> variableSetSnapshots = new ArrayList<>();
@@ -201,7 +205,11 @@ public class ApiExecutionEngineSupport {
     }
 
     ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Map<String, String> rowVariables, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId) {
-        ExecutionContext context = buildExecutionContext(workspaceId, environmentId, variableSetId, mockApplicationId, mockEnabled, mockBusinessScenarioId, mockReleaseId);
+        return buildExecutionContext(workspaceId, environmentId, variableSetId, rowVariables, mockApplicationId, mockEnabled, mockBusinessScenarioId, mockReleaseId, null);
+    }
+
+    ExecutionContext buildExecutionContext(Long workspaceId, Long environmentId, Long variableSetId, Map<String, String> rowVariables, Long mockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId, String serviceKey) {
+        ExecutionContext context = buildExecutionContext(workspaceId, environmentId, variableSetId, mockApplicationId, mockEnabled, mockBusinessScenarioId, mockReleaseId, serviceKey);
         if (rowVariables != null) {
             rowVariables.forEach((key, value) -> {
                 if (key != null && !key.isBlank()) {
@@ -213,7 +221,7 @@ public class ApiExecutionEngineSupport {
         return new ExecutionContext(context.environment(), variables, rebuildContextSnapshot(context.contextSnapshotJson(), context.environment(), variables));
     }
 
-    private ResolvedEnvironment resolveEnvironment(Long workspaceId, Long environmentId) {
+    private ResolvedEnvironment resolveEnvironment(Long workspaceId, Long environmentId, String serviceKey) {
         if (environmentId == null) {
             return new ResolvedEnvironment(null, "", List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, null, null, null, null, null, null, null, null, List.of());
         }
@@ -225,8 +233,13 @@ public class ApiExecutionEngineSupport {
                 new EnvironmentConfigPayload(List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, null, null, List.of()));
         List<EnvironmentServiceEndpoint> services = normalizeServices(config.services(), environment.getBaseUrl());
         String defaultServiceKey = normalizeDefaultServiceKey(config.defaultServiceKey(), services);
+        String requestedServiceKey = Optional.ofNullable(serviceKey).orElse("").trim();
+        String effectiveServiceKey = requestedServiceKey.isEmpty() ? defaultServiceKey : requestedServiceKey;
+        if (services.stream().noneMatch(service -> service.key().equals(effectiveServiceKey))) {
+            throw new BadRequestException("Selected service does not exist in the environment: " + effectiveServiceKey);
+        }
         String baseUrl = services.stream()
-                .filter(service -> service.key().equals(defaultServiceKey))
+                .filter(service -> service.key().equals(effectiveServiceKey))
                 .findFirst()
                 .map(EnvironmentServiceEndpoint::baseUrl)
                 .orElse(environment.getBaseUrl());
@@ -247,7 +260,7 @@ public class ApiExecutionEngineSupport {
                 Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockReleaseId(),
                 null,
                 null,
-                defaultServiceKey,
+                effectiveServiceKey,
                 services
         );
     }

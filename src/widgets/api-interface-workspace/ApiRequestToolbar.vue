@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import type { ApiAutomationEnvironmentItem } from '@/entities/api-automation'
 import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 
 const pathInputRef = ref<{ focus: () => void } | null>(null)
+const servicePickerOpen = ref(false)
+const urlFocused = ref(false)
+
+interface ApiServiceOption {
+  key: string
+  name: string
+  baseUrl: string
+  isDefault?: boolean
+}
 
 const props = defineProps<{
   method: string
@@ -12,6 +21,8 @@ const props = defineProps<{
   definitionId: number | null
   environmentId: number | null
   environments: ApiAutomationEnvironmentItem[]
+  serviceKey: string | null
+  services: ApiServiceOption[]
   environmentSelected: boolean
   runOptionsLoading: boolean
   sending: boolean
@@ -26,6 +37,7 @@ const emit = defineEmits<{
   'update:method': [value: string]
   'update:path': [value: string]
   'update:environmentId': [value: number | null]
+  'update:serviceKey': [value: string | null]
   dirty: []
   importCurl: []
   openEnvironment: []
@@ -39,6 +51,14 @@ const emit = defineEmits<{
 
 const apiMethodOptions = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH', 'TRACE'] as const
 const canMutate = computed(() => props.definitionId ? props.canEdit !== false : props.canCreate !== false)
+const isAbsolutePath = computed(() => /^https?:\/\//i.test(props.path.trim()))
+const selectedService = computed(() =>
+  props.services.find(item => item.key === props.serviceKey)
+    || props.services.find(item => item.isDefault)
+    || props.services[0]
+    || null,
+)
+const serviceBaseUrl = computed(() => isAbsolutePath.value ? '' : selectedService.value?.baseUrl || '')
 
 function requestMethodClass(method?: string) {
   return `method-${String(method || 'GET').toLowerCase()}`
@@ -59,6 +79,19 @@ function updateEnvironment(value: number | null) {
   emit('persistRunOptions')
 }
 
+function chooseService(key: string) {
+  emit('update:serviceKey', key)
+  servicePickerOpen.value = false
+  pathInputRef.value?.focus()
+}
+
+function closeServicePicker() {
+  servicePickerOpen.value = false
+}
+
+onMounted(() => document.addEventListener('click', closeServicePicker))
+onBeforeUnmount(() => document.removeEventListener('click', closeServicePicker))
+
 defineExpose({
   focus: () => pathInputRef.value?.focus(),
 })
@@ -78,13 +111,45 @@ defineExpose({
           <span :class="['api-method-option', requestMethodClass(methodOption)]">{{ methodOption }}</span>
         </el-option>
       </el-select>
-      <el-input
-        ref="pathInputRef"
-        :model-value="props.path"
-        placeholder="请输入包含 http/https 的完整 URL 或接口路径"
-        :disabled="!canMutate"
-        @update:model-value="updatePath"
-      />
+      <div
+        :class="['api-url-field', { 'is-focused': urlFocused, 'is-picker-open': servicePickerOpen }]"
+        @click.stop="pathInputRef?.focus()"
+      >
+        <button
+          v-if="props.environmentSelected && props.services.length && !isAbsolutePath"
+          type="button"
+          class="api-service-prefix"
+          :title="serviceBaseUrl || '选择服务前缀'"
+          :disabled="!canMutate"
+          @click.stop="servicePickerOpen = !servicePickerOpen"
+        >
+          <span>{{ serviceBaseUrl || '选择服务前缀' }}</span>
+        </button>
+        <el-input
+          ref="pathInputRef"
+          :model-value="props.path"
+          :placeholder="serviceBaseUrl ? '/api/v1/path' : '请输入包含 http/https 的完整 URL 或接口路径'"
+          :disabled="!canMutate"
+          @focus="urlFocused = true"
+          @blur="urlFocused = false"
+          @update:model-value="updatePath"
+        />
+        <div v-if="servicePickerOpen" class="api-service-picker" @click.stop>
+          <div class="api-service-picker__hint">选择服务模块，系统将自动拼接对应前置 URL</div>
+          <button
+            v-for="service in props.services"
+            :key="service.key"
+            type="button"
+            :class="['api-service-option', { 'is-selected': selectedService?.key === service.key }]"
+            @click="chooseService(service.key)"
+          >
+            <span class="api-service-option__radio"><i></i></span>
+            <strong>{{ service.name }}</strong>
+            <span>{{ service.baseUrl }}</span>
+            <b v-if="selectedService?.key === service.key">✓</b>
+          </button>
+        </div>
+      </div>
       <button type="button" class="api-curl-button" :disabled="!canMutate" @click="emit('importCurl')">Curl</button>
     </div>
     <div class="api-run-environment-combo">
@@ -174,6 +239,139 @@ defineExpose({
   background: transparent;
 }
 
+.api-url-field {
+  position: relative;
+  display: flex;
+  box-sizing: border-box;
+  height: 36px;
+  min-width: 0;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.api-url-field.is-focused,
+.api-url-field.is-picker-open {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.08);
+}
+
+.api-service-prefix {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 35%;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 2px 0 0;
+  border: 0;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.api-service-prefix > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.api-service-picker {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+
+.api-service-picker__hint {
+  padding: 9px 14px 8px;
+  border-bottom: 1px solid var(--app-border);
+  color: #c9cdd4;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.api-service-option {
+  display: grid;
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  grid-template-columns: 15px 72px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.api-service-option:hover {
+  background: #f4f6fa;
+}
+
+.api-service-option.is-selected {
+  background: rgba(22, 93, 255, 0.03);
+}
+
+.api-service-option__radio {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 15px;
+  height: 15px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #c9cdd4;
+  border-radius: 50%;
+}
+
+.api-service-option.is-selected .api-service-option__radio {
+  border-color: var(--app-primary);
+  background: var(--app-primary);
+}
+
+.api-service-option__radio i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.api-service-option strong {
+  overflow: hidden;
+  color: var(--app-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-service-option > span:nth-child(3) {
+  overflow: hidden;
+  color: #86909c;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-service-option b {
+  color: var(--app-primary);
+  font-size: 12px;
+}
+
 .api-run-environment-combo {
   display: block;
   box-sizing: border-box;
@@ -239,6 +437,23 @@ defineExpose({
   border-radius: 7px;
   font-size: 13px;
   line-height: 20px;
+}
+
+.api-url-field :deep(.el-input) {
+  min-width: 0;
+}
+
+.api-url-field :deep(.el-input__wrapper) {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 0 0 2px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.api-url-field :deep(.el-input__inner) {
+  font-family: 'JetBrains Mono', monospace;
 }
 
 .api-method-select :deep(.el-select__wrapper) {

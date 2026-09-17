@@ -129,6 +129,10 @@ function normalizeRequestConfig(config: ApiDefinitionDetail['requestConfig']): A
       authType: config?.authConfig?.authType || 'NONE',
       basicAuth: config?.authConfig?.basicAuth || null,
       digestAuth: config?.authConfig?.digestAuth || null,
+      bearerToken: config?.authConfig?.bearerToken || '',
+      apiKeyName: config?.authConfig?.apiKeyName || '',
+      apiKeyValue: config?.authConfig?.apiKeyValue || '',
+      apiKeyLocation: config?.authConfig?.apiKeyLocation || 'header',
     },
     schemaFields: Array.isArray(config?.schemaFields) ? config.schemaFields : [],
   }

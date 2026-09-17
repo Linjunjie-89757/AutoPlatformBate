@@ -51,6 +51,10 @@ export function emptyRequestConfig(method = 'GET'): ApiRequestConfigInput {
       authType: 'NONE',
       basicAuth: { userName: '', password: '' },
       digestAuth: { userName: '', password: '' },
+      bearerToken: '',
+      apiKeyName: 'X-API-Key',
+      apiKeyValue: '',
+      apiKeyLocation: 'header',
     },
     schemaFields: [],
   }

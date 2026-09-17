@@ -416,7 +416,11 @@ public class ApiAiCaseGenerationService {
         return new ApiAuthConfigInput(
                 firstNonBlank(authConfig.authType(), "NONE").toUpperCase(Locale.ROOT),
                 normalizeCredential(authConfig.basicAuth()),
-                normalizeCredential(authConfig.digestAuth())
+                normalizeCredential(authConfig.digestAuth()),
+                Optional.ofNullable(authConfig.bearerToken()).orElse(""),
+                Optional.ofNullable(authConfig.apiKeyName()).orElse(""),
+                Optional.ofNullable(authConfig.apiKeyValue()).orElse(""),
+                Optional.ofNullable(authConfig.apiKeyLocation()).orElse("header")
         );
     }
 

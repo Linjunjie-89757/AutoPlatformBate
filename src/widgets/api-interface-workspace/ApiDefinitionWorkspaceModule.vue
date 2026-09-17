@@ -121,6 +121,8 @@ const variableSets = computed(() => props.variableSets || [])
 const runOptionsLoading = computed(() => Boolean(props.runOptionsLoading))
 const {
   selectedEnvironmentId,
+  selectedServiceKey,
+  setSelectedServiceKey,
   selectedMockBusinessScenarioId,
   runEnvironmentDrawerVisible,
   runEnvironmentDetailLoading,
@@ -831,6 +833,8 @@ useApiDefinitionWorkspaceLifecycle({
         <ApiRequestEditorMain
           v-else-if="!isAiCaseGenerationTabActive"
           v-model:selected-environment-id="selectedEnvironmentId"
+          :service-key="selectedServiceKey"
+          :services="runEnvironmentServices"
           v-model:active-body-raw-text="activeBodyRawText"
           v-model:body-json-view-mode="bodyJsonViewMode"
           v-model:case-list-current-page="caseListCurrentPage"
@@ -849,6 +853,7 @@ useApiDefinitionWorkspaceLifecycle({
           :can-export="props.canExport"
           :sending="sending"
           :saving="saving"
+          :set-selected-service-key="setSelectedServiceKey"
           :content-tabs="contentTabs"
           :param-type-options="paramTypeOptions"
           :body-modes="bodyModes"
