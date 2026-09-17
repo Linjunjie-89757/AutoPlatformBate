@@ -36,3 +36,37 @@
 - 禁止为了批量替换而整文件重写中文源码或配置文件。
 - 禁止在没有确认成功的情况下声称已经完成。
 - 禁止把无关格式化、依赖锁文件变化、构建产物变化混入当前任务。
+
+## Figma 对齐硬性门禁
+
+涉及 Figma Design、Figma AI Make 或 Make 预览的对齐任务，必须按以下顺序执行，不得合并或跳过步骤：
+
+1. 用 Design 节点和截图对齐默认静态外观。
+2. 用 Make 源码列出目标区域的事件和状态，包括 Hover、Focus、Blur、Active、Disabled、Loading、Success、Failure；代码没有表达的状态也必须登记为 `not-expressed`，不得省略。
+3. 在 Make 预览中逐项操作验证 Make 源码列出的状态和事件。
+4. 在当前 Vue/前端代码中实现 Design 视觉和 Make 行为，同时保留真实业务规则。
+5. 用真实浏览器重新验证当前实现，包括截图、computed style、bounding box 和交互结果。
+6. 对 Design、Make 源码、Make 预览和当前实现的每一项差异登记来源、处理方式、影响和后续动作。
+
+每次对齐都必须提供结构化记录，默认放在 `docs/figma-alignment/`，格式参见 `docs/figma-alignment-record.template.json`。记录至少包含：
+
+- Design 节点和截图；
+- Make 源码路径、事件矩阵和关键逻辑；
+- Make 预览地址、视口和逐项操作证据；
+- 当前代码文件、浏览器截图、computed style 和 bounding box；
+- 六步流程的验证状态；
+- Design / Make 源码 / Make 预览 / 当前代码的差异登记；
+- 未验收状态和后续动作。
+
+运行 `npm run figma:alignment-check -- --record <record.json>` 作为交付门禁。检查失败时，不得使用“已完成”“完全对齐”等结论。只有六步流程均为 `verified`、所有事件均有证据、没有未验收或阻塞状态、所有差异均有处理结论时，才允许记录为完成。
+
+Make 没有表达的 Hover、Focus、Loading 等状态可以登记为 `not-expressed`，但必须保留 Make 代码证据、Make 预览验证结果、当前实现决策和遗留问题；不得把缺少状态稿或缺少事件误写成已验证。
+
+详细裁决与验收按 `docs/figma-project-alignment-standards.md` 执行。Design 决定静态外观，Make 源码及预览共同验证交互，真实业务规则优先；组件库默认效果不得自动视为设计依据。
+
+- 修改前建立四方差异表；覆盖范围内全部变体、图标双向切换、文案及实际尺寸，禁止用一个默认态代表整个区域。
+- `not-expressed` 必须检查 CSS、共享组件和原生行为，并经预览确认；不要求为来源和业务均未表达的状态强行补设计。
+- `draft`、`partial-alignment`、`blocked` 或任何 `unresolved` 差异必须被交付门禁拦截；未验收或未知事件状态不能通过。
+- `accepted-deviation` 必须填写 `acceptance.type`（`user-decision` 或 `business-constraint`）及可追溯的 `acceptance.reference`。代理自行决定保留不算接受。
+- 门禁通过仅说明记录约束及引用文件检查通过，不代表像素或证据真实性已经自动验收。最终报告区分已验证、未验证和遗留问题，并据记录给出数量。
+- 修改门禁后运行 `node --test tools/quality/check-figma-alignment.test.mjs`；不得为了让旧记录通过而隐藏缺项或提升其完成状态。

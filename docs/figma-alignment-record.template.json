@@ -1,0 +1,55 @@
+{
+  "title": "页面或组件 Figma 对齐记录",
+  "page": "页面名称",
+  "status": "draft",
+  "scope": {
+    "figmaNodes": ["fileKey:nodeId"],
+    "makeCodePath": "设计/figma-ai-make.../src/...",
+    "makePreviewUrl": "https://www.figma.com/make/...",
+    "currentCodeFiles": ["src/.../Component.vue"]
+  },
+  "workflow": [
+    { "id": "design-static", "status": "unverified", "evidence": [] },
+    { "id": "make-event-inventory", "status": "unverified", "evidence": [] },
+    { "id": "make-preview-validation", "status": "unverified", "evidence": [] },
+    { "id": "vue-implementation", "status": "unverified", "evidence": [] },
+    { "id": "browser-validation", "status": "unverified", "evidence": [] },
+    { "id": "difference-registration", "status": "unverified", "evidence": [] }
+  ],
+  "evidence": {
+    "design": { "nodes": [], "screenshots": [] },
+    "make": {
+      "codeReferences": [],
+      "eventMatrix": [
+        { "name": "hover", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" },
+        { "name": "focus", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" },
+        { "name": "blur", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" },
+        { "name": "active", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" },
+        { "name": "disabled", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" },
+        { "name": "loading", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" },
+        { "name": "success", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" },
+        { "name": "failure", "status": "not-expressed", "evidence": [], "rationale": "", "resolution": "" }
+      ]
+    },
+    "makePreview": { "url": "", "viewport": [], "interactions": [], "screenshots": [] },
+    "vue": { "screenshots": [], "computedStyle": [], "boundingBox": [], "interactionResults": [] }
+  },
+  "differences": [
+    {
+      "id": "DIFF-001",
+      "status": "unresolved",
+      "area": "填写差异区域",
+      "source": "Design / Make / Make preview / Vue",
+      "current": "当前实际表现",
+      "resolution": "当前处理方式或未处理原因",
+      "followUp": "后续动作",
+      "evidence": ["证据文件或操作记录"],
+      "decisionBasis": "裁决依据；未解决项填写缺少的决定或证据",
+      "impact": "影响范围和风险",
+      "acceptance": { "type": "", "reference": "" }
+    }
+  ],
+  "noDifferencesReason": "填写差异核对结论；若有差异，请改为数组并逐项登记。",
+  "unverifiedStatuses": ["填写尚未验收的状态；完成前不得清空"],
+  "validation": { "commands": ["npm run typecheck", "npm run build", "git diff --check"] }
+}

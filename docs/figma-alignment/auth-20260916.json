@@ -1,0 +1,120 @@
+{
+  "title": "接口管理 Auth 五种类型对齐复核",
+  "page": "接口自动化 / 接口管理 / Auth",
+  "status": "partial-alignment",
+  "recordReview": {
+    "date": "2026-09-17",
+    "scope": "仅迁移记录结构并纠正交付状态；本次未重新执行 Design、Make 预览或 Vue 浏览器验收",
+    "historicalEvidence": "下方 workflow、截图、测量及 validation 原有结果保留为历史记录，不代表本次重新验证，也不追认证据与当前代码版本一致",
+    "gateResult": "failed：partial-alignment 不可交付，AUTH-DIFF-002 尚未解决",
+    "followUp": "继续 Auth 对齐时，先核对历史证据与当前版本，按既定 Make 交互准则处理 AUTH-DIFF-002 并复验；若真实业务约束要求保留偏差，再登记明确依据"
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:805:1178",
+      "jSUUPxC4PVD9Kp2FUydfox:805:350",
+      "jSUUPxC4PVD9Kp2FUydfox:805:1582",
+      "jSUUPxC4PVD9Kp2FUydfox:805:2033",
+      "jSUUPxC4PVD9Kp2FUydfox:806:2485",
+      "jSUUPxC4PVD9Kp2FUydfox:806:2947"
+    ],
+    "makeCodePath": "设计/figma-ai-make20260914代码/src/app/ApiWorkbenchExtras.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/后台管理系统界面设计-正式",
+    "currentCodeFiles": [
+      "src/widgets/api-interface-workspace/ApiRequestAuthPanel.vue",
+      "src/widgets/api-interface-workspace/styles/api-request-auth-panel.css"
+    ]
+  },
+  "workflow": [
+    { "id": "design-static", "status": "verified", "evidence": ["Figma get_design_context for six Auth nodes", "output/playwright/figma-auth-digest.png"] },
+    { "id": "make-event-inventory", "status": "verified", "evidence": ["ApiWorkbenchExtras.tsx:1172-1375 AuthConfigSection", "Make event inventory recorded below"] },
+    { "id": "make-preview-validation", "status": "verified", "evidence": ["output/playwright/make-auth-bearer.png", "output/playwright/make-auth-basic.png", "output/playwright/make-auth-digest.png", "output/playwright/make-auth-api-key-header.png", "output/playwright/make-auth-api-key-query.png", "output/playwright/make-auth-no-auth.png", "output/playwright/make-response-collapsed.png"] },
+    { "id": "vue-implementation", "status": "verified", "evidence": ["src/widgets/api-interface-workspace/ApiRequestAuthPanel.vue", "src/widgets/api-interface-workspace/styles/api-request-auth-panel.css"] },
+    { "id": "browser-validation", "status": "verified", "evidence": ["output/playwright/vue-auth-no-auth.png", "output/playwright/vue-auth-api-key.png", "output/playwright/vue-auth-api-key-query.png", "output/playwright/vue-auth-digest.png", "output/playwright/vue-response-collapsed.png"] },
+    { "id": "difference-registration", "status": "verified", "evidence": ["This record differences array", "Make preview block and Make/Vue differences explicitly listed"] }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [
+        { "node": "805:1178", "label": "No Auth", "static": "segmented 452.734x32; padding 20; empty content padding-top 60; icon 36" },
+        { "node": "805:350", "label": "Bearer Token", "static": "form 520; notice 59.188; input 37.5; eye 14" },
+        { "node": "805:1582", "label": "Basic Auth", "static": "notice 58.781; columns 240+16+264; prefix and eye icons 13" },
+        { "node": "805:2033", "label": "API Key Header", "static": "columns 252+16+252; location 252x32; name input 36" },
+        { "node": "806:2485", "label": "API Key Query", "static": "same API Key geometry with Query selected" },
+        { "node": "806:2947", "label": "Digest Auth", "static": "notice 58.375; columns 240+16+264; prefix and eye icons 13" }
+      ],
+      "screenshots": ["output/playwright/figma-auth-digest.png"]
+    },
+    "make": {
+      "codeReferences": [
+        "设计/figma-ai-make20260914代码/src/app/ApiWorkbenchExtras.tsx:1172-1375",
+        "AuthConfigSection AUTH_TYPES and conditional render branches",
+        "Make FInput onFocus/onBlur at ApiWorkbenchExtras.tsx:72-86 is not used by AuthConfigSection"
+      ],
+      "eventMatrix": [
+        { "name": "hover", "status": "not-expressed", "evidence": ["Make preview hovered Basic Auth; computed color/background/shadow remained unchanged, cursor remained pointer", "Make source has no Auth-specific onMouseEnter/onMouseLeave"], "rationale": "Make preview permits hover, but the Make Auth code does not express a distinct hover visual state.", "resolution": "Vue keeps its existing hover affordance as a product interaction enhancement; it is not claimed as Make parity." },
+        { "name": "focus", "status": "not-expressed", "evidence": ["Make preview focused Basic username input; activeElement became the input and computed border/outline remained unchanged", "AuthConfigSection uses native input without onFocus/onBlur"], "rationale": "Make preview permits focus, but the Make Auth code does not express a distinct focus visual state.", "resolution": "Vue keeps the existing Element Plus focus affordance; no distinct Make visual state is claimed." },
+        { "name": "blur", "status": "not-expressed", "evidence": ["Make preview blurred Basic username input; activeElement left the input and computed border/outline remained unchanged", "AuthConfigSection has no Auth-specific blur handler"], "rationale": "Blur is operable in Make but no distinct Auth blur behavior is expressed by the source.", "resolution": "Vue retains the input value and normal component behavior; no Make-specific blur variant is claimed." },
+        { "name": "active", "status": "verified", "evidence": ["setAuthType, setApiKeyLocation and password visibility click handlers in AuthConfigSection"] },
+        { "name": "disabled", "status": "not-expressed", "evidence": ["No disabled prop or branch in AuthConfigSection"], "rationale": "Make Auth design/code does not express a disabled state.", "resolution": "No disabled visual state was invented as Make parity; Vue follows actual form availability." },
+        { "name": "loading", "status": "not-expressed", "evidence": ["No loading state in AuthConfigSection"], "rationale": "Make Auth code does not express a loading branch.", "resolution": "Request-level loading remains outside Auth and is not attributed to Auth." },
+        { "name": "success", "status": "not-expressed", "evidence": ["No Auth success state in AuthConfigSection"], "rationale": "Make Auth code does not express an Auth-specific success state.", "resolution": "No fake Auth success state was added." },
+        { "name": "failure", "status": "not-expressed", "evidence": ["No Auth failure state in AuthConfigSection"], "rationale": "Make Auth code does not express an Auth-specific validation/failure branch.", "resolution": "No fake Auth failure state was added; real request errors remain in request response handling." }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/后台管理系统界面设计-正式",
+      "viewport": [1614, 900],
+      "interactions": ["Logged in as superadmin and selected X-MAN", "Opened 接口自动化 > 接口管理 > Auth", "Clicked all five Auth options", "Hovered Basic Auth and measured no distinct visual hover style", "Focused and blurred Basic username input and measured no distinct visual focus style", "Switched API Key Header / Query Param and observed Query warning", "Toggled Bearer, Basic, API Key, and Digest eye visibility; each changed password/text type, swapped Eye/EyeOff, and preserved value", "Collapsed response header"],
+      "screenshots": ["output/playwright/make-auth-bearer.png", "output/playwright/make-auth-basic.png", "output/playwright/make-auth-digest.png", "output/playwright/make-auth-api-key-header.png", "output/playwright/make-auth-api-key-query.png", "output/playwright/make-auth-no-auth.png", "output/playwright/make-auth-bearer-token-visible.png", "output/playwright/make-auth-basic-auth-visible.png", "output/playwright/make-auth-api-key-visible.png", "output/playwright/make-auth-digest-auth-visible.png", "output/playwright/make-response-collapsed.png"]
+    },
+    "vue": {
+      "screenshots": [
+        "output/playwright/vue-auth-no-auth.png",
+        "output/playwright/vue-auth-bearer-hidden.png",
+        "output/playwright/vue-auth-bearer-visible.png",
+        "output/playwright/vue-auth-basic-placeholder.png",
+        "output/playwright/vue-auth-api-key.png",
+        "output/playwright/vue-auth-api-key-query.png",
+        "output/playwright/vue-auth-digest.png",
+        "output/playwright/vue-response-collapsed.png"
+      ],
+      "computedStyle": [
+        "Segmented 452.71875x32; Inter 12px/18px weight 600",
+        "Basic/Digest notice 520x58.375; columns 240/264; prefix icons 13x13; eye icons 13x13",
+        "Bearer/API Key eye icons 14x14; eye button boxes 34x14",
+        "API Key location 252x32; equal columns 252/252; notice 520x58.765625",
+        "No Auth icon 36x36 with 60px top offset"
+      ],
+      "boundingBox": [
+        "Bearer form 520x195.78125; notice 520x59.1875; input 520x37.5",
+        "Basic form 520x196.5625; columns 240+16+264",
+        "Digest form 520x196.5625; columns 240+16+264",
+        "Collapsed response shell 972x40"
+      ],
+      "interactionResults": [
+        "All five Auth radio options switch rendered content",
+        "Basic Auth username placeholder renders username 或 {{变量}}, matching Make source and preview",
+        "API Key Header/Query switches selection and Query warning",
+        "Bearer password eye toggles input type password/text, swaps Eye/EyeOff, and preserves value",
+        "Basic and Digest password fields render User/Key prefix icons and Eye/EyeOff toggle behavior",
+        "API Key value field renders Eye/EyeOff toggle behavior and preserves value",
+        "Response content collapses to 40px header and exposes aria-expanded=false"
+      ]
+    }
+  },
+  "differences": [
+    { "id": "AUTH-DIFF-001", "status": "resolved", "area": "Make preview access", "source": "Make preview", "current": "Initial load showed Reconnecting, then authenticated iframe loaded after reload", "resolution": "Retried with browser reload, logged in, and captured Auth interactions", "followUp": "Use the saved preview screenshots as regression evidence", "evidence": ["output/playwright/make-auth-bearer.png", "Make preview reload and login operation"], "decisionBasis": "Preview was reloaded and authenticated before interaction evidence was captured", "impact": "Preview access was a setup issue and does not change Auth rendering" },
+    { "id": "AUTH-DIFF-002", "status": "unresolved", "area": "Auth hover/focus/blur", "source": "Make code and preview", "current": "Make Auth branch has no explicit handlers; preview confirms hover/focus/blur are operable without distinct visual variants; Vue provides CSS hover and Element Plus focus", "resolution": "已记录实际无变体行为，但当前未移除 Vue 的额外交互反馈，也没有用户明确接受该差异", "followUp": "确认产品是否要求 Vue 复刻 Make 的无变体行为；若要求，移除或限定 Auth 区域的额外 Hover/Focus 视觉反馈并重新进行浏览器验证", "evidence": ["Make preview hover/focus/blur measurements", "ApiWorkbenchExtras.tsx:1172-1375", "Vue browser interaction results"], "decisionBasis": "准则要求用户明确接受才能标记 accepted-deviation；当前没有该决定，因此保留为 unresolved", "impact": "Vue 在 Hover/Focus 上提供 Make 未表达的视觉反馈，无法报告为四方无差异" },
+    { "id": "AUTH-DIFF-003", "status": "resolved", "area": "Auth segmented shadow", "source": "Make code vs Design", "current": "Make inline style uses 0 1px 4px; Design uses 0 1px 2px", "resolution": "Vue follows Design shadow", "followUp": "Keep Design as visual authority", "evidence": ["Figma Auth node measurements", "Vue computed style record"], "decisionBasis": "Visual authority is Design for static appearance", "impact": "Segmented control shadow now matches Design" },
+    { "id": "AUTH-DIFF-004", "status": "resolved", "area": "No Auth vertical offset", "source": "Make code vs Design", "current": "Make uses paddingTop 40; Design specifies 60", "resolution": "Vue follows Design 60px offset", "followUp": "Do not regress to Make demo spacing", "evidence": ["Figma No Auth node measurements", "Vue bounding box record"], "decisionBasis": "Visual authority is Design for static spacing", "impact": "No Auth empty state aligns with the Design vertical position" },
+    { "id": "AUTH-DIFF-005", "status": "resolved", "area": "Basic username placeholder", "source": "Make code vs previous Vue", "current": "Make and Vue now both use username 或 {{变量}}", "resolution": "Vue placeholder changed to match Make exactly", "followUp": "Keep the Make copy unless product supplies a replacement", "evidence": ["ApiWorkbenchExtras.tsx AuthConfigSection username input", "output/playwright/make-auth-basic.png", "output/playwright/vue-auth-basic-placeholder.png"], "decisionBasis": "用户明确要求 Basic Auth 用户名占位文案对齐 Make；Make 源码和 Make 预览均显示 username 或 {{变量}}", "impact": "Basic Auth 空输入框的引导文案与 Make 一致，避免误导用户填写固定账号" },
+    { "id": "AUTH-DIFF-006", "status": "resolved", "area": "Auth icon flex sizing", "source": "Design measurements vs current Vue computed style", "current": "Element Plus input flex layout initially compressed the 13px/14px auth icons below their Design sizes", "resolution": "Added fixed flex-basis for prefix and eye icons; Vue now measures User/Key/Eye icons at 13x13 and Bearer/API Key eye icons at 14x14", "followUp": "Keep the fixed icon basis when changing input suffix/prefix styles", "evidence": ["Figma Auth node measurements", "output/playwright/vue-auth-basic-placeholder.png", "output/playwright/vue-auth-digest.png", "Vue computed style record"], "decisionBasis": "Design defines the icon dimensions; browser computed style and bounding box now match those measurements", "impact": "Basic/Digest 前置图标和各密码显隐图标不再被 Element Plus flex 布局压缩，静态尺寸与 Design 对齐" }
+  ],
+  "noDifferencesReason": "",
+  "unverifiedStatuses": [],
+  "validation": {
+    "commands": ["npm run typecheck", "npm run build", "git diff --check", "Playwright CLI browser validation on http://localhost:4174 and Figma Make preview"],
+    "results": { "typecheck": "passed", "build": "passed with dependency/chunk-size warnings", "diffCheck": "passed with line-ending warnings only" }
+  }
+}
