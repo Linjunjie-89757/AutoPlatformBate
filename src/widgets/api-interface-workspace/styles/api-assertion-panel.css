@@ -1109,3 +1109,321 @@
   line-height: 15px;
   white-space: nowrap;
 }
+
+/* Assertion tab: Design node 878:1399 / Make AssertTab baseline. */
+.api-assertion-panel {
+  display: flex;
+  width: 100%;
+  min-height: 316px;
+  padding: 0;
+  gap: 0;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.api-assertion-editor {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 316px;
+  gap: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+
+.api-assertion-list {
+  width: 264px;
+  min-width: 264px;
+  border: 0;
+  border-right: 1px solid #e5e6eb;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+
+.api-assertion-toolbar {
+  box-sizing: border-box;
+  height: 43px;
+  flex: 0 0 43px;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.api-legacy-primary {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 98px;
+  height: 26px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-legacy-primary:hover {
+  border-color: #c9cdd4;
+  background: #f7f8fa;
+}
+
+.api-button-plus {
+  width: 11px;
+  height: 11px;
+  color: #4e5969;
+}
+
+.api-button-chevron {
+  width: 9px;
+  height: 9px;
+  margin-left: auto;
+  color: #86909c;
+}
+
+.api-assertion-batch-link {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 76px;
+  height: 26px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+}
+
+.api-assertion-batch-link:not(:disabled) {
+  color: #165dff;
+}
+
+.api-assertion-batch-link:hover:not(:disabled) {
+  border-color: #c9cdd4;
+  background: #f7f8fa;
+  color: #165dff;
+}
+
+.api-assertion-list > .api-assertion-list-item,
+.api-assertion-toolbar + .api-assertion-list-item {
+  margin-top: 5.25px;
+}
+
+.api-assertion-list-item {
+  box-sizing: border-box;
+  width: calc(100% - 7px);
+  min-height: 33px;
+  margin: 0 3.5px;
+  padding: 6px 8px 6px 10px;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.api-assertion-list-item:hover {
+  background: #f2f3f5;
+}
+
+.api-assertion-list-item.is-active {
+  border: 0;
+  background: #eef3ff;
+}
+
+.api-assertion-list-item__main {
+  gap: 7px;
+  min-width: 0;
+}
+
+.api-assertion-list-row {
+  gap: 7px;
+}
+
+.api-assertion-type-badge {
+  height: 19px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-assertion-list-title {
+  min-width: 0;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.api-assertion-list-item.is-active .api-assertion-list-title {
+  color: #165dff;
+  font-weight: 500;
+}
+
+.api-assertion-list-actions {
+  gap: 1.75px;
+}
+
+.api-assertion-detail {
+  height: 100%;
+  min-height: 316px;
+  gap: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+
+.api-assertion-name-row {
+  box-sizing: border-box;
+  min-height: 70.5px;
+  flex: 0 0 70.5px;
+  gap: 7px;
+  padding: 10.5px 14px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.api-figma-field {
+  gap: 3.5px;
+}
+
+.api-figma-field > span {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-figma-field :deep(.el-input__wrapper) {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10.5px;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #e5e6eb;
+}
+
+.api-figma-field :deep(.el-input__inner) {
+  height: 28px;
+  color: #1d2129;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+.api-assertion-name-actions {
+  gap: 10.5px;
+  padding-top: 17.5px;
+}
+
+.api-assertion-name-actions button {
+  height: 22px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-assertion-name-actions button:hover {
+  background: #f2f3f5;
+}
+
+.api-assertion-name-actions .api-row-remove {
+  color: #f53f3f;
+}
+
+.api-figma-enable {
+  gap: 7px;
+  padding-top: 21.5px;
+}
+
+.api-figma-enable em {
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-assertion-type-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10.5px;
+  padding: 14px;
+}
+
+.api-assertion-form-grid,
+.api-assertion-form-row {
+  gap: 10.5px;
+}
+
+.api-assertion-form-grid label,
+.api-assertion-form-row,
+.api-assertion-hint {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-assertion-item-list {
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  box-shadow: none;
+}
+
+.api-assertion-item-row {
+  min-height: 34.5px;
+  gap: 7px;
+  padding: 6px 10.5px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.api-assertion-empty {
+  min-height: 160px;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  color: #86909c;
+}
+
+.api-assertion-empty__icon {
+  display: block;
+  color: #c9cdd4;
+  font-size: 28px;
+  line-height: 32px;
+}
+
+.api-assertion-empty p {
+  margin: 8px 0 0;
+  color: #86909c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-assertion-empty small {
+  margin-top: 2px;
+  color: #c9cdd4;
+  font-size: 11px;
+  line-height: 16.5px;
+}

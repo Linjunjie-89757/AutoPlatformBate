@@ -56,7 +56,13 @@ function activeIndex() {
 </script>
 
 <template>
-  <div class="api-processor-panel">
+  <div
+    class="api-processor-panel"
+    :class="{
+      'is-pre': stage === 'pre',
+      'has-active-processor': Boolean(activeProcessor),
+    }"
+  >
     <div class="api-processor-editor">
       <ApiProcessorSidebar
         :stage="stage"
@@ -70,6 +76,7 @@ function activeIndex() {
         @dirty="emit('dirty')"
       />
       <ApiProcessorDetail
+        :stage="stage"
         :active-processor="activeProcessor"
         :extract-variable-type-options="extractVariableTypeOptions"
         :extract-type-options="extractTypeOptions"

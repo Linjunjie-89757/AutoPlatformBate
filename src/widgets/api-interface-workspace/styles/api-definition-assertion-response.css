@@ -1331,6 +1331,167 @@
   background: var(--app-primary);
 }
 
+/* Final processing-tab overrides: keep the 811:3534 / Make measurements after
+   the legacy workspace visual passes above. */
+.api-processor-panel .api-processor-editor {
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  height: 316px;
+  min-height: 316px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.api-processor-panel .api-processor-sidebar,
+.api-processor-panel .api-processor-detail {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.api-processor-panel .api-processor-sidebar {
+  border-right: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.api-processor-panel .api-processor-detail {
+  height: 316px;
+  min-height: 316px;
+  padding: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.api-processor-panel .api-processor-toolbar {
+  height: 43px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+}
+
+.api-processor-panel .api-legacy-primary {
+  display: inline-flex;
+  width: 110px;
+  height: 26px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.api-processor-panel .api-legacy-primary:hover {
+  border-color: #c9cdd4;
+  background: #f7f8fa;
+  color: #1d2129;
+}
+
+.api-processor-panel .api-processor-sidebar-list {
+  gap: 2px;
+  padding: 6px 4px;
+}
+
+.api-processor-panel .api-processor-list-item {
+  min-height: 34px;
+  margin: 0 2px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.api-processor-panel .api-processor-list-item:hover {
+  background: #f2f3f5;
+}
+
+.api-processor-panel .api-processor-list-item.is-active {
+  border-color: transparent;
+  background: #eef3ff;
+}
+
+.api-processor-panel .api-processor-list-item.is-active .api-processor-list-title {
+  color: #165dff;
+}
+
+.api-processor-panel .api-processor-list-item__main {
+  gap: 8px;
+}
+
+.api-processor-panel .api-processor-list-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.api-processor-panel .api-processor-list-item:hover .api-processor-list-actions,
+.api-processor-panel .api-processor-list-item:focus-within .api-processor-list-actions {
+  opacity: 1;
+}
+
+.api-processor-panel .api-processor-list-action {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.api-processor-panel .api-processor-list-action:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.api-processor-panel .api-processor-list-action:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.api-processor-panel .api-processor-empty {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.api-processor-panel .api-processor-empty svg {
+  color: #c9cdd4;
+}
+
+.api-processor-panel .api-processor-empty small {
+  color: #c9cdd4;
+  font-size: 11px;
+}
+
+.api-processor-panel .api-processor-empty--inline {
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+
 @media (max-width: 1480px) {
   .api-interface-shell {
     grid-template-columns: 252px minmax(0, 1fr);

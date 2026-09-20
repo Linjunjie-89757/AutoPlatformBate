@@ -475,6 +475,8 @@ onBeforeUnmount(() => {
 
 .api-code-editor__toolbar-left {
   display: inline-flex;
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   align-items: center;
   gap: 6px;

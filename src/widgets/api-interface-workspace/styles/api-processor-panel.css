@@ -70,6 +70,337 @@
 .api-row-remove{border:0;background:transparent;cursor:pointer;font-size:12px;font-weight:500;padding:0}
 .api-row-remove:hover{background:var(--app-danger-soft);color:var(--app-danger)}
 
+/* Processing tabs: values measured from Design 811:3534 and Make V2. */
+.api-processor-editor {
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  height: 316px;
+  min-height: 316px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.api-processor-sidebar,
+.api-processor-detail {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.api-processor-sidebar {
+  border-right: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.api-processor-detail {
+  height: 316px;
+  min-height: 316px;
+  padding: 16px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.api-processor-toolbar {
+  height: 43px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+}
+
+.api-legacy-primary {
+  display: inline-flex;
+  width: 110px;
+  height: 26px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.api-legacy-primary:hover {
+  border-color: #c9cdd4;
+  background: #f7f8fa;
+  color: #1d2129;
+}
+
+.api-processor-sidebar-list {
+  flex: 1 1 auto;
+  gap: 2px;
+  padding: 6px 4px;
+}
+
+.api-processor-list-item {
+  min-height: 34px;
+  margin: 0 2px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.api-processor-list-item:hover {
+  background: #f2f3f5;
+}
+
+.api-processor-list-item.is-active {
+  border-color: transparent;
+  background: #eef3ff;
+}
+
+.api-processor-list-item.is-active .api-processor-list-title {
+  color: #165dff;
+}
+
+.api-processor-list-item__main {
+  gap: 8px;
+}
+
+.api-processor-list-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.api-processor-list-item:hover .api-processor-list-actions,
+.api-processor-list-item:focus-within .api-processor-list-actions {
+  opacity: 1;
+}
+
+.api-processor-list-action {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.api-processor-list-action:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.api-processor-list-action:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.api-processor-empty {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.api-processor-empty svg {
+  color: #c9cdd4;
+}
+
+.api-processor-empty small {
+  color: #c9cdd4;
+  font-size: 11px;
+}
+
+.api-processor-empty--inline {
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+
+.api-processor-name-row {
+  gap: 10px;
+}
+
+/* This file is unscoped and is loaded with ApiProcessorPanel. Keep the final
+   values here so the older visual-pass rules above cannot win in the cascade. */
+.api-processor-panel .api-processor-editor {
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  height: 316px;
+  min-height: 316px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.api-processor-panel .api-processor-sidebar,
+.api-processor-panel .api-processor-detail {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.api-processor-panel .api-processor-sidebar {
+  border-right: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.api-processor-panel .api-processor-detail {
+  height: 316px;
+  min-height: 316px;
+  padding: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.api-processor-panel .api-processor-toolbar {
+  height: 43px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+}
+
+.api-processor-panel .api-legacy-primary {
+  display: inline-flex;
+  width: 110px;
+  height: 26px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.api-processor-panel .api-legacy-primary:hover {
+  border-color: #c9cdd4;
+  background: #f7f8fa;
+  color: #1d2129;
+}
+
+.api-processor-panel .api-processor-sidebar-list {
+  gap: 2px;
+  padding: 6px 3.5px;
+}
+
+.api-processor-panel .api-processor-list-item {
+  min-height: 34px;
+  margin: 0;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.api-processor-panel .api-processor-list-item:hover {
+  background: #f2f3f5;
+}
+
+.api-processor-panel .api-processor-list-item.is-active {
+  border-color: transparent;
+  background: #eef3ff;
+}
+
+.api-processor-panel .api-processor-list-item.is-active .api-processor-list-title {
+  color: #165dff;
+}
+
+.api-processor-panel .api-processor-list-item__main {
+  gap: 7px;
+}
+
+.api-processor-panel .api-processor-list-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+
+.api-processor-panel .api-processor-list-item:hover .api-processor-list-actions,
+.api-processor-panel .api-processor-list-item:focus-within .api-processor-list-actions {
+  opacity: 1;
+}
+
+.api-processor-panel .api-processor-list-action {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #4e5969;
+  cursor: pointer;
+}
+
+.api-processor-panel .api-processor-list-action:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.api-processor-panel .api-processor-list-action:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.api-processor-panel .api-processor-empty {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #c9cdd4;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-processor-panel .api-processor-empty svg {
+  color: #c9cdd4;
+}
+
+.api-processor-panel .api-processor-empty small {
+  color: #c9cdd4;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.api-processor-panel .api-processor-empty--inline {
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: #c9cdd4;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
 /* Figma interface workspace visual pass */
 .api-processor-panel {
   gap: 14px;
@@ -308,12 +639,12 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  height: 18.5px;
-  padding: 1.75px 5.25px;
-  border-radius: 3.5px;
-  font-size: 10px;
+  height: auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 15px;
+  line-height: 16.5px;
   white-space: nowrap;
 }
 
@@ -396,16 +727,16 @@
 
 .api-processor-name-actions button,
 .api-processor-script-actions button {
-  height: 22px;
+  height: 17.5px;
   padding: 0 7px;
   border: 1px solid #e5e6eb;
-  border-radius: 5.25px;
+  border-radius: 3.5px;
   background: #ffffff;
   color: #86909c;
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 16.5px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 15px;
 }
 
 .api-processor-name-actions button {
@@ -546,9 +877,9 @@
 
 .api-processor-extract-header,
 .api-processor-extract-row {
-  grid-template-columns: 112px 112px 96px 92px 82px minmax(0, 1fr) 52px;
-  gap: 7px;
-  padding: 7px 10.5px;
+  grid-template-columns: 120px 96px 88px 92px 88px minmax(0, 1fr) 68px;
+  gap: 0;
+  padding: 7px 8px;
 }
 
 .api-processor-extract-header,
@@ -562,13 +893,21 @@
 }
 
 .api-processor-extract-row {
-  min-height: 34.5px;
+  min-height: 40px;
   border-color: #e5e6eb;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .api-processor-extract-row > *,
 .api-sql-extract-table__row > * {
   min-width: 0;
+}
+
+/* Make changes only the border color for processor fields. */
+.api-processor-panel .el-input__wrapper.is-focus,
+.api-processor-panel .el-select__wrapper.is-focused {
+  box-shadow: inset 0 0 0 1px #165dff !important;
 }
 
 .api-processor-extract-actions {
@@ -578,12 +917,669 @@
 }
 
 .api-processor-extract-more {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 3.5px;
 }
 
 .api-processor-extract-delete {
   min-width: 0;
+  font-size: 11px;
+}
+
+.api-processor-extract-more .el-icon {
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+
+/* Detail fields shared by the pre/post processor variants. */
+.api-processor-panel .api-processor-api-card {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  padding: 8px 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #f8f9fc;
+}
+
+.api-processor-panel .api-processor-api-card__title {
+  flex: 0 0 100%;
+  color: #4e5969;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-processor-panel .api-processor-api-card__items {
+  display: flex;
+  flex: 0 0 100%;
+  flex-wrap: nowrap;
+  gap: 21px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.api-processor-panel .api-processor-api-card__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+  line-height: 16.5px;
+}
+
+.api-processor-panel .api-processor-api-card__item code {
+  color: #7816ff;
+  font-family: var(--app-font-family-mono, monospace);
+  font-size: 11px;
+}
+
+.api-processor-panel .api-processor-api-card__item small {
+  color: #86909c;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.api-processor-panel .api-processor-datasource {
+  display: flex;
+  align-items: center;
+  gap: 5.25px;
+  min-width: 0;
+  padding-top: 3.5px;
+}
+
+.api-processor-panel .api-processor-datasource > svg {
+  flex: 0 0 auto;
+  color: #86909c;
+}
+
+.api-processor-panel .api-processor-datasource .el-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.api-processor-panel .api-processor-sql-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 16.5px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-processor-panel .api-processor-sql-label small {
+  padding: 1px 6px;
+  border-radius: 3.5px;
+  background: #e8f3ff;
+  color: #165dff;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 15px;
+}
+
+.api-processor-panel .api-processor-sql-toolbar-icon {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  color: #7c9abf;
+}
+
+.api-processor-panel .api-processor-sql-result {
+  flex-shrink: 0;
+}
+
+.api-processor-panel .api-sql-extract-table__delete {
+  display: inline-flex;
+  width: 21px;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  color: #86909c;
+}
+
+.api-processor-panel .api-sql-extract-table__delete .el-icon {
+  width: 13px;
+  height: 13px;
+  font-size: 13px;
+}
+
+.api-processor-panel .api-sql-extract-table__delete:hover {
+  background: #fef2f2;
+  color: #f53f3f;
+}
+
+.api-processor-panel .api-processor-extract-delete {
+  display: inline-flex;
+  width: 21px;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  color: #86909c;
+}
+
+.api-processor-panel .api-processor-extract-delete .el-icon {
+  width: 13px;
+  height: 13px;
+  font-size: 13px;
+}
+
+.api-processor-panel .api-processor-extract-delete:hover {
+  color: #f53f3f;
+}
+
+/* Processor alignment overrides: keep the Design/Make geometry deterministic. */
+.api-processor-panel .api-processor-empty-icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.api-processor-panel .api-processor-sidebar .api-processor-empty {
+  box-sizing: border-box;
+  padding: 6px 0;
+}
+
+.api-processor-panel .api-processor-form-grid {
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 12px;
+}
+
+.api-processor-panel .api-processor-form-grid > label > span {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-processor-panel .api-processor-sql-timeout {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  padding: 0 10.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #1d2129;
+  font: 400 12px/18px var(--app-font-family, Inter, sans-serif);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+  appearance: textfield;
+}
+
+.api-processor-panel .api-processor-sql-timeout:focus {
+  border-color: #165dff;
+  box-shadow: none;
+}
+
+.api-processor-panel .api-processor-sql-timeout::-webkit-inner-spin-button,
+.api-processor-panel .api-processor-sql-timeout::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.api-processor-panel .api-processor-wait {
+  display: flex;
+  width: 100%;
+  max-width: 360px;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.api-processor-panel .api-processor-wait__label {
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-processor-panel .api-processor-wait__input-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding-top: 5.25px;
+}
+
+.api-processor-panel .api-processor-wait__input {
+  display: block;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 31.5px;
+  flex: 0 0 277.016px;
+  padding: 0 10.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #1d2129;
+  font: 600 14px/21px var(--app-font-family, Inter, sans-serif);
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+  appearance: textfield;
+}
+
+.api-processor-panel .api-processor-wait__input:focus {
+  border-color: #165dff;
+  box-shadow: none;
+}
+
+.api-processor-panel .api-processor-wait__input::-webkit-inner-spin-button,
+.api-processor-panel .api-processor-wait__input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.api-processor-panel .api-processor-wait__unit {
+  flex: 0 0 auto;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.api-processor-panel .api-processor-wait__presets {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  align-items: flex-start;
+  gap: 5.25px;
+  padding-top: 7px;
+}
+
+.api-processor-panel .api-processor-wait__presets button {
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 21px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10.5px;
+  border: 1px solid #e5e6eb;
+  border-radius: 3.5px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  font: 500 11px/16.5px var(--app-font-family, Inter, sans-serif);
+  white-space: nowrap;
+  transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+
+.api-processor-panel .api-processor-wait__presets button:hover {
+  border-color: #165dff;
+  color: #165dff;
+}
+
+.api-processor-panel .api-processor-wait__presets button.is-active {
+  border-color: #165dff;
+  background: rgba(22, 93, 255, .05);
+  color: #165dff;
+}
+
+.api-processor-panel .api-processor-wait__hint {
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  padding-top: 7px;
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+  white-space: nowrap;
+}
+
+.api-processor-panel .api-processor-detail .api-code-editor {
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.api-processor-panel .api-processor-form-grid,
+.api-processor-panel .api-processor-sql-label,
+.api-processor-panel .api-sql-extract-heading,
+.api-processor-panel .api-sql-extract-table {
+  flex-shrink: 0;
+}
+
+.api-processor-panel .api-sql-extract-table__header,
+.api-processor-panel .api-sql-extract-table__row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 10.1%;
+  gap: 0;
+  min-width: 0;
+}
+
+.api-processor-panel .api-sql-extract-heading {
+  display: flex;
+  align-items: center;
+  min-height: 18px;
+  gap: 8px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-processor-panel .api-sql-extract-heading > span {
+  flex: 0 0 auto;
+}
+
+.api-processor-panel .api-sql-extract-heading button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #165dff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.api-processor-panel .api-sql-extract-table__empty {
+  grid-column: 1 / -1;
+  padding: 12px;
+  color: #c9cdd4;
+  font-size: 11px;
+  line-height: 16.5px;
+  text-align: center;
+}
+
+.api-processor-panel .api-sql-extract-table__header {
+  box-sizing: border-box;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 12px;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.api-processor-panel .api-sql-extract-table__row {
+  box-sizing: border-box;
+  height: 32.5px;
+  min-height: 32.5px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+/* Make uses native, borderless monospace inputs inside SQL mapping cells. */
+.api-processor-panel .api-sql-extract-native-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 20px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: 400 12px/18px 'JetBrains Mono', monospace;
+  outline: none;
+}
+
+.api-processor-panel .api-sql-extract-native-input::placeholder {
+  color: #c9cdd4;
+}
+
+.api-processor-panel .api-sql-extract-input--column {
+  color: #1d2129;
+}
+
+.api-processor-panel .api-sql-extract-input--variable {
+  color: #165dff;
+}
+
+.api-processor-panel .api-processor-extract-row .el-input__wrapper,
+.api-processor-panel .api-processor-extract-row .el-select__wrapper {
+  min-height: 28px;
+  height: 28px;
+  border-radius: 6px;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.api-processor-panel .api-processor-extract-row .el-input__wrapper {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.api-processor-panel .api-processor-extract-row .el-select__wrapper {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.api-processor-panel .api-processor-extract-row .el-input__inner,
+.api-processor-panel .api-processor-extract-row .el-select__selected-item,
+.api-processor-panel .api-processor-extract-row .el-select__placeholder {
+  font-size: 12px;
+}
+
+.api-processor-panel .api-processor-extract-toolbar {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19.5px;
+}
+
+.api-processor-panel .api-processor-extract-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.api-processor-panel .api-processor-extract-more {
+  color: #86909c;
+}
+
+.api-processor-panel .api-fast-extraction-suffix-button {
+  width: 18px;
+  height: 18px;
+  color: #00b42a;
+}
+
+.api-processor-panel .api-fast-extraction-suffix-button:hover:not(:disabled) {
+  background: transparent;
+  color: #00b42a;
+}
+
+.api-processor-panel .api-fast-extraction-suffix-button.is-disabled,
+.api-processor-panel .api-fast-extraction-suffix-button:disabled {
+  color: #c9cdd4;
+}
+
+.api-processor-panel .api-fast-extraction-suffix-button > svg {
+  width: 11px;
+  height: 11px;
+}
+
+.api-processor-panel .api-processor-detail.is-pre.is-script,
+.api-processor-panel .api-processor-detail.is-pre.is-sql {
+  gap: 10.5px;
+}
+
+.api-processor-panel .api-processor-detail.is-post {
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+
+/* The Design has a taller populated pre-processing frame; empty and post frames remain 316px. */
+.api-processor-panel.is-pre.has-active-processor .api-processor-editor,
+.api-processor-panel.is-pre.has-active-processor .api-processor-detail {
+  height: 556px;
+  min-height: 556px;
+}
+
+.api-processor-panel:not(.has-active-processor) .api-processor-detail {
+  padding: 0;
+}
+
+.api-processor-add-popper.el-popper {
+  min-width: 128px;
+  border-color: #e5e6eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .1);
+}
+
+.api-processor-add-popper .el-dropdown-menu {
+  width: 128px;
+  padding: 4px 0;
+}
+
+.api-processor-add-popper .el-dropdown-menu__item {
+  box-sizing: border-box;
+  width: 128px;
+  min-height: 32px;
+  padding: 7px 12px;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
+.api-processor-add-popper .el-dropdown-menu__item:not(.is-disabled):focus,
+.api-processor-add-popper .el-dropdown-menu__item:not(.is-disabled):hover {
+  background: #f5f6f8;
+  color: #1d2129;
+}
+
+.api-processor-extract-more-popper.el-popper {
+  box-sizing: border-box;
+  min-width: 220px;
+  padding: 6px 0;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-panel {
+  display: block;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-copy {
+  display: block;
+  width: 100%;
+  padding: 7px 14px;
+  color: #165dff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: left;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: #e5e6eb;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-title {
+  padding: 6px 14px 4px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+  letter-spacing: .5px;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-group {
+  display: block;
+  padding: 4px 14px 8px;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-label {
+  margin-bottom: 6px;
+  color: #4e5969;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16.5px;
+}
+
+.api-processor-extract-more-popper .el-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.api-processor-extract-more-popper .el-radio {
+  height: 18px;
+  margin: 0;
+  color: #1d2129;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-processor-extract-more-popper .el-radio__label {
+  padding-left: 5px;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.api-processor-extract-more-popper .el-radio__inner {
+  width: 13px;
+  height: 13px;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-index {
+  margin-top: 6px;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-index input {
+  box-sizing: border-box;
+  width: 70px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #e5e6eb;
+  border-radius: 5px;
+  outline: none;
+  color: #1d2129;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-index input:focus {
+  border-color: #165dff;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px 8px;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16.5px;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-select > span {
+  flex: 0 0 auto;
+}
+
+.api-processor-extract-more-popper .api-processor-extract-more-select select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid #e5e6eb;
+  border-radius: 5px;
+  outline: none;
+  background: #fff;
+  color: #4e5969;
+  font-family: inherit;
   font-size: 11px;
 }

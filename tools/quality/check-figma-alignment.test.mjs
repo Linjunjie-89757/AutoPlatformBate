@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,9 +12,26 @@ const script = path.join(root, 'tools/quality/check-figma-alignment.mjs');
 // Synthetic records test the gate, not the actual Auth implementation.
 function fixture(screenshot) {
   const record = JSON.parse(fs.readFileSync(path.join(root, 'docs/figma-alignment-record.template.json'), 'utf8'));
+  const futureTimestamp = new Date(Date.now() + 60_000).toISOString();
   record.status = 'verified-alignment';
   record.scope.makeCodePath = script;
   record.scope.currentCodeFiles = [script];
+  record.scope.variants = ['Synthetic variant'];
+  record.scope.elements = ['Synthetic element'];
+  record.scope.excludedAreas = [];
+  record.sourceBaseline = {
+    gitBranch: 'synthetic',
+    gitCommit: 'synthetic',
+    designCapturedAt: futureTimestamp,
+    makeCode: {
+      path: script,
+      sha256: crypto.createHash('sha256').update(fs.readFileSync(script)).digest('hex'),
+      modifiedAt: fs.statSync(script).mtime.toISOString(),
+    },
+    makePreviewCapturedAt: futureTimestamp,
+    vueCapturedAt: futureTimestamp,
+    environment: { viewport: [1200, 900], devicePixelRatio: 1, browserZoom: 1, fontStatus: 'loaded' },
+  };
   for (const step of record.workflow) {
     step.status = 'verified';
     step.evidence = ['Synthetic test evidence'];
@@ -26,8 +44,21 @@ function fixture(screenshot) {
   }
   record.evidence.makePreview = { url: 'https://www.figma.com/make/test', viewport: [1200, 900], interactions: ['Synthetic interaction'], screenshots: [screenshot] };
   record.evidence.vue = { screenshots: [screenshot], computedStyle: ['width: 100px'], boundingBox: ['100x30'], interactionResults: ['Synthetic result'] };
+  record.comparisonMatrix = [{
+    id: 'Synthetic variant::Synthetic element',
+    variant: 'Synthetic variant',
+    element: 'Synthetic element',
+    status: 'verified',
+    design: { target: '100x30', evidence: ['Synthetic design evidence'] },
+    makeSource: { finding: 'Synthetic behavior', evidence: ['Synthetic source evidence'] },
+    makePreview: { operation: 'Open variant', result: 'Matched', evidence: [screenshot] },
+    vue: { result: 'Matched', screenshots: [screenshot], computedStyle: ['width: 100px'], boundingBox: ['100x30'], interactionEvidence: ['Synthetic interaction'] },
+    differenceIds: ['DIFF-001'],
+    rationale: '',
+  }];
   record.differences[0].status = 'resolved';
   record.unverifiedStatuses = [];
+  record.validation.summary = { resolved: 1, acceptedDeviations: 0, unresolved: 0, unverified: 0 };
   return record;
 }
 
@@ -71,6 +102,7 @@ test('accepted deviation with reference can pass as accepted, not identical', ()
   r.status = 'accepted-with-deviations';
   r.differences[0].status = 'accepted-deviation';
   r.differences[0].acceptance = { type: 'user-decision', reference: 'Synthetic user decision for test only' };
+  r.validation.summary = { resolved: 0, acceptedDeviations: 1, unresolved: 0, unverified: 0 };
 }, 0));
 test('duplicate event cannot mask an unverified entry', () => runCase(r => { r.evidence.make.eventMatrix.push({ ...r.evidence.make.eventMatrix[0] }); }, 1, /duplicate name/));
 test('duplicate difference identifiers are rejected', () => runCase(r => { r.differences.push({ ...r.differences[0] }); }, 1, /duplicate id/));
@@ -82,3 +114,8 @@ for (const field of ['workflow', 'differences', 'unverifiedStatuses']) {
 test('malformed events report a validation error', () => runCase(r => { r.evidence.make.eventMatrix = {}; }, 1, /must be an array/));
 test('null difference reports a validation error', () => runCase(r => { r.differences = [null]; }, 1, /entries must have/));
 test('malformed commands report a validation error', () => runCase(r => { r.validation.commands = {}; }, 1, /non-empty array/));
+test('legacy record without v2 schema cannot pass', () => runCase(r => { delete r.schemaVersion; }, 1, /schemaVersion must be 2/));
+test('missing matrix coverage is rejected', () => runCase(r => { r.comparisonMatrix = []; }, 1, /cover every variant/));
+test('changed Make source invalidates evidence', () => runCase(r => { r.sourceBaseline.makeCode.sha256 = '0'.repeat(64); }, 1, /Make source changed/));
+test('stale Vue evidence is rejected', () => runCase(r => { r.sourceBaseline.vueCapturedAt = '2000-01-01T00:00:00.000Z'; }, 1, /Vue evidence is stale/));
+test('handwritten summary cannot disagree with differences', () => runCase(r => { r.validation.summary.resolved = 99; }, 1, /validation.summary.resolved must be 1/));

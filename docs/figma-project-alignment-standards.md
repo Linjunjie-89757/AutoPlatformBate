@@ -64,6 +64,49 @@ Design、Make 源码、Make 预览、当前 Vue 相互佐证，不能套用一�
 
 ## 3. 开始前的基线
 
+### 3.1 任务触发和入口分工
+
+本准则仅在任务目标是把 Figma Design / Figma AI Make 与当前系统页面、组件或交互对齐时触发。`AGENTS.md` 负责触发条件和不可跳过的门禁，本文件负责具体执行方法；不得把本文件整段复制到 `AGENTS.md`，也不得只读其中一份。
+
+新的对齐任务必须先执行初始化命令，再修改目标代码：
+
+```text
+npm run figma:alignment-init -- --record <record.json> \
+  --title <任务标题> --page <页面/组件> \
+  --figma-node <fileKey:nodeId> \
+  --make-code <Make源码文件> --make-preview <Make预览URL> \
+  --current-code <Vue/CSS/TS文件> \
+  --variant <变体> --element <验收元素>
+```
+
+初始化只创建 `draft` 记录和 `unverified` 矩阵，不证明任何对齐结果。若记录路径已存在，初始化命令必须拒绝覆盖，防止抹除历史证据。
+
+### 3.2 来源与实现版本绑定
+
+记录必须绑定以下基线：
+
+```text
+schemaVersion
+创建时间与时区
+Git 分支与 commit
+Design fileKey / node-id
+Make 源码路径、文件摘要和修改时间
+Make 预览 URL
+目标 Vue/CSS/TS 文件
+viewport、DPR、浏览器缩放和字体加载状态
+```
+
+以下变化会让对应证据失效：
+
+- Design 节点、Make 源码路径或内容变化：重新读取 Design/Make 并重新操作 Make 预览；
+- 目标 Vue/CSS/TS 文件变化：重新采集受影响的 Vue 截图、computed style、bounding box 和交互结果；
+- 共享组件或共享样式变化：重新验证矩阵中所有受影响变体；
+- viewport、DPR、浏览器缩放或字体变化：旧几何证据不可直接复用；
+- 记录引用的截图早于对应目标代码最后修改时间：视为过期证据。
+
+旧记录可作为线索，但 `verified` 状态不能自动继承。需要复用历史证据时，必须逐项说明未受影响的依据。
+历史记录（包括 v1 模板和旧的 `docs/figma-alignment/*.json`）不会自动升级为 v2；若要作为新任务交付记录，必须通过 `figma:alignment-init` 新建记录并重新填写基线与矩阵，保留原记录只作历史参考。
+
 每次对齐任务开始前必须确认：
 
 ```text
@@ -112,6 +155,35 @@ Make 代码目录或版本
 | --- | --- | --- | --- | --- | --- |
 | Basic 用户名 placeholder | 节点原文 | 源码原文 | 空输入框实际文案 | 实际 placeholder | 用户决定采用 Make；浏览器核对 |
 | Digest 密码显隐 | 默认图标与尺寸 | 显隐状态及 Eye/EyeOff 分支 | 点击前后图标、输入类型和值 | 同操作结果 | 验证两个方向及值保持 |
+
+### 4.1 变体 × 验收元素矩阵
+
+对齐记录必须穷举 `scope.variants` 和 `scope.elements`，并为每个适用组合建立矩阵项。不能只写“已核对整个 Auth”或“所有处理器已���齐”。每个矩阵项至少包含：
+
+```text
+稳定 ID
+变体
+验收元素
+Design 目标值与证据
+Make 源码发现与证据
+Make 预览操作、实际结果与证据
+Vue 最终结果、截图、computed style、bounding box 和交互证据
+关联差异编号
+最终状态
+```
+
+矩阵状态定义：
+
+| 状态 | 含义 | 是否允许交付 |
+| --- | --- | --- |
+| `verified` | 四方证据完整，最终结果已复验 | 是 |
+| `accepted-deviation` | 存在用户决定或业务约束允许的差异 | 仅 `accepted-with-deviations` |
+| `not-applicable` | 该元素确实不适用于该变体，已写明原因 | 是 |
+| `unverified` | 尚未完成验证 | 否 |
+| `blocked` | 来源或环境阻塞 | 否 |
+| `failed` | 实测不匹配 | 否 |
+
+`not-applicable` 不能用于隐藏应核对的内容；必须填写具体原因。矩阵中的 `accepted-deviation` 必须关联 `differences` 中同状态且具有接受依据的条目。
 
 继续中断的任务时，先核对当前差异、记录和证据文件，再续做。聊天中的“已完成”、旧记录中的 `verified` 和前一轮构建成功都不能自动成为本轮新结果。
 
@@ -230,6 +302,27 @@ git diff --check
 - 执行 `npm run figma:alignment-check -- --record <record.json>`。通过只表明程序能检查的记录约束成立；脚本不能判定截图像素一致，也不能证明文字证据真实。
 - 脚本必须拦截非交付状态、未解决差异、未验收/未知事件、空白证据、重复编号和不存在的截图或源码文件。修改门禁后运行 `node --test tools/quality/check-figma-alignment.test.mjs`，同时验证应通过和应失败的用例。
 - 类型检查和构建通过只验证代码，不证明视觉或交互对齐。门禁失败时报告具体缺项，不得删掉差异、清空未验收项或改成 `verified` 来凑通过。
+- Vue 截图必须晚于其覆盖的目标源码最后修改时间；否则门禁按过期证据处理。
+- 记录的 Make 文件摘要必须与当前文件一致；Make 源码更新后仍引用旧摘要时门禁失败。
+- 差异数量和未验收数量必须由 `differences`、事件矩阵和“变体 × 验收元素”矩阵计算；手写汇总与实际数组不一致时门禁失败。
+- `figma:alignment-check` 必须检查 v2 记录结构、范围矩阵、来源指纹、证据文件、新鲜度和自动统计，但仍不能替代人工像素判断。
+
+### 固定执行阶段
+
+```text
+阶段 A：alignment-init
+  锁定来源、范围、变体和验收元素，生成 draft 矩阵。
+阶段 B：Design / Make / Vue 四方基线
+  在任何代码修改前填完当前差异，保持矩阵为 unverified。
+阶段 C：增量实施
+  只修复登记项；共享样式变化时扩展回归范围。
+阶段 D：真实浏览器复验
+  重采截图、computed style、bounding box 和交互证据。
+阶段 E：alignment-check
+  自动阻断缺项、旧版本、过期截图、错误统计和未解决状态。
+阶段 F：按记录交付
+  最终回复只报告已验证、未验证和遗留问题，数量来自记录而非主观估计。
+```
 
 ## 9. 对齐结论等级
 

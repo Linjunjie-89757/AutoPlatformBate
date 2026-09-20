@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp, MagicStick } from '@element-plus/icons-vue'
-import { ChevronDown, Plus, Zap } from '@lucide/vue'
+import { ChevronDown, Plus, Shield, Zap } from '@lucide/vue'
 
 import { AppSwitch } from '@/shared/ui'
 
@@ -101,12 +101,12 @@ function emitActiveResponseTime(value: number | undefined) {
 
 function assertionTone(type?: string | null) {
   const value = (type || '').toUpperCase()
-  if (value === 'RESPONSE_HEADER') return { label: '响应头', color: '#876800', bg: '#FFFBE8' }
-  if (value === 'RESPONSE_BODY') return { label: '响应体', color: '#4E5AC8', bg: '#EEF0FA' }
-  if (value === 'RESPONSE_TIME') return { label: '响应时间', color: '#00B42A', bg: '#E8FFEA' }
-  if (value === 'VARIABLE') return { label: '变量', color: '#6B7280', bg: '#F2F3F5' }
-  if (value === 'SCRIPT') return { label: '脚本', color: '#7816FF', bg: '#F5E8FF' }
-  return { label: '状态码', color: '#0E42D2', bg: '#E8F3FF' }
+  if (value === 'RESPONSE_HEADER') return { label: '响应头', color: '#00AECF', bg: '#E5F6FA' }
+  if (value === 'RESPONSE_BODY') return { label: '响应体', color: '#7816FF', bg: '#F0E8FF' }
+  if (value === 'RESPONSE_TIME') return { label: '响应时间', color: '#00B42A', bg: '#E6F9EC' }
+  if (value === 'VARIABLE') return { label: '变量', color: '#FF7D00', bg: '#FFF2E5' }
+  if (value === 'SCRIPT') return { label: '脚本', color: '#E0186C', bg: '#FCE8F2' }
+  return { label: '状态码', color: '#165DFF', bg: '#E8EEFF' }
 }
 
 function toggleAssertion(assertion: ApiAssertionPanelRow) {
@@ -181,7 +181,11 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
             </button>
           </span>
         </button>
-        <div v-if="!rows.length" class="api-assertion-empty">暂无断言</div>
+        <div v-if="!rows.length" class="api-assertion-empty">
+          <Shield class="api-assertion-empty__icon" :size="24" aria-hidden="true" />
+          <p>暂无断言</p>
+          <small>点击「添加」开始配置</small>
+        </div>
       </aside>
       <section v-if="activeAssertion" class="api-assertion-detail">
         <div class="api-assertion-name-row">

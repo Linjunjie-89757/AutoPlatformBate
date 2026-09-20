@@ -1,12 +1,35 @@
 {
+  "schemaVersion": 2,
   "title": "页面或组件 Figma 对齐记录",
   "page": "页面名称",
   "status": "draft",
+  "createdAt": "由 figma:alignment-init 生成",
+  "sourceBaseline": {
+    "gitBranch": "",
+    "gitCommit": "",
+    "designCapturedAt": "",
+    "makeCode": {
+      "path": "设计/figma-ai-make.../src/...",
+      "sha256": "",
+      "modifiedAt": ""
+    },
+    "makePreviewCapturedAt": "",
+    "vueCapturedAt": "",
+    "environment": {
+      "viewport": [],
+      "devicePixelRatio": null,
+      "browserZoom": null,
+      "fontStatus": "unverified"
+    }
+  },
   "scope": {
     "figmaNodes": ["fileKey:nodeId"],
     "makeCodePath": "设计/figma-ai-make.../src/...",
     "makePreviewUrl": "https://www.figma.com/make/...",
-    "currentCodeFiles": ["src/.../Component.vue"]
+    "currentCodeFiles": ["src/.../Component.vue"],
+    "variants": ["明确变体"],
+    "elements": ["明确验收元素"],
+    "excludedAreas": ["明确不处理区域"]
   },
   "workflow": [
     { "id": "design-static", "status": "unverified", "evidence": [] },
@@ -34,6 +57,20 @@
     "makePreview": { "url": "", "viewport": [], "interactions": [], "screenshots": [] },
     "vue": { "screenshots": [], "computedStyle": [], "boundingBox": [], "interactionResults": [] }
   },
+  "comparisonMatrix": [
+    {
+      "id": "明确变体::明确验收元素",
+      "variant": "明确变体",
+      "element": "明确验收元素",
+      "status": "unverified",
+      "design": { "target": "", "evidence": [] },
+      "makeSource": { "finding": "", "evidence": [] },
+      "makePreview": { "operation": "", "result": "", "evidence": [] },
+      "vue": { "result": "", "screenshots": [], "computedStyle": [], "boundingBox": [], "interactionEvidence": [] },
+      "differenceIds": [],
+      "rationale": ""
+    }
+  ],
   "differences": [
     {
       "id": "DIFF-001",
@@ -51,5 +88,8 @@
   ],
   "noDifferencesReason": "填写差异核对结论；若有差异，请改为数组并逐项登记。",
   "unverifiedStatuses": ["填写尚未验收的状态；完成前不得清空"],
-  "validation": { "commands": ["npm run typecheck", "npm run build", "git diff --check"] }
+  "validation": {
+    "commands": ["npm run typecheck", "npm run build", "git diff --check"],
+    "summary": { "resolved": 0, "acceptedDeviations": 0, "unresolved": 1, "unverified": 1 }
+  }
 }

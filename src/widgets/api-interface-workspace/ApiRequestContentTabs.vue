@@ -29,8 +29,9 @@ const emit = defineEmits<{
 <style scoped>
 .api-content-tabs {
   display: flex;
-  height: 40px;
-  min-height: 40px;
+  height: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
   align-items: center;
   gap: 0;
   overflow: hidden;
@@ -43,7 +44,7 @@ const emit = defineEmits<{
   position: relative;
   display: inline-flex;
   box-sizing: border-box;
-  height: 39px;
+  height: 43px;
   align-items: center;
   gap: 6px;
   border: 0;

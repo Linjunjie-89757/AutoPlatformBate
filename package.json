@@ -22,6 +22,7 @@
     "typecheck": "vue-tsc -b",
     "build": "vue-tsc -b && vite build",
     "quality:large-files": "node tools/quality/scan-large-files.mjs",
+    "figma:alignment-init": "node tools/quality/init-figma-alignment.mjs",
     "figma:alignment-check": "node tools/quality/check-figma-alignment.mjs",
     "preview": "vite preview"
   },

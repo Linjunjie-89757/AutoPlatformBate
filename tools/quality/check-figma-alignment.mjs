@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -15,6 +16,7 @@ const WORKFLOW = [
 const EVENTS = ['hover', 'focus', 'blur', 'active', 'disabled', 'loading', 'success', 'failure'];
 const RECORD_STATUSES = new Set(['draft', 'partial-alignment', 'blocked', 'verified-alignment', 'accepted-with-deviations']);
 const DIFFERENCE_STATUSES = new Set(['resolved', 'accepted-deviation', 'unresolved']);
+const MATRIX_STATUSES = new Set(['verified', 'accepted-deviation', 'not-applicable', 'unverified', 'blocked', 'failed']);
 
 function getArg(name) {
   const index = process.argv.indexOf(name);
@@ -31,6 +33,18 @@ function isNonEmptyString(value) {
 
 function isNonEmptyArray(value) {
   return Array.isArray(value) && value.length > 0;
+}
+
+function isValidTimestamp(value) {
+  return isNonEmptyString(value) && Number.isFinite(Date.parse(value));
+}
+
+function sha256(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function uniqueStrings(value) {
+  return Array.isArray(value) && value.length > 0 && value.every(isNonEmptyString) && new Set(value).size === value.length;
 }
 
 function addMissing(missing, condition, message) {
@@ -89,6 +103,7 @@ try {
 const missing = [];
 addMissing(missing, record && typeof record === 'object' && !Array.isArray(record), 'record must be an object');
 if (missing.length === 0) {
+  addMissing(missing, record.schemaVersion === 2, 'schemaVersion must be 2; create new records with npm run figma:alignment-init');
   addMissing(missing, isNonEmptyString(record.title), 'title is required');
   addMissing(missing, isNonEmptyString(record.page), 'page is required');
   addMissing(missing, isNonEmptyString(record.status), 'status is required');
@@ -98,9 +113,41 @@ if (missing.length === 0) {
   addMissing(missing, record.scope && isNonEmptyString(record.scope.makeCodePath), 'scope.makeCodePath is required');
   addMissing(missing, record.scope && isNonEmptyString(record.scope.makePreviewUrl), 'scope.makePreviewUrl is required');
   addMissing(missing, record.scope && isNonEmptyArray(record.scope.currentCodeFiles), 'scope.currentCodeFiles must be a non-empty array');
+  addMissing(missing, record.scope && uniqueStrings(record.scope.variants), 'scope.variants must contain unique non-empty values');
+  addMissing(missing, record.scope && uniqueStrings(record.scope.elements), 'scope.elements must contain unique non-empty values');
+  addMissing(missing, record.scope && Array.isArray(record.scope.excludedAreas), 'scope.excludedAreas must be an array');
 
   checkFiles(missing, [record.scope?.makeCodePath], 'scope.makeCodePath');
   checkFiles(missing, record.scope?.currentCodeFiles, 'scope.currentCodeFiles');
+
+  const baseline = record.sourceBaseline;
+  addMissing(missing, baseline && isNonEmptyString(baseline.gitBranch), 'sourceBaseline.gitBranch is required');
+  addMissing(missing, baseline && isNonEmptyString(baseline.gitCommit), 'sourceBaseline.gitCommit is required');
+  addMissing(missing, baseline && isValidTimestamp(baseline.designCapturedAt), 'sourceBaseline.designCapturedAt must be an ISO timestamp');
+  addMissing(missing, baseline && isValidTimestamp(baseline.makePreviewCapturedAt), 'sourceBaseline.makePreviewCapturedAt must be an ISO timestamp');
+  addMissing(missing, baseline && isValidTimestamp(baseline.vueCapturedAt), 'sourceBaseline.vueCapturedAt must be an ISO timestamp');
+  addMissing(missing, baseline?.makeCode?.path === record.scope?.makeCodePath, 'sourceBaseline.makeCode.path must equal scope.makeCodePath');
+  addMissing(missing, baseline?.makeCode && /^[a-f0-9]{64}$/i.test(baseline.makeCode.sha256 || ''), 'sourceBaseline.makeCode.sha256 is required');
+  addMissing(missing, baseline?.makeCode && isValidTimestamp(baseline.makeCode.modifiedAt), 'sourceBaseline.makeCode.modifiedAt must be an ISO timestamp');
+  const makeCodeAbsolute = isNonEmptyString(record.scope?.makeCodePath) ? path.resolve(ROOT, record.scope.makeCodePath) : '';
+  if (makeCodeAbsolute && fs.existsSync(makeCodeAbsolute) && baseline?.makeCode?.sha256) {
+    addMissing(missing, sha256(makeCodeAbsolute) === baseline.makeCode.sha256, 'Make source changed after baseline; rerun source and preview validation');
+  }
+  const environment = baseline?.environment;
+  addMissing(missing, Array.isArray(environment?.viewport) && environment.viewport.length === 2 && environment.viewport.every(Number.isFinite), 'sourceBaseline.environment.viewport must contain width and height');
+  addMissing(missing, Number.isFinite(environment?.devicePixelRatio) && environment.devicePixelRatio > 0, 'sourceBaseline.environment.devicePixelRatio must be positive');
+  addMissing(missing, Number.isFinite(environment?.browserZoom) && environment.browserZoom > 0, 'sourceBaseline.environment.browserZoom must be positive');
+  addMissing(missing, environment?.fontStatus === 'loaded', 'sourceBaseline.environment.fontStatus must be loaded');
+
+  if (isValidTimestamp(baseline?.vueCapturedAt)) {
+    const capturedAt = Date.parse(baseline.vueCapturedAt);
+    for (const file of Array.isArray(record.scope?.currentCodeFiles) ? record.scope.currentCodeFiles : []) {
+      const absolute = path.resolve(ROOT, file);
+      if (fs.existsSync(absolute)) {
+        addMissing(missing, capturedAt >= fs.statSync(absolute).mtimeMs, `Vue evidence is stale for ${file}; recapture after the latest code change`);
+      }
+    }
+  }
   const workflow = indexedEntries(missing, record.workflow, 'id', 'workflow');
   for (const id of WORKFLOW) {
     const step = workflow.get(id);
@@ -141,6 +188,32 @@ if (missing.length === 0) {
   checkEvidence(missing, vue?.boundingBox, 'evidence.vue.boundingBox');
   checkEvidence(missing, vue?.interactionResults, 'evidence.vue.interactionResults');
 
+  const matrix = indexedEntries(missing, record.comparisonMatrix, 'id', 'comparisonMatrix');
+  const expectedMatrixIds = new Set((record.scope?.variants || []).flatMap(variant => (record.scope?.elements || []).map(element => `${variant}::${element}`)));
+  addMissing(missing, matrix.size === expectedMatrixIds.size, 'comparisonMatrix must cover every variant × element combination exactly once');
+  for (const expectedId of expectedMatrixIds) addMissing(missing, matrix.has(expectedId), `comparisonMatrix is missing ${expectedId}`);
+  for (const [id, item] of matrix) {
+    addMissing(missing, expectedMatrixIds.has(id), `comparisonMatrix has out-of-scope item ${id}`);
+    addMissing(missing, MATRIX_STATUSES.has(item.status), `comparisonMatrix ${id} has invalid status ${item.status}`);
+    addMissing(missing, ['verified', 'accepted-deviation', 'not-applicable'].includes(item.status), `comparisonMatrix ${id} is not deliverable: ${item.status}`);
+    if (item.status === 'not-applicable') {
+      addMissing(missing, isNonEmptyString(item.rationale), `comparisonMatrix ${id}.rationale is required for not-applicable`);
+      continue;
+    }
+    addMissing(missing, isNonEmptyString(item.design?.target), `comparisonMatrix ${id}.design.target is required`);
+    checkEvidence(missing, item.design?.evidence, `comparisonMatrix ${id}.design.evidence`);
+    addMissing(missing, isNonEmptyString(item.makeSource?.finding), `comparisonMatrix ${id}.makeSource.finding is required`);
+    checkEvidence(missing, item.makeSource?.evidence, `comparisonMatrix ${id}.makeSource.evidence`);
+    addMissing(missing, isNonEmptyString(item.makePreview?.operation), `comparisonMatrix ${id}.makePreview.operation is required`);
+    addMissing(missing, isNonEmptyString(item.makePreview?.result), `comparisonMatrix ${id}.makePreview.result is required`);
+    checkEvidence(missing, item.makePreview?.evidence, `comparisonMatrix ${id}.makePreview.evidence`);
+    addMissing(missing, isNonEmptyString(item.vue?.result), `comparisonMatrix ${id}.vue.result is required`);
+    checkFiles(missing, item.vue?.screenshots, `comparisonMatrix ${id}.vue.screenshots`);
+    checkEvidence(missing, item.vue?.computedStyle, `comparisonMatrix ${id}.vue.computedStyle`);
+    checkEvidence(missing, item.vue?.boundingBox, `comparisonMatrix ${id}.vue.boundingBox`);
+    checkEvidence(missing, item.vue?.interactionEvidence, `comparisonMatrix ${id}.vue.interactionEvidence`);
+  }
+
   const differences = [...indexedEntries(missing, record.differences, 'id', 'differences').values()];
   if (Array.isArray(differences) && differences.length === 0) {
     addMissing(missing, isNonEmptyString(record.noDifferencesReason), 'noDifferencesReason is required when differences is empty');
@@ -174,10 +247,28 @@ if (missing.length === 0) {
     addMissing(missing, !differenceStatuses.has('unresolved'), 'accepted-with-deviations cannot contain unresolved differences');
     addMissing(missing, differenceStatuses.has('accepted-deviation'), 'accepted-with-deviations requires at least one accepted-deviation');
   }
+  for (const [id, item] of matrix) {
+    if (item.status !== 'accepted-deviation') continue;
+    addMissing(missing, Array.isArray(item.differenceIds) && item.differenceIds.some(differenceId => differences.some(difference => difference.id === differenceId && difference.status === 'accepted-deviation')), `comparisonMatrix ${id} must link an accepted-deviation difference`);
+  }
   const commands = record.validation?.commands;
   checkEvidence(missing, commands, 'validation.commands');
   addMissing(missing, Array.isArray(commands) && commands.some(command => /typecheck|build/i.test(command)), 'validation.commands must include typecheck or build');
   addMissing(missing, Array.isArray(commands) && commands.some(command => /diff --check/i.test(command)), 'validation.commands must include git diff --check');
+
+  const summary = record.validation?.summary;
+  const expectedSummary = {
+    resolved: differences.filter(item => item.status === 'resolved').length,
+    acceptedDeviations: differences.filter(item => item.status === 'accepted-deviation').length,
+    unresolved: differences.filter(item => item.status === 'unresolved').length,
+    unverified: (record.unverifiedStatuses || []).length
+      + [...matrix.values()].filter(item => !['verified', 'accepted-deviation', 'not-applicable'].includes(item.status)).length
+      + [...eventMap.values()].filter(item => !['verified', 'not-expressed'].includes(item.status)).length
+      + [...workflow.values()].filter(item => item.status !== 'verified').length,
+  };
+  for (const [key, expected] of Object.entries(expectedSummary)) {
+    addMissing(missing, summary?.[key] === expected, `validation.summary.${key} must be ${expected}`);
+  }
 }
 
 if (missing.length > 0) {

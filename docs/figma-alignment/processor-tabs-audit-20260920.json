@@ -1,0 +1,656 @@
+{
+  "title": "接口管理前置处理与后置处理重新核对记录",
+  "page": "接口管理 / 前置处理与后置处理",
+  "status": "accepted-with-deviations",
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:811:3909",
+      "jSUUPxC4PVD9Kp2FUydfox:811:4423",
+      "jSUUPxC4PVD9Kp2FUydfox:811:4980",
+      "jSUUPxC4PVD9Kp2FUydfox:812:6518",
+      "jSUUPxC4PVD9Kp2FUydfox:812:7067",
+      "jSUUPxC4PVD9Kp2FUydfox:812:7648",
+      "jSUUPxC4PVD9Kp2FUydfox:811:5431",
+      "jSUUPxC4PVD9Kp2FUydfox:814:8086"
+    ],
+    "makeCodePath": "设计/figma-ai-make最新代码20260920/src/app/App.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/后台管理系统界面设计-正式?code-node-id=0-9&p=f&t=6VTNXsmB9rHrFXts-0&fullscreen=1",
+    "currentCodeFiles": [
+      "src/widgets/api-interface-workspace/ApiProcessorDetail.vue",
+      "src/widgets/api-interface-workspace/ApiProcessorPanel.vue",
+      "src/widgets/api-interface-workspace/ApiProcessorSidebar.vue",
+      "src/widgets/api-interface-workspace/ApiCodeEditor.vue",
+      "src/widgets/api-interface-workspace/styles/api-processor-panel.css"
+    ],
+    "variants": [
+      "前置空态",
+      "前置脚本",
+      "前置 SQL",
+      "前置等待",
+      "后置空态",
+      "后置脚本",
+      "后置 SQL",
+      "后置等待",
+      "后置提取"
+    ]
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "verified",
+      "evidence": [
+        "Figma get_design_context: 811:3909, 811:4423, 811:4980, 812:6518, 812:7067, 812:7648, 811:5431, 814:8086",
+        "output/figma-processing/design-811-3883.png",
+        "output/figma-processing/design-812-6459.png",
+        "output/figma-processing/design-811-4980.png",
+        "output/figma-processing/design-812-7648.png",
+        "output/figma-processing/design-814-8086.png"
+      ]
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "verified",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4315-4685",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4685-5208"
+      ]
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "verified",
+      "evidence": [
+        "2026-09-20 在 1614x900 Make 预览中重新验证后置提取 disabled/enabled 快速提取、快速提取抽屉、更多设置弹层和指定匹配分支",
+        "output/playwright/make-post-extract-more-settings-20260920.png",
+        "历史截图覆盖前置脚本、SQL、等待、空态和后置脚本、SQL、等待、提取"
+      ]
+    },
+    {
+      "id": "vue-implementation",
+      "status": "verified",
+      "evidence": [
+        "ApiProcessorSidebar.vue、ApiProcessorDetail.vue 与 api-processor-panel.css 已按 Design 静态尺寸和 Make 行为完成局部修复",
+        "脚本格式化功能按用户决定保留，但与清空按钮共用同一视觉规则"
+      ]
+    },
+    {
+      "id": "browser-validation",
+      "status": "verified",
+      "evidence": [
+        "http://localhost:4173 at 1614x900",
+        "output/playwright/processor-pre-script-fixed-20260920.png",
+        "output/playwright/processor-pre-sql-fixed-20260920.png",
+        "output/playwright/processor-pre-wait-fixed-20260920.png",
+        "output/playwright/processor-pre-empty-fixed-20260920.png",
+        "output/playwright/processor-post-script-fixed-20260920-v2.png",
+        "output/playwright/processor-post-sql-fixed-20260920-v2.png",
+        "output/playwright/processor-post-wait-fixed-20260920.png",
+        "output/playwright/processor-post-extract-fixed-20260920-v2.png",
+        "output/playwright/processor-post-empty-fixed-20260920.png",
+        "output/playwright/processor-post-extract-more-settings-fixed-20260920.png",
+        "output/playwright/processor-post-extract-more-settings-index-fixed-20260920.png",
+        "output/playwright/processor-post-extract-quick-drawer-fixed-20260920.png"
+      ]
+    },
+    {
+      "id": "difference-registration",
+      "status": "verified",
+      "evidence": [
+        "本记录 differences 数组逐项登记 15 项已解决差异和 2 项可追溯接受差异"
+      ]
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [
+        "811:3909 PreScriptDetail",
+        "811:4423 PreSqlDetail",
+        "811:4980 PreWaitDetail",
+        "812:6518 PostScriptDetail",
+        "812:7067 PostSqlDetail",
+        "812:7648 PostWaitDetail",
+        "811:5431 PostExtractDetail",
+        "814:8086 processor empty state"
+      ],
+      "screenshots": [
+        "output/figma-processing/design-811-3883.png",
+        "output/figma-processing/design-812-6459.png",
+        "output/figma-processing/design-811-4980.png",
+        "output/figma-processing/design-812-7648.png",
+        "output/figma-processing/design-814-8086.png"
+      ]
+    },
+    "make": {
+      "codeReferences": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4315-4685",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4739-4974",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4977-5127",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5129-5208"
+      ],
+      "eventMatrix": [
+        {
+          "name": "hover",
+          "status": "verified",
+          "evidence": [
+            "Make SQL 删除按钮 onMouseEnter/onMouseLeave at App.tsx:4467 and 5062",
+            "Make 添加处理器菜单 onMouseEnter/onMouseLeave at App.tsx:5162-5163",
+            "Vue 添加菜单 hover 实测 128x32px、#f5f6f8；SQL 删除 hover 实测 21x21px、#fef2f2 与 #f53f3f",
+            "脚本清空和格式化 hover 的背景、颜色、边框实测一致"
+          ],
+          "rationale": "Make 源码表达的目标区域 hover 分支已在 Vue 中逐项操作。",
+          "resolution": "SQL 删除和添加菜单 hover 已按 Make 修复；快速提取 Make 未定义额外 hover，Vue 保持透明背景。"
+        },
+        {
+          "name": "focus",
+          "status": "verified",
+          "evidence": [
+            "Make processor inputs change borderColor only at App.tsx:4374, 4420, 4744, 4800-4828, 5100-5103",
+            "Vue 名称、SQL 超时、SQL 映射、等待和提取输入实测仅显示 1px #165dff 边框或 inset 边框，box-shadow 无额外外环"
+          ],
+          "rationale": "Design 未提供独立 focus 稿，按 Make 源码和预览验证。",
+          "resolution": "已移除目标区域额外 2px focus 外环。"
+        },
+        {
+          "name": "blur",
+          "status": "verified",
+          "evidence": [
+            "Make onBlur returns processor input border to #e5e6eb",
+            "Vue Element Plus wrappers and native fields return to neutral border after blur"
+          ],
+          "rationale": "双方均实现失焦恢复中性边框。",
+          "resolution": "无需修改行为，focus 的额外 ring 另行登记。"
+        },
+        {
+          "name": "active",
+          "status": "verified",
+          "evidence": [
+            "前置和后置处理器选中行、启用开关及等待快捷值 active 分支均存在"
+          ],
+          "rationale": "当前 Vue 与 Make 均表达选中/启用/快捷值状态。",
+          "resolution": "保留现有业务状态，视觉差异单独登记。"
+        },
+        {
+          "name": "disabled",
+          "status": "verified",
+          "evidence": [
+            "Make quick extraction uses hasSent at App.tsx:4829-4833",
+            "Vue quick extraction uses hasLatestResponseBody at ApiProcessorDetail.vue",
+            "Make 与 Vue 均实测 disabled 为 18x18px、#c9cdd4；enabled 为 18x18px、#00b42a，并可打开快速提取抽屉"
+          ],
+          "rationale": "双方的 disabled/enabled 双向状态和点击结果均已真实操作。",
+          "resolution": "已修复 Vue enabled 状态被共享规则覆盖为橙色的问题。"
+        },
+        {
+          "name": "loading",
+          "status": "not-expressed",
+          "evidence": [
+            "App.tsx:4315-5208 未定义处理器编辑器专属 loading 分支"
+          ],
+          "rationale": "Design、Make 与业务均未表达处理器编辑器专属 loading。",
+          "resolution": "不凭空增加。"
+        },
+        {
+          "name": "success",
+          "status": "not-expressed",
+          "evidence": [
+            "App.tsx:4315-5208 未定义处理器编辑器专属 success 分支"
+          ],
+          "rationale": "执行成功属于请求响应链路，不属于当前编辑器静态区域。",
+          "resolution": "不凭空增加。"
+        },
+        {
+          "name": "failure",
+          "status": "not-expressed",
+          "evidence": [
+            "App.tsx:4315-5208 未定义处理器编辑器专属 failure 分支"
+          ],
+          "rationale": "执行失败属于请求响应链路，不属于当前编辑器静态区域。",
+          "resolution": "不凭空增加。"
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/后台管理系统界面设计-正式?code-node-id=0-9&p=f&t=6VTNXsmB9rHrFXts-0&fullscreen=1",
+      "viewport": [929, 868],
+      "interactions": [
+        "历史轮次已打开前置脚本、SQL、等待和空态",
+        "历史轮次已打开后置脚本、SQL、等待、提取和空态",
+        "2026-09-20 重新操作后置提取快速提取 disabled/enabled 双向状态并打开快速提取抽屉",
+        "2026-09-20 重新打开更多设置，切换结果匹配规则为指定并核对 220x166px 弹层与 70x26px 数字框",
+        "添加处理器菜单、SQL 删除和输入 focus/blur 以 Make 源码事件结合 Vue 浏览器逐项验证",
+        "2026-09-20 使用当前 20260920 Make 预览重新登录并依次打开前置脚本、SQL、等待，以及后置脚本、SQL、等待、提取"
+      ],
+      "screenshots": [
+        "output/playwright/make-pre-script-20260918.png",
+        "output/playwright/make-pre-sql-20260918.png",
+        "output/playwright/make-pre-wait-20260918.png",
+        "output/playwright/make-pre-empty-20260918.png",
+        "output/playwright/make-post-script-20260918.png",
+        "output/playwright/make-post-sql-20260918.png",
+        "output/playwright/make-post-wait-20260918.png",
+        "output/playwright/make-post-extract-20260918.png",
+        "output/playwright/make-post-extract-more-settings-20260920.png",
+        "output/playwright/make-pre-script-current-20260920.png",
+        "output/playwright/make-pre-sql-current-20260920.png",
+        "output/playwright/make-pre-wait-current-20260920.png",
+        "output/playwright/make-post-script-current-20260920.png",
+        "output/playwright/make-post-sql-current-20260920.png",
+        "output/playwright/make-post-wait-current-20260920.png",
+        "output/playwright/make-post-extract-current-20260920.png"
+      ]
+    },
+    "vue": {
+      "screenshots": [
+        "output/playwright/processor-pre-script-fixed-20260920.png",
+        "output/playwright/processor-pre-sql-fixed-20260920.png",
+        "output/playwright/processor-pre-wait-fixed-20260920.png",
+        "output/playwright/processor-pre-empty-fixed-20260920.png",
+        "output/playwright/processor-post-script-fixed-20260920-v2.png",
+        "output/playwright/processor-post-sql-fixed-20260920-v2.png",
+        "output/playwright/processor-post-extract-fixed-20260920-v2.png",
+        "output/playwright/processor-post-wait-fixed-20260920.png",
+        "output/playwright/processor-post-empty-fixed-20260920.png",
+        "output/playwright/processor-add-menu-hover-fixed-20260920.png",
+        "output/playwright/processor-post-wait-active-fixed-20260920.png",
+        "output/playwright/processor-post-extract-more-settings-fixed-20260920.png",
+        "output/playwright/processor-post-extract-more-settings-index-fixed-20260920.png",
+        "output/playwright/processor-post-extract-quick-drawer-fixed-20260920.png",
+        "output/playwright/processor-pre-script-aligned-20260920.png",
+        "output/playwright/processor-pre-sql-aligned-20260920.png",
+        "output/playwright/processor-pre-wait-aligned-20260920.png",
+        "output/playwright/processor-post-sql-aligned-20260920.png",
+        "output/playwright/processor-post-wait-aligned-20260920.png",
+        "output/playwright/processor-post-extract-aligned-20260920.png"
+      ],
+      "computedStyle": [
+        "SQL label 实测 11px/600/16.5px；查询超时实测 150x28px、7px radius。",
+        "SQL 映射表头 26px、数据行 32.5px、删除按钮 21x21px；hover 为 #fef2f2 背景与 #f53f3f 图标。",
+        "脚本清空实测 36x17.5px，格式化实测 46x17.5px；二者均为 10px/500/15px、0 7px padding、1px #e5e6eb、3.5px radius。",
+        "左侧类型标签实测 11px/600/16.5px、1px 6px padding、4px radius；脚本/SQL/等待/提取分别采用 #7816FF/#F0E8FF、#165DFF/#E8EEFF、#FF7D00/#FFF2E5、#00B42A/#E6F9EC。",
+        "后置提取标题 13px/600；添加按钮 #165dff、3px gap；当前 1288px 表格实测列宽 120/96/88/92/88/720/68px。",
+        "后置提取更多设置按钮实测 26x26px，删除按钮实测 21x21px。",
+        "等待输入 277.016x31.5px；快捷值 active 为 #165dff 边框、rgba(22,93,255,.05) 背景。",
+        "更多设置弹层 220px 宽、6px 0 padding、10px radius、0 8px 24px rgba(0,0,0,.14)；指定数字框 70x26px。",
+        "快速提取 disabled 为 #c9cdd4，enabled 为 #00b42a，均为 18x18px。",
+        "名称、SQL、等待和提取输入 focus 无额外 2px 外环，blur 恢复 #e5e6eb。"
+      ],
+      "boundingBox": [
+        "Vue viewport 1920x862；Make 预览 iframe 929x868。",
+        "处理器左侧栏 264px；前置有处理器高度 556px；后置有处理器高度 316px。",
+        "SQL 映射在当前 982px 内容区内使用 44.95% / 44.95% / 10.1% 三列。",
+        "后置详情实测 padding 14px 16px 16px、gap 12px；切换处理器后 scrollTop 为 0。",
+        "提取表格总宽随当前工作区自适应；除固定列外，表达式列吸收剩余宽度，因此其像素值与 1350px Design 节点不同。"
+      ],
+      "interactionResults": [
+        "前置脚本、SQL 与后置脚本、SQL、等待、提取分支均已打开并截图。",
+        "空态、添加菜单 hover、SQL 删除 hover、输入 focus/blur、等待快捷值 active 均已操作。",
+        "更多设置已验证打开、指定条件字段显示、Escape/点击外部关闭。",
+        "快速提取已通过真实调试响应验证 disabled 到 enabled、绿色状态和抽屉打开。",
+        "本轮只操作未保存的新请求草稿，不写回接口定义。"
+      ]
+    }
+  },
+  "differences": [
+    {
+      "id": "PROC-AUDIT-001",
+      "status": "resolved",
+      "area": "后置处理各详情页水平与垂直内边距",
+      "source": "Design 812:6518/7067/7648 and 811:5431 vs Vue",
+      "current": "Vue 对前置和后置统一使用 14px 外层 padding；Design 后置详情头和正文使用 16px 水平 padding，并有独立的 14px/12px 顶底间距。",
+      "resolution": "已按 stage class 拆分前置/后置详情；后置实测 padding 14px 16px 16px、gap 12px。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:474-478",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4739-4753",
+        "output/playwright/audit-post-extract-20260920.png"
+      ],
+      "decisionBasis": "静态外观以 Design 为准。",
+      "impact": "后置区域所有字段、表格和编辑器相对 Design 整体偏移约 2px，纵向节奏也不一致。"
+    },
+    {
+      "id": "PROC-AUDIT-002",
+      "status": "resolved",
+      "area": "添加处理器下拉菜单",
+      "source": "Make source/preview vs Vue",
+      "current": "Vue 菜单项显示“脚本 / SQL / 等待 / 提取”，当前菜单实测约 60px 宽；Make 显示“脚本处理器 / SQL处理器 / 等待处理器 / 提取处理器”，菜单宽 128px。",
+      "resolution": "菜单文案已补全为四种“处理器”，实测每项 128x32px、7px 12px，hover 为 #f5f6f8。",
+      "followUp": "无。",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5153-5166",
+        "Vue 浏览器菜单实测：脚本/SQL/等待项均为 60x32px"
+      ],
+      "decisionBasis": "交互文案和菜单行为以 Make 源码及预览为准。",
+      "impact": "用户看到的处理器类型名称不完整，弹层尺寸与设计明显不同。"
+    },
+    {
+      "id": "PROC-AUDIT-003",
+      "status": "resolved",
+      "area": "脚本处理器清空按钮",
+      "source": "Design 811:3909/812:6518 and Make vs Vue",
+      "current": "Vue 清空按钮为 22px 高；Design 约 17.5px，Make h-5 为 20px。",
+      "resolution": "按 Design 采用 17.5px 高、10px/500/15px、0 7px padding 和 3.5px 圆角；清空与用户要求保留的格式化按钮共用同一视觉规则，浏览器实测分别为 36x17.5px 与 46x17.5px。",
+      "followUp": "无；格式化入口本身作为用户接受差异保留。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:728-740",
+        "output/playwright/audit-pre-script-20260920-current.png",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4985-4990"
+      ],
+      "decisionBasis": "静态尺寸以 Design 为准，Make 用于确认清空行为。",
+      "impact": "脚本标题栏按钮高度和垂直对齐偏大。"
+    },
+    {
+      "id": "PROC-AUDIT-004",
+      "status": "resolved",
+      "area": "SQL 数据源与查询超时标签字体",
+      "source": "Design 811:4423/812:7067 and Make vs Vue",
+      "current": "Vue 最终 computed style 为 12px/400/18px；Design 和 Make 为 11px/600/16.5px。",
+      "resolution": "已用 SQL 局部选择器固定为 11px/600/16.5px，并经 computed style 复验。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:465-472",
+        "output/playwright/audit-pre-sql-20260920-current.png"
+      ],
+      "decisionBasis": "Design 与 Make 一致。",
+      "impact": "SQL 顶部表单的字号、字重和信息层级不一致。"
+    },
+    {
+      "id": "PROC-AUDIT-005",
+      "status": "resolved",
+      "area": "SQL 查询超时输入框",
+      "source": "Design 811:4423/812:7067 vs Make vs Vue",
+      "current": "Vue 为 160x32px、8px radius；Design 为 150x28px、7px radius；Make 为 150x32px、8px radius。",
+      "resolution": "静态外观按 Design 修正为 150x28px、7px radius，同时保留数值边界逻辑。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:1067-1087",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5034-5038",
+        "output/playwright/audit-pre-sql-20260920-current.png"
+      ],
+      "decisionBasis": "尺寸和圆角属于静态视觉，以 Design 为准。",
+      "impact": "查询超时区域宽 10px、高 4px，导致数据源列和整体基线偏移。"
+    },
+    {
+      "id": "PROC-AUDIT-006",
+      "status": "resolved",
+      "area": "SQL 列到变量映射表格几何",
+      "source": "Design 811:4423/812:7067 vs Vue",
+      "current": "Vue 表头 28px、数据行实测 37px、删除按钮 24px、操作轨道 48px；Design 表头约 26px、数据行 32-32.5px、删除按钮约 21px，后置设计操作列约 133.5px。",
+      "resolution": "已修正为 26px 表头、32.5px 数据行、10.1% 操作列、21px 删除按钮与 13px 图标。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:1222-1309",
+        "Vue 浏览器两行实测：每行 956x37px，输入列各 442px，删除按钮 24px",
+        "output/playwright/audit-pre-sql-20260920-current.png"
+      ],
+      "decisionBasis": "表格几何属于静态视觉，以 Design 为准。",
+      "impact": "用户指出的“列 → 变量映射”仍明显比设计更高、更密，操作列位置错误。"
+    },
+    {
+      "id": "PROC-AUDIT-007",
+      "status": "resolved",
+      "area": "SQL 映射删除按钮 hover",
+      "source": "Make source vs Vue",
+      "current": "Make hover 同时显示 #FEF2F2 背景和红色图标；Vue hover 只把图标改成红色。",
+      "resolution": "已补局部 hover；浏览器实测 #fef2f2 背景和 #f53f3f 图标。",
+      "followUp": "无。",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4467",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5062",
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:1039-1041"
+      ],
+      "decisionBasis": "动态交互以 Make 源码及预览为准。",
+      "impact": "删除操作的危险反馈不完整。"
+    },
+    {
+      "id": "PROC-AUDIT-008",
+      "status": "resolved",
+      "area": "后置提取标题字重",
+      "source": "Design 811:5431 and Make vs Vue",
+      "current": "Vue“提取参数”为 13px/700；Design 与 Make 为 13px/600。",
+      "resolution": "已限定为 13px/600/19.5px，并经浏览器复验。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:38-40",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4915-4922",
+        "output/playwright/audit-post-extract-20260920.png"
+      ],
+      "decisionBasis": "Design 与 Make 一致。",
+      "impact": "标题层级比设计更重。"
+    },
+    {
+      "id": "PROC-AUDIT-009",
+      "status": "resolved",
+      "area": "后置提取添加按钮",
+      "source": "Design 811:5431 and Make vs Vue",
+      "current": "Vue 使用文本字符“+”且最终颜色为 #ff7d00；Design/Make 使用独立 12px Plus 图标，文字 12px/500，颜色 #165dff。",
+      "resolution": "已改为 12px Plus 图标，按钮实测 #165dff、12px/500、3px gap。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/ApiProcessorDetail.vue:219-224",
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:486-496",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4917-4922",
+        "output/playwright/audit-post-extract-20260920.png"
+      ],
+      "decisionBasis": "Design 与 Make 一致。",
+      "impact": "按钮图标、颜色和视觉语义均明显错误。"
+    },
+    {
+      "id": "PROC-AUDIT-010",
+      "status": "resolved",
+      "area": "后置提取表格列宽",
+      "source": "Design 811:5431 vs Make/Vue",
+      "current": "Vue 与 Make 使用 116/90/88/90/76/flex/68px；Design 为约 120/96/88/92/88/764/68px。",
+      "resolution": "已按 Design 改为 120/96/88/92/88/flex/68px，并保留横向滚动。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:878-883",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4924-4934",
+        "output/playwright/audit-post-extract-20260920.png"
+      ],
+      "decisionBasis": "静态列宽以 Design 为准；Make 与 Design 冲突需要保留记录。",
+      "impact": "描述、提取范围等列被压窄，表头与控件位置不一致。"
+    },
+    {
+      "id": "PROC-AUDIT-011",
+      "status": "resolved",
+      "area": "前置与后置等待时长输入宽度",
+      "source": "Design 811:4980/812:7648 vs Vue",
+      "current": "Vue 在 360px 容器内按 flex 分配后输入约 299.5px；Design 输入宽度为 277.016px。",
+      "resolution": "已固定输入宽度；浏览器实测 277.016x31.5px，并验证四个快捷值和 active 状态。",
+      "followUp": "无。",
+      "evidence": [
+        "Figma get_design_context 811:4980 node 811:5008",
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:1116-1139",
+        "output/playwright/audit-post-wait-20260920.png"
+      ],
+      "decisionBasis": "静态尺寸以 Design 为准。",
+      "impact": "等待输入与单位位置右移约 22.5px。"
+    },
+    {
+      "id": "PROC-AUDIT-012",
+      "status": "resolved",
+      "area": "处理器输入框 focus 视觉",
+      "source": "Make source vs Vue",
+      "current": "Make 的处理器名称、提取输入、等待输入只切换 1px 边框颜色；Vue 统一增加 2px 蓝色外环。",
+      "resolution": "已移除额外 focus 外环；名称、SQL、等待和提取输入逐项实测只保留 1px 蓝色边框或 inset。",
+      "followUp": "无。",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4374,4420,4744,4800-4828,5100-5103",
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:907-911",
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:1089-1092",
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:1141-1144"
+      ],
+      "decisionBasis": "Design 未提供独立 focus 稿，交互视觉以 Make 源码及预览为准。",
+      "impact": "聚焦时边框外观比 Make 更重，所有处理器表单均受影响。"
+    },
+    {
+      "id": "PROC-AUDIT-013",
+      "status": "accepted-deviation",
+      "area": "脚本处理器格式化按钮",
+      "source": "用户决定 vs Design/Make",
+      "current": "Vue 保留“格式化”按钮，Design/Make 目标脚本工具栏未表达该按钮。",
+      "resolution": "按用户明确要求保留。",
+      "followUp": "已完成：格式化与清空的高度、字号、字重、行高、padding、边框、圆角、背景、颜色和 hover 完全一致。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/ApiProcessorDetail.vue:130-155",
+        "用户指令：脚本处理器有个格式化按钮我觉得可以保留"
+      ],
+      "decisionBasis": "用户明确决定优先。",
+      "impact": "存在一项有意保留的功能入口差异，不能称四方零差异。",
+      "acceptance": {
+        "type": "user-decision",
+        "reference": "当前任务历史用户指令：脚本处理器有个格式化按钮我觉得可以保留"
+      }
+    },
+    {
+      "id": "PROC-AUDIT-014",
+      "status": "resolved",
+      "area": "后置提取快速提取图标 enabled 状态",
+      "source": "Make source/preview vs Vue",
+      "current": "真实响应后 Vue 图标曾被共享按钮规则覆盖为 #ff7d00；Make 为 #00b42a。",
+      "resolution": "已增加处理器局部状态规则；Vue 实测 disabled 为 #c9cdd4、enabled 为 #00b42a，尺寸均为 18x18px。",
+      "followUp": "无。",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4829-4833",
+        "output/playwright/processor-post-extract-quick-drawer-fixed-20260920.png"
+      ],
+      "decisionBasis": "动态状态以 Make 源码和 Make 预览为准。",
+      "impact": "修复前 enabled 图标使用警告橙，错误表达了操作语义。"
+    },
+    {
+      "id": "PROC-AUDIT-015",
+      "status": "resolved",
+      "area": "切换处理器后的详情滚动位置",
+      "source": "Make preview vs Vue",
+      "current": "从较长脚本详情切换到 SQL 时，Vue 曾继承旧 scrollTop，导致顶部字段被裁掉。",
+      "resolution": "监听 activeProcessor.id，在 nextTick 后将详情滚动位置复位到 0；后置脚本切换 SQL 实测 scrollTop=0。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/ApiProcessorDetail.vue",
+        "output/playwright/processor-post-sql-fixed-20260920-v2.png"
+      ],
+      "decisionBasis": "Make 切换处理器始终从详情顶部显示，Vue 应保持相同行为。",
+      "impact": "修复前会让用户误以为 SQL 顶部表单缺失。"
+    },
+    {
+      "id": "PROC-AUDIT-016",
+      "status": "resolved",
+      "area": "后置提取更多设置弹层",
+      "source": "Make source/preview vs Vue",
+      "current": "Vue 曾使用约 340px 的 Element Plus 默认弹层、较大内边距和带标签的数字组件；Make 为 220px、6px 0 padding 和直接显示的 70x26px 数字框。",
+      "resolution": "已改为 220px 弹层、10px radius、0 8px 24px rgba(0,0,0,.14) 阴影和 Make 的分区间距；指定态实测弹层 220x166px、数字框 70x26px。",
+      "followUp": "无。",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:4762-4897",
+        "output/playwright/make-post-extract-more-settings-20260920.png",
+        "output/playwright/processor-post-extract-more-settings-fixed-20260920.png",
+        "output/playwright/processor-post-extract-more-settings-index-fixed-20260920.png"
+      ],
+      "decisionBasis": "Design 未表达该动态弹层，结构和交互外观以 Make 源码及预览为准。",
+      "impact": "修复前弹层宽度、留白、层级和指定值控件均明显偏大。"
+    },
+    {
+      "id": "PROC-AUDIT-017",
+      "status": "accepted-deviation",
+      "area": "指定匹配序号的最小值与默认值",
+      "source": "Make vs real business contract",
+      "current": "Make 演示使用从 0 开始的 matchIndex；当前真实执行器使用从 1 开始的 resultMatchingRuleNum，并将小于等于 0 的值归一为 1。",
+      "resolution": "保留真实业务的 1 起始语义和 min=1；仅对齐控件尺寸与布局。",
+      "followUp": "若产品决定改为 0 起始，需同步修改后端执行器、格式化兼容逻辑和测试，不能只改界面。",
+      "evidence": [
+        "server/src/main/java/com/company/autoplatform/apiautomation/ApiProcessorExecutor.java:382-383",
+        "server/src/main/java/com/company/autoplatform/apiautomation/ApiAutomationFormatSupport.java:178",
+        "src/widgets/api-interface-workspace/lib/useApiProcessorWorkspace.ts:156,245"
+      ],
+      "decisionBasis": "项目准则规定真实业务规则优先于 Make 演示逻辑。",
+      "impact": "数字框默认内容为 1 而不是 Make 的 0，但实际提取语义保持正确。",
+      "acceptance": {
+        "type": "business-constraint",
+        "reference": "ApiProcessorExecutor.java:382-383 的 1-based 索引执行契约"
+      }
+    },
+    {
+      "id": "PROC-AUDIT-018",
+      "status": "resolved",
+      "area": "左侧处理器类型标签",
+      "source": "Design and Make vs Vue",
+      "current": "颜色已一致，但 Vue 曾使用 10px 字号、15px 行高、1.75px 5.25px padding 和 3.5px 圆角。",
+      "resolution": "已按 Design/Make 修正为 11px/600/16.5px、1px 6px padding、4px 圆角，并逐项复验四种颜色。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:638-650",
+        "output/playwright/processor-pre-script-aligned-20260920.png"
+      ],
+      "decisionBasis": "Design 与 Make 对标签排版和四组颜色一致。",
+      "impact": "修复前标签整体偏小，列表信息层级与设计不一致。"
+    },
+    {
+      "id": "PROC-AUDIT-019",
+      "status": "resolved",
+      "area": "前置 SQL 映射标题文案",
+      "source": "Design and Make vs Vue",
+      "current": "Vue 前置 SQL 显示“按列提取变量”，Design/Make 显示“列 → 变量映射”。",
+      "resolution": "前置和后置 SQL 均统一为“列 → 变量映射”。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/ApiProcessorDetail.vue:214"
+      ],
+      "decisionBasis": "文案以 Design 与 Make 一致结果为准。",
+      "impact": "修复前同一功能在前后置显示不同名称。"
+    },
+    {
+      "id": "PROC-AUDIT-020",
+      "status": "resolved",
+      "area": "后置提取行操作按钮尺寸",
+      "source": "Design 811:5431 vs Vue",
+      "current": "Vue 更多设置和删除按钮均为 24x24px；Design 分别约为 26x26px 和 21x21px。",
+      "resolution": "已分别修正并在浏览器实测为 26x26px 和 21x21px。",
+      "followUp": "无。",
+      "evidence": [
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:919-927",
+        "src/widgets/api-interface-workspace/styles/api-processor-panel.css:1056-1064",
+        "output/playwright/processor-post-extract-aligned-20260920.png"
+      ],
+      "decisionBasis": "静态尺寸以 Design 为准。",
+      "impact": "修复前操作区图标按钮比例与设计不一致。"
+    },
+    {
+      "id": "PROC-AUDIT-021",
+      "status": "accepted-deviation",
+      "area": "SQL 与提取处理器的设计示例数据",
+      "source": "Design/Make fixture vs real new-processor defaults",
+      "current": "Design/Make 使用测试数据库、5000ms、示例 SQL、示例映射和 access_token 提取数据；Vue 新建处理器使用空业务字段、30000ms，并仅创建一行空提取配置。",
+      "resolution": "保留真实新建流程的空值和现有业务默认超时，不把演示数据写入用户请求。视觉几何、占位文案和交互仍按 Design/Make 对齐。",
+      "followUp": "若产品希望修改真实默认超时或预填样例，应另行确认业务默认值并同步保存契约。",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:3997,4612,5132-5134",
+        "src/widgets/api-interface-workspace/lib/useApiProcessorWorkspace.ts:118-140"
+      ],
+      "decisionBasis": "项目准则规定真实业务规则优先，演示 fixture 不是生产默认值。",
+      "impact": "新建后的内容数据与设计截图不同，但不会造成布局和交互能力缺失。",
+      "acceptance": {
+        "type": "business-constraint",
+        "reference": "useApiProcessorWorkspace.ts:118-140 的现有新建草稿契约"
+      }
+    }
+  ],
+  "noDifferencesReason": "本轮共登记 21 项差异：18 项已修复并复验，3 项分别依据用户决定或真实业务约束接受保留；没有 unresolved 差异。",
+  "unverifiedStatuses": [],
+  "validation": {
+    "commands": [
+      "git status --short --branch",
+      "git diff --check",
+      "npm run typecheck",
+      "npm run build",
+      "Figma get_design_context for eight exact nodes",
+      "Playwright CLI browser validation at http://localhost:4173 with 1614x900 viewport",
+      "npm run figma:alignment-check -- --record docs/figma-alignment/processor-tabs-audit-20260920.json"
+    ],
+    "results": {
+      "typecheck": "passed: npm run typecheck",
+      "build": "passed: npm run build; only existing dependency annotation and chunk-size warnings remained",
+      "diffCheck": "passed: no whitespace errors; existing LF/CRLF conversion warnings only",
+      "alignmentCheck": "passed: record constraints and referenced files passed",
+      "recordStatus": "accepted-with-deviations"
+    }
+  }
+}

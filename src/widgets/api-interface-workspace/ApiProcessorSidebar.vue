@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import { ChevronDown, Plus } from '@lucide/vue'
+import processorAddIcon from '@/assets/figma-processor/processor-add.svg'
+import processorChevronIcon from '@/assets/figma-processor/processor-chevron.svg'
+import processorEmptyLeftIcon from '@/assets/figma-processor/processor-empty-right.svg'
 
 import { AppSwitch } from '@/shared/ui'
 
@@ -22,31 +24,32 @@ const emit = defineEmits<{
 }>()
 
 function processorTone(type?: string | null) {
-  if (type === 'SQL') return { label: 'SQL', color: '#0E42D2', bg: '#E8F3FF' }
-  if (type === 'TIME_WAITING') return { label: '等待', color: '#876800', bg: '#FFFBE8' }
-  if (type === 'EXTRACT') return { label: '提取', color: '#00B42A', bg: '#E8FFEA' }
-  return { label: '脚本', color: '#7816FF', bg: '#F5E8FF' }
+  if (type === 'SQL') return { label: 'SQL', color: '#165DFF', bg: '#E8EEFF' }
+  if (type === 'TIME_WAITING') return { label: '等待', color: '#FF7D00', bg: '#FFF2E5' }
+  if (type === 'EXTRACT') return { label: '提取', color: '#00B42A', bg: '#E6F9EC' }
+  return { label: '脚本', color: '#7816FF', bg: '#F0E8FF' }
 }
 
 function toggleProcessor(processor: ApiProcessorPanelRow) {
   processor.enabled = !processor.enabled
   emit('dirty')
 }
+
 </script>
 
 <template>
   <aside class="api-processor-sidebar">
     <div class="api-processor-toolbar">
-      <el-dropdown trigger="click" @command="emit('add', $event)">
+      <el-dropdown trigger="click" popper-class="api-processor-add-popper" @command="emit('add', $event)">
         <button type="button" class="api-legacy-primary">
-          <Plus class="api-button-plus" :size="12" aria-hidden="true" />
-          添加处理器
-          <ChevronDown class="api-button-chevron" :size="10" aria-hidden="true" />
+          <img class="api-button-plus" :src="processorAddIcon" alt="" aria-hidden="true" />
+          <span>添加处理器</span>
+          <img class="api-button-chevron" :src="processorChevronIcon" alt="" aria-hidden="true" />
         </button>
         <template #dropdown>
           <el-dropdown-menu>
             <el-dropdown-item v-for="item in typeOptions" :key="item.value" :command="item.value">
-              {{ item.label }}
+              {{ item.label }}处理器
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -55,12 +58,15 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
     </div>
 
     <div v-if="rows.length" class="api-processor-sidebar-list">
-      <button
+      <div
         v-for="(processor, index) in rows"
         :key="processor.id || index"
-        type="button"
         :class="['api-processor-list-item', { 'is-active': activeProcessor?.id === processor.id }]"
+        role="button"
+        tabindex="0"
         @click="emit('select', processor)"
+        @keydown.enter="emit('select', processor)"
+        @keydown.space.prevent="emit('select', processor)"
       >
         <span class="api-processor-list-item__main">
           <AppSwitch
@@ -94,8 +100,12 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
             <el-icon><ArrowDown /></el-icon>
           </button>
         </span>
-      </button>
+      </div>
     </div>
-    <div v-else class="api-processor-empty">暂无处理器</div>
+    <div v-else class="api-processor-empty">
+      <img class="api-processor-empty-icon" :src="processorEmptyLeftIcon" alt="" aria-hidden="true" />
+      <span>暂无处理器</span>
+      <small>点击「添加」开始配置</small>
+    </div>
   </aside>
 </template>

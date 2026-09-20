@@ -1,0 +1,138 @@
+{
+  "title": "接口管理前置处理、后置处理与响应内容对齐复核",
+  "page": "接口自动化 / 接口管理 / 前置处理、后置处理",
+  "status": "verified-alignment",
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:811:3883",
+      "jSUUPxC4PVD9Kp2FUydfox:812:6459",
+      "jSUUPxC4PVD9Kp2FUydfox:814:8086",
+      "jSUUPxC4PVD9Kp2FUydfox:814:8121",
+      "jSUUPxC4PVD9Kp2FUydfox:811:4980",
+      "jSUUPxC4PVD9Kp2FUydfox:812:7648"
+    ],
+    "makeCodePath": "设计/figma-ai-make最新设计20260917/src/app/App.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/后台管理系统界面设计-正式",
+    "currentCodeFiles": [
+      "src/widgets/api-interface-workspace/ApiProcessorPanel.vue",
+      "src/widgets/api-interface-workspace/ApiProcessorSidebar.vue",
+      "src/widgets/api-interface-workspace/ApiProcessorDetail.vue",
+      "src/widgets/api-interface-workspace/ApiResponsePanel.vue",
+      "src/widgets/api-interface-workspace/lib/useApiProcessorWorkspace.ts",
+      "src/widgets/api-interface-workspace/lib/useApiRequestEditor.ts",
+      "src/widgets/api-interface-workspace/styles/api-processor-panel.css"
+    ]
+  },
+  "workflow": [
+    { "id": "design-static", "status": "verified", "evidence": ["Figma get_design_context and screenshots for 811:3883, 812:6459, 814:8086, 814:8121, 811:4980, 812:7648", "Figma context 811:4980 PreWaitDetail and 812:7648 PostWaitDetail", "output/figma-processing/design-811-3883.png", "output/figma-processing/design-812-6459.png", "output/figma-processing/design-814-8086.png", "output/figma-processing/design-814-8121.png"] },
+    { "id": "make-event-inventory", "status": "verified", "evidence": ["设计/figma-ai-make最新设计20260917/src/app/App.tsx:3926-5200", "Processor component branches, onFocus/onBlur, hover handlers, disabled move/quick-extraction controls", "App.tsx:4487-4527 PreWaitDetail and 5091-5123 PostWaitDetail: presets [500,1000,2000,5000], range clamp 1..600000, focus/blur border handlers"] },
+    { "id": "make-preview-validation", "status": "verified", "evidence": ["Make preview authenticated and operated pre/post script, SQL, wait, extract and empty branches", "Make preview hover, focus and blur operations captured with measurements", "output/playwright/make-post-extract-20260918.png", "output/playwright/make-post-script-20260918.png", "output/playwright/make-post-sql-20260918.png", "output/playwright/make-post-wait-20260918.png", "output/playwright/make-pre-script-20260918.png", "output/playwright/make-pre-sql-20260918.png", "output/playwright/make-pre-wait-20260918.png", "output/playwright/make-pre-empty-20260918.png", "output/playwright/make-processor-hover-20260918.png", "output/playwright/make-processor-focus-20260918.png", "output/playwright/make-processor-blur-20260918.png"] },
+    { "id": "vue-implementation", "status": "verified", "evidence": ["ApiProcessorPanel.vue, ApiProcessorSidebar.vue, ApiProcessorDetail.vue, api-processor-panel.css, useApiRequestEditor.ts", "ApiProcessorDetail.vue TIME_WAITING branch with native number input, unit, presets and stage-specific placeholder"] },
+    { "id": "browser-validation", "status": "verified", "evidence": ["output/playwright/processor-pre-empty-final-20260918.png", "output/playwright/processor-post-empty-final-20260918.png", "output/playwright/processor-pre-script-final-20260918.png", "output/playwright/processor-pre-sql-aligned-final-20260918.png", "output/playwright/processor-post-script-final-20260918.png", "output/playwright/processor-post-sql-aligned-final-20260918.png", "output/playwright/processor-post-sql-two-rows-aligned-1920-20260920.png", "output/playwright/processor-extract-aligned-final-20260918.png", "output/playwright/processor-pre-wait-before-20260920.png", "output/playwright/processor-post-wait-before-20260920.png", "output/playwright/processor-pre-wait-aligned-20260920.png", "output/playwright/processor-post-wait-aligned-20260920.png", "output/playwright/response-expanded-280-20260918.png", "output/playwright/response-collapsed-280-20260918.png", "output/playwright/vue-processor-hover-20260918.png", "output/playwright/vue-processor-focus-20260918.png", "output/playwright/vue-processor-blur-20260918.png"] },
+    { "id": "difference-registration", "status": "verified", "evidence": ["This record differences array", "Design / Make / Vue measurements and screenshots listed below"] }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [
+        { "node": "811:3883", "label": "PreScriptTab", "static": "1614x556; left column 264px; toolbar 43px; detail padding 14px; script editor 253px" },
+        { "node": "812:6459", "label": "PostScriptTab", "static": "1614x316; left column 264px; toolbar 43px; four processor rows and extract detail; post detail is compact" },
+        { "node": "814:8086", "label": "Processor empty state", "static": "1614x316; left empty state and detail empty state" },
+        { "node": "814:8121", "label": "Response content", "static": "1614x280 in standalone Design response frame; title bar 40px; tabs 31.5px" }
+      ],
+    "screenshots": [
+        "output/figma-processing/design-811-3883.png",
+        "output/figma-processing/design-812-6459.png",
+        "output/figma-processing/design-814-8086.png",
+        "output/figma-processing/design-814-8121.png",
+        "output/figma-processing/design-811-4980.png",
+        "output/figma-processing/design-812-7648.png"
+      ]
+    },
+    "make": {
+      "codeReferences": [
+        "设计/figma-ai-make最新设计20260917/src/app/App.tsx:3926-4305 (shared processor components)",
+        "设计/figma-ai-make最新设计20260917/src/app/App.tsx:4315-4685 (PreScriptTab)",
+        "设计/figma-ai-make最新设计20260917/src/app/App.tsx:4685-5200 (PostScriptTab)"
+      ],
+      "eventMatrix": [
+        { "name": "hover", "status": "verified", "evidence": ["Make source has onMouseEnter/onMouseLeave for processor controls and rows", "output/playwright/make-processor-hover-20260918.png", "output/playwright/vue-processor-hover-20260918.png", "Make hover reveals the row action group; Vue hover reveals the same action group"], "rationale": "Processor source expresses hover feedback for controls/rows and both previews were operated.", "resolution": "Vue retains scoped hover feedback and action visibility." },
+        { "name": "focus", "status": "verified", "evidence": ["Make processor text fields use onFocus/onBlur border color handlers in App.tsx:4039-4143", "output/playwright/make-processor-focus-20260918.png", "output/playwright/vue-processor-focus-20260918.png", "Make computed border is 1px solid rgb(22, 93, 255); Vue processor field uses the matching 1px inset border and 2px blue ring"], "rationale": "Make source expresses focus border behavior on processor fields and both implementations were measured.", "resolution": "Scoped Vue processor-field focus CSS matches Make's blue border and 2px ring." },
+        { "name": "blur", "status": "verified", "evidence": ["Make processor text fields use onBlur handlers in App.tsx:4039-4143", "output/playwright/make-processor-blur-20260918.png", "output/playwright/vue-processor-blur-20260918.png", "Make and Vue return the processor field border to the neutral #e5e6eb state after blur"], "rationale": "Make source expresses blur reset behavior and both previews were operated.", "resolution": "Vue processor fields reset to the neutral border on blur." },
+        { "name": "active", "status": "verified", "evidence": ["PreScriptTab/PostScriptTab selection state and active processor row in App.tsx", "Vue selected processor and response tabs exercised"], "rationale": "Active/selected processor and response tab branches are expressed.", "resolution": "Vue implements selected processor and response tab state." },
+        { "name": "disabled", "status": "verified", "evidence": ["Make move controls and quick extraction button disable based on list/request state", "output/playwright/make-post-extract-20260918.png"], "rationale": "Make expresses disabled controls, including first/last move and quick extraction before a response.", "resolution": "Vue exposes disabled move and quick-extraction controls." },
+        { "name": "loading", "status": "not-expressed", "evidence": ["No processor-specific loading branch found in App.tsx:3926-5200"], "rationale": "The Make processor tabs do not define a processor-specific loading visual/state.", "resolution": "No synthetic processor loading state added; request-level loading remains outside this scope." },
+        { "name": "success", "status": "not-expressed", "evidence": ["No processor editor success branch found in App.tsx:3926-5200"], "rationale": "The Make processor editor does not define a processor-specific success state.", "resolution": "No synthetic processor success state added." },
+        { "name": "failure", "status": "not-expressed", "evidence": ["No processor editor failure branch found in App.tsx:3926-5200"], "rationale": "The Make processor editor does not define a processor-specific failure state.", "resolution": "Real request/execution errors remain in existing response handling; no fake editor failure state added." }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/后台管理系统界面设计-正式",
+      "viewport": [1614, 900],
+      "interactions": [
+        "Authenticated Make preview as superadmin and selected X-MAN workspace",
+        "Opened 接口自动化 > 接口管理 > 后置处理",
+        "Operated post-script, post-SQL, post-wait and post-extract branches",
+        "Operated pre-script, pre-SQL, pre-wait and pre-empty branches",
+        "Captured each branch after selection and verified the corresponding detail content",
+        "Hovered a processor row and verified the action group became visible",
+        "Focused and blurred the processor name input and measured the blue/neutral border states"
+      ],
+      "screenshots": ["output/playwright/make-post-extract-20260918.png", "output/playwright/make-post-script-20260918.png", "output/playwright/make-post-sql-20260918.png", "output/playwright/make-post-wait-20260918.png", "output/playwright/make-pre-script-20260918.png", "output/playwright/make-pre-sql-20260918.png", "output/playwright/make-pre-wait-20260918.png", "output/playwright/make-pre-empty-20260918.png", "output/playwright/make-processor-hover-20260918.png", "output/playwright/make-processor-focus-20260918.png", "output/playwright/make-processor-blur-20260918.png"]
+    },
+    "vue": {
+      "screenshots": [
+        "output/playwright/processor-pre-empty-final-20260918.png",
+        "output/playwright/processor-post-empty-final-20260918.png",
+        "output/playwright/processor-pre-script-final-20260918.png",
+        "output/playwright/processor-pre-sql-final-20260918.png",
+        "output/playwright/processor-post-script-final-20260918.png",
+        "output/playwright/processor-post-sql-final-20260918.png",
+        "output/playwright/response-expanded-280-20260918.png",
+        "output/playwright/response-collapsed-280-20260918.png"
+      ],
+      "computedStyle": [
+        "At the 1920x862 Vue viewport, empty pre/post and populated post processor panels measure 944x316; populated pre panels measure 944x556. Internal sidebar is 264px, toolbar 263x43, add button 110x26, populated detail padding 14px, and script editor 253px.",
+        "Fresh empty-state measurements: sidebar/detail panel height 316px; sidebar toolbar 43px; add button 110x26; sidebar empty icon 24px; detail empty icon 28px; detail empty state has zero padding.",
+        "Fresh populated measurements: pre script panel 556px; post script panel 316px; SQL editor height 153px with min-height 0; pre SQL mapping uses 600/600/68px at the 1294px detail width; post SQL mapping uses 600/584/68px because the second input shares the remaining track; SQL row controls are 30px rendered input boxes with 0px radius and no shadow.",
+        "Fresh populated extract measurements: fixed columns 116/90/88/90/76/748/68px, row height 41px, cell padding 6px 8px, and controls 28px high; evidence includes access_token / 登录 token / $.data.token.",
+        "Fresh script toolbar measurement: API chip is 224.578px wide and its right edge is within 2px of the toolbar right edge.",
+        "Response expanded shell computed bounding box 1614x280 after clearing local response height storage; standalone Design response frame is 1614x280",
+        "Response collapsed shell computed bounding box 1614x40 and aria-expanded=false",
+        "Script editor font-size 12px and line-height 19.5px; processor labels and API card visible",
+        "Processor name focus uses 1px #165dff inset border plus 2px rgba(22,93,255,.094) ring after the scoped alignment rule; blur returns to 1px #e5e6eb",
+        "Pre/post wait detail: wait input 31.5px high, 14px/600/21px with 10.5px horizontal padding and 7px radius; unit 12px/18px; preset buttons 21px high, 11px/500/16.5px, 3.5px radius, 5.25px gap; active state uses #165dff border and rgba(22,93,255,.05) background; helper 11px/16.5px; pre placeholder is '描述等待原因，如：等待任务队列初始化' and post placeholder is '描述等待原因'."
+      ],
+      "boundingBox": [
+        "Pre/post empty, pre/post script and pre/post SQL details captured at 1920x862 using the fresh final screenshots listed above",
+        "Response title bar 40px; response tabs remain mounted only when expanded",
+        "Processor panel 1571x556; left sidebar 264x556; processor list item 256x34"
+      ],
+      "interactionResults": [
+        "Pre/post tabs switch without changing unrelated request tabs",
+        "Add processor menu exposes script, SQL, wait and post-only extract",
+        "Processor selection, enable switch, copy/delete and move controls are usable",
+        "Response content toggles expanded/collapsed and keeps response tab state",
+        "Response collapse preserves shell data and exposes aria-expanded=false",
+        "Processor row hover reveals action buttons; processor name focus/blur matches the Make blue/neutral border behavior",
+        "Wait preset click changes delayMs and active preset; native number input clamps values to 1..600000; pre and post branches were each opened and checked independently"
+      ]
+    }
+  },
+  "differences": [
+    { "id": "PROC-DIFF-001", "status": "resolved", "area": "Processor layout geometry", "source": "Design vs Vue", "current": "Vue uses the Design height split: populated pre processor panel 556px; empty and populated post panels 316px. Internal sidebar is 264px, toolbar 43px, add button 110x26, and populated detail padding 14px.", "resolution": "Scoped CSS state classes distinguish is-pre/has-active-processor; fresh browser bounding boxes verify both height variants.", "followUp": "Recheck after changes to shared workspace CSS", "evidence": ["output/figma-processing/design-811-3883.png", "output/figma-processing/design-812-6459.png", "output/figma-processing/design-814-8086.png", "output/playwright/processor-pre-empty-final-20260918.png", "output/playwright/processor-post-empty-final-20260918.png", "output/playwright/processor-pre-script-final-20260918.png", "output/playwright/processor-post-script-final-20260918.png"], "decisionBasis": "Design static measurements and fresh browser bounding boxes", "impact": "Empty and post states no longer inherit the pre-processing editor height" },
+    { "id": "PROC-DIFF-002", "status": "resolved", "area": "Script and SQL detail content", "source": "Design and Make vs Vue", "current": "Vue renders stage-specific script API cards and SQL datasource, timeout, SELECT hint, database editor toolbar, pre SQL 按列提取变量 mapping, post SQL 列 → 变量映射 mapping, and full-result variable fields.", "resolution": "ApiProcessorDetail branches on stage and the mapping controls were restyled to remove Element Plus radius/shadow; populated pre/post SQL rows and the populated extract table were rechecked in the browser.", "followUp": "Keep pre/post API and SQL column semantics distinct", "evidence": ["output/figma-processing/design-811-3883.png", "output/figma-processing/design-812-6459.png", "output/playwright/processor-pre-script-final-20260918.png", "output/playwright/processor-pre-sql-aligned-final-20260918.png", "output/playwright/processor-post-script-final-20260918.png", "output/playwright/processor-post-sql-aligned-final-20260918.png", "output/playwright/processor-extract-aligned-final-20260918.png"], "decisionBasis": "Make branch logic plus Design labels, row data and controls", "impact": "Pre and post SQL now show the correct field order and populated-row geometry; extract rows use Make's fixed column widths" },
+    { "id": "PROC-DIFF-008", "status": "resolved", "area": "Populated SQL timeout and column-to-variable mapping", "source": "Design 812:6459 and Make App.tsx:5028-5070 vs Vue browser measurements", "current": "The Vue SQL detail now uses the Make timeout geometry (160px x 32px, native number input with hidden spin buttons) and a populated two-row mapping table. The mapping table measures 28px header, 37px data rows, 48px action track, 12px cell padding, JetBrains Mono 12px inputs, black column text and blue variable text, with no input radius or shadow.", "resolution": "Changed the SQL form grid timeout track from 150px to Make's 160px and retained native borderless mapping inputs. Revalidated with id → userId and token → tokenValue at a 1920x900 browser viewport.", "followUp": "Repeat populated-row checks when Make table tokens or Element Plus theme overrides change", "evidence": ["设计/figma-ai-make最新设计20260917/src/app/App.tsx:5028-5070", "output/figma-processing/design-812-6459.png", "output/playwright/processor-post-sql-two-rows-aligned-1920-20260920.png"], "decisionBasis": "Make source dimensions plus current-browser computed styles and bounding boxes", "impact": "The timeout column no longer shifts left by 10px, and mapping verification covers real multi-row content instead of only the empty state" },
+    { "id": "PROC-DIFF-006", "status": "resolved", "area": "Processor toolbar and empty states", "source": "Design vs Vue", "current": "Add processor control is a single-line 110x26 button with the supplied Figma plus/chevron assets; sidebar and detail empty states use the supplied 24px/28px assets and centered copy.", "resolution": "Replaced approximate icons and flex sizing with exact downloaded Figma assets and scoped dimensions.", "followUp": "Recheck if the Design component assets change", "evidence": ["output/figma-processing/design-814-8086.png", "output/playwright/processor-pre-empty-final-20260918.png", "output/playwright/processor-post-empty-final-20260918.png"], "decisionBasis": "Design asset screenshots and computed browser dimensions", "impact": "The previously wrapped add button and displaced empty states are corrected" },
+    { "id": "PROC-DIFF-007", "status": "resolved", "area": "Script API chip alignment", "source": "Design and Make vs Vue", "current": "The setVar/getVar/request/response/log/fail chip is right-aligned in the editor toolbar; fresh computed measurement puts its right edge within 2px of the toolbar right edge.", "resolution": "Toolbar left region now flexes to consume remaining width while the API chip remains intrinsic width.", "followUp": "Recheck at narrow responsive widths", "evidence": ["output/figma-processing/design-811-3883.png", "output/playwright/processor-pre-script-final-20260918.png", "output/playwright/processor-post-script-final-20260918.png"], "decisionBasis": "Design toolbar placement and browser bounding boxes", "impact": "API affordance no longer floats beside the language label" },
+    { "id": "PROC-DIFF-003", "status": "resolved", "area": "Response collapse", "source": "Design, Make and Vue", "current": "Vue supports expanded and collapsed response content with tab preservation; expanded shell measures 280px and collapsed shell measures 40px", "resolution": "Response header toggle and 40px collapsed shell retained; default expanded height is 280px to match the Design response frame", "followUp": "Keep local height storage migration in mind for existing users", "evidence": ["output/figma-processing/design-814-8121.png", "output/playwright/response-expanded-280-20260918.png", "output/playwright/response-collapsed-280-20260918.png"], "decisionBasis": "Design specifies a 280px static response frame; Make specifies collapse interaction", "impact": "Expanded response content matches the Design frame and collapse preserves response state" },
+    { "id": "PROC-DIFF-004", "status": "resolved", "area": "Make preview branch coverage", "source": "Make source and preview vs required six-step evidence", "current": "Make preview evidence now covers pre/post script, SQL, wait, extract and empty branches individually", "resolution": "Operated each branch in the authenticated Make preview and captured a branch-specific screenshot; the formatting button remains present in the script branch", "followUp": "Re-run this branch matrix when the Make source or preview URL changes", "evidence": ["设计/figma-ai-make最新设计20260917/src/app/App.tsx:4315-5200", "output/playwright/make-post-extract-20260918.png", "output/playwright/make-post-script-20260918.png", "output/playwright/make-post-sql-20260918.png", "output/playwright/make-post-wait-20260918.png", "output/playwright/make-pre-script-20260918.png", "output/playwright/make-pre-sql-20260918.png", "output/playwright/make-pre-wait-20260918.png", "output/playwright/make-pre-empty-20260918.png"], "decisionBasis": "AGENTS.md requires per-variant Make preview evidence", "impact": "All in-scope processor variants now have operation evidence" },
+    { "id": "PROC-DIFF-005", "status": "resolved", "area": "Focus/blur and hover preview evidence", "source": "Make event inventory vs Make preview vs Vue browser validation", "current": "Make and Vue both show row actions on hover; both use a blue processor-field border on focus and a neutral border on blur", "resolution": "Captured Make and Vue hover/focus/blur screenshots and measurements, then scoped Vue processor-field focus CSS to Make's 1px blue border plus 2px ring", "followUp": "Re-run dynamic-state checks when shared Element Plus overrides or processor styles change", "evidence": ["设计/figma-ai-make最新设计20260917/src/app/App.tsx:4039-4143", "output/playwright/make-processor-hover-20260918.png", "output/playwright/make-processor-focus-20260918.png", "output/playwright/make-processor-blur-20260918.png", "output/playwright/vue-processor-hover-20260918.png", "output/playwright/vue-processor-focus-20260918.png", "output/playwright/vue-processor-blur-20260918.png"], "decisionBasis": "AGENTS.md requires source, preview and current-browser evidence for each expressed interaction", "impact": "Processor interaction parity is evidenced for the scoped hover/focus/blur states" },
+    { "id": "PROC-DIFF-009", "status": "resolved", "area": "Pre/post wait processor detail", "source": "Design 811:4980 and 812:7648, Make App.tsx:4487-4527 and 5091-5123, previous Vue browser evidence", "current": "Previous Vue rendered only an Element Plus input-number labeled '等待时长(ms)' and a shared description field; it lacked the Design/Make unit layout, 500ms/1s/2s/5s presets, active preset styling, max-duration helper, and distinct pre/post description placeholders.", "resolution": "Added a dedicated TIME_WAITING branch with a native bounded number input, unit text, four preset buttons, active styling, max-duration helper, and separate pre/post placeholders. The pre and post branches were opened independently in the browser; input and preset interactions were exercised and computed geometry was recorded.", "followUp": "Repeat wait-branch evidence if Design or Make changes the preset set or duration limits", "evidence": ["811:4980 PreWaitDetail and 812:7648 PostWaitDetail get_design_context", "output/figma-processing/design-811-4980.png", "output/figma-processing/design-812-7648.png", "设计/figma-ai-make最新设计20260917/src/app/App.tsx:4487-4527", "设计/figma-ai-make最新设计20260917/src/app/App.tsx:5091-5123", "output/playwright/make-pre-wait-20260918.png", "output/playwright/make-post-wait-20260918.png", "output/playwright/processor-pre-wait-aligned-20260920.png", "output/playwright/processor-post-wait-aligned-20260920.png", "output/playwright/processor-pre-wait-before-20260920.png", "output/playwright/processor-post-wait-before-20260920.png"], "decisionBasis": "Design node dimensions and text, Make source behavior, and fresh Vue computed styles/bounding boxes", "impact": "Wait configuration now has the same information hierarchy and interaction affordances in both processing stages" }
+  ],
+  "noDifferencesReason": "",
+  "unverifiedStatuses": [],
+  "validation": {
+    "commands": ["npm run typecheck", "npm run build", "git diff --check", "npm run figma:alignment-check -- --record docs/figma-alignment/processor-tabs-20260917.json", "node --test tools/quality/check-figma-alignment.test.mjs", "Playwright CLI browser validation on http://localhost:4173"],
+    "results": { "typecheck": "passed", "build": "passed (Rolldown dependency annotation and chunk-size warnings only)", "diffCheck": "passed (Git line-ending warnings only)", "alignmentCheck": "passed", "recordStatus": "verified-alignment" }
+  }
+}

@@ -14,8 +14,8 @@
 .api-request-body.is-cookies,
 .api-request-body.is-auth {
   height: auto;
-  min-height: 360px;
-  flex: 1 1 360px;
+  min-height: 0;
+  flex: 1 1 0;
   overflow: hidden;
 }
 
@@ -23,27 +23,27 @@
 .api-request-body.is-post,
 .api-request-body.is-tests {
   height: auto;
-  min-height: 360px;
-  flex: 1 1 360px;
+  min-height: 0;
+  flex: 1 1 0;
   overflow: hidden auto;
 }
 
 .api-request-body.is-settings {
   height: auto;
-  min-height: 360px;
-  flex: 1 1 360px;
+  min-height: 0;
+  flex: 1 1 0;
   overflow: hidden auto;
 }
 
 .api-request-body.is-cases {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden auto;
   padding: 12px;
 }
 
 .api-request-body.is-definition {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden auto;
   padding: 12px 12px 16px;
