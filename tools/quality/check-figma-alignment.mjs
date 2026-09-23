@@ -212,6 +212,40 @@ if (missing.length === 0) {
     checkEvidence(missing, item.vue?.computedStyle, `comparisonMatrix ${id}.vue.computedStyle`);
     checkEvidence(missing, item.vue?.boundingBox, `comparisonMatrix ${id}.vue.boundingBox`);
     checkEvidence(missing, item.vue?.interactionEvidence, `comparisonMatrix ${id}.vue.interactionEvidence`);
+    if (['verified', 'accepted-deviation'].includes(item.status)) {
+      addMissing(missing, Array.isArray(item.visualSceneIds) && item.visualSceneIds.length > 0, 'comparisonMatrix ' + id + '.visualSceneIds is required for deliverable items');
+      addMissing(missing, item.visualCheck?.status === 'verified', 'comparisonMatrix ' + id + '.visualCheck.status must be verified');
+      addMissing(missing, item.visualCheck && typeof item.visualCheck.target === 'object', 'comparisonMatrix ' + id + '.visualCheck.target is required');
+      addMissing(missing, item.visualCheck && typeof item.visualCheck.actual === 'object', 'comparisonMatrix ' + id + '.visualCheck.actual is required');
+      addMissing(missing, item.visualCheck && typeof item.visualCheck.delta === 'object', 'comparisonMatrix ' + id + '.visualCheck.delta is required');
+      addMissing(missing, item.visualCheck && typeof item.visualCheck.tolerance === 'object', 'comparisonMatrix ' + id + '.visualCheck.tolerance is required');
+    }
+  }
+
+  const visualReview = record.visualReview;
+  if (['verified-alignment', 'accepted-with-deviations'].includes(record.status)) {
+    addMissing(missing, visualReview && visualReview.status === 'verified', 'visualReview.status must be verified for delivery');
+    addMissing(missing, visualReview?.method === 'paired-screenshot-overlay', 'visualReview.method must be paired-screenshot-overlay');
+    addMissing(missing, Array.isArray(visualReview?.viewport) && visualReview.viewport.length === 2 && visualReview.viewport.every(Number.isFinite), 'visualReview.viewport must contain width and height');
+    addMissing(missing, visualReview?.manualReview?.status === 'verified', 'visualReview.manualReview.status must be verified');
+    addMissing(missing, isNonEmptyString(visualReview?.manualReview?.reviewer), 'visualReview.manualReview.reviewer is required');
+    addMissing(missing, isValidTimestamp(visualReview?.manualReview?.reviewedAt), 'visualReview.manualReview.reviewedAt must be an ISO timestamp');
+    addMissing(missing, Number.isFinite(visualReview?.geometryTolerancePx) && visualReview.geometryTolerancePx >= 0, 'visualReview.geometryTolerancePx must be non-negative');
+    addMissing(missing, visualReview?.unresolvedVisibleDifferences === 0, 'visualReview.unresolvedVisibleDifferences must be 0');
+    const scenes = indexedEntries(missing, visualReview?.scenes, 'id', 'visualReview.scenes');
+    for (const [sceneId, scene] of scenes) {
+      addMissing(missing, scene.status === 'verified', 'visualReview.scenes.' + sceneId + ' must be verified');
+      checkFiles(missing, scene.designScreenshots, 'visualReview.scenes.' + sceneId + '.designScreenshots');
+      checkFiles(missing, scene.vueScreenshots, 'visualReview.scenes.' + sceneId + '.vueScreenshots');
+      checkFiles(missing, scene.overlayScreenshots, 'visualReview.scenes.' + sceneId + '.overlayScreenshots');
+      checkFiles(missing, scene.diffScreenshots, 'visualReview.scenes.' + sceneId + '.diffScreenshots');
+      if (scene.makeScreenshots !== undefined) checkFiles(missing, scene.makeScreenshots, 'visualReview.scenes.' + sceneId + '.makeScreenshots');
+    }
+    const sceneIds = new Set(scenes.keys());
+    for (const [id, item] of matrix) {
+      if (!['verified', 'accepted-deviation'].includes(item.status)) continue;
+      for (const sceneId of item.visualSceneIds || []) addMissing(missing, sceneIds.has(sceneId), 'comparisonMatrix ' + id + ' references missing visual scene ' + sceneId);
+    }
   }
 
   const differences = [...indexedEntries(missing, record.differences, 'id', 'differences').values()];
@@ -236,6 +270,12 @@ if (missing.length === 0) {
       addMissing(missing, isNonEmptyString(difference.acceptance?.reference), `difference ${difference.id} acceptance.reference is required`);
     }
   }
+
+  const hasPendingMatrix = [...matrix.values()].some(item => !['verified', 'accepted-deviation', 'not-applicable'].includes(item.status));
+  const browserValidationStep = workflow.get('browser-validation');
+  const differenceRegistrationStep = workflow.get('difference-registration');
+  addMissing(missing, !(browserValidationStep?.status === 'verified' && hasPendingMatrix), 'workflow.browser-validation cannot be verified while comparisonMatrix has pending items');
+  addMissing(missing, !(differenceRegistrationStep?.status === 'verified' && ((record.unverifiedStatuses || []).length > 0 || differences.some(item => item.status === 'unresolved'))), 'workflow.difference-registration cannot be verified while unverified or unresolved differences remain');
 
   addMissing(missing, Array.isArray(record.unverifiedStatuses), 'unverifiedStatuses must be an array');
   addMissing(missing, Array.isArray(record.unverifiedStatuses) && record.unverifiedStatuses.length === 0, 'delivery requires unverifiedStatuses to be empty');

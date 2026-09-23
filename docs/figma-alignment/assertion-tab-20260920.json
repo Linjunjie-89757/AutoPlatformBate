@@ -2,24 +2,24 @@
   "schemaVersion": 2,
   "title": "接口管理断言 Tab 对齐",
   "page": "接口管理 / 断言 Tab",
-  "status": "draft",
+  "status": "partial-alignment",
   "createdAt": "2026-09-20T09:34:50.943Z",
   "sourceBaseline": {
     "gitBranch": "codex/development-feature2",
     "gitCommit": "46e1ecddbcd8a46a3bedba7803fbe658c044acd1",
-    "designCapturedAt": "",
+    "designCapturedAt": "2026-09-20T10:08:04.000Z",
     "makeCode": {
       "path": "设计/figma-ai-make最新代码20260920/src/app/App.tsx",
       "sha256": "d0560f45a6d23f58a8230a908129e59e3714f8ae100f34e0723625311aaa5f20",
       "modifiedAt": "2026-09-20T06:45:35.550Z"
     },
-    "makePreviewCapturedAt": "",
-    "vueCapturedAt": "",
+    "makePreviewCapturedAt": "2026-09-20T10:04:08.000Z",
+    "vueCapturedAt": "2026-09-21T10:04:55.000Z",
     "environment": {
-      "viewport": [],
-      "devicePixelRatio": null,
-      "browserZoom": null,
-      "fontStatus": "unverified"
+      "viewport": [1920, 1080],
+      "devicePixelRatio": 1,
+      "browserZoom": 1,
+      "fontStatus": "loaded"
     }
   },
   "scope": {
@@ -29,7 +29,7 @@
       "878:1507"
     ],
     "makeCodePath": "设计/figma-ai-make最新代码20260920/src/app/App.tsx",
-    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%E5%90%8E%E5%8F%B0%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%E7%95%8C%E9%9D%A2%E8%AE%BE%E8%AE%A1-%E6%AD%A3%E5%BC%8F?code-node-id=0-9&p=f&t=vJBq1W4pi18B6Wh6-0&fullscreen=1",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%E5%90%8E%E5%8F%B0%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%E7%95%8C%E9%9D%A2%E8%AE%BE%E8%AE%A1-%E6%AD%A3%E5%BC%8F?code-node-id=0-9&p=f&t=7XNIATYQ0FCsd3oT-0&fullscreen=1",
     "currentCodeFiles": [
       "src/widgets/api-interface-workspace/ApiAssertionPanel.vue",
       "src/widgets/api-interface-workspace/styles/api-assertion-panel.css",
@@ -83,112 +83,133 @@
   "workflow": [
     {
       "id": "design-static",
-      "status": "unverified",
-      "evidence": []
+      "status": "verified",
+      "evidence": ["output/playwright/design-assertion-878-1399.png", "Figma node 878:1399 context"]
     },
     {
       "id": "make-event-inventory",
-      "status": "unverified",
-      "evidence": []
+      "status": "verified",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:5234-5968", "六种 AssertKind 与详情组件源码"]
     },
     {
       "id": "make-preview-validation",
-      "status": "unverified",
-      "evidence": []
+      "status": "verified",
+      "evidence": ["output/playwright/make-assertion-latest-add-menu.png", "output/playwright/make-assertion-latest-empty.png", "output/playwright/make-assertion-latest-default.png", ".playwright-cli/page-2026-09-21T03-03-11-308Z.yml", ".playwright-cli/page-2026-09-21T03-06-51-487Z.yml", ".playwright-cli/page-2026-09-21T03-07-56-154Z.yml", ".playwright-cli/page-2026-09-21T03-08-47-260Z.yml", ".playwright-cli/page-2026-09-21T03-09-43-782Z.yml", ".playwright-cli/page-2026-09-21T03-10-11-864Z.yml", ".playwright-cli/page-2026-09-21T03-11-03-921Z.yml", "Make preview token 7XNIATYQ0FCsd3oT-0"]
     },
     {
       "id": "vue-implementation",
-      "status": "unverified",
-      "evidence": []
+      "status": "verified",
+      "evidence": ["src/widgets/api-interface-workspace/ApiAssertionPanel.vue", "src/widgets/api-interface-workspace/styles/api-assertion-panel.css"]
     },
     {
       "id": "browser-validation",
-      "status": "unverified",
-      "evidence": []
+      "status": "verified",
+      "evidence": ["output/playwright/vue-assertion-1.png", "output/playwright/vue-assertion-2.png", "output/playwright/vue-assertion-3.png", "output/playwright/vue-assertion-4.png", "output/playwright/vue-assertion-5.png", "output/playwright/vue-assertion-6.png", "output/playwright/vue-assertion-wide-header.png", "output/playwright/vue-assertion-wide-variable.png"]
     },
     {
       "id": "difference-registration",
       "status": "unverified",
-      "evidence": []
+      "evidence": ["comparisonMatrix still contains unverified entries; gate intentionally remains closed"]
     }
   ],
   "evidence": {
     "design": {
-      "nodes": [],
-      "screenshots": []
+      "nodes": ["Figma node 878:1399", "Figma node 878:1483", "Figma node 878:1507"],
+      "screenshots": ["output/playwright/design-assertion-878-1399.png"]
     },
     "make": {
-      "codeReferences": [],
+      "codeReferences": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5234-5311",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5500-5968"
+      ],
       "eventMatrix": [
         {
           "name": "hover",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "verified",
+          "evidence": ["AssertListItem group-hover and onMouseEnter handlers in App.tsx"],
+          "rationale": "Make source expresses list hover affordances.",
+          "resolution": "Vue list action hover retained and browser checked."
         },
         {
           "name": "focus",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "verified",
+          "evidence": ["Make input onFocus/onBlur handlers in App.tsx"],
+          "rationale": "Make source expresses focused field border behavior.",
+          "resolution": "Vue input focus behavior retained."
         },
         {
           "name": "blur",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "verified",
+          "evidence": ["Make input onBlur handlers in App.tsx"],
+          "rationale": "Make source expresses blur border reset.",
+          "resolution": "Vue input blur behavior retained."
         },
         {
           "name": "active",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "verified",
+          "evidence": ["AssertListItem selected background in App.tsx", "output/playwright/vue-assertion-wide-variable.png"],
+          "rationale": "Make source expresses selected assertion state.",
+          "resolution": "Vue selected list item verified."
         },
         {
           "name": "disabled",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "verified",
+          "evidence": ["Make quick-generate disabled condition in App.tsx", "output/playwright/assertion-menu.png"],
+          "rationale": "Make source expresses disabled quick generation before a response.",
+          "resolution": "Vue disabled state verified in browser snapshot."
         },
         {
           "name": "loading",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "not-expressed",
+          "evidence": ["App.tsx assertion editor contains no loading state for the scoped controls"],
+          "rationale": "The latest Make source does not express a loading visual/state for assertion controls.",
+          "resolution": "No new loading UI added; retained current Vue business behavior."
         },
         {
           "name": "success",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "not-expressed",
+          "evidence": ["App.tsx assertion editor contains no success visual state for the scoped controls"],
+          "rationale": "Success appears only in result data outside the editor state.",
+          "resolution": "No editor success state added."
         },
         {
           "name": "failure",
-          "status": "unverified",
-          "evidence": [],
-          "rationale": "",
-          "resolution": ""
+          "status": "not-expressed",
+          "evidence": ["App.tsx assertion editor contains no failure visual state for the scoped controls"],
+          "rationale": "Failure appears only in result data outside the editor state.",
+          "resolution": "No editor failure state added."
         }
       ]
     },
     "makePreview": {
-      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%E5%90%8E%E5%8F%B0%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%E7%95%8C%E9%9D%A2%E8%AE%BE%E8%AE%A1-%E6%AD%A3%E5%BC%8F?code-node-id=0-9&p=f&t=vJBq1W4pi18B6Wh6-0&fullscreen=1",
-      "viewport": [],
-      "interactions": [],
-      "screenshots": []
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%E5%90%8E%E5%8F%B0%E7%AE%A1%E7%90%86%E7%B3%BB%E7%BB%9F%E7%95%8C%E9%9D%A2%E8%AE%BE%E8%AE%A1-%E6%AD%A3%E5%BC%8F?code-node-id=0-9&p=f&t=7XNIATYQ0FCsd3oT-0&fullscreen=1",
+      "viewport": [1920, 1080],
+      "interactions": [
+        "Logged in with non-empty demo account and selected X-MAN workspace",
+        "Entered X-MAN -> 接口自动化 -> 接口管理 -> 断言",
+        "Opened 添加断言 menu and verified six menu items",
+        "Created response-header, response-body, response-time, variable, and script variants",
+        "Verified quick-generate disabled before send and enabled as a single button after send",
+        "Deleted all assertions and verified the empty list plus right-side Shield empty state"
+      ],
+      "screenshots": ["output/playwright/make-assertion-latest-add-menu.png", "output/playwright/make-assertion-latest-empty.png", "output/playwright/make-assertion-latest-default.png"]
     },
     "vue": {
-      "screenshots": [],
-      "computedStyle": [],
-      "boundingBox": [],
-      "interactionResults": []
+      "screenshots": ["output/playwright/vue-assertion-1.png", "output/playwright/vue-assertion-2.png", "output/playwright/vue-assertion-3.png", "output/playwright/vue-assertion-4.png", "output/playwright/vue-assertion-5.png", "output/playwright/vue-assertion-6.png", "output/playwright/vue-assertion-wide-header.png", "output/playwright/vue-assertion-wide-variable.png"],
+      "computedStyle": [
+        " .api-assertion-table-head: font-size=10px; font-weight=600; color=rgb(134, 144, 156); height=28px",
+        " .api-assertion-detail: width=1307px; viewport=1920x1080"
+      ],
+      "boundingBox": [
+        " .api-assertion-detail: x=584; y=197; width=1307; height=316",
+        " .api-assertion-table-head: x=599; y=282.5; width=1277; height=28"
+      ],
+      "interactionResults": [
+        "Created and selected all six assertion types",
+        "Selected item active state and list controls remained functional",
+        "Add menu exposed all six types",
+        "Response header/body/variable tables rendered without row checkboxes or legacy SQL hint"
+      ]
     }
   },
   "comparisonMatrix": [
@@ -7753,7 +7774,151 @@
       "rationale": ""
     }
   ],
-  "differences": [],
+  "differences": [
+    {
+      "id": "DIFF-ASSERT-001",
+      "status": "resolved",
+      "area": "断言列表默认名称",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make mkAssert 使用“状态码断言 1”等带断言后缀和序号的默认名称；Vue 原先使用“状态码”等类型标签作为名称。",
+      "resolution": "已修改新建断言名称生成逻辑，使新建项采用 Make 风格的“类型断言 序号”，并在刷新后的真实 Vue 页面重新创建六种类型验证通过。",
+      "followUp": "无；后续若 Make 命名规则变更，重新核对该项。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:5260-5270", "src/widgets/api-interface-workspace/lib/useApiAssertionWorkspace.ts:145-220", "output/playwright/vue-assertion-name-1.png", "output/playwright/vue-assertion-name-2.png", "output/playwright/vue-assertion-name-3.png", "output/playwright/vue-assertion-name-4.png", "output/playwright/vue-assertion-name-5.png", "output/playwright/vue-assertion-name-6.png"],
+      "decisionBasis": "Make 源码行为优先于旧 Vue 默认文案；本轮代码已按该行为修正。",
+      "impact": "影响断言列表文案和新建断言的可识别性，不影响请求执行契约。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-002",
+      "status": "unresolved",
+      "area": "列表开关尺寸",
+      "source": "Design / 当前 Vue",
+      "current": "Design 的开关轨道为 28x14、滑块约 11x11；当前 Vue 实测 el-switch 为 28x16、滑块 12x12。",
+      "resolution": "未修改；需要将断言列表开关覆盖样式收敛到 Design 尺寸，并重新回归启用与停用态。",
+      "followUp": "修正 .api-assertion-list-item .el-switch__core 与 .el-switch__action 后重新测量。",
+      "evidence": ["Figma node 878:1418-1420", "output/playwright/vue-assertion-recheck-6.png", "browser computedStyle: .api-assertion-list-item .el-switch__core=28x16, action=12x12"],
+      "decisionBasis": "Design 静态外观优先；Make 的 SmToggle 为另一组 32x16 运行时基线，不能覆盖 Design 的尺寸要求。",
+      "impact": "每个断言列表行的开关垂直尺寸偏大，造成行内基线和视觉密度偏差。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-003",
+      "status": "unresolved",
+      "area": "添加断言菜单",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make 菜单宽 136px、每项带类型图标、padding 7px 12px；当前 Vue 使用 Element Plus 下拉，实测菜单项约 88x32 且没有六种类型图标。",
+      "resolution": "未修改；需要改为与 Make 相同的自定义菜单结构和图标。",
+      "followUp": "验证菜单边界、阴影、hover 背景及六个图标后重新截图。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:6020-6033", "output/playwright/vue-assertion-recheck-1.png", "browser computedStyle: visible .el-dropdown-menu__item=88x32"],
+      "decisionBasis": "Make 源码明确表达了菜单的图标和尺寸，组件库默认下拉不能视为设计依据。",
+      "impact": "打开添加断言时，菜单宽度、信息密度和类型识别方式与 Make 不一致。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-004",
+      "status": "unresolved",
+      "area": "表格操作列",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make 的响应头、响应体、变量表格操作列使用 Copy/Trash2 图标按钮，并在有响应时显示当前值列；当前 Vue 使用文本按钮“复制/删除”（响应体还有“测试”），且没有当前值列。",
+      "resolution": "未修改；需要按 Make 的图标按钮、按钮尺寸和 current 列条件渲染补齐。",
+      "followUp": "分别在无响应和有响应状态核对三种表格的列数、列宽、图标和 hover。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:5814-5834", "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5870-5894", "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5941-5961", "output/playwright/vue-assertion-header-recheck.png"],
+      "decisionBasis": "Make 源码表达了真实交互控件和响应后变体，当前 Vue 仅完成了表头文字对齐。",
+      "impact": "表格操作视觉和有响应时的信息结构不一致，影响复制、删除、测试及当前值展示。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-005",
+      "status": "unresolved",
+      "area": "响应体工具栏与添加项布局",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make 将“断言类型”、JSONPath/XPath/Regex、快速提取和“添加项”置于同一行；当前 Vue 显示“响应体断言”副标题，添加表达式在副标题右侧，快速提取改成表达式输入框内的图标。",
+      "resolution": "未修改；需要恢复 Make 的工具栏结构，同时保留业务快速提取逻辑。",
+      "followUp": "逐项验证三种表达式模式、快速提取禁用/启用和添加项位置。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:5853-5869", "src/widgets/api-interface-workspace/ApiAssertionPanel.vue:250-302", "output/playwright/vue-assertion-recheck-3.png"],
+      "decisionBasis": "Make 源码直接定义了该区域的控件顺序和文案，当前 Vue 结构不同。",
+      "impact": "响应体断言的操作入口位置和文案不一致，用户需要在不同位置寻找快速提取/添加操作。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-006",
+      "status": "unresolved",
+      "area": "状态码与响应时间文案",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make 使用“比较条件”“期望状态码”和“阈值 (ms)”；当前 Vue 使用“条件”“期望值”和“最大耗时(ms)”。",
+      "resolution": "未修改；需要按 Make 文案核对产品是否要求完全一致后再改动。",
+      "followUp": "确认文案差异是否属于业务术语约束，确认后同步标签和记录。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:5781-5792", "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5907-5920", "src/widgets/api-interface-workspace/ApiAssertionPanel.vue:210-223", "src/widgets/api-interface-workspace/ApiAssertionPanel.vue:292-302"],
+      "decisionBasis": "Make 源码是当前交互文案来源；Design 节点未单独表达这两个详情变体。",
+      "impact": "字段含义可理解但与 Make 文案不一致，影响逐字对齐和术语一致性。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-007",
+      "status": "unresolved",
+      "area": "脚本编辑器图标、行号和默认代码",
+      "source": "Design / Make 源码 / 当前 Vue",
+      "current": "Design/Make 的编辑器无行号，顶部有 11px Code2 图标，默认显示四行脚本；当前 Vue 的 Monaco 实测显示行号“1”、没有 Code2 图标，新增脚本默认内容为空。",
+      "resolution": "未修改；需要关闭行号、补齐代码图标并同步脚本默认值，同时保留 Monaco 编辑能力。",
+      "followUp": "重新测量编辑器 toolbar/text area，验证空脚本与默认脚本两种数据状态。",
+      "evidence": ["Figma node 878:1508-1523", "设计/figma-ai-make最新代码20260920/src/app/App.tsx:3940-3949", "output/playwright/vue-assertion-recheck-6.png", "browser computedStyle: .line-numbers display=block; .view-lines empty"],
+      "decisionBasis": "Design 静态外观与 Make 代码共同表达了无行号、Code2 图标和默认脚本文案。",
+      "impact": "脚本区域的首屏内容、左侧边距和工具栏识别与参考实现明显不同。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-008",
+      "status": "unresolved",
+      "area": "列表操作按钮尺寸",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make 上移/下移按钮为 17x17；当前 Vue .api-assertion-ghost-action 实测为 20x20。",
+      "resolution": "未修改；需要按 Make 尺寸调整并回归 hover、首项/末项 disabled 状态。",
+      "followUp": "验证操作按钮出现时不会改变列表行宽度或截断名称。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:5540-5544", "browser computedStyle: .api-assertion-ghost-action=20x20"],
+      "decisionBasis": "Make 源码明确给出按钮尺寸，当前 Vue 样式覆盖值更大。",
+      "impact": "hover 操作出现时右侧占用空间偏大，列表名称可用宽度和按钮密度不一致。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-009",
+      "status": "resolved",
+      "area": "最新 Make 预览证据",
+      "source": "Make 预览",
+      "current": "最新 token 7XNIATYQ0FCsd3oT-0 首次打开显示 Make 演示登录页；使用非空演示账号完成登录后已进入断言 Tab。",
+      "resolution": "已完成最新预览登录，并重新操作菜单、六种断言、发送前后快速生成及删除到空态。",
+      "followUp": "无；后续若 Make token 或源码变化，必须重新验证。",
+      "evidence": ["Make preview URL token 7XNIATYQ0FCsd3oT-0", ".playwright-cli/page-2026-09-21T03-03-11-308Z.yml", ".playwright-cli/page-2026-09-21T03-11-03-921Z.yml", "output/playwright/make-assertion-latest-add-menu.png", "output/playwright/make-assertion-latest-empty.png"],
+      "decisionBasis": "登录页是预览的演示入口，不是权限阻塞；完成登录后以断言页面交互作为最新预览证据。",
+      "impact": "该环境阻塞已解除；此前引用的旧登录页证据不再作为结论依据。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-010",
+      "status": "unresolved",
+      "area": "无选中断言的右侧空态",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make 在右侧空态显示 Shield 24px 图标和“请选择一个断言进行编辑”；当前 Vue 只渲染文字，没有图标。",
+      "resolution": "未修改；需要补齐 24px 空态图标、间距和透明度，并保留删除最后一条断言后的布局。",
+      "followUp": "在 Vue 修复后重新采集空态 computed style 和 bounding box。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:6043-6048", "src/widgets/api-interface-workspace/ApiAssertionPanel.vue:352-353", "output/playwright/make-assertion-latest-empty.png", "output/playwright/vue-assertion-empty-recheck.png"],
+      "decisionBasis": "最新 Make 源码明确使用 Shield size={24}，最新预览截图也显示该图标；当前 Vue 模板没有对应节点。",
+      "impact": "无选中断言时右侧视觉层级和垂直占位与 Make 不一致。",
+      "acceptance": {"type":"", "reference":""}
+    },
+    {
+      "id": "DIFF-ASSERT-011",
+      "status": "unresolved",
+      "area": "快速生成交互结构",
+      "source": "Make 源码 / 当前 Vue",
+      "current": "Make 的快速生成是单个 disabled/enabled 按钮；当前 Vue 将其实现为带三项下拉菜单的 Element Plus dropdown。",
+      "resolution": "未修改；最新预览确认 Make 仅显示单按钮，发送前 disabled、发送后 enabled，没有三项下拉。",
+      "followUp": "按 Make 单按钮结构收敛 Vue，并在发送前后重新验证 disabled/enabled。",
+      "evidence": ["设计/figma-ai-make最新代码20260920/src/app/App.tsx:6037-6040", "src/widgets/api-interface-workspace/ApiAssertionPanel.vue:107-120", "output/playwright/make-assertion-latest-default.png", "output/playwright/make-assertion-latest-empty.png"],
+      "decisionBasis": "源码和最新预览都没有 dropdown 结构或 command handler；当前 Vue 有额外交互。",
+      "impact": "按钮点击后的交互入口和可见菜单与 Make 行为存在差异，可能改变用户操作路径。",
+      "acceptance": {"type":"", "reference":""}
+    }
+  ],
   "noDifferencesReason": "",
   "unverifiedStatuses": [
     "四方基线和逐项验证尚未完成"
@@ -7765,10 +7930,10 @@
       "git diff --check"
     ],
     "summary": {
-      "resolved": 0,
+      "resolved": 2,
       "acceptedDeviations": 0,
-      "unresolved": 0,
-      "unverified": 271
+      "unresolved": 9,
+      "unverified": 272
     }
   }
 }

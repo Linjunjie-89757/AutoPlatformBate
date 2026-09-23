@@ -57,6 +57,15 @@
     "makePreview": { "url": "", "viewport": [], "interactions": [], "screenshots": [] },
     "vue": { "screenshots": [], "computedStyle": [], "boundingBox": [], "interactionResults": [] }
   },
+  "visualReview": {
+    "status": "unverified",
+    "method": "paired-screenshot-overlay",
+    "viewport": [],
+    "scenes": [],
+    "manualReview": { "status": "unverified", "reviewer": "", "reviewedAt": "", "notes": "" },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 0
+  },
   "comparisonMatrix": [
     {
       "id": "明确变体::明确验收元素",
@@ -67,6 +76,8 @@
       "makeSource": { "finding": "", "evidence": [] },
       "makePreview": { "operation": "", "result": "", "evidence": [] },
       "vue": { "result": "", "screenshots": [], "computedStyle": [], "boundingBox": [], "interactionEvidence": [] },
+      "visualSceneIds": [],
+      "visualCheck": { "status": "unverified", "target": {}, "actual": {}, "delta": {}, "tolerance": {} },
       "differenceIds": [],
       "rationale": ""
     }

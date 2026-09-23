@@ -44,6 +44,23 @@ function fixture(screenshot) {
   }
   record.evidence.makePreview = { url: 'https://www.figma.com/make/test', viewport: [1200, 900], interactions: ['Synthetic interaction'], screenshots: [screenshot] };
   record.evidence.vue = { screenshots: [screenshot], computedStyle: ['width: 100px'], boundingBox: ['100x30'], interactionResults: ['Synthetic result'] };
+  record.visualReview = {
+    status: 'verified',
+    method: 'paired-screenshot-overlay',
+    viewport: [1200, 900],
+    scenes: [{
+      id: 'synthetic-scene',
+      status: 'verified',
+      designScreenshots: [screenshot],
+      makeScreenshots: [screenshot],
+      vueScreenshots: [screenshot],
+      overlayScreenshots: [screenshot],
+      diffScreenshots: [screenshot],
+    }],
+    manualReview: { status: 'verified', reviewer: 'synthetic', reviewedAt: futureTimestamp, notes: 'Synthetic review' },
+    geometryTolerancePx: 0.5,
+    unresolvedVisibleDifferences: 0,
+  };
   record.comparisonMatrix = [{
     id: 'Synthetic variant::Synthetic element',
     variant: 'Synthetic variant',
@@ -53,6 +70,8 @@ function fixture(screenshot) {
     makeSource: { finding: 'Synthetic behavior', evidence: ['Synthetic source evidence'] },
     makePreview: { operation: 'Open variant', result: 'Matched', evidence: [screenshot] },
     vue: { result: 'Matched', screenshots: [screenshot], computedStyle: ['width: 100px'], boundingBox: ['100x30'], interactionEvidence: ['Synthetic interaction'] },
+    visualSceneIds: ['synthetic-scene'],
+    visualCheck: { status: 'verified', target: { width: 100 }, actual: { width: 100 }, delta: { width: 0 }, tolerance: { width: 0.5 } },
     differenceIds: ['DIFF-001'],
     rationale: '',
   }];
@@ -119,3 +138,6 @@ test('missing matrix coverage is rejected', () => runCase(r => { r.comparisonMat
 test('changed Make source invalidates evidence', () => runCase(r => { r.sourceBaseline.makeCode.sha256 = '0'.repeat(64); }, 1, /Make source changed/));
 test('stale Vue evidence is rejected', () => runCase(r => { r.sourceBaseline.vueCapturedAt = '2000-01-01T00:00:00.000Z'; }, 1, /Vue evidence is stale/));
 test('handwritten summary cannot disagree with differences', () => runCase(r => { r.validation.summary.resolved = 99; }, 1, /validation.summary.resolved must be 1/));
+test('visual review is required for delivery', () => runCase(r => { delete r.visualReview; }, 1, /visualReview.status must be verified/));
+test('deliverable matrix items require visual scene evidence', () => runCase(r => { delete r.comparisonMatrix[0].visualSceneIds; }, 1, /visualSceneIds is required/));
+test('verified browser validation cannot bypass pending matrix items', () => runCase(r => { r.comparisonMatrix[0].status = 'unverified'; r.validation.summary.unverified = 1; }, 1, /browser-validation cannot be verified/));

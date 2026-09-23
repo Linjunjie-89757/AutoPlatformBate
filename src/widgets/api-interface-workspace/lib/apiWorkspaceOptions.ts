@@ -57,8 +57,8 @@ export const paramTypeOptions = ['string', 'integer', 'number', 'boolean', 'arra
 
 export const assertionTypeOptions = [
   { label: '状态码', value: 'RESPONSE_CODE' },
-  { label: '响应头', value: 'RESPONSE_HEADER' },
   { label: '响应体', value: 'RESPONSE_BODY' },
+  { label: '响应头', value: 'RESPONSE_HEADER' },
   { label: '响应时间', value: 'RESPONSE_TIME' },
   { label: '变量', value: 'VARIABLE' },
   { label: '脚本', value: 'SCRIPT' },

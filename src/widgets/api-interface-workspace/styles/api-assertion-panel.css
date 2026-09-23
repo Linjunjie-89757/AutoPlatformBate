@@ -981,17 +981,17 @@
 
 .api-assertion-item-row.is-header {
   min-width: 0;
-  grid-template-columns: 18px minmax(0, 1fr) 112px minmax(0, 1fr) 24px 24px;
+  grid-template-columns: minmax(0, 1fr) 112px minmax(0, 1fr) 24px 24px;
 }
 
 .api-assertion-item-row.is-body {
   min-width: 0;
-  grid-template-columns: 18px minmax(0, 1.25fr) 112px minmax(0, 1fr) 32px 24px 24px;
+  grid-template-columns: minmax(0, 1.25fr) 112px minmax(0, 1fr) 32px 24px 24px;
 }
 
 .api-assertion-item-row.is-variable {
   min-width: 0;
-  grid-template-columns: 18px minmax(0, 1.1fr) 112px minmax(0, 1fr) 24px 24px;
+  grid-template-columns: minmax(0, 1.1fr) 112px minmax(0, 1fr) 24px 24px;
 }
 
 .api-assertion-item-row > * {
@@ -1391,6 +1391,51 @@
   box-shadow: none;
 }
 
+.api-assertion-table-head {
+  display: grid;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10.5px;
+  border-bottom: 1px solid #e5e6eb;
+  background: #fafafa;
+  color: #86909c;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+}
+
+.api-assertion-table-head.is-header,
+.api-assertion-item-row.is-header {
+  grid-template-columns: minmax(0, 1fr) 112px minmax(0, 1fr) 24px 24px;
+}
+
+.api-assertion-table-head.is-body,
+.api-assertion-item-row.is-body {
+  grid-template-columns: minmax(0, 1.25fr) 112px minmax(0, 1fr) 32px 24px 24px;
+}
+
+.api-assertion-table-head.is-variable,
+.api-assertion-item-row.is-variable {
+  grid-template-columns: minmax(0, 1.1fr) 112px minmax(0, 1fr) 24px 24px;
+}
+
+.api-assertion-table-head span {
+  min-width: 0;
+  padding: 0 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-assertion-table-head.is-header span:last-child,
+.api-assertion-table-head.is-variable span:last-child {
+  grid-column: 4 / span 2;
+}
+
+.api-assertion-table-head.is-body span:last-child {
+  grid-column: 4 / span 3;
+}
+
 .api-assertion-item-row {
   min-height: 34.5px;
   gap: 7px;
@@ -1426,4 +1471,429 @@
   color: #c9cdd4;
   font-size: 11px;
   line-height: 16.5px;
+}
+
+.api-assertion-list-item :deep(.app-switch),
+.api-figma-enable :deep(.app-switch) {
+  height: 14px;
+  line-height: 14px;
+}
+
+.api-assertion-list-item :deep(.el-switch__core),
+.api-figma-enable :deep(.el-switch__core) {
+  width: 28px;
+  min-width: 28px;
+  height: 14px;
+}
+
+.api-assertion-list-item :deep(.el-switch__action),
+.api-figma-enable :deep(.el-switch__action) {
+  width: 11px;
+  height: 11px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%), 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+.api-assertion-list-item :deep(.el-switch.is-checked .el-switch__core .el-switch__action),
+.api-figma-enable :deep(.el-switch.is-checked .el-switch__core .el-switch__action) {
+  left: 16.5px;
+  margin-left: 0;
+}
+
+.api-assertion-ghost-action {
+  width: 17px;
+  height: 17px;
+}
+
+.api-assertion-section-toolbar,
+.api-assertion-body-toolbar {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.api-assertion-section-toolbar {
+  justify-content: space-between;
+}
+
+.api-assertion-body-toolbar__label {
+  flex: 0 0 auto;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-assertion-body-toolbar__spacer {
+  flex: 1 1 auto;
+}
+
+.api-assertion-body-toolbar :deep(.el-radio-button__inner) {
+  height: 28px;
+  padding: 0 12px;
+  border-color: #e5e6eb;
+  color: #86909c;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 26px;
+}
+
+.api-assertion-body-toolbar :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  border-color: #165dff;
+  background: #165dff;
+  color: #fff;
+  box-shadow: -1px 0 0 0 #165dff;
+}
+
+.api-assertion-fast-extract,
+.api-assertion-toolbar-add {
+  box-sizing: border-box;
+  display: inline-flex;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: #165dff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16.5px;
+  cursor: pointer;
+}
+
+.api-assertion-fast-extract {
+  padding: 0 10px;
+  border: 1px solid rgba(22, 93, 255, 0.31);
+  border-radius: 6px;
+}
+
+.api-assertion-toolbar-add {
+  padding: 0;
+  font-size: 12px;
+}
+
+.api-assertion-fast-extract:disabled {
+  border-color: #e5e6eb;
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.api-assertion-table-head.is-header,
+.api-assertion-item-row.is-header {
+  grid-template-columns: minmax(120px, 1fr) 112px minmax(100px, 1fr) 24px 24px;
+}
+
+.api-assertion-table-head.is-header.has-current-value,
+.api-assertion-item-row.is-header.has-current-value {
+  grid-template-columns: minmax(120px, 1fr) 112px minmax(100px, 1fr) minmax(80px, .7fr) 24px 24px;
+}
+
+.api-assertion-table-head.is-body,
+.api-assertion-item-row.is-body {
+  grid-template-columns: minmax(150px, 1.25fr) 112px minmax(100px, 1fr) 24px 24px 24px;
+}
+
+.api-assertion-table-head.is-body.has-current-value,
+.api-assertion-item-row.is-body.has-current-value {
+  grid-template-columns: minmax(150px, 1.25fr) 112px minmax(100px, 1fr) minmax(80px, .7fr) 24px 24px 24px;
+}
+
+.api-assertion-table-head.is-variable,
+.api-assertion-item-row.is-variable {
+  grid-template-columns: minmax(120px, 1.1fr) 112px minmax(100px, 1fr) 24px 24px;
+}
+
+.api-assertion-table-head.is-variable.has-current-value,
+.api-assertion-item-row.is-variable.has-current-value {
+  grid-template-columns: minmax(120px, 1.1fr) 112px minmax(100px, 1fr) minmax(80px, .7fr) 24px 24px;
+}
+
+.api-assertion-table-head.is-header:not(.has-current-value) span:last-child,
+.api-assertion-table-head.is-variable:not(.has-current-value) span:last-child {
+  grid-column: 4 / span 2;
+}
+
+.api-assertion-table-head.is-header.has-current-value span:last-child,
+.api-assertion-table-head.is-variable.has-current-value span:last-child {
+  grid-column: 5 / span 2;
+}
+
+.api-assertion-table-head.is-body:not(.has-current-value) span:last-child {
+  grid-column: 4 / span 3;
+}
+
+.api-assertion-table-head.is-body.has-current-value span:last-child {
+  grid-column: 5 / span 3;
+}
+
+.api-assertion-current-value {
+  min-width: 0;
+  overflow: hidden;
+  color: #86909c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-assertion-icon-action {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+}
+
+.api-assertion-icon-action:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #4e5969;
+}
+
+.api-assertion-icon-action.is-danger:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #f53f3f;
+}
+
+.api-assertion-icon-action.is-extract:not(:disabled) {
+  color: #00b42a;
+}
+
+.api-assertion-icon-action.is-extract:hover:not(:disabled) {
+  background: #e6f9ec;
+  color: #00b42a;
+}
+
+.api-assertion-icon-action:disabled {
+  color: #c9cdd4;
+  cursor: not-allowed;
+}
+
+.api-assertion-time-grid {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.api-assertion-time-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+
+.api-assertion-time-grid label:first-child {
+  width: 130px;
+}
+
+.api-assertion-time-grid label:nth-child(2) {
+  width: 120px;
+}
+
+.api-assertion-time-grid :deep(.el-select__wrapper),
+.api-assertion-time-grid :deep(.el-input-number),
+.api-assertion-time-grid :deep(.el-input__wrapper) {
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 8px;
+}
+
+.api-assertion-time-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 30px;
+}
+
+.api-assertion-time-input:focus {
+  border-color: #165dff;
+}
+
+.api-assertion-time-grid em {
+  padding-bottom: 7px;
+  color: #86909c;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 18px;
+}
+
+.api-processor-language-tag {
+  gap: 5px;
+}
+
+.api-assertion-empty--inline > svg {
+  flex: 0 0 auto;
+  color: #c9cdd4;
+}
+
+.api-assertion-empty--inline p {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 19.5px;
+}
+
+:global(.api-assertion-add-dropdown.el-popper) {
+  min-width: 136px;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .1);
+}
+
+:global(.api-assertion-add-dropdown .el-dropdown-menu) {
+  padding: 4px 0;
+}
+
+:global(.api-assertion-add-dropdown .el-dropdown-menu__item) {
+  box-sizing: border-box;
+  width: 134px;
+  min-width: 134px;
+  min-height: 32px;
+  gap: 8px;
+  padding: 7px 12px;
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+:global(.api-assertion-add-dropdown .el-dropdown-menu__item svg) {
+  flex: 0 0 13px;
+  color: #86909c;
+}
+
+:global(.api-assertion-add-dropdown .el-dropdown-menu__item:not(.is-disabled):focus),
+:global(.api-assertion-add-dropdown .el-dropdown-menu__item:not(.is-disabled):hover) {
+  background: #f5f6f8;
+  color: #1d2129;
+}
+
+/* Final Make-referenced overrides; keep these last so library defaults cannot
+   stretch the fixed status-code fields or table control columns. */
+.api-assertion-form-grid {
+  grid-template-columns: 120px 100px;
+  gap: 12px;
+  justify-content: start;
+}
+
+.api-assertion-name-actions {
+  align-items: center;
+}
+
+.api-assertion-name-actions__divider {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: #e5e6eb;
+}
+
+.api-assertion-table-head.is-header,
+.api-assertion-item-row.is-header {
+  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) 48px 48px;
+  column-gap: 2px;
+}
+
+.api-assertion-table-head.is-header.has-current-value,
+.api-assertion-item-row.is-header.has-current-value {
+  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) minmax(120px, 1fr) 48px 48px;
+}
+
+.api-assertion-table-head.is-body,
+.api-assertion-item-row.is-body {
+  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) 48px 48px 48px;
+  column-gap: 2px;
+}
+
+.api-assertion-table-head.is-body.has-current-value,
+.api-assertion-item-row.is-body.has-current-value {
+  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) minmax(120px, 1fr) 48px 48px 48px;
+}
+
+.api-assertion-table-head.is-variable,
+.api-assertion-item-row.is-variable {
+  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) 48px 48px;
+  column-gap: 2px;
+}
+
+.api-assertion-table-head.is-variable.has-current-value,
+.api-assertion-item-row.is-variable.has-current-value {
+  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) minmax(120px, 1fr) 48px 48px;
+}
+
+.api-assertion-item-row :deep(.el-input__wrapper),
+.api-assertion-item-row :deep(.el-select__wrapper) {
+  display: flex;
+  align-items: center;
+}
+
+.api-assertion-item-row :deep(.el-input__inner),
+.api-assertion-item-row :deep(.el-select__selected-item),
+.api-assertion-item-row :deep(.el-select__placeholder) {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin: 0;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  vertical-align: middle;
+}
+
+.api-assertion-item-row :deep(.api-assertion-expression-input .el-input__inner) {
+  color: #165dff;
+  font-family: var(--app-font-family-mono);
+}
+
+.api-assertion-item-row :deep(.api-assertion-expected-input .el-input__inner) {
+  color: #1d2129;
+  font-family: var(--app-font-family-mono);
+}
+
+.api-assertion-item-row :deep(.api-assertion-condition-select .el-select__selected-item),
+.api-assertion-item-row :deep(.api-assertion-condition-select .el-select__placeholder) {
+  color: #4e5969;
+  font-family: var(--app-font-family);
+  font-weight: 400;
+}
+
+.api-assertion-icon-action {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.api-assertion-icon-action :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+
+:global(.api-assertion-add-dropdown .el-dropdown-menu__item) {
+  min-height: 32px;
+  padding-top: 7px;
+  padding-bottom: 7px;
 }

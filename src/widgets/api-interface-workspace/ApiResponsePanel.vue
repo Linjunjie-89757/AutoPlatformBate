@@ -35,7 +35,12 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div :class="['api-response-shell', { 'is-collapsed': collapsed }]" :style="{ minHeight: collapsed ? '40px' : `${minHeight}px` }">
+  <div
+    :class="['api-response-shell', { 'is-collapsed': collapsed }]"
+    :style="collapsed
+      ? { minHeight: '40px', height: '40px', flex: '0 0 40px' }
+      : { minHeight: `${minHeight}px`, height: `${minHeight}px`, flex: `0 0 ${minHeight}px` }"
+  >
     <div v-if="!collapsed" class="api-response-resizer" title="拖拽调整响应区高度" @pointerdown="emit('resizeStart', $event)"></div>
     <div class="api-response-header" role="button" tabindex="0" :aria-expanded="!collapsed" @click="emit('toggleCollapsed')" @keydown.enter="emit('toggleCollapsed')">
       <div class="api-response-title">
@@ -160,6 +165,7 @@ const emit = defineEmits<{
   border-top: 1px solid #e5e6eb;
   background: #ffffff;
   overflow: hidden;
+  transition: height 0.2s ease, flex-basis 0.2s ease;
 }
 
 .api-response-shell.is-collapsed {

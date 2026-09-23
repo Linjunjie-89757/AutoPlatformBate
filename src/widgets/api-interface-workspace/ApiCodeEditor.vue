@@ -269,6 +269,10 @@ function resolveEditorTheme(themeVariant = props.themeVariant) {
   return themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME
 }
 
+function shouldUsePlainEditor() {
+  return props.language === 'text' || props.plain
+}
+
 function createEditor(monacoApi: typeof MonacoApi) {
   if (!containerRef.value) {
     return
@@ -295,8 +299,8 @@ function createEditor(monacoApi: typeof MonacoApi) {
     scrollBeyondLastLine: false,
     wordWrap: 'on',
     roundedSelection: false,
-    renderLineHighlight: props.themeVariant === 'figma-dark' ? 'none' : 'line',
-    bracketPairColorization: { enabled: props.themeVariant !== 'figma-dark' },
+    renderLineHighlight: props.themeVariant === 'figma-dark' || shouldUsePlainEditor() ? 'none' : 'line',
+    bracketPairColorization: { enabled: props.themeVariant !== 'figma-dark' && !shouldUsePlainEditor() },
     scrollbar: {
       alwaysConsumeMouseWheel: false,
       useShadows: false,
@@ -371,8 +375,8 @@ watch(
   (themeVariant) => {
     monaco?.editor.setTheme(resolveEditorTheme(themeVariant))
     editor?.updateOptions({
-      renderLineHighlight: themeVariant === 'figma-dark' ? 'none' : 'line',
-      bracketPairColorization: { enabled: themeVariant !== 'figma-dark' },
+      renderLineHighlight: themeVariant === 'figma-dark' || shouldUsePlainEditor() ? 'none' : 'line',
+      bracketPairColorization: { enabled: themeVariant !== 'figma-dark' && !shouldUsePlainEditor() },
     })
   },
 )

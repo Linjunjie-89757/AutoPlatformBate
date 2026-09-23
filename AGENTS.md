@@ -85,6 +85,10 @@ Make 没有表达的 Hover、Focus、Loading 等状态可以登记为 `not-expre
 - `not-expressed` 必须检查 CSS、共享组件和原生行为，并经预览确认；不要求为来源和业务均未表达的状态强行补设计。
 - `draft`、`partial-alignment`、`blocked` 或任何 `unresolved` 差异必须被交付门禁拦截；未验收或未知事件状态不能通过。
 - `accepted-deviation` 必须填写 `acceptance.type`（`user-decision` 或 `business-constraint`）及可追溯的 `acceptance.reference`。代理自行决定保留不算接受。
+- 视觉结果是交付硬门禁：每个可见变体/状态必须有同视口的 Design、Make（适用时）和 Vue 配对截图，并完成区域裁剪、叠加或差异图审查；只有 `visualReview.status=verified`、人工复核完成且没有未解释的可见差异，才允许进入交付状态。
+- `workflow.browser-validation` 和 `workflow.difference-registration` 必须由逐项矩阵和 `visualReview` 自动汇总；父级不得在子项仍为 `unverified`、`failed`、`blocked` 或存在 `unresolved` 差异时手工标记为 `verified`。
+- `computedStyle`、`boundingBox` 和 CSS 声明只用于定位与解释差异，不能替代同状态最终画面审查；任一肉眼可见且未登记的差异必须按 `failed` 或 `unresolved` 处理。
+- 视觉矩阵项必须引用 `visualSceneIds`，并记录目标值、实际值、delta 与容差；不能用一个默认态截图代表其它变体或状态。
 - 门禁通过仅说明记录约束及引用文件检查通过，不代表像素或证据真实性已经自动验收。最终报告区分已验证、未验证和遗留问题，并据记录给出数量。
 - 最终数量和结论必须与逐项记录一致；禁止手写与数组不一致的汇总，禁止用一句“已逐项核对”代替矩阵证据。
 - 修改门禁后运行 `node --test tools/quality/check-figma-alignment.test.mjs`；不得为了让旧记录通过而隐藏缺项或提升其完成状态。

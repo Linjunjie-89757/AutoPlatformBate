@@ -46,6 +46,12 @@ Make 用于确认点击、Hover、Focus、Active、Tab、筛选、展开、提�
 
 Design、Make 和现有业务不一致时，必须记录差异和最终裁决，不得直接宣称“完全一致”。
 
+### 最终视觉结果优先
+
+流程记录、computed style、bounding box、构建结果和矩阵填写都是过程证据，不能替代最终画面验收。对用户可见的默认态和每个已实现状态，必须在相同 viewport、DPR、缩放、字体和测试数据下保存 Design/Make/Vue 配对截图，完成目标区域裁剪及半透明叠加或差异图审查。任何肉眼可见且未登记的差异都必须阻断交付；不能因为字段已填写或脚本通过而宣称视觉对齐。
+
+视觉验收按“场景 → 区域 → 元素 → 属性 → 状态”组织。矩阵只覆盖真实适用的组合；每个可交付矩阵项必须引用 `visualSceneIds`，并记录 `target`、`actual`、`delta`、`tolerance` 和审查结论。
+
 ### 四方证据与冲突处理
 
 Design、Make 源码、Make 预览、当前 Vue 相互佐证，不能套用一个覆盖所有事项的总优先级：
@@ -170,6 +176,7 @@ Make 预览操作、实际结果与证据
 Vue 最终结果、截图、computed style、bounding box 和交互证据
 关联差异编号
 最终状态
+视觉场景 ID，以及目标值 / 实际值 / delta / 容差和配对截图审查结论
 ```
 
 矩阵状态定义：
@@ -298,6 +305,8 @@ git diff --check
 
 - 每条证据须能定位到变体、状态、来源版本/采集时间和实际文件；截图路径必须真实存在。文字“已核对全部五种”不能代替各变体证据。
 - 记录实际启动地址、viewport、DPR、缩放、字体加载、测试数据及操作步骤。截图、测量和交互结果必须对应同一实现版本；修改后受影响的旧证据必须更新。
+- 交付状态还必须通过视觉结果门禁：`visualReview.status=verified`，人工复核为 `verified`，每个场景有配对截图、叠加图和差异图，所有差异图中的未解释可见差异为零；矩阵项必须引用有效视觉场景。
+- `workflow.browser-validation`、`workflow.difference-registration` 与逐项矩阵状态必须一致；父级状态不能绕过子项未验收。
 - 允许复用确认未受影响的历史证据，但要说明范围和依据。不能修改一条文案就将整个历史任务从部分对齐升级成完全对齐。
 - 执行 `npm run figma:alignment-check -- --record <record.json>`。通过只表明程序能检查的记录约束成立；脚本不能判定截图像素一致，也不能证明文字证据真实。
 - 脚本必须拦截非交付状态、未解决差异、未验收/未知事件、空白证据、重复编号和不存在的截图或源码文件。修改门禁后运行 `node --test tools/quality/check-figma-alignment.test.mjs`，同时验证应通过和应失败的用例。
@@ -347,6 +356,8 @@ git diff --check
 Design、Make、现有业务或产品规则存在冲突，需要确认后继续。
 
 只有“完全对齐”可以使用“已完成 Figma 对齐”。其他结论必须明确未完成范围和风险。
+
+“视觉已对齐”也只能在本次范围内所有可见场景完成配对截图、叠加审查、几何/样式差异登记且没有未解释可见差异时使用。
 
 机器记录状态使用 `draft`、`partial-alignment`、`blocked`、`verified-alignment`、`accepted-with-deviations`。仅修改状态字段不能改变验收事实；门禁只接受后两种交付状态，且 `verified-alignment` 不允许含保留差异。
 

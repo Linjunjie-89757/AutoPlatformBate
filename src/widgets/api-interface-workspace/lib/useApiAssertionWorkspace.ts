@@ -58,10 +58,18 @@ interface UseApiAssertionWorkspaceOptions {
 
 export function useApiAssertionWorkspace(options: UseApiAssertionWorkspaceOptions) {
   const activeAssertionId = ref('')
+  const defaultScriptAssertion = 'if (response.statusCode !== 200) {\n  fail("状态码不是 200")\n}\nlog("断言通过")'
 
   function assertionRowsFor(detail: ApiDefinitionDetail): ApiAssertionConfig[] {
     const rows = detail.assertions as ApiAssertionConfig[]
     rows.forEach(normalizeAssertion)
+    if (
+      rows[0]?.assertionType === 'RESPONSE_CODE'
+      && /^状态码断言(?:\s+1)?$/.test(rows[0].name || '')
+      && rows[0].expectedValue === '200'
+    ) {
+      rows[0].name = '状态码 200'
+    }
     return rows
   }
 
@@ -110,7 +118,7 @@ export function useApiAssertionWorkspace(options: UseApiAssertionWorkspaceOption
     if (type === 'SCRIPT') {
       assertion.expressionType = 'SCRIPT'
       assertion.scriptLanguage = assertion.scriptLanguage || 'JavaScript'
-      assertion.script = assertion.script ?? ''
+      assertion.script = assertion.script ?? defaultScriptAssertion
     }
   }
 
@@ -138,7 +146,8 @@ export function useApiAssertionWorkspace(options: UseApiAssertionWorkspaceOption
   }
 
   function defaultAssertionName(type?: string | null) {
-    return assertionTypeLabel(type) || '断言'
+    const label = assertionTypeLabel(type)
+    return label ? `${label}断言` : '断言'
   }
 
   function assertionTypeLabel(type?: string | null) {
@@ -213,19 +222,29 @@ export function useApiAssertionWorkspace(options: UseApiAssertionWorkspaceOption
 
   function createAssertion(type = 'RESPONSE_CODE', name?: string, expectedValue?: string): ApiAssertionConfig {
     const normalizedType = normalizeAssertionType(type)
+    const isHeader = normalizedType === 'RESPONSE_HEADER'
+    const isBody = normalizedType === 'RESPONSE_BODY'
+    const isVariable = normalizedType === 'VARIABLE'
+    const defaultCondition = normalizedType === 'RESPONSE_TIME'
+      ? 'LT_OR_EQUALS'
+      : isHeader
+        ? 'CONTAINS'
+        : isVariable
+          ? 'NOT_EMPTY'
+          : 'EQUALS'
     const assertion: ApiAssertionConfig = {
       id: `assertion-${normalizedType.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       assertionType: normalizedType,
       type: normalizedType,
       name: name || defaultAssertionName(normalizedType),
       enabled: true,
-      subject: '',
+      subject: isHeader ? 'Content-Type' : isVariable ? 'access_token' : '',
       expressionType: defaultAssertionExpressionType(normalizedType),
-      expression: '',
-      condition: normalizedType === 'RESPONSE_TIME' ? 'LT_OR_EQUALS' : 'EQUALS',
-      operator: normalizedType === 'RESPONSE_TIME' ? 'LT_OR_EQUALS' : 'EQUALS',
-      expectedValue: expectedValue || (normalizedType === 'RESPONSE_CODE' ? '200' : normalizedType === 'RESPONSE_TIME' ? '1000' : ''),
-      script: null,
+      expression: isBody ? '$.code' : isHeader ? 'Content-Type' : isVariable ? 'access_token' : '',
+      condition: defaultCondition,
+      operator: defaultCondition,
+      expectedValue: expectedValue || (normalizedType === 'RESPONSE_CODE' ? '200' : normalizedType === 'RESPONSE_TIME' ? '1000' : isHeader ? 'application/json' : isBody ? '0' : ''),
+      script: normalizedType === 'SCRIPT' ? defaultScriptAssertion : null,
     }
     normalizeAssertion(assertion)
     return assertion
@@ -233,8 +252,10 @@ export function useApiAssertionWorkspace(options: UseApiAssertionWorkspaceOption
 
   function addAssertion(type = 'RESPONSE_CODE') {
     if (!options.activeEditor.value) return
+    const rows = assertionRowsFor(options.activeEditor.value.detail)
     const assertion = createAssertion(type)
-    assertionRowsFor(options.activeEditor.value.detail).push(assertion)
+    assertion.name = `${assertion.name || defaultAssertionName(type)} ${rows.length + 1}`
+    rows.push(assertion)
     activeAssertionId.value = assertion.id || ''
     options.markDirty()
   }
@@ -317,8 +338,8 @@ export function useApiAssertionWorkspace(options: UseApiAssertionWorkspaceOption
   function updateAssertionResponseTime(assertion: ApiAssertionConfig | null, value: number | undefined) {
     if (!assertion) return
     assertion.expectedValue = String(value || 1000)
-    assertion.condition = 'LT_OR_EQUALS'
-    assertion.operator = 'LT_OR_EQUALS'
+    assertion.condition = assertion.condition || 'LT_OR_EQUALS'
+    assertion.operator = assertion.condition
     options.markDirty()
   }
 
@@ -431,6 +452,12 @@ export function useApiAssertionWorkspace(options: UseApiAssertionWorkspaceOption
 
   function addAssertionFromLatestResponseCommand(command: string | number | object) {
     const value = String(command)
+    if (value === 'all') {
+      addAssertionFromLatestResponse('code')
+      addAssertionFromLatestResponse('header')
+      addAssertionFromLatestResponse('body')
+      return
+    }
     if (value === 'code' || value === 'header' || value === 'body') {
       addAssertionFromLatestResponse(value)
     }
