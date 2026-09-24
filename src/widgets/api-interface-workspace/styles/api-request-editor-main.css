@@ -45,6 +45,20 @@
   overflow: hidden auto;
 }
 
+.api-request-body.is-assertion-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.api-request-body.is-assertion-tab + .api-response-shell {
+  min-height: 238px;
+  flex: 1 1 238px;
+}
+
 .api-request-body.is-cases,
 .api-request-body.is-definition {
   min-height: 0;

@@ -288,8 +288,10 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
               </el-select>
               <el-input v-model="item.expectedValue" class="api-assertion-expected-input" placeholder="期望值:" @input="activeAssertion.expectedValue = item.expectedValue || ''; emit('dirty')" />
               <span v-if="assertionResults.length" class="api-assertion-current-value">{{ assertionActualValue(activeAssertion, item.header) }}</span>
-              <button type="button" class="api-assertion-icon-action" title="复制" aria-label="复制" @click="emit('copyItem', activeAssertion.assertions || [], index)"><Copy :size="13" /></button>
-              <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertion.assertions || [], index, { header: '', condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
+              <span class="api-assertion-operation-actions">
+                <button type="button" class="api-assertion-icon-action" title="复制" aria-label="复制" @click="emit('copyItem', activeAssertion.assertions || [], index)"><Copy :size="13" /></button>
+                <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertion.assertions || [], index, { header: '', condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
+              </span>
             </div>
           </div>
         </div>
@@ -302,10 +304,6 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
               <el-radio-button value="X_PATH">XPath</el-radio-button>
               <el-radio-button value="REGEX">Regex</el-radio-button>
             </el-radio-group>
-            <el-select v-if="activeAssertion.assertionBodyType === 'X_PATH'" v-model="activeAssertionBodyGroup(activeAssertion).responseFormat" class="api-assertion-format-select" @change="emit('dirty')">
-              <el-option label="XML" value="XML" />
-              <el-option label="HTML" value="HTML" />
-            </el-select>
             <button type="button" class="api-assertion-fast-extract" :disabled="!hasLatestResponseBody" :title="fastExtractionTitle" @click="emit('openFastExtraction', activeAssertion, activeAssertionBodyGroup(activeAssertion).assertions[0])"><Zap :size="10" />快速提取</button>
             <span class="api-assertion-body-toolbar__spacer" />
             <button type="button" class="api-assertion-toolbar-add" @click="emit('addItem', activeAssertionBodyGroup(activeAssertion).assertions, { expression: defaultAssertionExpression(activeAssertion.assertionBodyType) })"><Plus :size="12" />添加项</button>
@@ -325,9 +323,11 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
               </el-select>
               <el-input v-model="item.expectedValue" class="api-assertion-expected-input" placeholder="期望值:" @input="activeAssertion.expectedValue = item.expectedValue || ''; emit('dirty')" />
               <span v-if="assertionResults.length" class="api-assertion-current-value">{{ assertionActualValue(activeAssertion, item.expression) }}</span>
-              <button type="button" class="api-assertion-icon-action is-extract" :disabled="!hasLatestResponseBody" :title="fastExtractionTitle" aria-label="快速提取" @click="emit('openFastExtraction', activeAssertion, item)"><Sparkles :size="13" /></button>
-              <button type="button" class="api-assertion-icon-action" title="复制" aria-label="复制" @click="emit('copyItem', activeAssertionBodyGroup(activeAssertion).assertions, index)"><Copy :size="13" /></button>
-              <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertionBodyGroup(activeAssertion).assertions, index, { expression: defaultAssertionExpression(activeAssertion.assertionBodyType), condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
+              <span class="api-assertion-operation-actions">
+                <button type="button" class="api-assertion-icon-action is-extract" :disabled="!hasLatestResponseBody" :title="fastExtractionTitle" aria-label="快速提取" @click="emit('openFastExtraction', activeAssertion, item)"><Sparkles :size="13" /></button>
+                <button type="button" class="api-assertion-icon-action" title="复制" aria-label="复制" @click="emit('copyItem', activeAssertionBodyGroup(activeAssertion).assertions, index)"><Copy :size="13" /></button>
+                <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertionBodyGroup(activeAssertion).assertions, index, { expression: defaultAssertionExpression(activeAssertion.assertionBodyType), condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
+              </span>
             </div>
           </div>
         </div>
@@ -376,8 +376,10 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
               </el-select>
               <el-input v-model="item.expectedValue" class="api-assertion-expected-input" placeholder="期望值:" @input="activeAssertion.expectedValue = item.expectedValue || ''; emit('dirty')" />
               <span v-if="assertionResults.length" class="api-assertion-current-value">{{ assertionActualValue(activeAssertion, item.variableName) }}</span>
-              <button type="button" class="api-assertion-icon-action" title="复制" aria-label="复制" @click="emit('copyItem', activeAssertion.variableAssertionItems || [], index)"><Copy :size="13" /></button>
-              <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertion.variableAssertionItems || [], index, { variableName: '', condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
+              <span class="api-assertion-operation-actions">
+                <button type="button" class="api-assertion-icon-action" title="复制" aria-label="复制" @click="emit('copyItem', activeAssertion.variableAssertionItems || [], index)"><Copy :size="13" /></button>
+                <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertion.variableAssertionItems || [], index, { variableName: '', condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
+              </span>
             </div>
           </div>
         </div>

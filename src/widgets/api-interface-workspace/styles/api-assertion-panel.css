@@ -1114,7 +1114,8 @@
 .api-assertion-panel {
   display: flex;
   width: 100%;
-  min-height: 316px;
+  min-height: 0;
+  flex: 1 1 auto;
   padding: 0;
   gap: 0;
   color: #1d2129;
@@ -1126,7 +1127,7 @@
   grid-template-columns: 264px minmax(0, 1fr);
   width: 100%;
   height: 100%;
-  min-height: 316px;
+  min-height: 0;
   gap: 0;
   overflow: hidden;
   border: 0;
@@ -1281,7 +1282,7 @@
 
 .api-assertion-detail {
   height: 100%;
-  min-height: 316px;
+  min-height: 0;
   gap: 0;
   padding: 0;
   overflow-x: hidden;
@@ -1421,7 +1422,7 @@
 
 .api-assertion-table-head span {
   min-width: 0;
-  padding: 0 3px;
+  padding: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1612,20 +1613,20 @@
 
 .api-assertion-table-head.is-header:not(.has-current-value) span:last-child,
 .api-assertion-table-head.is-variable:not(.has-current-value) span:last-child {
-  grid-column: 4 / span 2;
+  grid-column: 4;
 }
 
 .api-assertion-table-head.is-header.has-current-value span:last-child,
 .api-assertion-table-head.is-variable.has-current-value span:last-child {
-  grid-column: 5 / span 2;
+  grid-column: 5;
 }
 
 .api-assertion-table-head.is-body:not(.has-current-value) span:last-child {
-  grid-column: 4 / span 3;
+  grid-column: 4;
 }
 
 .api-assertion-table-head.is-body.has-current-value span:last-child {
-  grid-column: 5 / span 3;
+  grid-column: 5;
 }
 
 .api-assertion-current-value {
@@ -1796,6 +1797,20 @@
   justify-content: start;
 }
 
+.api-assertion-form-grid :deep(.el-select__selected-item),
+.api-assertion-form-grid :deep(.el-select__placeholder),
+.api-assertion-time-grid :deep(.el-select__selected-item),
+.api-assertion-time-grid :deep(.el-select__placeholder) {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  color: #4e5969;
+  font-family: var(--app-font-family);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+
 .api-assertion-name-actions {
   align-items: center;
 }
@@ -1810,35 +1825,35 @@
 
 .api-assertion-table-head.is-header,
 .api-assertion-item-row.is-header {
-  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) 48px 48px;
+  grid-template-columns: 33.05fr 19.34fr 33.05fr 14.56fr;
   column-gap: 2px;
 }
 
 .api-assertion-table-head.is-header.has-current-value,
 .api-assertion-item-row.is-header.has-current-value {
-  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) minmax(120px, 1fr) 48px 48px;
+  grid-template-columns: 33.05fr 19.34fr 33.05fr minmax(80px, 1fr) 14.56fr;
 }
 
 .api-assertion-table-head.is-body,
 .api-assertion-item-row.is-body {
-  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) 48px 48px 48px;
+  grid-template-columns: 35.81fr 20.52fr 25.34fr 18.33fr;
   column-gap: 2px;
 }
 
 .api-assertion-table-head.is-body.has-current-value,
 .api-assertion-item-row.is-body.has-current-value {
-  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) minmax(120px, 1fr) 48px 48px 48px;
+  grid-template-columns: 35.81fr 20.52fr 25.34fr minmax(80px, 1fr) 18.33fr;
 }
 
 .api-assertion-table-head.is-variable,
 .api-assertion-item-row.is-variable {
-  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) 48px 48px;
+  grid-template-columns: 34.73fr 22.54fr 27.83fr 14.9fr;
   column-gap: 2px;
 }
 
 .api-assertion-table-head.is-variable.has-current-value,
 .api-assertion-item-row.is-variable.has-current-value {
-  grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) minmax(120px, 1fr) 48px 48px;
+  grid-template-columns: 34.73fr 22.54fr 27.83fr minmax(80px, 1fr) 14.9fr;
 }
 
 .api-assertion-item-row :deep(.el-input__wrapper),
@@ -1879,12 +1894,48 @@
   font-weight: 400;
 }
 
-.api-assertion-icon-action {
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
+.api-assertion-body-toolbar {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  overflow: hidden;
+}
+
+.api-assertion-body-toolbar :deep(.el-radio-group) {
+  display: inline-flex;
+  height: 28px;
+  min-height: 28px;
+}
+
+.api-assertion-item-row .api-assertion-icon-action {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
   margin: 0 auto;
   padding: 0;
+  border-radius: 4px;
+  color: #4e5969;
+  line-height: 1;
+}
+
+.api-assertion-operation-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 1.75px;
+}
+
+.api-assertion-item-row .api-assertion-icon-action.is-danger {
+  color: #f53f3f;
+}
+
+.api-assertion-item-row .api-assertion-icon-action:hover:not(:disabled) {
+  background: #f2f3f5;
+  color: #1d2129;
+}
+
+.api-assertion-item-row .api-assertion-icon-action.is-danger:hover:not(:disabled) {
+  color: #f53f3f;
 }
 
 .api-assertion-icon-action :deep(svg) {
@@ -1892,8 +1943,105 @@
   height: 13px;
 }
 
+.api-assertion-table-head.is-header,
+.api-assertion-item-row.is-header {
+  grid-template-columns: 33.05fr 19.34fr 33.05fr 14.56fr;
+  column-gap: 0;
+}
+
+.api-assertion-table-head.is-header.has-current-value,
+.api-assertion-item-row.is-header.has-current-value {
+  grid-template-columns: 33.05fr 19.34fr 33.05fr minmax(80px, 1fr) 14.56fr;
+}
+
+.api-assertion-table-head.is-body,
+.api-assertion-item-row.is-body {
+  grid-template-columns: 35.81fr 20.52fr 25.34fr 18.33fr;
+  column-gap: 0;
+}
+
+.api-assertion-table-head.is-body.has-current-value,
+.api-assertion-item-row.is-body.has-current-value {
+  grid-template-columns: 35.81fr 20.52fr 25.34fr minmax(80px, 1fr) 18.33fr;
+}
+
+.api-assertion-table-head.is-variable,
+.api-assertion-item-row.is-variable {
+  grid-template-columns: 34.73fr 22.54fr 27.83fr 14.9fr;
+  column-gap: 0;
+}
+
+.api-assertion-table-head.is-variable.has-current-value,
+.api-assertion-item-row.is-variable.has-current-value {
+  grid-template-columns: 34.73fr 22.54fr 27.83fr minmax(80px, 1fr) 14.9fr;
+}
+
+.api-assertion-table-head {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.api-assertion-table-head span {
+  padding: 0 10.5px;
+}
+
+.api-assertion-item-row {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.api-assertion-item-row :deep(.el-input),
+.api-assertion-item-row :deep(.el-select) {
+  width: calc(100% - 21px);
+  margin-right: 10.5px;
+  margin-left: 10.5px;
+}
+
+.api-assertion-item-row .api-assertion-current-value {
+  padding: 0 10.5px;
+}
+
+.api-assertion-item-row .api-assertion-operation-actions {
+  margin-left: 10.5px;
+}
+
 :global(.api-assertion-add-dropdown .el-dropdown-menu__item) {
   min-height: 32px;
   padding-top: 7px;
   padding-bottom: 7px;
+}
+
+/* Keep the assertion sidebar geometry aligned with the processor sidebar. */
+.api-assertion-list-item {
+  width: 100%;
+  min-height: 34px;
+  margin: 0;
+  padding: 6px 8px 6px 10px;
+  border-radius: 8px;
+}
+
+.api-assertion-toolbar + .api-assertion-list-item {
+  margin-top: 0;
+}
+
+.api-assertion-ghost-action {
+  width: 20px;
+  height: 20px;
+  border-radius: 3.5px;
+}
+
+.api-assertion-item-row :deep(.api-assertion-condition-select) {
+  width: 72px;
+  min-width: 72px;
+  margin-right: 10.5px;
+  margin-left: 10.5px;
+}
+
+.api-assertion-item-row .api-assertion-icon-action.is-danger,
+.api-assertion-item-row .api-assertion-icon-action.is-danger:hover:not(:disabled) {
+  color: #f53f3f;
+}
+
+.api-assertion-item-row .api-assertion-icon-action.is-danger:hover:not(:disabled) {
+  background: #fef2f2;
 }

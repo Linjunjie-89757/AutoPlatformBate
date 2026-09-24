@@ -224,7 +224,7 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
     <div class="api-editor-loading__block"></div>
   </div>
   <template v-else>
-  <div :class="['api-request-body', `is-${activeEditor.activeTab}`]">
+  <div :class="['api-request-body', `is-${activeEditor.activeTab}`, { 'is-assertion-tab': activeEditor.activeTab === 'tests' }]">
     <ApiRequestConfigurationPanel
       v-if="['params', 'headers', 'cookies', 'body', 'auth', 'settings'].includes(activeEditor.activeTab)"
       v-model:active-body-raw-text="activeBodyRawText"
