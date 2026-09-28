@@ -27,7 +27,6 @@ import type {
   SaveWebUiElementModulePayload,
   SaveWebUiElementPagePayload,
   SaveWebUiElementPayload,
-  SaveWebUiEnvironmentPayload,
   SaveWebUiReportSharePayload,
   SaveWebUiTemplateFromCasePayload,
   ValidateWebUiElementPayload,
@@ -846,13 +845,6 @@ function toBackendTemplatePayload(data: SaveWebUiCaseTemplatePayload) {
   }
 }
 
-function toBackendEnvironmentPayload(data: SaveWebUiEnvironmentPayload) {
-  return {
-    ...data,
-    environmentName: data.name,
-  }
-}
-
 export const webUiAutomationApi = {
   async getCases(workspaceCode = 'ALL', query?: WebUiCaseListQuery) {
     const payload = await httpGet<ApiResponse<PageResponse<WebUiCaseItem>>>('/automation/web/cases', {
@@ -1492,28 +1484,4 @@ export const webUiAutomationApi = {
     return normalizePageResponse(unwrapApiResponse(payload), normalizeEnvironment)
   },
 
-  async createEnvironment(workspaceCode = 'ALL', data: SaveWebUiEnvironmentPayload) {
-    const payload = await httpPost<ApiResponse<WebUiEnvironmentItem>, ReturnType<typeof toBackendEnvironmentPayload>>(
-      '/automation/web/environments',
-      toBackendEnvironmentPayload(data),
-      { headers: workspaceHeaders(workspaceCode) },
-    )
-    return normalizeEnvironment(unwrapApiResponse(payload))
-  },
-
-  async updateEnvironment(workspaceCode = 'ALL', id: number, data: SaveWebUiEnvironmentPayload) {
-    const payload = await httpPut<ApiResponse<WebUiEnvironmentItem>, ReturnType<typeof toBackendEnvironmentPayload>>(
-      `/automation/web/environments/${id}`,
-      toBackendEnvironmentPayload(data),
-      { headers: workspaceHeaders(workspaceCode) },
-    )
-    return normalizeEnvironment(unwrapApiResponse(payload))
-  },
-
-  async deleteEnvironment(workspaceCode = 'ALL', id: number) {
-    const payload = await httpDelete<ApiResponse<null>>(`/automation/web/environments/${id}`, {
-      headers: workspaceHeaders(workspaceCode),
-    })
-    return unwrapApiResponse(payload)
-  },
 }

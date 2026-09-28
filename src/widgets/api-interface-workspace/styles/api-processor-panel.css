@@ -628,6 +628,41 @@
   gap: 7px;
 }
 
+.api-processor-panel .api-processor-list-item .app-switch,
+.api-processor-panel .api-figma-enable .app-switch {
+  height: 15px;
+  line-height: 15px;
+}
+
+.api-processor-panel .api-processor-list-item .el-switch__core,
+.api-processor-panel .api-figma-enable .el-switch__core {
+  width: 28px;
+  min-width: 28px;
+  height: 15px;
+}
+
+.api-processor-panel .api-processor-list-item .el-switch__action,
+.api-processor-panel .api-figma-enable .el-switch__action {
+  width: 11px;
+  height: 11px;
+}
+
+.api-processor-panel .api-processor-list-item .el-switch.is-checked .el-switch__core .el-switch__action,
+.api-processor-panel .api-figma-enable .el-switch.is-checked .el-switch__core .el-switch__action {
+  left: 14px;
+  margin-left: 0;
+}
+
+/* Keep destructive actions consistent with the assertion panel. */
+.api-processor-panel .api-row-remove {
+  color: #f53f3f;
+}
+
+.api-processor-panel .api-row-remove:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #f53f3f;
+}
+
 .api-processor-list-row {
   display: flex;
   min-width: 0;
@@ -1039,7 +1074,7 @@
   height: 21px;
   align-items: center;
   justify-content: center;
-  color: #86909c;
+  color: #f53f3f;
 }
 
 .api-processor-panel .api-sql-extract-table__delete .el-icon {
@@ -1059,7 +1094,7 @@
   height: 21px;
   align-items: center;
   justify-content: center;
-  color: #86909c;
+  color: #f53f3f;
 }
 
 .api-processor-panel .api-processor-extract-delete .el-icon {
@@ -1069,6 +1104,7 @@
 }
 
 .api-processor-panel .api-processor-extract-delete:hover {
+  background: #fef2f2;
   color: #f53f3f;
 }
 

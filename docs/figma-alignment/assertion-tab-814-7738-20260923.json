@@ -1,0 +1,2168 @@
+{
+  "schemaVersion": 2,
+  "title": "接口管理断言 Tab Figma 对齐",
+  "page": "接口管理 / 断言 Tab",
+  "status": "partial-alignment",
+  "createdAt": "2026-09-23T09:42:29.257Z",
+  "sourceBaseline": {
+    "gitBranch": "codex/development-feature2",
+    "gitCommit": "8a9ffc5f644838b18ba14f6d572b21796e0300c6",
+    "designCapturedAt": "2026-09-23T09:48:00.000Z",
+    "makeCode": {
+      "path": "设计/figma-ai-make最新代码20260920/src/app/ApiCaseDrawer.tsx",
+      "sha256": "b39d01300926136c9f8ac961d0231ac92630f923431f75ca75e0c1954e9445e6",
+      "modifiedAt": "2026-09-20T06:45:35.774Z"
+    },
+    "makePreviewCapturedAt": "2026-09-24T02:22:06.000Z",
+    "vueCapturedAt": "2026-09-24T05:53:30.000Z",
+    "environment": {
+      "viewport": [1920, 1080],
+      "devicePixelRatio": 1,
+      "browserZoom": 1,
+      "fontStatus": "loaded"
+    }
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:814:7738"
+    ],
+    "makeCodePath": "设计/figma-ai-make最新代码20260920/src/app/ApiCaseDrawer.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%25B0%25E7%25AE%25A1%25E7%2590%2586%25E7%25B3%25BB%25E7%25BB%259F%25E7%2595%258C%25E9%259D%25A2%25E8%25AE%25BE%25E8%25AE%25A1-%25E6%25AD%25A3%25E5%25BC%258F?code-node-id=0-9&p=f&t=bCb6GGStdLhpUNlB-0&fullscreen=1",
+    "currentCodeFiles": [
+      "src/widgets/api-interface-workspace/ApiAssertionPanel.vue",
+      "src/widgets/api-interface-workspace/ApiRequestEditorMain.vue",
+      "src/widgets/api-interface-workspace/lib/apiWorkspaceOptions.ts",
+      "src/widgets/api-interface-workspace/styles/api-assertion-panel.css",
+      "src/widgets/api-interface-workspace/styles/api-request-editor-main.css",
+      "src/widgets/api-interface-workspace/lib/useApiAssertionWorkspace.ts"
+    ],
+    "variants": [
+      "empty-left",
+      "empty-right",
+      "toolbar-menu",
+      "status",
+      "header",
+      "body",
+      "time",
+      "variable",
+      "script",
+      "response-expanded",
+      "response-collapsed"
+    ],
+    "elements": [
+      "layout",
+      "typography",
+      "controls",
+      "iconography",
+      "spacing",
+      "interaction"
+    ],
+    "excludedAreas": []
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "verified",
+      "evidence": ["Design node 814:7738 is a zero-size container; its parent frame 814:8150 (1920x862) was captured to output/playwright/assertion-tab-814/design-baseline.png. The frame shows the assertions tab empty state and is the locked static reference for this scope."]
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "verified",
+      "evidence": ["Make source: 设计/figma-ai-make最新代码20260920/src/app/ApiCaseDrawer.tsx:144-191; root entry: 设计/figma-ai-make最新代码20260920/src/app/App.tsx.", "The source inventory covers six assertion types, add/delete controls, input focus/blur border events, disabled quick generation, send loading, success and failure result branches."]
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "verified",
+      "evidence": ["output/playwright/assertion-tab-814/make-assertion-empty.png: full-screen Make URL loaded its inner preview login, accepted demo/demo123, entered X-MAN, opened 接口自动化 → 接口管理 → 断言, and captured the populated assertion view.", "output/playwright/assertion-tab-814/make-assertion-menu.png: 添加断言 menu opened and exposed 状态码断言、响应头断言、响应体断言、响应时间断言、变量断言、脚本断言.", "output/playwright/assertion-tab-814/make-assertion-status.png: status-code assertion editor captured after selecting a menu item.", "output/playwright/assertion-tab-814/make-assertion-header.png: response-header assertion editor captured.", "output/playwright/assertion-tab-814/make-assertion-body.png: response-body assertion editor captured.", "output/playwright/assertion-tab-814/make-assertion-time.png: response-time assertion editor captured.", "output/playwright/assertion-tab-814/make-assertion-variable.png: variable assertion editor captured.", "output/playwright/assertion-tab-814/make-assertion-script.png: script assertion editor captured."]
+    },
+    {
+      "id": "vue-implementation",
+      "status": "verified",
+      "evidence": ["Implemented the registered menu-order and assertion-panel geometry differences in src/widgets/api-interface-workspace/lib/apiWorkspaceOptions.ts, src/widgets/api-interface-workspace/ApiRequestEditorMain.vue, src/widgets/api-interface-workspace/styles/api-request-editor-main.css, and src/widgets/api-interface-workspace/styles/api-assertion-panel.css.", "The current implementation was reloaded and exercised in the real browser after those changes; per-variant screenshots are recorded under output/playwright/assertion-tab-814/."]
+    },
+    {
+      "id": "browser-validation",
+      "status": "unverified",
+      "evidence": ["output/playwright/assertion-tab-814/vue-login-superadmin123.png: POST /auth/login returned 200 with superadmin/superadmin123; X-MAN workspace was selected.", "output/playwright/assertion-tab-814/vue-api-loaded.png: /automation/api/interfaces loaded with request directory, request tabs, response panel, and 断言 tab.", "output/playwright/assertion-tab-814/vue-assertion-empty-regression-1920x1080.png: empty assertion state captured at viewport 1920x1080 after the flex and padding changes.", "output/playwright/assertion-tab-814/vue-status-regression-1920.png: 状态码断言 editor captured with panel x=306,y=226,width=1614,height=574 and detail x=570,width=1350.", "output/playwright/assertion-tab-814/vue-header-regression-1920.png: 响应头断言 editor captured.", "output/playwright/assertion-tab-814/vue-body-regression-1920.png: 响应体断言 editor captured.", "output/playwright/assertion-tab-814/vue-time-regression-1920.png: 响应时间断言 editor captured.", "output/playwright/assertion-tab-814/vue-variable-regression-1920.png: 变量断言 editor captured.", "output/playwright/assertion-tab-814/vue-script-regression-1920.png: 脚本断言 editor captured.", "output/playwright/assertion-tab-814/vue-event-hover-1920.png, vue-event-focus-1920.png, vue-event-blur-1920.png: hover, focus and blur exercised on the assertion-name input.", "output/playwright/assertion-tab-814/vue-regression-params-1920.png, vue-regression-body-1920.png, vue-regression-pre-1920.png, vue-regression-post-1920.png: shared request tabs rechecked after the assertion-specific layout change."]
+    },
+    {
+      "id": "difference-registration",
+      "status": "unverified",
+      "evidence": ["DIFF-001 through DIFF-009 are registered with current source, preview, and Vue evidence. The remaining four-source comparison, paired screenshot review, and all 66 matrix items remain unverified."]
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [{ "nodeId": "814:7738", "name": "接口自动化-接口管理-断言", "size": [0, 0], "parentFrame": "814:8150", "parentFrameSize": [1920, 862], "finding": "Target node is a zero-size container; parent frame shows the interface management assertions tab empty state, with list left, editor right, and response content below." }],
+      "screenshots": ["output/playwright/assertion-tab-814/design-baseline.png"]
+    },
+    "make": {
+      "codeReferences": ["设计/figma-ai-make最新代码20260920/src/app/ApiCaseDrawer.tsx:144-191 (AssertSection, six assertion types, add/delete, input focus/blur border events); ApiCaseDrawer.tsx:501-505 (assertions tab mount); ApiCaseDrawer.tsx:540-585 (response and assertion result states). The full-screen preview navigation confirmed this component is the requested 接口自动化 → 接口管理 → 断言 area."],
+      "eventMatrix": [
+        {
+          "name": "hover",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-hover-1920.png: hovered the assertion-name field in the Make preview."],
+          "rationale": "The Make preview exposes the assertion editor field and the real browser hover operation completed at the 1920px viewport.",
+          "resolution": "Verified in Make preview; Vue hover remains part of the pending comparison matrix."
+        },
+        {
+          "name": "focus",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-focus-1920.png: focused the assertion-name input in the Make preview."],
+          "rationale": "ApiCaseDrawer.tsx defines the input focus interaction and the real browser captured the focused editor state.",
+          "resolution": "Verified in Make preview; Vue focus remains part of the pending comparison matrix."
+        },
+        {
+          "name": "blur",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-blur-1920.png: moved focus from the assertion-name input to the response-content region."],
+          "rationale": "ApiCaseDrawer.tsx defines the input blur interaction and the real browser captured the resulting editor state.",
+          "resolution": "Verified in Make preview; Vue blur remains part of the pending comparison matrix."
+        },
+        {
+          "name": "active",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-active-1920.png: opened the 添加断言 menu, which rendered the active trigger and six choices."],
+          "rationale": "The Make preview visibly renders the active add-assertion trigger and menu state.",
+          "resolution": "Verified in Make preview; Vue active-state comparison remains pending."
+        },
+        {
+          "name": "disabled",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-disabled-1920.png: captured the disabled 快速生成 control."],
+          "rationale": "The Make preview exposes 快速生成 as disabled when the current request has no generated assertion context.",
+          "resolution": "Verified in Make preview; Vue disabled-state comparison remains pending."
+        },
+        {
+          "name": "loading",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-loading-1920.png: captured immediately after clicking 发送."],
+          "rationale": "The real browser captured the send interaction before the response settled.",
+          "resolution": "Verified in Make preview; Vue loading-state comparison remains pending."
+        },
+        {
+          "name": "success",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-success-1920.png: response panel showed 200 OK and assertion result 1/3 after 发送."],
+          "rationale": "The Make preview rendered a successful response and assertion result state.",
+          "resolution": "Verified in Make preview; Vue success-state comparison remains pending."
+        },
+        {
+          "name": "failure",
+          "status": "verified",
+          "evidence": ["output/playwright/assertion-tab-814/make-event-failure-1920.png: changed the expected status to 201 and captured the rendered 断言失败 state after 发送."],
+          "rationale": "The Make preview rendered a failure result from a deliberate assertion mismatch.",
+          "resolution": "Verified in Make preview; Vue failure-state comparison remains pending."
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%25B0%25E7%25AE%25A1%25E7%2590%2586%25E7%25B3%25BB%25E7%25BB%259F%25E7%2595%258C%25E9%259D%25A2%25E8%25AE%25BE%25E8%25AE%25A1-%25E6%25AD%25A3%25E5%25BC%258F?code-node-id=0-9&p=f&t=bCb6GGStdLhpUNlB-0&fullscreen=1",
+      "viewport": [1920, 1080],
+      "interactions": ["Loaded the provided full-screen Make URL, waited for the inner preview iframe, entered demo/demo123 (non-'wrong'), selected X-MAN, opened 接口自动化 → 接口管理 → 断言, opened 添加断言, and selected each of the six assertion types. The preview remained usable throughout this capture.", "At the 1920px viewport, toggled the 响应内容 region and captured the response expanded/collapsed presentation."] ,
+      "screenshots": ["output/playwright/assertion-tab-814/make-assertion-empty.png", "output/playwright/assertion-tab-814/make-assertion-menu-1920.png", "output/playwright/assertion-tab-814/make-assertion-status.png", "output/playwright/assertion-tab-814/make-assertion-header.png", "output/playwright/assertion-tab-814/make-assertion-body.png", "output/playwright/assertion-tab-814/make-assertion-time.png", "output/playwright/assertion-tab-814/make-assertion-variable.png", "output/playwright/assertion-tab-814/make-assertion-script.png", "output/playwright/assertion-tab-814/make-assertion-script-1920.png", "output/playwright/assertion-tab-814/make-response-expanded.png"],
+      "computedStyle": ["Make inner iframe viewport after resize: 1920x1031 CSS px.", "Script editor textarea: display:inline-block; width:1320px; height:216px; font:12px/19.5px JetBrains Mono, monospace; color:rgb(205,214,244).", "Assertion editor panel ancestor: x=570,y=266,width=1350,height=725; display:flex; font:14px/21px Inter, PingFang SC, Microsoft YaHei, sans-serif; color:rgb(29,33,41)."],
+      "boundingBox": ["Make script editor textarea: x=585,y=381,width=1320,height=216.", "Make assertion panel: x=570,y=266,width=1350,height=725."]
+    },
+    "vue": {
+      "screenshots": ["output/playwright/assertion-tab-814/vue-login-superadmin123.png", "output/playwright/assertion-tab-814/vue-api-loaded.png", "output/playwright/assertion-tab-814/vue-assertion-empty-1920-after-padding-fix.png", "output/playwright/assertion-tab-814/vue-assertion-menu-1920.png", "output/playwright/assertion-tab-814/vue-status-after-padding-fix.png", "output/playwright/assertion-tab-814/vue-empty-flex-fix-expanded.png", "output/playwright/assertion-tab-814/vue-empty-flex-fix-collapsed.png", "output/playwright/assertion-tab-814/vue-status-flex-fix-collapsed.png", "output/playwright/assertion-tab-814/vue-assertion-empty-regression-1920x1080.png", "output/playwright/assertion-tab-814/vue-status-regression-1920.png", "output/playwright/assertion-tab-814/vue-header-regression-1920.png", "output/playwright/assertion-tab-814/vue-body-regression-1920.png", "output/playwright/assertion-tab-814/vue-time-regression-1920.png", "output/playwright/assertion-tab-814/vue-variable-regression-1920.png", "output/playwright/assertion-tab-814/vue-script-regression-1920.png", "output/playwright/assertion-tab-814/vue-event-hover-1920.png", "output/playwright/assertion-tab-814/vue-event-focus-1920.png", "output/playwright/assertion-tab-814/vue-event-blur-1920.png", "output/playwright/assertion-tab-814/vue-regression-params-1920.png", "output/playwright/assertion-tab-814/vue-regression-body-1920.png", "output/playwright/assertion-tab-814/vue-regression-pre-1920.png", "output/playwright/assertion-tab-814/vue-regression-post-1920.png", "output/playwright/assertion-tab-814/vue-body-xpath-fixed-1920.png", "output/playwright/assertion-tab-814/vue-header-controls-fixed-1920.png", "output/playwright/assertion-tab-814/vue-time-typography-fixed-1920.png", "output/playwright/assertion-tab-814/vue-status-typography-fixed-1920.png", "output/playwright/assertion-tab-814/vue-response-region-fixed-1920.png", "output/playwright/assertion-tab-814/vue-final-status-1920-20260924.png", "output/playwright/assertion-tab-814/vue-final-header-20260924.png", "output/playwright/assertion-tab-814/vue-final-body-20260924.png", "output/playwright/assertion-tab-814/vue-final-body-xpath-clicked-20260924.png"],
+      "computedStyle": [".api-request-body.is-assertion-tab: display:flex; flex:1 1 0; padding:0; overflow:hidden", ".api-assertion-panel: display:flex; width:1614px; height:574px expanded / 814px collapsed; color:rgb(29,33,41)", ".api-assertion-list: x=306,width=264; .api-assertion-detail: x=570,width=1350", "状态码表单和响应时间条件: computed font-size 12px, font-weight 400, line-height 18px", "响应体 JSONPath/XPath/Regex toolbar: height 28px; XPath 下无 XML/HTML format select", "响应头操作列: grid columns 569.5px 80px 569.5px 36px 36px; copy/delete buttons 22x22, copy rgb(22,93,255), delete rgb(245,63,63)", "脚本编辑器: .api-code-editor__body x=586,y=343.5,width=1318,height=218; textarea x=586,y=343.5,width=120,height=40; assertion type panel x=570,y=296.5,width=1350,height=339.5", "响应区: .api-response-shell x=306,y=800,width=1614,height=280; .api-response-content x=306,y=841,width=1614,height=239", "共享 Tab 回归: Params/Body/前置处理/后置处理均可切换；后置处理 .api-request-body.is-post display:block;padding:14px", "2026-09-24 browser recapture at 1920x1080: status condition 12px/400/18px; header action buttons 22x22 with copy rgb(22,93,255) and delete rgb(245,63,63); body toolbar 28px and XPath has no XML/HTML selector; response shell x=306,y=800,w=1614,h=280 and content x=306,y=841,w=1614,h=239"],
+      "boundingBox": [".api-assertion-panel expanded: x=306,y=226,width=1614,height=574", ".api-assertion-panel collapsed: x=306,y=226,width=1614,height=814", ".api-assertion-detail status collapsed: x=570,y=226,width=1350,height=814", "header type panel: x=570,y=296.5,width=1350,height=134.5", "body type panel: x=570,y=296.5,width=1350,height=134.5", "time type panel: x=570,y=296.5,width=1350,height=80.5", "variable type panel: x=570,y=296.5,width=1350,height=134.5", "script type panel: x=570,y=296.5,width=1350,height=339.5"],
+      "interactionResults": ["POST /auth/login returned 200 for superadmin/superadmin123; selected X-MAN; opened /automation/api/interfaces; clicked 断言; observed empty state; opened 添加断言 menu; confirmed Make order 状态码、响应头、响应体、响应时间、变量、脚本; selected each assertion type and captured its editor.", "Expanded and collapsed 响应内容; assertion panel measured 574px and 814px respectively at 1920x1080.", "Hovered, focused, and blurred the 断言名称 input; disabled 快速生成 remained disabled in empty-request context.", "Params, Body, 前置处理, and 后置处理 were each selected after the assertion layout change and remained interactive."]
+    }
+  },
+  "visualReview": {
+    "status": "unverified",
+    "method": "paired-screenshot-overlay",
+    "viewport": [],
+    "scenes": [],
+    "manualReview": {
+      "status": "unverified",
+      "reviewer": "",
+      "reviewedAt": "",
+      "notes": ""
+    },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 0
+  },
+  "comparisonMatrix": [
+    {
+      "id": "empty-left::layout",
+      "variant": "empty-left",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-left::typography",
+      "variant": "empty-left",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-left::controls",
+      "variant": "empty-left",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-left::iconography",
+      "variant": "empty-left",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-left::spacing",
+      "variant": "empty-left",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-left::interaction",
+      "variant": "empty-left",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-right::layout",
+      "variant": "empty-right",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-right::typography",
+      "variant": "empty-right",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-right::controls",
+      "variant": "empty-right",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-right::iconography",
+      "variant": "empty-right",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-right::spacing",
+      "variant": "empty-right",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "empty-right::interaction",
+      "variant": "empty-right",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "toolbar-menu::layout",
+      "variant": "toolbar-menu",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "toolbar-menu::typography",
+      "variant": "toolbar-menu",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "toolbar-menu::controls",
+      "variant": "toolbar-menu",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "toolbar-menu::iconography",
+      "variant": "toolbar-menu",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "toolbar-menu::spacing",
+      "variant": "toolbar-menu",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "toolbar-menu::interaction",
+      "variant": "toolbar-menu",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::layout",
+      "variant": "status",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::typography",
+      "variant": "status",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::controls",
+      "variant": "status",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::iconography",
+      "variant": "status",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::spacing",
+      "variant": "status",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::interaction",
+      "variant": "status",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::layout",
+      "variant": "header",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::typography",
+      "variant": "header",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::controls",
+      "variant": "header",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::iconography",
+      "variant": "header",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::spacing",
+      "variant": "header",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::interaction",
+      "variant": "header",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::layout",
+      "variant": "body",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::typography",
+      "variant": "body",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::controls",
+      "variant": "body",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::iconography",
+      "variant": "body",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::spacing",
+      "variant": "body",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::interaction",
+      "variant": "body",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "time::layout",
+      "variant": "time",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "time::typography",
+      "variant": "time",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "time::controls",
+      "variant": "time",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "time::iconography",
+      "variant": "time",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "time::spacing",
+      "variant": "time",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "time::interaction",
+      "variant": "time",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::layout",
+      "variant": "variable",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::typography",
+      "variant": "variable",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::controls",
+      "variant": "variable",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::iconography",
+      "variant": "variable",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::spacing",
+      "variant": "variable",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::interaction",
+      "variant": "variable",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::layout",
+      "variant": "script",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::typography",
+      "variant": "script",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::controls",
+      "variant": "script",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::iconography",
+      "variant": "script",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::spacing",
+      "variant": "script",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::interaction",
+      "variant": "script",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-expanded::layout",
+      "variant": "response-expanded",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-expanded::typography",
+      "variant": "response-expanded",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-expanded::controls",
+      "variant": "response-expanded",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-expanded::iconography",
+      "variant": "response-expanded",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-expanded::spacing",
+      "variant": "response-expanded",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-expanded::interaction",
+      "variant": "response-expanded",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-collapsed::layout",
+      "variant": "response-collapsed",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-collapsed::typography",
+      "variant": "response-collapsed",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-collapsed::controls",
+      "variant": "response-collapsed",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-collapsed::iconography",
+      "variant": "response-collapsed",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-collapsed::spacing",
+      "variant": "response-collapsed",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "response-collapsed::interaction",
+      "variant": "response-collapsed",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    }
+  ],
+  "differences": [
+    {
+      "id": "DIFF-001",
+      "status": "resolved",
+      "area": "Make preview access",
+      "source": "Make preview",
+      "current": "The provided full-screen Make preview accepted demo/demo123 and exposed the interface-management assertion tab. All six assertion types were opened and captured.",
+      "resolution": "Resolved the preview access blocker with a real browser session and registered screenshots for login, assertion menu, and all six assertion editors. No source code was modified.",
+      "followUp": "Complete per-variant event, computed-style, bounding-box, and paired visual review for every required state.",
+      "evidence": ["output/playwright/assertion-tab-814/make-assertion-empty.png", "output/playwright/assertion-tab-814/make-assertion-menu.png", "output/playwright/assertion-tab-814/make-assertion-status.png", "output/playwright/assertion-tab-814/make-assertion-header.png", "output/playwright/assertion-tab-814/make-assertion-body.png", "output/playwright/assertion-tab-814/make-assertion-time.png", "output/playwright/assertion-tab-814/make-assertion-variable.png", "output/playwright/assertion-tab-814/make-assertion-script.png"],
+      "decisionBasis": "The provided Make preview contains its own simulated login and explicitly documents 'wrong' as the error-state password.",
+      "impact": "Make post-login interaction states, paired visual review, and all 66 four-source matrix items remain unverified."
+    },
+    {
+      "id": "DIFF-002",
+      "status": "resolved",
+      "area": "Current Vue browser validation",
+      "source": "Current Vue",
+      "current": "The running backend accepts superadmin/superadmin123; superadmin23 returns 401. With the accepted credential, localhost:4173 opened the X-MAN workspace and the assertion tab.",
+      "resolution": "Validated the real browser flow through login, workspace selection, assertion tab empty state, add menu, and status-code assertion editor. No authentication bypass or source change was used.",
+      "followUp": "Complete the remaining assertion variants and paired visual review after Make post-login capture.",
+      "evidence": ["output/playwright/assertion-tab-814/vue-login-superadmin123.png", "output/playwright/assertion-tab-814/vue-api-loaded.png", "output/playwright/assertion-tab-814/vue-assertion-empty.png", "output/playwright/assertion-tab-814/vue-assertion-status.png"],
+      "decisionBasis": "Direct POST /auth/login response was 200 for superadmin123; 23 is not the password configured by the current backend.",
+      "impact": "Basic Vue browser flow is verified; remaining matrix states and visual pairing are still pending."
+    },
+    {
+      "id": "DIFF-003",
+      "status": "resolved",
+      "area": "Assertion type menu order",
+      "source": "Make preview / current Vue",
+      "current": "Vue listed 响应体断言 before 响应头断言, while Make listed 响应头断言 before 响应体断言.",
+      "resolution": "Reordered assertionTypeOptions to 状态码、响应头、响应体、响应时间、变量、脚本, matching Make and the source interaction order.",
+      "followUp": "Recheck the menu after shared option changes; the 1920px browser capture confirms the new order.",
+      "evidence": ["output/playwright/assertion-tab-814/make-assertion-menu-1920.png", "output/playwright/assertion-tab-814/vue-assertion-menu-1920.png"],
+      "decisionBasis": "The Make preview menu is the interaction source of truth for this order.",
+      "impact": "Menu navigation now reaches each assertion variant in the same order as Make."
+    },
+    {
+      "id": "DIFF-004",
+      "status": "resolved",
+      "area": "Assertion content geometry",
+      "source": "Make preview / current Vue",
+      "current": "Vue applied a shared 14px request-body inset and its assertion panel stayed at a fixed 316px height, leaving an unbounded blank area above the response panel.",
+      "resolution": "Added an assertion-tab-only flex container with zero padding and allowed the assertion panel/editor to fill the available request area. Vue geometry now matches Make: list x=306,width=264 and detail x=570,width=1350, with 574px expanded and 814px collapsed heights at 1920x1080.",
+      "followUp": "Recheck all six assertion editors and response states after the shared container change.",
+      "evidence": ["output/playwright/assertion-tab-814/make-status-1920-current.png", "output/playwright/assertion-tab-814/vue-status-flex-fix-collapsed.png", "output/playwright/assertion-tab-814/vue-empty-flex-fix-expanded.png", "output/playwright/assertion-tab-814/vue-empty-flex-fix-collapsed.png"],
+      "decisionBasis": "Measured Make and Vue computed bounding boxes at the same browser viewport; the assertion region is the requested alignment scope.",
+      "impact": "The assertion list/editor now occupy the same content width and respond to response-panel expansion consistently."
+    },
+    {
+      "id": "DIFF-005",
+      "status": "resolved",
+      "area": "Status-code condition typography",
+      "source": "Make preview / current Vue",
+      "current": "The Vue status-code condition select inherited Element Plus 14px/600 typography, visibly heavier than Make.",
+      "resolution": "Scoped the status-code condition select to the Make-referenced 12px/400 typography and verified the browser computed style.",
+      "followUp": "Pair the status-code typography with Design and Make screenshots in the remaining matrix review.",
+      "evidence": ["output/playwright/assertion-tab-814/make-status-1920-current.png", "output/playwright/assertion-tab-814/vue-status-typography-fixed-1920.png"],
+      "decisionBasis": "Make preview visual reference and direct computed-style measurement.",
+      "impact": "The condition label no longer renders with the heavier component-library default weight."
+    },
+    {
+      "id": "DIFF-006",
+      "status": "resolved",
+      "area": "Response-header operation controls",
+      "source": "Make preview / current Vue",
+      "current": "Vue operation controls inherited the generic row-button color and spacing, making the copy and delete actions differ from Make.",
+      "resolution": "Scoped operation icon buttons to fixed 22px controls, blue copy color, and red delete color while retaining the fixed operation columns.",
+      "followUp": "Pair the response-header operation row with Design and Make screenshots in the remaining matrix review.",
+      "evidence": ["output/playwright/assertion-tab-814/make-assertion-header.png", "output/playwright/assertion-tab-814/vue-header-controls-fixed-1920.png"],
+      "decisionBasis": "Make preview operation icons and direct bounding-box/computed-style measurement.",
+      "impact": "Copy/delete controls now use the same visual treatment and stable operation-column geometry."
+    },
+    {
+      "id": "DIFF-007",
+      "status": "resolved",
+      "area": "Response-body XPath mode",
+      "source": "Make preview / current Vue",
+      "current": "Vue showed extra XML and HTML format choices for XPath and the toolbar height changed when switching JSONPath/XPath.",
+      "resolution": "Removed the extra response-format select and fixed the body assertion toolbar at 28px for JSONPath, XPath, and Regex.",
+      "followUp": "Pair all response-body modes with Design and Make screenshots in the remaining matrix review.",
+      "evidence": ["output/playwright/assertion-tab-814/make-assertion-body.png", "output/playwright/assertion-tab-814/vue-body-xpath-fixed-1920.png"],
+      "decisionBasis": "Make preview body assertion toolbar contains only JSONPath/XPath/Regex controls.",
+      "impact": "XPath no longer exposes unreferenced XML/HTML controls or changes the editor toolbar height."
+    },
+    {
+      "id": "DIFF-008",
+      "status": "resolved",
+      "area": "Response-time condition typography and layout",
+      "source": "Make preview / current Vue",
+      "current": "The response-time condition select inherited heavier typography and its surrounding control geometry was not explicitly constrained to the Make layout.",
+      "resolution": "Applied the same 12px/400 condition typography and retained the fixed response-time field widths and table/control column rules.",
+      "followUp": "Pair response-time typography and dimensions with Design and Make screenshots in the remaining matrix review.",
+      "evidence": ["output/playwright/assertion-tab-814/make-assertion-time.png", "output/playwright/assertion-tab-814/vue-time-typography-fixed-1920.png"],
+      "decisionBasis": "Make preview response-time editor and direct computed-style measurement.",
+      "impact": "The response-time condition no longer appears bold and its fields remain stable during the response-region split."
+    },
+    {
+      "id": "DIFF-009",
+      "status": "resolved",
+      "area": "Response content region visibility",
+      "source": "Make preview / current Vue",
+      "current": "The assertion request area did not explicitly reserve an independent response flex region, allowing tall assertion content to make the response area appear absent.",
+      "resolution": "Locked the assertion request body to a zero-minimum flex child and gave the adjacent response shell an independent 238px minimum flex basis. Browser measurements show the response shell at y=800 with 280px height and content at y=841 with 239px height at 1920x1080.",
+      "followUp": "Recheck response expanded/collapsed and populated result states during the remaining matrix review.",
+      "evidence": ["output/playwright/assertion-tab-814/make-response-expanded.png", "output/playwright/assertion-tab-814/vue-body-xpath-fixed-1920.png", "output/playwright/assertion-tab-814/vue-response-region-fixed-1920.png"],
+      "decisionBasis": "Make preview response panel is a persistent sibling region; direct Vue bounding-box measurement confirms it remains visible.",
+      "impact": "The response header and content region remain visible below every assertion editor state."
+    }
+  ],
+  "noDifferencesReason": "All nine registered implementation differences are resolved; remaining work is the unverified state-by-state comparison matrix and visual review.",
+  "unverifiedStatuses": [
+    "Every variant × element comparisonMatrix item remains unverified until its Design, Make, Make preview, and Vue evidence is paired.",
+    "The required paired screenshot overlay and manual visual review have not been completed for the 66 matrix items."
+  ],
+  "validation": {
+    "commands": [
+      "npm run typecheck",
+      "npm run build",
+      "git diff --check",
+      "npm run figma:alignment-check -- --record docs/figma-alignment/assertion-tab-814-7738-20260923.json"
+    ],
+    "summary": {
+      "resolved": 9,
+      "acceptedDeviations": 0,
+      "unresolved": 0,
+      "unverified": 70
+    }
+  }
+}

@@ -1,0 +1,1040 @@
+{
+  "schemaVersion": 2,
+  "title": "断言 Tab 表格与脚本编辑器视觉修复",
+  "page": "接口管理 / 断言 Tab",
+  "status": "draft",
+  "createdAt": "2026-09-23T06:15:39.391Z",
+  "sourceBaseline": {
+    "gitBranch": "codex/development-feature2",
+    "gitCommit": "8a9ffc5f644838b18ba14f6d572b21796e0300c6",
+    "designCapturedAt": "",
+    "makeCode": {
+      "path": "设计/figma-ai-make最新代码20260920/src/app/App.tsx",
+      "sha256": "d0560f45a6d23f58a8230a908129e59e3714f8ae100f34e0723625311aaa5f20",
+      "modifiedAt": "2026-09-20T06:45:35.550Z"
+    },
+    "makePreviewCapturedAt": "",
+    "vueCapturedAt": "",
+    "environment": {
+      "viewport": [],
+      "devicePixelRatio": null,
+      "browserZoom": null,
+      "fontStatus": "unverified"
+    }
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:878:1399"
+    ],
+    "makeCodePath": "设计/figma-ai-make最新代码20260920/src/app/App.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25F0%25E7%258F%25AD%25E7%25AE%25A1%25E7%2590%2586%25E7%25B3%25BB%25E7%BB%9F%25E7%95%8C%25E9%259D%25A2%25E8%25AE%BE%25E8%25AE%25A1-%25E6%AD%25A3%25E5%BC%258F?code-node-id=0-9&p=f&t=bCb6GGStdLhpUNlB-0&fullscreen=1",
+    "currentCodeFiles": [
+      "src/widgets/api-interface-workspace/ApiAssertionPanel.vue",
+      "src/widgets/api-interface-workspace/styles/api-assertion-panel.css",
+      "src/widgets/api-interface-workspace/ApiCodeEditor.vue"
+    ],
+    "variants": [
+      "status",
+      "header",
+      "body",
+      "variable",
+      "script"
+    ],
+    "elements": [
+      "typography",
+      "controls",
+      "iconography",
+      "spacing",
+      "layout",
+      "interaction"
+    ],
+    "excludedAreas": [
+      "接口管理断言 Tab 之外区域"
+    ]
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "vue-implementation",
+      "status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "browser-validation",
+      "status": "unverified",
+      "evidence": []
+    },
+    {
+      "id": "difference-registration",
+      "status": "unverified",
+      "evidence": []
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [],
+      "screenshots": []
+    },
+    "make": {
+      "codeReferences": [],
+      "eventMatrix": [
+        {
+          "name": "hover",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "focus",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "blur",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "active",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "disabled",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "loading",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "success",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "failure",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25F0%25E7%258F%25AD%25E7%25AE%25A1%25E7%2590%2586%25E7%25B3%25BB%25E7%BB%9F%25E7%95%8C%25E9%259D%25A2%25E8%25AE%BE%25E8%25AE%25A1-%25E6%AD%25A3%25E5%BC%258F?code-node-id=0-9&p=f&t=bCb6GGStdLhpUNlB-0&fullscreen=1",
+      "viewport": [],
+      "interactions": [],
+      "screenshots": []
+    },
+    "vue": {
+      "screenshots": [],
+      "computedStyle": [],
+      "boundingBox": [],
+      "interactionResults": []
+    }
+  },
+  "visualReview": {
+    "status": "unverified",
+    "method": "paired-screenshot-overlay",
+    "viewport": [],
+    "scenes": [],
+    "manualReview": {
+      "status": "unverified",
+      "reviewer": "",
+      "reviewedAt": "",
+      "notes": ""
+    },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 0
+  },
+  "comparisonMatrix": [
+    {
+      "id": "status::typography",
+      "variant": "status",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::controls",
+      "variant": "status",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::iconography",
+      "variant": "status",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::spacing",
+      "variant": "status",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::layout",
+      "variant": "status",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "status::interaction",
+      "variant": "status",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::typography",
+      "variant": "header",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::controls",
+      "variant": "header",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::iconography",
+      "variant": "header",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::spacing",
+      "variant": "header",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::layout",
+      "variant": "header",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "header::interaction",
+      "variant": "header",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::typography",
+      "variant": "body",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::controls",
+      "variant": "body",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::iconography",
+      "variant": "body",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::spacing",
+      "variant": "body",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::layout",
+      "variant": "body",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "body::interaction",
+      "variant": "body",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::typography",
+      "variant": "variable",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::controls",
+      "variant": "variable",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::iconography",
+      "variant": "variable",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::spacing",
+      "variant": "variable",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::layout",
+      "variant": "variable",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "variable::interaction",
+      "variant": "variable",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::typography",
+      "variant": "script",
+      "element": "typography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::controls",
+      "variant": "script",
+      "element": "controls",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::iconography",
+      "variant": "script",
+      "element": "iconography",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::spacing",
+      "variant": "script",
+      "element": "spacing",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::layout",
+      "variant": "script",
+      "element": "layout",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "script::interaction",
+      "variant": "script",
+      "element": "interaction",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    }
+  ],
+  "differences": [],
+  "noDifferencesReason": "",
+  "unverifiedStatuses": [
+    "四方基线和逐项验证尚未完成"
+  ],
+  "validation": {
+    "commands": [
+      "npm run typecheck",
+      "npm run build",
+      "git diff --check"
+    ],
+    "summary": {
+      "resolved": 0,
+      "acceptedDeviations": 0,
+      "unresolved": 0,
+      "unverified": 31
+    }
+  }
+}

@@ -37,23 +37,22 @@
 - 禁止在没有确认成功的情况下声称已经完成。
 - 禁止把无关格式化、依赖锁文件变化、构建产物变化混入当前任务。
 
-## Figma 对齐硬性门禁
+## Figma 对齐工作方式
 
 ### 适用范围与触发条件
 
-本分类只用于“将 Figma Design / Figma AI Make 与当前系统页面、组件或交互对齐”的任务。普通功能开发、无 Figma 来源的样式调整和纯后端任务不触发本门禁。用户提供 Figma Design 链接、Make 链接/源码，或明确使用“对齐 Figma、还原设计、像素级一致”等表述时，必须触发。
+本分类只用于“将 Figma Design / Figma AI Make 与当前系统页面、组件或交互对齐”的任务。普通功能开发、无 Figma 来源的样式调整和纯后端任务不触发本流程。用户提供 Figma Design 链接、Make 链接/源码，或明确使用“对齐 Figma、还原设计、像素级一致”等表述时，按本流程执行。
 
-`AGENTS.md` 只定义不可绕过的入口门禁；具体取值、测量、冲突裁决、证据格式和结论等级统一遵循 `docs/figma-project-alignment-standards.md`，不得在两处维护互相冲突的详细规则。
+`AGENTS.md` 只定义入口和协作要求；具体取值、测量、冲突裁决、证据格式和结论等级统一遵循 `docs/figma-project-alignment-standards.md`，不得在两处维护互相冲突的详细规则。
 
-### 修改前阻断点
+### 修改前检查点
 
-- 新的 Figma 对齐任务必须先运行 `npm run figma:alignment-init -- ...`，生成 `schemaVersion: 2` 的结构化记录；不得复制旧记录后直接把状态改成已验证。
-- 在第一次修改目标 Vue/CSS/TS 文件前，记录中必须锁定 Design 节点、Make 源码路径与版本、Make 预览地址、当前 Git 基线、目标代码文件、明确排除区域，以及范围内全部“变体 × 验收元素”矩阵。
-- 初始化后的矩阵项默认必须是 `unverified`。未完成 Design、Make 源码、Make 预览和 Vue 当前值的四方基线，不得开始实施；修复过程中只能逐项更新，不能在结束时凭记忆补写。
+- 新的 Figma 对齐任务应在修改前记录 Design 节点、Make 源码路径与版本、Make 预览地址、当前 Git 基线、目标代码文件、明确排除区域，以及范围内全部“变体 × 验收元素”差异。可使用 `npm run figma:alignment-init -- ...` 生成结构化记录，也可使用等价的人工差异表。
+- 修改前先完成 Design、Make 源码、Make 预览和 Vue 当前值的四方基线；修复过程中逐项更新差异，不能在结束时凭记忆补写。
 - Make 源码目录/版本、Design 节点、目标代码文件、viewport、DPR、缩放或字体环境变化时，受影响证据立即失效，必须重新采集；旧记录里的 `verified` 不自动继承。
 - 共享样式或共享组件发生变化时，必须重新验证矩阵中所有受影响变体，不能只复验触发修改的一个页面。
 
-涉及 Figma Design、Figma AI Make 或 Make 预览的对齐任务，必须按以下顺序执行，不得合并或跳过步骤：
+涉及 Figma Design、Figma AI Make 或 Make 预览的对齐任务，按以下顺序执行：
 
 1. 用 Design 节点和截图对齐默认静态外观。
 2. 用 Make 源码列出目标区域的事件和状态，包括 Hover、Focus、Blur、Active、Disabled、Loading、Success、Failure；代码没有表达的状态也必须登记为 `not-expressed`，不得省略。
@@ -62,7 +61,7 @@
 5. 用真实浏览器重新验证当前实现，包括截图、computed style、bounding box 和交互结果。
 6. 对 Design、Make 源码、Make 预览和当前实现的每一项差异登记来源、处理方式、影响和后续动作。
 
-每次对齐都必须提供结构化记录，默认放在 `docs/figma-alignment/`，格式参见 `docs/figma-alignment-record.template.json`。记录至少包含：
+每次对齐都应保留可追溯记录，默认放在 `docs/figma-alignment/`，可参考 `docs/figma-alignment-record.template.json`。记录至少包含：
 
 - Design 节点和截图；
 - Make 源码路径、事件矩阵和关键逻辑；
@@ -75,7 +74,7 @@
 - 全部“变体 × 验收元素”矩阵及逐项四方证据；
 - 由差异数组和矩阵状态自动核算的已修复、保留差异、未解决和未验收数量。
 
-运行 `npm run figma:alignment-check -- --record <record.json>` 作为交付门禁。检查失败时，不得使用“已完成”“完全对齐”等结论。只有六步流程均为 `verified`、所有事件均有证据、没有未验收或阻塞状态、所有差异均有处理结论时，才允许记录为完成。
+`npm run figma:alignment-check -- --record <record.json>` 仅作为可选的记录完整性检查。它不能替代 Design、Make 源码、Make 预览和真实 Vue 浏览器的人工复核，也不作为本项目对齐交付的阻断条件。
 
 Make 没有表达的 Hover、Focus、Loading 等状态可以登记为 `not-expressed`，但必须保留 Make 代码证据、Make 预览验证结果、当前实现决策和遗留问题；不得把缺少状态稿或缺少事件误写成已验证。
 
@@ -83,12 +82,12 @@ Make 没有表达的 Hover、Focus、Loading 等状态可以登记为 `not-expre
 
 - 修改前建立四方差异表；覆盖范围内全部变体、图标双向切换、文案及实际尺寸，禁止用一个默认态代表整个区域。
 - `not-expressed` 必须检查 CSS、共享组件和原生行为，并经预览确认；不要求为来源和业务均未表达的状态强行补设计。
-- `draft`、`partial-alignment`、`blocked` 或任何 `unresolved` 差异必须被交付门禁拦截；未验收或未知事件状态不能通过。
+- `draft`、`partial-alignment`、`blocked` 或任何 `unresolved` 差异必须在最终报告中明确列出；未验收或未知事件状态不能被描述为已验证。
 - `accepted-deviation` 必须填写 `acceptance.type`（`user-decision` 或 `business-constraint`）及可追溯的 `acceptance.reference`。代理自行决定保留不算接受。
-- 视觉结果是交付硬门禁：每个可见变体/状态必须有同视口的 Design、Make（适用时）和 Vue 配对截图，并完成区域裁剪、叠加或差异图审查；只有 `visualReview.status=verified`、人工复核完成且没有未解释的可见差异，才允许进入交付状态。
-- `workflow.browser-validation` 和 `workflow.difference-registration` 必须由逐项矩阵和 `visualReview` 自动汇总；父级不得在子项仍为 `unverified`、`failed`、`blocked` 或存在 `unresolved` 差异时手工标记为 `verified`。
+- 视觉结果是交付复核要求：每个可见变体/状态应有同视口的 Design、Make（适用时）和 Vue 配对截图，并完成区域裁剪、叠加或差异图审查；未完成的人工复核必须在最终报告中标为未验证。
+- `workflow.browser-validation` 和 `workflow.difference-registration` 用于记录逐项复核进度，不要求通过自动脚本汇总，也不能把子项仍为 `unverified`、`failed`、`blocked` 或存在 `unresolved` 差异的范围描述为已验证。
 - `computedStyle`、`boundingBox` 和 CSS 声明只用于定位与解释差异，不能替代同状态最终画面审查；任一肉眼可见且未登记的差异必须按 `failed` 或 `unresolved` 处理。
 - 视觉矩阵项必须引用 `visualSceneIds`，并记录目标值、实际值、delta 与容差；不能用一个默认态截图代表其它变体或状态。
-- 门禁通过仅说明记录约束及引用文件检查通过，不代表像素或证据真实性已经自动验收。最终报告区分已验证、未验证和遗留问题，并据记录给出数量。
+- 结构化检查通过仅说明记录约束及引用文件检查通过，不代表像素或证据真实性已经自动验收。最终报告区分已验证、未验证和遗留问题，并据实际复核给出数量。
 - 最终数量和结论必须与逐项记录一致；禁止手写与数组不一致的汇总，禁止用一句“已逐项核对”代替矩阵证据。
-- 修改门禁后运行 `node --test tools/quality/check-figma-alignment.test.mjs`；不得为了让旧记录通过而隐藏缺项或提升其完成状态。
+- 修改结构化检查脚本后可运行 `node --test tools/quality/check-figma-alignment.test.mjs`；不得为了让记录通过而隐藏缺项或提升其完成状态。

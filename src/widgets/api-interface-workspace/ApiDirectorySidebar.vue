@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { Plus, Search, Upload } from '@lucide/vue'
 
-import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 import ApiDirectoryTree from './ApiDirectoryTree.vue'
 import type { DirectoryNode } from './lib/apiDirectoryTree'
 
@@ -64,11 +64,11 @@ defineExpose({
   <aside class="api-interface-sidebar">
     <div class="api-interface-sidebar__actions">
       <button v-if="canCreate !== false" type="button" class="api-sidebar-primary" @click="emit('createRequest')">
-        <img class="api-sidebar-button-icon" :src="figmaApiInterfaceIcons.newRequest" alt="" />
+        <Plus class="api-sidebar-button-icon" :size="12" aria-hidden="true" />
         新建请求
       </button>
       <button v-if="canCreate !== false" type="button" class="api-sidebar-secondary" @click="emit('import')">
-        <img class="api-sidebar-button-icon" :src="figmaApiInterfaceIcons.import" alt="" />
+        <Upload class="api-sidebar-button-icon" :size="13" aria-hidden="true" />
         导入
       </button>
     </div>
@@ -76,7 +76,7 @@ defineExpose({
     <div class="api-sidebar-search">
       <el-input v-model="directoryKeyword" clearable placeholder="搜索请求">
         <template #prefix>
-          <img class="api-search-prefix-icon" :src="figmaApiInterfaceIcons.search" alt="" />
+          <Search class="api-search-prefix-icon" :size="14" aria-hidden="true" />
         </template>
       </el-input>
     </div>

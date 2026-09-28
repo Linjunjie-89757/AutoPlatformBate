@@ -54,6 +54,8 @@ function unwrapMemberResponse(payload: ApiResponse<WorkspaceMemberItem[]>) {
   return Array.isArray(payload.data) ? payload.data : []
 }
 
+let switchableWorkspacesRequest: Promise<WorkspaceItem[]> | null = null
+
 export const workspaceApi = {
   async getWorkspaces() {
     const payload = await httpGet<ApiResponse<WorkspaceItem[]>>('/workspaces', {
@@ -63,10 +65,18 @@ export const workspaceApi = {
   },
 
   async getSwitchableWorkspaces() {
-    const payload = await httpGet<ApiResponse<WorkspaceItem[]>>('/workspaces/switchable', {
-      headers: workspaceHeaders('ALL'),
-    })
-    return unwrapWorkspaceResponse(payload)
+    const request = switchableWorkspacesRequest ?? (switchableWorkspacesRequest = httpGet<ApiResponse<WorkspaceItem[]>>(
+      '/workspaces/switchable',
+      { headers: workspaceHeaders('ALL') },
+    ).then(unwrapWorkspaceResponse))
+
+    try {
+      return await request
+    } finally {
+      if (switchableWorkspacesRequest === request) {
+        switchableWorkspacesRequest = null
+      }
+    }
   },
 
   async getJoinCandidates(query = '') {

@@ -1,0 +1,1010 @@
+{
+  "schemaVersion": 2,
+  "title": "快速提取抽屉对齐修复",
+  "page": "接口自动化-接口管理-快速提取",
+  "status": "partial-alignment",
+  "createdAt": "2026-09-28T07:42:16.928Z",
+  "sourceBaseline": {
+    "gitBranch": "codex/development-feature2",
+    "gitCommit": "4b438221e4ae6abcbc0f9f22947b992c8dcf3ee1",
+    "designCapturedAt": "2026-09-28T06:25:00.000Z",
+    "makeCode": {
+      "path": "设计/figma-ai-make最新代码20260920/src/app/App.tsx",
+      "sha256": "d0560f45a6d23f58a8230a908129e59e3714f8ae100f34e0723625311aaa5f20",
+      "modifiedAt": "2026-09-20T06:45:35.550Z"
+    },
+    "makePreviewCapturedAt": "2026-09-28T06:08:00.000Z",
+    "vueCapturedAt": "2026-09-28T08:38:23.878Z",
+    "environment": {
+      "viewport": [
+        1280,
+        720
+      ],
+      "devicePixelRatio": 1,
+      "browserZoom": 1,
+      "fontStatus": "loaded"
+    }
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:879:1561",
+      "jSUUPxC4PVD9Kp2FUydfox:879:2134",
+      "jSUUPxC4PVD9Kp2FUydfox:879:2854",
+      "jSUUPxC4PVD9Kp2FUydfox:879:3574",
+      "jSUUPxC4PVD9Kp2FUydfox:879:4298",
+      "jSUUPxC4PVD9Kp2FUydfox:879:4970",
+      "jSUUPxC4PVD9Kp2FUydfox:880:5614",
+      "jSUUPxC4PVD9Kp2FUydfox:880:6258"
+    ],
+    "makeCodePath": "设计/figma-ai-make最新代码20260920/src/app/App.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%258D%8E%25E5%258F%25B0%25E7%AE%A1%25E7%90%86%25E7%25B3%BB%25E7%BB%9F%25E7%95%8C%25E9%259D%25A2%25E8%25AE%BE%25E8%25AE%A1-%25E6%AD%25A3%25E5%BC%258F?code-node-id=0-9&p=f&t=7sHT0169pfRVah3f-0&fullscreen=1",
+    "currentCodeFiles": [
+      "src/widgets/api-interface-workspace/ApiFastExtractionDrawer.vue",
+      "src/widgets/api-interface-workspace/lib/useApiFastExtraction.ts"
+    ],
+    "variants": [
+      "JSONPath",
+      "XPath",
+      "Regex"
+    ],
+    "elements": [
+      "抽屉框架",
+      "标题与来源徽标",
+      "方法Tab",
+      "响应内容",
+      "表达式配置",
+      "匹配规则",
+      "匹配结果",
+      "页脚操作"
+    ],
+    "excludedAreas": []
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "unverified",
+      "evidence": [
+        "output/playwright/design-quick-extraction.png",
+        "jSUUPxC4PVD9Kp2FUydfox:879:2134",
+        "jSUUPxC4PVD9Kp2FUydfox:879:4298",
+        "jSUUPxC4PVD9Kp2FUydfox:880:5614"
+      ]
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "unverified",
+      "evidence": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5350-5525",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5397-5405",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5450-5515"
+      ]
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "unverified",
+      "evidence": [
+        "output/playwright/make-quick-extraction-jsonpath.png",
+        "Make预览已有截图视口929x917，与本次Vue 1280x720不同，不能作为同视口配对证据"
+      ]
+    },
+    {
+      "id": "vue-implementation",
+      "status": "verified",
+      "evidence": [
+        "src/widgets/api-interface-workspace/ApiFastExtractionDrawer.vue",
+        "src/widgets/api-interface-workspace/lib/useApiFastExtraction.ts",
+        "npm run typecheck",
+        "npm run build"
+      ]
+    },
+    {
+      "id": "browser-validation",
+      "status": "verified",
+      "evidence": [
+        "output/playwright/quick-extraction-jsonpath-tested.png",
+        "output/playwright/quick-extraction-xpath-tested.png",
+        "output/playwright/quick-extraction-xpath-html.png",
+        "output/playwright/quick-extraction-regex-tested.png",
+        "output/playwright/quick-extraction-regex-switch-preserved.png",
+        "viewport=1280x720,dpr=1"
+      ]
+    },
+    {
+      "id": "difference-registration",
+      "status": "unverified",
+      "evidence": [
+        "本记录 comparisonMatrix 仍保留24项unverified，未将浏览器mock证据冒充四方完成"
+      ]
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:879:1561",
+          "target": "接口自动化-接口管理-快速提取画布"
+        },
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:879:2134",
+          "target": "JSONPath默认空态"
+        },
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:879:2854",
+          "target": "JSONPath输入态"
+        },
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:879:3574",
+          "target": "JSONPath成功态"
+        },
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:879:4298",
+          "target": "XPath XML空态"
+        },
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:879:4970",
+          "target": "XPath XML成功态"
+        },
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:880:5614",
+          "target": "Regex成功态"
+        },
+        {
+          "node": "jSUUPxC4PVD9Kp2FUydfox:880:6258",
+          "target": "Regex默认空态"
+        }
+      ],
+      "screenshots": [
+        "output/playwright/design-quick-extraction.png",
+        "output/playwright/figma-quick-extract/879-2134.png",
+        "output/playwright/figma-quick-extract/879-2854.png",
+        "output/playwright/figma-quick-extract/879-3574.png",
+        "output/playwright/figma-quick-extract/879-4298.png",
+        "output/playwright/figma-quick-extract/879-4970.png",
+        "output/playwright/figma-quick-extract/880-5614.png",
+        "output/playwright/figma-quick-extract/880-6258.png"
+      ]
+    },
+    "make": {
+      "codeReferences": [
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5350-5525 QuickExtractDrawer",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5397-5405 method tabs",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5450-5475 XPath XML/HTML and Regex matching rules",
+        "设计/figma-ai-make最新代码20260920/src/app/App.tsx:5480-5515 result states and footer"
+      ],
+      "eventMatrix": [
+        {
+          "name": "hover",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "focus",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "blur",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "active",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "disabled",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "loading",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "success",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "failure",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%258D%8E%25E5%258F%25B0%25E7%AE%A1%25E7%90%86%25E7%25B3%BB%25E7%BB%9F%25E7%95%8C%25E9%259D%25A2%25E8%25AE%BE%25E8%25AE%A1-%25E6%AD%25A3%25E5%BC%258F?code-node-id=0-9&p=f&t=7sHT0169pfRVah3f-0&fullscreen=1",
+      "viewport": [
+        929,
+        917
+      ],
+      "interactions": [
+        "Make预览登录 superadmin / superadmin123",
+        "进入后置处理->提取处理器->从响应快速提取",
+        "切换JSONPath、XPath、Regex；XPath切换XML/HTML"
+      ],
+      "screenshots": [
+        "output/playwright/make-quick-extraction-jsonpath.png"
+      ]
+    },
+    "vue": {
+      "screenshots": [
+        "output/playwright/quick-extraction-jsonpath.png",
+        "output/playwright/quick-extraction-jsonpath-tested.png",
+        "output/playwright/quick-extraction-xpath.png",
+        "output/playwright/quick-extraction-xpath-tested.png",
+        "output/playwright/quick-extraction-xpath-html.png",
+        "output/playwright/quick-extraction-regex-tested.png",
+        "output/playwright/quick-extraction-regex-switch-preserved.png"
+      ],
+      "computedStyle": [
+        "viewport=1280x720,dpr=1",
+        ".fast-extraction-drawer rect x=560 y=0 width=720 height=663",
+        ".fast-extraction-tabs height=41.5px; active tab font-weight=600;color=rgb(22,93,255)",
+        ".fast-extraction-response-content height=240px; width=678px; padding=10px 12px",
+        ".fast-extraction-input-row height=42px",
+        ".fast-extraction-option-row height=28px",
+        ".fast-extraction-footer height=32px",
+        ".测试 button rect width=66px height=34px;font-weight=500",
+        ".取消 button rect width=60px height=32px",
+        ".确认回填 button rect width=86px height=32px"
+      ],
+      "boundingBox": [
+        "drawer x=560 y=0 width=720 height=663; footer x=580 y=676 width=680 height=32",
+        "response x=581 y=175.5 width=678 height=240",
+        "tabs JSONPath x=580 width=95.046875; XPath x=675.046875 width=69.671875; Regex x=744.71875 width=70.125"
+      ],
+      "interactionResults": [
+        "真实登录 superadmin / superadmin123并进入X-MAN",
+        "Playwright route mock POST /api/automation/api/definitions/debug-run返回JSON ApiRunResult",
+        "JSONPath点击username生成$.data.username，测试成功john_doe",
+        "XPath XML切换并测试/response/data/token成功abc123",
+        "XPath HTML切换后状态保留且测试结果保留",
+        "Regex输入<token>([^<]+)</token>并切换分组1，测试成功abc123",
+        "JSONPath/XPath/Regex Tab切换后Regex GROUP与XPath HTML状态保留"
+      ]
+    }
+  },
+  "visualReview": {
+    "status": "blocked",
+    "method": "paired-screenshot-overlay",
+    "viewport": [
+      1280,
+      720
+    ],
+    "scenes": [],
+    "manualReview": {
+      "status": "blocked",
+      "reviewer": "Codex",
+      "reviewedAt": "2026-09-28T08:38:23.878Z",
+      "notes": "本次Vue浏览器mock验证已完成，但Design/Make截图为929x917，本地为1280x720，缺少同视口配对叠加，不能将视觉审查标记为verified。"
+    },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 1
+  },
+  "comparisonMatrix": [
+    {
+      "id": "JSONPath::抽屉框架",
+      "variant": "JSONPath",
+      "element": "抽屉框架",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "JSONPath::标题与来源徽标",
+      "variant": "JSONPath",
+      "element": "标题与来源徽标",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "JSONPath::方法Tab",
+      "variant": "JSONPath",
+      "element": "方法Tab",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "JSONPath::响应内容",
+      "variant": "JSONPath",
+      "element": "响应内容",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "JSONPath::表达式配置",
+      "variant": "JSONPath",
+      "element": "表达式配置",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "JSONPath::匹配规则",
+      "variant": "JSONPath",
+      "element": "匹配规则",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "JSONPath::匹配结果",
+      "variant": "JSONPath",
+      "element": "匹配结果",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "JSONPath::页脚操作",
+      "variant": "JSONPath",
+      "element": "页脚操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::抽屉框架",
+      "variant": "XPath",
+      "element": "抽屉框架",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::标题与来源徽标",
+      "variant": "XPath",
+      "element": "标题与来源徽标",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::方法Tab",
+      "variant": "XPath",
+      "element": "方法Tab",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::响应内容",
+      "variant": "XPath",
+      "element": "响应内容",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::表达式配置",
+      "variant": "XPath",
+      "element": "表达式配置",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::匹配规则",
+      "variant": "XPath",
+      "element": "匹配规则",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::匹配结果",
+      "variant": "XPath",
+      "element": "匹配结果",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "XPath::页脚操作",
+      "variant": "XPath",
+      "element": "页脚操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::抽屉框架",
+      "variant": "Regex",
+      "element": "抽屉框架",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::标题与来源徽标",
+      "variant": "Regex",
+      "element": "标题与来源徽标",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::方法Tab",
+      "variant": "Regex",
+      "element": "方法Tab",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::响应内容",
+      "variant": "Regex",
+      "element": "响应内容",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::表达式配置",
+      "variant": "Regex",
+      "element": "表达式配置",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::匹配规则",
+      "variant": "Regex",
+      "element": "匹配规则",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::匹配结果",
+      "variant": "Regex",
+      "element": "匹配结果",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Regex::页脚操作",
+      "variant": "Regex",
+      "element": "页脚操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    }
+  ],
+  "differences": [
+    {
+      "id": "same-viewport-paired-review",
+      "source": "design-make-vue",
+      "status": "unresolved",
+      "finding": "Vue本次真实浏览器验证使用1280x720；现有Design/Make截图使用929x917，尚未完成同视口配对叠加审查。",
+      "evidence": [
+        "output/playwright/quick-extraction-jsonpath-tested.png",
+        "output/playwright/make-quick-extraction-jsonpath.png",
+        "output/playwright/design-quick-extraction.png"
+      ],
+      "resolution": "保留为未解决，后续需在同一视口重新采集Design/Make/Vue截图并审查。"
+    }
+  ],
+  "noDifferencesReason": "浏览器交互差异已验证；同视口视觉差异尚未完成，因此不声明无差异。",
+  "unverifiedStatuses": [
+    "Design/Make/Vue本次截图视口不同，无法完成同视口叠加",
+    "comparisonMatrix 24项仍为unverified",
+    "Make预览本轮未重新操作"
+  ],
+  "validation": {
+    "commands": [
+      "npm run typecheck",
+      "npm run build",
+      "git diff --check"
+    ],
+    "summary": {
+      "resolved": 0,
+      "acceptedDeviations": 0,
+      "unresolved": 1,
+      "unverified": 24
+    }
+  }
+}

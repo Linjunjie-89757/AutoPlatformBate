@@ -571,7 +571,6 @@ const {
   assertionResultClass,
   defaultAssertionExpression,
   createAssertion,
-  addAssertionFromLatestResponseCommand,
   addAssertionFromCommand,
   selectAssertion,
   moveAssertion,
@@ -708,6 +707,7 @@ const {
 const {
   fastExtractionVisible,
   fastExtractionTitle,
+  fastExtractionSource,
   fastExtractionMode,
   fastExtractionConfig,
   openAssertionFastExtraction,
@@ -966,7 +966,6 @@ useApiDefinitionWorkspaceLifecycle({
           :delete-case="deleteCase"
           :add-extractor="addExtractor"
           :remove-extractor="removeExtractor"
-          :add-assertion-from-latest-response-command="addAssertionFromLatestResponseCommand"
           :add-assertion-from-command="addAssertionFromCommand"
           :select-assertion="selectAssertion"
           :move-assertion="moveAssertion"
@@ -1070,6 +1069,7 @@ useApiDefinitionWorkspaceLifecycle({
       :latest-response-body="latestResponseBody"
       :fast-extraction-mode="fastExtractionMode"
       :fast-extraction-config="fastExtractionConfig"
+      :fast-extraction-source="fastExtractionSource"
       :run-environment-detail-loading="runEnvironmentDetailLoading"
       :run-environment-detail-error-message="runEnvironmentDetailErrorMessage"
       :selected-environment="selectedEnvironment"

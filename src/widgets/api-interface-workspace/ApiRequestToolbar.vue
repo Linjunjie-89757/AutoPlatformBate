@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { Save, Send } from '@lucide/vue'
 
 import type { ApiAutomationEnvironmentItem } from '@/entities/api-automation'
-import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 
 const pathInputRef = ref<{ focus: () => void } | null>(null)
 const servicePickerOpen = ref(false)
@@ -184,7 +184,7 @@ defineExpose({
       :disabled="props.canExecute === false || props.sending || !props.path.trim()"
       @click="emit('send')"
     >
-      <img class="api-send-button__icon" :src="figmaApiInterfaceIcons.send" alt="" />
+      <Send class="api-send-button__icon" :size="13" aria-hidden="true" />
       发送
     </button>
     <el-dropdown
@@ -196,7 +196,7 @@ defineExpose({
       @click="emit('save')"
     >
       <span class="api-save-label">
-        <img class="api-button-icon" :src="figmaApiInterfaceIcons.save" alt="" />
+        <Save class="api-button-icon" :size="13" aria-hidden="true" />
         保存
       </span>
       <template #dropdown>

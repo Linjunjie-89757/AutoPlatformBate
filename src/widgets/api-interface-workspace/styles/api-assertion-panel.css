@@ -68,28 +68,6 @@
   background: var(--app-primary-hover);
 }
 
-.api-assertion-batch-link {
-  display: inline-flex;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  border: 1px solid var(--app-border-strong);
-  border-radius: var(--app-radius-md);
-  background: var(--app-bg-panel);
-  color: var(--app-primary);
-  cursor: pointer;
-  font-size: var(--app-font-size-xs);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.api-assertion-batch-link:hover {
-  border-color: var(--app-primary);
-  background: #eff6ff;
-  color: var(--app-primary-hover);
-}
-
 .api-assertion-empty {
   display: flex;
   min-height: 160px;
@@ -515,18 +493,12 @@
   background: #fafafa;
 }
 
-.api-legacy-primary,
-.api-assertion-batch-link {
+.api-legacy-primary {
   height: 28px;
   padding: 0 11.5px;
   border-radius: 7px;
   font-size: 12px;
   line-height: 18px;
-}
-
-.api-assertion-batch-link {
-  border-color: #e5e6eb;
-  color: #ff7d00;
 }
 
 .api-assertion-toolbar + .api-assertion-list-item {
@@ -691,39 +663,6 @@
   font-size: 10px;
   line-height: 1;
   transform: translateY(-1px);
-}
-
-.api-button-spark {
-  color: inherit;
-  font-size: 10px;
-  line-height: 1;
-}
-
-.api-assertion-batch-link {
-  display: inline-flex;
-  height: 24.5px;
-  align-items: center;
-  gap: 3.5px;
-  padding: 0 8.75px;
-  border: 1px solid rgba(22, 93, 255, 0.31);
-  border-radius: 7px;
-  background: #ffffff;
-  color: #165dff;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 16.5px;
-}
-
-.api-assertion-batch-link:hover:not(:disabled) {
-  border-color: rgba(22, 93, 255, 0.31);
-  background: #ffffff;
-  color: #165dff;
-}
-
-.api-assertion-batch-link:disabled {
-  border-color: #e5e6eb;
-  color: #c9cdd4;
-  cursor: not-allowed;
 }
 
 .api-assertion-toolbar + .api-assertion-list-item {
@@ -1191,34 +1130,6 @@
   color: #86909c;
 }
 
-.api-assertion-batch-link {
-  box-sizing: border-box;
-  display: inline-flex;
-  width: 76px;
-  height: 26px;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 0 8px;
-  border: 1px solid #e5e6eb;
-  border-radius: 6px;
-  background: #fff;
-  color: #c9cdd4;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 16.5px;
-}
-
-.api-assertion-batch-link:not(:disabled) {
-  color: #165dff;
-}
-
-.api-assertion-batch-link:hover:not(:disabled) {
-  border-color: #c9cdd4;
-  background: #f7f8fa;
-  color: #165dff;
-}
-
 .api-assertion-list > .api-assertion-list-item,
 .api-assertion-toolbar + .api-assertion-list-item {
   margin-top: 5.25px;
@@ -1476,15 +1387,15 @@
 
 .api-assertion-list-item :deep(.app-switch),
 .api-figma-enable :deep(.app-switch) {
-  height: 14px;
-  line-height: 14px;
+  height: 15px;
+  line-height: 15px;
 }
 
 .api-assertion-list-item :deep(.el-switch__core),
 .api-figma-enable :deep(.el-switch__core) {
   width: 28px;
   min-width: 28px;
-  height: 14px;
+  height: 15px;
 }
 
 .api-assertion-list-item :deep(.el-switch__action),
@@ -1496,7 +1407,7 @@
 
 .api-assertion-list-item :deep(.el-switch.is-checked .el-switch__core .el-switch__action),
 .api-figma-enable :deep(.el-switch.is-checked .el-switch__core .el-switch__action) {
-  left: 16.5px;
+  left: 14px;
   margin-left: 0;
 }
 
@@ -1546,7 +1457,6 @@
   box-shadow: -1px 0 0 0 #165dff;
 }
 
-.api-assertion-fast-extract,
 .api-assertion-toolbar-add {
   box-sizing: border-box;
   display: inline-flex;
@@ -1564,21 +1474,9 @@
   cursor: pointer;
 }
 
-.api-assertion-fast-extract {
-  padding: 0 10px;
-  border: 1px solid rgba(22, 93, 255, 0.31);
-  border-radius: 6px;
-}
-
 .api-assertion-toolbar-add {
   padding: 0;
   font-size: 12px;
-}
-
-.api-assertion-fast-extract:disabled {
-  border-color: #e5e6eb;
-  color: #c9cdd4;
-  cursor: not-allowed;
 }
 
 .api-assertion-table-head.is-header,
@@ -1776,11 +1674,6 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
-}
-
-:global(.api-assertion-add-dropdown .el-dropdown-menu__item svg) {
-  flex: 0 0 13px;
-  color: #86909c;
 }
 
 :global(.api-assertion-add-dropdown .el-dropdown-menu__item:not(.is-disabled):focus),
@@ -2044,4 +1937,14 @@
 
 .api-assertion-item-row .api-assertion-icon-action.is-danger:hover:not(:disabled) {
   background: #fef2f2;
+}
+
+/* Keep destructive actions consistent with the processor panel. */
+.api-assertion-panel .api-row-remove {
+  color: #f53f3f;
+}
+
+.api-assertion-panel .api-row-remove:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #f53f3f;
 }

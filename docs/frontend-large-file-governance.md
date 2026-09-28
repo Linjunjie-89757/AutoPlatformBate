@@ -73,7 +73,6 @@ LARGE_FILE_REVIEW_LINES=1800 LARGE_FILE_REVIEW_KB=120 LARGE_FILE_CRITICAL_LINES=
 
 - `src/widgets/api-interface-workspace/ApiDefinitionWorkspaceModule.vue`
 - `src/widgets/api-scenario-workspace/ApiScenarioFigmaWorkspace.vue`
-- `src/widgets/web-ui-case-workspace/WebUiElementLibraryPanel.vue`
 
 ## 接口工作区拆分方向
 

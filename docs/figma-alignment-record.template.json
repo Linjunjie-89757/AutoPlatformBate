@@ -3,7 +3,7 @@
   "title": "页面或组件 Figma 对齐记录",
   "page": "页面名称",
   "status": "draft",
-  "createdAt": "由 figma:alignment-init 生成",
+  "createdAt": "由工具生成或手工填写",
   "sourceBaseline": {
     "gitBranch": "",
     "gitCommit": "",

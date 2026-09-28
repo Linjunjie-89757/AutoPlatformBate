@@ -81,6 +81,7 @@ import {
   shouldRestoreWebUiRecordingDraft,
   type WebUiRecordingDraftPayload,
 } from '@/entities/web-ui-automation/lib/recordingDraft'
+import { createRecordingDraftPersistence } from '@/entities/web-ui-automation/lib/recordingDraftPersistence'
 import {
   buildRecordingReplayDiagnostics,
   buildRecordingReplayRepairActions,
@@ -109,6 +110,7 @@ import {
   hasTimingRisk,
   isFragileLocatorStep,
 } from '@/entities/web-ui-automation/lib/recordingQuality'
+import { useStepListSelection } from '@/entities/web-ui-automation/lib/useStepListSelection'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
@@ -267,6 +269,12 @@ const handledFigmaAiSuggestionKeys = ref<string[]>([])
 const draggingStepIndex = ref<number | null>(null)
 const form = ref<CaseForm>(createEmptyForm())
 const uploadArtifactBindings = ref<Record<string, UploadArtifactBinding>>({})
+const stepListSelection = useStepListSelection({
+  getSteps: () => form.value.steps,
+  selectedIndex: selectedStepIndex,
+  selectedIndexes: selectedStepIndexes,
+  draggingIndex: draggingStepIndex,
+})
 const uploadFileInputRef = ref<HTMLInputElement | null>(null)
 const uploadRepairPanelRef = ref<HTMLElement | null>(null)
 const stepLocatorSectionRef = ref<HTMLElement | null>(null)
@@ -284,13 +292,41 @@ let elementPickerSearchTimer: ReturnType<typeof window.setTimeout> | null = null
 let localRunnerTaskTimer: ReturnType<typeof window.setTimeout> | null = null
 let recordingElapsedTimer: ReturnType<typeof window.setInterval> | null = null
 let recordingStatusTimer: ReturnType<typeof window.setTimeout> | null = null
-let recordingDraftPersistTimer: ReturnType<typeof window.setTimeout> | null = null
 let uploadRepairFocusTimer: ReturnType<typeof window.setTimeout> | null = null
 let recordingReplayRepairFocusTimer: ReturnType<typeof window.setTimeout> | null = null
 let elementPickerRequestSeq = 0
 let runOptionsRequestSeq = 0
 let suppressRecordingDraftPersist = false
 let autoRecordingLaunchKey = ''
+
+const recordingDraftPersistence = createRecordingDraftPersistence({
+  getKey: getRecordingDraftStorageKey,
+  getStorage: () => typeof window === 'undefined' ? null : window.localStorage,
+  readPreviousDraft: readRecordingDraft,
+  createDraft: previousDraft => createWebUiRecordingDraft({
+    workspaceCode: props.workspaceCode,
+    caseId: caseId.value as number,
+    caseUpdatedAt: currentCaseUpdatedAt.value,
+    savedStepCount: savedCaseStepCount.value,
+    draftStepCount: form.value.steps.length,
+    recorderId: appliedRecordingRecorderId.value,
+    recordedStepCount: appliedRecordingStepCount.value,
+    form: cloneCaseFormForRecordingDraft(form.value),
+    uploadArtifactBindings: cloneUploadArtifactBindingsForRecordingDraft(uploadArtifactBindings.value),
+    previousDraft,
+  }),
+  isActive: () => recordingDraftActive.value,
+  isSuppressed: () => suppressRecordingDraftPersist,
+  onPersisted: () => {
+    recordingDraftActive.value = true
+    recordingDraftMessage.value = `录制草稿已本地保存，${form.value.steps.length} 个步骤待保存`
+  },
+  onPersistFailed: () => {
+    recordingDraftMessage.value = '录制草稿本地保存失败，请尽快保存用例'
+  },
+  scheduleTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
+  clearTimer: timer => window.clearTimeout(timer as number),
+})
 
 const caseId = computed(() => {
   const raw = Array.isArray(route.params.caseId) ? route.params.caseId[0] : route.params.caseId
@@ -949,75 +985,21 @@ function readRecordingDraft() {
   }
 }
 
-function persistRecordingDraftNow() {
-  const key = getRecordingDraftStorageKey()
-  if (!key || !caseId.value || typeof window === 'undefined') {
-    return
-  }
-  try {
-    const previousDraft = readRecordingDraft()
-    const draft = createWebUiRecordingDraft({
-      workspaceCode: props.workspaceCode,
-      caseId: caseId.value,
-      caseUpdatedAt: currentCaseUpdatedAt.value,
-      savedStepCount: savedCaseStepCount.value,
-      draftStepCount: form.value.steps.length,
-      recorderId: appliedRecordingRecorderId.value,
-      recordedStepCount: appliedRecordingStepCount.value,
-      form: cloneCaseFormForRecordingDraft(form.value),
-      uploadArtifactBindings: cloneUploadArtifactBindingsForRecordingDraft(uploadArtifactBindings.value),
-      previousDraft,
-    })
-    window.localStorage.setItem(key, JSON.stringify(draft))
-    recordingDraftActive.value = true
-    recordingDraftMessage.value = `录制草稿已本地保存，${form.value.steps.length} 个步骤待保存`
-  } catch {
-    recordingDraftMessage.value = '录制草稿本地保存失败，请尽快保存用例'
-  }
-}
-
 function schedulePersistRecordingDraft() {
-  if (!recordingDraftActive.value || suppressRecordingDraftPersist) {
-    return
-  }
-  if (recordingDraftPersistTimer) {
-    window.clearTimeout(recordingDraftPersistTimer)
-  }
-  recordingDraftPersistTimer = window.setTimeout(() => {
-    recordingDraftPersistTimer = null
-    persistRecordingDraftNow()
-  }, 400)
+  recordingDraftPersistence.schedule()
 }
 
 function flushRecordingDraftPersist() {
-  if (!recordingDraftPersistTimer) {
-    return
-  }
-  window.clearTimeout(recordingDraftPersistTimer)
-  recordingDraftPersistTimer = null
-  if (recordingDraftActive.value && !suppressRecordingDraftPersist) {
-    persistRecordingDraftNow()
-  }
+  recordingDraftPersistence.flush()
 }
 
 function activateRecordingDraftPersistence() {
   recordingDraftActive.value = true
-  persistRecordingDraftNow()
+  recordingDraftPersistence.persistNow()
 }
 
 function clearRecordingDraft() {
-  const key = getRecordingDraftStorageKey()
-  if (recordingDraftPersistTimer) {
-    window.clearTimeout(recordingDraftPersistTimer)
-    recordingDraftPersistTimer = null
-  }
-  if (key && typeof window !== 'undefined') {
-    try {
-      window.localStorage.removeItem(key)
-    } catch {
-      // localStorage can be unavailable in restricted browser modes.
-    }
-  }
+  recordingDraftPersistence.clearStorage()
   recordingDraftActive.value = false
   recordingDraftMessage.value = ''
 }
@@ -2715,45 +2697,27 @@ async function removeStepAt(index: number) {
 }
 
 function moveStep(index: number, direction: -1 | 1) {
-  const targetIndex = index + direction
-  if (targetIndex < 0 || targetIndex >= form.value.steps.length) {
-    return
-  }
-  const selectedRefs = getSelectedStepRefs()
-  const [step] = form.value.steps.splice(index, 1)
-  form.value.steps.splice(targetIndex, 0, step)
-  selectedStepIndex.value = targetIndex
-  restoreStepSelectionByRefs(selectedRefs)
-  reorderSteps()
+  stepListSelection.move(index, direction)
 }
 
 function clearStepSelection() {
-  selectedStepIndexes.value = []
+  stepListSelection.clear()
 }
 
 function normalizeStepSelection() {
-  selectedStepIndexes.value = selectedStepIndexes.value.filter(isValidStepIndex).sort((left, right) => left - right)
-}
-
-function isValidStepIndex(index: number) {
-  return Number.isInteger(index) && index >= 0 && index < form.value.steps.length
+  stepListSelection.normalize()
 }
 
 function getSelectedStepRefs() {
-  return selectedStepIndexes.value
-    .map(index => form.value.steps[index])
-    .filter((step): step is EditableStep => Boolean(step))
+  return stepListSelection.selectedItems()
 }
 
 function restoreStepSelectionByRefs(steps: EditableStep[]) {
-  selectedStepIndexes.value = steps
-    .map(step => form.value.steps.indexOf(step))
-    .filter(index => index >= 0)
-    .sort((left, right) => left - right)
+  stepListSelection.restore(steps)
 }
 
 function startStepDrag(index: number, event: DragEvent) {
-  draggingStepIndex.value = index
+  stepListSelection.startDrag(index)
   event.dataTransfer?.setData('text/plain', String(index))
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = 'move'
@@ -2761,25 +2725,11 @@ function startStepDrag(index: number, event: DragEvent) {
 }
 
 function dropStep(targetIndex: number) {
-  const sourceIndex = draggingStepIndex.value
-  if (sourceIndex === null || sourceIndex === targetIndex || !isValidStepIndex(sourceIndex) || !isValidStepIndex(targetIndex)) {
-    finishStepDrag()
-    return
-  }
-  const selectedRefs = getSelectedStepRefs()
-  const selectedStepRef = selectedStep.value
-  const [step] = form.value.steps.splice(sourceIndex, 1)
-  form.value.steps.splice(targetIndex, 0, step)
-  if (selectedStepRef) {
-    selectedStepIndex.value = Math.max(0, form.value.steps.indexOf(selectedStepRef))
-  }
-  restoreStepSelectionByRefs(selectedRefs)
-  reorderSteps()
-  finishStepDrag()
+  stepListSelection.drop(targetIndex)
 }
 
 function finishStepDrag() {
-  draggingStepIndex.value = null
+  stepListSelection.finishDrag()
 }
 
 function clearStepElementAssociation(step: EditableStep) {
@@ -2889,9 +2839,7 @@ function getElementValidationTagType(item: WebUiElementItem) {
 }
 
 function reorderSteps() {
-  form.value.steps.forEach((step, index) => {
-    step.sortOrder = index + 1
-  })
+  stepListSelection.reorder()
 }
 
 function handleStepTypeChange(step: EditableStep) {

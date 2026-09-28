@@ -1,7 +1,6 @@
 import type {
   WebUiBrowserType,
   WebUiCaseStatus,
-  WebUiEnvironmentStatus,
   WebUiLocatorType,
   WebUiRunStatus,
   WebUiRunStepStatus,
@@ -82,15 +81,6 @@ export const WEB_UI_SCREENSHOT_POLICY_OPTIONS: Array<{
   { label: '每步截图', value: 'ALWAYS', description: '每次执行都保存截图' },
 ]
 
-export const WEB_UI_ENVIRONMENT_STATUS_OPTIONS: Array<{
-  label: string
-  value: WebUiEnvironmentStatus
-  tone: BadgeTone
-}> = [
-  { label: '启用', value: 1, tone: 'success' },
-  { label: '停用', value: 0, tone: 'default' },
-]
-
 export function getWebUiBrowserOption(browserType?: string | null) {
   return WEB_UI_BROWSER_OPTIONS.find((item) => item.value === browserType)
 }
@@ -109,10 +99,6 @@ export function getWebUiLocatorOption(locatorType?: string | null) {
 
 export function getWebUiScreenshotPolicyOption(policy?: string | null) {
   return WEB_UI_SCREENSHOT_POLICY_OPTIONS.find((item) => item.value === policy)
-}
-
-export function getWebUiEnvironmentStatusOption(status?: number | null) {
-  return WEB_UI_ENVIRONMENT_STATUS_OPTIONS.find((item) => item.value === status)
 }
 
 export const WEB_UI_RUN_STATUS_OPTIONS: Array<{

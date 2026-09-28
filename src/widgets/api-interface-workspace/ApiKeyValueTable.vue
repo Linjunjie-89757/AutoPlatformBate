@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Plus } from '@lucide/vue'
+import { Plus, Trash2 } from '@lucide/vue'
 import type { ApiKeyValueInput } from '@/entities/api-automation'
-import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 
 const props = defineProps<{
   title: string
@@ -157,7 +156,7 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
         <el-input v-model="row.description" @input="emit('dirty')" />
       </template>
       <button type="button" class="api-row-remove" aria-label="删除参数" @click="emit('removeRow', index)">
-        <img class="api-row-remove__icon" :src="figmaApiInterfaceIcons.delete" alt="" />
+        <Trash2 class="api-row-remove__icon" :size="13" aria-hidden="true" />
       </button>
     </div>
     <button type="button" class="api-add-row" @click="emit('addRow')">
@@ -527,24 +526,28 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
 }
 
 .api-row-remove {
+  box-sizing: border-box;
   width: 28px;
   height: 28px;
   justify-self: center;
+  align-self: center;
+  margin-inline: auto;
   padding: 0;
-  color: #c9cdd4;
-  opacity: 0;
+  color: #f53f3f;
+  opacity: 1;
   transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
 .api-row-remove__icon {
   display: block;
+  flex: 0 0 13px;
   width: 13px;
   height: 13px;
 }
 
 .api-row-remove:hover {
   opacity: 1;
-  background: #fff1f0;
+  background: #fef2f2;
   color: #f53f3f;
 }
 

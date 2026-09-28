@@ -743,7 +743,7 @@ function toIndex(index: string | number) {
     :mode="activeFastExtractionMode"
     :config="activeFastExtractionConfig"
     :response="latestResponseBody"
-    :show-more-setting="activeFastExtractionTarget?.target === 'extractor'"
+    :source="activeFastExtractionTarget?.target === 'extractor' ? 'extractor' : 'assertion'"
     @apply="handleFastExtractionApply"
   />
 

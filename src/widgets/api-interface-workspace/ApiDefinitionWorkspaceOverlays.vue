@@ -85,6 +85,7 @@ const props = defineProps([
   'latestResponseBody',
   'fastExtractionMode',
   'fastExtractionConfig',
+  'fastExtractionSource',
   'runEnvironmentDetailLoading',
   'runEnvironmentDetailErrorMessage',
   'selectedEnvironment',
@@ -239,6 +240,7 @@ defineExpose({
     :response="props.latestResponseBody"
     :mode="props.fastExtractionMode"
     :config="props.fastExtractionConfig"
+    :source="props.fastExtractionSource"
     @apply="(config, matchResult) => emit('applyFastExtraction', config, matchResult)"
   />
 

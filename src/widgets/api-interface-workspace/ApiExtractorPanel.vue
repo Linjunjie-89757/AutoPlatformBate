@@ -238,6 +238,15 @@ function syncExtractType(row: ApiExtractorPanelRow) {
   font-weight: 500;
 }
 
+.api-extractor-panel .api-row-remove {
+  color: #f53f3f;
+}
+
+.api-extractor-panel .api-row-remove:hover {
+  background: #fef2f2;
+  color: #f53f3f;
+}
+
 .api-sidebar-primary {
   border-color: #165dff;
   background: #165dff;

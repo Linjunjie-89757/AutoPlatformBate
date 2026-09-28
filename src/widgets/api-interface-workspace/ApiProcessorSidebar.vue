@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import processorAddIcon from '@/assets/figma-processor/processor-add.svg'
-import processorChevronIcon from '@/assets/figma-processor/processor-chevron.svg'
 import processorEmptyLeftIcon from '@/assets/figma-processor/processor-empty-right.svg'
+import { ChevronDown, Plus } from '@lucide/vue'
 
 import { AppSwitch } from '@/shared/ui'
 
@@ -42,9 +41,9 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
     <div class="api-processor-toolbar">
       <el-dropdown trigger="click" popper-class="api-processor-add-popper" @command="emit('add', $event)">
         <button type="button" class="api-legacy-primary">
-          <img class="api-button-plus" :src="processorAddIcon" alt="" aria-hidden="true" />
+          <Plus class="api-button-plus" :size="11" aria-hidden="true" />
           <span>添加处理器</span>
-          <img class="api-button-chevron" :src="processorChevronIcon" alt="" aria-hidden="true" />
+          <ChevronDown class="api-button-chevron" :size="9" aria-hidden="true" />
         </button>
         <template #dropdown>
           <el-dropdown-menu>

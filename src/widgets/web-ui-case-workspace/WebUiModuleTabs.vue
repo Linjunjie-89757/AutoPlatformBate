@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 
-type WebUiModuleTabKey = 'cases' | 'elements' | 'suites' | 'records' | 'environments'
+type WebUiModuleTabKey = 'cases' | 'elements' | 'suites' | 'records'
 
 defineProps<{
   active: WebUiModuleTabKey
@@ -14,7 +14,6 @@ const tabs: Array<{ key: WebUiModuleTabKey; label: string; path: string }> = [
   { key: 'elements', label: '元素库', path: '/automation/web/elements' },
   { key: 'suites', label: '执行套件', path: '/automation/web/suites' },
   { key: 'records', label: '执行记录', path: '/automation/web/runs' },
-  { key: 'environments', label: '环境配置', path: '/automation/web/environments' },
 ]
 
 function navigate(path: string) {

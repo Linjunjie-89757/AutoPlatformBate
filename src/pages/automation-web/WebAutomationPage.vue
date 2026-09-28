@@ -30,7 +30,7 @@ const canEditWebUi = computed(() => hasWorkspacePermission(currentUser.value, wo
 const canDeleteWebUi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'webui.delete'))
 const canExecuteWebUi = computed(() => hasWorkspacePermission(currentUser.value, workspaceCode.value, 'webui.execute'))
 
-type WebUiSection = 'cases' | 'caseDetail' | 'elements' | 'suites' | 'collectTask' | 'templates' | 'runs' | 'batches' | 'environments' | 'variables' | 'variableDetail'
+type WebUiSection = 'cases' | 'caseDetail' | 'elements' | 'suites' | 'collectTask' | 'templates' | 'runs' | 'batches' | 'variables' | 'variableDetail'
 
 const routeSectionMap: Record<string, WebUiSection> = {
   'automation-web-cases': 'cases',
@@ -41,7 +41,6 @@ const routeSectionMap: Record<string, WebUiSection> = {
   'automation-web-templates': 'templates',
   'automation-web-runs': 'runs',
   'automation-web-batches': 'batches',
-  'automation-web-environments': 'environments',
   'automation-web-variables': 'variables',
   'automation-web-variable-detail': 'variableDetail',
 }
@@ -50,7 +49,7 @@ const activeSection = computed<WebUiSection>(() => {
   const routeName = typeof route.name === 'string' ? route.name : ''
   return routeSectionMap[routeName] || 'cases'
 })
-const workspaceMode = computed<'cases' | 'templates' | 'runs' | 'batches' | 'environments'>(() =>
+const workspaceMode = computed<'cases' | 'templates' | 'runs' | 'batches'>(() =>
   activeSection.value === 'caseDetail' || activeSection.value === 'elements' || activeSection.value === 'suites' || activeSection.value === 'runs' || activeSection.value === 'collectTask' || activeSection.value === 'variables' || activeSection.value === 'variableDetail'
     ? 'cases'
     : activeSection.value,
@@ -91,12 +90,6 @@ const pageCopy = computed(() => {
     return {
       title: 'Web UI 批次报告',
       description: '查看批量运行、CI 触发、批次结果和失败用例摘要。',
-    }
-  }
-  if (activeSection.value === 'environments') {
-    return {
-      title: 'Web UI 环境配置',
-      description: '管理 Web UI 运行环境、默认变量集和环境继承规则。',
     }
   }
   if (activeSection.value === 'variables') {
@@ -202,7 +195,7 @@ watch(
     }
 
     const tab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab
-    if (tab !== 'runs' && tab !== 'batches' && tab !== 'environments' && tab !== 'variables') {
+    if (tab !== 'runs' && tab !== 'batches' && tab !== 'variables') {
       return
     }
 

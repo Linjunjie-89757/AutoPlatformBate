@@ -81,11 +81,10 @@ import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppT
 
 import WebUiCaseEditorDrawer from './WebUiCaseEditorDrawer.vue'
 import WebUiCaseBasicInfoDialog from './WebUiCaseBasicInfoDialog.vue'
-import WebUiEnvironmentPanel from './WebUiEnvironmentPanel.vue'
 import WebUiReportShareDialog from './WebUiReportShareDialog.vue'
 import WebUiRunDetailDrawer from './WebUiRunDetailDrawer.vue'
 
-type WorkspaceMode = 'cases' | 'templates' | 'runs' | 'batches' | 'environments'
+type WorkspaceMode = 'cases' | 'templates' | 'runs' | 'batches'
 type WorkspaceTab = Exclude<WorkspaceMode, 'templates'>
 type WebUiRecordingFlowMode = 'idle' | 'recording' | 'confirm'
 type WebUiRecordingPhase = 'recording' | 'paused'
@@ -302,7 +301,6 @@ const isCasesMode = computed(() => props.mode === 'cases')
 const isTemplatesMode = computed(() => props.mode === 'templates')
 const isRunsMode = computed(() => props.mode === 'runs')
 const isBatchesMode = computed(() => props.mode === 'batches')
-const isEnvironmentsMode = computed(() => props.mode === 'environments')
 const workspaceTitle = computed(() => {
   if (isTemplatesMode.value) {
     return 'Web UI 模板库'
@@ -312,9 +310,6 @@ const workspaceTitle = computed(() => {
   }
   if (isBatchesMode.value) {
     return 'Web UI 批次报告'
-  }
-  if (isEnvironmentsMode.value) {
-    return 'Web UI 环境配置'
   }
   return 'Web UI 用例管理'
 })
@@ -327,9 +322,6 @@ const workspaceLoading = computed(() => {
   }
   if (isBatchesMode.value) {
     return loadingBatches.value || loadingCiTokens.value
-  }
-  if (isEnvironmentsMode.value) {
-    return loadingEnvironments.value
   }
   return loadingCases.value || loadingEnvironments.value || loadingRuns.value || loadingBatches.value
 })
@@ -383,12 +375,9 @@ const stats = computed(() => [
   { label: '环境数', value: environments.value.length },
 ])
 
-const activeWebUiModuleTab = computed<'cases' | 'records' | 'environments'>(() => {
+const activeWebUiModuleTab = computed<'cases' | 'records'>(() => {
   if (isRunsMode.value) {
     return 'records'
-  }
-  if (isEnvironmentsMode.value) {
-    return 'environments'
   }
   return 'cases'
 })
@@ -2124,7 +2113,7 @@ watch(
     </header>
 
     <WebUiModuleTabs
-      v-if="isCasesMode || isRunsMode || isEnvironmentsMode"
+      v-if="isCasesMode || isRunsMode"
       :active="activeWebUiModuleTab"
     />
 
@@ -2566,14 +2555,6 @@ watch(
         </div>
       </el-tab-pane>
 
-      <el-tab-pane v-if="isEnvironmentsMode" label="环境配置" name="environments">
-        <WebUiEnvironmentPanel
-          :workspace-code="workspaceCode"
-          :environments="environments"
-          :loading="loadingEnvironments"
-          @refresh="loadEnvironments"
-        />
-      </el-tab-pane>
     </el-tabs>
 
     <section v-if="isTemplatesMode" class="web-ui-template-page">

@@ -18,7 +18,7 @@
     "runner:e2e:recording-regression": "node tools/web-ui-runner/recordingRegressionSamples.e2e.mjs",
     "runner:e2e:recording-upload-context": "node tools/web-ui-runner/recordingPlatformUploadClosure.e2e.mjs",
     "runner:e2e:real-business": "node tools/web-ui-runner/realBusinessAcceptance.e2e.mjs",
-    "runner:test": "node --test --test-concurrency=1 tools/web-ui-runner/*.test.mjs tests/local-runner-client.test.ts tests/local-runner-node-view.test.ts tests/local-runner-task-detail-view.test.ts tests/web-ui-recorded-steps.test.ts tests/web-ui-recording-draft.test.ts tests/web-ui-recording-replay-diagnostics.test.ts tests/web-ui-recording-assertions.test.ts tests/web-ui-recording-quality.test.ts tests/web-ui-file-upload-artifacts.test.ts tests/api-runner-task-view.test.ts tests/api-suite-local-run-view.test.ts tests/api-report-evidence.test.ts tests/api-definition-save-dialog.test.ts tests/recording-platform-closure-script.test.mjs tests/recording-platform-upload-closure-script.test.mjs",
+    "runner:test": "node --test --test-concurrency=1 tools/web-ui-runner/*.test.mjs tests/local-runner-client.test.ts tests/local-runner-node-view.test.ts tests/local-runner-task-detail-view.test.ts tests/web-ui-recorded-steps.test.ts tests/web-ui-step-list-selection.test.ts tests/web-ui-recording-draft.test.ts tests/web-ui-recording-draft-persistence.test.ts tests/web-ui-recording-replay-diagnostics.test.ts tests/web-ui-recording-assertions.test.ts tests/web-ui-recording-quality.test.ts tests/web-ui-file-upload-artifacts.test.ts tests/api-runner-task-view.test.ts tests/api-suite-local-run-view.test.ts tests/api-report-evidence.test.ts tests/api-definition-save-dialog.test.ts tests/recording-platform-closure-script.test.mjs tests/recording-platform-upload-closure-script.test.mjs",
     "typecheck": "vue-tsc -b",
     "build": "vue-tsc -b && vite build",
     "quality:large-files": "node tools/quality/scan-large-files.mjs",
@@ -55,6 +55,7 @@
     "electron": "^43.2.0",
     "playwright": "^1.57.0",
     "typescript": "~6.0.2",
+    "unplugin-vue-components": "^32.1.0",
     "vite": "^8.0.12",
     "vue-tsc": "^3.2.8"
   }

@@ -36,8 +36,6 @@ export type WebUiLocatorType =
 
 export type WebUiScreenshotPolicy = 'NONE' | 'ON_FAILURE' | 'ALWAYS'
 
-export type WebUiEnvironmentStatus = 0 | 1
-
 export type WebUiLocatorContextPathItem = string | {
   selector?: string | null
   url?: string | null
@@ -188,17 +186,6 @@ export interface WebUiEnvironmentItem {
   defaultVariableSetId: number | null
   defaultVariableSetName: string | null
   updatedAt: string | null
-}
-
-export interface SaveWebUiEnvironmentPayload {
-  workspaceCode?: string
-  name: string
-  baseUrl: string
-  browserType?: WebUiBrowserType
-  headless?: boolean
-  defaultTimeoutMs?: number
-  defaultVariableSetId?: number | null
-  status?: WebUiEnvironmentStatus
 }
 
 export interface WebUiElementItem {

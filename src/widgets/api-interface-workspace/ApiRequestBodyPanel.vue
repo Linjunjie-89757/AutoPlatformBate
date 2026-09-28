@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Plus } from '@lucide/vue'
+import { Plus, Trash2 } from '@lucide/vue'
 
 import type { ApiKeyValueInput, ApiRequestBodyInput, ApiSchemaFieldInput } from '@/entities/api-automation'
-import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
 import ApiBodySchemaPanel from './ApiBodySchemaPanel.vue'
 import ApiCodeEditor from './ApiCodeEditor.vue'
 import type { ApiBodyLanguage, BodyJsonViewMode, BodyType, RawBodyType } from './apiInterfaceTypes'
@@ -261,7 +260,7 @@ async function formatRawBody() {
             <span :title="row.fileName || ''">{{ row.fileName || '未选择文件' }}</span>
             <small>{{ props.formatFileSize(row.fileSize) }}</small>
             <button v-if="row.fileName" type="button" class="api-row-remove" aria-label="清除文件" @click="emit('clearFormFile', row)">
-              <img class="api-row-remove__icon" :src="figmaApiInterfaceIcons.delete" alt="" />
+              <Trash2 class="api-row-remove__icon" :size="13" aria-hidden="true" />
             </button>
           </div>
           <el-input v-else v-model="row.value" @input="emit('dirty')" />
@@ -302,7 +301,7 @@ async function formatRawBody() {
           </span>
           <el-input v-model="row.description" @input="emit('dirty')" />
           <button type="button" class="api-row-remove" aria-label="删除参数" @click="emit('removeRow', index)">
-            <img class="api-row-remove__icon" :src="figmaApiInterfaceIcons.delete" alt="" />
+            <Trash2 class="api-row-remove__icon" :size="13" aria-hidden="true" />
           </button>
         </div>
         <button type="button" class="api-add-row" @click="emit('addRow')">

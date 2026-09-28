@@ -504,13 +504,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'automation/web/environments',
-        name: 'automation-web-environments',
-        component: WebAutomationPage,
-        meta: {
-          title: 'Web UI 环境配置',
-          description: '管理 Web UI 运行环境和默认变量集。',
-          keepAlivePage: true,
-        },
+        redirect: to => ({ path: '/config-center', query: { ...to.query, tab: 'env' }, hash: to.hash }),
       },
       {
         path: 'automation/web/variables',

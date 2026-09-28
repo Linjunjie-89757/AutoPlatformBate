@@ -7,13 +7,9 @@ import com.company.autoplatform.auth.CurrentUserPrincipal;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
-import com.company.autoplatform.notification.NotificationDomainService;
-import com.company.autoplatform.notification.NotificationModels;
 import com.company.autoplatform.runner.LocalRunnerModels.CreateRunnerTaskCommand;
 import com.company.autoplatform.runner.LocalRunnerService;
 import com.company.autoplatform.runner.LocalRunnerTaskFinalResultEvent;
-import com.company.autoplatform.settings.EnvConfigEntity;
-import com.company.autoplatform.settings.EnvConfigMapper;
 import com.company.autoplatform.settings.MockApplicationEntity;
 import com.company.autoplatform.settings.MockApplicationMapper;
 import com.company.autoplatform.settings.MockReleaseEntity;
@@ -23,6 +19,7 @@ import com.company.autoplatform.settings.ParamSetEntity;
 import com.company.autoplatform.settings.ParamSetMapper;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceService;
+import com.company.autoplatform.webuiautomation.WebUiEnvironmentResolver.EnvironmentResolution;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
@@ -78,8 +75,7 @@ public class WebUiExecutionDomainService {
     private final WebUiRunArtifactMapper runArtifactMapper;
     private final WebUiCaseMapper caseMapper;
     private final WebUiCaseStepMapper caseStepMapper;
-    private final WebUiEnvironmentMapper environmentMapper;
-    private final EnvConfigMapper envConfigMapper;
+    private final WebUiEnvironmentResolver environmentResolver;
     private final ParamSetMapper paramSetMapper;
     private final MockApplicationMapper mockApplicationMapper;
     private final MockReleaseMapper mockReleaseMapper;
@@ -92,7 +88,7 @@ public class WebUiExecutionDomainService {
     private final WebUiExecutionContextSupport executionContextSupport;
     private final WebUiLocatorContextSupport locatorContextSupport;
     private final WebUiUploadArtifactBindingSupport uploadArtifactBindingSupport;
-    private final NotificationDomainService notificationDomainService;
+    private final WebUiExecutionNotificationPublisher notificationPublisher;
     private final String mockPublicBaseUrl;
 
     public WebUiExecutionDomainService(
@@ -103,8 +99,7 @@ public class WebUiExecutionDomainService {
             WebUiRunArtifactMapper runArtifactMapper,
             WebUiCaseMapper caseMapper,
             WebUiCaseStepMapper caseStepMapper,
-            WebUiEnvironmentMapper environmentMapper,
-            EnvConfigMapper envConfigMapper,
+            WebUiEnvironmentResolver environmentResolver,
             ParamSetMapper paramSetMapper,
             MockApplicationMapper mockApplicationMapper,
             MockReleaseMapper mockReleaseMapper,
@@ -117,7 +112,7 @@ public class WebUiExecutionDomainService {
             WebUiExecutionContextSupport executionContextSupport,
             WebUiLocatorContextSupport locatorContextSupport,
             WebUiUploadArtifactBindingSupport uploadArtifactBindingSupport,
-            NotificationDomainService notificationDomainService,
+            WebUiExecutionNotificationPublisher notificationPublisher,
             @Value("${autoplatform.mock.public-base-url:http://localhost:${server.port:8080}/api/mock}") String mockPublicBaseUrl
     ) {
         this.runBatchMapper = runBatchMapper;
@@ -127,8 +122,7 @@ public class WebUiExecutionDomainService {
         this.runArtifactMapper = runArtifactMapper;
         this.caseMapper = caseMapper;
         this.caseStepMapper = caseStepMapper;
-        this.environmentMapper = environmentMapper;
-        this.envConfigMapper = envConfigMapper;
+        this.environmentResolver = environmentResolver;
         this.paramSetMapper = paramSetMapper;
         this.mockApplicationMapper = mockApplicationMapper;
         this.mockReleaseMapper = mockReleaseMapper;
@@ -141,7 +135,7 @@ public class WebUiExecutionDomainService {
         this.executionContextSupport = executionContextSupport;
         this.locatorContextSupport = locatorContextSupport;
         this.uploadArtifactBindingSupport = uploadArtifactBindingSupport;
-        this.notificationDomainService = notificationDomainService;
+        this.notificationPublisher = notificationPublisher;
         this.mockPublicBaseUrl = trimTrailingSlash(mockPublicBaseUrl);
     }
 
@@ -154,7 +148,7 @@ public class WebUiExecutionDomainService {
         if (enabledSteps.isEmpty()) {
             throw new BadRequestException("Web UI case has no enabled steps");
         }
-        EnvironmentResolution environment = resolveEnvironment(request == null ? null : request.environmentId(), webCase.getWorkspaceId());
+        EnvironmentResolution environment = environmentResolver.resolve(request == null ? null : request.environmentId(), webCase.getWorkspaceId());
         RunProfile profile = resolveRunProfile(
                 webCase,
                 environment,
@@ -178,7 +172,7 @@ public class WebUiExecutionDomainService {
         if (enabledSteps.isEmpty()) {
             throw new BadRequestException("Web UI case has no enabled steps");
         }
-        EnvironmentResolution environment = resolveEnvironment(request == null ? null : request.environmentId(), webCase.getWorkspaceId());
+        EnvironmentResolution environment = environmentResolver.resolve(request == null ? null : request.environmentId(), webCase.getWorkspaceId());
         RunProfile profile = resolveRunProfile(
                 webCase,
                 environment,
@@ -354,7 +348,7 @@ public class WebUiExecutionDomainService {
         if (enabledSteps.isEmpty()) {
             throw new BadRequestException("Web UI debug run has no enabled steps");
         }
-        EnvironmentResolution environment = resolveEnvironment(request.environmentId(), workspace.getId());
+        EnvironmentResolution environment = environmentResolver.resolve(request.environmentId(), workspace.getId());
         WebUiCaseEntity debugCase = new WebUiCaseEntity();
         debugCase.setId(request.caseId());
         debugCase.setWorkspaceId(workspace.getId());
@@ -557,7 +551,7 @@ public class WebUiExecutionDomainService {
         }
 
         if (batchId == null) {
-            publishWebUiRunNotification(run);
+            notificationPublisher.publishRun(run);
         }
 
         return new WebUiRunResponse(
@@ -811,7 +805,7 @@ public class WebUiExecutionDomainService {
             String externalBuildId,
             String operatorName
     ) {
-        EnvironmentResolution environment = resolveEnvironment(environmentId, workspace.getId());
+        EnvironmentResolution environment = environmentResolver.resolve(environmentId, workspace.getId());
         WebUiRunBatchEntity batch = createBatch(
                 workspace,
                 blankToNull(batchName) == null ? "Web UI batch run" : batchName.trim(),
@@ -945,7 +939,7 @@ public class WebUiExecutionDomainService {
         batch.setFinishedAt(finishedAt);
         batch.setUpdatedAt(finishedAt);
         runBatchMapper.updateById(batch);
-        publishWebUiBatchNotification(batch);
+        notificationPublisher.publishBatch(batch);
         return batch;
     }
 
@@ -1018,50 +1012,8 @@ public class WebUiExecutionDomainService {
             }
         }
         if (run.getBatchId() == null) {
-            publishWebUiRunNotification(run);
+            notificationPublisher.publishRun(run);
         }
-    }
-
-    private void publishWebUiRunNotification(WebUiRunEntity run) {
-        notificationDomainService.publishEvent(new NotificationModels.NotificationEvent(
-                run.getWorkspaceId(),
-                SUCCESS.equals(run.getStatus())
-                        ? NotificationDomainService.EVENT_WEB_UI_FINISHED
-                        : NotificationDomainService.EVENT_WEB_UI_FAILED,
-                SUCCESS.equals(run.getStatus()) ? "Web UI 执行完成" : "Web UI 执行失败",
-                "WEB_UI_RUN",
-                run.getId(),
-                run.getCaseName(),
-                run.getStatus(),
-                run.getTotalSteps(),
-                run.getPassedSteps(),
-                run.getFailedSteps(),
-                run.getDurationMs(),
-                run.getFailureSummary(),
-                "/automation/web?tab=runs&runId=" + run.getId(),
-                Map.of()
-        ));
-    }
-
-    private void publishWebUiBatchNotification(WebUiRunBatchEntity batch) {
-        notificationDomainService.publishEvent(new NotificationModels.NotificationEvent(
-                batch.getWorkspaceId(),
-                SUCCESS.equals(batch.getStatus())
-                        ? NotificationDomainService.EVENT_WEB_UI_FINISHED
-                        : NotificationDomainService.EVENT_WEB_UI_FAILED,
-                SUCCESS.equals(batch.getStatus()) ? "Web UI 执行完成" : "Web UI 执行失败",
-                "WEB_UI_BATCH",
-                batch.getId(),
-                batch.getBatchName(),
-                batch.getStatus(),
-                batch.getTotalCases(),
-                batch.getSuccessCases(),
-                batch.getFailedCases(),
-                batch.getDurationMs(),
-                batch.getFailureSummary(),
-                "/automation/web?tab=batches&batchId=" + batch.getId(),
-                Map.of()
-        ));
     }
 
     private CurrentUserPrincipal currentUserOrNull() {
@@ -1478,73 +1430,6 @@ public class WebUiExecutionDomainService {
         );
     }
 
-    private EnvironmentResolution resolveEnvironment(Long environmentId, Long workspaceId) {
-        if (environmentId == null) {
-            return null;
-        }
-        if (environmentId < 0) {
-            return resolvePublicEnvironment(Math.abs(environmentId), workspaceId);
-        }
-        WebUiEnvironmentEntity legacyEnvironment = environmentMapper.selectById(environmentId);
-        if (legacyEnvironment != null) {
-            if (!workspaceId.equals(legacyEnvironment.getWorkspaceId())) {
-                throw new NotFoundException("Web UI environment not found");
-            }
-            if (legacyEnvironment.getStatus() != null && legacyEnvironment.getStatus() == 0) {
-                throw new BadRequestException("Web UI environment is disabled");
-            }
-            return new EnvironmentResolution(
-                    legacyEnvironment.getId(),
-                    legacyEnvironment.getEnvironmentName(),
-                    legacyEnvironment.getBaseUrl(),
-                    legacyEnvironment.getBrowserType(),
-                    legacyEnvironment.getHeadless(),
-                    legacyEnvironment.getDefaultTimeoutMs(),
-                    legacyEnvironment.getDefaultVariableSetId(),
-                    null,
-                    null,
-                    List.of(),
-                    "default",
-                    List.of()
-            );
-        }
-        return resolvePublicEnvironment(environmentId, workspaceId);
-    }
-
-    private EnvironmentResolution resolvePublicEnvironment(Long environmentId, Long workspaceId) {
-        EnvConfigEntity environment = envConfigMapper.selectById(environmentId);
-        if (environment == null || !WebUiEnvironmentTypeSupport.isWebUiUsable(environment.getEnvType())
-                || !workspaceId.equals(environment.getWorkspaceId())) {
-            throw new NotFoundException("Web UI environment not found");
-        }
-        if (environment.getStatus() != null && environment.getStatus() == 0) {
-            throw new BadRequestException("Web UI environment is disabled");
-        }
-        WebUiExecutionContextSupport.WebUiEnvironmentConfig config =
-                executionContextSupport.readEnvironmentConfig(environment.getConfigJson());
-        List<WebUiExecutionContextSupport.ServiceEndpoint> services = normalizeServices(config.services(), environment.getBaseUrl());
-        String defaultServiceKey = normalizeDefaultServiceKey(config.defaultServiceKey(), services);
-        String baseUrl = services.stream()
-                .filter(service -> service.key().equals(defaultServiceKey))
-                .findFirst()
-                .map(WebUiExecutionContextSupport.ServiceEndpoint::baseUrl)
-                .orElse(environment.getBaseUrl());
-        return new EnvironmentResolution(
-                -environment.getId(),
-                environment.getEnvName(),
-                baseUrl,
-                config.browserType(),
-                config.headless(),
-                config.defaultTimeoutMs(),
-                config.defaultVariableSetId(),
-                Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockApplicationId(),
-                Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockReleaseId(),
-                config.variables() == null ? List.of() : config.variables(),
-                defaultServiceKey,
-                services
-        );
-    }
-
     private MockResolution resolveMockApplication(Long mockApplicationId, Long mockReleaseId, Long workspaceId) {
         if (mockApplicationId == null) {
             return null;
@@ -1590,34 +1475,6 @@ public class WebUiExecutionDomainService {
             throw new BadRequestException("Mock release must belong to the selected Mock application and workspace");
         }
         return release;
-    }
-
-    private List<WebUiExecutionContextSupport.ServiceEndpoint> normalizeServices(
-            List<WebUiExecutionContextSupport.ServiceEndpoint> services,
-            String fallbackBaseUrl
-    ) {
-        List<WebUiExecutionContextSupport.ServiceEndpoint> normalized = defaultList(services).stream()
-                .filter(service -> service != null
-                        && service.key() != null && !service.key().isBlank()
-                        && service.baseUrl() != null && !service.baseUrl().isBlank())
-                .map(service -> new WebUiExecutionContextSupport.ServiceEndpoint(
-                        service.key().trim(),
-                        service.name() == null || service.name().isBlank() ? service.key().trim() : service.name().trim(),
-                        service.baseUrl().trim()
-                ))
-                .toList();
-        if (!normalized.isEmpty()) {
-            return normalized;
-        }
-        return List.of(new WebUiExecutionContextSupport.ServiceEndpoint("default", "默认服务", fallbackBaseUrl == null ? "" : fallbackBaseUrl.trim()));
-    }
-
-    private String normalizeDefaultServiceKey(String defaultServiceKey, List<WebUiExecutionContextSupport.ServiceEndpoint> services) {
-        String normalized = defaultServiceKey == null ? "" : defaultServiceKey.trim();
-        if (!normalized.isBlank() && services.stream().anyMatch(service -> service.key().equals(normalized))) {
-            return normalized;
-        }
-        return services.isEmpty() ? "default" : services.getFirst().key();
     }
 
     private void putServiceRuntimeVariables(Map<String, WebUiExecutionContextSupport.RuntimeVariable> variables, EnvironmentResolution environment) {
@@ -1951,22 +1808,6 @@ public class WebUiExecutionDomainService {
             Map<String, WebUiExecutionContextSupport.RuntimeVariable> variables,
             String mockExecutionToken,
             String contextSnapshotJson
-    ) {
-    }
-
-    private record EnvironmentResolution(
-            Long bridgeId,
-            String name,
-            String baseUrl,
-            String browserType,
-            Boolean headless,
-            Integer defaultTimeoutMs,
-            Long defaultVariableSetId,
-            Long mockApplicationId,
-            Long mockReleaseId,
-            List<WebUiExecutionContextSupport.VariableItem> variables,
-            String defaultServiceKey,
-            List<WebUiExecutionContextSupport.ServiceEndpoint> services
     ) {
     }
 

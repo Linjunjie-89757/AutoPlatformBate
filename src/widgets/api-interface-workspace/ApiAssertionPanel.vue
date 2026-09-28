@@ -1,20 +1,6 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import {
-  ChevronDown,
-  Code2,
-  Copy,
-  FileText,
-  Hash,
-  Plus,
-  Server,
-  Shield,
-  Sparkles,
-  Timer,
-  Trash2,
-  Variable,
-  Zap,
-} from '@lucide/vue'
+import { ChevronDown, Code2, Copy, Plus, Shield, Sparkles, Trash2 } from '@lucide/vue'
 
 import { AppSwitch } from '@/shared/ui'
 
@@ -77,7 +63,6 @@ const props = defineProps<{
   assertionTypeOptions: AssertionOption[]
   assertionConditionOptions: AssertionOption[]
   assertionResults: ApiAssertionResultRow[]
-  hasLatestResponse: boolean
   hasLatestResponseBody: boolean
   fastExtractionTitle: string
   assertionTypeLabel: (type?: string | null) => string
@@ -87,7 +72,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   batchAdd: []
-  addFromLatestResponse: [command: string | number | object]
   addFromCommand: [command: string | number | object]
   select: [assertion: ApiAssertionPanelRow]
   move: [index: number, direction: -1 | 1]
@@ -106,22 +90,8 @@ function activeIndex(rows: ApiAssertionPanelRow[], assertion: ApiAssertionPanelR
   return assertion ? rows.indexOf(assertion) : -1
 }
 
-function emitAddFromLatestResponse(command: string | number | object) {
-  emit('addFromLatestResponse', command)
-}
-
 function emitAddFromCommand(command: string | number | object) {
   emit('addFromCommand', command)
-}
-
-function assertionIcon(type?: string | null) {
-  const value = (type || '').toUpperCase()
-  if (value === 'RESPONSE_HEADER') return Server
-  if (value === 'RESPONSE_BODY') return FileText
-  if (value === 'RESPONSE_TIME') return Timer
-  if (value === 'VARIABLE') return Variable
-  if (value === 'SCRIPT') return Code2
-  return Hash
 }
 
 function assertionActualValue(assertion: ApiAssertionPanelRow, subject?: string | null) {
@@ -167,29 +137,18 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
         <div class="api-assertion-toolbar">
           <el-dropdown trigger="click" popper-class="api-assertion-add-dropdown" @command="emitAddFromCommand">
             <button type="button" class="api-legacy-primary">
-              <Plus class="api-button-plus" :size="12" aria-hidden="true" />
-              添加断言
-              <ChevronDown class="api-button-chevron" :size="10" aria-hidden="true" />
+              <Plus class="api-button-plus" :size="11" aria-hidden="true" />
+              <span>添加断言</span>
+              <ChevronDown class="api-button-chevron" :size="9" aria-hidden="true" />
             </button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item v-for="item in assertionTypeOptions" :key="item.value" :command="item.value">
-                  <component :is="assertionIcon(item.value)" :size="13" aria-hidden="true" />
                   <span>{{ item.label }}断言</span>
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <button
-            type="button"
-            class="api-assertion-batch-link"
-            :disabled="!hasLatestResponse"
-            :title="hasLatestResponse ? '从最近响应快速生成断言' : '请先发送请求，再快速生成断言'"
-            @click="emitAddFromLatestResponse('all')"
-          >
-            <Zap class="api-button-spark" :size="10" aria-hidden="true" />
-            快速生成
-          </button>
         </div>
         <button
           v-for="(assertion, index) in rows"
@@ -304,7 +263,6 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
               <el-radio-button value="X_PATH">XPath</el-radio-button>
               <el-radio-button value="REGEX">Regex</el-radio-button>
             </el-radio-group>
-            <button type="button" class="api-assertion-fast-extract" :disabled="!hasLatestResponseBody" :title="fastExtractionTitle" @click="emit('openFastExtraction', activeAssertion, activeAssertionBodyGroup(activeAssertion).assertions[0])"><Zap :size="10" />快速提取</button>
             <span class="api-assertion-body-toolbar__spacer" />
             <button type="button" class="api-assertion-toolbar-add" @click="emit('addItem', activeAssertionBodyGroup(activeAssertion).assertions, { expression: defaultAssertionExpression(activeAssertion.assertionBodyType) })"><Plus :size="12" />添加项</button>
           </div>

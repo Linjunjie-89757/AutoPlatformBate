@@ -57,6 +57,9 @@ export function useApiFastExtraction(options: UseApiFastExtractionOptions) {
   const fastExtractionTitle = computed(() => (
     options.hasLatestResponseBody.value ? '从最近响应快速提取' : '请先发送请求，再使用快速提取'
   ))
+  const fastExtractionSource = computed<'assertion' | 'extractor'>(() => (
+    fastExtractionTarget.value?.kind === 'processorExtract' ? 'extractor' : 'assertion'
+  ))
   const fastExtractionMode = computed<FastExtractionMode>(() => {
     const target = fastExtractionTarget.value
     if (!target) return 'JSON_PATH'
@@ -133,6 +136,7 @@ export function useApiFastExtraction(options: UseApiFastExtractionOptions) {
   return {
     fastExtractionVisible,
     fastExtractionTitle,
+    fastExtractionSource,
     fastExtractionMode,
     fastExtractionConfig,
     openAssertionFastExtraction,

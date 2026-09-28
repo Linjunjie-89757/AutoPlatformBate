@@ -1,7 +1,6 @@
 import {
   getWebUiBrowserOption,
   getWebUiCaseStatusOption,
-  getWebUiEnvironmentStatusOption,
   getWebUiLocatorOption,
   getWebUiRunStatusOption,
   getWebUiRunStepStatusOption,
@@ -29,10 +28,6 @@ export function formatLocatorType(locatorType?: string | null) {
 
 export function formatScreenshotPolicy(policy?: string | null) {
   return getWebUiScreenshotPolicyOption(policy)?.label || policy || '-'
-}
-
-export function formatEnvironmentStatus(status?: number | null) {
-  return getWebUiEnvironmentStatusOption(status)?.label || (status === null || status === undefined ? '-' : String(status))
 }
 
 export function formatRunStatus(status?: string | null) {

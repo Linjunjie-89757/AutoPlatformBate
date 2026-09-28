@@ -536,13 +536,17 @@
 }
 
 .api-row-remove {
+  box-sizing: border-box;
   justify-self: center;
+  align-self: center;
+  margin-inline: auto;
   width: 28px;
   height: 28px;
   min-width: 0;
   padding: 0;
-  color: #c9cdd4;
-  opacity: 0;
+  justify-content: center;
+  color: #f53f3f;
+  opacity: 1;
   transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 
@@ -573,13 +577,14 @@
 
 .api-row-remove__icon {
   display: block;
+  flex: 0 0 13px;
   width: 13px;
   height: 13px;
 }
 
 .api-row-remove:hover {
   opacity: 1;
-  background: #fff1f0;
+  background: #fef2f2;
   color: var(--app-danger);
 }
 

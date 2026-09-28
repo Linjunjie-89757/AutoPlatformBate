@@ -138,7 +138,6 @@ defineProps<{
   deleteCase: AnyFn
   addExtractor: AnyFn
   removeExtractor: AnyFn
-  addAssertionFromLatestResponseCommand: AnyFn
   addAssertionFromCommand: AnyFn
   selectAssertion: AnyFn
   moveAssertion: AnyFn
@@ -334,14 +333,12 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
         :assertion-type-options="assertionTypeOptions"
         :assertion-condition-options="assertionConditionOptions"
         :assertion-results="assertionRows"
-        :has-latest-response="!showResponseEmpty"
         :has-latest-response-body="hasLatestResponseBody"
         :fast-extraction-title="fastExtractionTitle"
         :assertion-type-label="assertionTypeLabel"
         :active-assertion-body-group="activeAssertionBodyGroup"
         :default-assertion-expression="defaultAssertionExpression"
         @batch-add="openBatchAdd('assertion')"
-        @add-from-latest-response="addAssertionFromLatestResponseCommand"
         @add-from-command="addAssertionFromCommand"
         @select="selectAssertion"
         @move="moveAssertion"
