@@ -1,6 +1,7 @@
 package com.company.autoplatform.webuiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.apiautomation.ApiWorkspaceScopeSupport;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
@@ -13,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static com.company.autoplatform.webuiautomation.WebUiAutomationFormatSupport.*;
 import static com.company.autoplatform.webuiautomation.WebUiAutomationModels.*;
@@ -71,13 +75,18 @@ public class WebUiCaseDomainService {
         if (normalizedStatus != null) {
             query.eq(WebUiCaseEntity::getStatus, normalizedStatus);
         }
-        List<WebUiCaseItem> items = caseMapper.selectList(query.orderByDesc(WebUiCaseEntity::getUpdatedAt))
-                .stream()
-                .map(this::toCaseItem)
-                .toList();
         int safePageNo = safePageNo(pageNo);
-        int safePageSize = safePageSize(pageSize, items.size());
-        return PageResponse.of(paginate(items, safePageNo, safePageSize), items.size(), safePageNo, safePageSize);
+        if (pageSize == null || pageSize < 1) {
+            List<WebUiCaseEntity> entities = caseMapper.selectList(query.orderByDesc(WebUiCaseEntity::getUpdatedAt));
+            List<WebUiCaseItem> items = toCaseItems(entities);
+            int compatiblePageSize = safePageSize(pageSize, items.size());
+            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
+        }
+        Page<WebUiCaseEntity> page = caseMapper.selectPage(
+                new Page<>(safePageNo, pageSize),
+                query.orderByDesc(WebUiCaseEntity::getUpdatedAt));
+        List<WebUiCaseItem> items = toCaseItems(page.getRecords());
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public WebUiCaseDetail getCase(Long id, String workspaceCode) {
@@ -201,8 +210,29 @@ public class WebUiCaseDomainService {
         return entity;
     }
 
-    private WebUiCaseItem toCaseItem(WebUiCaseEntity entity) {
-        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+    private List<WebUiCaseItem> toCaseItems(List<WebUiCaseEntity> entities) {
+        if (entities.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, WorkspaceEntity> workspaces = workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity(), (left, right) -> left));
+        List<Long> caseIds = entities.stream().map(WebUiCaseEntity::getId).toList();
+        Map<Long, Long> stepCounts = stepMapper.selectList(new LambdaQueryWrapper<WebUiCaseStepEntity>()
+                        .in(WebUiCaseStepEntity::getCaseId, caseIds))
+                .stream()
+                .collect(Collectors.groupingBy(WebUiCaseStepEntity::getCaseId, Collectors.counting()));
+        return entities.stream()
+                .map(entity -> {
+                    WorkspaceEntity workspace = workspaces.get(entity.getWorkspaceId());
+                    if (workspace == null) {
+                        workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+                    }
+                    return toCaseItem(entity, workspace, stepCounts.getOrDefault(entity.getId(), 0L));
+                })
+                .toList();
+    }
+
+    private WebUiCaseItem toCaseItem(WebUiCaseEntity entity, WorkspaceEntity workspace, Long stepCount) {
         return new WebUiCaseItem(
                 entity.getId(),
                 workspace.getWorkspaceCode(),
@@ -215,7 +245,7 @@ public class WebUiCaseDomainService {
                 entity.getHeadless(),
                 entity.getDefaultTimeoutMs(),
                 entity.getStatus(),
-                countSteps(entity.getId()),
+                Math.toIntExact(stepCount),
                 entity.getLastRunResult(),
                 entity.getLastRunAt(),
                 entity.getUpdatedAt()
@@ -252,12 +282,6 @@ public class WebUiCaseDomainService {
                 .stream()
                 .map(this::toStepItem)
                 .toList();
-    }
-
-    private int countSteps(Long caseId) {
-        Long count = stepMapper.selectCount(new LambdaQueryWrapper<WebUiCaseStepEntity>()
-                .eq(WebUiCaseStepEntity::getCaseId, caseId));
-        return count == null ? 0 : Math.toIntExact(count);
     }
 
     private WebUiCaseStepItem toStepItem(WebUiCaseStepEntity entity) {

@@ -58,6 +58,7 @@ export interface ApiExecutionSuiteItem {
   lastRunResult: string | null
   lastRunAt: string | null
   updatedAt: string | null
+  itemCount?: number
 }
 
 export interface ApiExecutionSuiteDetail extends ApiExecutionSuiteItem {

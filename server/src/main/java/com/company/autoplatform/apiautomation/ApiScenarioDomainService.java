@@ -1,6 +1,7 @@
 package com.company.autoplatform.apiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
@@ -19,6 +20,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static com.company.autoplatform.apiautomation.ApiAutomationModels.*;
 import static com.company.autoplatform.apiautomation.ApiAutomationFormatSupport.*;
@@ -103,13 +106,18 @@ public class ApiScenarioDomainService {
         if (normalizedStatus != null) {
             query.eq(ApiScenarioEntity::getStatus, normalizedStatus.toUpperCase(Locale.ROOT));
         }
-        List<ApiScenarioItem> items = scenarioMapper.selectList(query.orderByDesc(ApiScenarioEntity::getUpdatedAt))
-                .stream()
-                .map(this::toScenarioItem)
-                .toList();
         int safePageNo = safePageNo(pageNo);
-        int safePageSize = safePageSize(pageSize, items.size());
-        return PageResponse.of(paginate(items, safePageNo, safePageSize), items.size(), safePageNo, safePageSize);
+        if (pageSize == null || pageSize < 1) {
+            List<ApiScenarioEntity> entities = scenarioMapper.selectList(query.orderByDesc(ApiScenarioEntity::getUpdatedAt));
+            List<ApiScenarioItem> items = toScenarioItems(entities);
+            int compatiblePageSize = safePageSize(pageSize, items.size());
+            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
+        }
+        Page<ApiScenarioEntity> page = scenarioMapper.selectPage(
+                new Page<>(safePageNo, pageSize),
+                query.orderByDesc(ApiScenarioEntity::getUpdatedAt));
+        List<ApiScenarioItem> items = toScenarioItems(page.getRecords());
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public List<ApiScenarioModuleItem> listScenarioModules(String workspaceCode) {
@@ -124,11 +132,18 @@ public class ApiScenarioDomainService {
         List<ApiScenarioModuleEntity> modules = scenarioModuleMapper.selectList(query
                 .orderByAsc(ApiScenarioModuleEntity::getSortOrder)
                 .orderByAsc(ApiScenarioModuleEntity::getId));
-        Map<Long, Long> counts = scenarioMapper.selectList(new LambdaQueryWrapper<ApiScenarioEntity>())
+        if (modules.isEmpty()) {
+            return List.of();
+        }
+        List<Long> moduleWorkspaceIds = modules.stream()
+                .map(ApiScenarioModuleEntity::getWorkspaceId)
+                .distinct()
+                .toList();
+        Map<Long, Long> counts = scenarioMapper.selectList(new LambdaQueryWrapper<ApiScenarioEntity>()
+                        .in(ApiScenarioEntity::getWorkspaceId, moduleWorkspaceIds)
+                        .isNotNull(ApiScenarioEntity::getModuleId))
                 .stream()
-                .filter(scenario -> modules.stream().anyMatch(module -> module.getWorkspaceId().equals(scenario.getWorkspaceId())))
-                .filter(scenario -> scenario.getModuleId() != null)
-                .collect(java.util.stream.Collectors.groupingBy(ApiScenarioEntity::getModuleId, java.util.stream.Collectors.counting()));
+                .collect(Collectors.groupingBy(ApiScenarioEntity::getModuleId, Collectors.counting()));
         return buildScenarioModuleTree(modules, counts, null);
     }
 
@@ -296,10 +311,42 @@ public class ApiScenarioDomainService {
         entity.setRelatedCaseId(request.relatedCaseId());
     }
 
-    private ApiScenarioItem toScenarioItem(ApiScenarioEntity entity) {
-        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+    private List<ApiScenarioItem> toScenarioItems(List<ApiScenarioEntity> entities) {
+        if (entities.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, WorkspaceEntity> workspaces = workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity(), (left, right) -> left));
+        List<Long> moduleIds = entities.stream()
+                .map(ApiScenarioEntity::getModuleId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, ApiScenarioModuleEntity> modules = moduleIds.isEmpty()
+                ? Map.of()
+                : scenarioModuleMapper.selectBatchIds(moduleIds).stream()
+                .collect(Collectors.toMap(ApiScenarioModuleEntity::getId, Function.identity(), (left, right) -> left));
+        return entities.stream()
+                .map(entity -> {
+                    WorkspaceEntity workspace = workspaces.get(entity.getWorkspaceId());
+                    if (workspace == null) {
+                        workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+                    }
+                    ApiScenarioModuleEntity module = entity.getModuleId() == null ? null : modules.get(entity.getModuleId());
+                    if (entity.getModuleId() != null && module == null) {
+                        module = scenarioModuleMapper.selectById(entity.getModuleId());
+                    }
+                    return toScenarioItem(entity, workspace, module);
+                })
+                .toList();
+    }
+
+    private ApiScenarioItem toScenarioItem(
+            ApiScenarioEntity entity,
+            WorkspaceEntity workspace,
+            ApiScenarioModuleEntity module
+    ) {
         List<ApiScenarioStepInput> steps = readScenarioSteps(entity.getStepsJson());
-        ApiScenarioModuleEntity module = entity.getModuleId() == null ? null : scenarioModuleMapper.selectById(entity.getModuleId());
         return new ApiScenarioItem(
                 entity.getId(),
                 workspace.getWorkspaceCode(),

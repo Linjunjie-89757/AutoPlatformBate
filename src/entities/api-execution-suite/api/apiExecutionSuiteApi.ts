@@ -103,6 +103,7 @@ function normalizeSuite(item: ApiExecutionSuiteItem): ApiExecutionSuiteItem {
     lastRunResult: item.lastRunResult || null,
     lastRunAt: item.lastRunAt || null,
     updatedAt: item.updatedAt || null,
+    itemCount: Number(item.itemCount || 0),
   }
 }
 

@@ -604,7 +604,8 @@ public final class ApiAutomationModels {
             String dataFailureStrategy,
             String lastRunResult,
             LocalDateTime lastRunAt,
-            LocalDateTime updatedAt
+            LocalDateTime updatedAt,
+            Long itemCount
     ) {
     }
 

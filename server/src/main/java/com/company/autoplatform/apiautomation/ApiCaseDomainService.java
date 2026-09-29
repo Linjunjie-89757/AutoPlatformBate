@@ -1,6 +1,7 @@
 package com.company.autoplatform.apiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.auth.CurrentUserPrincipal;
 import com.company.autoplatform.common.BadRequestException;
@@ -13,8 +14,11 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static com.company.autoplatform.apiautomation.ApiAutomationModels.*;
 import static com.company.autoplatform.apiautomation.ApiAutomationFormatSupport.*;
@@ -76,13 +80,18 @@ public class ApiCaseDomainService {
                     .or()
                     .like(ApiDefinitionCaseEntity::getDescription, trimmedKeyword));
         }
-        List<ApiDefinitionCaseItem> items = caseMapper.selectList(query.orderByDesc(ApiDefinitionCaseEntity::getUpdatedAt))
-                .stream()
-                .map(this::toCaseItem)
-                .toList();
         int safePageNo = safePageNo(pageNo);
-        int safePageSize = safePageSize(pageSize, items.size());
-        return PageResponse.of(paginate(items, safePageNo, safePageSize), items.size(), safePageNo, safePageSize);
+        if (pageSize == null || pageSize < 1) {
+            List<ApiDefinitionCaseEntity> entities = caseMapper.selectList(query.orderByDesc(ApiDefinitionCaseEntity::getUpdatedAt));
+            List<ApiDefinitionCaseItem> items = toCaseItems(entities);
+            int compatiblePageSize = safePageSize(pageSize, items.size());
+            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
+        }
+        Page<ApiDefinitionCaseEntity> page = caseMapper.selectPage(
+                new Page<>(safePageNo, pageSize),
+                query.orderByDesc(ApiDefinitionCaseEntity::getUpdatedAt));
+        List<ApiDefinitionCaseItem> items = toCaseItems(page.getRecords());
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public ApiDefinitionCaseDetail getCase(Long id, String workspaceCode) {
@@ -163,9 +172,41 @@ public class ApiCaseDomainService {
         caseChangeHistoryMapper.insert(history);
     }
 
-    private ApiDefinitionCaseItem toCaseItem(ApiDefinitionCaseEntity entity) {
-        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
-        ApiDefinitionEntity definition = requireDefinition(entity.getDefinitionId());
+    private List<ApiDefinitionCaseItem> toCaseItems(List<ApiDefinitionCaseEntity> entities) {
+        if (entities.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, WorkspaceEntity> workspaces = workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity(), (left, right) -> left));
+        List<Long> definitionIds = entities.stream()
+                .map(ApiDefinitionCaseEntity::getDefinitionId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, ApiDefinitionEntity> definitions = definitionIds.isEmpty()
+                ? Map.of()
+                : definitionMapper.selectBatchIds(definitionIds).stream()
+                .collect(Collectors.toMap(ApiDefinitionEntity::getId, Function.identity(), (left, right) -> left));
+        return entities.stream()
+                .map(entity -> {
+                    WorkspaceEntity workspace = workspaces.get(entity.getWorkspaceId());
+                    if (workspace == null) {
+                        workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+                    }
+                    ApiDefinitionEntity definition = definitions.get(entity.getDefinitionId());
+                    if (definition == null) {
+                        definition = requireDefinition(entity.getDefinitionId());
+                    }
+                    return toCaseItem(entity, workspace, definition);
+                })
+                .toList();
+    }
+
+    private ApiDefinitionCaseItem toCaseItem(
+            ApiDefinitionCaseEntity entity,
+            WorkspaceEntity workspace,
+            ApiDefinitionEntity definition
+    ) {
         ApiRequestConfigInput requestConfig = readStoredRequestConfig(entity.getRequestJson(), definition.getHttpMethod(), definition.getPath());
         return new ApiDefinitionCaseItem(
                 entity.getId(),

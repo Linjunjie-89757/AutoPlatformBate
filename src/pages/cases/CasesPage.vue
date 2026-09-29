@@ -727,6 +727,7 @@ watch(
             </header>
 
             <CaseListPanel
+              v-if="workspaceReady"
               ref="caseListRef"
               :workspace-code="workspaceCode"
               :directory-id="selectedDirectoryId"

@@ -101,6 +101,7 @@ const sharingReportId = ref<number | null>(null)
 let reportRequestSeq = 0
 let detailRequestSeq = 0
 let shareRequestSeq = 0
+let reportFilterReloadTimer: ReturnType<typeof window.setTimeout> | null = null
 let tableFrameObserver: ResizeObserver | null = null
 
 function formatLogSource(value: string) {
@@ -559,6 +560,16 @@ function reloadReportsFromFirstPage() {
   reportPageNo.value = 1
 }
 
+function scheduleReportsReload() {
+  if (reportFilterReloadTimer) {
+    window.clearTimeout(reportFilterReloadTimer)
+  }
+  reportFilterReloadTimer = window.setTimeout(() => {
+    reportFilterReloadTimer = null
+    reloadReportsFromFirstPage()
+  }, 300)
+}
+
 function setReportPage(value: number) {
   reportPageNo.value = value
 }
@@ -602,7 +613,7 @@ function openReportColumnSettings() {
   reportColumnSettings.open()
 }
 
-watch([reportKeyword, reportStatusFilter], reloadReportsFromFirstPage)
+watch([reportKeyword, reportStatusFilter], scheduleReportsReload)
 
 watch(reportPageNo, (value, oldValue) => {
   if (value !== oldValue) void loadReports()
@@ -663,6 +674,7 @@ onBeforeUnmount(() => {
   reportRequestSeq += 1
   detailRequestSeq += 1
   shareRequestSeq += 1
+  if (reportFilterReloadTimer) window.clearTimeout(reportFilterReloadTimer)
   tableFrameObserver?.disconnect()
   copiedResetTimers.forEach(timer => window.clearTimeout(timer))
   copiedResetTimers.clear()

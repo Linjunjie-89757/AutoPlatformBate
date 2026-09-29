@@ -1,6 +1,7 @@
 package com.company.autoplatform.apiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static com.company.autoplatform.apiautomation.ApiAutomationFormatSupport.blankToFallback;
 import static com.company.autoplatform.apiautomation.ApiAutomationFormatSupport.blankToNull;
@@ -126,11 +128,18 @@ public class ApiExecutionSuiteDomainService {
         List<ApiExecutionSuiteModuleEntity> modules = suiteModuleMapper.selectList(query
                 .orderByAsc(ApiExecutionSuiteModuleEntity::getSortOrder)
                 .orderByAsc(ApiExecutionSuiteModuleEntity::getId));
-        Map<Long, Long> counts = suiteMapper.selectList(new LambdaQueryWrapper<ApiExecutionSuiteEntity>())
+        if (modules.isEmpty()) {
+            return List.of();
+        }
+        List<Long> moduleWorkspaceIds = modules.stream()
+                .map(ApiExecutionSuiteModuleEntity::getWorkspaceId)
+                .distinct()
+                .toList();
+        Map<Long, Long> counts = suiteMapper.selectList(new LambdaQueryWrapper<ApiExecutionSuiteEntity>()
+                        .in(ApiExecutionSuiteEntity::getWorkspaceId, moduleWorkspaceIds)
+                        .isNotNull(ApiExecutionSuiteEntity::getModuleId))
                 .stream()
-                .filter(suite -> modules.stream().anyMatch(module -> module.getWorkspaceId().equals(suite.getWorkspaceId())))
-                .filter(suite -> suite.getModuleId() != null)
-                .collect(java.util.stream.Collectors.groupingBy(ApiExecutionSuiteEntity::getModuleId, java.util.stream.Collectors.counting()));
+                .collect(Collectors.groupingBy(ApiExecutionSuiteEntity::getModuleId, Collectors.counting()));
         return buildSuiteModuleTree(modules, counts, null);
     }
 
@@ -222,15 +231,36 @@ public class ApiExecutionSuiteDomainService {
                     .or()
                     .like(ApiExecutionSuiteEntity::getDescription, trimmedKeyword));
         }
-        List<ApiExecutionSuiteItem> items = suiteMapper.selectList(query.orderByDesc(ApiExecutionSuiteEntity::getUpdatedAt))
-                .stream()
-                .map(this::toSuiteItem)
-                .toList();
         int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
-        int safePageSize = pageSize == null || pageSize < 1 ? (items.isEmpty() ? 10 : items.size()) : pageSize;
-        int fromIndex = Math.min((safePageNo - 1) * safePageSize, items.size());
-        int toIndex = Math.min(fromIndex + safePageSize, items.size());
-        return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, safePageSize);
+        List<ApiExecutionSuiteEntity> pageEntities;
+        long total;
+        int safePageSize;
+        if (pageSize == null || pageSize < 1) {
+            List<ApiExecutionSuiteEntity> suiteEntities = suiteMapper.selectList(query.orderByDesc(ApiExecutionSuiteEntity::getUpdatedAt));
+            safePageSize = suiteEntities.isEmpty() ? 10 : suiteEntities.size();
+            int fromIndex = Math.min((safePageNo - 1) * safePageSize, suiteEntities.size());
+            int toIndex = Math.min(fromIndex + safePageSize, suiteEntities.size());
+            pageEntities = suiteEntities.subList(fromIndex, toIndex);
+            total = suiteEntities.size();
+        } else {
+            Page<ApiExecutionSuiteEntity> page = suiteMapper.selectPage(
+                    new Page<>(safePageNo, pageSize),
+                    query.orderByDesc(ApiExecutionSuiteEntity::getUpdatedAt));
+            pageEntities = page.getRecords();
+            total = page.getTotal();
+            safePageSize = Math.toIntExact(page.getSize());
+            safePageNo = Math.toIntExact(page.getCurrent());
+        }
+        Map<Long, Long> itemCounts = pageEntities.isEmpty()
+                ? Map.of()
+                : suiteItemMapper.selectList(new LambdaQueryWrapper<ApiExecutionSuiteItemEntity>()
+                        .in(ApiExecutionSuiteItemEntity::getSuiteId, pageEntities.stream().map(ApiExecutionSuiteEntity::getId).toList()))
+                .stream()
+                .collect(Collectors.groupingBy(ApiExecutionSuiteItemEntity::getSuiteId, Collectors.counting()));
+        List<ApiExecutionSuiteItem> items = pageEntities.stream()
+                .map(entity -> toSuiteItem(entity, itemCounts.getOrDefault(entity.getId(), 0L)))
+                .toList();
+        return PageResponse.of(items, total, safePageNo, safePageSize);
     }
 
     public ApiExecutionSuiteDetail getSuite(Long id, String workspaceCode) {
@@ -846,7 +876,7 @@ public class ApiExecutionSuiteDomainService {
         return expression;
     }
 
-    private ApiExecutionSuiteItem toSuiteItem(ApiExecutionSuiteEntity entity) {
+    private ApiExecutionSuiteItem toSuiteItem(ApiExecutionSuiteEntity entity, Long itemCount) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
         ApiExecutionSuiteModuleEntity module = entity.getModuleId() == null ? null : suiteModuleMapper.selectById(entity.getModuleId());
         return new ApiExecutionSuiteItem(
@@ -882,7 +912,8 @@ public class ApiExecutionSuiteDomainService {
                 entity.getDataFailureStrategy(),
                 entity.getLastRunResult(),
                 entity.getLastRunAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                itemCount
         );
     }
 

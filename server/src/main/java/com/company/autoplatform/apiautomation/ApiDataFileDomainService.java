@@ -1,6 +1,7 @@
 package com.company.autoplatform.apiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
@@ -54,15 +55,15 @@ public class ApiDataFileDomainService {
                     .or()
                     .like(ApiDataFileEntity::getOriginalFileName, trimmedKeyword));
         }
-        List<ApiDataFileItem> items = dataFileMapper.selectList(query.orderByDesc(ApiDataFileEntity::getUpdatedAt))
-                .stream()
-                .map(this::toItem)
-                .toList();
         int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
         int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
-        int fromIndex = Math.min((safePageNo - 1) * safePageSize, items.size());
-        int toIndex = Math.min(fromIndex + safePageSize, items.size());
-        return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, safePageSize);
+        Page<ApiDataFileEntity> page = dataFileMapper.selectPage(
+                new Page<>(safePageNo, safePageSize),
+                query.orderByDesc(ApiDataFileEntity::getUpdatedAt));
+        List<ApiDataFileItem> items = page.getRecords().stream()
+                .map(this::toItem)
+                .toList();
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public ApiDataFileDetail getDataFile(Long id, String workspaceCode) {

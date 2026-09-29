@@ -108,6 +108,7 @@ interface Suite {
   priority: Priority
   desc: string
   items: SuiteItem[]
+  itemCount: number
   env: string
   environmentId: number | null
   variableSetId: number | null
@@ -273,6 +274,7 @@ function mapSuite(item: ApiExecutionSuiteItem | ApiExecutionSuiteDetail, arrange
     priority: normalizePriority(item.priority),
     desc: item.description || '',
     items: arrangeItems.map(mapArrangeItem),
+    itemCount: arrangeItems.length > 0 ? arrangeItems.length : Number(item.itemCount || 0),
     env: environment?.name || '',
     environmentId: item.environmentId,
     variableSetId: item.variableSetId,
@@ -405,14 +407,7 @@ async function loadSuiteList() {
       pageNo: suitePageNo.value,
       pageSize: suitePageSize.value,
     })
-    const mapped = await Promise.all(page.items.map(async (item) => {
-      try {
-        const arrangeItems = await apiExecutionSuiteApi.getSuiteItems(item.workspaceCode, item.id)
-        return mapSuite(item, arrangeItems)
-      } catch {
-        return mapSuite(item)
-      }
-    }))
+    const mapped = page.items.map(item => mapSuite(item))
     pagedSuites.value = mapped
     const retained = suites.value.filter(item => openedIds.value.includes(item.id) || !item.persistedId)
     const retainedIds = new Set(retained.map(item => item.id))
@@ -518,10 +513,12 @@ const pickerPartiallySelected = computed(() => !pickerAllSelected.value && selec
 async function loadSuiteArrangeItems(suite: Suite) {
   if (!suite.persistedId) {
     suite.items = []
+    suite.itemCount = 0
     return
   }
   const items = await apiExecutionSuiteApi.getSuiteItems(suite.workspaceCode, suite.persistedId)
   suite.items = items.map(mapArrangeItem)
+  suite.itemCount = suite.items.length
 }
 
 async function openSuite(id: string) {
@@ -574,6 +571,7 @@ function createSuite() {
     priority: 'P2',
     desc: '',
     items: [],
+    itemCount: 0,
     env: defaultEnvironment?.name || '',
     environmentId: defaultEnvironment?.id ?? null,
     variableSetId: defaultEnvironment?.defaultVariableSetId ?? null,
@@ -610,12 +608,14 @@ async function moveItem(index: number, direction: -1 | 1) {
   const items = [...suite.items]
   ;[items[index], items[target]] = [items[target], items[index]]
   suite.items = items
+  suite.itemCount = items.length
   if (!suite.persistedId || items.some(item => !item.arrangeId)) return
   try {
     const reordered = await apiExecutionSuiteApi.reorderSuiteItems(suite.workspaceCode, suite.persistedId, {
       items: items.map((item, itemIndex) => ({ id: item.arrangeId as number, sortOrder: itemIndex + 1, enabled: true })),
     })
     suite.items = reordered.map(mapArrangeItem)
+    suite.itemCount = suite.items.length
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
     await loadSuiteArrangeItems(suite)
@@ -628,6 +628,7 @@ async function removeItem(item: SuiteItem) {
   if (!suite) return
   if (!suite.persistedId || !item.arrangeId) {
     suite.items = suite.items.filter(candidate => candidate.id !== item.id)
+    suite.itemCount = suite.items.length
     return
   }
   try {
@@ -638,6 +639,7 @@ async function removeItem(item: SuiteItem) {
   try {
     await apiExecutionSuiteApi.deleteSuiteItem(suite.workspaceCode, suite.persistedId, item.arrangeId)
     suite.items = suite.items.filter(candidate => candidate.arrangeId !== item.arrangeId)
+    suite.itemCount = suite.items.length
     ElMessage.success('编排项已移除')
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
@@ -988,7 +990,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
               <div v-if="column.key === 'name'" class="figma-suite__table-name"><button type="button" @click.stop="openSuite(suite.id)">{{ suite.name }}</button><small>{{ suite.desc }}</small></div>
               <b v-else-if="column.key === 'priority'" class="figma-suite__priority" :class="`is-${suite.priority.toLowerCase()}`">{{ suite.priority }}</b>
               <span v-else-if="column.key === 'module'" class="figma-suite__table-text">{{ suite.module }}</span>
-              <span v-else-if="column.key === 'items'" class="figma-suite__table-text">{{ suite.items.length }} 项</span>
+              <span v-else-if="column.key === 'items'" class="figma-suite__table-text">{{ suite.itemCount }} 项</span>
               <span v-else-if="column.key === 'lastResult'" class="figma-suite__status" :class="`is-${suite.lastResult || 'empty'}`"><i />{{ suiteResultLabel(suite.lastResult) }}</span>
               <span v-else-if="column.key === 'lastRun'" class="figma-suite__last-date is-mono">{{ suite.lastRun || '-' }}</span>
               <span v-else class="figma-suite__table-extra">{{ formatSuiteColumn(suite, column.key) }}</span>

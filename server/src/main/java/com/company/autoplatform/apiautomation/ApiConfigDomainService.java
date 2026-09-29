@@ -15,8 +15,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static com.company.autoplatform.apiautomation.ApiAutomationModels.*;
 
@@ -48,10 +51,10 @@ public class ApiConfigDomainService {
         LambdaQueryWrapper<EnvConfigEntity> query = new LambdaQueryWrapper<>();
         query.in(EnvConfigEntity::getEnvType, ApiEnvironmentTypeSupport.apiUsableEnvTypes());
         workspaceScopeSupport.applyWorkspaceScope(query, EnvConfigEntity::getWorkspaceId, workspaceCode);
-        List<ApiEnvironmentItem> items = envConfigMapper.selectList(query.orderByDesc(EnvConfigEntity::getUpdatedAt))
-                .stream()
-                .map(this::toEnvironmentItem)
-                .toList();
+        List<EnvConfigEntity> entities = envConfigMapper.selectList(query.orderByDesc(EnvConfigEntity::getUpdatedAt));
+        Map<Long, WorkspaceEntity> workspaces = workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity(), (left, right) -> left));
+        List<ApiEnvironmentItem> items = entities.stream().map(entity -> toEnvironmentItem(entity, workspaces)).toList();
         return new PageResponse<>(items, items.size());
     }
 
@@ -87,10 +90,10 @@ public class ApiConfigDomainService {
         LambdaQueryWrapper<ParamSetEntity> query = new LambdaQueryWrapper<>();
         query.in(ParamSetEntity::getParamType, API_VARIABLE_SET_TYPE, PAYMENT_CHANNEL_VARIABLE_SET_TYPE);
         workspaceScopeSupport.applyWorkspaceScope(query, ParamSetEntity::getWorkspaceId, workspaceCode);
-        List<ApiVariableSetItem> items = paramSetMapper.selectList(query.orderByDesc(ParamSetEntity::getUpdatedAt))
-                .stream()
-                .map(this::toVariableSetItem)
-                .toList();
+        List<ParamSetEntity> entities = paramSetMapper.selectList(query.orderByDesc(ParamSetEntity::getUpdatedAt));
+        Map<Long, WorkspaceEntity> workspaces = workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity(), (left, right) -> left));
+        List<ApiVariableSetItem> items = entities.stream().map(entity -> toVariableSetItem(entity, workspaces)).toList();
         return new PageResponse<>(items, items.size());
     }
 
@@ -149,7 +152,12 @@ public class ApiConfigDomainService {
     }
 
     private ApiEnvironmentItem toEnvironmentItem(EnvConfigEntity entity) {
-        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        return toEnvironmentItem(entity, Map.of());
+    }
+
+    private ApiEnvironmentItem toEnvironmentItem(EnvConfigEntity entity, Map<Long, WorkspaceEntity> workspaces) {
+        WorkspaceEntity workspace = workspaces.get(entity.getWorkspaceId());
+        if (workspace == null) workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
         EnvironmentConfigPayload config = ApiAutomationJsonSupport.read(entity.getConfigJson(), EnvironmentConfigPayload.class,
                 new EnvironmentConfigPayload(List.of(), emptyAuthConfig(), 10000, List.of(), null, null));
         return new ApiEnvironmentItem(
@@ -168,7 +176,12 @@ public class ApiConfigDomainService {
     }
 
     private ApiVariableSetItem toVariableSetItem(ParamSetEntity entity) {
-        WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        return toVariableSetItem(entity, Map.of());
+    }
+
+    private ApiVariableSetItem toVariableSetItem(ParamSetEntity entity, Map<Long, WorkspaceEntity> workspaces) {
+        WorkspaceEntity workspace = workspaces.get(entity.getWorkspaceId());
+        if (workspace == null) workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
         return new ApiVariableSetItem(
                 entity.getId(),
                 workspace.getWorkspaceCode(),
