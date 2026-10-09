@@ -1,6 +1,7 @@
 package com.company.autoplatform.webuiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.apiautomation.ApiWorkspaceScopeSupport;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
@@ -119,16 +120,24 @@ public class WebUiElementDomainService {
         if (collectTaskId != null) {
             query.eq(WebUiElementEntity::getCollectTaskId, collectTaskId);
         }
-        List<WebUiElementItem> items = elementMapper.selectList(query
-                        .orderByAsc(WebUiElementEntity::getPageName)
-                        .orderByAsc(WebUiElementEntity::getGroupName)
-                        .orderByDesc(WebUiElementEntity::getUpdatedAt))
-                .stream()
+        int safePageNo = safePageNo(pageNo);
+        LambdaQueryWrapper<WebUiElementEntity> orderedQuery = query
+                .orderByAsc(WebUiElementEntity::getPageName)
+                .orderByAsc(WebUiElementEntity::getGroupName)
+                .orderByDesc(WebUiElementEntity::getUpdatedAt);
+        if (pageSize == null || pageSize < 1) {
+            List<WebUiElementItem> items = elementMapper.selectList(orderedQuery).stream()
+                    .map(this::toElementItem)
+                    .toList();
+            int compatiblePageSize = safePageSize(pageSize, items.size());
+            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
+        }
+        Page<WebUiElementEntity> page = elementMapper.selectPage(
+                new Page<>(safePageNo, pageSize), orderedQuery);
+        List<WebUiElementItem> items = page.getRecords().stream()
                 .map(this::toElementItem)
                 .toList();
-        int safePageNo = safePageNo(pageNo);
-        int safePageSize = safePageSize(pageSize, items.size());
-        return PageResponse.of(paginate(items, safePageNo, safePageSize), items.size(), safePageNo, safePageSize);
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public WebUiElementQualityCheckResult checkElementQuality(

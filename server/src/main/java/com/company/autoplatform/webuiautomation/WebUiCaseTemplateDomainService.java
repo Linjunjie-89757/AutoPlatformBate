@@ -1,6 +1,7 @@
 package com.company.autoplatform.webuiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.apiautomation.ApiWorkspaceScopeSupport;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
@@ -74,13 +75,21 @@ public class WebUiCaseTemplateDomainService {
         if (normalizedStatus != null) {
             query.eq(WebUiCaseTemplateEntity::getStatus, normalizedStatus);
         }
-        List<WebUiCaseTemplateItem> items = templateMapper.selectList(query.orderByDesc(WebUiCaseTemplateEntity::getUpdatedAt))
-                .stream()
+        int safePageNo = safePageNo(pageNo);
+        LambdaQueryWrapper<WebUiCaseTemplateEntity> orderedQuery = query.orderByDesc(WebUiCaseTemplateEntity::getUpdatedAt);
+        if (pageSize == null || pageSize < 1) {
+            List<WebUiCaseTemplateItem> items = templateMapper.selectList(orderedQuery).stream()
+                    .map(this::toTemplateItem)
+                    .toList();
+            int compatiblePageSize = safePageSize(pageSize, items.size());
+            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
+        }
+        Page<WebUiCaseTemplateEntity> page = templateMapper.selectPage(
+                new Page<>(safePageNo, pageSize), orderedQuery);
+        List<WebUiCaseTemplateItem> items = page.getRecords().stream()
                 .map(this::toTemplateItem)
                 .toList();
-        int safePageNo = safePageNo(pageNo);
-        int safePageSize = safePageSize(pageSize, items.size());
-        return PageResponse.of(paginate(items, safePageNo, safePageSize), items.size(), safePageNo, safePageSize);
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public WebUiCaseTemplateDetail getTemplate(Long id, String workspaceCode) {
