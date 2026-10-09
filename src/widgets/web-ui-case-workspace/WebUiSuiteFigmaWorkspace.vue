@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   ArrowDown,
   ArrowUp,
@@ -127,10 +127,18 @@ const subTab = ref<SubTab>('arrange')
 const editingName = ref(false)
 const addCaseVisible = ref(false)
 const selectedAvailableCaseIds = ref<number[]>([])
+const availableCasePageNo = ref(1)
+const availableCasePageSize = ref(20)
+const availableCaseTotal = ref(0)
+const availableCaseKeyword = ref('')
+const availableCaseById = ref(new Map<number, AvailableCase>())
+const availableCaseLoading = ref(false)
 const loading = ref(false)
 const running = ref(false)
 let draftSequence = 0
 let workspaceRequestVersion = 0
+let availableCaseFilterTimer: ReturnType<typeof window.setTimeout> | null = null
+let availableCaseRequestVersion = 0
 
 const selectedSuite = computed(() => suites.value.find(item => item.id === selectedSuiteId.value) || null)
 const filteredSuites = computed(() => {
@@ -198,11 +206,13 @@ function toggleSuiteCase(id: string) {
 
 async function openAddCaseDialog() {
   if (!props.canEdit) return
-  if (!availableCases.value.length) {
-    await loadCases(workspaceRequestVersion)
-  }
+  availableCasePageNo.value = 1
+  availableCaseKeyword.value = ''
+  availableCaseTotal.value = 0
+  availableCaseById.value = new Map()
   selectedAvailableCaseIds.value = []
   addCaseVisible.value = true
+  await loadCases(workspaceRequestVersion)
 }
 
 function toggleAvailableCase(id: number) {
@@ -214,8 +224,9 @@ function toggleAvailableCase(id: number) {
 function addSelectedCases() {
   const suite = selectedSuite.value
   if (!suite) return
-  const additions = availableCases.value
-    .filter(item => selectedAvailableCaseIds.value.includes(item.id))
+  const additions = selectedAvailableCaseIds.value
+    .map(id => availableCaseById.value.get(id))
+    .filter((item): item is AvailableCase => Boolean(item))
     .map(item => ({ ...item, id: `${suite.id}-${item.id}-${Date.now()}`, enabled: true }))
   updateSuiteCases([...(selectedSuite.value?.cases || []), ...additions])
   addCaseVisible.value = false
@@ -284,15 +295,45 @@ function mapRunRecord(item: WebUiRunBatchSummary): RunRecord {
 }
 
 async function loadCases(requestVersion: number) {
+  const caseRequestVersion = ++availableCaseRequestVersion
+  availableCaseLoading.value = true
   try {
-    const response = await webUiAutomationApi.getCases(props.workspaceCode, { pageNo: 1, pageSize: 1000 })
-    if (requestVersion !== workspaceRequestVersion) return
+    const response = await webUiAutomationApi.getCases(props.workspaceCode, {
+      keyword: availableCaseKeyword.value.trim() || undefined,
+      pageNo: availableCasePageNo.value,
+      pageSize: availableCasePageSize.value,
+    })
+    if (requestVersion !== workspaceRequestVersion || caseRequestVersion !== availableCaseRequestVersion) return
     availableCases.value = response.items.map(mapAvailableCase)
+    availableCaseTotal.value = response.total
+    availableCaseById.value = new Map([
+      ...availableCaseById.value,
+      ...availableCases.value.map(item => [item.id, item] as const),
+    ])
   } catch (error) {
-    if (requestVersion !== workspaceRequestVersion) return
+    if (requestVersion !== workspaceRequestVersion || caseRequestVersion !== availableCaseRequestVersion) return
     availableCases.value = []
+    availableCaseTotal.value = 0
     ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    if (requestVersion === workspaceRequestVersion && caseRequestVersion === availableCaseRequestVersion) {
+      availableCaseLoading.value = false
+    }
   }
+}
+
+function setAvailableCasePage(value: number) {
+  availableCasePageNo.value = value
+  void loadCases(workspaceRequestVersion)
+}
+
+function scheduleAvailableCaseReload() {
+  if (availableCaseFilterTimer) window.clearTimeout(availableCaseFilterTimer)
+  availableCaseFilterTimer = window.setTimeout(() => {
+    availableCaseFilterTimer = null
+    availableCasePageNo.value = 1
+    void loadCases(workspaceRequestVersion)
+  }, 250)
 }
 
 async function loadEnvironments(requestVersion: number) {
@@ -348,11 +389,14 @@ async function reloadWorkspaceData() {
   environments.value = []
   runners.value = []
   runRecords.value = []
+  availableCasePageNo.value = 1
+  availableCaseKeyword.value = ''
+  availableCaseTotal.value = 0
+  availableCaseById.value = new Map()
   if (!props.workspaceReady) return
 
   loading.value = true
   await Promise.all([
-    loadCases(requestVersion),
     loadEnvironments(requestVersion),
     loadRunners(requestVersion),
     loadRunRecords(requestVersion),
@@ -434,6 +478,10 @@ watch(() => [props.workspaceCode, props.workspaceReady] as const, () => {
 }, { immediate: true })
 
 watch(selectedSuiteId, syncSelectedSuiteLastRun)
+
+onBeforeUnmount(() => {
+  if (availableCaseFilterTimer) window.clearTimeout(availableCaseFilterTimer)
+})
 </script>
 
 <template>
@@ -609,7 +657,8 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
         <div class="web-ui-suite-dialog__mask" @click="addCaseVisible = false" />
         <section class="web-ui-suite-dialog__panel">
           <header><h2>添加 Web UI 用例</h2><button type="button" aria-label="关闭" @click="addCaseVisible = false"><X /></button></header>
-          <div class="web-ui-suite-dialog__table">
+          <label class="web-ui-suite-dialog__search"><Search aria-hidden="true" /><input v-model="availableCaseKeyword" placeholder="搜索用例名称" @input="scheduleAvailableCaseReload" /></label>
+          <div v-loading="availableCaseLoading" class="web-ui-suite-dialog__table">
             <div class="web-ui-suite-dialog__thead"><span /><span>用例名称</span><span>所属目录</span><span>优先级</span><span>状态</span><span>最近结果</span></div>
             <label v-for="caseItem in availableCases" :key="caseItem.id" class="web-ui-suite-dialog__row" :class="{ 'is-existing': selectedSuiteCaseIds.has(caseItem.caseId) }">
               <span v-if="selectedSuiteCaseIds.has(caseItem.caseId)" class="web-ui-suite-dialog__existing">已在套件</span>
@@ -619,7 +668,7 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
               <em :class="caseItem.result || 'is-pending'">{{ resultText(caseItem.result) }}</em>
             </label>
           </div>
-          <footer><p>已选 <b>{{ selectedCaseCount }}</b> 个用例</p><span><button type="button" @click="addCaseVisible = false">取消</button><button type="button" :disabled="!selectedCaseCount" @click="addSelectedCases">添加 {{ selectedCaseCount ? `(${selectedCaseCount})` : '' }} 个用例</button></span></footer>
+          <footer><p>已选 <b>{{ selectedCaseCount }}</b> 个用例 · 共 {{ availableCaseTotal }} 条</p><el-pagination size="small" layout="prev, pager, next" :current-page="availableCasePageNo" :page-size="availableCasePageSize" :total="availableCaseTotal" @current-change="setAvailableCasePage" /><span><button type="button" @click="addCaseVisible = false">取消</button><button type="button" :disabled="!selectedCaseCount" @click="addSelectedCases">添加 {{ selectedCaseCount ? `(${selectedCaseCount})` : '' }} 个用例</button></span></footer>
         </section>
       </div>
     </Teleport>
@@ -755,6 +804,10 @@ watch(selectedSuiteId, syncSelectedSuiteLastRun)
 .web-ui-suite-dialog__panel > header button { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #86909c; cursor: pointer; }
 .web-ui-suite-dialog__panel > header button:hover { background: #f2f3f5; }
 .web-ui-suite-dialog__panel > header svg { width: 14px; height: 14px; }
+.web-ui-suite-dialog__search { position: relative; display: flex; height: 34px; flex: 0 0 auto; align-items: center; margin: 10px 14px 0; }
+.web-ui-suite-dialog__search svg { position: absolute; left: 9px; width: 14px; height: 14px; color: #86909c; }
+.web-ui-suite-dialog__search input { box-sizing: border-box; width: 100%; height: 32px; padding: 0 10px 0 30px; border: 1px solid #e5e6eb; border-radius: 6px; outline: 0; background: #f7f8fa; color: #1d2129; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
+.web-ui-suite-dialog__search input:focus { border-color: #0fc6c2; background: #fff; }
 .web-ui-suite-dialog__table { min-height: 0; overflow-y: auto; }
 .web-ui-suite-dialog__thead, .web-ui-suite-dialog__row { display: grid; grid-template-columns: 40px 1.35fr 1.15fr .58fr .72fr .7fr; align-items: center; column-gap: 7px; padding: 0 14px; }
 .web-ui-suite-dialog__thead { position: sticky; z-index: 1; top: 0; height: 38px; background: #f4f6fa; color: #86909c; font-size: 12px; font-weight: 500; line-height: 18px; }

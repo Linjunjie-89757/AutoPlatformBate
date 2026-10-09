@@ -165,6 +165,10 @@ const editingNameDraft = ref('')
 const pickerType = ref<SuiteItemType | null>(null)
 const pickerKeyword = ref('')
 const selectedPickerIds = ref<string[]>([])
+const pickerPageNo = ref(1)
+const pickerPageSize = ref(20)
+const pickerTotal = ref(0)
+const pickerCandidateById = ref(new Map<string, SuiteItem>())
 const selectedRunRecord = ref<RunRecord | null>(null)
 const expandedResultItems = ref<string[]>(['failure-scene'])
 const suiteTableFrameRef = ref<HTMLElement | null>(null)
@@ -172,6 +176,8 @@ const suiteTableFrameWidth = ref(0)
 const { currentUser } = useSession()
 let suiteTableFrameObserver: ResizeObserver | null = null
 let suiteFilterTimer: ReturnType<typeof window.setTimeout> | null = null
+let pickerFilterTimer: ReturnType<typeof window.setTimeout> | null = null
+let pickerRequestVersion = 0
 
 const activeSuite = computed(() => suites.value.find(item => item.id === activeTab.value) || null)
 const filteredSuiteTotal = computed(() => suiteTotal.value)
@@ -426,20 +432,41 @@ async function loadSuiteList() {
 }
 
 async function loadSuiteResources() {
+  if (!pickerType.value) return
+  const requestVersion = ++pickerRequestVersion
   pickerLoading.value = true
   try {
-    const [casePage, scenarioPage] = await Promise.all([
-      apiAutomationApi.getCases(props.workspaceCode, { pageNo: 1, pageSize: 1000 }),
-      apiAutomationApi.getScenarios(props.workspaceCode, { pageNo: 1, pageSize: 1000 }),
-    ])
-    caseCandidates.value = casePage.items.map(mapCaseCandidate)
-    sceneCandidates.value = scenarioPage.items.map(mapSceneCandidate)
+    if (pickerType.value === 'scene') {
+      const page = await apiAutomationApi.getScenarios(props.workspaceCode, {
+        keyword: pickerKeyword.value.trim() || undefined,
+        pageNo: pickerPageNo.value,
+        pageSize: pickerPageSize.value,
+      })
+      if (requestVersion !== pickerRequestVersion) return
+      const items = page.items.map(mapSceneCandidate)
+      sceneCandidates.value = items
+      pickerTotal.value = page.total
+      pickerCandidateById.value = new Map([...pickerCandidateById.value, ...items.map(item => [item.id, item] as const)])
+    } else {
+      const page = await apiAutomationApi.getCases(props.workspaceCode, {
+        keyword: pickerKeyword.value.trim() || undefined,
+        pageNo: pickerPageNo.value,
+        pageSize: pickerPageSize.value,
+      })
+      if (requestVersion !== pickerRequestVersion) return
+      const items = page.items.map(mapCaseCandidate)
+      caseCandidates.value = items
+      pickerTotal.value = page.total
+      pickerCandidateById.value = new Map([...pickerCandidateById.value, ...items.map(item => [item.id, item] as const)])
+    }
   } catch (error) {
+    if (requestVersion !== pickerRequestVersion) return
     caseCandidates.value = []
     sceneCandidates.value = []
+    pickerTotal.value = 0
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
-    pickerLoading.value = false
+    if (requestVersion === pickerRequestVersion) pickerLoading.value = false
   }
 }
 
@@ -476,6 +503,7 @@ watch(
     suitePageNo.value = 1
     caseCandidates.value = []
     sceneCandidates.value = []
+    pickerCandidateById.value = new Map()
     void initializeSuitePage()
   },
   { immediate: true },
@@ -499,11 +527,11 @@ watch(suiteTableFrameRef, element => {
 onBeforeUnmount(() => {
   suiteTableFrameObserver?.disconnect()
   if (suiteFilterTimer) window.clearTimeout(suiteFilterTimer)
+  if (pickerFilterTimer) window.clearTimeout(pickerFilterTimer)
 })
 const pickerRows = computed(() => {
   const rows = pickerType.value === 'scene' ? sceneCandidates.value : caseCandidates.value
-  const search = pickerKeyword.value.trim().toLowerCase()
-  return rows.filter(item => !search || item.name.toLowerCase().includes(search))
+  return rows
 })
 const activeItemIds = computed(() => new Set(activeSuite.value?.items.map(item => item.id) || []))
 const selectablePickerIds = computed(() => pickerRows.value.filter(item => !activeItemIds.value.has(item.id)).map(item => item.id))
@@ -534,7 +562,6 @@ async function openSuite(id: string) {
     const [detail, arrangeItems] = await Promise.all([
       apiExecutionSuiteApi.getSuiteDetail(suite.workspaceCode, suite.persistedId),
       apiExecutionSuiteApi.getSuiteItems(suite.workspaceCode, suite.persistedId),
-      loadSuiteResources(),
     ])
     const mapped = mapSuite(detail, arrangeItems)
     const index = suites.value.findIndex(item => item.id === id)
@@ -654,8 +681,25 @@ async function openPicker(type: SuiteItemType) {
   }
   pickerType.value = type
   pickerKeyword.value = ''
+  pickerPageNo.value = 1
+  pickerTotal.value = 0
+  pickerCandidateById.value = new Map()
   selectedPickerIds.value = []
   await loadSuiteResources()
+}
+
+function setPickerPage(value: number) {
+  pickerPageNo.value = value
+  void loadSuiteResources()
+}
+
+function schedulePickerReload() {
+  if (pickerFilterTimer) window.clearTimeout(pickerFilterTimer)
+  pickerFilterTimer = window.setTimeout(() => {
+    pickerFilterTimer = null
+    pickerPageNo.value = 1
+    void loadSuiteResources()
+  }, 250)
 }
 
 function togglePickerItem(id: string) {
@@ -677,8 +721,10 @@ async function addPickerItems() {
   if (!props.canEdit) return
   const suite = activeSuite.value
   if (!suite?.persistedId || !pickerType.value) return
-  const source = pickerType.value === 'scene' ? sceneCandidates.value : caseCandidates.value
-  const selected = source.filter(item => selectedPickerIds.value.includes(item.id) && !activeItemIds.value.has(item.id))
+  const selected = selectedPickerIds.value
+    .map(id => pickerCandidateById.value.get(id))
+    .filter((item): item is SuiteItem => Boolean(item))
+    .filter(item => !activeItemIds.value.has(item.id))
   if (!selected.length) return
   pickerLoading.value = true
   try {
@@ -1139,7 +1185,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
     <div v-if="pickerType" class="figma-suite__overlay">
       <section class="figma-suite__dialog" :class="{ 'is-scene': pickerType === 'scene' }">
         <header><strong>{{ pickerType === 'scene' ? '添加场景' : '添加接口用例' }}</strong><button title="关闭" type="button" @click="pickerType = null"><X /></button></header>
-        <div class="figma-suite__dialog-tools"><select><option>X-MAN</option></select><select v-if="pickerType === 'api'"><option>HTTP</option></select><label><Search /><input v-model="pickerKeyword" :placeholder="pickerType === 'scene' ? '搜索场景名称' : '搜索用例名称'" /></label></div>
+        <div class="figma-suite__dialog-tools"><select><option>X-MAN</option></select><select v-if="pickerType === 'api'"><option>HTTP</option></select><label><Search /><input v-model="pickerKeyword" :placeholder="pickerType === 'scene' ? '搜索场景名称' : '搜索用例名称'" @input="schedulePickerReload" /></label></div>
         <div v-loading="pickerLoading" class="figma-suite__dialog-table">
           <table :class="pickerType === 'scene' ? 'is-scene-picker' : 'is-api-picker'">
             <colgroup v-if="pickerType === 'api'">
@@ -1152,7 +1198,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
             <tbody><tr v-for="item in pickerRows" :key="item.id" :class="{ 'is-disabled': activeItemIds.has(item.id) }" @click="togglePickerItem(item.id)"><td><span v-if="activeItemIds.has(item.id)">已在套件</span><input v-else :checked="selectedPickerIds.includes(item.id)" type="checkbox" /></td><td class="figma-suite__picker-id">{{ item.id }}</td><td><strong>{{ item.name }}</strong></td><td v-if="pickerType === 'api'"><b class="figma-suite__picker-method" :class="`is-${item.method?.toLowerCase()}`">{{ item.method }}</b></td><td v-if="pickerType === 'api'" class="figma-suite__picker-path">{{ item.path }}</td><td>{{ pickerType === 'scene' ? item.module : item.desc }}</td><td v-if="pickerType === 'scene'">{{ item.steps }} 个</td><td><span v-if="pickerType === 'scene' && item.status" class="figma-suite__picker-status" :class="`is-${item.status}`"><i />{{ item.status === 'pass' ? '通过' : item.status === 'fail' ? '失败' : '运行中' }}</span><span v-else class="figma-suite__picker-empty-status">未运行</span></td></tr></tbody>
           </table>
         </div>
-        <footer><p>已选 <strong>{{ selectedPickerIds.length }}</strong> · 当前页 {{ pickerRows.length }} · 共 {{ pickerType === 'scene' ? sceneCandidates.length : caseCandidates.length }}</p><div><button type="button" @click="pickerType = null">取消</button><button :disabled="!selectedPickerIds.length" type="button" @click="addPickerItems">添加{{ selectedPickerIds.length ? ` (${selectedPickerIds.length})` : '' }}</button></div></footer>
+        <footer><p>已选 <strong>{{ selectedPickerIds.length }}</strong> · 当前页 {{ pickerRows.length }} · 共 {{ pickerTotal }}</p><el-pagination size="small" layout="prev, pager, next" :current-page="pickerPageNo" :page-size="pickerPageSize" :total="pickerTotal" @current-change="setPickerPage" /><div><button type="button" @click="pickerType = null">取消</button><button :disabled="!selectedPickerIds.length" type="button" @click="addPickerItems">添加{{ selectedPickerIds.length ? ` (${selectedPickerIds.length})` : '' }}</button></div></footer>
       </section>
     </div>
   </section>
