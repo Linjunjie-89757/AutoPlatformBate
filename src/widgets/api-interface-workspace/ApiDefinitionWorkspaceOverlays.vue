@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref } from 'vue'
+import { defineAsyncComponent, nextTick, ref } from 'vue'
 
 import type {
   ApiDefinitionCaseItem,
 } from '@/entities/api-automation'
-import ApiCaseDetailModule from './ApiCaseDetailModule.vue'
-
 const ApiBatchAddDialog = defineAsyncComponent(() => import('./ApiBatchAddDialog.vue'))
 const ApiCaseCreateEditDialog = defineAsyncComponent(
   () => import('@/features/api-case-create-edit/ApiCaseCreateEditDialog.vue'),
 )
+const loadApiCaseDetailModule = () => import('./ApiCaseDetailModule.vue')
+const ApiCaseDetailModule = defineAsyncComponent(loadApiCaseDetailModule)
 const ApiDefinitionSaveDialog = defineAsyncComponent(() => import('./ApiDefinitionSaveDialog.vue'))
 const ApiFastExtractionDrawer = defineAsyncComponent(() => import('./ApiFastExtractionDrawer.vue'))
 const ApiImportDialog = defineAsyncComponent(() => import('./ApiImportDialog.vue'))
@@ -122,10 +122,19 @@ const emit = defineEmits<{
   configRunEnvironment: []
 }>()
 
-const caseDetailModuleRef = ref<InstanceType<typeof ApiCaseDetailModule> | null>(null)
+type ApiCaseDetailModuleRef = {
+  open: (item: ApiDefinitionCaseItem) => Promise<void>
+  refreshHistoriesIfViewing: (item: ApiDefinitionCaseItem, workspaceCode?: string) => Promise<void>
+}
 
-function open(item: ApiDefinitionCaseItem) {
-  void caseDetailModuleRef.value?.open(item)
+const caseDetailModuleRef = ref<ApiCaseDetailModuleRef | null>(null)
+const caseDetailModuleVisible = ref(false)
+
+async function open(item: ApiDefinitionCaseItem) {
+  caseDetailModuleVisible.value = true
+  await loadApiCaseDetailModule()
+  await nextTick()
+  await caseDetailModuleRef.value?.open(item)
 }
 
 function refreshHistoriesIfViewing(item: ApiDefinitionCaseItem, workspaceCode?: string) {
@@ -195,6 +204,7 @@ defineExpose({
   />
 
   <ApiCaseDetailModule
+    v-if="caseDetailModuleVisible"
     ref="caseDetailModuleRef"
     :workspace-code="props.workspaceCode"
     :active-editor-name="props.activeEditor?.detail.name || ''"
