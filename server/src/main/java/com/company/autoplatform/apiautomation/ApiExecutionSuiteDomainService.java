@@ -726,18 +726,26 @@ public class ApiExecutionSuiteDomainService {
     ) {
         ApiExecutionSuiteEntity suite = requireSuite(suiteId);
         workspaceScopeSupport.validateReadable(suite.getWorkspaceId(), workspaceCode, "Current workspace cannot access the execution suite");
-        List<ApiExecutionSuiteRunHistoryItem> items = suiteRunHistoryMapper.selectList(new LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity>()
-                        .eq(ApiExecutionSuiteRunHistoryEntity::getSuiteId, suiteId)
-                        .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getCreatedAt)
-                        .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getId))
-                .stream()
+        int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
+        LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity> query = new LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity>()
+                .eq(ApiExecutionSuiteRunHistoryEntity::getSuiteId, suiteId)
+                .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getCreatedAt)
+                .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getId);
+        if (pageSize == null || pageSize < 1) {
+            List<ApiExecutionSuiteRunHistoryItem> items = suiteRunHistoryMapper.selectList(query).stream()
+                    .map(this::toSuiteRunHistoryItem)
+                    .toList();
+            int compatiblePageSize = 10;
+            int fromIndex = Math.min((safePageNo - 1) * compatiblePageSize, items.size());
+            int toIndex = Math.min(fromIndex + compatiblePageSize, items.size());
+            return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, compatiblePageSize);
+        }
+        Page<ApiExecutionSuiteRunHistoryEntity> page = suiteRunHistoryMapper.selectPage(
+                new Page<>(safePageNo, pageSize), query);
+        List<ApiExecutionSuiteRunHistoryItem> items = page.getRecords().stream()
                 .map(this::toSuiteRunHistoryItem)
                 .toList();
-        int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
-        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
-        int fromIndex = Math.min((safePageNo - 1) * safePageSize, items.size());
-        int toIndex = Math.min(fromIndex + safePageSize, items.size());
-        return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, safePageSize);
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public ApiExecutionSuiteRunHistoryDetail getSuiteRunHistoryDetail(Long historyId, String workspaceCode) {

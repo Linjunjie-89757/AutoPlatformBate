@@ -1,6 +1,7 @@
 package com.company.autoplatform.apiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.auth.CurrentUserPrincipal;
 import com.company.autoplatform.common.BadRequestException;
@@ -893,18 +894,27 @@ public class ApiExecutionDomainService {
     ) {
         ApiScenarioEntity scenario = executionEngine.requireScenario(scenarioId);
         workspaceScopeSupport.validateReadable(scenario.getWorkspaceId(), workspaceCode, "Current workspace cannot access the scenario");
-        List<ApiScenarioRunHistoryItem> items = scenarioRunHistoryMapper.selectList(new LambdaQueryWrapper<ApiScenarioRunHistoryEntity>()
-                        .eq(ApiScenarioRunHistoryEntity::getScenarioId, scenarioId)
-                        .orderByDesc(ApiScenarioRunHistoryEntity::getCreatedAt)
-                        .orderByDesc(ApiScenarioRunHistoryEntity::getId))
-                .stream()
+        int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
+        LambdaQueryWrapper<ApiScenarioRunHistoryEntity> query = new LambdaQueryWrapper<ApiScenarioRunHistoryEntity>()
+                .eq(ApiScenarioRunHistoryEntity::getScenarioId, scenarioId)
+                .orderByDesc(ApiScenarioRunHistoryEntity::getCreatedAt)
+                .orderByDesc(ApiScenarioRunHistoryEntity::getId);
+        if (pageSize == null || pageSize < 1) {
+            List<ApiScenarioRunHistoryItem> items = scenarioRunHistoryMapper.selectList(query).stream()
+                    .map(this::toScenarioRunHistoryItem)
+                    .toList();
+            int compatiblePageSize = 10;
+            int fromIndex = Math.min((safePageNo - 1) * compatiblePageSize, items.size());
+            int toIndex = Math.min(fromIndex + compatiblePageSize, items.size());
+            return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, compatiblePageSize);
+        }
+        int safePageSize = Math.min(pageSize, 50);
+        Page<ApiScenarioRunHistoryEntity> page = scenarioRunHistoryMapper.selectPage(
+                new Page<>(safePageNo, safePageSize), query);
+        List<ApiScenarioRunHistoryItem> items = page.getRecords().stream()
                 .map(this::toScenarioRunHistoryItem)
                 .toList();
-        int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
-        int safePageSize = pageSize == null || pageSize < 1 ? 10 : Math.min(pageSize, 50);
-        int fromIndex = Math.min((safePageNo - 1) * safePageSize, items.size());
-        int toIndex = Math.min(fromIndex + safePageSize, items.size());
-        return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, safePageSize);
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public ApiScenarioRunHistoryDetail getScenarioRunHistoryDetail(Long historyId, String workspaceCode) {
