@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
-import RequirementManagementPanel from './RequirementManagementPanel.vue'
-import TestPlanManagementPanel from './TestPlanManagementPanel.vue'
-import VersionManagementPanel from './VersionManagementPanel.vue'
+const RequirementManagementPanel = defineAsyncComponent(
+  () => import('./RequirementManagementPanel.vue'),
+)
+const TestPlanManagementPanel = defineAsyncComponent(
+  () => import('./TestPlanManagementPanel.vue'),
+)
+const VersionManagementPanel = defineAsyncComponent(
+  () => import('./VersionManagementPanel.vue'),
+)
 
 type ActiveTab = 'requirements' | 'versions' | 'plans'
 type DetailState = { id: string | null; tab: string | null }

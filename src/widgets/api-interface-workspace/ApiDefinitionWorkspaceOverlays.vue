@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 
 import type {
   ApiDefinitionCaseItem,
 } from '@/entities/api-automation'
-import ApiCaseCreateEditDialog from '@/features/api-case-create-edit/ApiCaseCreateEditDialog.vue'
-import ApiBatchAddDialog from './ApiBatchAddDialog.vue'
 import ApiCaseDetailModule from './ApiCaseDetailModule.vue'
-import ApiDefinitionSaveDialog from './ApiDefinitionSaveDialog.vue'
-import ApiFastExtractionDrawer from './ApiFastExtractionDrawer.vue'
-import ApiImportDialog from './ApiImportDialog.vue'
-import ApiRunEnvironmentDrawer from './ApiRunEnvironmentDrawer.vue'
-import ApiSoftPromptDialog from './ApiSoftPromptDialog.vue'
+
+const ApiBatchAddDialog = defineAsyncComponent(() => import('./ApiBatchAddDialog.vue'))
+const ApiCaseCreateEditDialog = defineAsyncComponent(
+  () => import('@/features/api-case-create-edit/ApiCaseCreateEditDialog.vue'),
+)
+const ApiDefinitionSaveDialog = defineAsyncComponent(() => import('./ApiDefinitionSaveDialog.vue'))
+const ApiFastExtractionDrawer = defineAsyncComponent(() => import('./ApiFastExtractionDrawer.vue'))
+const ApiImportDialog = defineAsyncComponent(() => import('./ApiImportDialog.vue'))
+const ApiRunEnvironmentDrawer = defineAsyncComponent(() => import('./ApiRunEnvironmentDrawer.vue'))
+const ApiSoftPromptDialog = defineAsyncComponent(() => import('./ApiSoftPromptDialog.vue'))
 
 const softPromptVisible = defineModel<boolean>('softPromptVisible', { required: true })
 const softPromptValue = defineModel<string>('softPromptValue', { required: true })
@@ -137,6 +140,7 @@ defineExpose({
 
 <template>
   <ApiSoftPromptDialog
+    v-if="softPromptVisible"
     v-model="softPromptVisible"
     v-model:value="softPromptValue"
     :title="props.softPromptTitle"
@@ -151,6 +155,7 @@ defineExpose({
   />
 
   <ApiImportDialog
+    v-if="importDialogVisible"
     v-model="importDialogVisible"
     v-model:mode="importMode"
     v-model:input-mode="importInputMode"
@@ -165,6 +170,7 @@ defineExpose({
   />
 
   <ApiDefinitionSaveDialog
+    v-if="definitionSaveDialogVisible"
     v-model="definitionSaveDialogVisible"
     :current-name="props.activeEditor?.detail.name"
     :request-path="props.activeEditor?.detail.requestConfig.path"
@@ -178,6 +184,7 @@ defineExpose({
   />
 
   <ApiBatchAddDialog
+    v-if="batchAddVisible"
     v-model="batchAddVisible"
     v-model:text="batchAddText"
     :title="props.batchAddDialogTitle"
@@ -214,6 +221,7 @@ defineExpose({
   />
 
   <ApiCaseCreateEditDialog
+    v-if="caseDialogVisible"
     v-model="caseDialogVisible"
     :mode="props.caseDialogMode"
     :definition="props.currentDefinitionSummary()"
@@ -236,6 +244,7 @@ defineExpose({
   />
 
   <ApiFastExtractionDrawer
+    v-if="fastExtractionVisible"
     v-model:visible="fastExtractionVisible"
     :response="props.latestResponseBody"
     :mode="props.fastExtractionMode"
@@ -245,6 +254,7 @@ defineExpose({
   />
 
   <ApiRunEnvironmentDrawer
+    v-if="runEnvironmentDrawerVisible"
     v-model="runEnvironmentDrawerVisible"
     v-model:selected-mock-business-scenario-id="selectedMockBusinessScenarioId"
     :loading="props.runEnvironmentDetailLoading"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, type Component } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { aiProviderApi } from '@/entities/ai-provider'
@@ -8,13 +8,6 @@ import { localRunnerApi } from '@/entities/local-runner'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { ConfigAiPanel } from '@/widgets/config-ai-panel'
-import ConfigDbPanel from '@/widgets/config-db-panel/ConfigDbPanel.vue'
-import ConfigEnvironmentFigmaWorkspace from '@/widgets/config-env-panel/ConfigEnvironmentFigmaWorkspace.vue'
-import ConfigMockPanel from '@/widgets/config-mock-panel/ConfigMockPanel.vue'
-import ConfigNotificationPanel from '@/widgets/config-notification-panel/ConfigNotificationPanel.vue'
-import ConfigVariableFigmaWorkspace from '@/widgets/config-param-panel/ConfigVariableFigmaWorkspace.vue'
-import ConfigRunnerPanel from '@/widgets/config-runner-panel/ConfigRunnerPanel.vue'
 import { figmaConfigOverviewIcons } from '@/shared/assets/figma-icons'
 
 type ConfigCenterView = ConfigCenterTab | 'overview' | 'ai'
@@ -70,13 +63,13 @@ const configTabs: ConfigTabItem[] = [
 
 const configTabKeys = new Set<ConfigCenterView>(configTabs.map(item => item.key))
 const configPanelComponents: Record<ConfigPanelView, Component> = {
-  dbConnection: ConfigDbPanel,
-  env: ConfigEnvironmentFigmaWorkspace,
-  param: ConfigVariableFigmaWorkspace,
-  notification: ConfigNotificationPanel,
-  runner: ConfigRunnerPanel,
-  ai: ConfigAiPanel,
-  mock: ConfigMockPanel,
+  dbConnection: defineAsyncComponent(() => import('@/widgets/config-db-panel/ConfigDbPanel.vue')),
+  env: defineAsyncComponent(() => import('@/widgets/config-env-panel/ConfigEnvironmentFigmaWorkspace.vue')),
+  param: defineAsyncComponent(() => import('@/widgets/config-param-panel/ConfigVariableFigmaWorkspace.vue')),
+  notification: defineAsyncComponent(() => import('@/widgets/config-notification-panel/ConfigNotificationPanel.vue')),
+  runner: defineAsyncComponent(() => import('@/widgets/config-runner-panel/ConfigRunnerPanel.vue')),
+  ai: defineAsyncComponent(() => import('@/widgets/config-ai-panel/ConfigAiPanel.vue')),
+  mock: defineAsyncComponent(() => import('@/widgets/config-mock-panel/ConfigMockPanel.vue')),
 }
 
 const route = useRoute()

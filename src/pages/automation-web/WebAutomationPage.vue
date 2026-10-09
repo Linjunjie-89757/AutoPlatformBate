@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { hasWorkspacePermission, useSession } from '@/entities/session'
@@ -7,15 +7,32 @@ import { useWorkspaceContext, workspaceApi, type WorkspaceItem } from '@/entitie
 import AppButton from '@/shared/ui/app-button/AppButton.vue'
 import AppEmptyState from '@/shared/ui/app-empty-state/AppEmptyState.vue'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
-import { WebUiCaseWorkspace } from '@/widgets/web-ui-case-workspace'
-import WebUiCaseDetailWorkspace from '@/widgets/web-ui-case-workspace/WebUiCaseDetailWorkspace.vue'
-import WebUiElementCollectTaskWorkspace from '@/widgets/web-ui-case-workspace/WebUiElementCollectTaskWorkspace.vue'
-import WebUiElementFigmaLibrary from '@/widgets/web-ui-case-workspace/WebUiElementFigmaLibrary.vue'
-import WebUiRunRecordsFigmaPage from '@/widgets/web-ui-case-workspace/WebUiRunRecordsFigmaPage.vue'
-import WebUiSuiteFigmaWorkspace from '@/widgets/web-ui-case-workspace/WebUiSuiteFigmaWorkspace.vue'
-import WebUiVariableSetDetailPage from '@/widgets/web-ui-case-workspace/WebUiVariableSetDetailPage.vue'
-import WebUiVariableSetPanel from '@/widgets/web-ui-case-workspace/WebUiVariableSetPanel.vue'
 import { webUiAutomationApi, type WebUiEnvironmentItem } from '@/entities/web-ui-automation'
+
+const WebUiCaseWorkspace = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiCaseWorkspace.vue'),
+)
+const WebUiCaseDetailWorkspace = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiCaseDetailWorkspace.vue'),
+)
+const WebUiElementFigmaLibrary = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiElementFigmaLibrary.vue'),
+)
+const WebUiSuiteFigmaWorkspace = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiSuiteFigmaWorkspace.vue'),
+)
+const WebUiRunRecordsFigmaPage = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiRunRecordsFigmaPage.vue'),
+)
+const WebUiElementCollectTaskWorkspace = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiElementCollectTaskWorkspace.vue'),
+)
+const WebUiVariableSetPanel = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiVariableSetPanel.vue'),
+)
+const WebUiVariableSetDetailPage = defineAsyncComponent(
+  () => import('@/widgets/web-ui-case-workspace/WebUiVariableSetDetailPage.vue'),
+)
 
 const workspaceCode = ref('ALL')
 const workspaces = ref<WorkspaceItem[]>([])

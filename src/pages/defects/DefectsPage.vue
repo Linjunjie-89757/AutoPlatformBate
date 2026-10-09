@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { defectApi, type DefectClientFilter, type DefectStatistics } from '@/entities/defect'
@@ -13,11 +13,12 @@ import {
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 import AppPage from '@/shared/ui/app-page/AppPage.vue'
-import DefectStatusDonutChart from '@/shared/ui/charts/DefectStatusDonutChart.vue'
-import DefectTrendAreaChart from '@/shared/ui/charts/DefectTrendAreaChart.vue'
 import { DefectFilterPanel } from '@/widgets/defect-filter-panel'
 import { DefectListPanel } from '@/widgets/defect-list-panel'
 import { DefectSummaryPanel } from '@/widgets/defect-summary-panel'
+
+const DefectStatusDonutChart = defineAsyncComponent(() => import('@/shared/ui/charts/DefectStatusDonutChart.vue'))
+const DefectTrendAreaChart = defineAsyncComponent(() => import('@/shared/ui/charts/DefectTrendAreaChart.vue'))
 
 const route = useRoute()
 const router = useRouter()
