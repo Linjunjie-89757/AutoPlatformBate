@@ -24,7 +24,7 @@ import {
 } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type Component, watch } from 'vue'
 
-import { caseApi, type CaseDirectoryNode, type CaseSummaryItem } from '@/entities/case'
+import { caseApi, type CaseDirectoryNode, type CaseDirectoryWorkspace, type CaseSummaryItem } from '@/entities/case'
 import { defectApi } from '@/entities/defect'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import {
@@ -111,6 +111,8 @@ const planVersions = ref<Array<{ id: string; name: string; status: string }>>([]
 const planOwners = ref<Array<{ id: number; displayName: string }>>([])
 const planCaseLibrary = ref<LibraryCase[]>([])
 const planCaseDirectoryTree = ref<CaseDirectory[]>([{ id: 'root', label: '全部用例', count: 0, children: [] }])
+let planDirectoryWorkspace: CaseDirectoryWorkspace | null = null
+let planWizardDataLoadPromise: Promise<void> | null = null
 type PlanRequirementOption = {
   id: string
   versionId: string
@@ -256,7 +258,7 @@ const directoryCaseCount = (node: CaseDirectoryNode, items: LibraryCase[]): numb
 const mapCaseDirectory = (node: CaseDirectoryNode, items: LibraryCase[]): CaseDirectory => ({
   id: String(node.id),
   label: node.name,
-  count: directoryCaseCount(node, items),
+  count: node.caseCount ?? directoryCaseCount(node, items),
   children: (node.children || []).map(child => mapCaseDirectory(child, items)),
 })
 
@@ -384,27 +386,27 @@ const loadPlans = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const [result, versions, requirements, members, cases, directoryWorkspaces] = await Promise.all([
+    const [result, versions, members, directoryWorkspaces] = await Promise.all([
       testManagementApi.listPlans(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
-      testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value),
-      caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 }),
       caseApi.getCaseDirectories(selectedWorkspaceCode.value),
     ])
     plans.value = result.items.map(mapPlan)
     planLockVersions.value = new Map(result.items.map(item => [String(item.id), item.lockVersion]))
     planVersions.value = versions.items.map(item => ({ id: String(item.id), name: item.name, status: item.status }))
-    planRequirements.value = requirements.items.map(mapPlanRequirement)
     planOwners.value = members.map(mapAssignableMember)
-    planCaseLibrary.value = cases.items.map(mapLibraryCase)
     const workspaceDirectories = directoryWorkspaces.find(item => item.workspaceCode === selectedWorkspaceCode.value)
       || directoryWorkspaces[0]
+    planDirectoryWorkspace = workspaceDirectories || null
+    planRequirements.value = []
+    planCaseLibrary.value = []
+    planWizardDataLoadPromise = null
     planCaseDirectoryTree.value = [{
       id: 'root',
       label: workspaceDirectories?.workspaceName || '全部用例',
-      count: planCaseLibrary.value.length,
-      children: (workspaceDirectories?.children || []).map(item => mapCaseDirectory(item, planCaseLibrary.value)),
+      count: workspaceDirectories?.caseCount || 0,
+      children: (workspaceDirectories?.children || []).map(item => mapCaseDirectory(item, [])),
     }]
     if (!form.versionId) form.versionId = result.items.find(item => item.versionId)?.versionId ? String(result.items.find(item => item.versionId)?.versionId) : ''
     restoreInitialDetail()
@@ -415,6 +417,29 @@ const loadPlans = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+const ensurePlanWizardData = async () => {
+  if (planWizardDataLoadPromise) return planWizardDataLoadPromise
+  planWizardDataLoadPromise = Promise.all([
+    testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
+    caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 }),
+  ]).then(([requirements, cases]) => {
+    planRequirements.value = requirements.items.map(mapPlanRequirement)
+    planCaseLibrary.value = cases.items.map(mapLibraryCase)
+    if (planDirectoryWorkspace) {
+      planCaseDirectoryTree.value = [{
+        id: 'root',
+        label: planDirectoryWorkspace.workspaceName,
+        count: planDirectoryWorkspace.caseCount || 0,
+        children: planDirectoryWorkspace.children.map(item => mapCaseDirectory(item, planCaseLibrary.value)),
+      }]
+    }
+  }).catch((error) => {
+    planWizardDataLoadPromise = null
+    throw error
+  })
+  return planWizardDataLoadPromise
 }
 
 const applyPlanDetail = (result: TestPlanItem) => {
@@ -610,9 +635,15 @@ const resetWizard = () => {
   editReturnToDetail.value = false
 }
 
-const openWizard = (versionId?: string | null) => {
+const openWizard = async (versionId?: string | null) => {
   if (!canCreate.value) {
     showToast('你没有创建测试计划的权限')
+    return
+  }
+  try {
+    await ensurePlanWizardData()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '测试计划关联数据加载失败')
     return
   }
   resetWizard()
@@ -652,6 +683,7 @@ const openEditPlan = async (plan: ManagedTestPlan, returnToDetail = false) => {
   }
   isSubmitting.value = true
   try {
+    await ensurePlanWizardData()
     const detail = await testManagementApi.getPlan(selectedWorkspaceCode.value, Number(plan.id))
     resetWizard()
     editingPlanId.value = String(detail.id)
@@ -841,9 +873,15 @@ const saveAndStart = async () => {
   }
 }
 
-const openPicker = (mode: 'manual' | 'direct' | 'detail') => {
+const openPicker = async (mode: 'manual' | 'direct' | 'detail') => {
   if (mode === 'detail' ? !canModifySelectedPlanCases.value : !canCreate.value) {
     showToast('你没有调整测试用例范围的权限')
+    return
+  }
+  try {
+    await ensurePlanWizardData()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '测试用例加载失败')
     return
   }
   pickerMode.value = mode

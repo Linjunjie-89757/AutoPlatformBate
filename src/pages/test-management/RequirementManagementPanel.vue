@@ -20,7 +20,7 @@ import {
 } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-import { caseApi, type CaseDetail, type CaseDirectoryNode, type CaseSummaryItem } from '@/entities/case'
+import { caseApi, type CaseDetail, type CaseDirectoryNode, type CaseDirectoryWorkspace, type CaseSummaryItem } from '@/entities/case'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { testManagementApi, type TestPlanItem, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
 import { getRequestErrorMessage } from '@/shared/api/error'
@@ -64,6 +64,9 @@ const caseLibrary = ref<Array<{ id: string; no: string; title: string; directory
 const caseDirectoryTree = ref<CaseDirectory[]>([{ id: 'root', label: '全部用例', count: 0, children: [] }])
 const requirementTestPlans = ref<Array<{ id: string; name: string; status: RequirementPlanStatus; requirementIds: number[] }>>([])
 const requirementOwners = ref<Array<{ id: number; displayName: string }>>([])
+let caseDirectoryWorkspace: CaseDirectoryWorkspace | null = null
+let caseLibraryLoadPromise: Promise<void> | null = null
+let requirementPlansLoadPromise: Promise<void> | null = null
 const requirementLockVersions = ref(new Map<string, number>())
 const isLoading = ref(false)
 const isSubmitting = ref(false)
@@ -149,7 +152,7 @@ const directoryCaseCount = (node: CaseDirectoryNode, cases: Array<{ directoryId:
 const mapCaseDirectory = (node: CaseDirectoryNode, cases: Array<{ directoryId: string }>): CaseDirectory => ({
   id: String(node.id),
   label: node.name,
-  count: directoryCaseCount(node, cases),
+  count: node.caseCount ?? directoryCaseCount(node, cases),
   children: (node.children || []).map(child => mapCaseDirectory(child, cases)),
 })
 
@@ -216,13 +219,11 @@ const loadRequirements = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const [versions, requirementPage, cases, members, directories, plans] = await Promise.all([
+    const [versions, requirementPage, members, directories] = await Promise.all([
       testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
       testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
-      caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 }),
       workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value),
       caseApi.getCaseDirectories(selectedWorkspaceCode.value),
-      testManagementApi.listPlans(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
     ])
     requirementVersions.value = versions.items.map(item => ({
       id: String(item.id),
@@ -231,15 +232,18 @@ const loadRequirements = async () => {
     }))
     requirements.value = requirementPage.items.map(mapRequirement)
     requirementLockVersions.value = new Map(requirementPage.items.map(item => [String(item.id), item.lockVersion]))
-    caseLibrary.value = cases.items.map(mapCase)
     const workspaceDirectories = directories.find(item => item.workspaceCode === selectedWorkspaceCode.value) || directories[0]
+    caseDirectoryWorkspace = workspaceDirectories || null
+    caseLibrary.value = []
+    requirementTestPlans.value = []
+    caseLibraryLoadPromise = null
+    requirementPlansLoadPromise = null
     caseDirectoryTree.value = [{
       id: 'root',
       label: workspaceDirectories?.workspaceName || '全部用例',
-      count: caseLibrary.value.length,
-      children: (workspaceDirectories?.children || []).map(node => mapCaseDirectory(node, caseLibrary.value)),
+      count: workspaceDirectories?.caseCount || 0,
+      children: (workspaceDirectories?.children || []).map(node => mapCaseDirectory(node, [])),
     }]
-    requirementTestPlans.value = plans.items.map(mapRequirementPlan)
     requirementOwners.value = members.map(mapAssignableMember)
     if (!requirementVersions.value.some(item => item.id === createForm.versionId)) {
       createForm.versionId = requirementVersions.value[0]?.id || ''
@@ -252,6 +256,40 @@ const loadRequirements = async () => {
   } finally {
     isLoading.value = false
   }
+}
+
+const ensureCaseLibraryLoaded = async () => {
+  if (caseLibraryLoadPromise) return caseLibraryLoadPromise
+  caseLibraryLoadPromise = caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 })
+    .then((cases) => {
+      caseLibrary.value = cases.items.map(mapCase)
+      if (caseDirectoryWorkspace) {
+        caseDirectoryTree.value = [{
+          id: 'root',
+          label: caseDirectoryWorkspace.workspaceName,
+          count: caseDirectoryWorkspace.caseCount || 0,
+          children: caseDirectoryWorkspace.children.map(node => mapCaseDirectory(node, caseLibrary.value)),
+        }]
+      }
+    })
+    .catch((error) => {
+      caseLibraryLoadPromise = null
+      throw error
+    })
+  return caseLibraryLoadPromise
+}
+
+const ensureRequirementPlansLoaded = async () => {
+  if (requirementPlansLoadPromise) return requirementPlansLoadPromise
+  requirementPlansLoadPromise = testManagementApi.listPlans(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 })
+    .then((plans) => {
+      requirementTestPlans.value = plans.items.map(mapRequirementPlan)
+    })
+    .catch((error) => {
+      requirementPlansLoadPromise = null
+      throw error
+    })
+  return requirementPlansLoadPromise
 }
 
 const managementTabs: Array<{ key: ManagementTab; label: string }> = [
@@ -437,6 +475,9 @@ const openRequirement = (requirement: ManagedRequirement, tab: DetailTab = 'case
   selectedRequirement.value = requirement
   detailTab.value = tab
   emit('detail-state-change', { id: requirement.id, tab })
+  void Promise.all([ensureCaseLibraryLoaded(), ensureRequirementPlansLoaded()]).catch((error) => {
+    showToast(error instanceof Error ? error.message : '需求关联数据加载失败')
+  })
 }
 
 const closeDetail = () => {
@@ -707,9 +748,15 @@ const deleteRequirement = async () => {
   }
 }
 
-const openCasePicker = () => {
+const openCasePicker = async () => {
   if (!canEdit.value) {
     showToast('暂无关联需求用例权限')
+    return
+  }
+  try {
+    await ensureCaseLibraryLoaded()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '测试用例加载失败')
     return
   }
   pickerChecked.value = new Set(linkedCases.value.map(item => item.id))
