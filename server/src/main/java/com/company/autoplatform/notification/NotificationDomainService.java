@@ -1,6 +1,7 @@
 package com.company.autoplatform.notification;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.company.autoplatform.common.BadRequestException;
@@ -284,17 +285,16 @@ public class NotificationDomainService {
         if (createdTo != null) {
             query.le(NotificationRecordEntity::getCreatedAt, createdTo);
         }
-        List<NotificationRecordItem> allItems = recordMapper.selectList(query
-                        .orderByDesc(NotificationRecordEntity::getCreatedAt)
-                        .orderByDesc(NotificationRecordEntity::getId))
-                .stream()
-                .map(this::toRecordItem)
-                .toList();
         int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
         int safePageSize = pageSize == null || pageSize < 1 ? 20 : pageSize;
-        int fromIndex = Math.min((safePageNo - 1) * safePageSize, allItems.size());
-        int toIndex = Math.min(fromIndex + safePageSize, allItems.size());
-        return PageResponse.of(allItems.subList(fromIndex, toIndex), allItems.size(), safePageNo, safePageSize);
+        Page<NotificationRecordEntity> page = recordMapper.selectPage(
+                new Page<>(safePageNo, safePageSize),
+                query.orderByDesc(NotificationRecordEntity::getCreatedAt)
+                        .orderByDesc(NotificationRecordEntity::getId));
+        List<NotificationRecordItem> items = page.getRecords().stream()
+                .map(this::toRecordItem)
+                .toList();
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     public void publishEvent(NotificationEvent event) {
