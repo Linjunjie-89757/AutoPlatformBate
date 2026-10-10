@@ -35,8 +35,25 @@ final class ApiExecutionRuntimeModels {
             Long mockApplicationId,
             Long mockReleaseId,
             String defaultServiceKey,
-            List<EnvironmentServiceEndpoint> services
+            List<EnvironmentServiceEndpoint> services,
+            List<Long> variableSetIds,
+            List<Long> disabledVariableSetIds
     ) {
+        EnvironmentConfigPayload(
+                List<ApiKeyValueInput> headers,
+                ApiAuthConfigInput authConfig,
+                Integer timeoutMs,
+                List<ApiVariableItem> variables,
+                Long defaultVariableSetId,
+                Boolean mockEnabled,
+                Long mockApplicationId,
+                Long mockReleaseId,
+                String defaultServiceKey,
+                List<EnvironmentServiceEndpoint> services
+        ) {
+            this(headers, authConfig, timeoutMs, variables, defaultVariableSetId, mockEnabled,
+                    mockApplicationId, mockReleaseId, defaultServiceKey, services, List.of(), List.of());
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -65,7 +82,9 @@ final class ApiExecutionRuntimeModels {
             Integer mockReleaseVersion,
             String mockExecutionToken,
             String defaultServiceKey,
-            List<EnvironmentServiceEndpoint> services
+            List<EnvironmentServiceEndpoint> services,
+            List<Long> variableSetIds,
+            List<Long> disabledVariableSetIds
     ) {
         ResolvedEnvironment(
                 Long environmentId,
@@ -84,8 +103,35 @@ final class ApiExecutionRuntimeModels {
         ) {
             this(environmentId, baseUrl, headers, authConfig, timeoutMs, variables, defaultVariableSetId,
                     mockApplicationId, mockApplicationName, mockApplicationCode, mockBaseUrl, null, null,
-                    null, null, null, defaultServiceKey, services);
+                    null, null, null, defaultServiceKey, services, List.of(), List.of());
         }
+
+        ResolvedEnvironment(
+                Long environmentId,
+                String baseUrl,
+                List<ApiKeyValueInput> headers,
+                ApiAuthConfigInput authConfig,
+                Integer timeoutMs,
+                List<ApiVariableItem> variables,
+                Long defaultVariableSetId,
+                Long mockApplicationId,
+                String mockApplicationName,
+                String mockApplicationCode,
+                String mockBaseUrl,
+                Long mockBusinessScenarioId,
+                String mockBusinessScenarioName,
+                Long mockReleaseId,
+                Integer mockReleaseVersion,
+                String mockExecutionToken,
+                String defaultServiceKey,
+                List<EnvironmentServiceEndpoint> services
+        ) {
+            this(environmentId, baseUrl, headers, authConfig, timeoutMs, variables, defaultVariableSetId,
+                    mockApplicationId, mockApplicationName, mockApplicationCode, mockBaseUrl, mockBusinessScenarioId,
+                    mockBusinessScenarioName, mockReleaseId, mockReleaseVersion, mockExecutionToken,
+                    defaultServiceKey, services, List.of(), List.of());
+        }
+
     }
 
     record ExecutionContext(

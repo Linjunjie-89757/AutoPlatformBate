@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 
 import {
   apiAutomationApi,
+  listAllApiCases,
   type ApiDefinitionCaseDetail,
   type ApiDefinitionCaseItem,
   type ApiDefinitionDetail,
@@ -112,9 +113,9 @@ export function useApiDefinitionCases(options: UseApiDefinitionCasesOptions) {
 
   async function loadCasesForDefinition(definitionId: number, workspaceCode = options.workspaceCode.value) {
     try {
-      const page = await apiAutomationApi.getCases(workspaceCode, { definitionId, pageNo: 1, pageSize: 100 })
+      const loadedCases = await listAllApiCases(workspaceCode, { definitionId })
       const others = cases.value.filter(item => item.definitionId !== definitionId)
-      cases.value = [...others, ...page.items]
+      cases.value = [...others, ...loadedCases]
       options.onLoaded({
         definitions: options.getDefinitions(),
         modules: options.getModules(),

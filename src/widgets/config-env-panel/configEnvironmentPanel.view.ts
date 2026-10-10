@@ -199,8 +199,8 @@ export function variableSetHasSensitive(item: ParamSetItem) {
 
 export function calculateConfigIssues(target: ConfigEnvForm) {
   let issues = 0
-  if (!target.services.length) issues += 1
-  if (target.services.some(service => !service.name.trim() || !service.baseUrl.trim())) issues += 1
+  if (target.automationType !== 'APP' && !target.apiConfig.baseUrl.trim() && !target.webUIConfig?.entryUrl.trim()) issues += 1
+  if ((target.automationType === 'WEB_UI' || target.automationType === 'API_WEB_UI') && !target.webUIConfig?.entryUrl.trim()) issues += 1
   if ((target.mockApplicationId || target.mockReleaseId) && (!target.mockApplicationId || !target.mockReleaseId)) issues += 1
   return issues
 }
@@ -209,10 +209,21 @@ export function environmentCardSummary(environment: EnvConfigItem): EnvironmentC
   const form = createConfigEnvFormFromItem(environment)
   return {
     stage: environmentStageMeta[form.envType] || environmentStageMeta.TEST,
-    services: form.services.filter(service => service.baseUrl).length,
+    services: form.apiConfig.baseUrl.trim() ? 1 : 0,
+    apiConfigured: Boolean(form.apiConfig.baseUrl.trim()),
+    webUiConfigured: Boolean(form.webUIConfig?.entryUrl.trim()),
     variableSets: form.variableSetIds.length,
     issues: calculateConfigIssues(form),
     mockEnabled: Boolean(form.mockApplicationId && form.mockReleaseId),
+  }
+}
+
+export function environmentCardIdentifier(environment: EnvConfigItem) {
+  try {
+    const config = JSON.parse(environment.configJson || '{}') as { identifier?: string }
+    return config.identifier || environment.envName
+  } catch {
+    return environment.envName
   }
 }
 

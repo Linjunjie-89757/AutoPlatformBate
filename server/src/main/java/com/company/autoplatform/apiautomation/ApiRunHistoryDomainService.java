@@ -11,8 +11,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static com.company.autoplatform.apiautomation.ApiAutomationModels.*;
 
@@ -65,11 +67,12 @@ public class ApiRunHistoryDomainService {
     public PageResponse<ApiDefinitionCaseRunHistoryItem> listCaseRunHistory(Long caseId, String workspaceCode) {
         ApiDefinitionCaseEntity apiCase = requireCase(caseId);
         workspaceScopeSupport.validateReadable(apiCase.getWorkspaceId(), workspaceCode, "Current workspace cannot access the case");
-        List<ApiDefinitionCaseRunHistoryItem> items = caseRunHistoryMapper.selectList(new LambdaQueryWrapper<ApiDefinitionCaseRunHistoryEntity>()
+        List<ApiDefinitionCaseRunHistoryEntity> histories = caseRunHistoryMapper.selectList(new LambdaQueryWrapper<ApiDefinitionCaseRunHistoryEntity>()
                         .eq(ApiDefinitionCaseRunHistoryEntity::getCaseId, caseId)
-                        .orderByDesc(ApiDefinitionCaseRunHistoryEntity::getCreatedAt))
-                .stream()
-                .map(this::toCaseRunHistoryItem)
+                        .orderByDesc(ApiDefinitionCaseRunHistoryEntity::getCreatedAt));
+        Map<Long, List<ApiRunStepResultResponse>> stepResultsByReportId = loadStepResultsByReportId(histories);
+        List<ApiDefinitionCaseRunHistoryItem> items = histories.stream()
+                .map(history -> toCaseRunHistoryItem(history, stepResultsByReportId))
                 .toList();
         return new PageResponse<>(items, items.size());
     }
@@ -108,9 +111,12 @@ public class ApiRunHistoryDomainService {
         );
     }
 
-    private ApiDefinitionCaseRunHistoryItem toCaseRunHistoryItem(ApiDefinitionCaseRunHistoryEntity entity) {
+    private ApiDefinitionCaseRunHistoryItem toCaseRunHistoryItem(
+            ApiDefinitionCaseRunHistoryEntity entity,
+            Map<Long, List<ApiRunStepResultResponse>> stepResultsByReportId
+    ) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
-        List<ApiRunStepResultResponse> stepResults = listRunStepResponses(entity.getReportId());
+        List<ApiRunStepResultResponse> stepResults = stepResultsByReportId.getOrDefault(entity.getReportId(), List.of());
         return new ApiDefinitionCaseRunHistoryItem(
                 entity.getId(),
                 workspace.getWorkspaceCode(),
@@ -180,12 +186,35 @@ public class ApiRunHistoryDomainService {
     }
 
     private List<ApiRunStepResultResponse> listRunStepResponses(Long reportId) {
+        if (reportId == null) {
+            return List.of();
+        }
         return runStepResultMapper.selectList(new LambdaQueryWrapper<ApiRunStepResultEntity>()
                         .eq(ApiRunStepResultEntity::getReportId, reportId)
                         .orderByAsc(ApiRunStepResultEntity::getStepOrder))
                 .stream()
                 .map(this::toRunStepResponse)
                 .toList();
+    }
+
+    private Map<Long, List<ApiRunStepResultResponse>> loadStepResultsByReportId(
+            List<ApiDefinitionCaseRunHistoryEntity> histories
+    ) {
+        List<Long> reportIds = histories.stream()
+                .map(ApiDefinitionCaseRunHistoryEntity::getReportId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (reportIds.isEmpty()) {
+            return Map.of();
+        }
+        return runStepResultMapper.selectList(new LambdaQueryWrapper<ApiRunStepResultEntity>()
+                        .in(ApiRunStepResultEntity::getReportId, reportIds)
+                        .orderByAsc(ApiRunStepResultEntity::getReportId)
+                        .orderByAsc(ApiRunStepResultEntity::getStepOrder))
+                .stream()
+                .map(this::toRunStepResponse)
+                .collect(Collectors.groupingBy(ApiRunStepResultResponse::reportId));
     }
 
     private String resolveCaseRunDisplayResult(String runResult, List<ApiRunStepResultResponse> stepResults) {

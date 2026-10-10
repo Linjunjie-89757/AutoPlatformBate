@@ -1,35 +1,30 @@
 <script setup lang="ts">
 import {
-  AlertTriangle as Warning,
   Copy as CopyDocument,
-  Edit2 as Edit,
   Globe,
-  Layers,
   Power as SwitchButton,
-  Trash2 as Delete,
+  CheckCircle,
 } from '@lucide/vue'
 
 import type { EnvironmentStageMeta } from './configEnvironmentPanel.types'
 
 defineProps<{
   environmentName: string
+  environmentIdentifier: string
   description: string
   stage: EnvironmentStageMeta
-  applicationLabel: string
-  configComplete: boolean
-  configIssueCount: number
-  serviceCount: number
-  variableSetCount: number
-  referenceCount: number
   enabled: boolean
+  isProduction: boolean
+  dirty: boolean
   operating: boolean
+  saving: boolean
+  saveDisabled: boolean
 }>()
 
 const emit = defineEmits<{
   copy: []
-  edit: []
   switchStatus: []
-  remove: []
+  save: []
 }>()
 </script>
 
@@ -41,28 +36,21 @@ const emit = defineEmits<{
         <div class="figma-env__detail-title-row">
           <h2>{{ environmentName }}</h2>
           <span class="figma-env__stage-badge" :style="{ color: stage.color, background: stage.background }">{{ stage.label }}</span>
-          <span class="figma-env__apply-badge">
-            <el-icon><Layers :size="10" /></el-icon>
-            {{ applicationLabel }}
-          </span>
+          <span v-if="isProduction" class="figma-env__status-badge is-production">生产</span>
+          <span v-if="!enabled" class="figma-env__status-badge is-disabled">已停用</span>
+          <span v-if="dirty" class="figma-env__status-badge is-dirty">未保存</span>
         </div>
         <div class="figma-env__detail-description">
-          <span>{{ description || '暂未填写环境说明' }}</span>
-          <i>·</i><span>更新人：—</span><i>·</i><span>—</span>
-          <template v-if="!configComplete"><i>·</i><span class="is-warning"><el-icon><Warning /></el-icon>{{ configIssueCount }} 项配置待完善</span></template>
+          <code>{{ environmentIdentifier || '—' }}</code>
+          <i>·</i><span>{{ description || '暂未填写环境说明' }}</span>
         </div>
       </div>
     </div>
 
     <div class="figma-env__detail-actions">
-      <div v-for="metric in [{ value: serviceCount, label: '服务' }, { value: variableSetCount, label: '变量集' }, { value: referenceCount, label: '引用任务' }]" :key="metric.label" class="figma-env__metric">
-        <strong>{{ metric.value }}</strong><span>{{ metric.label }}</span>
-      </div>
-      <i class="figma-env__action-divider" />
       <button type="button" @click="emit('copy')"><el-icon><CopyDocument /></el-icon>复制</button>
-      <button type="button" @click="emit('edit')"><el-icon><Edit /></el-icon>编辑</button>
       <button type="button" :disabled="operating" @click="emit('switchStatus')"><el-icon><SwitchButton /></el-icon>{{ enabled ? '停用' : '启用' }}</button>
-      <button class="figma-env__icon-button" type="button" title="删除环境" :disabled="operating" @click="emit('remove')"><el-icon><Delete /></el-icon></button>
+      <button class="is-primary" type="button" :disabled="saving || saveDisabled" @click="emit('save')"><el-icon><CheckCircle /></el-icon>保存配置</button>
     </div>
   </header>
 </template>

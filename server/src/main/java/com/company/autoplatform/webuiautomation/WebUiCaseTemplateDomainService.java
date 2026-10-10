@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.company.autoplatform.webuiautomation.WebUiAutomationFormatSupport.*;
 import static com.company.autoplatform.webuiautomation.WebUiAutomationModels.*;
@@ -300,12 +302,21 @@ public class WebUiCaseTemplateDomainService {
     }
 
     private List<WebUiCaseTemplateStepItem> listSteps(Long templateId) {
-        return templateStepMapper.selectList(new LambdaQueryWrapper<WebUiCaseTemplateStepEntity>()
+        List<WebUiCaseTemplateStepEntity> steps = templateStepMapper.selectList(new LambdaQueryWrapper<WebUiCaseTemplateStepEntity>()
                         .eq(WebUiCaseTemplateStepEntity::getTemplateId, templateId)
                         .orderByAsc(WebUiCaseTemplateStepEntity::getSortOrder)
-                        .orderByAsc(WebUiCaseTemplateStepEntity::getId))
-                .stream()
-                .map(this::toStepItem)
+                        .orderByAsc(WebUiCaseTemplateStepEntity::getId));
+        List<Long> elementIds = steps.stream()
+                .map(WebUiCaseTemplateStepEntity::getElementId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> elementNames = elementIds.isEmpty()
+                ? Map.of()
+                : elementMapper.selectBatchIds(elementIds).stream()
+                .collect(Collectors.toMap(WebUiElementEntity::getId, WebUiElementEntity::getElementName));
+        return steps.stream()
+                .map(step -> toStepItem(step, elementNames))
                 .toList();
     }
 
@@ -315,14 +326,14 @@ public class WebUiCaseTemplateDomainService {
         return count == null ? 0 : Math.toIntExact(count);
     }
 
-    private WebUiCaseTemplateStepItem toStepItem(WebUiCaseTemplateStepEntity entity) {
+    private WebUiCaseTemplateStepItem toStepItem(WebUiCaseTemplateStepEntity entity, Map<Long, String> elementNames) {
         return new WebUiCaseTemplateStepItem(
                 entity.getId(),
                 entity.getTemplateId(),
                 entity.getStepName(),
                 entity.getStepType(),
                 entity.getElementId(),
-                getElementName(entity.getElementId()),
+                entity.getElementId() == null ? null : elementNames.get(entity.getElementId()),
                 entity.getLocatorType(),
                 entity.getLocatorValue(),
                 locatorContextSupport.framePath(entity.getLocatorContextJson()),
@@ -335,14 +346,6 @@ public class WebUiCaseTemplateDomainService {
                 entity.getEnabled(),
                 entity.getSortOrder()
         );
-    }
-
-    private String getElementName(Long elementId) {
-        if (elementId == null) {
-            return null;
-        }
-        WebUiElementEntity element = elementMapper.selectById(elementId);
-        return element == null ? null : element.getElementName();
     }
 
     private int safePageNo(Integer pageNo) {

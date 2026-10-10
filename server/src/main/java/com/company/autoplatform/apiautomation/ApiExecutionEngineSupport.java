@@ -168,8 +168,17 @@ public class ApiExecutionEngineSupport {
         Map<String, String> variables = new LinkedHashMap<>();
         List<RuntimeVariableSetSnapshot> variableSetSnapshots = new ArrayList<>();
         applyVariableSets(variables, listGlobalVariableSets(workspaceId), variableSetSnapshots);
+        List<ParamSetEntity> environmentVariableSets = loadEnvironmentVariableSets(
+                workspaceId,
+                environment.variableSetIds(),
+                environment.disabledVariableSetIds(),
+                environment.defaultVariableSetId()
+        );
+        for (int index = environmentVariableSets.size() - 1; index >= 0; index--) {
+            applyVariableSet(variables, environmentVariableSets.get(index), variableSetSnapshots);
+        }
         for (ApiVariableItem variable : defaultList(environment.variables())) {
-            if (variable.name() != null) {
+            if (variable != null && variable.name() != null && !variable.name().isBlank()) {
                 variables.put(variable.name(), variable.value() == null ? "" : variable.value());
             }
         }
@@ -177,9 +186,12 @@ public class ApiExecutionEngineSupport {
         putMockVariables(variables, environment);
         ParamSetEntity defaultVariableSet = null;
         if (environment.defaultVariableSetId() != null) {
-            defaultVariableSet = requireVariableSet(environment.defaultVariableSetId());
-            ensureVariableSetInWorkspace(defaultVariableSet, workspaceId);
-            applyVariableSet(variables, defaultVariableSet, variableSetSnapshots);
+            for (ParamSetEntity variableSet : environmentVariableSets) {
+                if (environment.defaultVariableSetId().equals(variableSet.getId())) {
+                    defaultVariableSet = variableSet;
+                    break;
+                }
+            }
         }
         ParamSetEntity runtimeVariableSet = null;
         if (variableSetId != null && (defaultVariableSet == null || !variableSetId.equals(defaultVariableSet.getId()))) {
@@ -261,8 +273,33 @@ public class ApiExecutionEngineSupport {
                 null,
                 null,
                 effectiveServiceKey,
-                services
+                services,
+                defaultList(config.variableSetIds()),
+                defaultList(config.disabledVariableSetIds())
         );
+    }
+
+    private List<ParamSetEntity> loadEnvironmentVariableSets(
+            Long workspaceId,
+            List<Long> variableSetIds,
+            List<Long> disabledVariableSetIds,
+            Long defaultVariableSetId
+    ) {
+        List<Long> orderedIds = new ArrayList<>(defaultList(variableSetIds));
+        if (orderedIds.isEmpty() && defaultVariableSetId != null) {
+            orderedIds.add(defaultVariableSetId);
+        }
+        List<Long> disabledIds = defaultList(disabledVariableSetIds);
+        List<ParamSetEntity> result = new ArrayList<>();
+        for (Long id : orderedIds) {
+            if (id == null || disabledIds.contains(id) || result.stream().anyMatch(item -> id.equals(item.getId()))) {
+                continue;
+            }
+            ParamSetEntity variableSet = requireVariableSet(id);
+            ensureVariableSetInWorkspace(variableSet, workspaceId);
+            result.add(variableSet);
+        }
+        return result;
     }
 
     private ResolvedEnvironment resolveMockEnvironment(Long workspaceId, ResolvedEnvironment environment, Long requestMockApplicationId, Boolean mockEnabled, Long mockBusinessScenarioId, Long mockReleaseId) {
@@ -341,7 +378,9 @@ public class ApiExecutionEngineSupport {
                 mockReleaseVersion,
                 mockExecutionToken,
                 environment.defaultServiceKey(),
-                environment.services()
+                environment.services(),
+                environment.variableSetIds(),
+                environment.disabledVariableSetIds()
         );
     }
 

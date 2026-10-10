@@ -54,6 +54,8 @@ class WebUiEnvironmentResolver {
                     null,
                     List.of(),
                     "default",
+                    List.of(),
+                    List.of(),
                     List.of()
             );
         }
@@ -71,13 +73,22 @@ class WebUiEnvironmentResolver {
         }
         WebUiExecutionContextSupport.WebUiEnvironmentConfig config =
                 executionContextSupport.readEnvironmentConfig(environment.getConfigJson());
-        List<WebUiExecutionContextSupport.ServiceEndpoint> services = normalizeServices(config.services(), environment.getBaseUrl());
+        String configuredEntryUrl = config.webUIConfig() == null ? null : config.webUIConfig().entryUrl();
+        if (config.webUIConfig() != null && Boolean.FALSE.equals(config.webUIConfig().enabled())) {
+            throw new BadRequestException("Web UI environment configuration is disabled");
+        }
+        String fallbackBaseUrl = configuredEntryUrl == null || configuredEntryUrl.isBlank()
+                ? environment.getBaseUrl()
+                : configuredEntryUrl.trim();
+        List<WebUiExecutionContextSupport.ServiceEndpoint> services = normalizeServices(config.services(), fallbackBaseUrl);
         String defaultServiceKey = normalizeDefaultServiceKey(config.defaultServiceKey(), services);
-        String baseUrl = services.stream()
-                .filter(service -> service.key().equals(defaultServiceKey))
-                .findFirst()
-                .map(WebUiExecutionContextSupport.ServiceEndpoint::baseUrl)
-                .orElse(environment.getBaseUrl());
+        String baseUrl = configuredEntryUrl == null || configuredEntryUrl.isBlank()
+                ? services.stream()
+                    .filter(service -> service.key().equals(defaultServiceKey))
+                    .findFirst()
+                    .map(WebUiExecutionContextSupport.ServiceEndpoint::baseUrl)
+                    .orElse(fallbackBaseUrl)
+                : fallbackBaseUrl;
         return new EnvironmentResolution(
                 -environment.getId(),
                 environment.getEnvName(),
@@ -90,7 +101,9 @@ class WebUiEnvironmentResolver {
                 Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockReleaseId(),
                 config.variables() == null ? List.of() : config.variables(),
                 defaultServiceKey,
-                services
+                services,
+                config.variableSetIds() == null ? List.of() : config.variableSetIds(),
+                config.disabledVariableSetIds() == null ? List.of() : config.disabledVariableSetIds()
         );
     }
 
@@ -134,7 +147,9 @@ class WebUiEnvironmentResolver {
             Long mockReleaseId,
             List<WebUiExecutionContextSupport.VariableItem> variables,
             String defaultServiceKey,
-            List<WebUiExecutionContextSupport.ServiceEndpoint> services
+            List<WebUiExecutionContextSupport.ServiceEndpoint> services,
+            List<Long> variableSetIds,
+            List<Long> disabledVariableSetIds
     ) {
     }
 }

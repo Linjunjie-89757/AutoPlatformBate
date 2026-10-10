@@ -47,6 +47,7 @@ public class TestPlanService {
 
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 100;
+    private static final int MAX_BATCH_DEFECT_PLAN_IDS = 100;
     private static final BigDecimal DEFAULT_EXECUTE_RATE = BigDecimal.valueOf(90);
     private static final BigDecimal DEFAULT_PASS_RATE = BigDecimal.valueOf(85);
 
@@ -584,6 +585,78 @@ public class TestPlanService {
         return hydrateDefectAssigneeNames(sorted);
     }
 
+    public Map<Long, List<BugEntity>> listDefects(Collection<Long> rawPlanIds, String workspaceCode) {
+        List<Long> planIds = rawPlanIds == null ? List.of() : rawPlanIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (planIds.isEmpty()) return Map.of();
+        if (planIds.size() > MAX_BATCH_DEFECT_PLAN_IDS) {
+            throw TestManagementException.validation("批量查询测试计划缺陷最多支持 100 个计划");
+        }
+
+        Map<Long, TestPlanEntity> plans = planMapper.selectList(new LambdaQueryWrapper<TestPlanEntity>()
+                        .in(TestPlanEntity::getId, planIds)
+                        .isNull(TestPlanEntity::getDeletedAt))
+                .stream()
+                .collect(Collectors.toMap(TestPlanEntity::getId, Function.identity()));
+        for (Long planId : planIds) {
+            TestPlanEntity plan = plans.get(planId);
+            if (plan == null) throw TestManagementException.notFound("测试计划", planId);
+            workspaceSupport.requireReadableEntityWorkspace(workspaceCode, plan.getWorkspaceId());
+        }
+
+        List<Long> workspaceIds = plans.values().stream()
+                .map(TestPlanEntity::getWorkspaceId)
+                .distinct()
+                .toList();
+        List<BugEntity> directDefects = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
+                .in(BugEntity::getTestPlanId, planIds)
+                .in(BugEntity::getWorkspaceId, workspaceIds));
+        List<TestPlanCaseDefectRelationEntity> relations = planCaseDefectRelationMapper.selectList(
+                new LambdaQueryWrapper<TestPlanCaseDefectRelationEntity>()
+                        .in(TestPlanCaseDefectRelationEntity::getPlanId, planIds)
+                        .in(TestPlanCaseDefectRelationEntity::getWorkspaceId, workspaceIds));
+        List<Long> linkedDefectIds = relations.stream()
+                .map(TestPlanCaseDefectRelationEntity::getDefectId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, BugEntity> linkedDefects = linkedDefectIds.isEmpty() ? Map.of() : bugMapper.selectList(
+                        new LambdaQueryWrapper<BugEntity>()
+                                .in(BugEntity::getId, linkedDefectIds)
+                                .in(BugEntity::getWorkspaceId, workspaceIds))
+                .stream()
+                .collect(Collectors.toMap(BugEntity::getId, Function.identity()));
+
+        Map<Long, Map<Long, BugEntity>> defectsByPlan = new HashMap<>();
+        directDefects.forEach(defect -> defectsByPlan
+                .computeIfAbsent(defect.getTestPlanId(), ignored -> new LinkedHashMap<>())
+                .put(defect.getId(), defect));
+        relations.forEach(relation -> {
+            BugEntity defect = linkedDefects.get(relation.getDefectId());
+            if (defect != null) {
+                defectsByPlan.computeIfAbsent(relation.getPlanId(), ignored -> new LinkedHashMap<>())
+                        .putIfAbsent(defect.getId(), defect);
+            }
+        });
+
+        List<BugEntity> allDefects = defectsByPlan.values().stream()
+                .flatMap(items -> items.values().stream())
+                .distinct()
+                .toList();
+        hydrateDefectAssigneeNames(allDefects);
+        Map<Long, List<BugEntity>> result = new LinkedHashMap<>();
+        planIds.forEach(planId -> {
+            List<BugEntity> items = defectsByPlan.getOrDefault(planId, Map.of()).values().stream()
+                    .sorted(Comparator.comparing(BugEntity::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                            .thenComparing(BugEntity::getId, Comparator.reverseOrder()))
+                    .toList();
+            result.put(planId, items);
+        });
+        return result;
+    }
+
     public List<BugEntity> listCaseDefects(Long id, Long planCaseId, String workspaceCode) {
         TestPlanEntity plan = requireReadable(id, workspaceCode);
         requirePlanCase(planCaseId, id);
@@ -1086,10 +1159,14 @@ public class TestPlanService {
         Map<Long, UserEntity> users = loadUsers(plans.stream().map(TestPlanEntity::getOwnerId).filter(Objects::nonNull).toList());
         List<TestPlanRequirementEntity> planRequirements = planRequirementMapper.selectList(new LambdaQueryWrapper<TestPlanRequirementEntity>().in(TestPlanRequirementEntity::getPlanId, planIds));
         Map<Long, List<TestPlanRequirementEntity>> requirementsByPlan = planRequirements.stream().collect(Collectors.groupingBy(TestPlanRequirementEntity::getPlanId));
-        Map<Long, TestRequirementEntity> requirements = requirementsByIds(planRequirements.stream().map(TestPlanRequirementEntity::getRequirementId).toList()).stream().collect(Collectors.toMap(TestRequirementEntity::getId, Function.identity()));
+        List<Long> requirementIds = planRequirements.stream().map(TestPlanRequirementEntity::getRequirementId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, TestRequirementEntity> requirements = requirementsByIds(requirementIds).stream().collect(Collectors.toMap(TestRequirementEntity::getId, Function.identity()));
+        Map<Long, RequirementReviewStatus> requirementReviewStatuses = loadRequirementReviewStatuses(requirementIds);
         List<TestPlanCaseEntity> cases = planCaseMapper.selectList(new LambdaQueryWrapper<TestPlanCaseEntity>().in(TestPlanCaseEntity::getPlanId, planIds));
         Map<Long, List<TestPlanCaseEntity>> casesByPlan = cases.stream().collect(Collectors.groupingBy(TestPlanCaseEntity::getPlanId));
-        Map<Long, List<TestPlanCaseRequirementEntity>> caseRequirements = cases.isEmpty() ? Map.of() : planCaseRequirementMapper.selectList(new LambdaQueryWrapper<TestPlanCaseRequirementEntity>().in(TestPlanCaseRequirementEntity::getPlanCaseId, cases.stream().map(TestPlanCaseEntity::getId).toList())).stream().collect(Collectors.groupingBy(TestPlanCaseRequirementEntity::getPlanCaseId));
+        List<TestPlanCaseRequirementEntity> caseRequirementLinks = cases.isEmpty() ? List.of() : planCaseRequirementMapper.selectList(new LambdaQueryWrapper<TestPlanCaseRequirementEntity>().in(TestPlanCaseRequirementEntity::getPlanCaseId, cases.stream().map(TestPlanCaseEntity::getId).toList()));
+        Map<Long, List<TestPlanCaseRequirementEntity>> caseRequirements = caseRequirementLinks.stream().collect(Collectors.groupingBy(TestPlanCaseRequirementEntity::getPlanCaseId));
+        Map<Long, Long> passedCasesByRequirement = countPassedCasesByRequirement(caseRequirementLinks, cases);
         Map<Long, CaseEntity> sourceCases = loadCases(cases.stream().map(TestPlanCaseEntity::getSourceCaseId).toList());
         List<BugEntity> planDefects = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>().in(BugEntity::getTestPlanId, planIds));
         Map<Long, Long> defectCounts = planDefects.stream().filter(item -> item.getTestPlanCaseId() != null).collect(Collectors.groupingBy(BugEntity::getTestPlanCaseId, Collectors.counting()));
@@ -1107,8 +1184,8 @@ public class TestPlanService {
             UserEntity owner = users.get(plan.getOwnerId());
             List<TestPlanRequirementItem> reqItems = requirementsByPlan.getOrDefault(plan.getId(), List.of()).stream().map(link -> {
                 TestRequirementEntity req = requirements.get(link.getRequirementId());
-                long passedCases = caseRequirements.values().stream().flatMap(Collection::stream).filter(item -> item.getRequirementId().equals(link.getRequirementId())).map(TestPlanCaseRequirementEntity::getPlanCaseId).map(id -> cases.stream().filter(pc -> pc.getId().equals(id) && pc.getExecutionStatus() == PlanCaseExecutionStatus.PASSED).count()).reduce(0L, Long::sum);
-                return new TestPlanRequirementItem(link.getRequirementId(), req == null ? null : req.getRequirementNo(), req == null ? null : req.getTitle(), req == null ? null : req.getPriority(), aggregateReviewStatus(link.getRequirementId()), passedCases);
+                long passedCases = passedCasesByRequirement.getOrDefault(link.getRequirementId(), 0L);
+                return new TestPlanRequirementItem(link.getRequirementId(), req == null ? null : req.getRequirementNo(), req == null ? null : req.getTitle(), req == null ? null : req.getPriority(), requirementReviewStatuses.getOrDefault(link.getRequirementId(), RequirementReviewStatus.PENDING), passedCases);
             }).toList();
             List<TestPlanCaseItem> caseItems = planCases.stream().sorted(Comparator.comparing(TestPlanCaseEntity::getSortOrder, Comparator.nullsLast(Integer::compareTo))).map(item -> {
                 CaseEntity source = sourceCases.get(item.getSourceCaseId()); UserEntity assignee = users.get(item.getAssigneeId()); UserEntity executor = users.get(item.getExecutedBy());
@@ -1118,23 +1195,49 @@ public class TestPlanService {
         }).toList();
     }
 
-    private RequirementReviewStatus aggregateReviewStatus(Long requirementId) {
-        List<TestRequirementCaseEntity> relations = requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>().eq(TestRequirementCaseEntity::getRequirementId, requirementId));
-        if (relations.isEmpty()) return RequirementReviewStatus.PENDING;
-        Map<Long, CaseEntity> cases = caseMapper.selectBatchIds(relations.stream()
+    private Map<Long, RequirementReviewStatus> loadRequirementReviewStatuses(Collection<Long> requirementIds) {
+        if (requirementIds.isEmpty()) return Map.of();
+        List<TestRequirementCaseEntity> relations = requirementCaseMapper.selectList(new LambdaQueryWrapper<TestRequirementCaseEntity>()
+                .in(TestRequirementCaseEntity::getRequirementId, requirementIds));
+        Map<Long, List<TestRequirementCaseEntity>> relationsByRequirement = relations.stream()
+                .collect(Collectors.groupingBy(TestRequirementCaseEntity::getRequirementId));
+        if (relations.isEmpty()) {
+            return requirementIds.stream().collect(Collectors.toMap(Function.identity(), id -> RequirementReviewStatus.PENDING));
+        }
+        List<Long> caseIds = relations.stream()
                         .map(TestRequirementCaseEntity::getCaseId)
                         .filter(Objects::nonNull)
                         .distinct()
-                        .toList())
-                .stream()
+                        .toList();
+        Map<Long, CaseEntity> cases = caseIds.isEmpty() ? Map.of() : caseMapper.selectBatchIds(caseIds).stream()
                 .collect(Collectors.toMap(CaseEntity::getId, Function.identity()));
-        if (relations.stream().anyMatch(relation -> caseReviewStatus(cases.get(relation.getCaseId())) == RequirementReviewStatus.REJECTED)) {
-            return RequirementReviewStatus.REJECTED;
-        }
-        if (relations.stream().anyMatch(relation -> caseReviewStatus(cases.get(relation.getCaseId())) != RequirementReviewStatus.PASSED)) {
-            return RequirementReviewStatus.REVIEWING;
-        }
-        return RequirementReviewStatus.PASSED;
+        Map<Long, RequirementReviewStatus> statuses = new HashMap<>();
+        requirementIds.forEach(id -> {
+            List<TestRequirementCaseEntity> requirementRelations = relationsByRequirement.getOrDefault(id, List.of());
+            RequirementReviewStatus status = requirementRelations.isEmpty()
+                    ? RequirementReviewStatus.PENDING
+                    : requirementRelations.stream().anyMatch(relation -> caseReviewStatus(cases.get(relation.getCaseId())) == RequirementReviewStatus.REJECTED)
+                            ? RequirementReviewStatus.REJECTED
+                            : requirementRelations.stream().anyMatch(relation -> caseReviewStatus(cases.get(relation.getCaseId())) != RequirementReviewStatus.PASSED)
+                                    ? RequirementReviewStatus.REVIEWING
+                                    : RequirementReviewStatus.PASSED;
+            statuses.put(id, status);
+        });
+        return statuses;
+    }
+
+    private Map<Long, Long> countPassedCasesByRequirement(
+            List<TestPlanCaseRequirementEntity> links,
+            List<TestPlanCaseEntity> cases
+    ) {
+        if (links.isEmpty() || cases.isEmpty()) return Map.of();
+        Set<Long> passedPlanCaseIds = cases.stream()
+                .filter(item -> item.getExecutionStatus() == PlanCaseExecutionStatus.PASSED)
+                .map(TestPlanCaseEntity::getId)
+                .collect(Collectors.toSet());
+        return links.stream()
+                .filter(link -> link.getRequirementId() != null && passedPlanCaseIds.contains(link.getPlanCaseId()))
+                .collect(Collectors.groupingBy(TestPlanCaseRequirementEntity::getRequirementId, Collectors.counting()));
     }
 
     private RequirementReviewStatus caseReviewStatus(CaseEntity testCase) {

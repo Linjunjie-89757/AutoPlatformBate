@@ -20,9 +20,9 @@ import {
 } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
-import { caseApi, type CaseDetail, type CaseDirectoryNode, type CaseDirectoryWorkspace, type CaseSummaryItem } from '@/entities/case'
+import { caseApi, listAllCases, type CaseDetail, type CaseDirectoryNode, type CaseDirectoryWorkspace, type CaseSummaryItem } from '@/entities/case'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
-import { testManagementApi, type TestPlanItem, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
+import { listAllTestPlans, listAllTestRequirements, listAllTestVersions, testManagementApi, type TestPlanItem, type TestRequirementImportResult, type TestRequirementItem } from '@/entities/test-management'
 import { getRequestErrorMessage } from '@/shared/api/error'
 import { useWorkspaceContext, workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
 
@@ -219,19 +219,19 @@ const loadRequirements = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const [versions, requirementPage, members, directories] = await Promise.all([
-      testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
-      testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
+    const [versionItems, requirementItems, members, directories] = await Promise.all([
+      listAllTestVersions(selectedWorkspaceCode.value),
+      listAllTestRequirements(selectedWorkspaceCode.value),
       workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value),
       caseApi.getCaseDirectories(selectedWorkspaceCode.value),
     ])
-    requirementVersions.value = versions.items.map(item => ({
+    requirementVersions.value = versionItems.map(item => ({
       id: String(item.id),
       name: item.name,
       status: item.status.toLowerCase().replace('_', '-') as 'planning' | 'developing' | 'testing' | 'pending-release' | 'released',
     }))
-    requirements.value = requirementPage.items.map(mapRequirement)
-    requirementLockVersions.value = new Map(requirementPage.items.map(item => [String(item.id), item.lockVersion]))
+    requirements.value = requirementItems.map(mapRequirement)
+    requirementLockVersions.value = new Map(requirementItems.map(item => [String(item.id), item.lockVersion]))
     const workspaceDirectories = directories.find(item => item.workspaceCode === selectedWorkspaceCode.value) || directories[0]
     caseDirectoryWorkspace = workspaceDirectories || null
     caseLibrary.value = []
@@ -260,9 +260,9 @@ const loadRequirements = async () => {
 
 const ensureCaseLibraryLoaded = async () => {
   if (caseLibraryLoadPromise) return caseLibraryLoadPromise
-  caseLibraryLoadPromise = caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 })
+  caseLibraryLoadPromise = listAllCases(selectedWorkspaceCode.value)
     .then((cases) => {
-      caseLibrary.value = cases.items.map(mapCase)
+      caseLibrary.value = cases.map(mapCase)
       if (caseDirectoryWorkspace) {
         caseDirectoryTree.value = [{
           id: 'root',
@@ -281,9 +281,9 @@ const ensureCaseLibraryLoaded = async () => {
 
 const ensureRequirementPlansLoaded = async () => {
   if (requirementPlansLoadPromise) return requirementPlansLoadPromise
-  requirementPlansLoadPromise = testManagementApi.listPlans(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 })
+  requirementPlansLoadPromise = listAllTestPlans(selectedWorkspaceCode.value)
     .then((plans) => {
-      requirementTestPlans.value = plans.items.map(mapRequirementPlan)
+      requirementTestPlans.value = plans.map(mapRequirementPlan)
     })
     .catch((error) => {
       requirementPlansLoadPromise = null

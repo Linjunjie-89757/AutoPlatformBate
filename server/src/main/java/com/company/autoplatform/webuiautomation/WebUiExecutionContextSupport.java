@@ -170,11 +170,22 @@ public class WebUiExecutionContextSupport {
             Long mockReleaseId,
             List<VariableItem> variables,
             String defaultServiceKey,
-            List<ServiceEndpoint> services
+            List<ServiceEndpoint> services,
+            List<Long> variableSetIds,
+            List<Long> disabledVariableSetIds,
+            WebUiConfig webUIConfig
     ) {
         static WebUiEnvironmentConfig defaults() {
-            return new WebUiEnvironmentConfig(null, null, null, null, null, null, null, null, null, List.of(), null, List.of());
+            return new WebUiEnvironmentConfig(null, null, null, null, null, null, null, null, null, List.of(), null, List.of(), List.of(), List.of(), null);
         }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record WebUiConfig(
+            String entryUrl,
+            Integer pageLoadTimeout,
+            Boolean enabled
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

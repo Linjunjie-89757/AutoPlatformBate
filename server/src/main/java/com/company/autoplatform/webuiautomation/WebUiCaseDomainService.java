@@ -275,23 +275,32 @@ public class WebUiCaseDomainService {
     }
 
     private List<WebUiCaseStepItem> listSteps(Long caseId) {
-        return stepMapper.selectList(new LambdaQueryWrapper<WebUiCaseStepEntity>()
+        List<WebUiCaseStepEntity> steps = stepMapper.selectList(new LambdaQueryWrapper<WebUiCaseStepEntity>()
                         .eq(WebUiCaseStepEntity::getCaseId, caseId)
                         .orderByAsc(WebUiCaseStepEntity::getSortOrder)
-                        .orderByAsc(WebUiCaseStepEntity::getId))
-                .stream()
-                .map(this::toStepItem)
+                        .orderByAsc(WebUiCaseStepEntity::getId));
+        List<Long> elementIds = steps.stream()
+                .map(WebUiCaseStepEntity::getElementId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> elementNames = elementIds.isEmpty()
+                ? Map.of()
+                : elementMapper.selectBatchIds(elementIds).stream()
+                .collect(Collectors.toMap(WebUiElementEntity::getId, WebUiElementEntity::getElementName));
+        return steps.stream()
+                .map(step -> toStepItem(step, elementNames))
                 .toList();
     }
 
-    private WebUiCaseStepItem toStepItem(WebUiCaseStepEntity entity) {
+    private WebUiCaseStepItem toStepItem(WebUiCaseStepEntity entity, Map<Long, String> elementNames) {
         return new WebUiCaseStepItem(
                 entity.getId(),
                 entity.getCaseId(),
                 entity.getStepName(),
                 entity.getStepType(),
                 entity.getElementId(),
-                getElementName(entity.getElementId()),
+                entity.getElementId() == null ? null : elementNames.get(entity.getElementId()),
                 entity.getLocatorType(),
                 entity.getLocatorValue(),
                 locatorContextSupport.framePath(entity.getLocatorContextJson()),
@@ -304,14 +313,6 @@ public class WebUiCaseDomainService {
                 entity.getEnabled(),
                 entity.getSortOrder()
         );
-    }
-
-    private String getElementName(Long elementId) {
-        if (elementId == null) {
-            return null;
-        }
-        WebUiElementEntity element = elementMapper.selectById(elementId);
-        return element == null ? null : element.getElementName();
     }
 
     private int safePageNo(Integer pageNo) {

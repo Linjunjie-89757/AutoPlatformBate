@@ -24,7 +24,7 @@ import {
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import { hasWorkspacePermission, useSession } from '@/entities/session'
-import { testManagementApi, type TestPlanDefectItem } from '@/entities/test-management'
+import { listAllTestPlans, listAllTestVersions, listAllVersionActivities, listAllVersionRequirements, testManagementApi, type TestPlanDefectItem } from '@/entities/test-management'
 import { type UserItem } from '@/entities/user'
 import { useWorkspaceContext, workspaceApi } from '@/entities/workspace'
 import AppDrawer from '@/shared/ui/app-drawer/AppDrawer.vue'
@@ -251,11 +251,11 @@ const loadVersions = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const result = await testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 })
-    const items = result.items.map(item => mapVersion(item))
+    const versionItems = await listAllTestVersions(selectedWorkspaceCode.value)
+    const items = versionItems.map(item => mapVersion(item))
     versions.value = items
-    versionLockVersions.value = new Map(result.items.map(item => [String(item.id), item.lockVersion]))
-    versionOwnerIds.value = new Map(result.items.filter(item => item.ownerId !== null).map(item => [String(item.id), item.ownerId as number]))
+    versionLockVersions.value = new Map(versionItems.map(item => [String(item.id), item.lockVersion]))
+    versionOwnerIds.value = new Map(versionItems.filter(item => item.ownerId !== null).map(item => [String(item.id), item.ownerId as number]))
     if (selectedVersion.value) {
       selectedVersion.value = items.find(item => item.id === selectedVersion.value?.id) || null
     }
@@ -296,8 +296,8 @@ const mapVersionActivities = (items: VersionActivityItem[]): VersionLog[] => ite
 }))
 
 const refreshVersionLogs = async (versionId: number) => {
-  const activities = await testManagementApi.listVersionActivities(selectedWorkspaceCode.value, versionId)
-  versionLogs.value = mapVersionActivities(activities.items)
+  const activities = await listAllVersionActivities(selectedWorkspaceCode.value, versionId)
+  versionLogs.value = mapVersionActivities(activities)
 }
 
 const loadVersionDetail = async (version: ManagedVersion) => {
@@ -305,16 +305,18 @@ const loadVersionDetail = async (version: ManagedVersion) => {
   detailError.value = ''
   try {
     const versionId = Number(version.id)
-    const [requirements, plans, activities] = await Promise.all([
-      testManagementApi.listVersionRequirements(selectedWorkspaceCode.value, versionId),
-      testManagementApi.listPlans(selectedWorkspaceCode.value, { versionId, pageNo: 1, pageSize: 100 }),
-      testManagementApi.listVersionActivities(selectedWorkspaceCode.value, versionId),
+    const [requirementItems, planItems, activities] = await Promise.all([
+      listAllVersionRequirements(selectedWorkspaceCode.value, versionId),
+      listAllTestPlans(selectedWorkspaceCode.value, { versionId }),
+      listAllVersionActivities(selectedWorkspaceCode.value, versionId),
     ])
-    versionRequirements.value = requirements.items.map(mapRequirement)
-    versionPlans.value = plans.items.map(mapPlan)
-    versionLogs.value = mapVersionActivities(activities.items)
-    const defects = await Promise.all(plans.items.map(item => testManagementApi.listPlanDefects(selectedWorkspaceCode.value, item.id)))
-    versionBugs.value = defects.flatMap((items, index) => items.map(item => mapPlanDefect(item, plans.items[index]?.name || '')))
+    versionRequirements.value = requirementItems.map(mapRequirement)
+    versionPlans.value = planItems.map(mapPlan)
+    versionLogs.value = mapVersionActivities(activities)
+    const defectsByPlan = await testManagementApi.listPlanDefectsBatch(selectedWorkspaceCode.value, planItems.map(item => item.id))
+    versionBugs.value = planItems.flatMap(plan =>
+      (defectsByPlan[plan.id] || []).map(item => mapPlanDefect(item, plan.name)),
+    )
     const summary = await testManagementApi.getVersion(selectedWorkspaceCode.value, versionId)
     const mapped = withVersionMetrics(mapVersion(summary), versionPlans.value, versionBugs.value)
     reportGeneratedAt.value = formatTestManagementDateTime(summary.updatedAt)

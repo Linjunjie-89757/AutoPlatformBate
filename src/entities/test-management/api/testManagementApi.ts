@@ -70,15 +70,15 @@ export const testManagementApi = {
     }), '版本状态更新失败')
   },
 
-  async listVersionRequirements(workspaceCode: string, id: number) {
+  async listVersionRequirements(workspaceCode: string, id: number, params?: Record<string, string | number | undefined>) {
     return page(await httpGet<ApiResponse<TestPage<TestRequirementItem>>>(`/test-management/versions/${id}/requirements`, {
-      headers: workspaceHeaders(workspaceCode), params: { pageNo: 1, pageSize: 100 },
+      headers: workspaceHeaders(workspaceCode), params,
     }), '版本需求加载失败')
   },
 
-  async listVersionActivities(workspaceCode: string, id: number) {
+  async listVersionActivities(workspaceCode: string, id: number, params?: Record<string, string | number | undefined>) {
     return page(await httpGet<ApiResponse<TestPage<TestActivityItem>>>(`/test-management/versions/${id}/activities`, {
-      headers: workspaceHeaders(workspaceCode), params: { pageNo: 1, pageSize: 100 },
+      headers: workspaceHeaders(workspaceCode), params,
     }), '版本操作记录加载失败')
   },
 
@@ -175,9 +175,9 @@ export const testManagementApi = {
     ), '用例评审保存失败')
   },
 
-  async listRequirementActivities(workspaceCode: string, id: number) {
+  async listRequirementActivities(workspaceCode: string, id: number, params?: Record<string, string | number | undefined>) {
     return page(await httpGet<ApiResponse<TestPage<TestActivityItem>>>(`/test-management/requirements/${id}/activities`, {
-      headers: workspaceHeaders(workspaceCode), params: { pageNo: 1, pageSize: 100 },
+      headers: workspaceHeaders(workspaceCode), params,
     }), '需求操作记录加载失败')
   },
 
@@ -340,6 +340,13 @@ export const testManagementApi = {
     }), '测试计划缺陷加载失败')
   },
 
+  async listPlanDefectsBatch(workspaceCode: string, planIds: number[]) {
+    if (planIds.length === 0) return {}
+    return unwrap(await httpGet<ApiResponse<Record<number, TestPlanDefectItem[]>>>('/test-management/plans/defects/batch', {
+      headers: workspaceHeaders(workspaceCode), params: { planIds: planIds.join(',') },
+    }), '测试计划缺陷加载失败')
+  },
+
   async listPlanCaseDefects(workspaceCode: string, id: number, planCaseId: number) {
     return unwrap(await httpGet<ApiResponse<TestPlanDefectItem[]>>(`/test-management/plans/${id}/cases/${planCaseId}/defects`, {
       headers: workspaceHeaders(workspaceCode),
@@ -394,9 +401,9 @@ export const testManagementApi = {
     }), '测试报告撤回签署失败')
   },
 
-  async listPlanActivities(workspaceCode: string, id: number) {
+  async listPlanActivities(workspaceCode: string, id: number, params?: Record<string, string | number | undefined>) {
     return page(await httpGet<ApiResponse<TestPage<TestActivityItem>>>(`/test-management/plans/${id}/activities`, {
-      headers: workspaceHeaders(workspaceCode), params: { pageNo: 1, pageSize: 100 },
+      headers: workspaceHeaders(workspaceCode), params,
     }), '测试计划操作记录加载失败')
   },
 }

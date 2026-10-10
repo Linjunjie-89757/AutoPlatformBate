@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
-import { caseApi, type CaseSummaryItem } from '@/entities/case'
+import { listAllCases, type CaseSummaryItem } from '@/entities/case'
 import {
   defectApi,
   defectPriorityOptions,
@@ -14,7 +14,7 @@ import {
   type DefectDetail,
 } from '@/entities/defect'
 import { workspaceApi, type WorkspaceItem } from '@/entities/workspace'
-import { testManagementApi, type TestVersionItem } from '@/entities/test-management'
+import { listAllTestVersions, type TestVersionItem } from '@/entities/test-management'
 import DefectCaseAssociateDialog from '@/features/defect-case-associate/DefectCaseAssociateDialog.vue'
 import DefectRichTextEditor from '@/features/defect-create-edit/DefectRichTextEditor.vue'
 import UnsavedConfirmModal from '@/features/defect-create-edit/UnsavedConfirmModal.vue'
@@ -411,11 +411,7 @@ async function loadCaseOptions(workspaceCode: string) {
 
   caseOptionsLoading.value = true
   try {
-    const page = await caseApi.getCases(workspaceCode, {
-      pageNo: 1,
-      pageSize: 50,
-    })
-    caseOptions.value = Array.isArray(page.items) ? page.items : []
+    caseOptions.value = await listAllCases(workspaceCode)
     if (!selectedCases.value.length && form.relatedCaseIds.length) {
       selectedCases.value = caseOptions.value.filter(item => form.relatedCaseIds.includes(String(item.id)))
     }
@@ -456,8 +452,7 @@ async function loadVersionOptions(workspaceCode: string) {
 
   versionOptionsLoading.value = true
   try {
-    const page = await testManagementApi.listVersions(workspaceCode, { pageNo: 1, pageSize: 100 })
-    versionOptions.value = Array.isArray(page.items) ? page.items : []
+    versionOptions.value = await listAllTestVersions(workspaceCode)
   } catch {
     versionOptions.value = []
   } finally {

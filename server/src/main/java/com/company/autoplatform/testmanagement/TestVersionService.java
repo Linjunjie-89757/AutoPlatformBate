@@ -140,9 +140,8 @@ public class TestVersionService {
 
     public GeneratedTestPlanPdf exportReportPdf(Long id, String workspaceCode) {
         TestVersionResponse version = get(id, workspaceCode);
-        List<TestPlanResponse> plans = planService.list(workspaceCode, null, null, null, id, null, 1, MAX_PAGE_SIZE).items();
-        List<TestRequirementResponse> requirements = requirementService.list(
-                workspaceCode, id, null, null, null, null, null, null, 1, MAX_PAGE_SIZE).items();
+        List<TestPlanResponse> plans = listAllVersionPlans(workspaceCode, id);
+        List<TestRequirementResponse> requirements = listAllVersionRequirements(workspaceCode, id);
         List<BugEntity> defects = bugMapper.selectList(new LambdaQueryWrapper<BugEntity>()
                 .eq(BugEntity::getTestVersionId, id));
 
@@ -181,6 +180,27 @@ public class TestVersionService {
                 qualityPassedCount, planItems, requirementItems, defects
         );
         return pdfReportService.renderVersion(report);
+    }
+
+    private List<TestPlanResponse> listAllVersionPlans(String workspaceCode, Long versionId) {
+        return collectPages(pageNo -> planService.list(
+                workspaceCode, null, null, null, versionId, null, pageNo, MAX_PAGE_SIZE));
+    }
+
+    private List<TestRequirementResponse> listAllVersionRequirements(String workspaceCode, Long versionId) {
+        return collectPages(pageNo -> requirementService.list(
+                workspaceCode, versionId, null, null, null, null, null, null, pageNo, MAX_PAGE_SIZE));
+    }
+
+    private <T> List<T> collectPages(Function<Integer, PageResponse<T>> loadPage) {
+        PageResponse<T> firstPage = loadPage.apply(1);
+        List<T> items = new ArrayList<>(firstPage.items());
+        for (int pageNo = 2; pageNo <= firstPage.totalPages(); pageNo++) {
+            PageResponse<T> page = loadPage.apply(pageNo);
+            if (page.items().isEmpty()) break;
+            items.addAll(page.items());
+        }
+        return items;
     }
 
     @Transactional

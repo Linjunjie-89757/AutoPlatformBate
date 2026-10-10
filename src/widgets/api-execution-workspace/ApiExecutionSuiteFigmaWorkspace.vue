@@ -34,6 +34,7 @@ import {
 } from '@/entities/api-automation'
 import {
   apiExecutionSuiteApi,
+  listAllApiExecutionSuiteRunHistory,
   type ApiExecutionSuiteArrangeItem,
   type ApiExecutionSuiteDetail,
   type ApiExecutionSuiteItem,
@@ -910,8 +911,8 @@ async function loadRunRecords() {
   }
   runHistoryLoading.value = true
   try {
-    const page = await apiExecutionSuiteApi.getSuiteRunHistory(suite.workspaceCode, suite.persistedId, { pageNo: 1, pageSize: 100 })
-    runRecords.value = page.items.map(mapRunRecord)
+    const items = await listAllApiExecutionSuiteRunHistory(suite.workspaceCode, suite.persistedId)
+    runRecords.value = items.map(mapRunRecord)
   } catch (error) {
     runRecords.value = []
     ElMessage.error(getRequestErrorMessage(error))

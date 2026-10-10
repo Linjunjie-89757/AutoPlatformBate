@@ -1,6 +1,6 @@
 import type { ConfigAutomationType, ConfigEnvLocalVariableForm } from '@/features/config-env-create-edit'
 
-export type EnvironmentDetailTab = 'services' | 'variables' | 'mock' | 'effective' | 'references'
+export type EnvironmentDetailTab = 'basic' | 'api' | 'webui' | 'app' | 'variables' | 'mock' | 'effective' | 'references'
 
 export interface EnvironmentStageMeta {
   label: string
@@ -11,6 +11,8 @@ export interface EnvironmentStageMeta {
 export interface EnvironmentCardSummary {
   stage: EnvironmentStageMeta
   services: number
+  apiConfigured: boolean
+  webUiConfigured: boolean
   variableSets: number
   issues: number
   mockEnabled: boolean
@@ -29,7 +31,9 @@ export interface ServiceEditorForm {
 
 export interface EnvironmentEditorForm {
   envName: string
+  identifier: string
   envType: string
+  isProd: boolean
   automationType: ConfigAutomationType
   description: string
 }

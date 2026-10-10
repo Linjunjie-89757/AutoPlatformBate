@@ -13,11 +13,13 @@ import {
   buildCreateEnvPayload,
   createConfigEnvFormFromItem,
   createDefaultConfigEnvForm,
+  getConfigEnvFieldErrors,
   validateConfigEnvForm,
 } from '@/features/config-env-create-edit'
 import { deleteConfigEnv } from '@/features/config-env-delete'
 import { toggleConfigEnvStatus } from '@/features/config-env-toggle-status'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction } from '@/shared/ui'
 
 import type { EnvironmentDetailTab, EnvironmentEditorForm } from './configEnvironmentPanel.types'
 
@@ -36,9 +38,11 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
   const saving = ref(false)
   const operating = ref(false)
   const errorMessage = ref('')
+  const validationAttempted = ref(false)
   const referenceLoading = ref(false)
   const referenceSummary = ref<ConfigReferenceSummary | null>(null)
   const environmentDialogMode = ref<'create' | 'edit' | null>(null)
+  const environmentDialogSubmitted = ref(false)
   const disableDialogVisible = ref(false)
   const variableSetVersions = ref<Record<number, number | null>>({})
   const mockEndpointCount = ref<number | null>(null)
@@ -48,7 +52,9 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
   const form = reactive(createDefaultConfigEnvForm(options.workspaceCode()))
   const environmentEditor = reactive<EnvironmentEditorForm>({
     envName: '',
+    identifier: '',
     envType: 'TEST',
+    isProd: false,
     automationType: 'API',
     description: '',
   })
@@ -56,6 +62,7 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
   let environmentSelectedHandler: () => void = () => undefined
 
   const selectedEnv = computed(() => envs.value.find(item => item.id === selectedEnvId.value) || null)
+  const fieldErrors = computed(() => validationAttempted.value ? getConfigEnvFieldErrors(form) : {})
 
   function setEnvironmentSelectedHandler(handler: () => void) {
     environmentSelectedHandler = handler
@@ -105,7 +112,7 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     variableSetVersions.value = { ...variableSetVersions.value, ...Object.fromEntries(entries) }
   }
 
-  async function selectEnv(env: EnvConfigItem, preferredTab: EnvironmentDetailTab = 'services') {
+  async function selectEnv(env: EnvConfigItem, preferredTab: EnvironmentDetailTab = 'basic') {
     selectedEnvId.value = env.id
     Object.assign(form, createConfigEnvFormFromItem(env))
     options.activeTab.value = preferredTab
@@ -173,6 +180,7 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     saveOptions: { reload?: boolean } = {},
   ) {
     if (!selectedEnv.value) return false
+    validationAttempted.value = true
     const validationMessage = validateConfigEnvForm(form)
     if (validationMessage) {
       ElMessage.warning(validationMessage)
@@ -197,6 +205,7 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
         await loadData(updated.id, currentTab)
       }
       ElMessage.success(successMessage)
+      validationAttempted.value = false
       return true
     } catch (error) {
       ElMessage.error(getRequestErrorMessage(error))
@@ -232,6 +241,30 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
 
   async function removeEnvironment() {
     if (!selectedEnv.value) return
+    await loadReferences()
+    if (!referenceSummary.value) {
+      ElMessage.error('无法确认环境引用关系，请稍后重试')
+      return
+    }
+    if ((referenceSummary.value?.totalCount || 0) > 0) {
+      const names = (referenceSummary.value?.items || [])
+        .map(item => item.sourceName || '未命名任务')
+        .filter((name, index, list) => list.indexOf(name) === index)
+        .slice(0, 4)
+      const suffix = (referenceSummary.value?.totalCount || 0) > names.length ? '等' : ''
+      try {
+        await confirmAction({
+          title: '无法删除环境',
+          message: `当前环境仍被 ${names.join('、') || '任务'}${suffix}引用，请先解除引用后再删除。`,
+          confirmText: '知道了',
+          cancelText: '关闭',
+          variant: 'figma-danger',
+        })
+      } catch {
+        // 关闭阻止弹窗时不执行删除。
+      }
+      return
+    }
     const currentId = selectedEnv.value.id
     operating.value = true
     try {
@@ -266,7 +299,9 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
   function editEnvironment() {
     Object.assign(environmentEditor, {
       envName: form.envName,
+      identifier: form.identifier,
       envType: form.envType,
+      isProd: form.isProd,
       automationType: form.automationType,
       description: form.description,
     })
@@ -278,15 +313,22 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
   }
 
   async function submitEnvironment() {
+    environmentDialogSubmitted.value = true
     if (!environmentEditor.envName.trim()) {
       ElMessage.warning('请输入环境名称')
+      return
+    }
+    if (environmentEditor.identifier.trim() && !/^[A-Za-z][A-Za-z0-9_-]*$/.test(environmentEditor.identifier.trim())) {
+      ElMessage.warning('环境标识符仅支持字母开头，以及字母、数字、下划线和连字符')
       return
     }
     if (environmentDialogMode.value === 'create') {
       const createForm = createDefaultConfigEnvForm(options.workspaceCode())
       Object.assign(createForm, {
         envName: environmentEditor.envName.trim(),
+        identifier: environmentEditor.identifier.trim(),
         envType: environmentEditor.envType,
+        isProd: environmentEditor.isProd,
         automationType: environmentEditor.automationType,
         description: environmentEditor.description.trim(),
       })
@@ -305,13 +347,17 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     }
     const previous = {
       envName: form.envName,
+      identifier: form.identifier,
       envType: form.envType,
+      isProd: form.isProd,
       automationType: form.automationType,
       description: form.description,
     }
     Object.assign(form, {
       envName: environmentEditor.envName.trim(),
+      identifier: environmentEditor.identifier.trim(),
       envType: environmentEditor.envType,
+      isProd: environmentEditor.isProd,
       automationType: environmentEditor.automationType,
       description: environmentEditor.description.trim(),
     })
@@ -323,11 +369,15 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
   function createEnvironment() {
     Object.assign(environmentEditor, {
       envName: '',
+      identifier: '',
       envType: 'TEST',
+      isProd: false,
       automationType: 'API_WEB_UI',
       description: '',
     })
     environmentDialogMode.value = 'create'
+    environmentDialogSubmitted.value = false
+    validationAttempted.value = false
   }
 
   return {
@@ -337,6 +387,7 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     disableDialogVisible,
     editEnvironment,
     environmentDialogMode,
+    environmentDialogSubmitted,
     environmentEditor,
     envs,
     errorMessage,
@@ -365,5 +416,7 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     switchStatus,
     variableSets,
     variableSetVersions,
+    fieldErrors,
+    validationAttempted,
   }
 }

@@ -257,8 +257,17 @@ public class ApiExecutionSuiteDomainService {
                         .in(ApiExecutionSuiteItemEntity::getSuiteId, pageEntities.stream().map(ApiExecutionSuiteEntity::getId).toList()))
                 .stream()
                 .collect(Collectors.groupingBy(ApiExecutionSuiteItemEntity::getSuiteId, Collectors.counting()));
+        List<Long> moduleIds = pageEntities.stream()
+                .map(ApiExecutionSuiteEntity::getModuleId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, ApiExecutionSuiteModuleEntity> modules = moduleIds.isEmpty()
+                ? Map.of()
+                : suiteModuleMapper.selectBatchIds(moduleIds).stream()
+                .collect(Collectors.toMap(ApiExecutionSuiteModuleEntity::getId, module -> module));
         List<ApiExecutionSuiteItem> items = pageEntities.stream()
-                .map(entity -> toSuiteItem(entity, itemCounts.getOrDefault(entity.getId(), 0L)))
+                .map(entity -> toSuiteItem(entity, itemCounts.getOrDefault(entity.getId(), 0L), modules))
                 .toList();
         return PageResponse.of(items, total, safePageNo, safePageSize);
     }
@@ -884,9 +893,13 @@ public class ApiExecutionSuiteDomainService {
         return expression;
     }
 
-    private ApiExecutionSuiteItem toSuiteItem(ApiExecutionSuiteEntity entity, Long itemCount) {
+    private ApiExecutionSuiteItem toSuiteItem(
+            ApiExecutionSuiteEntity entity,
+            Long itemCount,
+            Map<Long, ApiExecutionSuiteModuleEntity> modules
+    ) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
-        ApiExecutionSuiteModuleEntity module = entity.getModuleId() == null ? null : suiteModuleMapper.selectById(entity.getModuleId());
+        ApiExecutionSuiteModuleEntity module = entity.getModuleId() == null ? null : modules.get(entity.getModuleId());
         return new ApiExecutionSuiteItem(
                 entity.getId(),
                 workspace.getWorkspaceCode(),

@@ -18,6 +18,8 @@ export interface EnvConfigItem {
   baseUrl: string
   configJson: string
   status: ConfigStatus
+  updatedAt?: string | null
+  updatedBy?: string | null
 }
 
 export interface CreateEnvPayload {

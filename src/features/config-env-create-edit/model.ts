@@ -20,12 +20,47 @@ export interface ConfigEnvLocalVariableForm {
   enabled?: boolean
 }
 
+export type ConfigEnvAuthType = 'none' | 'bearer' | 'basic' | 'apikey' | 'digest'
+
+export interface ConfigEnvHeaderForm {
+  id: string
+  enabled: boolean
+  key: string
+  value: string
+  sensitive: boolean
+}
+
+export interface ConfigEnvApiConfigForm {
+  baseUrl: string
+  timeout: number
+  headers: ConfigEnvHeaderForm[]
+  authType: ConfigEnvAuthType
+  authBearer: string
+  authBasicUser: string
+  authBasicPass: string
+  authApiKeyName: string
+  authApiKeyValue: string
+  authApiKeyIn: 'header' | 'query'
+  authDigestUser: string
+  authDigestPass: string
+}
+
+export interface ConfigEnvWebUiConfigForm {
+  entryUrl: string
+  pageLoadTimeout: number
+  enabled: boolean
+}
+
 export interface ConfigEnvForm {
   workspaceCode: string
   automationType: ConfigAutomationType
   envType: string
+  isProd: boolean
   envName: string
+  identifier: string
   baseUrl: string
+  apiConfig: ConfigEnvApiConfigForm
+  webUIConfig: ConfigEnvWebUiConfigForm | null
   defaultServiceKey: string
   services: ConfigEnvServiceEndpointForm[]
   configJson: string
@@ -62,7 +97,9 @@ interface WebUiEnvConfig {
   scopeType?: string
   automationType?: string
   envGroup?: string
+  isProd?: boolean
   description?: string
+  identifier?: string
   defaultServiceKey?: string
   services?: Array<{
     key?: unknown
@@ -84,6 +121,7 @@ interface WebUiEnvConfig {
   browserType?: string
   headless?: boolean
   defaultTimeoutMs?: number
+  timeoutMs?: number
   viewport?: {
     width?: number
     height?: number
@@ -97,6 +135,9 @@ interface WebUiEnvConfig {
   mockApplicationId?: number | null
   mockReleaseId?: number | null
   appProfile?: Record<string, unknown>
+  variables?: unknown
+  apiConfig?: Partial<ConfigEnvApiConfigForm>
+  webUIConfig?: Partial<ConfigEnvWebUiConfigForm>
 }
 
 export function createDefaultConfigEnvForm(workspaceCode = 'ALL'): ConfigEnvForm {
@@ -104,8 +145,12 @@ export function createDefaultConfigEnvForm(workspaceCode = 'ALL'): ConfigEnvForm
     workspaceCode,
     automationType: 'API',
     envType: 'TEST',
+    isProd: false,
     envName: '',
+    identifier: '',
     baseUrl: '',
+    apiConfig: createDefaultApiConfig(),
+    webUIConfig: null,
     defaultServiceKey: 'default',
     services: [createDefaultServiceEndpoint()],
     configJson: '',
@@ -144,6 +189,8 @@ export function createConfigEnvFormFromItem(item: EnvConfigItem): ConfigEnvForm 
   const services = normalizeServiceEndpoints(envConfig.services ?? envConfig.sites, item.baseUrl)
   const defaultServiceKey = normalizeDefaultServiceKey(envConfig.defaultServiceKey, services)
   const defaultService = services.find(service => service.key === defaultServiceKey) ?? services[0]
+  const apiConfig = normalizeApiConfig(envConfig.apiConfig, defaultService?.baseUrl || item.baseUrl, envConfig)
+  const webUIConfig = normalizeWebUiConfig(envConfig.webUIConfig, envConfig)
   const appProfile = envConfig.appProfile ?? {}
   const defaultVariableSetId = typeof envConfig.defaultVariableSetId === 'number' ? envConfig.defaultVariableSetId : null
   const variableSetIds = normalizeNumberList(envConfig.variableSetIds)
@@ -154,8 +201,12 @@ export function createConfigEnvFormFromItem(item: EnvConfigItem): ConfigEnvForm 
     workspaceCode: item.workspaceCode || 'ALL',
     automationType: normalizeAutomationType(envConfig.scopeType ?? envConfig.automationType, envConfig, item.envType),
     envType: normalizeEnvGroup(envConfig.envGroup ?? item.envType),
+    isProd: typeof envConfig.isProd === 'boolean' ? envConfig.isProd : item.envType === 'PROD',
     envName: item.envName,
-    baseUrl: defaultService?.baseUrl || item.baseUrl,
+    identifier: normalizeString(envConfig.identifier) || slugifyIdentifier(item.envName),
+    baseUrl: apiConfig.baseUrl,
+    apiConfig,
+    webUIConfig,
     defaultServiceKey,
     services,
     configJson: item.configJson ?? '',
@@ -169,7 +220,7 @@ export function createConfigEnvFormFromItem(item: EnvConfigItem): ConfigEnvForm 
     defaultVariableSetId,
     variableSetIds,
     disabledVariableSetIds: normalizeNumberList(envConfig.disabledVariableSetIds),
-    localVariables: normalizeLocalVariables(envConfig.localVariables),
+    localVariables: normalizeLocalVariables(envConfig.localVariables ?? envConfig.variables),
     mockEnabled: typeof envConfig.mockEnabled === 'boolean'
       ? envConfig.mockEnabled
       : typeof envConfig.mockApplicationId === 'number',
@@ -192,16 +243,75 @@ export function createConfigEnvFormFromItem(item: EnvConfigItem): ConfigEnvForm 
 }
 
 export function buildCreateEnvPayload(form: ConfigEnvForm): CreateEnvPayload {
-  const services = normalizeServiceEndpoints(form.services, form.baseUrl)
+  const apiConfig = normalizeApiConfig(form.apiConfig, form.baseUrl, {
+    timeoutMs: form.defaultTimeoutMs,
+    services: form.services,
+    defaultServiceKey: form.defaultServiceKey,
+  })
+  const services = [{
+    key: 'default',
+    name: '默认入口',
+    baseUrl: apiConfig.baseUrl.trim(),
+    timeoutMs: clampNumber(apiConfig.timeout, 1000, 120000, 30000),
+    enabled: true,
+  }]
+  const webUIConfig = form.webUIConfig?.entryUrl
+    ? {
+        entryUrl: form.webUIConfig.entryUrl.trim(),
+        pageLoadTimeout: clampNumber(form.webUIConfig.pageLoadTimeout, 1000, 120000, 30000),
+        enabled: form.webUIConfig.enabled,
+      }
+    : null
   const defaultServiceKey = normalizeDefaultServiceKey(form.defaultServiceKey, services)
-  const defaultService = services.find(service => service.key === defaultServiceKey) ?? services[0]
+  const authConfig = {
+    authType: form.apiConfig.authType === 'none'
+      ? 'NONE'
+      : form.apiConfig.authType === 'apikey'
+        ? 'API_KEY'
+        : form.apiConfig.authType.toUpperCase(),
+    basicAuth: {
+      userName: form.apiConfig.authBasicUser,
+      password: form.apiConfig.authBasicPass,
+    },
+    digestAuth: {
+      userName: form.apiConfig.authDigestUser,
+      password: form.apiConfig.authDigestPass,
+    },
+    bearerToken: form.apiConfig.authBearer,
+    apiKeyName: form.apiConfig.authApiKeyName,
+    apiKeyValue: form.apiConfig.authApiKeyValue,
+    apiKeyLocation: form.apiConfig.authApiKeyIn,
+  }
+  const localVariables = form.localVariables
+    .map(variable => ({
+      name: variable.name.trim(),
+      value: variable.value,
+      sensitive: variable.sensitive,
+      description: variable.description.trim(),
+      valueType: variable.valueType || (variable.sensitive ? 'secret' : 'string'),
+      enabled: variable.enabled !== false,
+    }))
+    .filter(variable => variable.name)
   const configJson = JSON.stringify({
     scopeType: form.automationType,
     envGroup: normalizeEnvGroup(form.envType),
+    isProd: form.isProd,
     description: form.description.trim(),
+    identifier: form.identifier.trim() || slugifyIdentifier(form.envName),
     defaultServiceKey,
     services,
-    sites: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI' ? services : undefined,
+    apiConfig,
+    authConfig,
+    headers: apiConfig.headers,
+    variables: localVariables.filter(variable => variable.enabled !== false),
+    webUIConfig,
+    sites: webUIConfig ? [{
+      key: 'default',
+      name: '默认入口',
+      baseUrl: webUIConfig.entryUrl,
+      timeoutMs: webUIConfig.pageLoadTimeout,
+      enabled: webUIConfig.enabled,
+    }] : undefined,
     browserType: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI' ? form.browserType : undefined,
     headless: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI' ? form.headless : undefined,
     viewport: form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI'
@@ -210,22 +320,12 @@ export function buildCreateEnvPayload(form: ConfigEnvForm): CreateEnvPayload {
           height: clampNumber(form.viewportHeight, 240, 4320, 900),
         }
       : undefined,
-    timeoutMs: clampNumber(form.defaultTimeoutMs, 1000, 60000, 10000),
-    ignoreSsl: form.ignoreHttpsErrors,
+    timeoutMs: clampNumber(apiConfig.timeout, 1000, 120000, 30000),
     defaultVariableSetId: form.variableSetIds.find(id => !form.disabledVariableSetIds.includes(id)) ?? null,
     variableSetIds: Array.from(new Set(form.variableSetIds)),
     disabledVariableSetIds: Array.from(new Set(form.disabledVariableSetIds))
       .filter(id => form.variableSetIds.includes(id)),
-    localVariables: form.localVariables
-      .map(variable => ({
-        name: variable.name.trim(),
-        value: variable.value,
-        sensitive: variable.sensitive,
-        description: variable.description.trim(),
-        valueType: variable.valueType || (variable.sensitive ? 'secret' : 'string'),
-        enabled: variable.enabled !== false,
-      }))
-      .filter(variable => variable.name),
+    localVariables,
     mockEnabled: form.mockEnabled,
     mockApplicationId: form.mockApplicationId,
     mockReleaseId: form.mockReleaseId,
@@ -251,39 +351,64 @@ export function buildCreateEnvPayload(form: ConfigEnvForm): CreateEnvPayload {
     workspaceCode: form.workspaceCode === 'ALL' ? undefined : form.workspaceCode,
     envType: normalizeEnvGroup(form.envType),
     envName: form.envName.trim(),
-    baseUrl: defaultService?.baseUrl.trim() || form.baseUrl.trim(),
+    baseUrl: apiConfig.baseUrl.trim() || form.baseUrl.trim(),
     configJson,
     status: form.status,
   }
+}
+
+function slugifyIdentifier(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'environment'
 }
 
 export function validateConfigEnvForm(form: ConfigEnvForm) {
   if (!form.envName.trim()) {
     return '请输入环境名称'
   }
+  if (form.identifier.trim() && !/^[A-Za-z][A-Za-z0-9_-]*$/.test(form.identifier.trim())) {
+    return '环境标识符仅支持字母开头，以及字母、数字、下划线和连字符'
+  }
   if (form.automationType === 'APP') {
     if (form.appPlatform === 'ANDROID' && !form.appPackage.trim()) return '请输入 Android Package'
     if (form.appPlatform === 'IOS' && !form.appBundleId.trim()) return '请输入 iOS Bundle ID'
     return validateLocalVariables(form.localVariables)
   }
-  const services = normalizeServiceEndpoints(form.services, form.baseUrl)
-  if (!services.some(service => service.baseUrl)) {
-    return form.automationType === 'WEB_UI' ? '请至少配置一个站点地址' : '请至少配置一个服务地址'
+  if (form.automationType === 'WEB_UI' || form.automationType === 'API_WEB_UI') {
+    if (!form.webUIConfig?.entryUrl.trim()) return '请至少配置一个入口 URL'
+    if (!/^https?:\/\//i.test(form.webUIConfig.entryUrl.trim())) return '入口 URL 必须以 http:// 或 https:// 开头'
   }
-  const serviceKeys = new Set<string>()
-  for (const service of services) {
-    if (!service.key.trim()) {
-      return '请输入服务标识'
-    }
-    if (serviceKeys.has(service.key)) {
-      return '服务标识不能重复'
-    }
-    serviceKeys.add(service.key)
-    if (!/^https?:\/\//i.test(service.baseUrl)) {
-      return '服务地址必须以 http:// 或 https:// 开头'
-    }
+  if (form.automationType === 'API' || form.automationType === 'API_WEB_UI') {
+    if (!form.apiConfig.baseUrl.trim()) return '请至少配置 Base URL'
+    if (!/^https?:\/\//i.test(form.apiConfig.baseUrl.trim())) return 'Base URL 必须以 http:// 或 https:// 开头'
   }
   return validateLocalVariables(form.localVariables)
+}
+
+export interface ConfigEnvFieldErrors {
+  envName?: string
+  identifier?: string
+  apiBaseUrl?: string
+  webEntryUrl?: string
+}
+
+export function getConfigEnvFieldErrors(form: ConfigEnvForm): ConfigEnvFieldErrors {
+  const errors: ConfigEnvFieldErrors = {}
+  if (!form.envName.trim()) {
+    errors.envName = '请输入环境名称'
+  }
+  if (form.identifier.trim() && !/^[A-Za-z][A-Za-z0-9_-]*$/.test(form.identifier.trim())) {
+    errors.identifier = '仅支持字母开头，以及字母、数字、下划线和连字符'
+  }
+  if (form.automationType === 'WEB_UI') {
+    const entryUrl = form.webUIConfig?.entryUrl.trim() || ''
+    if (!entryUrl) errors.webEntryUrl = '请至少配置一个入口 URL'
+    else if (!/^https?:\/\//i.test(entryUrl)) errors.webEntryUrl = '入口 URL 必须以 http:// 或 https:// 开头'
+  } else if (form.automationType !== 'APP') {
+    const baseUrl = form.apiConfig.baseUrl.trim()
+    if (!baseUrl) errors.apiBaseUrl = '请至少配置 Base URL'
+    else if (!/^https?:\/\//i.test(baseUrl)) errors.apiBaseUrl = 'Base URL 必须以 http:// 或 https:// 开头'
+  }
+  return errors
 }
 
 function parseEnvConfig(configJson: string): WebUiEnvConfig & {
@@ -301,6 +426,68 @@ function parseEnvConfig(configJson: string): WebUiEnvConfig & {
   } catch {
     return { description: configJson.trim() }
   }
+}
+
+export function createDefaultApiConfig(): ConfigEnvApiConfigForm {
+  return {
+    baseUrl: '',
+    timeout: 30000,
+    headers: [],
+    authType: 'none',
+    authBearer: '',
+    authBasicUser: '',
+    authBasicPass: '',
+    authApiKeyName: 'X-API-Key',
+    authApiKeyValue: '',
+    authApiKeyIn: 'header',
+    authDigestUser: '',
+    authDigestPass: '',
+  }
+}
+
+function normalizeApiConfig(value: Partial<ConfigEnvApiConfigForm> | undefined, fallbackBaseUrl: string, legacy: WebUiEnvConfig): ConfigEnvApiConfigForm {
+  const base = createDefaultApiConfig()
+  const legacyHeaders = Array.isArray((legacy as { headers?: unknown }).headers) ? (legacy as { headers: unknown[] }).headers : []
+  const headers = Array.isArray(value?.headers) ? value.headers : legacyHeaders
+  return {
+    ...base,
+    ...value,
+    baseUrl: normalizeString(value?.baseUrl) || fallbackBaseUrl.trim(),
+    timeout: clampNumber(value?.timeout ?? legacy.timeoutMs, 1000, 120000, 30000),
+    headers: normalizeHeaders(headers),
+    authType: normalizeAuthType(value?.authType),
+    authApiKeyIn: value?.authApiKeyIn === 'query' ? 'query' : 'header',
+  }
+}
+
+function normalizeWebUiConfig(value: Partial<ConfigEnvWebUiConfigForm> | undefined, legacy: WebUiEnvConfig): ConfigEnvWebUiConfigForm | null {
+  const sites = normalizeServiceEndpoints(legacy.sites, '')
+  const entryUrl = normalizeString(value?.entryUrl) || sites[0]?.baseUrl || ''
+  if (!entryUrl && !value) return null
+  return {
+    entryUrl,
+    pageLoadTimeout: clampNumber(value?.pageLoadTimeout ?? legacy.defaultTimeoutMs, 1000, 120000, 30000),
+    enabled: value?.enabled !== false,
+  }
+}
+
+function normalizeHeaders(value: unknown): ConfigEnvHeaderForm[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(item => typeof item === 'object' && item !== null).map((item, index) => {
+    const row = item as Record<string, unknown>
+    return {
+      id: normalizeString(row.id) || `header-${index + 1}`,
+      enabled: row.enabled !== false,
+      key: normalizeString(row.key ?? row.name),
+      value: normalizeString(row.value),
+      sensitive: row.sensitive === true,
+    }
+  }).filter(item => item.key || item.value)
+}
+
+function normalizeAuthType(value: unknown): ConfigEnvAuthType {
+  const normalized = normalizeString(value).toLowerCase()
+  return normalized === 'bearer' || normalized === 'basic' || normalized === 'apikey' || normalized === 'digest' ? normalized : 'none'
 }
 
 function normalizeBrowserType(value: unknown): ConfigEnvForm['browserType'] {

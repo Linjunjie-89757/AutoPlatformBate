@@ -24,6 +24,7 @@ import {
 import {
   defectApi,
   formatDefectDateTime,
+  listAllDefects,
   type DefectSummaryItem,
 } from '@/entities/defect'
 import { CaseCreateEditDrawer } from '@/features/case-create-edit'
@@ -272,14 +273,6 @@ const availableAssociateDefects = computed(() => {
 })
 
 const canSubmitDefect = computed(() => !defectSaving.value)
-
-function canDefectSummaryBelongToCase(item: DefectSummaryItem, caseId: number) {
-  if (item.relatedCaseId === caseId) {
-    return true
-  }
-
-  return item.relatedCaseCount > 0
-}
 
 function displayText(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === '') {
@@ -871,27 +864,15 @@ async function loadRelatedDefects(row: CaseDetail) {
   defectsLoading.value = true
   defectsErrorMessage.value = ''
   try {
-    const workspaceCode = row.workspaceCode || effectiveWorkspaceCode.value
-    const page = await defectApi.getDefects(row.workspaceCode || effectiveWorkspaceCode.value, {
-      pageNo: 1,
-      pageSize: 100,
+    const items = await listAllDefects(row.workspaceCode || effectiveWorkspaceCode.value, {
+      relatedCaseId: row.id,
     })
     if (requestSeq !== defectsRequestSeq) {
       return
     }
 
-    const candidateItems = page.items.filter(item => canDefectSummaryBelongToCase(item, row.id))
-    const relatedFlags = await Promise.all(candidateItems.map(async (item) => {
-      if (item.relatedCaseId === row.id) {
-        return true
-      }
-
-      const relatedCases = await defectApi.getDefectCases(workspaceCode, item.id)
-      return relatedCases.some(caseItem => caseItem.id === row.id)
-    }))
-
     if (requestSeq === defectsRequestSeq) {
-      relatedDefects.value = candidateItems.filter((_, index) => relatedFlags[index])
+      relatedDefects.value = items
     }
   } catch (error) {
     if (requestSeq === defectsRequestSeq) {
@@ -909,12 +890,9 @@ async function loadDefectAssociateCandidates(row: CaseDetail) {
   const requestSeq = ++defectAssociateRequestSeq
   defectAssociateLoading.value = true
   try {
-    const page = await defectApi.getDefects(row.workspaceCode || effectiveWorkspaceCode.value, {
-      pageNo: 1,
-      pageSize: 100,
-    })
+    const items = await listAllDefects(row.workspaceCode || effectiveWorkspaceCode.value)
     if (requestSeq === defectAssociateRequestSeq) {
-      defectAssociateCandidates.value = page.items
+      defectAssociateCandidates.value = items
     }
   } catch (error) {
     if (requestSeq === defectAssociateRequestSeq) {

@@ -27,6 +27,7 @@ export {
   getCaseReviewStatusMeta,
   matchesCaseClientFilter,
 } from './lib/format'
+export { listAllCases } from './lib/listAllCases'
 export {
   caseExecutionStatusOptions,
   casePriorityOptions,

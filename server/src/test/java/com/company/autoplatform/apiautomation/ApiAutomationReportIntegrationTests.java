@@ -270,6 +270,44 @@ class ApiAutomationReportIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.items[0].archived").value(true));
     }
 
+    @Test
+    void reportListPaginatesAcrossMultipleCaseRuns() throws Exception {
+        String unique = "report-page-" + System.nanoTime();
+        ApiDefinitionCaseDetail apiCase = createCase(unique);
+        apiAutomationService.runCase(apiCase.id(), WORKSPACE_CODE, new ApiRunRequest(WORKSPACE_CODE, null, null, null, null));
+        apiAutomationService.runCase(apiCase.id(), WORKSPACE_CODE, new ApiRunRequest(WORKSPACE_CODE, null, null, null, null));
+        apiAutomationService.runCase(apiCase.id(), WORKSPACE_CODE, new ApiRunRequest(WORKSPACE_CODE, null, null, null, null));
+
+        String firstPage = mockMvc.perform(get("/api/automation/api/reports")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique)
+                        .param("objectType", "API_CASE")
+                        .param("pageNo", "1")
+                        .param("pageSize", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(3))
+                .andExpect(jsonPath("$.data.items", hasSize(1)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String secondPage = mockMvc.perform(get("/api/automation/api/reports")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique)
+                        .param("objectType", "API_CASE")
+                        .param("pageNo", "2")
+                        .param("pageSize", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(3))
+                .andExpect(jsonPath("$.data.items", hasSize(1)))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String firstKey = com.jayway.jsonpath.JsonPath.read(firstPage, "$.data.items[0].reportKey");
+        String secondKey = com.jayway.jsonpath.JsonPath.read(secondPage, "$.data.items[0].reportKey");
+        org.assertj.core.api.Assertions.assertThat(firstKey).isNotEqualTo(secondKey);
+    }
+
     private int createSuite(String unique) throws Exception {
         String response = mockMvc.perform(post("/api/automation/api/execution-suites")
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)

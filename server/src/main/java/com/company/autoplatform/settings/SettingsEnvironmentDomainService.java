@@ -7,6 +7,9 @@ import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.company.autoplatform.workspace.WorkspaceService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -18,6 +21,7 @@ public class SettingsEnvironmentDomainService {
 
     private final EnvConfigMapper envConfigMapper;
     private final WorkspaceService workspaceService;
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final ConfigReferenceDomainService referenceDomainService;
 
     public SettingsEnvironmentDomainService(
@@ -67,6 +71,7 @@ public class SettingsEnvironmentDomainService {
     public EnvConfigItem createEnv(String headerWorkspaceCode, CreateEnvConfigRequest request) {
         WorkspaceEntity workspace = workspaceService.requireWritableWorkspace(
                 workspaceService.resolveTargetWorkspace(headerWorkspaceCode, request.workspaceCode()));
+        validateEnvironmentRequest(request);
         EnvConfigEntity entity = new EnvConfigEntity();
         entity.setWorkspaceId(workspace.getId());
         entity.setEnvType(normalizeEnvType(request.envType()));
@@ -88,6 +93,7 @@ public class SettingsEnvironmentDomainService {
         if (!entity.getWorkspaceId().equals(workspace.getId())) {
             throw new BadRequestException("不允许修改环境归属空间");
         }
+        validateEnvironmentRequest(request);
         entity.setEnvType(normalizeEnvType(request.envType()));
         entity.setEnvName(request.envName());
         entity.setBaseUrl(normalizeBaseUrl(request.baseUrl()));
@@ -166,6 +172,65 @@ public class SettingsEnvironmentDomainService {
 
     private String normalizeBaseUrl(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private void validateEnvironmentRequest(CreateEnvConfigRequest request) {
+        String envName = request.envName() == null ? "" : request.envName().trim();
+        if (envName.isBlank()) {
+            throw new BadRequestException("环境名称不能为空");
+        }
+        JsonNode config = readConfig(request.configJson());
+        String scopeType = text(config, "scopeType").toUpperCase(Locale.ROOT);
+        String baseUrl = normalizeBaseUrl(request.baseUrl());
+        if (!baseUrl.isBlank()) {
+            validateHttpUrl(baseUrl, "Base URL");
+        }
+        JsonNode apiConfig = config.path("apiConfig");
+        validateTimeout(apiConfig.path("timeout"), "API 超时时间");
+        validateTimeout(config.path("timeoutMs"), "环境超时时间");
+        JsonNode webConfig = config.path("webUIConfig");
+        if (!webConfig.isMissingNode() && !webConfig.isNull()) {
+            String entryUrl = text(webConfig, "entryUrl");
+            if (!entryUrl.isBlank()) {
+                validateHttpUrl(entryUrl, "Web UI 入口 URL");
+            }
+            validateTimeout(webConfig.path("pageLoadTimeout"), "Web UI 页面加载超时");
+        }
+    }
+
+    private JsonNode readConfig(String configJson) {
+        if (configJson == null || configJson.isBlank()) {
+            return OBJECT_MAPPER.createObjectNode();
+        }
+        try {
+            JsonNode node = OBJECT_MAPPER.readTree(configJson);
+            if (node == null || !node.isObject()) {
+                throw new BadRequestException("环境配置必须是 JSON 对象");
+            }
+            return node;
+        } catch (JsonProcessingException exception) {
+            throw new BadRequestException("环境配置 JSON 格式不正确");
+        }
+    }
+
+    private String text(JsonNode object, String field) {
+        JsonNode value = object == null ? null : object.get(field);
+        return value == null || value.isNull() ? "" : value.asText("").trim();
+    }
+
+    private void validateHttpUrl(String value, String label) {
+        if (!value.matches("^https?://[^\\s]+$")) {
+            throw new BadRequestException(label + " 必须以 http:// 或 https:// 开头且不能包含空格");
+        }
+    }
+
+    private void validateTimeout(JsonNode value, String label) {
+        if (value == null || value.isMissingNode() || value.isNull() || value.asText("").isBlank()) {
+            return;
+        }
+        if (!value.isNumber() || value.asInt() < 1000 || value.asInt() > 120000) {
+            throw new BadRequestException(label + "必须在 1000 到 120000 毫秒之间");
+        }
     }
 
     private String normalizeEnvType(String value) {

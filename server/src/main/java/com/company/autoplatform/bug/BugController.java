@@ -42,10 +42,11 @@ public class BugController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "severity", required = false) String severity,
             @RequestParam(value = "priority", required = false) String priority,
+            @RequestParam(value = "relatedCaseId", required = false) Long relatedCaseId,
             @RequestParam(value = "pageNo", required = false) Integer pageNo,
             @RequestParam(value = "pageSize", required = false) Integer pageSize
     ) {
-        return ApiResponse.ok(bugService.listBugs(workspaceCode, keyword, status, severity, priority, pageNo, pageSize));
+        return ApiResponse.ok(bugService.listBugs(workspaceCode, keyword, status, severity, priority, relatedCaseId, pageNo, pageSize));
     }
 
     @PostMapping("/bugs")

@@ -30,6 +30,7 @@ import {
   WEB_UI_LOCATOR_OPTIONS,
   WEB_UI_SCREENSHOT_POLICY_OPTIONS,
   WEB_UI_STEP_TYPE_OPTIONS,
+  listAllWebUiElements,
   type SaveWebUiCasePayload,
   type WebUiBrowserType,
   type WebUiCaseDetail,
@@ -688,18 +689,16 @@ async function loadElements() {
 
   loadingElements.value = true
   try {
-    const [page, moduleResult, pageResult, groupResult] = await Promise.all([
-      webUiAutomationApi.getElements(workspaceCode, {
+    const [elementsResult, moduleResult, pageResult, groupResult] = await Promise.all([
+      listAllWebUiElements(workspaceCode, {
         status: 'ENABLED',
-        pageNo: 1,
-        pageSize: 500,
       }),
       webUiAutomationApi.getElementModules(workspaceCode),
       webUiAutomationApi.getElementPages(workspaceCode),
       webUiAutomationApi.getElementGroups(workspaceCode),
     ])
     if (requestId === elementRequestSeq && props.modelValue && props.workspaceCode === workspaceCode) {
-      elements.value = page.items
+      elements.value = elementsResult
       elementModules.value = moduleResult.items
       elementPages.value = pageResult.items
       elementGroups.value = groupResult.items

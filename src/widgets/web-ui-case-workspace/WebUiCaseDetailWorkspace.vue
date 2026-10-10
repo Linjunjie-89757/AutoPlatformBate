@@ -44,6 +44,7 @@ import {
   formatLocatorType,
   requiresInput,
   requiresLocator,
+  listAllWebUiElements,
   toWebUiCollectCandidatesFromRecordedSteps,
   toWebUiCaseStepFromRecordedStep,
   webUiAutomationApi,
@@ -2545,29 +2546,7 @@ async function enrichRecordedStepsWithElementMatches(steps: EditableStep[]) {
 }
 
 async function loadEnabledElementsForRecordedStepMatching() {
-  const pageSize = 500
-  const firstPage = await webUiAutomationApi.getElements(props.workspaceCode, {
-    status: 'ENABLED',
-    pageNo: 1,
-    pageSize,
-  })
-  const elements = [...firstPage.items]
-  let pageNo = 1
-
-  while (elements.length < firstPage.total) {
-    pageNo += 1
-    const page = await webUiAutomationApi.getElements(props.workspaceCode, {
-      status: 'ENABLED',
-      pageNo,
-      pageSize,
-    })
-    if (!page.items.length) {
-      break
-    }
-    elements.push(...page.items)
-  }
-
-  return elements
+  return listAllWebUiElements(props.workspaceCode, { status: 'ENABLED' })
 }
 
 function applyElementMatchToRecordedStep(step: EditableStep, item: WebUiElementItem) {

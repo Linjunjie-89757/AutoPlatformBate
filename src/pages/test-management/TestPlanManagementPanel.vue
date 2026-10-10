@@ -24,10 +24,14 @@ import {
 } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, type Component, watch } from 'vue'
 
-import { caseApi, type CaseDirectoryNode, type CaseDirectoryWorkspace, type CaseSummaryItem } from '@/entities/case'
+import { caseApi, listAllCases, type CaseDirectoryNode, type CaseDirectoryWorkspace, type CaseSummaryItem } from '@/entities/case'
 import { defectApi } from '@/entities/defect'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import {
+  listAllTestPlans,
+  listAllTestRequirements,
+  listAllTestVersions,
+  listAllPlanActivities,
   testManagementApi,
   type TestActivityItem,
   type TestPlanCaseItem as ApiTestPlanCaseItem,
@@ -386,15 +390,15 @@ const loadPlans = async () => {
   isLoading.value = true
   loadError.value = ''
   try {
-    const [result, versions, members, directoryWorkspaces] = await Promise.all([
-      testManagementApi.listPlans(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
-      testManagementApi.listVersions(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
+    const [planItems, versionItems, members, directoryWorkspaces] = await Promise.all([
+      listAllTestPlans(selectedWorkspaceCode.value),
+      listAllTestVersions(selectedWorkspaceCode.value),
       workspaceApi.getWorkspaceAssignableMembers(selectedWorkspaceCode.value),
       caseApi.getCaseDirectories(selectedWorkspaceCode.value),
     ])
-    plans.value = result.items.map(mapPlan)
-    planLockVersions.value = new Map(result.items.map(item => [String(item.id), item.lockVersion]))
-    planVersions.value = versions.items.map(item => ({ id: String(item.id), name: item.name, status: item.status }))
+    plans.value = planItems.map(mapPlan)
+    planLockVersions.value = new Map(planItems.map(item => [String(item.id), item.lockVersion]))
+    planVersions.value = versionItems.map(item => ({ id: String(item.id), name: item.name, status: item.status }))
     planOwners.value = members.map(mapAssignableMember)
     const workspaceDirectories = directoryWorkspaces.find(item => item.workspaceCode === selectedWorkspaceCode.value)
       || directoryWorkspaces[0]
@@ -408,7 +412,7 @@ const loadPlans = async () => {
       count: workspaceDirectories?.caseCount || 0,
       children: (workspaceDirectories?.children || []).map(item => mapCaseDirectory(item, [])),
     }]
-    if (!form.versionId) form.versionId = result.items.find(item => item.versionId)?.versionId ? String(result.items.find(item => item.versionId)?.versionId) : ''
+    if (!form.versionId) form.versionId = planItems.find(item => item.versionId)?.versionId ? String(planItems.find(item => item.versionId)?.versionId) : ''
     restoreInitialDetail()
     restoreInitialAction()
   } catch (error) {
@@ -422,11 +426,11 @@ const loadPlans = async () => {
 const ensurePlanWizardData = async () => {
   if (planWizardDataLoadPromise) return planWizardDataLoadPromise
   planWizardDataLoadPromise = Promise.all([
-    testManagementApi.listRequirements(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 100 }),
-    caseApi.getCases(selectedWorkspaceCode.value, { pageNo: 1, pageSize: 500 }),
+    listAllTestRequirements(selectedWorkspaceCode.value),
+    listAllCases(selectedWorkspaceCode.value),
   ]).then(([requirements, cases]) => {
-    planRequirements.value = requirements.items.map(mapPlanRequirement)
-    planCaseLibrary.value = cases.items.map(mapLibraryCase)
+    planRequirements.value = requirements.map(mapPlanRequirement)
+    planCaseLibrary.value = cases.map(mapLibraryCase)
     if (planDirectoryWorkspace) {
       planCaseDirectoryTree.value = [{
         id: 'root',
@@ -996,12 +1000,12 @@ const openPlan = async (plan: ManagedTestPlan, tab: DetailTab = 'overview') => {
     const [result, defects, activities] = await Promise.all([
       testManagementApi.getPlan(selectedWorkspaceCode.value, Number(plan.id)),
       testManagementApi.listPlanDefects(selectedWorkspaceCode.value, Number(plan.id)),
-      testManagementApi.listPlanActivities(selectedWorkspaceCode.value, Number(plan.id)),
+      listAllPlanActivities(selectedWorkspaceCode.value, Number(plan.id)),
     ])
     applyPlanDetail(result)
     planDefectDetails.value = defects
     planBugs.value = defects.map(mapPlanBug)
-    planLogs.value = activities.items.map(mapPlanLog)
+    planLogs.value = activities.map(mapPlanLog)
     if (selectedPlan.value) {
       selectedPlan.value.p0Bugs = planBugs.value.filter(item => item.priority === 'P0' && !['closed', 'rejected'].includes(item.status)).length
       selectedPlan.value.p1Bugs = planBugs.value.filter(item => item.priority === 'P1' && !['closed', 'rejected'].includes(item.status)).length
@@ -1139,11 +1143,11 @@ const submitDefect = async (payload: TestPlanDefectSubmitPayload, continueCreate
     }
     const [defects, activities] = await Promise.all([
       testManagementApi.listPlanDefects(selectedWorkspaceCode.value, Number(selectedPlan.value.id)),
-      testManagementApi.listPlanActivities(selectedWorkspaceCode.value, Number(selectedPlan.value.id)),
+      listAllPlanActivities(selectedWorkspaceCode.value, Number(selectedPlan.value.id)),
     ])
     planDefectDetails.value = defects
     planBugs.value = defects.map(mapPlanBug)
-    planLogs.value = activities.items.map(mapPlanLog)
+    planLogs.value = activities.map(mapPlanLog)
     if (view.value === 'execution' && selectedPlan.value) {
       await loadExecutionCaseContext(String(payload.caseId))
     }
@@ -1245,13 +1249,13 @@ const openExecution = async (plan: ManagedTestPlan, caseId?: string) => {
       const [detail, defects, activities] = await Promise.all([
         testManagementApi.getPlan(selectedWorkspaceCode.value, Number(plan.id)),
         testManagementApi.listPlanDefects(selectedWorkspaceCode.value, Number(plan.id)),
-        testManagementApi.listPlanActivities(selectedWorkspaceCode.value, Number(plan.id)),
+        listAllPlanActivities(selectedWorkspaceCode.value, Number(plan.id)),
       ])
       selectedPlan.value = plan
       applyPlanDetail(detail)
       planDefectDetails.value = defects
       planBugs.value = defects.map(mapPlanBug)
-      planLogs.value = activities.items.map(mapPlanLog)
+      planLogs.value = activities.map(mapPlanLog)
     }
     if (!selectedPlanDetail.value?.cases.length) {
       showToast('当前计划暂无可执行用例')
@@ -1521,8 +1525,8 @@ const bugStatusCount = (status: 'all' | TestPlanBugStatus) => status === 'all'
 
 const refreshPlanActivities = async () => {
   if (!selectedPlan.value) return
-  const activities = await testManagementApi.listPlanActivities(selectedWorkspaceCode.value, Number(selectedPlan.value.id))
-  planLogs.value = activities.items.map(mapPlanLog)
+  const activities = await listAllPlanActivities(selectedWorkspaceCode.value, Number(selectedPlan.value.id))
+  planLogs.value = activities.map(mapPlanLog)
 }
 
 const generateReport = async () => {

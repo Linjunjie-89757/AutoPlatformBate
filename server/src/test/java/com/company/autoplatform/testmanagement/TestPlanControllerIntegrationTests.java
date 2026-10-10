@@ -101,6 +101,64 @@ class TestPlanControllerIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void batchPlanDefectsGroupsResultsAndIncludesPlansWithoutDefects() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        CaseEntity testCase = firstCaseInRiskWorkspace();
+        long firstPlanId = createTemporaryRunningPlan("batch-defect-plan-a-" + suffix, testCase).path("id").asLong();
+        long secondPlanId = createTemporaryRunningPlan("batch-defect-plan-b-" + suffix, testCase).path("id").asLong();
+        JsonNode firstPlan = data(mockMvc.perform(get("/api/test-management/plans/{id}", firstPlanId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andReturn());
+        long planCaseId = firstPlan.path("cases").path(0).path("id").asLong();
+
+        mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/results", firstPlanId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of("status", "FAILED", "expectedVersion", 1))))
+                .andExpect(status().isOk());
+        JsonNode defect = data(mockMvc.perform(post("/api/test-management/plans/{id}/cases/{planCaseId}/defects", firstPlanId, planCaseId)
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "title", "batch-plan-defect-" + suffix,
+                                "description", "Verify batch plan defect grouping",
+                                "priority", "P1",
+                                "severity", "HIGH",
+                                "assigneeId", 11,
+                                "sourceType", "TEST_PLAN"
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+
+        mockMvc.perform(get("/api/test-management/plans/defects/batch")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .param("planIds", firstPlanId + "," + secondPlanId + "," + firstPlanId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data['" + firstPlanId + "'].length()").value(1))
+                .andExpect(jsonPath("$.data['" + firstPlanId + "'][0].id").value(defect.path("id").asLong()))
+                .andExpect(jsonPath("$.data['" + secondPlanId + "'].length()").value(0));
+    }
+
+    private JsonNode createTemporaryRunningPlan(String name, CaseEntity testCase) throws Exception {
+        return data(mockMvc.perform(post("/api/test-management/plans/create-and-start")
+                        .header("X-Workspace-Code", WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(json(Map.of(
+                                "purpose", "TEMP",
+                                "planType", "MIXED",
+                                "name", name,
+                                "ownerId", 11,
+                                "startDate", "2026-08-18",
+                                "endDate", "2026-08-20",
+                                "manualCaseIds", List.of(testCase.getId()),
+                                "draft", false
+                        ))))
+                .andExpect(status().isOk())
+                .andReturn());
+    }
+
+    @Test
     void versionPlanFreezesExecutesGeneratesAndSignsReport() throws Exception {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         JsonNode version = data(mockMvc.perform(post("/api/test-management/versions")

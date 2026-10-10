@@ -38,6 +38,7 @@ import {
   formatStepType,
   formatWebUiDateTime,
   parseWebUiCaseImportJson,
+  listAllWebUiTemplates,
   webUiAutomationApi,
   WEB_UI_CASE_TEMPLATES,
   WebUiRunStatusBadge,
@@ -922,9 +923,9 @@ async function loadTemplates() {
 
   loadingTemplates.value = true
   try {
-    const page = await webUiAutomationApi.getTemplates(workspaceCode, { pageNo: 1, pageSize: 100 })
+    const items = await listAllWebUiTemplates(workspaceCode)
     if (requestId === templateRequestSeq && isWorkspaceReady() && props.workspaceCode === workspaceCode) {
-      templates.value = page.items
+      templates.value = items
     }
   } catch (error) {
     if (requestId === templateRequestSeq && isWorkspaceReady() && props.workspaceCode === workspaceCode) {
@@ -947,7 +948,6 @@ async function loadWorkspaceData() {
     loadRuns(),
     loadBatches(),
     loadCiTokens(),
-    loadTemplates(),
   ])
   await syncReportDeepLink()
 }
@@ -1989,6 +1989,9 @@ function handleLocateRunStep(payload: { caseId: number | null; step: WebUiRunSte
 
 onMounted(() => {
   void loadWorkspaceData()
+  if (props.mode === 'templates') {
+    void loadTemplates()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -2029,6 +2032,9 @@ watch(
   () => props.mode,
   value => {
     activeTab.value = resolveModeTab(value)
+    if (value === 'templates') {
+      void loadTemplates()
+    }
     void syncReportDeepLink()
   },
 )
@@ -2080,6 +2086,9 @@ watch(
     selectedCases.value = []
     latestCreatedToken.value = null
     void loadWorkspaceData()
+    if (props.mode === 'templates' || templateDialogVisible.value) {
+      void loadTemplates()
+    }
   },
 )
 </script>

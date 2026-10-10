@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 import java.nio.charset.StandardCharsets;
 
 @RestController
@@ -489,6 +490,14 @@ public class TestManagementController {
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
     ) {
         return ApiResponse.ok(planService.listDefects(id, workspaceCode));
+    }
+
+    @GetMapping("/plans/defects/batch")
+    public ApiResponse<Map<Long, List<BugEntity>>> listPlanDefectsBatch(
+            @RequestParam("planIds") List<Long> planIds,
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(planService.listDefects(planIds, workspaceCode));
     }
 
     @GetMapping("/plans/{id}/cases/{planCaseId}/defects")

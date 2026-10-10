@@ -8,7 +8,7 @@ defineProps<{
 
 const emit = defineEmits<{ select: [tab: EnvironmentDetailTab] }>()
 
-const tabs: EnvironmentDetailTab[] = ['services', 'variables', 'mock', 'effective', 'references']
+const tabs: EnvironmentDetailTab[] = ['basic', 'api', 'webui', 'app', 'variables']
 </script>
 
 <template>

@@ -1,17 +1,31 @@
 package com.company.autoplatform.bug;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.company.autoplatform.casecenter.CaseDirectoryEntity;
+import com.company.autoplatform.casecenter.CaseDirectoryMapper;
+import com.company.autoplatform.casecenter.CaseEntity;
+import com.company.autoplatform.casecenter.CaseMapper;
+import com.company.autoplatform.common.BaseEntity;
 import com.company.autoplatform.common.JsonUtils;
 import com.company.autoplatform.user.UserEntity;
+import com.company.autoplatform.user.UserMapper;
 import com.company.autoplatform.user.UserService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
+import com.company.autoplatform.workspace.WorkspaceMapper;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 public class BugResponseAssembler {
@@ -22,6 +36,10 @@ public class BugResponseAssembler {
     private final BugCommentMapper bugCommentMapper;
     private final BugAttachmentMapper bugAttachmentMapper;
     private final BugCaseRelationMapper bugCaseRelationMapper;
+    private final CaseMapper caseMapper;
+    private final CaseDirectoryMapper caseDirectoryMapper;
+    private final UserMapper userMapper;
+    private final WorkspaceMapper workspaceMapper;
     private final UserService userService;
     private final WorkspaceService workspaceService;
 
@@ -32,6 +50,10 @@ public class BugResponseAssembler {
             BugCommentMapper bugCommentMapper,
             BugAttachmentMapper bugAttachmentMapper,
             BugCaseRelationMapper bugCaseRelationMapper,
+            CaseMapper caseMapper,
+            CaseDirectoryMapper caseDirectoryMapper,
+            UserMapper userMapper,
+            WorkspaceMapper workspaceMapper,
             UserService userService,
             WorkspaceService workspaceService
     ) {
@@ -41,6 +63,10 @@ public class BugResponseAssembler {
         this.bugCommentMapper = bugCommentMapper;
         this.bugAttachmentMapper = bugAttachmentMapper;
         this.bugCaseRelationMapper = bugCaseRelationMapper;
+        this.caseMapper = caseMapper;
+        this.caseDirectoryMapper = caseDirectoryMapper;
+        this.userMapper = userMapper;
+        this.workspaceMapper = workspaceMapper;
         this.userService = userService;
         this.workspaceService = workspaceService;
     }
@@ -72,6 +98,132 @@ public class BugResponseAssembler {
                 workspace.getWorkspaceCode(),
                 workspace.getWorkspaceName()
         );
+    }
+
+    public List<BugSummaryResponse> toSummaries(List<BugEntity> entities) {
+        if (entities.isEmpty()) return List.of();
+
+        List<Long> workspaceIds = entities.stream().map(BugEntity::getWorkspaceId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, WorkspaceEntity> workspaces = loadEntities(workspaceIds,
+                workspaceIds.isEmpty() ? List.of() : workspaceMapper.selectBatchIds(workspaceIds));
+        List<Long> bugIds = entities.stream().map(BugEntity::getId).filter(Objects::nonNull).distinct().toList();
+        List<BugCaseRelationEntity> relations = bugCaseRelationMapper.selectList(
+                new LambdaQueryWrapper<BugCaseRelationEntity>().in(BugCaseRelationEntity::getBugId, bugIds)
+                        .orderByAsc(BugCaseRelationEntity::getId));
+        Map<Long, List<BugCaseRelationEntity>> relationsByBug = relations.stream()
+                .collect(Collectors.groupingBy(BugCaseRelationEntity::getBugId, LinkedHashMap::new, Collectors.toList()));
+        List<Long> caseIds = new ArrayList<>(relations.stream().map(BugCaseRelationEntity::getCaseId).filter(Objects::nonNull).distinct().toList());
+        entities.stream().map(BugEntity::getRelatedCaseId).filter(Objects::nonNull).distinct().forEach(id -> {
+            if (!caseIds.contains(id)) caseIds.add(id);
+        });
+        Map<Long, CaseEntity> cases = loadEntities(caseIds, caseIds.isEmpty() ? List.of() : caseMapper.selectBatchIds(caseIds));
+        List<Long> directoryIds = cases.values().stream().map(CaseEntity::getCaseDirectoryId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, CaseDirectoryEntity> directories = loadEntities(directoryIds,
+                directoryIds.isEmpty() ? List.of() : caseDirectoryMapper.selectBatchIds(directoryIds));
+
+        List<BugFlowEntity> latestFlows = bugIds.isEmpty() ? List.of() : bugFlowMapper.selectLatestByBugIds(bugIds);
+        List<BugCommentEntity> latestComments = bugIds.isEmpty() ? List.of() : bugCommentMapper.selectLatestByBugIds(bugIds);
+        Map<Long, BugFlowEntity> latestFlowsByBug = latestFlows.stream()
+                .collect(Collectors.toMap(BugFlowEntity::getBugId, Function.identity()));
+        Map<Long, BugCommentEntity> latestCommentsByBug = latestComments.stream()
+                .collect(Collectors.toMap(BugCommentEntity::getBugId, Function.identity()));
+
+        Set<Long> userIds = new java.util.LinkedHashSet<>();
+        entities.forEach(item -> {
+            if (item.getAssigneeId() != null) userIds.add(item.getAssigneeId());
+            if (item.getReporterId() != null) userIds.add(item.getReporterId());
+        });
+        latestFlows.forEach(item -> { if (item.getOperatorId() != null) userIds.add(item.getOperatorId()); });
+        latestComments.forEach(item -> { if (item.getCommenterId() != null) userIds.add(item.getCommenterId()); });
+        Map<Long, UserEntity> users = loadEntities(userIds, userIds.isEmpty() ? List.of() : userMapper.selectBatchIds(userIds));
+
+        return entities.stream().map(entity -> toSummary(entity, workspaces, users, relationsByBug, cases, directories, latestFlowsByBug, latestCommentsByBug)).toList();
+    }
+
+    private BugSummaryResponse toSummary(
+            BugEntity entity,
+            Map<Long, WorkspaceEntity> workspaces,
+            Map<Long, UserEntity> users,
+            Map<Long, List<BugCaseRelationEntity>> relationsByBug,
+            Map<Long, CaseEntity> cases,
+            Map<Long, CaseDirectoryEntity> directories,
+            Map<Long, BugFlowEntity> latestFlows,
+            Map<Long, BugCommentEntity> latestComments
+    ) {
+        WorkspaceEntity workspace = workspace(entity.getWorkspaceId(), workspaces);
+        UserEntity reporter = user(entity.getReporterId(), users);
+        UserEntity assignee = entity.getAssigneeId() == null ? null : user(entity.getAssigneeId(), users);
+        List<BugCaseSummaryResponse> relatedCases = buildRelatedCaseSummaries(entity, relationsByBug, cases, directories, workspaces);
+        return new BugSummaryResponse(
+                entity.getId(), entity.getBugNo(), entity.getTitle(), JsonUtils.toStringList(entity.getTagsJson()),
+                BugPriority.valueOf(entity.getPriority()), BugSeverity.valueOf(entity.getSeverity()), BugStatus.valueOf(entity.getStatus()),
+                assignee == null ? "-" : assignee.getDisplayName(), reporter == null ? "-" : reporter.getDisplayName(),
+                entity.getCreatedAt(), resolveUpdatedByName(entity, reporter, latestFlows.get(entity.getId()), latestComments.get(entity.getId()), users),
+                entity.getUpdatedAt(), resolvePrimaryCaseId(entity, relatedCases), relatedCases.size(), entity.getVersionName(),
+                entity.getEnvironmentName(), workspace.getWorkspaceCode(), workspace.getWorkspaceName());
+    }
+
+    private List<BugCaseSummaryResponse> buildRelatedCaseSummaries(
+            BugEntity entity,
+            Map<Long, List<BugCaseRelationEntity>> relationsByBug,
+            Map<Long, CaseEntity> cases,
+            Map<Long, CaseDirectoryEntity> directories,
+            Map<Long, WorkspaceEntity> workspaces
+    ) {
+        List<Long> caseIds = new ArrayList<>(relationsByBug.getOrDefault(entity.getId(), List.of()).stream()
+                .map(BugCaseRelationEntity::getCaseId).filter(Objects::nonNull).toList());
+        if (entity.getRelatedCaseId() != null && !caseIds.contains(entity.getRelatedCaseId())) caseIds.add(0, entity.getRelatedCaseId());
+        return caseIds.stream().map(caseId -> {
+            CaseEntity testCase = cases.get(caseId);
+            if (testCase == null || !Objects.equals(testCase.getWorkspaceId(), entity.getWorkspaceId())) return null;
+            WorkspaceEntity caseWorkspace = workspaces.get(testCase.getWorkspaceId());
+            if (caseWorkspace == null) return null;
+            CaseDirectoryEntity directory = testCase.getCaseDirectoryId() == null ? null : directories.get(testCase.getCaseDirectoryId());
+            String modulePath = directory == null || directory.getDirectoryName() == null || directory.getDirectoryName().isBlank()
+                    ? caseWorkspace.getWorkspaceName() : caseWorkspace.getWorkspaceName() + " / " + directory.getDirectoryName();
+            return new BugCaseSummaryResponse(testCase.getId(), testCase.getCaseNo(), testCase.getTitle(), caseWorkspace.getWorkspaceCode(),
+                    caseWorkspace.getWorkspaceName(), directory == null ? null : directory.getId(), directory == null ? null : directory.getDirectoryName(),
+                    modulePath, defaultExecutionStatus(testCase.getExecutionStatus()),
+                    testCase.getExecutionComment() == null || testCase.getExecutionComment().isBlank() ? testCase.getExecutionNote() : testCase.getExecutionComment(),
+                    testCase.getExecutedAt() == null ? null : testCase.getExecutedAt().toString());
+        }).filter(Objects::nonNull).toList();
+    }
+
+    private String defaultExecutionStatus(String executionStatus) {
+        if (executionStatus == null || executionStatus.isBlank()) return "NOT_RUN";
+        if ("RUNNING".equalsIgnoreCase(executionStatus.trim())) return "BLOCKED";
+        return executionStatus.trim().toUpperCase();
+    }
+
+    private String resolveUpdatedByName(BugEntity entity, UserEntity reporter, BugFlowEntity latestFlow, BugCommentEntity latestComment, Map<Long, UserEntity> users) {
+        LocalDateTime latestTime = entity.getUpdatedAt() == null ? entity.getCreatedAt() : entity.getUpdatedAt();
+        String updatedByName = reporter == null ? "-" : reporter.getDisplayName();
+        if (latestFlow != null && latestFlow.getCreatedAt() != null && (latestTime == null || !latestFlow.getCreatedAt().isBefore(latestTime))) {
+            UserEntity operator = user(latestFlow.getOperatorId(), users);
+            if (operator != null) updatedByName = operator.getDisplayName();
+            latestTime = latestFlow.getCreatedAt();
+        }
+        if (latestComment != null && latestComment.getCreatedAt() != null && (latestTime == null || latestComment.getCreatedAt().isAfter(latestTime))) {
+            UserEntity commenter = user(latestComment.getCommenterId(), users);
+            if (commenter != null) updatedByName = commenter.getDisplayName();
+        }
+        return updatedByName;
+    }
+
+    private <T extends BaseEntity> Map<Long, T> loadEntities(Collection<Long> ids, List<T> entities) {
+        if (ids.isEmpty() || entities.isEmpty()) return Map.of();
+        return entities.stream().collect(Collectors.toMap(BaseEntity::getId, Function.identity(), (left, right) -> left));
+    }
+
+    private WorkspaceEntity workspace(Long id, Map<Long, WorkspaceEntity> workspaces) {
+        WorkspaceEntity workspace = workspaces.get(id);
+        return workspace == null ? workspaceService.requireWorkspaceById(id) : workspace;
+    }
+
+    private UserEntity user(Long id, Map<Long, UserEntity> users) {
+        if (id == null) return null;
+        UserEntity user = users.get(id);
+        return user == null ? userService.requireUser(id) : user;
     }
 
     public BugDetailResponse toDetail(BugEntity entity) {

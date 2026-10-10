@@ -1,27 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Server as Service } from '@lucide/vue'
+import { Server as Service, Smartphone } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { type ParamSetItem } from '@/entities/config'
-import { type ConfigAutomationType } from '@/features/config-env-create-edit'
 import { parseWebUiVariables } from '@/features/config-param-create-edit'
 
 import ConfigEnvironmentEffectivePanel from './ConfigEnvironmentEffectivePanel.vue'
+import ConfigEnvironmentApiPanel from './ConfigEnvironmentApiPanel.vue'
 import ConfigEnvironmentDetailHeader from './ConfigEnvironmentDetailHeader.vue'
 import ConfigEnvironmentDetailTabs from './ConfigEnvironmentDetailTabs.vue'
 import ConfigEnvironmentEditorDialogs from './ConfigEnvironmentEditorDialogs.vue'
 import ConfigEnvironmentMockPanel from './ConfigEnvironmentMockPanel.vue'
 import ConfigEnvironmentMockDialogs from './ConfigEnvironmentMockDialogs.vue'
 import ConfigEnvironmentReferencesPanel from './ConfigEnvironmentReferencesPanel.vue'
-import ConfigEnvironmentServicesPanel from './ConfigEnvironmentServicesPanel.vue'
 import ConfigEnvironmentSidebar from './ConfigEnvironmentSidebar.vue'
 import ConfigEnvironmentVariableDialogs from './ConfigEnvironmentVariableDialogs.vue'
 import ConfigEnvironmentVariablesPanel from './ConfigEnvironmentVariablesPanel.vue'
 import {
   buildEffectiveVariables,
   buildReferenceRows,
-  calculateConfigIssues,
   environmentCardSummary,
   environmentStageMeta,
   variableSetHasSensitive,
@@ -44,8 +42,9 @@ const props = withDefaults(defineProps<{ workspaceCode?: string }>(), { workspac
 const route = useRoute()
 const router = useRouter()
 
-const activeTab = ref<EnvironmentDetailTab>('services')
+const activeTab = ref<EnvironmentDetailTab>('basic')
 const keyword = ref('')
+const savedFormSnapshot = ref('')
 const effectiveSourceFilter = ref<'all' | EffectiveVariableSourceType>('all')
 const effectiveKeyword = ref('')
 
@@ -54,11 +53,12 @@ const {
   copyEnvironment,
   createEnvironment,
   disableDialogVisible,
-  editEnvironment,
   environmentDialogMode,
+  environmentDialogSubmitted,
   environmentEditor,
   envs,
   errorMessage,
+  fieldErrors,
   form,
   loadData,
   loading,
@@ -96,14 +96,14 @@ const environmentStageOptions = [
   { value: 'PROD', label: '生产' },
   { value: 'SANDBOX', label: '沙箱' },
 ]
-const environmentApplicabilityOptions: Array<{ value: ConfigAutomationType; label: string; icon: 'api' | 'web' | 'both' }> = [
-  { value: 'API', label: '接口自动化', icon: 'api' },
-  { value: 'WEB_UI', label: 'Web UI 自动化', icon: 'web' },
-  { value: 'API_WEB_UI', label: '接口 + Web UI', icon: 'both' },
-]
 const localVariableTypeOptions: LocalVariableEditorForm['valueType'][] = ['string', 'integer', 'boolean', 'secret']
 
 const selectedStage = computed(() => environmentStageMeta[form.envType] || environmentStageMeta.TEST)
+const lastUpdatedText = computed(() => {
+  const item = selectedEnv.value
+  if (!item?.updatedAt) return '暂无更新时间'
+  return `${item.updatedAt}${item.updatedBy ? ` · ${item.updatedBy}` : ''}`
+})
 const filteredEnvs = computed(() => {
   const query = keyword.value.trim().toLowerCase()
   return envs.value.filter(item => !query || item.envName.toLowerCase().includes(query))
@@ -144,16 +144,7 @@ const referenceStats = computed(() => (['api-scenario', 'api-suite', 'web-ui', '
   .map(kind => ({ kind, count: referenceRows.value.filter(item => item.kind === kind).length }))
   .filter(item => item.count > 0))
 const referenceListIsSampled = computed(() => referenceCount.value > referenceRows.value.length)
-const configIssueCount = computed(() => calculateConfigIssues(form))
-const configComplete = computed(() => configIssueCount.value === 0)
-const applicationLabel = computed(() => {
-  if (form.automationType === 'API_WEB_UI') return '接口 + Web UI'
-  if (form.automationType === 'WEB_UI') return 'Web UI 自动化'
-  if (form.automationType === 'APP') return 'APP 自动化'
-  return '接口自动化'
-})
-const variableCount = computed(() => form.variableSetIds.length + form.localVariables.length)
-const defaultServiceCount = computed(() => form.services.filter(item => item.key === form.defaultServiceKey).length)
+const isDirty = computed(() => savedFormSnapshot.value !== JSON.stringify(form))
 const selectedMockApplication = computed(() => mockApplications.value.find(item => item.id === form.mockApplicationId) || null)
 const selectedMockRelease = computed(() => mockReleases.value.find(item => item.id === form.mockReleaseId) || null)
 const mockBaseUrl = computed(() => selectedMockApplication.value ? `/api/mock/${selectedMockApplication.value.appCode}` : '—')
@@ -175,24 +166,23 @@ function isVariableSetEnabled(item: ParamSetItem) {
   return !form.disabledVariableSetIds.includes(item.id)
 }
 
+async function discardChanges() {
+  if (!selectedEnv.value) return
+  await selectEnv(selectedEnv.value, activeTab.value)
+}
+
 const {
   serviceDialogVisible,
   serviceEditingIndex,
   serviceEditor,
   resetServiceTests,
-  openAddService,
-  openEditService,
   closeServiceDialog,
   submitService,
-  copyService,
-  removeService,
   testConnection,
-  batchTestConnections,
-  serviceStatus,
-  formatTimeout,
 } = useConfigEnvironmentServiceActions(form, saveCurrentForm)
 
 setEnvironmentSelectedHandler(() => {
+  savedFormSnapshot.value = JSON.stringify(form)
   effectiveSourceFilter.value = 'all'
   effectiveKeyword.value = ''
   resetServiceTests()
@@ -213,7 +203,6 @@ const {
   movePriorityDraft,
   saveVariableSetPriority,
   moveBoundVariableSet,
-  toggleVariableSetEnabled,
   unbindVariableSet,
   openLocalVariableDialog,
   closeLocalVariableDialog,
@@ -289,8 +278,11 @@ function viewReference(item: ReferenceViewItem) {
 }
 
 function tabLabel(tab: EnvironmentDetailTab) {
-  if (tab === 'services') return `服务配置 (${form.services.filter(item => item.baseUrl).length})`
-  if (tab === 'variables') return `变量配置 (${variableCount.value})`
+  if (tab === 'basic') return '基础信息'
+  if (tab === 'api') return 'API'
+  if (tab === 'webui') return 'Web UI'
+  if (tab === 'app') return 'APP'
+  if (tab === 'variables') return `变量绑定${form.variableSetIds.length ? ` ${form.variableSetIds.length}` : ''}`
   if (tab === 'mock') return mockBound.value ? 'Mock 已启用' : 'Mock 配置'
   if (tab === 'effective') return '最终生效预览'
   return `引用分析 (${referenceCount.value})`
@@ -305,7 +297,10 @@ onMounted(() => void loadData())
 watch(() => props.workspaceCode, () => void loadData(null))
 
 const detailTabLabels = computed<Record<EnvironmentDetailTab, string>>(() => ({
-  services: tabLabel('services'),
+  basic: tabLabel('basic'),
+  api: tabLabel('api'),
+  webui: tabLabel('webui'),
+  app: tabLabel('app'),
   variables: tabLabel('variables'),
   mock: tabLabel('mock'),
   effective: tabLabel('effective'),
@@ -318,49 +313,46 @@ const detailTabLabels = computed<Record<EnvironmentDetailTab, string>>(() => ({
     <ConfigEnvironmentSidebar
       :environments="filteredEnvs"
       :selected-environment-id="selectedEnvId"
+      :environment-count="envs.length"
       :keyword="keyword"
       :loading="loading"
+      :error-message="errorMessage"
       :card-summary="environmentCardSummary"
       @update:keyword="keyword = $event"
       @create="createEnvironment"
       @select="selectEnv"
+      @remove="selectEnv($event).then(() => removeEnvironment())"
+      @retry="loadData()"
     />
 
     <main v-if="selectedEnv" class="figma-env__detail" data-node-id="311:3923">
       <ConfigEnvironmentDetailHeader
         :environment-name="form.envName"
+        :environment-identifier="form.identifier"
         :description="form.description"
         :stage="selectedStage"
-        :application-label="applicationLabel"
-        :config-complete="configComplete"
-        :config-issue-count="configIssueCount"
-        :service-count="form.services.filter(item => item.baseUrl).length"
-        :variable-set-count="form.variableSetIds.length"
-        :reference-count="referenceCount"
         :enabled="selectedEnv.status === 1"
+        :is-production="form.isProd"
+        :dirty="isDirty"
         :operating="operating"
+        :saving="saving"
+        :save-disabled="!isDirty"
         @copy="copyEnvironment"
-        @edit="editEnvironment"
         @switch-status="switchStatus"
-        @remove="removeEnvironment"
+        @save="saveCurrentForm('环境配置已保存')"
       />
 
       <ConfigEnvironmentDetailTabs :active-tab="activeTab" :labels="detailTabLabels" @select="selectDetailTab" />
 
-      <ConfigEnvironmentServicesPanel
-        v-if="activeTab === 'services'"
-        :services="form.services"
-        :default-service-key="form.defaultServiceKey"
-        :default-service-count="defaultServiceCount"
-        :service-status="serviceStatus"
-        :format-timeout="formatTimeout"
-        @batch-test="batchTestConnections"
-        @add="openAddService"
-        @test="testConnection"
-        @edit="openEditService"
-        @copy="copyService"
-        @remove="removeService"
-      />
+      <div class="figma-env__detail-content">
+      <section v-if="activeTab === 'basic'" class="figma-env__basic-panel">
+        <div class="figma-env__config-card"><header><div><h3>基础信息</h3><p>用于识别和说明当前测试环境</p></div></header><div class="figma-env__basic-grid"><label class="figma-env__field" :class="{ 'has-error': fieldErrors.envName }"><span>环境名称 <b>*</b></span><input v-model="form.envName" :aria-invalid="Boolean(fieldErrors.envName)"><small v-if="fieldErrors.envName" class="figma-env__field-error">{{ fieldErrors.envName }}</small></label><label class="figma-env__field" :class="{ 'has-error': fieldErrors.identifier }"><span>环境标识符 <small>系统内部识别，不作为变量引用</small></span><input v-model="form.identifier" class="is-mono" :aria-invalid="Boolean(fieldErrors.identifier)" placeholder="例：test-env"><small v-if="fieldErrors.identifier" class="figma-env__field-error">{{ fieldErrors.identifier }}</small></label><label class="figma-env__field figma-env__field--wide"><span>描述</span><input v-model="form.description" placeholder="说明该环境的用途和范围"></label></div><div class="figma-env__basic-stage"><span>环境阶段</span><div class="figma-env__stage-options"><button v-for="option in environmentStageOptions" :key="option.value" type="button" :class="{ 'is-selected': form.envType === option.value }" @click="form.envType = option.value">{{ option.label }}</button></div></div></div>
+        <div class="figma-env__config-card"><header><div><h3>环境属性</h3></div></header><div class="figma-env__property-list"><div class="figma-env__property-row"><div><strong>标记为生产环境</strong><small>保存时将弹出额外确认；建议仅对直连线上系统的环境开启</small></div><button type="button" class="figma-env__mini-switch" :class="{ 'is-on': form.isProd }" :aria-label="form.isProd ? '取消生产环境标记' : '标记为生产环境'" @click="form.isProd = !form.isProd"><i /></button></div><div class="figma-env__property-row"><div><strong>启用环境</strong><small>停用后该环境不可被测试任务选择</small></div><button type="button" class="figma-env__mini-switch" :class="{ 'is-on': form.status === 1 }" :aria-label="form.status === 1 ? '停用环境' : '启用环境'" @click="void switchStatus()"><i /></button></div></div></div>
+        <div class="figma-env__updated"><span>最后更新：{{ lastUpdatedText }}</span></div>
+      </section>
+      <ConfigEnvironmentApiPanel v-else-if="activeTab === 'api'" v-model="form.apiConfig" :base-url-error="fieldErrors.apiBaseUrl" />
+      <section v-else-if="activeTab === 'webui'" class="figma-env__webui-panel"><div class="figma-env__config-card"><header><div><h3>Web UI 连接参数</h3></div></header><div class="figma-env__basic-grid"><label class="figma-env__field figma-env__field--wide"><span>入口 URL <b>*</b><small>浏览器测试的起始页面地址</small></span><input :value="form.webUIConfig?.entryUrl || ''" class="is-mono" placeholder="https://app.example.com" @input="form.webUIConfig = { ...(form.webUIConfig || { pageLoadTimeout: 30000, enabled: true }), entryUrl: ($event.target as HTMLInputElement).value }"></label><label class="figma-env__field"><span>页面加载超时 (ms)</span><input :value="form.webUIConfig?.pageLoadTimeout || 30000" type="number" @input="form.webUIConfig = { ...(form.webUIConfig || { entryUrl: '', enabled: true }), pageLoadTimeout: Number(($event.target as HTMLInputElement).value) || 30000 }"></label></div><div class="figma-env__webui-enabled"><div><strong>启用 Web UI 配置</strong><small>停用后 Web UI 测试任务不可选择此环境</small></div><button type="button" class="figma-env__mini-switch" :class="{ 'is-on': form.webUIConfig?.enabled !== false }" :aria-label="form.webUIConfig?.enabled !== false ? '停用 Web UI 配置' : '启用 Web UI 配置'" @click="form.webUIConfig = { ...(form.webUIConfig || { entryUrl: '', pageLoadTimeout: 30000, enabled: true }), enabled: form.webUIConfig?.enabled === false }"><i /></button></div></div><div v-if="!form.webUIConfig?.entryUrl" class="figma-env__info-banner">填写入口 URL 后，Web UI 测试任务才能在此环境中执行。</div></section>
+      <section v-else-if="activeTab === 'app'" class="figma-env__app-panel"><Smartphone :size="40" /><strong>APP 配置待开放</strong><p>APP 自动化环境参数配置功能即将上线，请关注版本更新。</p></section>
 
       <ConfigEnvironmentVariablesPanel
         v-else-if="activeTab === 'variables'"
@@ -372,7 +364,6 @@ const detailTabLabels = computed<Record<EnvironmentDetailTab, string>>(() => ({
         :is-enabled="isVariableSetEnabled"
         @adjust-priority="openPriorityDialog"
         @bind="openBindVariableSetDialog"
-        @toggle-set="toggleVariableSetEnabled"
         @move-set="moveBoundVariableSet"
         @view-sets="goToVariableSetConfig"
         @unbind="unbindVariableSet"
@@ -420,6 +411,13 @@ const detailTabLabels = computed<Record<EnvironmentDetailTab, string>>(() => ({
         :sampled="referenceListIsSampled"
         @view="viewReference"
       />
+      </div>
+
+      <footer v-if="isDirty" class="figma-env__save-bar">
+        <span>有未保存的修改</span>
+        <button type="button" @click="void discardChanges()">放弃修改</button>
+        <button class="is-primary" type="button" :disabled="saving" @click="void saveCurrentForm('环境配置已保存')">保存配置</button>
+      </footer>
     </main>
 
     <div v-else class="figma-env__detail figma-env__no-selection">
@@ -487,7 +485,6 @@ const detailTabLabels = computed<Record<EnvironmentDetailTab, string>>(() => ({
       :environment-mode="environmentDialogMode"
       :environment-editor="environmentEditor"
       :stage-options="environmentStageOptions"
-      :applicability-options="environmentApplicabilityOptions"
       :disable-visible="disableDialogVisible"
       :running-references="runningReferences"
       :reference-count="referenceCount"
@@ -496,6 +493,7 @@ const detailTabLabels = computed<Record<EnvironmentDetailTab, string>>(() => ({
       :service-editor="serviceEditor"
       :saving="saving"
       :operating="operating"
+      :environment-errors="environmentDialogSubmitted ? { envName: !environmentEditor.envName.trim() ? '请输入环境名称' : undefined, identifier: environmentEditor.identifier.trim() && !/^[A-Za-z][A-Za-z0-9_-]*$/.test(environmentEditor.identifier.trim()) ? '仅支持字母开头，以及字母、数字、下划线和连字符' : undefined } : undefined"
       @close-environment="closeEnvironmentDialog"
       @submit-environment="submitEnvironment"
       @close-disable="disableDialogVisible = false"

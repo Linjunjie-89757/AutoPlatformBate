@@ -1379,7 +1379,17 @@ public class WebUiExecutionDomainService {
         Boolean headless = requestHeadless != null ? requestHeadless : (environment == null ? webCase.getHeadless() : environment.headless());
         String baseUrl = environment == null ? webCase.getBaseUrl() : environment.baseUrl();
         Integer timeoutMs = environment == null ? webCase.getDefaultTimeoutMs() : environment.defaultTimeoutMs();
-        VariableSetResolution defaultVariableSet = resolveVariableSet(environment == null ? null : environment.defaultVariableSetId(), webCase.getWorkspaceId());
+        List<VariableSetResolution> environmentVariableSets = resolveVariableSets(
+                environment == null ? List.of() : environment.variableSetIds(),
+                environment == null ? List.of() : environment.disabledVariableSetIds(),
+                environment == null ? null : environment.defaultVariableSetId(),
+                webCase.getWorkspaceId()
+        );
+        VariableSetResolution defaultVariableSet = environmentVariableSets.stream()
+                .filter(item -> environment != null && environment.defaultVariableSetId() != null
+                        && environment.defaultVariableSetId().equals(item.id()))
+                .findFirst()
+                .orElse(null);
         VariableSetResolution runtimeVariableSet = requestVariableSetId == null
                 || defaultVariableSet != null && requestVariableSetId.equals(defaultVariableSet.id())
                 ? null
@@ -1401,10 +1411,12 @@ public class WebUiExecutionDomainService {
                 null
         );
         applyVariableSets(variables, listGlobalVariableSets(webCase.getWorkspaceId()), variableSetSnapshots);
-        executionContextSupport.putVariableItems(variables, environment == null ? List.of() : environment.variables());
+        for (int index = environmentVariableSets.size() - 1; index >= 0; index--) {
+            applyVariableSet(variables, environmentVariableSets.get(index), variableSetSnapshots);
+        }
         putServiceRuntimeVariables(variables, environment);
         putMockRuntimeVariables(variables, mock);
-        applyVariableSet(variables, defaultVariableSet, variableSetSnapshots);
+        executionContextSupport.putVariableItems(variables, environment == null ? List.of() : environment.variables());
         applyVariableSet(variables, runtimeVariableSet, variableSetSnapshots);
         putRuntimeVariables(variables, runtimeVariables);
         String normalizedBrowserType = normalizeBrowserType(browserType);
@@ -1586,6 +1598,27 @@ public class WebUiExecutionDomainService {
                 variableSet.getParamName(),
                 executionContextSupport.readVariables(variableSet.getContentJson())
         );
+    }
+
+    private List<VariableSetResolution> resolveVariableSets(
+            List<Long> variableSetIds,
+            List<Long> disabledVariableSetIds,
+            Long defaultVariableSetId,
+            Long workspaceId
+    ) {
+        List<Long> orderedIds = new ArrayList<>(defaultList(variableSetIds));
+        if (orderedIds.isEmpty() && defaultVariableSetId != null) {
+            orderedIds.add(defaultVariableSetId);
+        }
+        List<Long> disabledIds = defaultList(disabledVariableSetIds);
+        List<VariableSetResolution> result = new ArrayList<>();
+        for (Long id : orderedIds) {
+            if (id == null || disabledIds.contains(id) || result.stream().anyMatch(item -> id.equals(item.id()))) {
+                continue;
+            }
+            result.add(resolveVariableSet(id, workspaceId));
+        }
+        return result;
     }
 
     private boolean isWebUiRuntimeVariableSet(String paramType) {

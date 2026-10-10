@@ -7,6 +7,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
   WEB_UI_LOCATOR_OPTIONS,
+  listAllWebUiElements,
   webUiAutomationApi,
   type WebUiElementCollectFilterDetail,
   type WebUiElementCollectTaskResponse,
@@ -1376,12 +1377,9 @@ function isExistingElementDuplicateCandidate(existingElements: WebUiElementItem[
 }
 
 async function loadDuplicateBaseline(workspaceCode: string, pageId: number) {
-  const response = await webUiAutomationApi.getElements(workspaceCode, {
+  return listAllWebUiElements(workspaceCode, {
     pageId,
-    pageNo: 1,
-    pageSize: 1000,
   })
-  return response.items
 }
 
 async function confirmSaveSummary(summary: ReturnType<typeof buildCollectCandidateSaveSummary>) {

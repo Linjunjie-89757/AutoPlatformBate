@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { Activity as Connection, AlertTriangle as Warning, Layers, Link2 as Link, Monitor, X as Close, XCircle as CircleClose } from '@lucide/vue'
+import { Activity as Connection, AlertTriangle as Warning, X as Close, XCircle as CircleClose } from '@lucide/vue'
 
-import type { ConfigAutomationType } from '@/features/config-env-create-edit'
 import { AppSwitch } from '@/shared/ui'
 
 import type { EnvironmentEditorForm, ServiceEditorForm } from './configEnvironmentPanel.types'
@@ -10,7 +9,6 @@ defineProps<{
   environmentMode: 'create' | 'edit' | null
   environmentEditor: EnvironmentEditorForm
   stageOptions: Array<{ value: string; label: string }>
-  applicabilityOptions: Array<{ value: ConfigAutomationType; label: string; icon: 'api' | 'web' | 'both' }>
   disableVisible: boolean
   runningReferences: Array<{ sourceType: string; sourceId: number | null; sourceName: string | null }>
   referenceCount: number
@@ -19,6 +17,7 @@ defineProps<{
   serviceEditor: ServiceEditorForm
   saving: boolean
   operating: boolean
+  environmentErrors?: { envName?: string; identifier?: string }
 }>()
 
 const emit = defineEmits<{
@@ -36,12 +35,14 @@ const emit = defineEmits<{
   <Teleport to="body">
     <div v-if="environmentMode" class="figma-env-modal" :data-node-id="environmentMode === 'create' ? '331:2778' : '330:730'" @mousedown.self="emit('closeEnvironment')">
       <section class="figma-env-modal__dialog figma-env-modal__dialog--environment" :class="{ 'is-create': environmentMode === 'create' }">
-        <header><div class="figma-env-modal__heading-copy"><h2>{{ environmentMode === 'create' ? '新建环境' : '编辑环境' }}</h2><p v-if="environmentMode === 'create'">先创建环境，再配置服务地址、变量和 Mock</p></div><button type="button" @click="emit('closeEnvironment')"><el-icon><Close /></el-icon></button></header>
+        <header><div class="figma-env-modal__heading-copy"><h2>{{ environmentMode === 'create' ? '新建环境' : '编辑环境' }}</h2><p v-if="environmentMode === 'create'">创建后可在详情页配置 API、Web UI 等连接参数</p></div><button type="button" @click="emit('closeEnvironment')"><el-icon><Close /></el-icon></button></header>
         <div class="figma-env-modal__body figma-env-modal__body--environment">
-          <label><span>环境名称 <b>*</b></span><input v-model="environmentEditor.envName" type="text" :placeholder="environmentMode === 'create' ? '例：功能测试环境、性能测试环境' : '请输入环境名称'"></label>
+          <label :class="{ 'has-error': environmentErrors?.envName }"><span>环境名称 <b>*</b></span><input v-model="environmentEditor.envName" type="text" :aria-invalid="Boolean(environmentErrors?.envName)" :placeholder="environmentMode === 'create' ? '例：功能测试环境' : '请输入环境名称'"><small v-if="environmentErrors?.envName" class="figma-env-modal__field-error">{{ environmentErrors.envName }}</small></label>
+          <label :class="{ 'has-error': environmentErrors?.identifier }"><span>环境标识符 <small>系统内部识别，不作为变量引用</small></span><input v-model="environmentEditor.identifier" class="is-mono" type="text" :aria-invalid="Boolean(environmentErrors?.identifier)" placeholder="例：test-env"><small v-if="environmentErrors?.identifier" class="figma-env-modal__field-error">{{ environmentErrors.identifier }}</small></label>
           <fieldset class="figma-env-modal__choice-field"><legend>环境阶段</legend><div class="figma-env-modal__stage-options"><button v-for="option in stageOptions" :key="option.value" type="button" :class="{ 'is-selected': environmentEditor.envType === option.value }" @click="environmentEditor.envType = option.value">{{ option.label }}</button></div></fieldset>
-          <fieldset class="figma-env-modal__choice-field"><legend>适用范围</legend><div class="figma-env-modal__applicability-options"><button v-for="option in applicabilityOptions" :key="option.value" type="button" :class="{ 'is-selected': environmentEditor.automationType === option.value }" @click="environmentEditor.automationType = option.value"><el-icon><Link v-if="option.icon === 'api'" /><Monitor v-else-if="option.icon === 'web'" /><Layers v-else /></el-icon>{{ option.label }}</button></div></fieldset>
+          <div class="figma-env-modal__enabled"><span><strong>标记为生产环境</strong><small>保存生产环境配置时将额外要求确认</small></span><AppSwitch v-model="environmentEditor.isProd" label="标记为生产环境" size="regular" /></div>
           <label><span>描述</span><input v-model="environmentEditor.description" type="text" :placeholder="environmentMode === 'create' ? '说明该环境的用途和范围' : '请输入环境说明'"></label>
+          <div v-if="environmentEditor.isProd" class="figma-env-modal__notice is-danger"><el-icon><Warning /></el-icon><span>已标记为生产环境，修改配置时将提示二次确认。</span></div>
         </div>
         <footer><button type="button" @click="emit('closeEnvironment')">取消</button><button class="is-primary" type="button" :disabled="saving" @click="emit('submitEnvironment')">{{ environmentMode === 'create' ? '创建环境' : '保存' }}</button></footer>
       </section>

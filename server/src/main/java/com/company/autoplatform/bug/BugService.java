@@ -51,12 +51,13 @@ public class BugService {
             String status,
             String severity,
             String priority,
+            Long relatedCaseId,
             Integer pageNo,
             Integer pageSize
     ) {
-        PageResponse<BugEntity> page = bugDomainService.listBugs(workspaceCode, keyword, status, severity, priority, pageNo, pageSize);
+        PageResponse<BugEntity> page = bugDomainService.listBugs(workspaceCode, keyword, status, severity, priority, relatedCaseId, pageNo, pageSize);
         return new PageResponse<>(
-                page.items().stream().map(bugResponseAssembler::toSummary).toList(),
+                bugResponseAssembler.toSummaries(page.items()),
                 page.total(),
                 page.pageNo(),
                 page.pageSize(),

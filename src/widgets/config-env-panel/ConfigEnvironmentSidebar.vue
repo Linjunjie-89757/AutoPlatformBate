@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import { AlertTriangle as Warning, CheckCircle as CircleCheck, Plus, Search } from '@lucide/vue'
+import { Plus, Search, Trash2 } from '@lucide/vue'
 
 import type { EnvConfigItem } from '@/entities/config'
 
+import { environmentCardIdentifier } from './configEnvironmentPanel.view'
 import type { EnvironmentCardSummary } from './configEnvironmentPanel.types'
 
 defineProps<{
   environments: EnvConfigItem[]
+  environmentCount: number
   selectedEnvironmentId: number | null
   keyword: string
   loading: boolean
+  errorMessage: string
   cardSummary: (environment: EnvConfigItem) => EnvironmentCardSummary
 }>()
 
 const emit = defineEmits<{
   create: []
   select: [environment: EnvConfigItem]
+  remove: [environment: EnvConfigItem]
+  retry: []
   'update:keyword': [value: string]
 }>()
 </script>
@@ -24,14 +29,14 @@ const emit = defineEmits<{
   <aside class="figma-env__sidebar" data-node-id="311:3774">
     <header class="figma-env__sidebar-head">
       <div class="figma-env__sidebar-title-row">
-        <strong>测试环境</strong>
+        <strong>环境列表</strong>
         <button class="figma-env__primary-button is-small" type="button" @click="emit('create')">
           <el-icon><Plus /></el-icon><span>新建</span>
         </button>
       </div>
       <label class="figma-env__search">
         <el-icon><Search /></el-icon>
-        <input :value="keyword" type="text" placeholder="搜索环境名称" @input="emit('update:keyword', ($event.target as HTMLInputElement).value)">
+        <input :value="keyword" type="text" placeholder="搜索名称或标识符" @input="emit('update:keyword', ($event.target as HTMLInputElement).value)">
       </label>
     </header>
 
@@ -39,7 +44,12 @@ const emit = defineEmits<{
       <template v-if="loading && !environments.length">
         <div v-for="index in 5" :key="index" class="figma-env__env-card is-skeleton" />
       </template>
-      <button
+      <div v-else-if="errorMessage && !environments.length" class="figma-env__sidebar-state is-error">
+        <strong>环境加载失败</strong>
+        <span>{{ errorMessage }}</span>
+        <button type="button" @click="emit('retry')">重新加载</button>
+      </div>
+      <div
         v-for="environment in environments"
         v-else
         :key="environment.id"
@@ -49,31 +59,38 @@ const emit = defineEmits<{
           '--stage-color': cardSummary(environment).stage.color,
           '--stage-background': cardSummary(environment).stage.background,
         }"
-        type="button"
+        role="button"
+        tabindex="0"
         @click="emit('select', environment)"
+        @keydown.enter="emit('select', environment)"
       >
         <span class="figma-env__env-card-main">
-          <i class="figma-env__stage-line" />
           <span class="figma-env__env-card-copy">
             <span class="figma-env__env-name-row">
               <strong>{{ environment.envName }}</strong>
-              <em v-if="environment.status === 0">停用</em>
+              <b :style="{ color: cardSummary(environment).stage.color, background: cardSummary(environment).stage.background }">{{ cardSummary(environment).stage.label }}</b>
+              <em v-if="cardSummary(environment).stage.label === '生产'">生产</em>
             </span>
-            <span class="figma-env__env-meta-row">
-              <b>{{ cardSummary(environment).stage.label }}</b>
-              <small>{{ cardSummary(environment).services }} 服务 · {{ cardSummary(environment).variableSets }} 变量集</small>
-            </span>
+            <code>{{ environmentCardIdentifier(environment) }}</code>
           </span>
         </span>
         <span class="figma-env__env-card-foot">
-          <span :class="{ 'is-warning': cardSummary(environment).issues > 0 }">
-            <el-icon><Warning v-if="cardSummary(environment).issues > 0" /><CircleCheck v-else /></el-icon>
-            {{ cardSummary(environment).issues > 0 ? `${cardSummary(environment).issues} 项待完善` : '配置完整' }}
+          <span class="figma-env__env-status-list">
+            <span :class="{ 'is-configured': cardSummary(environment).apiConfigured }"><i />API</span>
+            <span :class="{ 'is-configured': cardSummary(environment).webUiConfigured }"><i />Web UI</span>
           </span>
-          <small v-if="cardSummary(environment).mockEnabled">Mock 已接入</small>
+          <span class="figma-env__env-card-actions">
+            <small v-if="environment.status === 0">已停用</small>
+            <button type="button" aria-label="删除环境" @click.stop="emit('remove', environment)"><el-icon><Trash2 /></el-icon></button>
+          </span>
         </span>
-      </button>
-      <div v-if="!loading && !environments.length" class="figma-env__sidebar-empty">暂无环境</div>
+      </div>
+      <div v-if="!loading && !errorMessage && !environments.length && environmentCount === 0" class="figma-env__sidebar-state">
+        <strong>暂无环境</strong><span>新建环境后即可配置 API、Web UI 等连接参数。</span>
+        <button type="button" @click="emit('create')"><el-icon><Plus /></el-icon>新建环境</button>
+      </div>
+      <div v-else-if="!loading && !errorMessage && !environments.length && environmentCount > 0" class="figma-env__sidebar-empty">未找到匹配环境</div>
     </div>
+    <footer class="figma-env__sidebar-foot">共 {{ environmentCount }} 个环境</footer>
   </aside>
 </template>

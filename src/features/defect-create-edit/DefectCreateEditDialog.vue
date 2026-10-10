@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 
-import { caseApi, type CaseSummaryItem } from '@/entities/case'
+import { listAllCases, type CaseSummaryItem } from '@/entities/case'
 import {
   defectPriorityOptions,
   defectSeverityOptions,
@@ -146,12 +146,9 @@ async function loadCaseOptions(workspaceCode: string) {
   caseOptionsLoading.value = true
   caseOptionsError.value = ''
   try {
-    const page = await caseApi.getCases(workspaceCode, {
-      pageNo: 1,
-      pageSize: 50,
-    })
+    const items = await listAllCases(workspaceCode)
     if (requestSeq === caseOptionsRequestSeq) {
-      caseOptions.value = Array.isArray(page.items) ? page.items : []
+      caseOptions.value = items
       loadedCaseOptionsWorkspaceCode = workspaceCode
     }
   } catch (error) {

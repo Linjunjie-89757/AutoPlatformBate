@@ -23,6 +23,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
@@ -31,6 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -54,6 +58,12 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
 
     @Autowired
     private WorkspaceMapper workspaceMapper;
+
+    @Autowired
+    private BugFlowMapper bugFlowMapper;
+
+    @Autowired
+    private BugCommentMapper bugCommentMapper;
 
     @Test
     void createAndGetBugKeepsDetailResponseShape() throws Exception {
@@ -191,6 +201,72 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.items[*].priority", containsInAnyOrder("P1", "P1")))
                 .andExpect(jsonPath("$.data.items[*].severity", containsInAnyOrder("HIGH", "HIGH")))
                 .andExpect(jsonPath("$.data.items[*].status", containsInAnyOrder("ASSIGNED", "ASSIGNED")));
+    }
+
+    @Test
+    void listBugsCanFilterDirectAndAdditionalCaseRelations() throws Exception {
+        String unique = uniquePrefix("case-filter");
+        CaseSummaryResponse relatedCase = createCase(unique + "-case");
+        Integer directBug = createBug(unique + "-direct", "P1", "HIGH", relatedCase.id(), null, null);
+        Integer additionalBug = createBug(unique + "-additional", "P2", "MEDIUM", null, null, null);
+        createBug(unique + "-unrelated", "P3", "LOW", null, null, null);
+
+        mockMvc.perform(put("/api/bugs/{id}/cases", additionalBug)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content("{\"caseIds\":[" + relatedCase.id() + "]}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/bugs")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("relatedCaseId", relatedCase.id().toString())
+                        .param("pageNo", "1")
+                        .param("pageSize", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*].id", containsInAnyOrder(directBug, additionalBug)));
+    }
+
+    @Test
+    void latestHistoryQueriesReturnOneRecordPerBugAndBreakTimestampTiesById() throws Exception {
+        Long bugId = createBug(uniquePrefix("latest-history"), "P1", "HIGH", null, null, null).longValue();
+        LocalDateTime timestamp = LocalDateTime.of(2026, 10, 10, 12, 0);
+
+        BugFlowEntity earlierFlow = new BugFlowEntity();
+        earlierFlow.setBugId(bugId);
+        earlierFlow.setFromStatus("TODO");
+        earlierFlow.setToStatus("ASSIGNED");
+        earlierFlow.setOperatorId(11L);
+        earlierFlow.setCreatedAt(timestamp);
+        bugFlowMapper.insert(earlierFlow);
+
+        BugFlowEntity latestFlow = new BugFlowEntity();
+        latestFlow.setBugId(bugId);
+        latestFlow.setFromStatus("ASSIGNED");
+        latestFlow.setToStatus("IN_PROGRESS");
+        latestFlow.setOperatorId(11L);
+        latestFlow.setCreatedAt(timestamp);
+        bugFlowMapper.insert(latestFlow);
+
+        BugCommentEntity earlierComment = new BugCommentEntity();
+        earlierComment.setBugId(bugId);
+        earlierComment.setContent("earlier");
+        earlierComment.setCommenterId(11L);
+        earlierComment.setCreatedAt(timestamp);
+        bugCommentMapper.insert(earlierComment);
+
+        BugCommentEntity latestComment = new BugCommentEntity();
+        latestComment.setBugId(bugId);
+        latestComment.setContent("latest");
+        latestComment.setCommenterId(11L);
+        latestComment.setCreatedAt(timestamp);
+        bugCommentMapper.insert(latestComment);
+
+        assertEquals(1, bugFlowMapper.selectLatestByBugIds(java.util.List.of(bugId)).size());
+        assertEquals(latestFlow.getId(), bugFlowMapper.selectLatestByBugIds(java.util.List.of(bugId)).get(0).getId());
+        assertEquals(1, bugCommentMapper.selectLatestByBugIds(java.util.List.of(bugId)).size());
+        assertEquals(latestComment.getId(), bugCommentMapper.selectLatestByBugIds(java.util.List.of(bugId)).get(0).getId());
     }
 
     @Test

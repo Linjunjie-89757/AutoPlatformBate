@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Delete, RefreshCw, Upload } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 
-import { apiAutomationApi, type ApiDataFileDetail, type ApiDataFileItem } from '@/entities/api-automation'
+import { apiAutomationApi, listAllApiDataFiles, type ApiDataFileDetail, type ApiDataFileItem } from '@/entities/api-automation'
 import { confirmDelete } from '@/shared/ui'
 
 const props = defineProps<{
@@ -30,12 +30,9 @@ async function loadFiles() {
   }
   loading.value = true
   try {
-    const page = await apiAutomationApi.getDataFiles(props.workspaceCode, {
+    files.value = await listAllApiDataFiles(props.workspaceCode, {
       keyword: query.keyword.trim(),
-      pageNo: 1,
-      pageSize: 50,
     })
-    files.value = page.items
     if (!activeFileId.value && files.value.length) {
       activeFileId.value = files.value[0].id
     }

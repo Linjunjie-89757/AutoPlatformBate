@@ -56,6 +56,7 @@ public class BugDomainService {
             String status,
             String severity,
             String priority,
+            Long relatedCaseId,
             Integer pageNo,
             Integer pageSize
     ) {
@@ -95,6 +96,19 @@ public class BugDomainService {
         String normalizedPriority = blankToNull(priority);
         if (normalizedPriority != null) {
             query.eq(BugEntity::getPriority, normalizeBugPriority(normalizedPriority));
+        }
+
+        if (relatedCaseId != null) {
+            List<Long> relatedBugIds = bugCaseRelationMapper.selectList(new LambdaQueryWrapper<BugCaseRelationEntity>()
+                            .eq(BugCaseRelationEntity::getCaseId, relatedCaseId))
+                    .stream()
+                    .map(BugCaseRelationEntity::getBugId)
+                    .distinct()
+                    .toList();
+            query.and(wrapper -> {
+                wrapper.eq(BugEntity::getRelatedCaseId, relatedCaseId);
+                if (!relatedBugIds.isEmpty()) wrapper.or().in(BugEntity::getId, relatedBugIds);
+            });
         }
 
         long total = bugMapper.selectCount(query);

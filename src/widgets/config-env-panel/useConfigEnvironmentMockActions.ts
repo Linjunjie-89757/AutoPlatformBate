@@ -21,7 +21,7 @@ export function useConfigEnvironmentMockActions(
   const mockVersionSelection = ref<number | null>(null)
   const mockUnbindDialogVisible = ref(false)
 
-  const productionEnvironment = computed(() => form.envType === 'PROD')
+  const productionEnvironment = computed(() => form.isProd || form.envType === 'PROD')
   const mockBound = computed(() => form.mockApplicationId != null && form.mockReleaseId != null)
   const mockVersionOptions = computed(() => [...mockReleases.value].sort((left, right) => right.versionNo - left.versionNo))
   const selectedMockVersionOption = computed(() => mockVersionOptions.value.find(item => item.id === mockVersionSelection.value) || null)

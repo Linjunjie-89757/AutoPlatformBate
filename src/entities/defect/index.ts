@@ -1,5 +1,6 @@
 export * from './api/defectApi'
 export * from './lib/format'
+export * from './lib/listAllDefects'
 export * from './model/options'
 export * from './model/types'
 export { default as DefectAttachmentPanel } from './ui/DefectAttachmentPanel.vue'

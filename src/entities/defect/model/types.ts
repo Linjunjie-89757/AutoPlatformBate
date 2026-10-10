@@ -163,6 +163,7 @@ export interface DefectListQuery {
   status?: string
   priority?: string
   severity?: string
+  relatedCaseId?: number
   pageNo?: number
   pageSize?: number
 }

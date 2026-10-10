@@ -1,6 +1,7 @@
 package com.company.autoplatform.apiautomation;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
@@ -70,7 +71,9 @@ public class ApiReportDomainService {
             Integer pageNo,
             Integer pageSize
     ) {
-        List<ApiAutomationReportItem> items = findReports(new ReportQuery(
+        int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : Math.min(pageSize, 100);
+        ReportPage reportPage = findReportPage(new ReportQuery(
                 workspaceCode,
                 objectType,
                 result,
@@ -78,12 +81,8 @@ public class ApiReportDomainService {
                 createdFrom,
                 createdTo,
                 archived
-        ));
-        int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
-        int safePageSize = pageSize == null || pageSize < 1 ? 10 : Math.min(pageSize, 100);
-        int fromIndex = Math.min((safePageNo - 1) * safePageSize, items.size());
-        int toIndex = Math.min(fromIndex + safePageSize, items.size());
-        return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, safePageSize);
+        ), safePageNo, safePageSize);
+        return PageResponse.of(reportPage.items(), reportPage.total(), safePageNo, safePageSize);
     }
 
     public ApiAutomationReportAnalysis analyzeReports(
@@ -245,38 +244,174 @@ public class ApiReportDomainService {
         return getReportDetail(reportKey, workspaceCode);
     }
 
-    private List<ApiAutomationReportItem> listCaseReports(String workspaceCode) {
+    private List<ApiDefinitionCaseRunHistoryEntity> listCaseReportEntities(String workspaceCode) {
         LambdaQueryWrapper<ApiDefinitionCaseRunHistoryEntity> query = new LambdaQueryWrapper<>();
         workspaceScopeSupport.applyWorkspaceScope(query, ApiDefinitionCaseRunHistoryEntity::getWorkspaceId, workspaceCode);
         return caseRunHistoryMapper.selectList(query.orderByDesc(ApiDefinitionCaseRunHistoryEntity::getCreatedAt)
-                        .orderByDesc(ApiDefinitionCaseRunHistoryEntity::getId))
-                .stream()
-                .map(this::toCaseReportItem)
-                .toList();
+                        .orderByDesc(ApiDefinitionCaseRunHistoryEntity::getId));
     }
 
-    private List<ApiAutomationReportItem> listSuiteReports(String workspaceCode) {
+    private List<ApiExecutionSuiteRunHistoryEntity> listSuiteReportEntities(String workspaceCode) {
         LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity> query = new LambdaQueryWrapper<>();
         workspaceScopeSupport.applyWorkspaceScope(query, ApiExecutionSuiteRunHistoryEntity::getWorkspaceId, workspaceCode);
         return suiteRunHistoryMapper.selectList(query.orderByDesc(ApiExecutionSuiteRunHistoryEntity::getCreatedAt)
-                        .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getId))
-                .stream()
-                .map(this::toSuiteReportItem)
-                .toList();
+                        .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getId));
     }
 
-    private List<ApiAutomationReportItem> listScenarioReports(String workspaceCode) {
+    private List<ApiScenarioRunHistoryEntity> listScenarioReportEntities(String workspaceCode) {
         LambdaQueryWrapper<ApiScenarioRunHistoryEntity> query = new LambdaQueryWrapper<>();
         workspaceScopeSupport.applyWorkspaceScope(query, ApiScenarioRunHistoryEntity::getWorkspaceId, workspaceCode);
         return scenarioRunHistoryMapper.selectList(query.orderByDesc(ApiScenarioRunHistoryEntity::getCreatedAt)
-                        .orderByDesc(ApiScenarioRunHistoryEntity::getId))
-                .stream()
-                .map(this::toScenarioReportItem)
+                        .orderByDesc(ApiScenarioRunHistoryEntity::getId));
+    }
+
+    private ReportPage findReportPage(ReportQuery query, int pageNo, int pageSize) {
+        String normalizedType = normalizeObjectType(query.objectType());
+        long candidateSize = Math.min((long) pageNo * pageSize, Integer.MAX_VALUE);
+        long offset = (long) (pageNo - 1) * pageSize;
+        List<ApiDefinitionCaseRunHistoryEntity> caseEntities = List.of();
+        List<ApiScenarioRunHistoryEntity> scenarioEntities = List.of();
+        List<ApiExecutionSuiteRunHistoryEntity> suiteEntities = List.of();
+        long total = 0;
+        if (normalizedType == null || OBJECT_TYPE_CASE.equals(normalizedType)) {
+            total += caseRunHistoryMapper.selectCount(buildCaseReportCountQuery(query));
+            caseEntities = caseRunHistoryMapper.selectPage(new Page<>(1, candidateSize, false), buildCaseReportQuery(query))
+                    .getRecords();
+        }
+        if (normalizedType == null || OBJECT_TYPE_SCENARIO.equals(normalizedType)) {
+            total += scenarioRunHistoryMapper.selectCount(buildScenarioReportCountQuery(query));
+            scenarioEntities = scenarioRunHistoryMapper.selectPage(new Page<>(1, candidateSize, false), buildScenarioReportQuery(query))
+                    .getRecords();
+        }
+        if (normalizedType == null || OBJECT_TYPE_SUITE.equals(normalizedType)) {
+            total += suiteRunHistoryMapper.selectCount(buildSuiteReportCountQuery(query));
+            suiteEntities = suiteRunHistoryMapper.selectPage(new Page<>(1, candidateSize, false), buildSuiteReportQuery(query))
+                    .getRecords();
+        }
+
+        Map<Long, WorkspaceEntity> workspaces = workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, workspace -> workspace));
+        List<Long> reportIds = new ArrayList<>();
+        reportIds.addAll(caseEntities.stream().map(ApiDefinitionCaseRunHistoryEntity::getReportId).toList());
+        reportIds.addAll(scenarioEntities.stream().map(ApiScenarioRunHistoryEntity::getReportId).toList());
+        reportIds.addAll(suiteEntities.stream().map(ApiExecutionSuiteRunHistoryEntity::getReportId).toList());
+        Map<Long, Boolean> archivedByReportId = loadArchivedByReportId(reportIds);
+        List<ApiAutomationReportItem> items = new ArrayList<>();
+        items.addAll(caseEntities.stream()
+                .map(entity -> toCaseReportItem(entity, resolveWorkspace(workspaces, entity.getWorkspaceId()),
+                        archivedByReportId.getOrDefault(entity.getReportId(), false)))
+                .toList());
+        items.addAll(scenarioEntities.stream()
+                .map(entity -> toScenarioReportItem(entity, resolveWorkspace(workspaces, entity.getWorkspaceId()),
+                        archivedByReportId.getOrDefault(entity.getReportId(), false)))
+                .toList());
+        items.addAll(suiteEntities.stream()
+                .map(entity -> toSuiteReportItem(entity, resolveWorkspace(workspaces, entity.getWorkspaceId()),
+                        archivedByReportId.getOrDefault(entity.getReportId(), false)))
+                .toList());
+        items = items.stream()
+                .sorted(reportComparator())
+                .skip(offset)
+                .limit(pageSize)
                 .toList();
+        return new ReportPage(items, total);
+    }
+
+    private LambdaQueryWrapper<ApiDefinitionCaseRunHistoryEntity> buildCaseReportQuery(ReportQuery query) {
+        LambdaQueryWrapper<ApiDefinitionCaseRunHistoryEntity> wrapper = new LambdaQueryWrapper<>();
+        workspaceScopeSupport.applyWorkspaceScope(wrapper, ApiDefinitionCaseRunHistoryEntity::getWorkspaceId, query.workspaceCode());
+        applyCommonReportFilters(wrapper, query, "case_name", "run_result", "tb_api_definition_case_run_history");
+        wrapper.orderByDesc(ApiDefinitionCaseRunHistoryEntity::getCreatedAt)
+                .orderByDesc(ApiDefinitionCaseRunHistoryEntity::getId);
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ApiDefinitionCaseRunHistoryEntity> buildCaseReportCountQuery(ReportQuery query) {
+        LambdaQueryWrapper<ApiDefinitionCaseRunHistoryEntity> wrapper = new LambdaQueryWrapper<>();
+        workspaceScopeSupport.applyWorkspaceScope(wrapper, ApiDefinitionCaseRunHistoryEntity::getWorkspaceId, query.workspaceCode());
+        applyCommonReportFilters(wrapper, query, "case_name", "run_result", "tb_api_definition_case_run_history");
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ApiScenarioRunHistoryEntity> buildScenarioReportQuery(ReportQuery query) {
+        LambdaQueryWrapper<ApiScenarioRunHistoryEntity> wrapper = new LambdaQueryWrapper<>();
+        workspaceScopeSupport.applyWorkspaceScope(wrapper, ApiScenarioRunHistoryEntity::getWorkspaceId, query.workspaceCode());
+        applyCommonReportFilters(wrapper, query, "scenario_name", "result", "tb_api_scenario_run_history");
+        wrapper.orderByDesc(ApiScenarioRunHistoryEntity::getCreatedAt)
+                .orderByDesc(ApiScenarioRunHistoryEntity::getId);
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ApiScenarioRunHistoryEntity> buildScenarioReportCountQuery(ReportQuery query) {
+        LambdaQueryWrapper<ApiScenarioRunHistoryEntity> wrapper = new LambdaQueryWrapper<>();
+        workspaceScopeSupport.applyWorkspaceScope(wrapper, ApiScenarioRunHistoryEntity::getWorkspaceId, query.workspaceCode());
+        applyCommonReportFilters(wrapper, query, "scenario_name", "result", "tb_api_scenario_run_history");
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity> buildSuiteReportQuery(ReportQuery query) {
+        LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity> wrapper = new LambdaQueryWrapper<>();
+        workspaceScopeSupport.applyWorkspaceScope(wrapper, ApiExecutionSuiteRunHistoryEntity::getWorkspaceId, query.workspaceCode());
+        applyCommonReportFilters(wrapper, query, "suite_name", "result", "tb_api_execution_suite_run_history");
+        wrapper.orderByDesc(ApiExecutionSuiteRunHistoryEntity::getCreatedAt)
+                .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getId);
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity> buildSuiteReportCountQuery(ReportQuery query) {
+        LambdaQueryWrapper<ApiExecutionSuiteRunHistoryEntity> wrapper = new LambdaQueryWrapper<>();
+        workspaceScopeSupport.applyWorkspaceScope(wrapper, ApiExecutionSuiteRunHistoryEntity::getWorkspaceId, query.workspaceCode());
+        applyCommonReportFilters(wrapper, query, "suite_name", "result", "tb_api_execution_suite_run_history");
+        return wrapper;
+    }
+
+    private <T> void applyCommonReportFilters(
+            LambdaQueryWrapper<T> wrapper,
+            ReportQuery query,
+            String objectNameColumn,
+            String resultColumn,
+            String tableName
+    ) {
+        String normalizedResult = blankToNull(query.result());
+        if (normalizedResult != null) {
+            wrapper.apply("UPPER(" + resultColumn + ") LIKE UPPER({0})", "%" + normalizedResult + "%");
+        }
+        String keyword = blankToNull(query.keyword());
+        if (keyword != null) {
+            String pattern = "%" + keyword.toUpperCase(Locale.ROOT) + "%";
+            wrapper.apply("(UPPER(" + objectNameColumn + ") LIKE {0} OR UPPER(failure_summary) LIKE {0} OR UPPER(operator_name) LIKE {0} "
+                    + "OR EXISTS (SELECT 1 FROM tb_exec_report r WHERE r.id = " + tableName + ".report_id AND UPPER(r.report_name) LIKE {0}))", pattern);
+        }
+        if (query.createdFrom() != null) {
+            wrapper.apply("created_at >= {0}", query.createdFrom());
+        }
+        if (query.createdTo() != null) {
+            wrapper.apply("created_at <= {0}", query.createdTo());
+        }
+        applyArchivedFilter(wrapper, query.archived(), tableName);
+    }
+
+    private <T> void applyArchivedFilter(LambdaQueryWrapper<T> wrapper, Boolean archived, String tableName) {
+        boolean expectedArchived = archived != null && archived;
+        if (expectedArchived) {
+            wrapper.apply("EXISTS (SELECT 1 FROM tb_exec_report r WHERE r.id = " + tableName + ".report_id AND r.archived = {0})", true);
+        } else {
+            wrapper.apply("(" + tableName + ".report_id IS NULL OR NOT EXISTS (SELECT 1 FROM tb_exec_report r WHERE r.id = "
+                    + tableName + ".report_id) OR EXISTS (SELECT 1 FROM tb_exec_report r WHERE r.id = "
+                    + tableName + ".report_id AND (r.archived = {0} OR r.archived IS NULL)))", false);
+        }
     }
 
     private ApiAutomationReportItem toCaseReportItem(ApiDefinitionCaseRunHistoryEntity entity) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        return toCaseReportItem(entity, workspace, isArchived(entity.getReportId()));
+    }
+
+    private ApiAutomationReportItem toCaseReportItem(
+            ApiDefinitionCaseRunHistoryEntity entity,
+            WorkspaceEntity workspace,
+            boolean archived
+    ) {
         return new ApiAutomationReportItem(
                 CASE_KEY_PREFIX + entity.getId(),
                 OBJECT_TYPE_CASE,
@@ -310,12 +445,20 @@ public class ApiReportDomainService {
                 0,
                 entity.getOperatorName(),
                 entity.getCreatedAt(),
-                isArchived(entity.getReportId())
+                archived
         );
     }
 
     private ApiAutomationReportItem toSuiteReportItem(ApiExecutionSuiteRunHistoryEntity entity) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        return toSuiteReportItem(entity, workspace, isArchived(entity.getReportId()));
+    }
+
+    private ApiAutomationReportItem toSuiteReportItem(
+            ApiExecutionSuiteRunHistoryEntity entity,
+            WorkspaceEntity workspace,
+            boolean archived
+    ) {
         return new ApiAutomationReportItem(
                 SUITE_KEY_PREFIX + entity.getId(),
                 OBJECT_TYPE_SUITE,
@@ -349,12 +492,20 @@ public class ApiReportDomainService {
                 entity.getDataRowCount(),
                 entity.getOperatorName(),
                 entity.getCreatedAt(),
-                isArchived(entity.getReportId())
+                archived
         );
     }
 
     private ApiAutomationReportItem toScenarioReportItem(ApiScenarioRunHistoryEntity entity) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(entity.getWorkspaceId());
+        return toScenarioReportItem(entity, workspace, isArchived(entity.getReportId()));
+    }
+
+    private ApiAutomationReportItem toScenarioReportItem(
+            ApiScenarioRunHistoryEntity entity,
+            WorkspaceEntity workspace,
+            boolean archived
+    ) {
         return new ApiAutomationReportItem(
                 SCENARIO_KEY_PREFIX + entity.getId(),
                 OBJECT_TYPE_SCENARIO,
@@ -388,7 +539,7 @@ public class ApiReportDomainService {
                 entity.getDataIterationJson() == null ? 0 : readDataIterations(entity.getDataIterationJson()).size(),
                 entity.getOperatorName(),
                 entity.getCreatedAt(),
-                isArchived(entity.getReportId())
+                archived
         );
     }
 
@@ -650,17 +801,46 @@ public class ApiReportDomainService {
     }
 
     private List<ApiAutomationReportItem> findReports(ReportQuery query) {
+        List<ApiDefinitionCaseRunHistoryEntity> caseEntities = List.of();
+        List<ApiScenarioRunHistoryEntity> scenarioEntities = List.of();
+        List<ApiExecutionSuiteRunHistoryEntity> suiteEntities = List.of();
         List<ApiAutomationReportItem> items = new ArrayList<>();
         String normalizedType = normalizeObjectType(query.objectType());
         if (normalizedType == null || OBJECT_TYPE_CASE.equals(normalizedType)) {
-            items.addAll(listCaseReports(query.workspaceCode()));
+            caseEntities = listCaseReportEntities(query.workspaceCode());
         }
         if (normalizedType == null || OBJECT_TYPE_SCENARIO.equals(normalizedType)) {
-            items.addAll(listScenarioReports(query.workspaceCode()));
+            scenarioEntities = listScenarioReportEntities(query.workspaceCode());
         }
         if (normalizedType == null || OBJECT_TYPE_SUITE.equals(normalizedType)) {
-            items.addAll(listSuiteReports(query.workspaceCode()));
+            suiteEntities = listSuiteReportEntities(query.workspaceCode());
         }
+        Map<Long, WorkspaceEntity> workspaces = workspaceService.listReadableWorkspaceEntities().stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, workspace -> workspace));
+        List<Long> reportIds = new ArrayList<>();
+        reportIds.addAll(caseEntities.stream().map(ApiDefinitionCaseRunHistoryEntity::getReportId).toList());
+        reportIds.addAll(scenarioEntities.stream().map(ApiScenarioRunHistoryEntity::getReportId).toList());
+        reportIds.addAll(suiteEntities.stream().map(ApiExecutionSuiteRunHistoryEntity::getReportId).toList());
+        List<Long> distinctReportIds = reportIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, Boolean> archivedByReportId = distinctReportIds.isEmpty()
+                ? Map.of()
+                : reportMapper.selectBatchIds(distinctReportIds).stream()
+                .collect(Collectors.toMap(ReportEntity::getId, report -> Boolean.TRUE.equals(report.getArchived())));
+        items.addAll(caseEntities.stream()
+                .map(entity -> toCaseReportItem(entity, resolveWorkspace(workspaces, entity.getWorkspaceId()),
+                        archivedByReportId.getOrDefault(entity.getReportId(), false)))
+                .toList());
+        items.addAll(scenarioEntities.stream()
+                .map(entity -> toScenarioReportItem(entity, resolveWorkspace(workspaces, entity.getWorkspaceId()),
+                        archivedByReportId.getOrDefault(entity.getReportId(), false)))
+                .toList());
+        items.addAll(suiteEntities.stream()
+                .map(entity -> toSuiteReportItem(entity, resolveWorkspace(workspaces, entity.getWorkspaceId()),
+                        archivedByReportId.getOrDefault(entity.getReportId(), false)))
+                .toList());
         String normalizedResult = blankToNull(query.result());
         if (normalizedResult != null) {
             String expected = normalizedResult.toUpperCase(Locale.ROOT);
@@ -696,6 +876,28 @@ public class ApiReportDomainService {
                 .sorted(Comparator.comparing(ApiAutomationReportItem::createdAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed()
                         .thenComparing(ApiAutomationReportItem::historyId, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+    }
+
+    private WorkspaceEntity resolveWorkspace(Map<Long, WorkspaceEntity> workspaces, Long workspaceId) {
+        WorkspaceEntity workspace = workspaces.get(workspaceId);
+        return workspace == null ? workspaceService.requireWorkspaceById(workspaceId) : workspace;
+    }
+
+    private Map<Long, Boolean> loadArchivedByReportId(List<Long> reportIds) {
+        List<Long> distinctReportIds = reportIds.stream()
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (distinctReportIds.isEmpty()) {
+            return Map.of();
+        }
+        return reportMapper.selectBatchIds(distinctReportIds).stream()
+                .collect(Collectors.toMap(ReportEntity::getId, report -> Boolean.TRUE.equals(report.getArchived())));
+    }
+
+    private Comparator<ApiAutomationReportItem> reportComparator() {
+        return Comparator.comparing(ApiAutomationReportItem::createdAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed()
+                .thenComparing(ApiAutomationReportItem::historyId, Comparator.nullsLast(Comparator.reverseOrder()));
     }
 
     private List<ApiAutomationReportFailureBucket> topFailureReasons(List<ApiAutomationReportItem> failedItems) {
@@ -882,6 +1084,9 @@ public class ApiReportDomainService {
             LocalDateTime createdTo,
             Boolean archived
     ) {
+    }
+
+    private record ReportPage(List<ApiAutomationReportItem> items, long total) {
     }
 
     private boolean isArchived(Long reportId) {
