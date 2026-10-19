@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { reactive, watch } from 'vue'
 
 import {
@@ -85,7 +86,7 @@ watch(
 
       <div class="case-batch-dialog__field">
         <span>优先级</span>
-        <el-select v-model="form.priority" clearable placeholder="不修改">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.priority" clearable placeholder="不修改">
           <el-option
             v-for="item in casePriorityOptions"
             :key="item.value"
@@ -97,7 +98,7 @@ watch(
 
       <div class="case-batch-dialog__field">
         <span>评审状态</span>
-        <el-select v-model="form.reviewStatus" clearable placeholder="不修改">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.reviewStatus" clearable placeholder="不修改">
           <el-option
             v-for="item in caseReviewStatusOptions"
             :key="item.value"
@@ -109,7 +110,7 @@ watch(
 
       <div class="case-batch-dialog__field">
         <span>执行状态</span>
-        <el-select v-model="form.executionStatus" clearable placeholder="不修改">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.executionStatus" clearable placeholder="不修改">
           <el-option
             v-for="item in caseExecutionStatusOptions"
             :key="item.value"

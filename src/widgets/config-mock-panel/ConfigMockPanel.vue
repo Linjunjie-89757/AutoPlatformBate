@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import {
@@ -412,7 +413,7 @@ onMounted(() => {
           </label>
           <label>
             <span>未匹配策略</span>
-            <el-select class="figma-mock-app-form__readonly-select" model-value="strict" disabled title="后端暂未提供应用级未匹配策略字段">
+            <el-select :suffix-icon="AppSelectChevron" class="figma-mock-app-form__readonly-select" model-value="strict" disabled title="后端暂未提供应用级未匹配策略字段">
               <el-option label="严格失败 (推荐)" value="strict" />
               <el-option label="返回空响应" value="empty" />
               <el-option label="透传真实服务" value="passthrough" />
@@ -439,7 +440,7 @@ onMounted(() => {
         <div class="config-mock-form__grid">
           <label>
             <span>请求方法 *</span>
-            <el-select v-model="endpointForm.httpMethod">
+            <el-select :suffix-icon="AppSelectChevron" v-model="endpointForm.httpMethod">
               <el-option label="ANY" value="ANY" />
               <el-option label="GET" value="GET" />
               <el-option label="POST" value="POST" />
@@ -520,9 +521,9 @@ onMounted(() => {
               <div class="figma-mock-simple-rules">
                 <div class="figma-mock-rule-grid is-head"><span>来源</span><span>字段 / JSONPath</span><span>操作符</span><span>期望值</span><span /></div>
                 <div v-for="(rule, index) in matchRuleRows" :key="index" class="figma-mock-rule-grid">
-                  <el-select v-model="rule.source"><el-option label="Query" value="Query" /><el-option label="Header" value="Header" /><el-option label="Body.JSON" value="Body.JSON" /><el-option label="Path" value="Path" /><el-option label="Cookie" value="Cookie" /></el-select>
+                  <el-select :suffix-icon="AppSelectChevron" v-model="rule.source"><el-option label="Query" value="Query" /><el-option label="Header" value="Header" /><el-option label="Body.JSON" value="Body.JSON" /><el-option label="Path" value="Path" /><el-option label="Cookie" value="Cookie" /></el-select>
                   <el-input v-model="rule.field" placeholder="字段名或 JSONPath" />
-                  <el-select v-model="rule.operator"><el-option label="等于" value="equals" /><el-option label="存在" value="exists" /><el-option label="包含" value="contains" /><el-option label="大于" value="greaterThan" /><el-option label="正则匹配" value="regex" /></el-select>
+                  <el-select :suffix-icon="AppSelectChevron" v-model="rule.operator"><el-option label="等于" value="equals" /><el-option label="存在" value="exists" /><el-option label="包含" value="contains" /><el-option label="大于" value="greaterThan" /><el-option label="正则匹配" value="regex" /></el-select>
                   <el-input v-model="rule.value" placeholder="期望值" />
                   <button type="button" aria-label="删除匹配条件" @click="removeMatchRule(index)"><X :size="14" /></button>
                 </div>
@@ -553,8 +554,8 @@ onMounted(() => {
 
           <section v-else-if="scenarioEditorTab === 'response'" class="figma-mock-scene-section is-response">
             <div class="figma-mock-response-grid">
-              <label><span>HTTP 状态码</span><el-select v-model="responseStatusModel" filterable allow-create default-first-option><el-option v-for="option in responseStatusOptions" :key="option.value" :label="option.label" :value="option.value" /></el-select></label>
-              <label><span>Content-Type</span><el-select v-model="responseContentType"><el-option label="application/json" value="application/json" /><el-option label="application/xml" value="application/xml" /><el-option label="text/plain" value="text/plain" /><el-option label="text/html" value="text/html" /></el-select></label>
+              <label><span>HTTP 状态码</span><el-select :suffix-icon="AppSelectChevron" v-model="responseStatusModel" filterable allow-create default-first-option><el-option v-for="option in responseStatusOptions" :key="option.value" :label="option.label" :value="option.value" /></el-select></label>
+              <label><span>Content-Type</span><el-select :suffix-icon="AppSelectChevron" v-model="responseContentType"><el-option label="application/json" value="application/json" /><el-option label="application/xml" value="application/xml" /><el-option label="text/plain" value="text/plain" /><el-option label="text/html" value="text/html" /></el-select></label>
               <label><span>响应延迟 (ms)</span><el-input-number v-model="scenarioForm.responseDelayMs" :min="0" :max="10000" :controls="false" /></label>
             </div>
             <div class="figma-mock-response-headers">
@@ -625,7 +626,7 @@ onMounted(() => {
           <div v-if="businessScenarioForm.items.length" class="config-mock-combo-items__list app-soft-scrollbar">
             <div v-for="(item, index) in businessScenarioForm.items" :key="index" class="config-mock-combo-item">
               <span class="config-mock-combo-item__order">{{ index + 1 }}</span>
-              <el-select v-model="item.scenarioId" filterable placeholder="选择单接口 Mock 场景">
+              <el-select :suffix-icon="AppSelectChevron" v-model="item.scenarioId" filterable placeholder="选择单接口 Mock 场景">
                 <el-option
                   v-for="scenario in appScenarios"
                   :key="scenario.id"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { Search, RefreshRight } from '@element-plus/icons-vue'
 
 import { AUTOMATION_TASK_STATUS_OPTIONS, type AutomationTaskClientFilter } from '@/entities/automation-task'
@@ -20,7 +21,7 @@ const emit = defineEmits<{
       :prefix-icon="Search"
       placeholder="搜索任务名称 / 摘要"
     />
-    <el-select v-model="model.status" clearable placeholder="状态" class="automation-task-filter-panel__select">
+    <el-select :suffix-icon="AppSelectChevron" v-model="model.status" clearable placeholder="状态" class="automation-task-filter-panel__select">
       <el-option
         v-for="item in AUTOMATION_TASK_STATUS_OPTIONS"
         :key="item.value"

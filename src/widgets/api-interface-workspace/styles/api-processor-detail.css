@@ -1,0 +1,137 @@
+/* Detail-only geometry from Design 1028 and Make 20261016. */
+.api-processor-detail.is-pre {
+  padding: 16px;
+  gap: 12px;
+}
+
+.api-processor-detail.is-pre.is-time-waiting { gap: 16px; }
+.api-processor-detail-body { display: contents; }
+.api-processor-detail.is-post { padding: 0; gap: 0; overflow: hidden; }
+.api-processor-detail.is-post > .api-processor-name-row { padding: 14px 16px 12px; }
+.api-processor-detail.is-post > .api-processor-detail-body {
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 16px;
+  overflow: auto;
+}
+.api-processor-detail.is-post.is-extract > .api-processor-detail-body { padding-top: 16px; gap: 16px; }
+.api-processor-detail.is-post.is-time-waiting > .api-processor-detail-body { gap: 16px; }
+.api-processor-detail-body > * { flex-shrink: 0; }
+.api-processor-detail .api-processor-name-row { flex-shrink: 0; gap: 8px; }
+.api-processor-detail .api-figma-field { gap: 4px; }
+.api-processor-detail .api-figma-field > span,
+.api-processor-detail .api-processor-form-grid label > span,
+.api-processor-detail .api-processor-wait__label,
+.api-processor-detail .api-processor-wait__hint { line-height: 17px; }
+.api-processor-detail .api-figma-field :deep(.el-input__wrapper) {
+  height: 32px;
+  min-height: 32px;
+  padding: 1px 12px;
+  border-radius: 8px;
+}
+.api-processor-detail .api-figma-field :deep(.el-input__inner) { height: 30px; font-size: 12px; }
+.api-processor-detail .api-processor-name-row :deep(.el-input__inner) { font-size: 13px; }
+.api-processor-detail .api-processor-name-actions { padding-top: 20px; gap: 12px; }
+.api-processor-detail .api-processor-name-actions button {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #4e5969;
+  font-weight: 400;
+  line-height: 18px;
+}
+.api-processor-detail .api-processor-name-actions .api-row-remove { color: #f53f3f; }
+.api-processor-detail .api-figma-enable { padding-top: 20px; gap: 12px; margin-left: 4px; }
+.api-processor-detail .api-figma-enable::before { content: ''; width: 1px; height: 14px; background: #e5e6eb; }
+.api-processor-detail .api-processor-code-block { display: flex; flex-direction: column; gap: 6px; }
+.api-processor-detail .api-processor-script-head { min-height: 20px; gap: 8px; }
+.api-processor-detail .api-processor-script-actions { gap: 8px; }
+.api-processor-detail .api-processor-script-actions button { height: 20px; padding: 0 8px; border-radius: 4px; font-weight: 400; }
+.api-processor-detail .api-processor-script-toolbar-icon { color: #7c7c9a; flex-shrink: 0; }
+.api-processor-detail :deep(.api-code-editor.is-dark) { min-height: 0; padding: 0; border-radius: 8px; }
+.api-processor-detail :deep(.api-code-editor.is-dark .api-code-editor__toolbar) { height: 32px; flex-shrink: 0; padding: 6px 12px; }
+.api-processor-detail.is-sql :deep(.api-code-editor.is-dark .api-code-editor__toolbar) { height: 30px; }
+.api-processor-detail :deep(.api-code-editor__toolbar-left) { gap: 8px; }
+.api-processor-detail .api-processor-api-chip { padding: 2px 6px; border-radius: 4px; }
+.api-processor-detail .api-processor-api-card { padding: 12px; border-radius: 8px; gap: 8px; }
+.api-processor-detail .api-processor-api-card__items { flex-wrap: wrap; gap: 4px 24px; overflow: visible; }
+.api-processor-detail .api-processor-form-grid { gap: 12px; }
+.api-processor-detail .api-processor-form-grid label { gap: 4px; }
+.api-processor-detail .api-processor-datasource { padding-top: 0; gap: 6px; }
+.api-processor-detail .api-processor-datasource :deep(.el-select__wrapper) { height: 32px; min-height: 32px; border-radius: 8px; }
+.api-processor-detail .api-processor-sql-timeout { height: 32px; padding: 0 12px; border-radius: 8px; }
+.api-processor-detail .api-processor-sql-label { gap: 8px; }
+.api-processor-detail .api-processor-sql-label small { padding: 2px 6px; border-radius: 4px; }
+.api-processor-detail.is-sql .api-processor-language-tag { color: #7c9abf; }
+.api-processor-detail .api-processor-sql-result :deep(.el-input__inner) { font-family: var(--app-font-family-mono, monospace); color: #165dff; }
+.api-processor-detail .api-processor-mapping-block { display: flex; flex-direction: column; gap: 6px; }
+.api-processor-detail .api-sql-extract-heading { min-height: 16.5px; }
+.api-processor-detail .api-sql-extract-table { border-radius: 8px; }
+.api-processor-detail .api-sql-extract-table__row:last-of-type { border-bottom: 0; }
+.api-processor-detail .api-sql-extract-table__delete,
+.api-processor-detail .api-processor-extract-delete { width: 24px; height: 24px; padding: 0; }
+.api-processor-detail .api-processor-table-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-top: 1px solid #e5e6eb;
+  background: transparent;
+  color: #86909c;
+  font: 400 12px/18px var(--app-font-family, sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+.api-processor-detail .api-processor-table-add:hover { color: #165dff; }
+.api-processor-detail .api-processor-wait__input-row { gap: 8px; padding-top: 6px; }
+.api-processor-detail .api-processor-wait__input { height: 36px; flex: 1 1 0; padding: 0 12px; border-radius: 8px; }
+.api-processor-detail .api-processor-wait__presets { height: auto; gap: 6px; padding-top: 8px; }
+.api-processor-detail .api-processor-wait__presets button { height: 24px; padding: 0 12px; border-radius: 4px; font-weight: 400; }
+.api-processor-detail .api-processor-wait__hint { height: auto; padding-top: 8px; }
+.api-processor-detail .api-processor-extract-panel { gap: 10px; }
+.api-processor-detail .api-processor-extract-toolbar { line-height: 20px; }
+.api-processor-detail .api-processor-extract-grid { border-radius: 8px; min-width: 700px; }
+.api-processor-detail .api-processor-extract-scroll { overflow-x: auto; }
+.api-processor-detail .api-processor-extract-header,
+.api-processor-detail .api-processor-extract-row {
+  grid-template-columns: 128px 104px 104px 104px 92px minmax(0, 1fr) 68px;
+  padding: 0;
+  gap: 0;
+  align-items: center;
+}
+.api-processor-detail .api-processor-extract-header { min-height: 31px; background: #f8f9fc; }
+.api-processor-detail .api-processor-extract-header > span { padding: 7px 8px; white-space: nowrap; }
+.api-processor-detail .api-processor-extract-row { min-height: 41px; }
+.api-processor-detail .api-processor-extract-row > * { width: auto; min-width: 0; margin: 6px 8px; }
+.api-processor-detail .api-processor-extract-row :deep(.el-input__inner) { font-size: 12px; }
+.api-processor-detail .api-processor-extract-row :deep(.el-select__wrapper) { gap: 2px; }
+.api-processor-detail .api-processor-extract-row :deep(.el-select__selected-item) { text-overflow: clip; color: #4e5969; }
+.api-processor-detail .api-processor-extract-row :deep(.is-disabled .el-select__selected-item) { color: #c9cdd4; }
+.api-processor-detail .api-processor-extract-row :deep(.el-select__caret) { font-size: 10px; color: #4e5969; }
+.api-processor-detail .api-processor-extract-row :deep(.is-disabled .el-select__caret) { color: #c9cdd4; }
+.api-processor-detail .api-processor-extract-row > .el-input:first-child :deep(.el-input__inner) { color: #165dff; font-family: var(--app-font-family-mono, monospace); }
+.api-processor-detail .api-processor-extract-row > .el-input:nth-child(6) :deep(.el-input__inner) { font-family: var(--app-font-family-mono, monospace); }
+.api-processor-detail .api-processor-extract-actions { justify-content: flex-end; gap: 2px; }
+.api-processor-detail .api-processor-extract-more {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #86909c;
+}
+.api-processor-detail .api-processor-extract-more > svg { display: block; width: 14px; height: 14px; }
+.api-processor-detail .api-processor-extract-more:hover,
+.api-processor-detail .api-processor-extract-more:focus-visible { background: #f2f3f5; color: #4e5969; }
+.api-processor-detail .api-processor-extract-more.is-active { background: #165dff10; color: #165dff; }
+.api-processor-detail .api-processor-extract-more:focus-visible { outline: 2px solid #165dff; outline-offset: 1px; }
+.api-processor-detail .api-processor-extract-delete { flex-shrink: 0; }
+.api-processor-detail .api-processor-extract-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 32px 0; color: #c9cdd4; font-size: 12px; }
+.api-processor-detail .api-processor-extract-empty svg { opacity: .3; }

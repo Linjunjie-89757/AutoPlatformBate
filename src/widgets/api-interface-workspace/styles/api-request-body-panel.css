@@ -740,3 +740,31 @@
   color: var(--app-text-muted);
   font-size: 12px;
 }
+
+/* Keep form bodies aligned with the Params table while preserving the form-specific columns. */
+.api-param-table.is-body-form {
+  height: auto;
+  min-height: 0;
+  max-height: 100%;
+  flex: 0 1 auto;
+}
+
+.api-param-table.is-body-form .api-param-header {
+  height: 33px;
+  min-height: 33px;
+}
+
+.api-param-table.is-body-form .api-param-row {
+  height: 37.5px;
+  min-height: 37.5px;
+}
+
+.api-param-table.is-body-form .api-figma-checkbox {
+  width: 14px;
+  height: 14px;
+}
+
+.api-param-table.is-body-form .api-add-row {
+  height: 34px;
+  min-height: 34px;
+}

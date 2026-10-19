@@ -93,6 +93,8 @@ const selectedReportDetail = ref<ReportDetail | null>(null)
 const detailLoading = ref(false)
 const detailError = ref('')
 const reportShares = ref<ReportShareSummary[]>([])
+const reportShareTotal = ref(0)
+const reportShareTotalPages = ref(0)
 const shareLoading = ref(false)
 const shareError = ref('')
 const sharePageNo = ref(1)
@@ -267,10 +269,7 @@ const selectedReportName = computed(() => (
 ))
 const selectedReportLog = computed(() => selectedReportDetail.value?.logText?.trim() || '')
 const selectedReportAttachments = computed(() => selectedReportDetail.value?.attachments || [])
-const pagedReportShares = computed(() => {
-  const start = (sharePageNo.value - 1) * sharePageSize.value
-  return reportShares.value.slice(start, start + sharePageSize.value) as ReportShareRow[]
-})
+const pagedReportShares = computed(() => reportShares.value as ReportShareRow[])
 const shareOperationColumnWidth = getAppFigmaActionColumnWidth(2)
 
 function formatDetailDate(value?: string | null) {
@@ -334,6 +333,7 @@ function backToList() {
   selectedReportDetail.value = null
   detailLoading.value = false
   detailError.value = ''
+  void Promise.all([loadReports(), loadReportStats()])
   if (route.query.reportId) {
     const nextQuery = { ...route.query }
     delete nextQuery.reportId
@@ -394,14 +394,20 @@ async function loadReportShares() {
   shareLoading.value = true
   shareError.value = ''
   try {
-    const items = await reportApi.getReportShares(selectedWorkspaceCode.value || 'ALL')
+    const page = await reportApi.getReportShares(selectedWorkspaceCode.value || 'ALL', {
+      pageNo: sharePageNo.value,
+      pageSize: sharePageSize.value,
+    })
     if (requestSeq !== shareRequestSeq) return
-    reportShares.value = items
-    const totalPages = Math.max(1, Math.ceil(items.length / sharePageSize.value))
-    if (sharePageNo.value > totalPages) sharePageNo.value = totalPages
+    reportShares.value = page.items
+    reportShareTotal.value = page.total
+    reportShareTotalPages.value = page.totalPages || Math.ceil(page.total / Math.max(sharePageSize.value, 1))
+    sharePageNo.value = page.pageNo || sharePageNo.value
   } catch (error) {
     if (requestSeq !== shareRequestSeq) return
     reportShares.value = []
+    reportShareTotal.value = 0
+    reportShareTotalPages.value = 0
     shareError.value = getRequestErrorMessage(error)
   } finally {
     if (requestSeq === shareRequestSeq) shareLoading.value = false
@@ -475,6 +481,12 @@ async function openReportFromRoute() {
   }
 }
 
+function hasReportIdInRoute() {
+  const rawReportId = Array.isArray(route.query.reportId) ? route.query.reportId[0] : route.query.reportId
+  const reportId = Number(rawReportId)
+  return Number.isInteger(reportId) && reportId > 0
+}
+
 function handleReportTypeFilterChange(event: Event) {
   if ((event.target as HTMLSelectElement).value === 'all') return
   window.setTimeout(() => {
@@ -541,12 +553,7 @@ async function loadReports() {
 async function loadReportStats() {
   try {
     const workspaceCode = selectedWorkspaceCode.value || 'ALL'
-    const [all, success, failed] = await Promise.all([
-      reportApi.getReports(workspaceCode, { pageNo: 1, pageSize: 1 }),
-      reportApi.getReports(workspaceCode, { result: 'SUCCESS', pageNo: 1, pageSize: 1 }),
-      reportApi.getReports(workspaceCode, { result: 'FAILED', pageNo: 1, pageSize: 1 }),
-    ])
-    reportStats.value = { total: all.total, success: success.total, failed: failed.total }
+    reportStats.value = await reportApi.getReportStats(workspaceCode)
   } catch {
     reportStats.value = { total: 0, success: 0, failed: 0 }
   }
@@ -631,8 +638,19 @@ watch(activeTab, (value) => {
   if (value === 'share') void loadReportShares()
 })
 
-watch(sharePageSize, () => {
-  sharePageNo.value = 1
+watch(sharePageNo, (value, oldValue) => {
+  if (value !== oldValue) void loadReportShares()
+})
+
+watch(sharePageSize, (value, oldValue) => {
+  if (value !== oldValue) {
+    if (sharePageNo.value === 1) void loadReportShares()
+    else sharePageNo.value = 1
+  }
+})
+
+watch(reportShareTotalPages, value => {
+  if (value > 0 && sharePageNo.value > value) sharePageNo.value = value
 })
 
 watch(selectedWorkspaceCode, () => {
@@ -647,6 +665,8 @@ watch(selectedWorkspaceCode, () => {
   void loadReportStats()
   shareRequestSeq += 1
   reportShares.value = []
+  reportShareTotal.value = 0
+  reportShareTotalPages.value = 0
   sharePageNo.value = 1
   if (activeTab.value === 'share') void loadReportShares()
   if (route.query.reportId) void openReportFromRoute()
@@ -666,8 +686,11 @@ watch(tableFrameRef, (element) => {
 })
 
 onMounted(() => {
+  if (hasReportIdInRoute()) {
+    void openReportFromRoute()
+    return
+  }
   void Promise.all([loadReports(), loadReportStats()])
-  void openReportFromRoute()
 })
 
 onBeforeUnmount(() => {
@@ -708,14 +731,14 @@ onBeforeUnmount(() => {
               <img :src="figmaReportIcons.listSearch" alt="">
               <input v-model="reportKeyword" type="text" placeholder="搜索报告名称或 ID">
             </label>
-            <select v-model="reportTypeFilter" class="report-filter-select" aria-label="报告类型" @change="handleReportTypeFilterChange">
+            <select v-model="reportTypeFilter" class="report-filter-select app-native-select" aria-label="报告类型" @change="handleReportTypeFilterChange">
               <option value="all">全部类型</option>
               <option value="api-scene">接口场景</option>
               <option value="api-suite">接口套件</option>
               <option value="webui-case">Web UI 用例</option>
               <option value="webui-suite">Web UI 套件</option>
             </select>
-            <select v-model="reportStatusFilter" class="report-filter-select" aria-label="报告状态">
+            <select v-model="reportStatusFilter" class="report-filter-select app-native-select" aria-label="报告状态">
               <option value="all">全部状态</option>
               <option value="success">成功</option>
               <option value="failed">失败</option>
@@ -859,7 +882,7 @@ onBeforeUnmount(() => {
           :error="shareError"
           :page-no="sharePageNo"
           :page-size="sharePageSize"
-          :total="reportShares.length"
+          :total="reportShareTotal"
           :page-sizes="[10, 20, 50]"
           show-page-size
           show-jumper

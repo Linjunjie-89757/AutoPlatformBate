@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed } from 'vue'
 import type { ApiAutomationEnvironmentItem } from '@/entities/api-automation'
 import type { MockApplicationItem, MockBusinessScenarioItem, ParamSetItem } from '@/entities/config'
@@ -131,7 +132,7 @@ function maskHeaderValue(key: string, value: string) {
             </div>
             <div v-if="mockApplication">
               <span>本次 Mock 场景</span>
-              <el-select
+              <el-select :suffix-icon="AppSelectChevron"
                 v-model="mockScenarioId"
                 clearable
                 filterable

@@ -35,14 +35,35 @@
   padding: 0;
 }
 
-.api-request-body.is-pre,
-.api-request-body.is-post,
+.api-request-body.is-settings {
+  padding: 0;
+}
+
+.api-processor-tab-content.is-pre,
+.api-processor-tab-content.is-post,
 .api-request-body.is-tests,
 .api-request-body.is-settings {
+  display: flex;
+  flex-direction: column;
   height: auto;
   min-height: 0;
   flex: 1 1 0;
   overflow: hidden auto;
+}
+
+.api-processor-tab-content {
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  overflow: hidden auto;
+  padding: 0;
+  background: #ffffff;
+}
+
+.api-processor-tab-content.is-pre,
+.api-processor-tab-content.is-post {
+  display: flex;
 }
 
 .api-request-body.is-assertion-tab {

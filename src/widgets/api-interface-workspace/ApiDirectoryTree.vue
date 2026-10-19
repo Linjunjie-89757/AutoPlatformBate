@@ -93,7 +93,7 @@ defineExpose({
             <span class="api-directory-node__placeholder-text" :title="data.label">{{ data.label }}</span>
           </template>
           <template v-else>
-            <span :class="['api-directory-node__folder', { 'is-open': props.expandedKeys.includes(data.key) }]">
+            <span :class="['api-directory-node__folder', { 'is-open': props.expandedKeys.includes(data.key), 'is-workspace': data.type === 'workspace' }]">
               <LucideFolderOpen v-if="props.expandedKeys.includes(data.key)" class="api-directory-node__icon" />
               <LucideFolder v-else class="api-directory-node__icon" />
             </span>
@@ -148,19 +148,19 @@ defineExpose({
 }
 
 .api-directory-tree :deep(.el-tree-node__expand-icon) {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   margin-right: 0;
   padding: 0;
   color: var(--app-text-subtle);
-  font-size: 12px;
-  line-height: 12px;
+  font-size: 11px;
+  line-height: 11px;
   transition: color 0.16s ease, transform 0.16s ease;
 }
 
 .api-directory-tree :deep(.el-tree-node__content) {
-  min-height: 28.5px;
-  height: 28.5px;
+  min-height: 32px;
+  height: 32px;
   border-radius: 7px;
   padding-right: 7px;
   transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
@@ -190,7 +190,7 @@ defineExpose({
 .api-directory-node {
   position: relative;
   display: flex;
-  min-height: 28.5px;
+  min-height: 32px;
   min-width: 0;
   width: 100%;
   align-items: center;
@@ -270,13 +270,13 @@ defineExpose({
 }
 
 .api-directory-node.is-request {
-  min-height: 28.5px;
+  min-height: 30px;
   font-size: 12px;
 }
 
 .api-directory-tree :deep(.el-tree-node__content:has(.api-directory-node.is-request)) {
-  min-height: 28.5px;
-  height: 28.5px;
+  min-height: 30px;
+  height: 30px;
 }
 
 .api-directory-node.is-request .api-directory-node__main {
@@ -296,6 +296,10 @@ defineExpose({
 }
 
 .api-directory-node:not(.is-request):not(.is-placeholder) .api-directory-node__name.is-root {
+  font-weight: 600;
+}
+
+.api-directory-node:not(.is-request):not(.is-placeholder) .api-directory-node__folder.is-workspace + .api-directory-node__name {
   font-weight: 600;
 }
 

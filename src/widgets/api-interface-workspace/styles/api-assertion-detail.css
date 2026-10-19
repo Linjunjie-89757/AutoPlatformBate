@@ -1,0 +1,121 @@
+/* Assertion detail: Make HeaderAssertDetail/BodyAssertDetail/VarAssertDetail. */
+.api-assertion-detail:not(.api-assertion-empty) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.api-assertion-detail-body {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.api-assertion-name-row {
+  min-height: 0;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.api-assertion-name-row .api-figma-field { gap: 4px; }
+.api-assertion-name-row :deep(.el-input__wrapper) {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+}
+.api-assertion-name-row :deep(.el-input__inner) { height: 30px; }
+.api-assertion-name-actions { gap: 12px; padding-top: 20px; }
+.api-assertion-name-row .api-figma-enable { gap: 12px; padding-top: 20px; }
+
+.api-assertion-panel :deep(.app-switch) { height: 16px; line-height: 16px; }
+.api-assertion-panel :deep(.el-switch__core) { width: 32px; min-width: 32px; height: 16px; }
+.api-assertion-panel :deep(.el-switch__action) { width: 12px; height: 12px; }
+.api-assertion-panel :deep(.el-switch.is-checked .el-switch__core .el-switch__action) { left: 16px; margin-left: 0; }
+
+.api-assertion-type-panel {
+  min-width: 0;
+  gap: 12px;
+  padding: 16px;
+}
+
+.api-assertion-item-list {
+  display: block;
+  border-radius: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.api-assertion-item-list > .api-assertion-table-head,
+.api-assertion-item-list > .api-assertion-item-row,
+.api-assertion-table-add { min-width: 580px; }
+
+.api-assertion-table-head.is-header,
+.api-assertion-item-row.is-header,
+.api-assertion-table-head.is-variable,
+.api-assertion-item-row.is-variable {
+  grid-template-columns: minmax(120px, 1.15fr) 148px minmax(100px, 1fr) 76px;
+}
+.api-assertion-table-head.is-header.has-current-value,
+.api-assertion-item-row.is-header.has-current-value,
+.api-assertion-table-head.is-variable.has-current-value,
+.api-assertion-item-row.is-variable.has-current-value {
+  grid-template-columns: minmax(120px, 1.15fr) 148px minmax(100px, 1fr) minmax(100px, 1fr) 76px;
+}
+.api-assertion-table-head.is-body,
+.api-assertion-item-row.is-body {
+  grid-template-columns: minmax(140px, 1.2fr) 148px minmax(100px, 1fr) 100px;
+}
+.api-assertion-table-head.is-body.has-current-value,
+.api-assertion-item-row.is-body.has-current-value {
+  grid-template-columns: minmax(140px, 1.2fr) 148px minmax(100px, 1fr) minmax(100px, 1fr) 100px;
+  min-width: 600px;
+}
+
+.api-assertion-table-head span { padding: 0 12px; }
+.api-assertion-item-row { gap: 0; padding: 6px 0; }
+.api-assertion-item-row:last-of-type { border-bottom: 0; }
+.api-assertion-item-row :deep(.el-input),
+.api-assertion-item-row :deep(.el-select),
+.api-assertion-item-row :deep(.api-assertion-condition-select) {
+  width: calc(100% - 24px);
+  min-width: 0;
+  margin: 0 12px;
+}
+.api-assertion-item-row :deep(.el-input__wrapper) { padding: 0; }
+.api-assertion-item-row .api-assertion-current-value { padding: 0 12px; }
+.api-assertion-item-row .api-assertion-operation-actions { gap: 2px; margin: 0 12px; }
+.api-assertion-item-row .api-assertion-icon-action {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  margin: 0;
+  color: #86909c;
+}
+.api-assertion-item-row .api-assertion-icon-action.is-danger { color: #f53f3f; }
+.api-assertion-item-row .api-assertion-icon-action:hover:not(:disabled) { color: #86909c; background: #f3f4f6; }
+.api-assertion-item-row .api-assertion-icon-action.is-danger:hover:not(:disabled) { color: #f53f3f; background: #fef2f2; }
+.api-assertion-item-row .api-assertion-icon-action.is-extract:not(:disabled) { color: #00b42a; }
+.api-assertion-item-row .api-assertion-icon-action.is-extract:hover:not(:disabled) { color: #00b42a; }
+.api-assertion-item-row .api-assertion-icon-action:disabled { color: #c9cdd4; }
+
+.api-assertion-table-add {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-top: 1px solid #e5e6eb;
+  background: transparent;
+  color: #86909c;
+  font: 400 12px/18px var(--app-font-family);
+  text-align: left;
+  cursor: pointer;
+}
+.api-assertion-table-add:hover { color: #165dff; }
+.api-assertion-table-add:focus-visible { outline: 2px solid #165dff; outline-offset: -2px; }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 
 import { workspaceApi, type WorkspaceAssignableMemberItem } from '@/entities/workspace'
@@ -107,7 +108,7 @@ watch(
 
 <template>
   <div class="app-user-select">
-    <el-select
+    <el-select :suffix-icon="AppSelectChevron"
       :model-value="modelValue"
       class="app-user-select__control"
       :disabled="selectDisabled"

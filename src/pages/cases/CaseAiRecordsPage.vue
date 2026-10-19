@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type HistoryState } from 'vue-router'
 import { FolderOpened } from '@element-plus/icons-vue'
@@ -722,7 +723,7 @@ onBeforeUnmount(() => {
           clearable
           placeholder="搜索需求或任务 ID"
         />
-        <el-select v-model="statusFilter" class="case-ai-records-page__status-filter" clearable placeholder="全部状态">
+        <el-select :suffix-icon="AppSelectChevron" v-model="statusFilter" class="case-ai-records-page__status-filter" clearable placeholder="全部状态">
           <el-option label="需求解析中" value="PENDING" />
           <el-option label="生成中" value="GENERATING" />
           <el-option label="评审中" value="REVIEWING" />

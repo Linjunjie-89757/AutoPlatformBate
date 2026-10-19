@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { ArrowLeft, Cpu, Link } from '@element-plus/icons-vue'
 import { Sparkles } from '@lucide/vue'
@@ -84,7 +85,7 @@ function handlePageChange(value: number | null) {
 
           <section class="web-ui-ai-capture__field-block web-ui-ai-capture__field-block--compact">
             <label>AI 采集模型</label>
-            <el-select v-model="form.providerConnectionId" :loading="aiProviderLoading" clearable filterable placeholder="选择 AI 连接">
+            <el-select :suffix-icon="AppSelectChevron" v-model="form.providerConnectionId" :loading="aiProviderLoading" clearable filterable placeholder="选择 AI 连接">
               <el-option
                 v-for="item in availableAiProviders"
                 :key="item.id"
@@ -96,21 +97,21 @@ function handlePageChange(value: number | null) {
 
           <section class="web-ui-ai-capture__field-block web-ui-ai-capture__field-block--compact">
             <label>运行环境</label>
-            <el-select v-model="form.environmentId" clearable filterable placeholder="选择登录环境">
+            <el-select :suffix-icon="AppSelectChevron" v-model="form.environmentId" clearable filterable placeholder="选择登录环境">
               <el-option v-for="item in enabledEnvironments" :key="item.id" :label="item.name" :value="item.id" />
             </el-select>
           </section>
 
           <section class="web-ui-ai-capture__field-block web-ui-ai-capture__field-block--compact">
             <label>所属模块</label>
-            <el-select v-model="form.moduleId" clearable filterable placeholder="选择模块" @change="emit('module-change')">
+            <el-select :suffix-icon="AppSelectChevron" v-model="form.moduleId" clearable filterable placeholder="选择模块" @change="emit('module-change')">
               <el-option v-for="item in modules" :key="item.id" :label="item.moduleName" :value="item.id" />
             </el-select>
           </section>
 
           <section class="web-ui-ai-capture__field-block web-ui-ai-capture__field-block--compact">
             <label>页面对象</label>
-            <el-select v-model="form.pageId" clearable filterable placeholder="选择已有页面" @change="handlePageChange($event as number | null)">
+            <el-select :suffix-icon="AppSelectChevron" v-model="form.pageId" clearable filterable placeholder="选择已有页面" @change="handlePageChange($event as number | null)">
               <el-option v-for="item in pageOptions" :key="item.id" :label="item.pageName" :value="item.id" />
             </el-select>
             <el-input v-model="form.pageName" :placeholder="selectedPage?.pageName || '或输入新页面名称'" />

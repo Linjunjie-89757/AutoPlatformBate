@@ -125,15 +125,9 @@ public class WebUiElementDomainService {
                 .orderByAsc(WebUiElementEntity::getPageName)
                 .orderByAsc(WebUiElementEntity::getGroupName)
                 .orderByDesc(WebUiElementEntity::getUpdatedAt);
-        if (pageSize == null || pageSize < 1) {
-            List<WebUiElementItem> items = elementMapper.selectList(orderedQuery).stream()
-                    .map(this::toElementItem)
-                    .toList();
-            int compatiblePageSize = safePageSize(pageSize, items.size());
-            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
         Page<WebUiElementEntity> page = elementMapper.selectPage(
-                new Page<>(safePageNo, pageSize), orderedQuery);
+                new Page<>(safePageNo, safePageSize), orderedQuery);
         List<WebUiElementItem> items = page.getRecords().stream()
                 .map(this::toElementItem)
                 .toList();
@@ -1102,15 +1096,7 @@ public class WebUiElementDomainService {
     }
 
     private int safePageSize(Integer pageSize, int total) {
-        if (pageSize == null || pageSize < 1) {
-            return total > 0 ? total : 10;
-        }
-        return pageSize;
+        return pageSize == null || pageSize < 1 ? 10 : pageSize;
     }
 
-    private <T> List<T> paginate(List<T> items, int pageNo, int pageSize) {
-        int fromIndex = Math.min((pageNo - 1) * pageSize, items.size());
-        int toIndex = Math.min(fromIndex + pageSize, items.size());
-        return items.subList(fromIndex, toIndex);
-    }
 }

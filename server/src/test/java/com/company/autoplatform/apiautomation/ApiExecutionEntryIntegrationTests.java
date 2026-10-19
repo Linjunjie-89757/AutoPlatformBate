@@ -119,6 +119,30 @@ class ApiExecutionEntryIntegrationTests extends IntegrationTestSupport {
     }
 
     @Test
+    void debugRunDefinitionReadsLegacyNestedApiEnvironmentConfig() {
+        EnvConfigItem environment = settingsService.createEnv(WORKSPACE_CODE, new CreateEnvConfigRequest(
+                null,
+                "TEST",
+                "legacy nested api env " + System.nanoTime(),
+                "",
+                """
+                        {"apiConfig":{"baseUrl":"%s","timeout":4500,"authType":"NONE"}}
+                        """.formatted(baseUrl)
+        ));
+        ApiDefinitionDetail definition = createDefinition(
+                "legacy nested api definition " + System.nanoTime(),
+                "/ok"
+        );
+        ApiRunResponse run = apiAutomationService.debugRunDefinition(
+                definition.id(),
+                WORKSPACE_CODE,
+                new ApiRunRequest(WORKSPACE_CODE, environment.id(), null, null, null)
+        );
+
+        assertSuccessfulRun(run);
+    }
+
+    @Test
     void debugRunDefinitionResolvesDynamicFunctionsFromVariableSetIntoRequestAndSnapshot() {
         ParamSetItem variableSet = settingsService.createParam(WORKSPACE_CODE, new CreateParamSetRequest(
                 WORKSPACE_CODE,

@@ -249,7 +249,8 @@ export function useApiProcessorWorkspace(options: UseApiProcessorWorkspaceOption
   }
 
   function normalizeProcessorExtractItems(items: ApiProcessorExtractItem[] | undefined, processor: ApiProcessorConfig) {
-    const source = items?.length
+    const hasLegacyExtraction = Boolean(processor.expression || processor.variableName)
+    const source = Array.isArray(items) && (items.length > 0 || !hasLegacyExtraction)
       ? items
       : [createProcessorExtractItem({
           name: processor.name || '提取项',
@@ -265,6 +266,7 @@ export function useApiProcessorWorkspace(options: UseApiProcessorWorkspaceOption
 
   function normalizeSqlExtractParams(items: ApiProcessorSqlExtractParam[] | undefined) {
     const rows = Array.isArray(items) ? items : []
+    if (!rows.length) rows.push({ key: '', value: '', enabled: true })
     rows.forEach(row => {
       row.key = row.key ?? ''
       row.value = row.value ?? ''
@@ -282,7 +284,7 @@ export function useApiProcessorWorkspace(options: UseApiProcessorWorkspaceOption
   function removeSqlExtractParam(processor: ApiProcessorConfig, index: number) {
     const rows = normalizeSqlExtractParams(processor.extractParams)
     rows.splice(index, 1)
-    processor.extractParams = rows
+    processor.extractParams = normalizeSqlExtractParams(rows)
     syncProcessorScript(processor)
   }
 
@@ -363,8 +365,8 @@ export function useApiProcessorWorkspace(options: UseApiProcessorWorkspaceOption
       processor.script = processor.sql ?? ''
     } else if (processor.processorType === 'EXTRACT') {
       const firstExtractor = processor.extractors?.[0]
-      processor.expression = firstExtractor?.expression ?? processor.expression ?? ''
-      processor.variableName = firstExtractor?.variableName ?? processor.variableName ?? ''
+      processor.expression = firstExtractor?.expression ?? ''
+      processor.variableName = firstExtractor?.variableName ?? ''
       processor.sourceType = firstExtractor?.sourceType ?? processor.sourceType ?? 'RESPONSE_BODY'
       processor.extractType = firstExtractor?.extractType ?? processor.extractType ?? 'JSON_PATH'
       processor.script = processor.expression ?? ''
@@ -390,7 +392,6 @@ export function useApiProcessorWorkspace(options: UseApiProcessorWorkspaceOption
   function removeProcessorExtractItem(processor: ApiProcessorConfig, index: number) {
     const rows = normalizeProcessorExtractItems(processor.extractors, processor)
     rows.splice(index, 1)
-    if (!rows.length) rows.push(createProcessorExtractItem())
     processor.extractors = rows
     syncProcessorScript(processor)
   }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { Sparkles } from '@lucide/vue'
 
@@ -47,7 +48,7 @@ const emit = defineEmits<{
           @update:model-value="emit('update:keyword', String($event))"
           @keyup.enter="emit('search')"
         />
-        <el-select
+        <el-select :suffix-icon="AppSelectChevron"
           :model-value="locatorType"
           class="web-ui-filter-toolbar__select"
           clearable
@@ -56,7 +57,7 @@ const emit = defineEmits<{
         >
           <el-option v-for="item in WEB_UI_LOCATOR_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-select
+        <el-select :suffix-icon="AppSelectChevron"
           :model-value="validationStatus"
           class="web-ui-filter-toolbar__validation"
           clearable

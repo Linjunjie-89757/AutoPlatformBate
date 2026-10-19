@@ -246,7 +246,7 @@ async function formatRawBody() {
           </span>
           <el-input v-model="row.key" class="api-param-key-input" @input="emit('dirty')" />
           <span class="api-param-type-cell">
-            <select :value="row.paramType ?? 'string'" class="api-param-type-select" @change="onParamTypeChange(row, $event)">
+            <select :value="row.paramType ?? 'string'" class="api-param-type-select app-native-select" @change="onParamTypeChange(row, $event)">
               <option v-for="option in normalizedParamTypeOptions" :key="option" :value="option">
                 {{ option }}
               </option>

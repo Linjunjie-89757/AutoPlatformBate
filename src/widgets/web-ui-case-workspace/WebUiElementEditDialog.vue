@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import {
   WEB_UI_CASE_STATUS_OPTIONS,
   WEB_UI_LOCATOR_OPTIONS,
@@ -29,12 +30,12 @@ const emit = defineEmits<{
   <el-dialog :model-value="modelValue" :title="editing ? '编辑元素' : '新增元素'" width="620px" @update:model-value="emit('update:modelValue', $event)">
     <el-form label-width="96px">
       <el-form-item label="页面对象" required>
-        <el-select v-model="form.pageId" clearable filterable placeholder="选择页面对象" @change="emit('page-change')">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.pageId" clearable filterable placeholder="选择页面对象" @change="emit('page-change')">
           <el-option v-for="item in elementPageOptions" :key="item.id" :label="item.pageName" :value="item.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="页面分组">
-        <el-select v-model="form.groupId" clearable filterable placeholder="选择分组" @change="emit('group-change')">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.groupId" clearable filterable placeholder="选择分组" @change="emit('group-change')">
           <el-option v-for="item in availableGroups" :key="item.id" :label="item.groupName" :value="item.id" />
         </el-select>
       </el-form-item>
@@ -42,7 +43,7 @@ const emit = defineEmits<{
         <el-input v-model="form.elementName" maxlength="80" placeholder="例如：用户名输入框" show-word-limit />
       </el-form-item>
       <el-form-item label="定位方式" required>
-        <el-select v-model="form.locatorType">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.locatorType">
           <el-option v-for="item in WEB_UI_LOCATOR_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
@@ -50,7 +51,7 @@ const emit = defineEmits<{
         <el-input v-model="form.locatorValue" maxlength="1000" clearable placeholder="#username 或 //input[@name='username']" />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="form.status">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.status">
           <el-option v-for="item in WEB_UI_CASE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>

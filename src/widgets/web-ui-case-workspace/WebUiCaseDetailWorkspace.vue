@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -3444,11 +3445,11 @@ watch(elementPickerLocatorType, () => {
 
     <aside v-if="!loading && !errorMessage && canExecute" class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--fixed" aria-label="快速运行">
       <p>快速运行</p>
-      <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
+      <el-select :suffix-icon="AppSelectChevron" v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
         <el-option label="使用用例配置" :value="0" />
         <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
-      <el-select v-model="form.browserType" aria-label="浏览器">
+      <el-select :suffix-icon="AppSelectChevron" v-model="form.browserType" aria-label="浏览器">
         <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
       <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || running || localRunning" @click="runCase(false)"><Play />运行此用例</button>
@@ -3746,11 +3747,11 @@ watch(elementPickerLocatorType, () => {
 
         <aside class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--legacy" aria-label="快速运行">
           <p>快速运行</p>
-          <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
+          <el-select :suffix-icon="AppSelectChevron" v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
             <el-option label="使用用例配置" :value="0" />
             <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
-          <el-select v-model="form.browserType" aria-label="浏览器">
+          <el-select :suffix-icon="AppSelectChevron" v-model="form.browserType" aria-label="浏览器">
             <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || running || localRunning" @click="runCase(false)"><Play />运行此用例</button>
@@ -3861,7 +3862,7 @@ watch(elementPickerLocatorType, () => {
                   <el-input v-model="selectedStep.name" maxlength="80" clearable />
                 </el-form-item>
                 <el-form-item label="步骤类型">
-                  <el-select v-model="selectedStep.type" @change="handleStepTypeChange(selectedStep)">
+                  <el-select :suffix-icon="AppSelectChevron" v-model="selectedStep.type" @change="handleStepTypeChange(selectedStep)">
                     <el-option v-for="item in WEB_UI_STEP_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                   </el-select>
                 </el-form-item>
@@ -4049,7 +4050,7 @@ watch(elementPickerLocatorType, () => {
                   <el-input-number :model-value="0" :min="0" :max="5" controls-position="right" disabled />
                 </el-form-item>
                 <el-form-item label="截图策略">
-                  <el-select v-model="selectedStep.screenshotPolicy">
+                  <el-select :suffix-icon="AppSelectChevron" v-model="selectedStep.screenshotPolicy">
                     <el-option v-for="item in WEB_UI_SCREENSHOT_POLICY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                   </el-select>
                 </el-form-item>
@@ -4070,7 +4071,7 @@ watch(elementPickerLocatorType, () => {
               <el-input v-model="form.baseUrl" placeholder="环境默认地址或完整 URL" clearable />
             </el-form-item>
             <el-form-item label="浏览器">
-              <el-select v-model="form.browserType">
+              <el-select :suffix-icon="AppSelectChevron" v-model="form.browserType">
                 <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </el-form-item>
@@ -4359,14 +4360,14 @@ watch(elementPickerLocatorType, () => {
           <div class="web-ui-case-detail__form-card">
             <label>
               <span>执行环境</span>
-              <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions">
+              <el-select :suffix-icon="AppSelectChevron" v-model="quickRunEnvironmentId" :loading="loadingRunOptions">
                 <el-option label="使用用例配置" :value="0" />
                 <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </label>
             <label>
               <span>浏览器</span>
-              <el-select v-model="form.browserType">
+              <el-select :suffix-icon="AppSelectChevron" v-model="form.browserType">
                 <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </label>
@@ -4380,13 +4381,13 @@ watch(elementPickerLocatorType, () => {
             </label>
             <label>
               <span>截图策略</span>
-              <el-select v-model="caseScreenshotPolicy">
+              <el-select :suffix-icon="AppSelectChevron" v-model="caseScreenshotPolicy">
                 <el-option v-for="item in WEB_UI_SCREENSHOT_POLICY_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </label>
             <label>
               <span>变量集</span>
-              <el-select v-model="caseVariableSetId" :loading="loadingRunOptions">
+              <el-select :suffix-icon="AppSelectChevron" v-model="caseVariableSetId" :loading="loadingRunOptions">
                 <el-option label="默认变量集" :value="0" />
                 <el-option v-for="item in enabledRunVariableSets" :key="item.id" :label="item.paramName" :value="item.id" />
               </el-select>
@@ -4396,11 +4397,11 @@ watch(elementPickerLocatorType, () => {
 
         <aside class="web-ui-case-detail__figma-quick-run web-ui-case-detail__figma-quick-run--legacy" aria-label="快速运行">
           <p>快速运行</p>
-          <el-select v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
+          <el-select :suffix-icon="AppSelectChevron" v-model="quickRunEnvironmentId" :loading="loadingRunOptions" aria-label="执行环境">
             <el-option label="使用用例配置" :value="0" />
             <el-option v-for="item in enabledRunEnvironments" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
-          <el-select v-model="form.browserType" aria-label="浏览器">
+          <el-select :suffix-icon="AppSelectChevron" v-model="form.browserType" aria-label="浏览器">
             <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <button type="button" class="web-ui-case-detail__quick-run-button" :disabled="saving || running || localRunning" @click="runCase(false)"><Play />运行此用例</button>
@@ -4428,7 +4429,7 @@ watch(elementPickerLocatorType, () => {
             placeholder="搜索元素名称、页面、分组或定位值"
             clearable
           />
-          <el-select v-model="elementPickerLocatorType" placeholder="定位方式" clearable>
+          <el-select :suffix-icon="AppSelectChevron" v-model="elementPickerLocatorType" placeholder="定位方式" clearable>
             <el-option v-for="item in WEB_UI_LOCATOR_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </div>

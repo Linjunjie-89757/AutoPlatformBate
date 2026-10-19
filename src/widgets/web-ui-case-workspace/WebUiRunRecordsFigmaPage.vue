@@ -355,9 +355,9 @@ onBeforeUnmount(() => {
 
     <div class="web-ui-runs-page__filters">
       <label class="web-ui-runs-search"><Search /><input v-model="keyword" placeholder="搜索用例名称" /></label>
-      <select v-model="status" :class="{ 'is-default': isDefaultFilter(status) }" aria-label="执行状态"><option value="all">全部状态</option><option value="pass">通过</option><option value="fail">失败</option><option value="running">运行中</option></select>
-      <select v-model="environment" :class="{ 'is-default': isDefaultFilter(environment) }" aria-label="执行环境" @change="resetUnsupportedFilter('environment')"><option value="all">全部环境</option><option>测试环境</option><option>预发布环境</option></select>
-      <select v-model="browser" :class="{ 'is-default': isDefaultFilter(browser) }" aria-label="浏览器" @change="resetUnsupportedFilter('browser')"><option value="all">全部浏览器</option><option>Chrome</option><option>Firefox</option></select>
+      <select class="app-native-select" v-model="status" :class="{ 'is-default': isDefaultFilter(status) }" aria-label="执行状态"><option value="all">全部状态</option><option value="pass">通过</option><option value="fail">失败</option><option value="running">运行中</option></select>
+      <select class="app-native-select" v-model="environment" :class="{ 'is-default': isDefaultFilter(environment) }" aria-label="执行环境" @change="resetUnsupportedFilter('environment')"><option value="all">全部环境</option><option>测试环境</option><option>预发布环境</option></select>
+      <select class="app-native-select" v-model="browser" :class="{ 'is-default': isDefaultFilter(browser) }" aria-label="浏览器" @change="resetUnsupportedFilter('browser')"><option value="all">全部浏览器</option><option>Chrome</option><option>Firefox</option></select>
     </div>
 
     <main class="web-ui-runs-page__content">

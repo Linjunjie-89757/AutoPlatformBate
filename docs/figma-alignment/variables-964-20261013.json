@@ -1,0 +1,1227 @@
+{
+  "schemaVersion": 2,
+  "title": "变量配置模块对齐 964:2",
+  "page": "配置中心/变量配置",
+  "status": "partial-alignment",
+  "createdAt": "2026-10-13T09:46:37.836Z",
+  "sourceBaseline": {
+    "gitBranch": "codex/development-feature2",
+    "gitCommit": "7437daa535b8053a5386f0f484b0f37bd1759c00",
+    "designCapturedAt": "2026-10-14T09:48:00+08:00",
+    "makeCode": {
+      "path": "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx",
+      "sha256": "4a87eb574d1784b14281cc50b2fb0e70a8558c14d67f9568b51cc729bbd0e28d",
+      "modifiedAt": "2026-10-13T08:38:40.740Z"
+    },
+    "makePreviewCapturedAt": "2026-10-14T09:54:00+08:00",
+    "vueCapturedAt": "2026-10-14T09:55:00+08:00",
+    "environment": {
+      "viewport": [1920, 862],
+      "devicePixelRatio": 1,
+      "browserZoom": 1,
+      "fontStatus": "loaded"
+    }
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:964:2"
+    ],
+    "makeCodePath": "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%25B0%25E7%25AE%25A1%25E7%2590%2586%25E7%25B3%25BB%25E7%25BB%259F%25E7%2595%258C%25E面%25E8%25AE%25BE%25E8%25AE%25A1?code-node-id=0-9&p=f&t=FTmNTwSm7saTjHHB-0&fullscreen=1",
+    "currentCodeFiles": [
+      "src/widgets/config-param-panel/ConfigVariableFigmaWorkspace.vue",
+      "src/widgets/config-param-panel/ConfigVariableBuiltinPanel.vue",
+      "src/features/config-param-create-edit/model.ts"
+    ],
+    "variants": [
+      "全局变量默认态",
+      "变量集详情态",
+      "内置函数态",
+      "添加/编辑变量态",
+      "加载/空/错误态"
+    ],
+    "elements": [
+      "页面布局与侧栏",
+      "变量表与操作",
+      "类型与敏感开关",
+      "适用自动化类型",
+      "搜索与折叠",
+      "新增编辑删除交互",
+      "加载空错误状态"
+    ],
+    "excludedAreas": []
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "verified",
+      "evidence": ["output/playwright/variables/design-964-2.png", "Figma metadata 964:2: frame 964:3 1920x862; variable workspace frame 964:176 1816x482"]
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "verified",
+      "evidence": ["设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:13-23", "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:28-117", "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:390-520"]
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "verified",
+      "evidence": [
+        "output/playwright/variables/make-cdp-after-login.png",
+        "output/playwright/variables/make-cdp-config.png",
+        "output/playwright/variables/make-cdp-vars.png",
+        "output/playwright/variables/make-cdp-varset.png",
+        "output/playwright/variables/make-cdp-builtin.png",
+        "output/playwright/variables/make-cdp-add-modal-real.png",
+        "output/playwright/variables/make-cdp-type-integer.png",
+        "output/playwright/variables/make-cdp-type-boolean.png",
+        "output/playwright/variables/make-cdp-type-json.png",
+        "output/playwright/variables/make-cdp-sensitive-on-correct.png",
+        "output/playwright/variables/make-cdp-varset-edit.png",
+        "output/playwright/variables/make-cdp-search.png",
+        "output/playwright/variables/make-cdp-secret-revealed.png",
+        "output/playwright/variables/make-cdp-function-collapse.png"
+      ],
+      "rationale": "The user-provided Chrome session was connected over CDP, the Make preview loaded after waiting, and the variable configuration flow was exercised with the supplied valid credentials.",
+      "resolution": "Make preview behavior is now available for comparison; the remaining matrix and paired visual review still require completion."
+    },
+    {
+      "id": "vue-implementation",
+      "status": "verified",
+      "evidence": ["output/playwright/variables/vue-global-final.png", "output/playwright/variables/vue-builtins-final.png", "output/playwright/variables/vue-create-varset-final.png", "output/playwright/variables/vue-variable-evidence.json"]
+    },
+    {
+      "id": "browser-validation",
+      "status": "unverified",
+      "evidence": ["Make preview blocked; Vue interactions were checked only in the local browser evidence script"]
+    },
+    {
+      "id": "difference-registration",
+      "status": "unverified",
+      "evidence": ["Comparison matrix remains unverified because Make preview is blocked; no visual difference is promoted to resolved."]
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": ["964:2", "964:3", "964:176", "965:13025"],
+      "screenshots": ["output/playwright/variables/design-964-2.png"]
+    },
+    "make": {
+      "codeReferences": [
+        "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:13-23",
+        "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:151-232",
+        "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:271-344",
+        "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:390-520",
+        "设计/figma_make代码最新20261013/src/imports/VarConfigModule.tsx:554-690"
+      ],
+      "eventMatrix": [
+        {
+          "name": "hover",
+          "status": "verified",
+          "evidence": ["Make source PBtn/IBtn/Inp/TR handlers at VarConfigModule.tsx:13-23, 355-383"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "focus",
+          "status": "verified",
+          "evidence": ["Make source Inp and variable-set textarea focus handlers at VarConfigModule.tsx:18, 331"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "blur",
+          "status": "verified",
+          "evidence": ["Make source Inp and variable-set textarea blur handlers at VarConfigModule.tsx:18, 331"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "active",
+          "status": "verified",
+          "evidence": ["Make source button active scale and selected state at VarConfigModule.tsx:15, 185, 322"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "disabled",
+          "status": "verified",
+          "evidence": ["Make source PBtn disabled styling and form validity guards at VarConfigModule.tsx:13-15, 163-166, 232"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "loading",
+          "status": "verified",
+          "evidence": ["Make source GlobalVarsPanel/VarSetDetailPanel loading prop and SkeletonRows at VarConfigModule.tsx:390-480, 554-556"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "success",
+          "status": "verified",
+          "evidence": ["Make source toast success calls after variable, set and import actions at VarConfigModule.tsx:578-602"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "failure",
+          "status": "not-expressed",
+          "evidence": ["Make source defines error Toast styling at VarConfigModule.tsx:124-130 but no failure action path is wired in the variable module"],
+          "rationale": "Failure visual exists as a reusable toast tone, but the current Make variable flow does not express a triggered failure state.",
+          "resolution": "Keep as not-expressed until a real failed persistence or validation path is available."
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%25B0%25E7%25AE%25A1%25E7%2590%2586%25E7%25B3%25BB%25E7%25BB%259F%25E7%2595%258C%25E面%25E8%25AE%25BE%25E8%25AE%25A1?code-node-id=0-9&p=f&t=FTmNTwSm7saTjHHB-0&fullscreen=1",
+      "viewport": [1920, 945],
+      "interactions": [
+        "Connected to the user-opened Chrome tab over CDP and waited for the preview to leave its initial blank/loading state; browser viewport 1920x945, DPR 1",
+        "Logged in with superadmin / superadmin123 and selected the X-MAN workspace",
+        "Opened 配置中心 > 变量配置 and inspected global variables, a variable set, and 内置 & 动态函数",
+        "Opened 添加变量 and exercised 文本/整数/布尔/JSON type switching",
+        "Enabled the sensitive-variable switch and observed the reveal confirmation flow",
+        "Searched for DEFAULT_TIMEOUT and inspected the filtered result",
+        "Opened the variable-set edit dialog and confirmed API/Web UI/APP multi-select"
+      ],
+      "screenshots": [
+        "output/playwright/variables/make-cdp-after-login.png",
+        "output/playwright/variables/make-cdp-config.png",
+        "output/playwright/variables/make-cdp-vars.png",
+        "output/playwright/variables/make-cdp-varset.png",
+        "output/playwright/variables/make-cdp-builtin.png",
+        "output/playwright/variables/make-cdp-add-modal-real.png",
+        "output/playwright/variables/make-cdp-type-integer.png",
+        "output/playwright/variables/make-cdp-type-boolean.png",
+        "output/playwright/variables/make-cdp-type-json.png",
+        "output/playwright/variables/make-cdp-sensitive-on-correct.png",
+        "output/playwright/variables/make-cdp-varset-edit.png",
+        "output/playwright/variables/make-cdp-search.png",
+        "output/playwright/variables/make-cdp-secret-revealed.png",
+        "output/playwright/variables/make-cdp-function-collapse.png",
+        "output/playwright/variables/make-cdp-final-global.png"
+      ]
+    },
+    "vue": {
+      "screenshots": ["output/playwright/variables/vue-global-final.png", "output/playwright/variables/vue-builtins-final.png", "output/playwright/variables/vue-create-varset-final.png"],
+      "computedStyle": ["output/playwright/variables/vue-variable-evidence.json: sidebar width 256px; sidebar search 231x34px; table header 34.5px; table row 46.5px; builtin group header 47.5px"],
+      "boundingBox": ["output/playwright/variables/vue-variable-evidence.json: viewport 1920x862; main x334 width1586; table x352.5 width1533; modal x720 width480"],
+      "interactionResults": ["Login superadmin/superadmin123 and workspace account-open selection succeeded", "Global variables, built-in functions, and create variable-set modal opened", "Built-in groups expanded/collapsed and multi-scope modal rendered", "Sensitive value remained masked with reveal icon"]
+    }
+  },
+  "visualReview": {
+    "status": "blocked",
+    "method": "paired-screenshot-overlay",
+    "viewport": [1920, 862],
+    "scenes": [],
+    "manualReview": {
+      "status": "blocked",
+      "reviewer": "Codex",
+      "reviewedAt": "2026-10-14T09:57:23+08:00",
+      "notes": "Make preview is now interactive and evidence was collected. Paired Design/Make/Vue overlay review and the full variant matrix are still pending."
+    },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 0
+  },
+  "comparisonMatrix": [
+    {
+      "id": "全局变量默认态::页面布局与侧栏",
+      "variant": "全局变量默认态",
+      "element": "页面布局与侧栏",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "全局变量默认态::变量表与操作",
+      "variant": "全局变量默认态",
+      "element": "变量表与操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "全局变量默认态::类型与敏感开关",
+      "variant": "全局变量默认态",
+      "element": "类型与敏感开关",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "全局变量默认态::适用自动化类型",
+      "variant": "全局变量默认态",
+      "element": "适用自动化类型",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "全局变量默认态::搜索与折叠",
+      "variant": "全局变量默认态",
+      "element": "搜索与折叠",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "全局变量默认态::新增编辑删除交互",
+      "variant": "全局变量默认态",
+      "element": "新增编辑删除交互",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "全局变量默认态::加载空错误状态",
+      "variant": "全局变量默认态",
+      "element": "加载空错误状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集详情态::页面布局与侧栏",
+      "variant": "变量集详情态",
+      "element": "页面布局与侧栏",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集详情态::变量表与操作",
+      "variant": "变量集详情态",
+      "element": "变量表与操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集详情态::类型与敏感开关",
+      "variant": "变量集详情态",
+      "element": "类型与敏感开关",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集详情态::适用自动化类型",
+      "variant": "变量集详情态",
+      "element": "适用自动化类型",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集详情态::搜索与折叠",
+      "variant": "变量集详情态",
+      "element": "搜索与折叠",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集详情态::新增编辑删除交互",
+      "variant": "变量集详情态",
+      "element": "新增编辑删除交互",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集详情态::加载空错误状态",
+      "variant": "变量集详情态",
+      "element": "加载空错误状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "内置函数态::页面布局与侧栏",
+      "variant": "内置函数态",
+      "element": "页面布局与侧栏",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "内置函数态::变量表与操作",
+      "variant": "内置函数态",
+      "element": "变量表与操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "内置函数态::类型与敏感开关",
+      "variant": "内置函数态",
+      "element": "类型与敏感开关",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "内置函数态::适用自动化类型",
+      "variant": "内置函数态",
+      "element": "适用自动化类型",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "内置函数态::搜索与折叠",
+      "variant": "内置函数态",
+      "element": "搜索与折叠",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "内置函数态::新增编辑删除交互",
+      "variant": "内置函数态",
+      "element": "新增编辑删除交互",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "内置函数态::加载空错误状态",
+      "variant": "内置函数态",
+      "element": "加载空错误状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "添加/编辑变量态::页面布局与侧栏",
+      "variant": "添加/编辑变量态",
+      "element": "页面布局与侧栏",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "添加/编辑变量态::变量表与操作",
+      "variant": "添加/编辑变量态",
+      "element": "变量表与操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "添加/编辑变量态::类型与敏感开关",
+      "variant": "添加/编辑变量态",
+      "element": "类型与敏感开关",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "添加/编辑变量态::适用自动化类型",
+      "variant": "添加/编辑变量态",
+      "element": "适用自动化类型",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "添加/编辑变量态::搜索与折叠",
+      "variant": "添加/编辑变量态",
+      "element": "搜索与折叠",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "添加/编辑变量态::新增编辑删除交互",
+      "variant": "添加/编辑变量态",
+      "element": "新增编辑删除交互",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "添加/编辑变量态::加载空错误状态",
+      "variant": "添加/编辑变量态",
+      "element": "加载空错误状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "加载/空/错误态::页面布局与侧栏",
+      "variant": "加载/空/错误态",
+      "element": "页面布局与侧栏",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "加载/空/错误态::变量表与操作",
+      "variant": "加载/空/错误态",
+      "element": "变量表与操作",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "加载/空/错误态::类型与敏感开关",
+      "variant": "加载/空/错误态",
+      "element": "类型与敏感开关",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "加载/空/错误态::适用自动化类型",
+      "variant": "加载/空/错误态",
+      "element": "适用自动化类型",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "加载/空/错误态::搜索与折叠",
+      "variant": "加载/空/错误态",
+      "element": "搜索与折叠",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "加载/空/错误态::新增编辑删除交互",
+      "variant": "加载/空/错误态",
+      "element": "新增编辑删除交互",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "加载/空/错误态::加载空错误状态",
+      "variant": "加载/空/错误态",
+      "element": "加载空错误状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    }
+  ],
+  "differences": [],
+  "noDifferencesReason": "Make 预览交互已恢复并完成部分场景验证；本轮尚未完成逐项对齐矩阵与 Design/Make/Vue 配对叠加复核。",
+  "unverifiedStatuses": [
+    "35 个变体 × 验收元素矩阵尚未完成同状态 Design/Make/Vue 逐项验收",
+    "未完成 Design/Make/Vue 配对叠加审查"
+  ],
+  "validation": {
+    "commands": [
+      "npm run typecheck",
+      "npm run build",
+      "git diff --check"
+    ],
+    "summary": {
+      "resolved": 0,
+      "acceptedDeviations": 0,
+      "unresolved": 0,
+      "unverified": 39
+    }
+  }
+}

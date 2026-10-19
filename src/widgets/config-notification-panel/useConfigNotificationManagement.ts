@@ -36,6 +36,7 @@ export function useConfigNotificationManagement(workspaceCode: Readonly<Ref<stri
   const channels = ref<NotificationChannelItem[]>([])
   const rules = ref<NotificationRuleItem[]>([])
   const records = ref<NotificationRecordItem[]>([])
+  const recordsLoaded = ref(false)
   const recordsTotal = ref(0)
   const failedRecordsTotal = ref(0)
   const recordsPageNo = ref(1)
@@ -197,6 +198,7 @@ export function useConfigNotificationManagement(workspaceCode: Readonly<Ref<stri
       })
       records.value = Array.isArray(page.items) ? page.items : []
       recordsTotal.value = Number(page.total || 0)
+      recordsLoaded.value = true
     } catch (error) {
       errorMessage.value = getRequestErrorMessage(error)
     } finally {
@@ -218,11 +220,21 @@ export function useConfigNotificationManagement(workspaceCode: Readonly<Ref<stri
   }
 
   async function refreshAll() {
-    await Promise.all([loadChannels(), loadRules(), loadRecords(), loadRecordStats()])
+    recordsLoaded.value = false
+    records.value = []
+    await Promise.all([
+      loadChannels(),
+      loadRules(),
+      loadRecordStats(),
+      activeTab.value !== 'rules' ? loadRecords() : Promise.resolve(),
+    ])
   }
 
   function selectTab(tab: NotificationPanelTab) {
     activeTab.value = tab
+    if (tab !== 'rules' && !recordsLoaded.value) {
+      void loadRecords()
+    }
   }
 
   function getChannelTypeLabel(channel: NotificationChannelItem) {

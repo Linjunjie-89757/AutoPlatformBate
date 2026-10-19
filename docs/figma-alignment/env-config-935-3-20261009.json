@@ -1,0 +1,2093 @@
+{
+  "schemaVersion": 2,
+  "title": "环境配置页面对齐 935:3",
+  "page": "配置中心/环境配置",
+  "status": "partial-alignment",
+  "createdAt": "2026-10-09T10:35:06.688Z",
+  "sourceBaseline": {
+    "gitBranch": "codex/development-feature2",
+    "gitCommit": "93d44043223f84b21b291f81197daf1f89725fc6",
+    "designCapturedAt": "2026-10-09T11:50:40.000Z",
+    "makeCode": {
+      "path": "设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx",
+      "sha256": "cf51f29f65ae3fdc3c6e04093756afe2464a313f1cb6e536742303404c38ac46",
+      "modifiedAt": "2026-10-09T10:09:45.474Z"
+    },
+    "makePreviewCapturedAt": "2026-10-09T12:34:36.000Z",
+    "vueCapturedAt": "2026-10-09T14:51:02.000Z",
+    "environment": {
+      "viewport": [960, 900],
+      "devicePixelRatio": 1,
+      "browserZoom": 1,
+      "fontStatus": "loaded"
+    }
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:935:3"
+    ],
+    "makeCodePath": "设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%25B0%25E7%25AE%25A1%25E7%2590%2586%25E7%25B3%25BB%25E7%25BB%259F%25E7%2595%258C%25E9%259D%25A2%25E8%25AE%25BE%25E8%25AE%25A1-%25E6%25AD%25A3%25E5%25BC%258F?code-node-id=0-9&t=WJftkTvhcyOYrnqw-0&fullscreen=1",
+    "currentCodeFiles": [
+      "src/widgets/config-env-panel/ConfigEnvironmentFigmaWorkspace.vue",
+      "src/features/config-env-create-edit/model.ts",
+      "src/widgets/config-env-panel/config-environment-figma-workspace.css"
+    ],
+    "variants": [
+      "环境列表默认态",
+      "API 配置态",
+      "Web UI 配置态",
+      "APP 待开放态",
+      "公共请求头空态/展开态",
+      "变量集优先级与冲突态"
+    ],
+    "elements": [
+      "基础信息",
+      "标识符说明",
+      "Base URL",
+      "默认超时",
+      "公共请求头",
+      "认证",
+      "API/Web UI/APP页签",
+      "变量集绑定",
+      "优先级排序",
+      "冲突检测",
+      "保存/未保存状态"
+    ],
+    "excludedAreas": []
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "verified",
+      "evidence": ["output/playwright/figma-env/design-935-4.png"]
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "verified",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"]
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "verified",
+      "evidence": ["output/playwright/figma-env/make-basic.png"]
+    },
+    {
+      "id": "vue-implementation",
+      "status": "verified",
+      "evidence": ["src/widgets/config-env-panel/ConfigEnvironmentFigmaWorkspace.vue"]
+    },
+    {
+      "id": "browser-validation",
+      "status": "unverified",
+      "evidence": ["output/playwright/figma-env/vue-basic-final.png","output/playwright/figma-env/vue-api-final.png","output/playwright/figma-env/vue-vars-final.png"]
+    },
+    {
+      "id": "difference-registration",
+      "status": "unverified",
+      "evidence": ["docs/figma-alignment/env-config-935-3-20261009.json"]
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": ["jSUUPxC4PVD9Kp2FUydfox:935:3","jSUUPxC4PVD9Kp2FUydfox:935:4","jSUUPxC4PVD9Kp2FUydfox:935:2399","jSUUPxC4PVD9Kp2FUydfox:935:3007","jSUUPxC4PVD9Kp2FUydfox:935:3894","jSUUPxC4PVD9Kp2FUydfox:935:4303"],
+      "screenshots": ["output/playwright/figma-env/design-935-4.png","output/playwright/figma-env/design-api-2399.png","output/playwright/figma-env/design-webui-3007.png","output/playwright/figma-env/design-app-3894.png","output/playwright/figma-env/design-vars-4303.png"]
+    },
+    "make": {
+      "codeReferences": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx:620-760","设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx:446-575"],
+      "eventMatrix": [
+        {
+          "name": "hover",
+      "status": "verified",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "focus",
+      "status": "verified",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "blur",
+      "status": "verified",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "active",
+      "status": "not-expressed",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+      "rationale": "Make 源码未为该状态提供独立事件或状态分支。",
+      "resolution": "保留浏览器原生或 CSS 行为，并在 Vue 浏览器复核中单独登记。"
+        },
+        {
+          "name": "disabled",
+      "status": "not-expressed",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+      "rationale": "Make 源码未为该状态提供独立事件或状态分支。",
+      "resolution": "保留浏览器原生或 CSS 行为，并在 Vue 浏览器复核中单独登记。"
+        },
+        {
+          "name": "loading",
+      "status": "not-expressed",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+      "rationale": "Make 源码未为该状态提供独立事件或状态分支。",
+      "resolution": "保留浏览器原生或 CSS 行为，并在 Vue 浏览器复核中单独登记。"
+        },
+        {
+          "name": "success",
+      "status": "not-expressed",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+      "rationale": "Make 源码未为该状态提供独立事件或状态分支。",
+      "resolution": "保留浏览器原生或 CSS 行为，并在 Vue 浏览器复核中单独登记。"
+        },
+        {
+          "name": "failure",
+      "status": "not-expressed",
+      "evidence": ["设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+      "rationale": "Make 源码未为该状态提供独立事件或状态分支。",
+      "resolution": "保留浏览器原生或 CSS 行为，并在 Vue 浏览器复核中单独登记。"
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2585%25B3%25E9%2597%25AD?code-node-id=0-9&t=WJftkTvhcyOYrnqw-0&fullscreen=1",
+      "viewport": [960, 900],
+      "interactions": ["登录后打开配置中心/环境配置，查看基础信息、API、Web UI、APP、变量绑定页签；切换 API 和变量绑定"],
+      "screenshots": ["output/playwright/figma-env/make-basic.png"]
+    },
+    "vue": {
+      "screenshots": ["output/playwright/figma-env/vue-basic-final.png","output/playwright/figma-env/vue-api-final.png","output/playwright/figma-env/vue-vars-final.png"],
+      "computedStyle": [".figma-env__detail-head: height 74.25px; .figma-env__tabs: height 37px"],
+      "boundingBox": [".figma-env__detail-head: x=337,y=107,width=920,height=74.25; .figma-env__tabs: x=337,y=181.25,width=920,height=37"],
+      "interactionResults": ["保存配置默认 disabled；API 与变量绑定页签可切换；删除按钮仅 active/hover 显示"]
+    }
+  },
+  "visualReview": {
+    "status": "unverified",
+    "method": "paired-screenshot-overlay",
+    "viewport": [],
+    "scenes": [],
+    "manualReview": {
+      "status": "unverified",
+      "reviewer": "",
+      "reviewedAt": "",
+      "notes": ""
+    },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 0
+  },
+  "comparisonMatrix": [
+    {
+      "id": "环境列表默认态::基础信息",
+      "variant": "环境列表默认态",
+      "element": "基础信息",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::标识符说明",
+      "variant": "环境列表默认态",
+      "element": "标识符说明",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::Base URL",
+      "variant": "环境列表默认态",
+      "element": "Base URL",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::默认超时",
+      "variant": "环境列表默认态",
+      "element": "默认超时",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::公共请求头",
+      "variant": "环境列表默认态",
+      "element": "公共请求头",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::认证",
+      "variant": "环境列表默认态",
+      "element": "认证",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::API/Web UI/APP页签",
+      "variant": "环境列表默认态",
+      "element": "API/Web UI/APP页签",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::变量集绑定",
+      "variant": "环境列表默认态",
+      "element": "变量集绑定",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::优先级排序",
+      "variant": "环境列表默认态",
+      "element": "优先级排序",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::冲突检测",
+      "variant": "环境列表默认态",
+      "element": "冲突检测",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "环境列表默认态::保存/未保存状态",
+      "variant": "环境列表默认态",
+      "element": "保存/未保存状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::基础信息",
+      "variant": "API 配置态",
+      "element": "基础信息",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::标识符说明",
+      "variant": "API 配置态",
+      "element": "标识符说明",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::Base URL",
+      "variant": "API 配置态",
+      "element": "Base URL",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::默认超时",
+      "variant": "API 配置态",
+      "element": "默认超时",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::公共请求头",
+      "variant": "API 配置态",
+      "element": "公共请求头",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::认证",
+      "variant": "API 配置态",
+      "element": "认证",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::API/Web UI/APP页签",
+      "variant": "API 配置态",
+      "element": "API/Web UI/APP页签",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::变量集绑定",
+      "variant": "API 配置态",
+      "element": "变量集绑定",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::优先级排序",
+      "variant": "API 配置态",
+      "element": "优先级排序",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::冲突检测",
+      "variant": "API 配置态",
+      "element": "冲突检测",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "API 配置态::保存/未保存状态",
+      "variant": "API 配置态",
+      "element": "保存/未保存状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::基础信息",
+      "variant": "Web UI 配置态",
+      "element": "基础信息",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::标识符说明",
+      "variant": "Web UI 配置态",
+      "element": "标识符说明",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::Base URL",
+      "variant": "Web UI 配置态",
+      "element": "Base URL",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::默认超时",
+      "variant": "Web UI 配置态",
+      "element": "默认超时",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::公共请求头",
+      "variant": "Web UI 配置态",
+      "element": "公共请求头",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::认证",
+      "variant": "Web UI 配置态",
+      "element": "认证",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::API/Web UI/APP页签",
+      "variant": "Web UI 配置态",
+      "element": "API/Web UI/APP页签",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::变量集绑定",
+      "variant": "Web UI 配置态",
+      "element": "变量集绑定",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::优先级排序",
+      "variant": "Web UI 配置态",
+      "element": "优先级排序",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::冲突检测",
+      "variant": "Web UI 配置态",
+      "element": "冲突检测",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "Web UI 配置态::保存/未保存状态",
+      "variant": "Web UI 配置态",
+      "element": "保存/未保存状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::基础信息",
+      "variant": "APP 待开放态",
+      "element": "基础信息",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::标识符说明",
+      "variant": "APP 待开放态",
+      "element": "标识符说明",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::Base URL",
+      "variant": "APP 待开放态",
+      "element": "Base URL",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::默认超时",
+      "variant": "APP 待开放态",
+      "element": "默认超时",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::公共请求头",
+      "variant": "APP 待开放态",
+      "element": "公共请求头",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::认证",
+      "variant": "APP 待开放态",
+      "element": "认证",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::API/Web UI/APP页签",
+      "variant": "APP 待开放态",
+      "element": "API/Web UI/APP页签",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::变量集绑定",
+      "variant": "APP 待开放态",
+      "element": "变量集绑定",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::优先级排序",
+      "variant": "APP 待开放态",
+      "element": "优先级排序",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::冲突检测",
+      "variant": "APP 待开放态",
+      "element": "冲突检测",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "APP 待开放态::保存/未保存状态",
+      "variant": "APP 待开放态",
+      "element": "保存/未保存状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::基础信息",
+      "variant": "公共请求头空态/展开态",
+      "element": "基础信息",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::标识符说明",
+      "variant": "公共请求头空态/展开态",
+      "element": "标识符说明",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::Base URL",
+      "variant": "公共请求头空态/展开态",
+      "element": "Base URL",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::默认超时",
+      "variant": "公共请求头空态/展开态",
+      "element": "默认超时",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::公共请求头",
+      "variant": "公共请求头空态/展开态",
+      "element": "公共请求头",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::认证",
+      "variant": "公共请求头空态/展开态",
+      "element": "认证",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::API/Web UI/APP页签",
+      "variant": "公共请求头空态/展开态",
+      "element": "API/Web UI/APP页签",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::变量集绑定",
+      "variant": "公共请求头空态/展开态",
+      "element": "变量集绑定",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::优先级排序",
+      "variant": "公共请求头空态/展开态",
+      "element": "优先级排序",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::冲突检测",
+      "variant": "公共请求头空态/展开态",
+      "element": "冲突检测",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "公共请求头空态/展开态::保存/未保存状态",
+      "variant": "公共请求头空态/展开态",
+      "element": "保存/未保存状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::基础信息",
+      "variant": "变量集优先级与冲突态",
+      "element": "基础信息",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::标识符说明",
+      "variant": "变量集优先级与冲突态",
+      "element": "标识符说明",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::Base URL",
+      "variant": "变量集优先级与冲突态",
+      "element": "Base URL",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::默认超时",
+      "variant": "变量集优先级与冲突态",
+      "element": "默认超时",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::公共请求头",
+      "variant": "变量集优先级与冲突态",
+      "element": "公共请求头",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::认证",
+      "variant": "变量集优先级与冲突态",
+      "element": "认证",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::API/Web UI/APP页签",
+      "variant": "变量集优先级与冲突态",
+      "element": "API/Web UI/APP页签",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::变量集绑定",
+      "variant": "变量集优先级与冲突态",
+      "element": "变量集绑定",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::优先级排序",
+      "variant": "变量集优先级与冲突态",
+      "element": "优先级排序",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::冲突检测",
+      "variant": "变量集优先级与冲突态",
+      "element": "冲突检测",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "变量集优先级与冲突态::保存/未保存状态",
+      "variant": "变量集优先级与冲突态",
+      "element": "保存/未保存状态",
+      "status": "unverified",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    }
+  ],
+  "differences": [
+    {
+      "id": "baseline-header-and-tabs",
+      "area": "环境详情头部与页签",
+      "status": "unresolved",
+      "source": "Design 节点 935:4 与 Make EnvConfigModule.tsx 详情头部/页签实现",
+      "current": "Vue 已收敛为复制、启停、保存配置和五个页签；旧截图中的服务指标/旧页签已移除",
+      "finding": "当前 Vue 头部显示服务/变量集/引用任务指标、编辑和删除按钮，并显示 Mock、最终生效预览、引用分析页签；Design/Make 只显示复制、启停、保存配置和基础信息/API/Web UI/APP/变量绑定五个页签。",
+      "resolution": "已按 Make/Design 收敛可见头部和页签，保留删除入口在环境列表卡片。",
+      "followUp": "补齐同视口 Design/Make/Vue 区域叠加审查后，将对应矩阵项更新为 verified 或 accepted-deviation。",
+      "evidence": ["output/playwright/figma-env/design-935-4.png","output/playwright/figma-env/make-basic.png","output/playwright/figma-env/vue-basic-1920-after.png"],
+      "decisionBasis": "Design 静态结构与 Make 源码/预览共同确认，真实业务删除入口保留在环境列表。",
+      "impact": "影响环境详情头部、页签和左侧列表可见信息；不改变后端环境数据读取。"
+    },
+    {
+      "id": "baseline-variable-binding-layout",
+      "area": "变量绑定",
+      "status": "unresolved",
+      "source": "Design 节点 935:4303 与 Make EnvConfigModule.tsx 变量绑定实现",
+      "current": "Vue 已增加绑定变量集排序序号、启停、冲突检测、赢家/被覆盖提示和优先级说明",
+      "finding": "当前 Vue 变量绑定区仍显示旧的变量优先级条、局部变量表和旧卡片结构，未完整呈现 Make 的排序序号、赢家/被覆盖冲突行和底部优先级说明。",
+      "resolution": "已按 Make 的变量集卡片、排序按钮、冲突汇总和优先级说明调整；当前页隐藏旧局部变量表。",
+      "followUp": "补采变量绑定各状态的 computed style、bounding box 和叠加截图，确认长文本与窄视口表现。",
+      "evidence": ["output/playwright/figma-env/design-vars-4303.png","output/playwright/figma-env/vue-vars-1920-after.png"],
+      "decisionBasis": "Make 源码明确表达排序与冲突交互，真实变量绑定仍通过既有后端数据模型完成。",
+      "impact": "影响变量绑定页的展示与排序交互；旧局部变量能力仍保留在数据模型和弹窗调用链。"
+    },
+    {
+      "id": "baseline-data-shape-compatibility",
+      "area": "旧环境数据兼容",
+      "status": "accepted-deviation",
+      "acceptance": {"type": "business-constraint", "reference": "现有后端环境数据仍可能包含 services/sites；本轮保留读取兼容并在保存时收敛为单 Base URL"},
+      "source": "src/features/config-env-create-edit/model.ts 与后端历史配置结构",
+      "current": "读取时兼容 services/sites；保存时写入默认入口单 Base URL，同时保留兼容字段",
+      "finding": "旧数据模型仍可能携带多服务结构。",
+      "resolution": "不改变历史数据读取，保存新模型时收敛为单 Base URL 及默认入口。",
+      "followUp": "后端完成旧 services/sites 清理后，再重新核对保存 payload 与迁移结果。",
+      "evidence": ["src/features/config-env-create-edit/model.ts","设计/figma-ai-make设计20261009/src/app/EnvConfigModule.tsx"],
+      "decisionBasis": "真实业务兼容与历史数据可读性优先于演示模型完全删除旧字段。",
+      "impact": "影响环境保存 payload 与旧数据迁移；不会影响当前 Base URL 请求拼接。"
+    }
+  ],
+  "noDifferencesReason": "",
+  "unverifiedStatuses": [
+    "四方基线和逐项验证尚未完成"
+  ],
+  "validation": {
+    "commands": [
+      "npm run typecheck",
+      "npm run build",
+      "git diff --check"
+    ],
+    "summary": {
+      "resolved": 0,
+      "acceptedDeviations": 1,
+      "unresolved": 2,
+      "unverified": 69
+    }
+  }
+}

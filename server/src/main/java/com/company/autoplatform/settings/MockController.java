@@ -138,11 +138,12 @@ public class MockController {
     @GetMapping("/api/settings/mock/scenarios")
     public ApiResponse<PageResponse<MockScenarioItem>> listScenarios(
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(value = "appId", required = false) Long appId,
             @RequestParam(value = "endpointId", required = false) Long endpointId,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "status", required = false) Integer status
     ) {
-        return ApiResponse.ok(mockDomainService.listScenarios(workspaceCode, endpointId, keyword, status));
+        return ApiResponse.ok(mockDomainService.listScenarios(workspaceCode, appId, endpointId, keyword, status));
     }
 
     @PostMapping("/api/settings/mock/scenarios")
@@ -214,6 +215,14 @@ public class MockController {
             @RequestParam(value = "scenarioId", required = false) Long scenarioId
     ) {
         return ApiResponse.ok(mockDomainService.listCallLogs(workspaceCode, appId, scenarioId));
+    }
+
+    @GetMapping("/api/settings/mock/call-logs/unmatched-count")
+    public ApiResponse<Long> countUnmatchedCallLogs(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(value = "appId", required = false) Long appId
+    ) {
+        return ApiResponse.ok(mockDomainService.countUnmatchedCallLogs(workspaceCode, appId));
     }
 
     @RequestMapping("/api/mock/{appCode}/**")

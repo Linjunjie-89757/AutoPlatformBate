@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ChevronDown, Code2, Copy, Plus, Shield, Sparkles, Trash2 } from '@lucide/vue'
+import { nextTick, ref, watch } from 'vue'
 
 import { AppSwitch } from '@/shared/ui'
 
@@ -128,6 +130,12 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
   assertion.enabled = !assertion.enabled
   emit('dirty')
 }
+
+const detailBodyRef = ref<HTMLElement | null>(null)
+watch(() => props.activeAssertion?.id, async () => {
+  await nextTick()
+  detailBodyRef.value?.scrollTo({ top: 0, left: 0 })
+})
 </script>
 
 <template>
@@ -212,11 +220,12 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
           </label>
         </div>
 
+        <div ref="detailBodyRef" class="api-assertion-detail-body">
         <div v-if="activeAssertion.assertionType === 'RESPONSE_CODE'" class="api-assertion-type-panel">
           <div class="api-assertion-form-grid">
             <label>
               <span>比较条件</span>
-              <el-select v-model="activeAssertion.condition" @change="activeAssertion.operator = activeAssertion.condition; emit('dirty')">
+              <el-select :suffix-icon="AppSelectChevron" v-model="activeAssertion.condition" @change="activeAssertion.operator = activeAssertion.condition; emit('dirty')">
                 <el-option v-for="item in assertionConditionOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </label>
@@ -228,10 +237,6 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
         </div>
 
         <div v-else-if="activeAssertion.assertionType === 'RESPONSE_HEADER'" class="api-assertion-type-panel">
-          <div class="api-assertion-section-toolbar">
-            <span />
-            <button type="button" class="api-assertion-toolbar-add" @click="emit('addItem', activeAssertion.assertions || (activeAssertion.assertions = []), { header: '' })"><Plus :size="12" />添加项</button>
-          </div>
           <div class="api-assertion-item-list">
             <div :class="['api-assertion-table-head', 'is-header', { 'has-current-value': assertionResults.length }]">
               <span>Header 名称</span>
@@ -242,7 +247,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
             </div>
             <div v-for="(item, index) in activeAssertion.assertions" :key="`${activeAssertion.id}-header-${index}`" :class="['api-assertion-item-row', 'is-header', { 'has-current-value': assertionResults.length }]">
               <el-input v-model="item.header" class="api-assertion-expression-input" placeholder="响应头名称" @input="activeAssertion.expression = item.header || ''; emit('dirty')" />
-              <el-select v-model="item.condition" class="api-assertion-condition-select" @change="item.operator = item.condition; emit('dirty')">
+              <el-select :suffix-icon="AppSelectChevron" v-model="item.condition" class="api-assertion-condition-select" @change="item.operator = item.condition; emit('dirty')">
                 <el-option v-for="option in assertionConditionOptions" :key="option.value" :label="option.label" :value="option.value" />
               </el-select>
               <el-input v-model="item.expectedValue" class="api-assertion-expected-input" placeholder="期望值:" @input="activeAssertion.expectedValue = item.expectedValue || ''; emit('dirty')" />
@@ -252,6 +257,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
                 <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertion.assertions || [], index, { header: '', condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
               </span>
             </div>
+            <button type="button" class="api-assertion-table-add" @click="emit('addItem', activeAssertion.assertions || (activeAssertion.assertions = []), { header: '' })"><Plus :size="12" aria-hidden="true" />添加项</button>
           </div>
         </div>
 
@@ -263,8 +269,6 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
               <el-radio-button value="X_PATH">XPath</el-radio-button>
               <el-radio-button value="REGEX">Regex</el-radio-button>
             </el-radio-group>
-            <span class="api-assertion-body-toolbar__spacer" />
-            <button type="button" class="api-assertion-toolbar-add" @click="emit('addItem', activeAssertionBodyGroup(activeAssertion).assertions, { expression: defaultAssertionExpression(activeAssertion.assertionBodyType) })"><Plus :size="12" />添加项</button>
           </div>
           <div class="api-assertion-item-list">
             <div :class="['api-assertion-table-head', 'is-body', { 'has-current-value': assertionResults.length }]">
@@ -276,7 +280,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
             </div>
             <div v-for="(item, index) in activeAssertionBodyGroup(activeAssertion).assertions" :key="`${activeAssertion.id}-body-${activeAssertion.assertionBodyType}-${index}`" :class="['api-assertion-item-row', 'is-body', { 'has-current-value': assertionResults.length }]">
               <el-input v-model="item.expression" class="api-assertion-expression-input" placeholder="$.data.id / /root/id / 正则" @input="activeAssertion.expression = item.expression || ''; emit('dirty')" />
-              <el-select v-model="item.condition" class="api-assertion-condition-select" @change="item.operator = item.condition; emit('dirty')">
+              <el-select :suffix-icon="AppSelectChevron" v-model="item.condition" class="api-assertion-condition-select" @change="item.operator = item.condition; emit('dirty')">
                 <el-option v-for="option in assertionConditionOptions" :key="option.value" :label="option.label" :value="option.value" />
               </el-select>
               <el-input v-model="item.expectedValue" class="api-assertion-expected-input" placeholder="期望值:" @input="activeAssertion.expectedValue = item.expectedValue || ''; emit('dirty')" />
@@ -287,6 +291,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
                 <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertionBodyGroup(activeAssertion).assertions, index, { expression: defaultAssertionExpression(activeAssertion.assertionBodyType), condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
               </span>
             </div>
+            <button type="button" class="api-assertion-table-add" @click="emit('addItem', activeAssertionBodyGroup(activeAssertion).assertions, { expression: defaultAssertionExpression(activeAssertion.assertionBodyType) })"><Plus :size="12" aria-hidden="true" />添加项</button>
           </div>
         </div>
 
@@ -294,7 +299,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
           <div class="api-assertion-time-grid">
             <label>
               <span>比较条件</span>
-              <el-select v-model="activeAssertion.condition" @change="activeAssertion.operator = activeAssertion.condition; emit('dirty')">
+              <el-select :suffix-icon="AppSelectChevron" v-model="activeAssertion.condition" @change="activeAssertion.operator = activeAssertion.condition; emit('dirty')">
                 <el-option v-for="item in assertionConditionOptions" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </label>
@@ -315,10 +320,6 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
         </div>
 
         <div v-else-if="activeAssertion.assertionType === 'VARIABLE'" class="api-assertion-type-panel">
-          <div class="api-assertion-section-toolbar">
-            <span />
-            <button type="button" class="api-assertion-toolbar-add" @click="emit('addItem', activeAssertion.variableAssertionItems || (activeAssertion.variableAssertionItems = []), { variableName: '' })"><Plus :size="12" />添加项</button>
-          </div>
           <div class="api-assertion-item-list">
             <div :class="['api-assertion-table-head', 'is-variable', { 'has-current-value': assertionResults.length }]">
               <span>变量名</span>
@@ -329,7 +330,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
             </div>
             <div v-for="(item, index) in activeAssertion.variableAssertionItems" :key="`${activeAssertion.id}-variable-${index}`" :class="['api-assertion-item-row', 'is-variable', { 'has-current-value': assertionResults.length }]">
               <el-input v-model="item.variableName" class="api-assertion-expression-input" placeholder="变量名" @input="activeAssertion.expression = item.variableName || ''; emit('dirty')" />
-              <el-select v-model="item.condition" class="api-assertion-condition-select" @change="item.operator = item.condition; emit('dirty')">
+              <el-select :suffix-icon="AppSelectChevron" v-model="item.condition" class="api-assertion-condition-select" @change="item.operator = item.condition; emit('dirty')">
                 <el-option v-for="option in assertionConditionOptions" :key="option.value" :label="option.label" :value="option.value" />
               </el-select>
               <el-input v-model="item.expectedValue" class="api-assertion-expected-input" placeholder="期望值:" @input="activeAssertion.expectedValue = item.expectedValue || ''; emit('dirty')" />
@@ -339,6 +340,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
                 <button type="button" class="api-assertion-icon-action is-danger" title="删除" aria-label="删除" @click="emit('removeItem', activeAssertion.variableAssertionItems || [], index, { variableName: '', condition: 'EQUALS', expectedValue: '' })"><Trash2 :size="13" /></button>
               </span>
             </div>
+            <button type="button" class="api-assertion-table-add" @click="emit('addItem', activeAssertion.variableAssertionItems || (activeAssertion.variableAssertionItems = []), { variableName: '' })"><Plus :size="12" aria-hidden="true" />添加项</button>
           </div>
         </div>
 
@@ -373,6 +375,7 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
             <el-input v-model="activeAssertion.description" placeholder="选填" @input="emit('dirty')" />
           </label>
         </div>
+        </div>
       </section>
       <section v-else class="api-assertion-detail api-assertion-empty api-assertion-empty--inline">
         <Shield :size="32" aria-hidden="true" />
@@ -383,3 +386,4 @@ function toggleAssertion(assertion: ApiAssertionPanelRow) {
 </template>
 
 <style scoped src="./styles/api-assertion-panel.css"></style>
+<style scoped src="@/widgets/api-interface-workspace/styles/api-assertion-detail.css"></style>

@@ -7,6 +7,7 @@ import {
   createConfigParamFormFromItem,
   createDefaultConfigParamForm,
   type ConfigParamForm,
+  type ConfigVariableScope,
   type WebUiVariableItem,
 } from '@/features/config-param-create-edit'
 import { getRequestErrorMessage } from '@/shared/api/error'
@@ -36,6 +37,7 @@ export function useConfigVariableSetActions(options: UseConfigVariableSetActions
     Object.assign(variableSetDraft, createDefaultConfigParamForm(options.workspaceCode.value), {
       workspaceCode: options.workspaceCode.value,
       paramType: 'API_VARIABLE_SET',
+      applicableTypes: ['API'],
       variables: [],
     })
     variableSetDialogVisible.value = true
@@ -58,6 +60,10 @@ export function useConfigVariableSetActions(options: UseConfigVariableSetActions
       variableSetError.value = '请先选择具体工作区'
       return
     }
+    if (!variableSetDraft.applicableTypes.length) {
+      variableSetError.value = '请至少选择一种适用类型'
+      return
+    }
     options.saving.value = true
     try {
       const payload = buildCreateParamPayload(variableSetDraft)
@@ -76,6 +82,13 @@ export function useConfigVariableSetActions(options: UseConfigVariableSetActions
     } finally {
       options.saving.value = false
     }
+  }
+
+  function toggleVariableSetScope(scope: ConfigVariableScope) {
+    variableSetDraft.applicableTypes = variableSetDraft.applicableTypes.includes(scope)
+      ? variableSetDraft.applicableTypes.filter(item => item !== scope)
+      : [...variableSetDraft.applicableTypes, scope]
+    if (variableSetDraft.applicableTypes.length) variableSetError.value = ''
   }
 
   async function confirmDeleteVariableSet() {
@@ -104,6 +117,7 @@ export function useConfigVariableSetActions(options: UseConfigVariableSetActions
     openCreateVariableSet,
     openEditVariableSet,
     submitVariableSet,
+    toggleVariableSetScope,
     variableSetDialogMode,
     variableSetDialogVisible,
     variableSetDraft,

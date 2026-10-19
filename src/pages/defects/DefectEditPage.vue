@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { Plus, X } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
@@ -801,7 +802,7 @@ watch(
 
               <div class="defect-edit-page__field">
                 <span class="is-required">严重级别</span>
-                <el-select v-model="form.severity" class="defect-edit-page__select" :disabled="saving">
+                <el-select :suffix-icon="AppSelectChevron" v-model="form.severity" class="defect-edit-page__select" :disabled="saving">
                   <el-option
                     v-for="item in defectSeverityOptions"
                     :key="item.value"
@@ -813,7 +814,7 @@ watch(
 
               <div class="defect-edit-page__field">
                 <span>Bug 类型</span>
-                <el-select
+                <el-select :suffix-icon="AppSelectChevron"
                   v-model="form.bugType"
                   class="defect-edit-page__select"
                   :disabled="saving"
@@ -831,7 +832,7 @@ watch(
               <div class="defect-edit-page__compact-field-row">
                 <div class="defect-edit-page__field">
                   <span>影响版本</span>
-                  <el-select
+                  <el-select :suffix-icon="AppSelectChevron"
                     v-model="form.versionName"
                     class="defect-edit-page__select"
                     :disabled="saving || versionOptionsLoading"
@@ -847,7 +848,7 @@ watch(
                 </div>
                 <div class="defect-edit-page__field">
                   <span>发现环境</span>
-                  <el-select
+                  <el-select :suffix-icon="AppSelectChevron"
                     v-model="form.environmentName"
                     class="defect-edit-page__select"
                     :disabled="saving"
@@ -924,7 +925,7 @@ watch(
             <div class="defect-edit-page__card defect-edit-page__source-card">
               <div class="defect-edit-page__field">
                 <span>来源类型</span>
-                <el-select
+                <el-select :suffix-icon="AppSelectChevron"
                   v-model="form.sourceType"
                   class="defect-edit-page__source-select"
                   :disabled="saving"

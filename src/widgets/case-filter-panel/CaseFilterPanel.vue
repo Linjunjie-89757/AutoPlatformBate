@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { reactive, watch } from 'vue'
 
 import {
@@ -20,6 +21,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: CaseClientFilter]
+  'creator-focus': []
 }>()
 
 const form = reactive<CaseClientFilter>({
@@ -47,6 +49,12 @@ watch(
   { deep: true },
 )
 
+function handleCreatorVisible(visible: boolean) {
+  if (visible) {
+    emit('creator-focus')
+  }
+}
+
 </script>
 
 <template>
@@ -61,10 +69,10 @@ watch(
         <img class="case-filter-panel__prefix-icon" :src="figmaCaseIcons.filterSearch" alt="" />
       </template>
     </el-input>
-    <el-select v-model="form.priority" class="case-filter-panel__control" clearable placeholder="优先级">
+    <el-select :suffix-icon="AppSelectChevron" v-model="form.priority" class="case-filter-panel__control" clearable placeholder="优先级">
       <el-option v-for="item in casePriorityOptions" :key="item.value" :label="item.label" :value="item.value" />
     </el-select>
-    <el-select v-model="form.reviewStatus" class="case-filter-panel__control" clearable placeholder="评审状态">
+    <el-select :suffix-icon="AppSelectChevron" v-model="form.reviewStatus" class="case-filter-panel__control" clearable placeholder="评审状态">
       <el-option
         v-for="item in caseReviewStatusOptions"
         :key="item.value"
@@ -72,7 +80,7 @@ watch(
         :value="item.value"
       />
     </el-select>
-    <el-select v-model="form.sourceType" class="case-filter-panel__control" clearable placeholder="来源">
+    <el-select :suffix-icon="AppSelectChevron" v-model="form.sourceType" class="case-filter-panel__control" clearable placeholder="来源">
       <el-option
         v-for="item in sourceOptions"
         :key="item.value"
@@ -80,7 +88,14 @@ watch(
         :value="item.value"
       />
     </el-select>
-    <el-select v-model="form.createdByName" class="case-filter-panel__control" clearable filterable placeholder="创建人">
+    <el-select :suffix-icon="AppSelectChevron"
+      v-model="form.createdByName"
+      class="case-filter-panel__control"
+      clearable
+      filterable
+      placeholder="创建人"
+      @visible-change="handleCreatorVisible"
+    >
       <el-option v-for="item in creatorOptions" :key="`creator-${item}`" :label="item" :value="item" />
     </el-select>
   </div>

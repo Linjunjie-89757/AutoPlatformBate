@@ -1,0 +1,299 @@
+{
+  "schemaVersion": 2,
+  "title": "缺陷统计视图严重程度与负责人分布对齐",
+  "page": "缺陷管理/统计视图",
+  "status": "partial-alignment",
+  "createdAt": "2026-10-15T07:05:34.499Z",
+  "sourceBaseline": {
+    "gitBranch": "codex/development-feature2",
+    "gitCommit": "7437daa535b8053a5386f0f484b0f37bd1759c00",
+    "designCapturedAt": "2026-10-15T16:45:00+08:00",
+    "makeCode": {
+      "path": "设计/figma_make代码最新20261013/src/app/BugsModule.tsx",
+      "sha256": "901224dc500d0e80e4e6c284b32f402772791c533237064f0d77681ee6175355",
+      "modifiedAt": "2026-10-13T08:38:40.612Z"
+    },
+    "makePreviewCapturedAt": "2026-10-15T16:50:00+08:00",
+    "vueCapturedAt": "2026-10-15T16:50:00+08:00",
+    "environment": {
+      "viewport": [1920, 862],
+      "devicePixelRatio": 1,
+      "browserZoom": 1,
+      "fontStatus": "browser default; Microsoft YaHei fallback not separately confirmed"
+    }
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:979-13102"
+    ],
+    "makeCodePath": "设计/figma_make代码最新20261013/src/app/BugsModule.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%258B%25E7%25AE%25A1%25E7%2590%25BB%25E7%25BB%259F%25E7%2595%258C%25E9%259D%25A2%25E8%25AE%BE%25E8%25AE%25A1-%25E6%AD%A3%E5%BC%8F?fullscreen=1",
+    "currentCodeFiles": [
+      "src/pages/defects/DefectsPage.vue",
+      "src/entities/defect/model/types.ts",
+      "server/src/main/java/com/company/autoplatform/bug/BugStatisticsResponse.java",
+      "server/src/main/java/com/company/autoplatform/bug/BugDomainService.java",
+      "server/src/test/java/com/company/autoplatform/bug/BugControllerIntegrationTests.java",
+      "src/shared/ui/charts/DefectAssigneeBarChart.vue"
+    ],
+    "variants": [
+      "统计视图默认数据"
+    ],
+    "elements": [
+      "严重程度分布行间距",
+      "负责人缺陷分布位置与图表"
+    ],
+    "excludedAreas": []
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "verified",
+      "evidence": ["output/playwright/figma-defects-stats-979-frame.png", "Figma metadata node 979:13418"]
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "verified",
+      "evidence": ["设计/figma_make代码最新20261013/src/app/BugsModule.tsx:1230-1278"]
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "blocked",
+      "evidence": ["Chrome CDP tab at supplied Make URL rendered Figma sign-up page; app preview controls unavailable"]
+    },
+    {
+      "id": "vue-implementation",
+      "status": "verified",
+      "evidence": ["src/pages/defects/DefectsPage.vue", "src/shared/ui/charts/DefectAssigneeBarChart.vue", "server/src/main/java/com/company/autoplatform/bug/BugDomainService.java"]
+    },
+    {
+      "id": "browser-validation",
+      "status": "unverified",
+      "evidence": ["output/playwright/defects-stats-severity-viewport.png", "output/playwright/defects-stats-assignee-scrolled.png"]
+    },
+    {
+      "id": "difference-registration",
+      "status": "unverified",
+      "evidence": ["comparisonMatrix", "differences"]
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [
+        { "id": "979:13103", "name": "后台管理系统界面设计-正式", "viewport": [1920, 862] },
+        { "id": "979:13414", "name": "严重程度分布卡片", "viewport": [898, 275] }
+      ],
+      "screenshots": ["output/playwright/figma-defects-stats-979-frame.png"]
+    },
+    "make": {
+      "codeReferences": [
+        { "path": "设计/figma_make代码最新20261013/src/app/BugsModule.tsx", "lines": "1230-1244", "finding": "severityDist 每项显示18px标签、4px间隔和8px进度条；列表使用space-y-4，总节距46px" },
+        { "path": "设计/figma_make代码最新20261013/src/app/BugsModule.tsx", "lines": "1248-1278", "finding": "负责人分布使用open/closed堆叠柱状图和Tooltip，Make页面顺序是负责人图在趋势图之前" }
+      ],
+      "eventMatrix": [
+        {
+          "name": "hover",
+          "status": "unverified",
+          "evidence": ["Make Tooltip source at BugsModule.tsx:1258-1264; preview unavailable; Vue tooltip interaction not confirmed"],
+          "rationale": "Owner bars expose a hover tooltip in Make source.",
+          "resolution": "Requires preview and browser interaction validation."
+        },
+        {
+          "name": "focus",
+          "status": "not-expressed",
+          "evidence": ["Charts have no keyboard focus behavior in Make source."],
+          "rationale": "No focus behavior is defined for these chart elements.",
+          "resolution": "No custom focus state added."
+        },
+        {
+          "name": "blur",
+          "status": "not-expressed",
+          "evidence": ["Charts have no focus/blur handlers in Make source."],
+          "rationale": "No focus behavior is defined for these chart elements.",
+          "resolution": "No custom blur state added."
+        },
+        {
+          "name": "active",
+          "status": "not-expressed",
+          "evidence": ["No active/click selection handler in Make chart source."],
+          "rationale": "Chart bars are informational.",
+          "resolution": "No active state added."
+        },
+        {
+          "name": "disabled",
+          "status": "not-expressed",
+          "evidence": ["Charts have no disabled state in Make source."],
+          "rationale": "Data charts do not have disabled controls.",
+          "resolution": "No disabled state added."
+        },
+        {
+          "name": "loading",
+          "status": "unverified",
+          "evidence": ["Make preview unavailable; no chart-specific loading branch found in source."],
+          "rationale": "No loading branch was found in chart JSX.",
+          "resolution": "Preview observation remains outstanding."
+        },
+        {
+          "name": "success",
+          "status": "not-expressed",
+          "evidence": ["Charts are read-only and have no success state in Make source."],
+          "rationale": "Not an action control.",
+          "resolution": "No success state added."
+        },
+        {
+          "name": "failure",
+          "status": "unverified",
+          "evidence": ["Make preview unavailable; no chart failure branch found in source."],
+          "rationale": "No chart failure branch is expressed in Make source.",
+          "resolution": "Vue provides an empty fallback when data is absent."
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%258B%25E7%25AE%25A1%25E7%2590%25BB%25E7%25BB%259F%25E7%2595%258C%25E9%259D%25A2%25E8%25AE%BE%25E8%25AE%25A1-%25E6%AD%A3%E5%BC%8F?fullscreen=1",
+      "viewport": [1920, 945],
+      "interactions": [
+        { "operation": "Open supplied full-screen Make URL in user Chrome via CDP", "result": "Figma sign-up page shown; target prototype did not render", "status": "blocked" }
+      ],
+      "screenshots": []
+    },
+    "vue": {
+      "screenshots": ["output/playwright/defects-stats-severity-viewport.png", "output/playwright/defects-stats-assignee-scrolled.png"],
+      "computedStyle": [
+        { "selector": ".defects-page__severity-row", "values": { "grid-auto-row": "46px", "align-content": "start", "row-gap": "4px" } },
+        { "selector": ".defects-page__severity-meta", "values": { "height": "18px", "font-size": "12px", "font-weight": "500" } },
+        { "selector": ".defects-page__severity-track", "values": { "height": "8px" } }
+      ],
+      "boundingBox": [
+        { "selector": ".defects-page__severity-row", "rowTops": [339.5, 385.5, 431.5, 477.5], "rowHeight": 46 },
+        { "selector": ".defects-page__severity-meta", "firstTop": 339.5, "height": 18 },
+        { "selector": ".defects-page__severity-track", "firstTop": 361.5, "height": 8 }
+      ],
+      "interactionResults": [
+        { "result": "Chart order: 状态分布 → 严重程度分布 → 新增 vs 关闭趋势 → 负责人缺陷分布", "status": "verified" },
+        { "result": "负责人统计从真实 API 加载 5 个已分配负责人；工作区统计总数为12", "status": "verified" }
+      ]
+    }
+  },
+  "visualReview": {
+    "status": "unverified",
+    "method": "paired-screenshot-overlay",
+    "viewport": [],
+    "scenes": [],
+    "manualReview": {
+      "status": "unverified",
+      "reviewer": "",
+      "reviewedAt": "",
+      "notes": ""
+    },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 0
+  },
+  "comparisonMatrix": [
+    {
+      "id": "统计视图默认数据::严重程度分布行间距",
+      "variant": "统计视图默认数据",
+      "element": "严重程度分布行间距",
+      "status": "unverified",
+      "design": {
+        "target": "Figma node 979:13418: first label begins 58px below card top; label-to-label distance 46px; label height 18px; progress track begins 80px below card top and is 8px high.",
+        "evidence": ["output/playwright/figma-defects-stats-979-frame.png", "Figma metadata 979:13418"]
+      },
+      "makeSource": {
+        "finding": "BugsModule.tsx:1230-1244 uses 18px label, 4px label-to-bar gap, 8px track, and space-y-4; item starts are 46px apart.",
+        "evidence": ["设计/figma_make代码最新20261013/src/app/BugsModule.tsx:1230-1244"]
+      },
+      "makePreview": {
+        "operation": "Open supplied full-screen Make URL and wait for app prototype.",
+        "result": "Blocked: Figma sign-up page rendered instead of prototype; could not inspect chart or hover states.",
+        "evidence": []
+      },
+      "vue": {
+        "result": "Four rows have 46px pitch; labels are 18px; label-to-track gap is 4px; tracks are 8px. First label starts 58px below card top.",
+        "screenshots": ["output/playwright/defects-stats-severity-viewport.png"],
+        "computedStyle": ["row-gap: 4px", "align-content: start", "track height: 8px"],
+        "boundingBox": ["row tops: 339.5, 385.5, 431.5, 477.5; card top: 281.5; first label top relative to card: 58px"],
+        "interactionEvidence": []
+      },
+      "visualSceneIds": ["severity-bars-default"],
+      "visualCheck": { "status": "unverified", "target": { "rowPitch": 46, "firstLabelTopInCard": 58, "labelHeight": 18, "trackTopInCard": 80, "trackHeight": 8 }, "actual": { "rowPitch": 46, "firstLabelTopInCard": 58, "labelHeight": 18, "trackTopInCard": 80, "trackHeight": 8 }, "delta": { "rowPitch": 0, "firstLabelTopInCard": 0, "trackTopInCard": 0 }, "tolerance": { "px": 0.5 } },
+      "differenceIds": ["DIFF-001"],
+      "rationale": "Design metadata and Vue browser measurements match for requested vertical spacing. Four-party verification remains incomplete because Make preview is blocked."
+    },
+    {
+      "id": "统计视图默认数据::负责人缺陷分布位置与图表",
+      "variant": "统计视图默认数据",
+      "element": "负责人缺陷分布位置与图表",
+      "status": "accepted-deviation",
+      "design": {
+        "target": "Design order places owner distribution before trend; user explicitly requests it below trend.",
+        "evidence": ["Figma node 979:13103", "User request in current task"]
+      },
+      "makeSource": {
+        "finding": "Make order is owner distribution before trend (BugsModule.tsx:1248-1286).",
+        "evidence": ["设计/figma_make代码最新20261013/src/app/BugsModule.tsx:1248-1286"]
+      },
+      "makePreview": {
+        "operation": "Inspect target order in Make preview.",
+        "result": "Blocked at Figma sign-up page; source order is known, preview could not be checked.",
+        "evidence": []
+      },
+      "vue": {
+        "result": "Owner distribution renders after 新增 vs 关闭趋势; API supplies five assignees and stacked open/closed bars.",
+        "screenshots": ["output/playwright/defects-stats-assignee-scrolled.png"],
+        "computedStyle": ["chart width: 600px, max-width: 100%"],
+        "boundingBox": ["owner chart container: 1783px wide by 152px minimum; rendered below trend card"],
+        "interactionEvidence": []
+      },
+      "visualSceneIds": ["assignee-chart-below-trend"],
+      "visualCheck": { "status": "unverified", "target": { "order": "after trend" }, "actual": { "order": "after trend" }, "delta": { "order": "0 cards" }, "tolerance": { "order": "exact" } },
+      "differenceIds": ["DIFF-002"],
+      "rationale": "Position intentionally follows the user's instruction and differs from Design/Make order."
+    }
+  ],
+  "differences": [
+    {
+      "id": "DIFF-001",
+      "status": "resolved",
+      "area": "严重程度分布首项垂直起点",
+      "source": "Design / Make source / Vue browser",
+      "current": "修改前标签和进度条在46px行轨道中垂直居中，整组比Design起点低约4.5px。",
+      "resolution": "改为align-content:start并校准顶部内距；当前首标签相对卡片top为58px，行距46px，进度条top相对卡片为80px、高8px。",
+      "followUp": "Make preview恢复后补做四方截图与叠加审查。",
+      "evidence": ["output/playwright/figma-defects-stats-979-frame.png", "output/playwright/defects-stats-severity-viewport.png", "Design node 979:13418 metadata"],
+      "decisionBasis": "Design 979:13418明确给出首项起点、后续46px行高；Make的space-y-4加30px内容对应46px节距。",
+      "impact": "只影响严重程度分布条目垂直位置，不改变数据和业务逻辑。",
+      "acceptance": { "type": "", "reference": "" }
+    },
+    {
+      "id": "DIFF-002",
+      "status": "accepted-deviation",
+      "area": "负责人缺陷分布卡片顺序",
+      "source": "User decision over Design and Make order",
+      "current": "Design/Make将负责人分布放在趋势图前；当前Vue将负责人分布放在趋势图后。",
+      "resolution": "按用户明确要求放在新增 vs 关闭趋势下方。",
+      "followUp": "无；这是本次指定布局。",
+      "evidence": ["output/playwright/defects-stats-assignee-scrolled.png", "User request in current task"],
+      "decisionBasis": "用户明确要求负责人缺陷分布放在新增 vs 关闭趋势下面。",
+      "impact": "仅图表垂直顺序与Design/Make不同。",
+      "acceptance": { "type": "user-decision", "reference": "本轮用户请求：负责人缺陷分布放在新增 vs 关闭趋势下面" }
+    }
+  ],
+  "noDifferencesReason": "本轮一项严重程度起点差异已修复；负责人图顺序按用户决定保留。Make预览未能渲染，相关四方核验仍未完成。",
+  "unverifiedStatuses": [
+    "Make预览当前显示Figma注册页，未能操作图表或确认tooltip；未完成Design/Make/Vue配对叠加复核。"
+  ],
+  "validation": {
+    "commands": [
+      "npm run typecheck",
+      "npm run build",
+      "git diff --check"
+    ],
+      "summary": {
+      "resolved": 1,
+      "acceptedDeviations": 1,
+      "unresolved": 0,
+      "unverified": 6
+    }
+  }
+}

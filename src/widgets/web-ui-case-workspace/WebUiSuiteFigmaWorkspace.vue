@@ -525,7 +525,7 @@ onBeforeUnmount(() => {
 
       <main v-if="selectedSuite" class="web-ui-suite-editor">
         <header class="web-ui-suite-editor__toolbar">
-          <select v-model="selectedSuite.priority" :disabled="!canEdit" class="web-ui-suite-priority" :style="priorityStyle(selectedSuite.priority)" aria-label="套件优先级">
+          <select v-model="selectedSuite.priority" :disabled="!canEdit" class="web-ui-suite-priority app-native-select" :style="priorityStyle(selectedSuite.priority)" aria-label="套件优先级">
             <option v-for="priority in ['P0', 'P1', 'P2', 'P3']" :key="priority">{{ priority }}</option>
           </select>
 
@@ -548,13 +548,13 @@ onBeforeUnmount(() => {
           </div>
           <label class="web-ui-suite-toolbar-select">
             <span>环境</span>
-            <select v-model="selectedSuite.environmentId" aria-label="执行环境">
+            <select class="app-native-select" v-model="selectedSuite.environmentId" aria-label="执行环境">
               <option :value="null">用例默认环境</option><option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}</option>
             </select>
           </label>
           <label class="web-ui-suite-toolbar-select web-ui-suite-toolbar-select--browser">
             <Monitor aria-hidden="true" />
-            <select v-model="selectedSuite.browser" aria-label="浏览器" @change="handleUnsupportedSetting('浏览器类型覆盖')">
+            <select class="app-native-select" v-model="selectedSuite.browser" aria-label="浏览器" @change="handleUnsupportedSetting('浏览器类型覆盖')">
               <option>Chrome</option><option>Firefox</option><option>Safari</option><option>Edge</option><option>Chrome (无头)</option>
             </select>
           </label>
@@ -629,8 +629,8 @@ onBeforeUnmount(() => {
                 <span><b>{{ runnerDisplayName(runner) }}</b><small>{{ runnerStatusText(runner) }}</small></span>
               </label>
             </section>
-            <label class="web-ui-suite-setting-field">失败策略<select v-model="selectedSuite.failurePolicy"><option>遇到失败继续执行</option><option>遇到失败立即中止</option><option>当前用例失败跳过</option></select></label>
-            <label class="web-ui-suite-setting-field">截图策略<select v-model="selectedSuite.screenshotPolicy" @change="handleUnsupportedSetting('截图策略')"><option>仅失败时截图</option><option>每步都截图</option><option>不截图</option></select></label>
+            <label class="web-ui-suite-setting-field">失败策略<select class="app-native-select" v-model="selectedSuite.failurePolicy"><option>遇到失败继续执行</option><option>遇到失败立即中止</option><option>当前用例失败跳过</option></select></label>
+            <label class="web-ui-suite-setting-field">截图策略<select class="app-native-select" v-model="selectedSuite.screenshotPolicy" @change="handleUnsupportedSetting('截图策略')"><option>仅失败时截图</option><option>每步都截图</option><option>不截图</option></select></label>
             <label class="web-ui-suite-setting-field">超时 (s)<input v-model.number="selectedSuite.timeout" type="number" min="1" @change="handleUnsupportedSetting('套件级超时')" /></label>
             <section v-if="selectedSuite.lastRun" class="web-ui-suite-last-run">
               <h3>上次运行</h3>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { Eye, EyeOff } from '@lucide/vue'
 
 import {
@@ -187,7 +188,7 @@ function formatTime(value: string | null) {
           <div class="notification-channel-grid">
             <label class="notification-channel-field">
               <span>请求方式</span>
-              <el-select v-model="channelForm.httpMethod">
+              <el-select :suffix-icon="AppSelectChevron" v-model="channelForm.httpMethod">
                 <el-option label="POST" value="POST" />
                 <el-option label="PUT" value="PUT" />
               </el-select>
@@ -288,7 +289,7 @@ function formatTime(value: string | null) {
         <div class="notification-drawer-grid">
           <label class="notification-drawer-field">
             <span>触发事件 <b>*</b></span>
-            <el-select v-model="ruleForm.eventType" placeholder="选择触发事件">
+            <el-select :suffix-icon="AppSelectChevron" v-model="ruleForm.eventType" placeholder="选择触发事件">
               <el-option v-for="item in eventTypes" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </label>
@@ -300,13 +301,13 @@ function formatTime(value: string | null) {
         <div class="notification-drawer-grid">
           <label class="notification-drawer-field">
             <span>触发条件</span>
-            <el-select v-model="ruleForm.triggerCondition" placeholder="选择触发条件">
+            <el-select :suffix-icon="AppSelectChevron" v-model="ruleForm.triggerCondition" placeholder="选择触发条件">
               <el-option v-for="item in notificationTriggerConditionOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
           </label>
           <label class="notification-drawer-field">
             <span>通知渠道 <b>*</b></span>
-            <el-select v-model="ruleForm.channelIds" multiple collapse-tags collapse-tags-tooltip placeholder="选择通知渠道">
+            <el-select :suffix-icon="AppSelectChevron" v-model="ruleForm.channelIds" multiple collapse-tags collapse-tags-tooltip placeholder="选择通知渠道">
               <el-option v-for="item in enabledChannels" :key="item.id" :label="item.channelName" :value="item.id" />
             </el-select>
           </label>

@@ -147,6 +147,26 @@ class WebUiExecutionSupportTests {
     }
 
     @Test
+    void readEnvironmentConfigAcceptsLegacyLocalVariablesAlias() {
+        WebUiExecutionContextSupport support = new WebUiExecutionContextSupport();
+
+        WebUiExecutionContextSupport.WebUiEnvironmentConfig config = support.readEnvironmentConfig("""
+                {
+                  "webUIConfig": {"entryUrl": "https://web.test/login", "enabled": true},
+                  "localVariables": [{"name": "TENANT", "value": "legacy", "sensitive": false}],
+                  "variableSetIds": [11, 12],
+                  "disabledVariableSetIds": [12]
+                }
+                """);
+
+        assertThat(config.webUIConfig().entryUrl()).isEqualTo("https://web.test/login");
+        assertThat(config.variables()).extracting(WebUiExecutionContextSupport.VariableItem::name)
+                .containsExactly("TENANT");
+        assertThat(config.variableSetIds()).containsExactly(11L, 12L);
+        assertThat(config.disabledVariableSetIds()).containsExactly(12L);
+    }
+
+    @Test
     void maskVariablesHidesSensitiveValues() {
         WebUiExecutionContextSupport support = new WebUiExecutionContextSupport();
 

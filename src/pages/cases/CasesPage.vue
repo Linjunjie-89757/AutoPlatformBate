@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RefreshRight } from '@element-plus/icons-vue'
@@ -43,6 +44,8 @@ const workspaceLoading = ref(false)
 const workspaceReady = ref(false)
 const workspaceErrorMessage = ref('')
 const creatorNames = ref<string[]>([])
+const creatorNamesLoaded = ref(false)
+const creatorNamesLoading = ref(false)
 const workspaceSelectorCode = ref('ALL')
 const selectedNodeId = ref('root')
 const selectedDirectoryId = ref<number | null>(null)
@@ -415,11 +418,18 @@ function openCreateModule(payload: { nodeId: string; workspaceCode: string; dire
 }
 
 async function loadCreatorNames() {
+  if (creatorNamesLoaded.value || creatorNamesLoading.value) {
+    return
+  }
+  creatorNamesLoading.value = true
   try {
     const users = await userApi.getUsers()
     creatorNames.value = users.map(item => item.displayName).filter(Boolean)
+    creatorNamesLoaded.value = true
   } catch {
-    creatorNames.value = []
+    // The current page names remain available when the user list is unavailable.
+  } finally {
+    creatorNamesLoading.value = false
   }
 }
 
@@ -580,7 +590,7 @@ async function confirmDeleteModule() {
 
 onMounted(() => {
   void (async () => {
-    await Promise.all([loadWorkspaces(), loadCreatorNames()])
+    await loadWorkspaces()
     await loadDirectories()
   })()
 })
@@ -645,7 +655,7 @@ watch(
     <template #actions>
       <div class="cases-workspace-select">
         <span class="cases-workspace-select__label">工作空间</span>
-        <el-select
+        <el-select :suffix-icon="AppSelectChevron"
           v-model="workspaceSelectorCode"
           class="cases-workspace-select__control"
           :disabled="workspaceLoading"
@@ -711,6 +721,7 @@ watch(
                 v-model="filter"
                 :source-options="sourceOptions"
                 :creator-options="creatorOptions"
+                @creator-focus="loadCreatorNames"
                 :workspace-options="businessWorkspaceOptions"
                 :show-workspace-filter="workspaceCode === 'ALL'"
               />
@@ -776,7 +787,7 @@ watch(
       <div class="case-module-dialog">
         <label class="case-module-dialog__field">
           <span>移动到</span>
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="moveTargetDirectoryId"
             class="case-module-dialog__select"
             clearable

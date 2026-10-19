@@ -93,14 +93,14 @@ const {
           <Search :size="12" :stroke-width="1.8" />
           <input v-model="runnerKeyword" type="search" placeholder="搜索节点名称或 IP">
         </div>
-        <select v-model="runnerStatusFilter" class="config-runner-filter" aria-label="状态筛选">
+        <select v-model="runnerStatusFilter" class="config-runner-filter app-native-select" aria-label="状态筛选">
           <option value="">全部状态</option>
           <option value="online">在线</option>
           <option value="busy">忙碌</option>
           <option value="offline">离线</option>
           <option value="disabled">已禁用</option>
         </select>
-        <select v-model="runnerEnvFilter" class="config-runner-filter" aria-label="环境筛选">
+        <select v-model="runnerEnvFilter" class="config-runner-filter app-native-select" aria-label="环境筛选">
           <option value="">全部环境</option>
           <option v-for="env in envOptions" :key="env" :value="env">{{ env }}</option>
         </select>

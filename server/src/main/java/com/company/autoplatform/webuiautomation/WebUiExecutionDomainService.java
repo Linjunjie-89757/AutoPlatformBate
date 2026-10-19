@@ -381,20 +381,9 @@ public class WebUiExecutionDomainService {
             query.eq(WebUiRunBatchEntity::getStatus, trimmedStatus.toUpperCase(Locale.ROOT));
         }
         int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
-        if (pageSize == null || pageSize < 1) {
-            List<WebUiRunBatchSummary> items = runBatchMapper.selectList(query
-                            .orderByDesc(WebUiRunBatchEntity::getCreatedAt)
-                            .orderByDesc(WebUiRunBatchEntity::getId))
-                    .stream()
-                    .map(this::toBatchSummary)
-                    .toList();
-            int compatiblePageSize = items.isEmpty() ? 10 : items.size();
-            int fromIndex = Math.min((safePageNo - 1) * compatiblePageSize, items.size());
-            int toIndex = Math.min(fromIndex + compatiblePageSize, items.size());
-            return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, compatiblePageSize);
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
         Page<WebUiRunBatchEntity> page = runBatchMapper.selectPage(
-                new Page<>(safePageNo, pageSize),
+                new Page<>(safePageNo, safePageSize),
                 query.orderByDesc(WebUiRunBatchEntity::getCreatedAt)
                         .orderByDesc(WebUiRunBatchEntity::getId));
         List<WebUiRunBatchSummary> items = page.getRecords().stream()
@@ -450,20 +439,9 @@ public class WebUiExecutionDomainService {
             query.eq(WebUiRunEntity::getStatus, trimmedStatus.toUpperCase(Locale.ROOT));
         }
         int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
-        if (pageSize == null || pageSize < 1) {
-            List<WebUiRunSummary> items = runMapper.selectList(query
-                            .orderByDesc(WebUiRunEntity::getCreatedAt)
-                            .orderByDesc(WebUiRunEntity::getId))
-                    .stream()
-                    .map(this::toRunSummary)
-                    .toList();
-            int compatiblePageSize = items.isEmpty() ? 10 : items.size();
-            int fromIndex = Math.min((safePageNo - 1) * compatiblePageSize, items.size());
-            int toIndex = Math.min(fromIndex + compatiblePageSize, items.size());
-            return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, compatiblePageSize);
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
         Page<WebUiRunEntity> page = runMapper.selectPage(
-                new Page<>(safePageNo, pageSize),
+                new Page<>(safePageNo, safePageSize),
                 query.orderByDesc(WebUiRunEntity::getCreatedAt)
                         .orderByDesc(WebUiRunEntity::getId));
         List<WebUiRunSummary> items = page.getRecords().stream()

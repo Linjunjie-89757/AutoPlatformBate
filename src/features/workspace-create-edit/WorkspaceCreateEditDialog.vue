@@ -125,7 +125,7 @@ watch(
 
       <div class="workspace-dialog__field">
         <span>负责人（Owner）</span>
-        <select v-model="form.ownerUserId" class="workspace-dialog__select">
+        <select v-model="form.ownerUserId" class="workspace-dialog__select app-native-select">
           <option :value="null">组织管理员</option>
           <option v-for="item in ownerOptions" :key="item.value" :value="item.value">
             {{ item.label }}

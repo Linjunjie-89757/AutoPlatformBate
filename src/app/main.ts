@@ -8,6 +8,7 @@ import '@/shared/styles/fonts.css'
 import '@/shared/styles/tokens.css'
 import '@/shared/styles/element-overrides.css'
 import '@/shared/styles/global.css'
+import '@/shared/styles/select-arrows.css'
 
 const app = createApp(App)
 

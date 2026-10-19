@@ -33,6 +33,7 @@ import type {
   ParamSetVersionItem,
   TestNotificationChannelPayload,
   UpdateDbConnectionStatusPayload,
+  SettingsOverview,
 } from '../model/types'
 
 export interface PageResponse<T> {
@@ -95,6 +96,7 @@ export interface SettingsMockEndpointQuery {
 }
 
 export interface SettingsMockScenarioQuery {
+  appId?: number
   endpointId?: number
   keyword?: string
   status?: ConfigStatus
@@ -134,6 +136,14 @@ function unwrapApiResponse<T>(payload: ApiResponse<T>) {
 }
 
 export const configApi = {
+  async getSettingsOverview(workspaceCode = 'ALL') {
+    const payload = await httpGet<ApiResponse<SettingsOverview>>('/settings/overview', {
+      headers: workspaceHeaders(workspaceCode),
+    })
+
+    return unwrapApiResponse(payload)
+  },
+
   async getSettingsEnvs(workspaceCode = 'ALL', query?: SettingsEnvQuery) {
     const payload = await httpGet<ApiResponse<PageResponse<EnvConfigItem>>>('/settings/envs', {
       headers: workspaceHeaders(workspaceCode),
@@ -643,6 +653,15 @@ export const configApi = {
     const payload = await httpGet<ApiResponse<PageResponse<MockCallLogItem>>>('/settings/mock/call-logs', {
       headers: workspaceHeaders(workspaceCode),
       params: cleanQuery(query),
+    })
+
+    return unwrapApiResponse(payload)
+  },
+
+  async getMockUnmatchedCallLogCount(workspaceCode = 'ALL', appId?: number) {
+    const payload = await httpGet<ApiResponse<number>>('/settings/mock/call-logs/unmatched-count', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery({ appId }),
     })
 
     return unwrapApiResponse(payload)

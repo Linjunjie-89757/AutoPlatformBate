@@ -52,7 +52,7 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
 </script>
 
 <template>
-  <div :class="['api-param-table', props.variant === 'query' ? 'is-query' : 'is-header', { 'is-advanced': showAdvancedParams }]">
+  <div :class="['api-param-table', props.variant === 'query' ? 'is-query' : 'is-header', { 'is-advanced': showAdvancedParams, 'is-params': props.batchTarget === 'query' }]">
     <div class="api-param-header">
       <span class="api-drag-cell"></span>
       <span class="api-checkbox-cell">
@@ -103,7 +103,7 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
       <el-input v-model="row.key" class="api-param-key-input" @input="emit('dirty')" />
       <template v-if="showAdvancedParams">
         <span class="api-param-type-cell">
-          <select :value="row.paramType ?? 'string'" class="api-param-type-select" @change="onParamTypeChange(row, $event)">
+          <select :value="row.paramType ?? 'string'" class="api-param-type-select app-native-select" @change="onParamTypeChange(row, $event)">
             <option v-for="option in normalizedParamTypeOptions" :key="option" :value="option">
               {{ option }}
             </option>
@@ -326,6 +326,7 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
 
 .api-link-button {
   justify-self: center;
+  min-width: 60px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -333,6 +334,7 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
   opacity: 0;
   transition: opacity 0.15s ease, color 0.15s ease;
 }
@@ -554,5 +556,81 @@ function setNullableNumber(row: ApiKeyValueInput, key: 'minLength' | 'maxLength'
 .api-param-row:hover .api-row-remove,
 .api-row-remove:focus-visible {
   opacity: 1;
+}
+
+.api-param-table.is-params {
+  height: auto;
+  min-height: 0;
+  max-height: 100%;
+  flex: 0 1 auto;
+}
+
+.api-param-table.is-params.is-advanced .api-param-header,
+.api-param-table.is-params.is-advanced .api-param-row {
+  min-width: 100%;
+  grid-template-columns:
+    0
+    36px
+    minmax(160px, 1.2fr)
+    84px
+    minmax(160px, 1.2fr)
+    48px
+    48px
+    120px
+    minmax(160px, 1.2fr)
+    64px;
+}
+
+.api-param-table.is-params .api-param-header {
+  height: 33px;
+  min-height: 33px;
+}
+
+.api-param-table.is-params .api-param-row {
+  height: 37.5px;
+  min-height: 37.5px;
+}
+
+.api-param-table.is-params .api-figma-checkbox {
+  width: 14px;
+  height: 14px;
+}
+
+.api-param-table.is-params .api-add-row {
+  height: 34px;
+  min-height: 34px;
+}
+
+/* Headers and Cookies use the same compact table rhythm as Params without its advanced columns. */
+.api-param-table.is-header,
+.api-param-table.is-query:not(.is-params) {
+  height: auto;
+  min-height: 0;
+  max-height: 100%;
+  flex: 0 1 auto;
+}
+
+.api-param-table.is-header .api-param-header,
+.api-param-table.is-query:not(.is-params) .api-param-header {
+  height: 33px;
+  min-height: 33px;
+}
+
+.api-param-table.is-header .api-param-row,
+.api-param-table.is-query:not(.is-params) .api-param-row {
+  height: 37.5px;
+  min-height: 37.5px;
+}
+
+.api-param-table.is-header .api-figma-checkbox,
+.api-param-table.is-query:not(.is-params) .api-figma-checkbox {
+  width: 14px;
+  height: 14px;
+}
+
+.api-param-table.is-header .api-add-row,
+.api-param-table.is-query:not(.is-params) .api-add-row {
+  height: 34px;
+  min-height: 34px;
 }
 </style>

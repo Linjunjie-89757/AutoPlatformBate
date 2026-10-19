@@ -148,10 +148,10 @@ defineExpose({
 .api-interface-sidebar__actions {
   display: flex;
   box-sizing: border-box;
-  height: 45.5px;
+  height: 52px;
   align-items: center;
   gap: 7px;
-  padding: 10.5px;
+  padding: 12px 12px 8px;
   background: #ffffff;
 }
 
@@ -184,11 +184,15 @@ defineExpose({
 }
 
 .api-sidebar-secondary {
-  width: 65.25px;
-  padding: 0 11.5px;
+  width: 67px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
   border-color: var(--app-border);
   background: #ffffff;
   color: var(--app-text-secondary);
+  font-size: 13px;
+  line-height: 20px;
 }
 
 .api-sidebar-primary:hover {
@@ -227,14 +231,14 @@ defineExpose({
 .api-sidebar-search {
   position: relative;
   box-sizing: border-box;
-  height: 35px;
-  padding: 0 10.5px 7px;
+  height: 40px;
+  padding: 0 12px 8px;
   background: #ffffff;
 }
 
 .api-sidebar-search :deep(.el-input__wrapper) {
-  height: 28px;
-  min-height: 28px;
+  height: 32px;
+  min-height: 32px;
   padding-left: 10px;
   border-radius: 7px;
   background: #ffffff;
@@ -310,7 +314,7 @@ defineExpose({
   min-height: 0;
   flex: 1 1 662.5px;
   overflow: auto;
-  padding: 3.5px 0 8px;
+  padding: 8px 0;
   background: #ffffff;
 }
 

@@ -1,9 +1,12 @@
 package com.company.autoplatform.execution;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.common.NotFoundException;
+import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.workspace.WorkspaceEntity;
+import com.company.autoplatform.workspace.WorkspaceMapper;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Service;
@@ -16,12 +19,18 @@ import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.Objects;
 import java.util.List;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class ReportShareDomainService {
 
     private final ReportShareMapper reportShareMapper;
+    private final ReportMapper reportMapper;
+    private final WorkspaceMapper workspaceMapper;
     private final ExecutionReportDomainService reportDomainService;
     private final ExecutionReportAttachmentSupport reportAttachmentSupport;
     private final ReportAttachmentStorageService reportAttachmentStorageService;
@@ -30,12 +39,16 @@ public class ReportShareDomainService {
 
     public ReportShareDomainService(
             ReportShareMapper reportShareMapper,
+            ReportMapper reportMapper,
+            WorkspaceMapper workspaceMapper,
             ExecutionReportDomainService reportDomainService,
             ExecutionReportAttachmentSupport reportAttachmentSupport,
             ReportAttachmentStorageService reportAttachmentStorageService,
             WorkspaceService workspaceService
     ) {
         this.reportShareMapper = reportShareMapper;
+        this.reportMapper = reportMapper;
+        this.workspaceMapper = workspaceMapper;
         this.reportDomainService = reportDomainService;
         this.reportAttachmentSupport = reportAttachmentSupport;
         this.reportAttachmentStorageService = reportAttachmentStorageService;
@@ -61,28 +74,55 @@ public class ReportShareDomainService {
         return toCreated(entity, rawToken);
     }
 
-    public List<ReportShareSummaryResponse> listShares(String workspaceCode, Long reportId) {
+    public PageResponse<ReportShareSummaryResponse> listShares(
+            String workspaceCode,
+            Long reportId,
+            Long pageNo,
+            Long pageSize
+    ) {
         LambdaQueryWrapper<ReportShareEntity> query = new LambdaQueryWrapper<>();
         String normalized = WorkspaceScope.normalize(workspaceCode);
+        long safePageNo = pageNo == null || pageNo <= 0 ? 1 : pageNo;
+        long safePageSize = pageSize == null || pageSize <= 0 ? 10 : Math.min(pageSize, 100);
         if (!WorkspaceScope.isAll(normalized)) {
             WorkspaceEntity workspace = workspaceService.requireReadableWorkspace(normalized);
             query.eq(ReportShareEntity::getWorkspaceId, workspace.getId());
         } else if (!workspaceService.isPlatformAdmin()) {
             List<Long> workspaceIds = workspaceService.listReadableWorkspaceIds();
             if (workspaceIds.isEmpty()) {
-                return List.of();
+                return PageResponse.of(List.of(), 0, safePageNo, safePageSize);
             }
             query.in(ReportShareEntity::getWorkspaceId, workspaceIds);
         }
         if (reportId != null) {
             query.eq(ReportShareEntity::getReportId, reportId);
         }
-        return reportShareMapper.selectList(query
-                        .orderByDesc(ReportShareEntity::getCreatedAt)
-                        .orderByDesc(ReportShareEntity::getId))
-                .stream()
-                .map(this::toSummary)
+        Page<ReportShareEntity> page = reportShareMapper.selectPage(
+                new Page<>(safePageNo, safePageSize),
+                query.orderByDesc(ReportShareEntity::getCreatedAt)
+                        .orderByDesc(ReportShareEntity::getId)
+        );
+        List<ReportShareEntity> records = page.getRecords();
+        List<Long> reportIds = records.stream()
+                .map(ReportShareEntity::getReportId)
+                .filter(Objects::nonNull)
+                .distinct()
                 .toList();
+        Map<Long, ReportEntity> reports = reportIds.isEmpty() ? Map.of() : reportMapper.selectBatchIds(reportIds)
+                .stream()
+                .collect(Collectors.toMap(ReportEntity::getId, Function.identity()));
+        List<Long> workspaceIds = records.stream()
+                .map(ReportShareEntity::getWorkspaceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, WorkspaceEntity> workspaces = workspaceIds.isEmpty() ? Map.of() : workspaceMapper.selectBatchIds(workspaceIds)
+                .stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity()));
+        List<ReportShareSummaryResponse> items = records.stream()
+                .map(share -> toSummary(share, reports, workspaces))
+                .toList();
+        return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
     }
 
     @Transactional
@@ -191,6 +231,27 @@ public class ReportShareDomainService {
     private ReportShareSummaryResponse toSummary(ReportShareEntity share) {
         ReportEntity report = reportDomainService.requireReport(share.getReportId());
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(share.getWorkspaceId());
+        return toSummary(share, report, workspace);
+    }
+
+    private ReportShareSummaryResponse toSummary(
+            ReportShareEntity share,
+            Map<Long, ReportEntity> reports,
+            Map<Long, WorkspaceEntity> workspaces
+    ) {
+        ReportEntity report = reports.get(share.getReportId());
+        WorkspaceEntity workspace = workspaces.get(share.getWorkspaceId());
+        if (report == null || workspace == null) {
+            throw new NotFoundException("Report share target not found");
+        }
+        return toSummary(share, report, workspace);
+    }
+
+    private ReportShareSummaryResponse toSummary(
+            ReportShareEntity share,
+            ReportEntity report,
+            WorkspaceEntity workspace
+    ) {
         return new ReportShareSummaryResponse(
                 share.getId(),
                 report.getId(),

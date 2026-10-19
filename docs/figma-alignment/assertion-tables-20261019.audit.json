@@ -1,0 +1,143 @@
+{
+  "date": "2026-10-19",
+  "status": "partial-alignment",
+  "scope": "API assertion tables and shared detail header",
+  "differences": [
+    {
+      "id": "AS-01",
+      "status": "resolved",
+      "element": "底部添加项",
+      "before": "响应头、变量右上角；响应体工具栏右侧",
+      "target": "表格最后一行，全宽、8px 12px、灰色，hover 蓝色",
+      "actual": "五种表格变体均已移至底部；实测高35px，hover rgb(22,93,255)",
+      "evidence": "measurements-final.json / interactions.json"
+    },
+    {
+      "id": "AS-02",
+      "status": "resolved",
+      "element": "表格圆角",
+      "before": "7px",
+      "target": "12px",
+      "actual": "五种表格均12px",
+      "evidence": "measurements-final.json"
+    },
+    {
+      "id": "AS-03",
+      "status": "resolved",
+      "element": "单元格留白",
+      "before": "行级10.5px，输入框二次padding",
+      "target": "每列左右12px，表头和字段起点一致",
+      "actual": "行padding 6px 0，控件margin 0 12px，输入wrapper padding 0；运行前后截图复核",
+      "evidence": "响应头断言.png / current-final-响应头断言 1.png"
+    },
+    {
+      "id": "AS-04",
+      "status": "resolved",
+      "element": "操作按钮",
+      "before": "20px，复制蓝色",
+      "target": "24×24px，复制灰色，间隔2px",
+      "actual": "24×24px，复制#86909c；hover #f3f4f6；删除hover #fef2f2",
+      "evidence": "measurements-final.json / interactions.json"
+    },
+    {
+      "id": "AS-05",
+      "status": "resolved",
+      "element": "比较条件宽度",
+      "before": "固定72px，长条件截断",
+      "target": "容纳真实业务的六字条件",
+      "actual": "列148px，控件124px，文字可用94px；长度大于等于/长度小于等于均未截断",
+      "evidence": "body-JSONPath.png / long-condition.png / interactions.json"
+    },
+    {
+      "id": "AS-06",
+      "status": "resolved",
+      "element": "名称输入框",
+      "before": "28px/7px圆角",
+      "target": "用户批准的最新Make 32px/8px",
+      "actual": "六类断言均32px/8px",
+      "evidence": "measurements-final.json"
+    },
+    {
+      "id": "AS-07",
+      "status": "resolved",
+      "element": "开关",
+      "before": "28×15px",
+      "target": "用户批准的处理器统一32×16px",
+      "actual": "左侧和详情开关32×16px；详情关闭同步左侧，重新开启恢复",
+      "evidence": "measurements-final.json / interactions.json"
+    },
+    {
+      "id": "AS-08",
+      "status": "resolved",
+      "element": "详情滚动",
+      "before": "名称与正文一起滚动",
+      "target": "名称固定，正文独立滚动，切换断言重置",
+      "actual": "正文scrollTop180时名称y保持222；切换后scrollTop0",
+      "evidence": "interactions.json / fixed-header-scroll.png"
+    },
+    {
+      "id": "AS-A1",
+      "status": "accepted-deviation",
+      "element": "旧Design与最新Make的尺寸冲突",
+      "actual": "878:1399是旧脚本断言截图，名称28/7、开关28×14；本次使用32/8、32×16",
+      "acceptance": {
+        "type": "user-decision",
+        "reference": "用户在本次前的审查建议后回复：可以 对齐这些差异；该建议明确包含名称32px/8px和开关32×16。"
+      }
+    },
+    {
+      "id": "AS-A2",
+      "status": "accepted-deviation",
+      "element": "删除默认红色",
+      "actual": "Make默认灰色、hover红色；Vue始终红色",
+      "acceptance": {
+        "type": "user-decision",
+        "reference": "此前用户确定接口表格删除按钮默认红色的统一风格，本次未撤销。"
+      }
+    },
+    {
+      "id": "AS-A3",
+      "status": "accepted-deviation",
+      "element": "删除最后一项保留空白行",
+      "actual": "Make可删除至零项；Vue沿用真实编辑器的至少一行规则",
+      "acceptance": {
+        "type": "business-constraint",
+        "reference": "src/widgets/api-interface-workspace/lib/useApiAssertionWorkspace.ts 中 removeAssertionItem 的 fallback 规则；本次只做视觉修改。"
+      }
+    },
+    {
+      "id": "AS-A4",
+      "status": "accepted-deviation",
+      "element": "响应体行快速提取",
+      "actual": "保留真实业务入口，未运行禁用，有响应启用并可打开抽屉",
+      "acceptance": {
+        "type": "user-decision",
+        "reference": "用户明确更正：操作列的快速提取按钮我没说去掉啊；本次仍保留。"
+      }
+    }
+  ],
+  "unverified": [
+    {
+      "id": "AS-U1",
+      "item": "Make在线预览当前状态",
+      "reason": "连接用户Chrome CDP 9222超时；本轮未刷新或重启用户浏览器，因此不能确认在线预览与所给本地源码一致。"
+    },
+    {
+      "id": "AS-U2",
+      "item": "表格变体Design/Make/Vue同视口配对与叠加验收",
+      "reason": "本轮成功取得878:1399脚本断言节点和截图，节点不含三组表格；其余表格依据最新Make源码实施，未取得本轮配对预览截图，不声明像素级完整验收。"
+    },
+    {
+      "id": "AS-U3",
+      "item": "XPath、Regex、变量非空实际值的完整后端执行",
+      "reason": "本次真实本地HTTP验证覆盖响应头application/json和JSONPath [\\\"0\\\"]；XPath/Regex及未配置变量在当前值列仅检查了—的布局，不代表其表达式解析与变量解析已完成回归。"
+    }
+  ],
+  "counts": {
+    "resolved": 8,
+    "accepted": 4,
+    "unresolved": 0,
+    "unverified": 3
+  },
+  "evidenceRoot": "output/playwright/assertion-fix-20261019/"
+}

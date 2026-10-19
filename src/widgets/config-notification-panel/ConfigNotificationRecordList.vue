@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 
@@ -77,7 +78,7 @@ function formatTime(value: string | null) {
 <template>
   <div class="notification-toolbar notification-record-toolbar">
     <el-input v-model="keyword" class="notification-toolbar__search" clearable placeholder="搜索渠道、事件或关联对象" :prefix-icon="Search" />
-    <el-select v-model="statusFilter" class="notification-record-result-filter" clearable placeholder="全部结果" @change="emit('statusChange')">
+    <el-select :suffix-icon="AppSelectChevron" v-model="statusFilter" class="notification-record-result-filter" clearable placeholder="全部结果" @change="emit('statusChange')">
       <el-option v-for="item in notificationSendStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
     </el-select>
   </div>

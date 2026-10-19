@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed } from 'vue'
 
 import {
@@ -130,7 +131,7 @@ function addFiles(files: File[]) {
 
         <div class="case-defect-editor-drawer__field">
           <span class="is-required">严重级别</span>
-          <el-select v-model="form.severity" :disabled="saving" placeholder="请选择严重级别">
+          <el-select :suffix-icon="AppSelectChevron" v-model="form.severity" :disabled="saving" placeholder="请选择严重级别">
             <el-option
               v-for="item in defectSeverityOptions"
               :key="item.value"

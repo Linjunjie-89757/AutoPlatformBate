@@ -1,6 +1,7 @@
 package com.company.autoplatform.execution;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.NotFoundException;
@@ -8,14 +9,20 @@ import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.platformadmin.PlatformTaskCompletionNotificationService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
+import com.company.autoplatform.workspace.WorkspaceMapper;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class ExecutionTaskDomainService {
@@ -27,6 +34,7 @@ public class ExecutionTaskDomainService {
 
     private final TaskMapper taskMapper;
     private final ReportMapper reportMapper;
+    private final WorkspaceMapper workspaceMapper;
     private final WorkspaceService workspaceService;
     private final PlatformTaskCompletionNotificationService taskNotificationService;
 
@@ -34,11 +42,13 @@ public class ExecutionTaskDomainService {
     public ExecutionTaskDomainService(
             TaskMapper taskMapper,
             ReportMapper reportMapper,
+            WorkspaceMapper workspaceMapper,
             WorkspaceService workspaceService,
             PlatformTaskCompletionNotificationService taskNotificationService
     ) {
         this.taskMapper = taskMapper;
         this.reportMapper = reportMapper;
+        this.workspaceMapper = workspaceMapper;
         this.workspaceService = workspaceService;
         this.taskNotificationService = taskNotificationService;
     }
@@ -46,9 +56,18 @@ public class ExecutionTaskDomainService {
     ExecutionTaskDomainService(
             TaskMapper taskMapper,
             ReportMapper reportMapper,
+            WorkspaceMapper workspaceMapper,
             WorkspaceService workspaceService
     ) {
-        this(taskMapper, reportMapper, workspaceService, null);
+        this(taskMapper, reportMapper, workspaceMapper, workspaceService, null);
+    }
+
+    ExecutionTaskDomainService(
+            TaskMapper taskMapper,
+            ReportMapper reportMapper,
+            WorkspaceService workspaceService
+    ) {
+        this(taskMapper, reportMapper, null, workspaceService, null);
     }
 
     public PageResponse<TaskSummaryResponse> listTasks(
@@ -87,23 +106,59 @@ public class ExecutionTaskDomainService {
             query.eq(TaskEntity::getEngineType, normalizeEngineType(normalizedEngineType));
         }
 
-        if (pageNo == null && pageSize == null) {
-            var allItems = taskMapper.selectList(query.orderByAsc(TaskEntity::getId)).stream()
-                    .map(this::toTaskSummary)
-                    .toList();
-            return new PageResponse<>(allItems, allItems.size());
-        }
-
         long safePageNo = pageNo == null || pageNo <= 0 ? 1 : pageNo;
         long safePageSize = pageSize == null || pageSize <= 0 ? DEFAULT_TASK_PAGE_SIZE : pageSize;
         Page<TaskEntity> page = taskMapper.selectPage(
                 new Page<>(safePageNo, safePageSize),
                 query.orderByAsc(TaskEntity::getId)
         );
-        var items = page.getRecords().stream()
-                .map(this::toTaskSummary)
+        List<TaskEntity> records = page.getRecords();
+        List<Long> workspaceIds = records.stream()
+                .map(TaskEntity::getWorkspaceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, WorkspaceEntity> workspaces = workspaceMapper == null || workspaceIds.isEmpty()
+                ? Map.of()
+                : workspaceMapper.selectBatchIds(workspaceIds).stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity(), (first, ignored) -> first, LinkedHashMap::new));
+        var items = records.stream()
+                .map(task -> toTaskSummary(task, workspaces))
                 .toList();
         return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
+    }
+
+    public TaskStatsResponse taskStats(String workspaceCode) {
+        String normalized = WorkspaceScope.normalize(workspaceCode);
+        QueryWrapper<TaskEntity> query = new QueryWrapper<>();
+        if (!WorkspaceScope.isAll(normalized)) {
+            WorkspaceEntity workspace = workspaceService.requireReadableWorkspace(normalized);
+            query.eq("workspace_id", workspace.getId());
+        } else if (!workspaceService.isPlatformAdmin()) {
+            List<Long> workspaceIds = workspaceService.listReadableWorkspaceIds();
+            if (workspaceIds.isEmpty()) {
+                return new TaskStatsResponse(0, 0, 0);
+            }
+            query.in("workspace_id", workspaceIds);
+        }
+
+        List<Map<String, Object>> rows = taskMapper.selectMaps(query
+                .select("task_status", "COUNT(*) AS task_count")
+                .groupBy("task_status"));
+        long total = 0;
+        long running = 0;
+        long failed = 0;
+        for (Map<String, Object> row : rows) {
+            long count = numericValue(row, "task_count");
+            total += count;
+            String status = String.valueOf(row.get("task_status")).toUpperCase();
+            if ("RUNNING".equals(status)) {
+                running += count;
+            } else if ("FAILED".equals(status)) {
+                failed += count;
+            }
+        }
+        return new TaskStatsResponse(total, running, failed);
     }
 
     public TaskDetailResponse getTask(Long id, String workspaceCode) {
@@ -186,6 +241,18 @@ public class ExecutionTaskDomainService {
 
     private TaskSummaryResponse toTaskSummary(TaskEntity item) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(item.getWorkspaceId());
+        return toTaskSummary(item, workspace);
+    }
+
+    private TaskSummaryResponse toTaskSummary(TaskEntity item, Map<Long, WorkspaceEntity> workspaces) {
+        WorkspaceEntity workspace = workspaces.get(item.getWorkspaceId());
+        if (workspace == null) {
+            throw new NotFoundException("任务所属工作空间不存在");
+        }
+        return toTaskSummary(item, workspace);
+    }
+
+    private TaskSummaryResponse toTaskSummary(TaskEntity item, WorkspaceEntity workspace) {
         return new TaskSummaryResponse(
                 item.getId(),
                 item.getTaskName(),
@@ -267,6 +334,25 @@ public class ExecutionTaskDomainService {
             throw new BadRequestException("鏃犳晥鐨勪换鍔＄姸鎬? " + status);
         }
         return normalized;
+    }
+
+    private long numericValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value == null) {
+            value = row.entrySet().stream()
+                    .filter(entry -> key.equalsIgnoreCase(String.valueOf(entry.getKey())))
+                    .map(Map.Entry::getValue)
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return value == null ? 0 : Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 
     private String normalizeLogSource(String logSource) {

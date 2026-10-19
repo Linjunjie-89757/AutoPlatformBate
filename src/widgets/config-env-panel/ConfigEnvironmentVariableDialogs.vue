@@ -91,7 +91,7 @@ const emit = defineEmits<{
           <label><span>变量名 <b>*</b></span><input v-model="localEditor.name" class="is-mono" type="text" placeholder="例：API_GATEWAY_URL"></label>
           <label><span>值</span><input v-model="localEditor.value" :type="localEditor.sensitive ? 'password' : 'text'" :placeholder="localEditor.valueType === 'secret' ? '输入后将按敏感变量存储' : ''"></label>
           <div class="figma-env-modal__row figma-env-modal__row--local-variable">
-            <label><span>类型</span><select v-model="localEditor.valueType" @change="emit('syncLocalType')"><option v-for="option in localTypeOptions" :key="option" :value="option">{{ option }}</option></select></label>
+            <label><span>类型</span><select class="app-native-select" v-model="localEditor.valueType" @change="emit('syncLocalType')"><option v-for="option in localTypeOptions" :key="option" :value="option">{{ option }}</option></select></label>
             <div class="figma-env-modal__default"><span>敏感变量</span><AppSwitch v-model="localEditor.sensitive" label="敏感变量" /></div>
           </div>
           <label><span>说明</span><input v-model="localEditor.description" type="text" placeholder="简要描述此变量的用途"></label>

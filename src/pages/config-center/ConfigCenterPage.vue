@@ -180,14 +180,6 @@ function countMetricDetail(metric: CountMetric | null) {
   return metric ? `${metric.enabled} 启用 · ${metric.total - metric.enabled} 停用` : metricUnavailableText()
 }
 
-async function loadCountMetric(
-  loadAll: () => Promise<{ total: number }>,
-  loadEnabled: () => Promise<{ total: number }>,
-): Promise<CountMetric> {
-  const [all, enabled] = await Promise.all([loadAll(), loadEnabled()])
-  return { total: all.total, enabled: enabled.total }
-}
-
 function settledValue<T>(result: PromiseSettledResult<T>) {
   return result.status === 'fulfilled' ? result.value : null
 }
@@ -199,14 +191,7 @@ async function loadOverview() {
   overviewErrorMessage.value = ''
 
   const results = await Promise.allSettled([
-    loadCountMetric(
-      () => configApi.getSettingsDbConnections(requestedWorkspaceCode),
-      () => configApi.getSettingsDbConnections(requestedWorkspaceCode, { status: 1 }),
-    ),
-    loadCountMetric(
-      () => configApi.getSettingsEnvs(requestedWorkspaceCode),
-      () => configApi.getSettingsEnvs(requestedWorkspaceCode, { status: 1 }),
-    ),
+    configApi.getSettingsOverview(requestedWorkspaceCode),
     localRunnerApi.getRunnerNodes().then(items => ({
       total: items.length,
       online: items.filter(item => !item.offline).length,
@@ -216,27 +201,20 @@ async function loadOverview() {
       enabled: items.filter(item => item.status === 1).length,
       keyConfigured: items.filter(item => item.apiKeyConfigured).length,
     })),
-    loadCountMetric(
-      () => configApi.getNotificationChannels(requestedWorkspaceCode),
-      () => configApi.getNotificationChannels(requestedWorkspaceCode, { status: 1 }),
-    ),
-    loadCountMetric(
-      () => configApi.getSettingsParams(requestedWorkspaceCode),
-      () => configApi.getSettingsParams(requestedWorkspaceCode, { status: 1 }),
-    ),
   ] as const)
 
   if (requestId !== overviewRequestId) return
 
+  const settingsOverview = settledValue(results[0])
   overviewMetrics.value = {
-    database: settledValue(results[0]),
-    environment: settledValue(results[1]),
-    runner: settledValue(results[2]),
-    ai: settledValue(results[3]),
-    notification: settledValue(results[4]),
-    parameter: settledValue(results[5]),
+    database: settingsOverview?.database ?? null,
+    environment: settingsOverview?.environment ?? null,
+    runner: settledValue(results[1]),
+    ai: settledValue(results[2]),
+    notification: settingsOverview?.notification ?? null,
+    parameter: settingsOverview?.parameter ?? null,
   }
-  const labels = ['数据库连接', '测试环境', 'Runner 节点', 'AI 连接', '通知渠道', '变量配置']
+  const labels = ['配置统计', 'Runner 节点', 'AI 连接']
   const failedLabels = results
     .map((result, index) => result.status === 'rejected' ? labels[index] : '')
     .filter(Boolean)

@@ -1,19 +1,26 @@
 package com.company.autoplatform.execution;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.autoplatform.common.BadRequestException;
 import com.company.autoplatform.common.JsonUtils;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.workspace.WorkspaceEntity;
+import com.company.autoplatform.workspace.WorkspaceMapper;
 import com.company.autoplatform.workspace.WorkspaceScope;
 import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Service
@@ -27,6 +34,7 @@ public class ExecutionReportDomainService {
     private final ExecutionTaskDomainService taskDomainService;
     private final ReportMapper reportMapper;
     private final ReportAttachmentMapper reportAttachmentMapper;
+    private final WorkspaceMapper workspaceMapper;
     private final WorkspaceService workspaceService;
     private final ReportAttachmentStorageService reportAttachmentStorageService;
 
@@ -34,12 +42,14 @@ public class ExecutionReportDomainService {
             ExecutionTaskDomainService taskDomainService,
             ReportMapper reportMapper,
             ReportAttachmentMapper reportAttachmentMapper,
+            WorkspaceMapper workspaceMapper,
             WorkspaceService workspaceService,
             ReportAttachmentStorageService reportAttachmentStorageService
     ) {
         this.taskDomainService = taskDomainService;
         this.reportMapper = reportMapper;
         this.reportAttachmentMapper = reportAttachmentMapper;
+        this.workspaceMapper = workspaceMapper;
         this.workspaceService = workspaceService;
         this.reportAttachmentStorageService = reportAttachmentStorageService;
     }
@@ -93,23 +103,59 @@ public class ExecutionReportDomainService {
             query.eq(ReportEntity::getLogSource, normalizeLogSource(normalizedLogSource));
         }
 
-        if (pageNo == null && pageSize == null) {
-            var allItems = reportMapper.selectList(query.orderByDesc(ReportEntity::getId)).stream()
-                    .map(this::toReportSummary)
-                    .toList();
-            return new PageResponse<>(allItems, allItems.size());
-        }
-
         long safePageNo = pageNo == null || pageNo <= 0 ? 1 : pageNo;
         long safePageSize = pageSize == null || pageSize <= 0 ? DEFAULT_REPORT_PAGE_SIZE : pageSize;
         Page<ReportEntity> page = reportMapper.selectPage(
                 new Page<>(safePageNo, safePageSize),
                 query.orderByDesc(ReportEntity::getId)
         );
-        var items = page.getRecords().stream()
-                .map(this::toReportSummary)
+        List<ReportEntity> records = page.getRecords();
+        List<Long> workspaceIds = records.stream()
+                .map(ReportEntity::getWorkspaceId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, WorkspaceEntity> workspaces = workspaceIds.isEmpty()
+                ? Map.of()
+                : workspaceMapper.selectBatchIds(workspaceIds).stream()
+                .collect(Collectors.toMap(WorkspaceEntity::getId, Function.identity(), (first, ignored) -> first, LinkedHashMap::new));
+        var items = records.stream()
+                .map(report -> toReportSummary(report, workspaces))
                 .toList();
         return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
+    }
+
+    public ReportStatsResponse reportStats(String workspaceCode) {
+        String normalized = WorkspaceScope.normalize(workspaceCode);
+        QueryWrapper<ReportEntity> query = new QueryWrapper<>();
+        if (!WorkspaceScope.isAll(normalized)) {
+            WorkspaceEntity workspace = workspaceService.requireReadableWorkspace(normalized);
+            query.eq("workspace_id", workspace.getId());
+        } else if (!workspaceService.isPlatformAdmin()) {
+            List<Long> workspaceIds = workspaceService.listReadableWorkspaceIds();
+            if (workspaceIds.isEmpty()) {
+                return new ReportStatsResponse(0, 0, 0);
+            }
+            query.in("workspace_id", workspaceIds);
+        }
+
+        List<Map<String, Object>> rows = reportMapper.selectMaps(query
+                .select("result", "COUNT(*) AS report_count")
+                .groupBy("result"));
+        long total = 0;
+        long success = 0;
+        long failed = 0;
+        for (Map<String, Object> row : rows) {
+            long count = numericValue(row, "report_count");
+            total += count;
+            String result = String.valueOf(row.get("result")).toUpperCase();
+            if ("SUCCESS".equals(result)) {
+                success += count;
+            } else if ("FAILED".equals(result)) {
+                failed += count;
+            }
+        }
+        return new ReportStatsResponse(total, success, failed);
     }
 
     public ReportDetailResponse getReport(Long id, String workspaceCode) {
@@ -214,6 +260,18 @@ public class ExecutionReportDomainService {
 
     private ReportSummaryResponse toReportSummary(ReportEntity item) {
         WorkspaceEntity workspace = workspaceService.requireWorkspaceById(item.getWorkspaceId());
+        return toReportSummary(item, workspace);
+    }
+
+    private ReportSummaryResponse toReportSummary(ReportEntity item, Map<Long, WorkspaceEntity> workspaces) {
+        WorkspaceEntity workspace = workspaces.get(item.getWorkspaceId());
+        if (workspace == null) {
+            throw new NotFoundException("报告所属工作空间不存在");
+        }
+        return toReportSummary(item, workspace);
+    }
+
+    private ReportSummaryResponse toReportSummary(ReportEntity item, WorkspaceEntity workspace) {
         return new ReportSummaryResponse(
                 item.getId(),
                 item.getTaskId(),
@@ -317,5 +375,24 @@ public class ExecutionReportDomainService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private long numericValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value == null) {
+            value = row.entrySet().stream()
+                    .filter(entry -> key.equalsIgnoreCase(String.valueOf(entry.getKey())))
+                    .map(Map.Entry::getValue)
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return value == null ? 0 : Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
     }
 }

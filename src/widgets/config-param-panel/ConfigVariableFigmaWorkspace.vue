@@ -12,8 +12,9 @@ import {
   FileUp,
   Globe2,
   Layers,
-  LoaderCircle,
+  Link2,
   LockKeyhole,
+  Monitor,
   Pencil,
   Plus,
   Search,
@@ -23,6 +24,7 @@ import {
   X,
   XCircle,
   Zap,
+  Smartphone,
 } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 
@@ -52,24 +54,20 @@ interface VariableTypeOption {
 const sidebarKeyword = ref('')
 const variableKeyword = ref('')
 const typeFilter = ref('ALL')
-const statusFilter = ref('ALL')
 const setsExpanded = ref(true)
 
 const variableTypeOptions: VariableTypeOption[] = [
   { value: 'TEXT', label: '文本' },
   { value: 'NUMBER', label: '整数' },
   { value: 'BOOLEAN', label: '布尔' },
-  { value: 'SECRET', label: '密钥' },
   { value: 'JSON', label: 'JSON' },
 ]
 
 const variableSetTypeOptions = [
-  { value: 'API_VARIABLE_SET', label: '接口自动化' },
-  { value: 'WEB_UI_VARIABLE_SET', label: 'Web UI' },
-  { value: 'APP_UI_VARIABLE_SET', label: 'APP 自动化' },
-  { value: 'BUSINESS', label: '业务公共' },
-  { value: 'PAYMENT_CHANNEL', label: '支付渠道' },
-]
+  { value: 'API', label: 'API' },
+  { value: 'WEB_UI', label: 'Web UI' },
+  { value: 'APP', label: 'APP' },
+] as const
 
 let resetVariableRevealState = () => {}
 const {
@@ -115,16 +113,12 @@ const filteredVariables = computed(() => {
       const matchesKeyword = !keyword || `${variable.name} ${variable.value} ${variable.description}`.toLowerCase().includes(keyword)
       const type = effectiveVariableType(variable)
       const matchesType = typeFilter.value === 'ALL' || type === typeFilter.value
-      const matchesStatus = statusFilter.value === 'ALL'
-        || (statusFilter.value === 'ENABLED' && variable.enabled !== false)
-        || (statusFilter.value === 'DISABLED' && variable.enabled === false)
-      return matchesKeyword && matchesType && matchesStatus
+      return matchesKeyword && matchesType
     })
 })
 
 function effectiveVariableType(variable: WebUiVariableItem): VariableType {
-  if (variable.sensitive || variable.valueType === 'SECRET') return 'SECRET'
-  return variable.valueType || 'TEXT'
+  return variable.valueType === 'SECRET' ? 'TEXT' : (variable.valueType || 'TEXT')
 }
 
 function variableTypeLabel(variable: WebUiVariableItem) {
@@ -132,8 +126,21 @@ function variableTypeLabel(variable: WebUiVariableItem) {
   return variableTypeOptions.find(item => item.value === type)?.label || '文本'
 }
 
-function variableSetTypeLabel(item: ParamSetItem) {
-  return variableSetTypeOptions.find(option => option.value === item.paramType)?.label || '其他'
+function variableSetScopeLabels(item: ParamSetItem) {
+  return variableSetForm(item).applicableTypes
+    .map(scope => variableSetTypeOptions.find(option => option.value === scope)?.label || scope)
+}
+
+function variableSetScopeClass(scope: string) {
+  if (scope === 'API') return 'is-api'
+  if (scope === 'Web UI') return 'is-web-ui'
+  return 'is-app'
+}
+
+function variableSetScopeIcon(scope: string) {
+  if (scope === 'API') return Link2
+  if (scope === 'Web UI') return Monitor
+  return Smartphone
 }
 
 function variableSetForm(item: ParamSetItem) {
@@ -169,7 +176,6 @@ const {
 resetVariableRevealState = () => {
   variableKeyword.value = ''
   typeFilter.value = 'ALL'
-  statusFilter.value = 'ALL'
   resetRevealedVariables()
 }
 
@@ -208,6 +214,7 @@ const {
   variableSetDialogVisible,
   variableSetDraft,
   variableSetError,
+  toggleVariableSetScope,
 } = useConfigVariableSetActions({
   activeParam,
   cloneVariable,
@@ -244,7 +251,7 @@ watch(() => props.workspaceCode, () => {
     <aside class="figma-variable__sidebar">
       <label class="figma-variable__sidebar-search">
         <Search :size="12" />
-        <input v-model="sidebarKeyword" type="search" placeholder="搜索">
+        <input v-model="sidebarKeyword" type="search" placeholder="搜索变量和函数…">
       </label>
 
       <nav class="figma-variable__nav" aria-label="变量配置导航">
@@ -254,7 +261,7 @@ watch(() => props.workspaceCode, () => {
           :class="{ 'is-active': isGlobalView }"
           @click="selectView('global')"
         >
-          <Globe2 :size="14" />
+          <span class="figma-variable__nav-icon"><Globe2 :size="14" /></span>
           <span>全局变量</span>
           <small>{{ globalParam.id < 0 ? 0 : variableSetForm(globalParam).variables.length }}</small>
         </button>
@@ -280,13 +287,13 @@ watch(() => props.workspaceCode, () => {
               :class="{ 'is-active': activeView === item.id }"
               @click="selectView(item.id)"
             >
-              <span class="figma-variable__set-icon"><Layers :size="9" /></span>
+              <span class="figma-variable__set-icon"><Layers :size="14" /></span>
               <span class="figma-variable__set-copy">
                 <strong>{{ item.paramName }}</strong>
                 <small>
-                  <span>—</span>
+                  <span v-for="scope in variableSetScopeLabels(item)" :key="scope" class="figma-variable__scope-tag" :class="variableSetScopeClass(scope)">{{ scope }}</span>
                   <em v-if="variableSetSensitiveCount(item)">· {{ variableSetSensitiveCount(item) }} 敏感</em>
-                  <em v-else-if="item.status === 0" class="is-disabled">· 停用</em>
+                  <span v-else-if="item.status === 0" class="figma-variable__scope-tag is-disabled">停用</span>
                 </small>
               </span>
             </button>
@@ -296,7 +303,7 @@ watch(() => props.workspaceCode, () => {
 
         <div class="figma-variable__builtin-link">
           <button type="button" :class="{ 'is-active': isBuiltinView }" @click="selectView('builtin')">
-            <Zap :size="14" />
+            <span class="figma-variable__nav-icon"><Zap :size="14" /></span>
             <span>内置 &amp; 动态函数</span>
           </button>
         </div>
@@ -309,12 +316,7 @@ watch(() => props.workspaceCode, () => {
         <button type="button" @click="loadParams()">重试</button>
       </div>
 
-      <div v-if="loading" class="figma-variable__loading">
-        <LoaderCircle :size="24" />
-        <span>正在加载变量配置...</span>
-      </div>
-
-      <template v-else-if="!isBuiltinView">
+      <template v-if="!isBuiltinView">
         <header v-if="isGlobalView" class="figma-variable__global-head">
           <div class="figma-variable__title-block">
             <h2>全局变量</h2>
@@ -327,14 +329,9 @@ watch(() => props.workspaceCode, () => {
           </div>
           <div class="figma-variable__filters">
             <label><Search :size="12" /><input v-model="variableKeyword" type="search" placeholder="搜索变量名或描述"></label>
-            <select v-model="typeFilter">
+            <select class="app-native-select" v-model="typeFilter">
               <option value="ALL">全部类型</option>
               <option v-for="item in variableTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-            </select>
-            <select v-model="statusFilter">
-              <option value="ALL">全部状态</option>
-              <option value="ENABLED">已启用</option>
-              <option value="DISABLED">已停用</option>
             </select>
             <p>共 {{ activeVariables.length }} 个变量，其中 {{ sensitiveCount }} 个敏感</p>
           </div>
@@ -346,7 +343,9 @@ watch(() => props.workspaceCode, () => {
             <div>
               <div class="figma-variable__set-title-row">
                 <h2>{{ activeParam.paramName }}</h2>
-                <span>{{ variableSetTypeLabel(activeParam) }}</span>
+                <span v-for="scope in variableSetScopeLabels(activeParam)" :key="scope" class="figma-variable__scope-tag" :class="variableSetScopeClass(scope)">
+                  <component :is="variableSetScopeIcon(scope)" :size="9" />{{ scope }}
+                </span>
                 <span v-if="activeParam.status === 0" class="is-disabled">已停用</span>
               </div>
               <p>
@@ -366,50 +365,55 @@ watch(() => props.workspaceCode, () => {
           </div>
           <div class="figma-variable__filters">
             <label><Search :size="12" /><input v-model="variableKeyword" type="search" placeholder="搜索变量名"></label>
-            <select v-model="typeFilter">
+            <select class="app-native-select" v-model="typeFilter">
               <option value="ALL">全部类型</option>
               <option v-for="item in variableTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-            </select>
-            <select v-model="statusFilter">
-              <option value="ALL">全部状态</option>
-              <option value="ENABLED">已启用</option>
-              <option value="DISABLED">已停用</option>
             </select>
           </div>
         </header>
 
-        <div class="figma-variable__table-wrap" :class="{ 'is-empty': !filteredVariables.length }">
+        <div v-if="loading" class="figma-variable__skeleton">
+          <div v-for="row in 3" :key="row" class="figma-variable__skeleton-row">
+            <i /><i /><i /><i />
+          </div>
+        </div>
+
+        <div v-else class="figma-variable__table-wrap" :class="{ 'is-empty': !filteredVariables.length }">
           <table v-if="filteredVariables.length" class="figma-variable__table">
             <colgroup>
-              <col class="is-name"><col class="is-value"><col class="is-type"><col class="is-description"><col class="is-status"><col v-if="isGlobalView" class="is-updated"><col class="is-actions">
+              <col class="is-name"><col class="is-value"><col class="is-type"><col class="is-description"><col class="is-status"><col class="is-actions">
             </colgroup>
             <thead>
               <tr>
-                <th>变量名</th><th>值</th><th>类型</th><th>说明</th><th>状态</th><th v-if="isGlobalView">更新</th><th>操作</th>
+                <th>变量名</th><th>值</th><th>类型</th><th>说明</th><th>启用</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in filteredVariables" :key="`${row.variable.name}-${row.index}`">
                 <td>
-                  <span class="figma-variable__name" :class="{ 'is-secret': effectiveVariableType(row.variable) === 'SECRET' }">
-                    <LockKeyhole v-if="effectiveVariableType(row.variable) === 'SECRET'" :size="11" />
+                  <span class="figma-variable__name" :class="{ 'is-secret': row.variable.sensitive || row.variable.valueType === 'SECRET' }">
+                    <LockKeyhole v-if="row.variable.sensitive || row.variable.valueType === 'SECRET'" :size="11" />
                     {{ row.variable.name }}
                   </span>
                 </td>
                 <td>
                   <span class="figma-variable__value">
                     {{ displayedVariableValue(row.variable) }}
-                    <button v-if="effectiveVariableType(row.variable) === 'SECRET'" type="button" @click="toggleReveal(row.variable)">
+                    <button v-if="row.variable.sensitive || row.variable.valueType === 'SECRET'" type="button" @click="toggleReveal(row.variable)">
                       <component :is="revealedVariables.has(row.variable.name) ? EyeOff : Eye" :size="11" />
                     </button>
                   </span>
                 </td>
-                <td><span class="figma-variable__type" :class="`is-${effectiveVariableType(row.variable).toLowerCase()}`">{{ variableTypeLabel(row.variable) }}</span></td>
+                <td>
+                  <div class="figma-variable__type-list">
+                    <span class="figma-variable__type" :class="`is-${effectiveVariableType(row.variable).toLowerCase()}`">{{ variableTypeLabel(row.variable) }}</span>
+                    <span v-if="row.variable.sensitive || row.variable.valueType === 'SECRET'" class="figma-variable__sensitive-tag">敏感</span>
+                  </div>
+                </td>
                 <td><span class="figma-variable__description">{{ row.variable.description || '—' }}</span></td>
                 <td>
                   <AppSwitch :model-value="row.variable.enabled !== false" size="regular" :disabled="saving" :label="row.variable.enabled === false ? '启用变量' : '停用变量'" @update:model-value="toggleVariable(row.index)" />
                 </td>
-                <td v-if="isGlobalView"><span class="figma-variable__updated">—<small>暂无记录</small></span></td>
                 <td>
                   <div class="figma-variable__row-actions">
                     <button type="button" aria-label="编辑变量" @click="openEditVariable(row.index)"><Pencil :size="13" /></button>
@@ -441,26 +445,24 @@ watch(() => props.workspaceCode, () => {
         <section class="figma-variable-modal__card is-variable" role="dialog" aria-modal="true">
           <header><h3>{{ editingVariableIndex >= 0 ? '编辑变量' : '添加变量' }}</h3><button type="button" @click="variableDialogVisible = false"><X :size="16" /></button></header>
           <div class="figma-variable-modal__body">
-            <label class="figma-variable-modal__field"><span>变量名 <em>*</em></span><input v-model="variableDraft.name" placeholder="例：API_BASE_URL（仅大写字母、数字、下划线）"></label>
-            <div class="figma-variable-modal__variable-options">
-              <div class="figma-variable-modal__option-column">
-                <span>类型</span>
-                <div class="figma-variable-modal__type-options">
-                  <button v-for="item in variableTypeOptions" :key="item.value" type="button" :class="{ 'is-active': effectiveVariableType(variableDraft) === item.value }" @click="selectVariableType(item.value)">{{ item.label }}</button>
-                </div>
-              </div>
-              <div class="figma-variable-modal__option-column is-sensitive">
-                <span>敏感变量</span>
-                <div><AppSwitch v-model="variableDraft.sensitive" size="regular" label="敏感变量" /><small>{{ variableDraft.sensitive ? '值将在界面上隐藏显示' : '值明文可见' }}</small></div>
+            <label class="figma-variable-modal__field"><span>变量名 <em>*</em></span><input v-model="variableDraft.name" placeholder="例：API_BASE_URL（建议大写字母、数字、下划线）"></label>
+            <div class="figma-variable-modal__field">
+              <span>类型</span>
+              <div class="figma-variable-modal__type-options">
+                <button v-for="item in variableTypeOptions" :key="item.value" type="button" :class="{ 'is-active': effectiveVariableType(variableDraft) === item.value }" @click="selectVariableType(item.value)">{{ item.label }}</button>
               </div>
             </div>
-            <label class="figma-variable-modal__field"><span>值 <em>*</em></span><textarea v-if="effectiveVariableType(variableDraft) === 'JSON'" v-model="variableDraft.value" rows="5" placeholder="请输入 JSON"></textarea><input v-else v-model="variableDraft.value" :type="variableDraft.sensitive ? 'password' : 'text'" placeholder="变量值"></label>
+            <div class="figma-variable-modal__field"><span>值 <em>*</em></span><textarea v-if="effectiveVariableType(variableDraft) === 'JSON'" v-model="variableDraft.value" rows="5" placeholder="{&#10;  &quot;key&quot;: &quot;value&quot;&#10;}"></textarea><input v-else v-model="variableDraft.value" :type="variableDraft.sensitive ? 'password' : 'text'" :placeholder="variableDraft.sensitive ? '输入后将以掩码存储' : '变量值'"></div>
+            <div class="figma-variable-modal__sensitive-row">
+              <div><strong>敏感变量</strong><small>开启后值将掩码显示，可通过眼睛图标临时查看，导出时不含明文</small></div>
+              <AppSwitch v-model="variableDraft.sensitive" size="compact" label="敏感变量" />
+            </div>
             <label class="figma-variable-modal__field"><span>说明</span><input v-model="variableDraft.description" placeholder="描述该变量的用途、注意事项"></label>
-            <div class="figma-variable-modal__enabled"><span>是否启用</span><AppSwitch :model-value="variableDraft.enabled !== false" size="regular" label="是否启用" @update:model-value="variableDraft.enabled = Boolean($event)" /><small>{{ variableDraft.enabled === false ? '已停用' : '已启用' }}</small></div>
+            <div class="figma-variable-modal__enabled"><span>是否启用</span><AppSwitch :model-value="variableDraft.enabled !== false" size="compact" label="是否启用" @update:model-value="variableDraft.enabled = Boolean($event)" /><small>{{ variableDraft.enabled === false ? '已停用' : '已启用' }}</small></div>
             <div v-if="variableDraft.sensitive" class="figma-variable-modal__warning"><AlertTriangle :size="13" /><span>敏感变量保存后，值将不再以明文展示。如需修改请重新输入。</span></div>
             <p v-if="variableError" class="figma-variable-modal__error">{{ variableError }}</p>
           </div>
-          <footer><button type="button" @click="variableDialogVisible = false">取消</button><button type="button" class="is-primary" :disabled="saving" @click="submitVariable">{{ saving ? '保存中...' : '保存变量' }}</button></footer>
+          <footer><button type="button" @click="variableDialogVisible = false">取消</button><button type="button" class="is-primary" :disabled="saving || !variableDraft.name.trim() || !variableDraft.value.trim()" @click="submitVariable">{{ saving ? '保存中...' : '保存变量' }}</button></footer>
         </section>
       </div>
 
@@ -469,12 +471,12 @@ watch(() => props.workspaceCode, () => {
           <header><h3>{{ variableSetDialogMode === 'create' ? '创建变量集' : '编辑变量集' }}</h3><button type="button" @click="variableSetDialogVisible = false"><X :size="16" /></button></header>
           <div class="figma-variable-modal__body">
             <label class="figma-variable-modal__field"><span>变量集名称 <em>*</em></span><input v-model="variableSetDraft.paramName" placeholder="请输入变量集名称"></label>
-            <div class="figma-variable-modal__field"><span>适用范围</span><div class="figma-variable-modal__scope-options"><button v-for="item in variableSetTypeOptions" :key="item.value" type="button" :class="{ 'is-active': variableSetDraft.paramType === item.value }" @click="variableSetDraft.paramType = item.value">{{ item.label }}</button></div></div>
-            <label class="figma-variable-modal__field"><span>描述</span><textarea v-model="variableSetDraft.description" rows="4" placeholder="说明变量集的用途和包含内容"></textarea></label>
-            <div class="figma-variable-modal__enabled"><span>是否启用</span><AppSwitch :model-value="variableSetDraft.status === 1" size="regular" label="是否启用" @update:model-value="variableSetDraft.status = $event ? 1 : 0" /><small>{{ variableSetDraft.status === 1 ? '已启用' : '已停用' }}</small></div>
+            <div class="figma-variable-modal__field"><span>适用自动化类型 <em>*</em></span><small>决定此变量集可被哪些自动化类型的测试环境绑定，支持多选</small><div class="figma-variable-modal__scope-options"><button v-for="item in variableSetTypeOptions" :key="item.value" type="button" :class="{ 'is-active': variableSetDraft.applicableTypes.includes(item.value) }" @click="toggleVariableSetScope(item.value)">{{ item.label }}</button></div><p v-if="!variableSetDraft.applicableTypes.length" class="figma-variable-modal__error">请至少选择一种适用类型</p></div>
+            <label class="figma-variable-modal__field"><span>描述</span><textarea v-model="variableSetDraft.description" rows="3" placeholder="说明变量集的用途和包含内容"></textarea></label>
+            <div class="figma-variable-modal__enabled"><span>是否启用</span><AppSwitch :model-value="variableSetDraft.status === 1" size="compact" label="是否启用" @update:model-value="variableSetDraft.status = $event ? 1 : 0" /><small>{{ variableSetDraft.status === 1 ? '已启用' : '已停用' }}</small></div>
             <p v-if="variableSetError" class="figma-variable-modal__error">{{ variableSetError }}</p>
           </div>
-          <footer><button type="button" @click="variableSetDialogVisible = false">取消</button><button type="button" class="is-primary" :disabled="saving" @click="submitVariableSet">{{ saving ? '保存中...' : (variableSetDialogMode === 'create' ? '创建变量集' : '保存更改') }}</button></footer>
+          <footer><button type="button" @click="variableSetDialogVisible = false">取消</button><button type="button" class="is-primary" :disabled="saving || !variableSetDraft.paramName.trim() || !variableSetDraft.applicableTypes.length" @click="submitVariableSet">{{ saving ? '保存中...' : (variableSetDialogMode === 'create' ? '创建变量集' : '保存更改') }}</button></footer>
         </section>
       </div>
 
@@ -560,7 +562,8 @@ watch(() => props.workspaceCode, () => {
   --variable-cyan: #0fc6c2;
   display: flex;
   overflow: hidden;
-  height: calc(100dvh - 128px);
+  height: calc(100dvh - 136px);
+  margin: 8px 2px 0;
   min-width: 0;
   min-height: 438px;
   border: 1px solid #e5e6eb;
@@ -575,8 +578,8 @@ button { cursor: pointer; }
 .figma-variable__sidebar {
   display: flex;
   overflow: hidden;
-  width: 240px;
-  flex: 0 0 240px;
+  width: 256px;
+  flex: 0 0 256px;
   flex-direction: column;
   border-right: 1px solid #e5e6eb;
   background: #fff;
@@ -586,58 +589,77 @@ button { cursor: pointer; }
   position: relative;
   display: flex;
   align-items: center;
-  margin: 14px 10.5px 7px;
+  margin: 14px 12px 10px;
   color: #86909c;
 }
 
 .figma-variable__sidebar-search svg { position: absolute; left: 8.75px; pointer-events: none; }
 .figma-variable__sidebar-search input {
-  width: 100%; height: 28px; padding: 0 10px 0 28px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; color: #1d2129; font-size: 13px;
+  width: 100%; height: 34px; padding: 0 10px 0 32px; border: 1px solid #e5e6eb; border-radius: 8px; outline: 0; color: #1d2129; background: #fafbfe; font-size: 12px;
 }
 .figma-variable__sidebar-search input:focus { border-color: var(--variable-primary); box-shadow: 0 0 0 2px rgba(22, 93, 255, .08); }
+.figma-variable__scope-tag { display: inline-flex; align-items: center; padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: 600; line-height: 13.5px; }
+.figma-variable__scope-tag.is-api { background: #e8f3ff; color: var(--variable-primary); }
+.figma-variable__scope-tag.is-web-ui { background: #e8fffe; color: var(--variable-cyan); }
+.figma-variable__scope-tag.is-app { background: #f5e8ff; color: var(--variable-purple); }
+.figma-variable__scope-tag.is-disabled { background: #f2f3f5; color: #c9cdd4; }
 
-.figma-variable__nav { display: flex; flex: 1; min-height: 0; flex-direction: column; padding: 3.5px 7px; }
+.figma-variable__nav { display: flex; overflow-y: auto; flex: 1; min-height: 0; flex-direction: column; padding: 4px 8px 16px; scrollbar-color: #c9cdd4 transparent; scrollbar-width: thin; }
 .figma-variable__nav button { border: 0; background: transparent; color: #4e5969; }
+.figma-variable__nav-icon { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: rgba(22, 93, 255, .07); color: var(--variable-primary); }
+.figma-variable__nav button.is-active::before { position: absolute; top: 6px; bottom: 6px; left: 0; width: 3px; border-radius: 0 2px 2px 0; background: currentColor; content: ''; }
 .figma-variable__nav-global {
-  display: flex; width: 100%; height: 34px; align-items: center; gap: 7px; padding: 0 10.5px; border-radius: 7px !important; font-size: 13px; font-weight: 500; text-align: left;
+  position: relative; display: flex; width: 100%; min-height: 42px; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px !important; font-size: 13px; font-weight: 400; text-align: left;
 }
-.figma-variable__nav-global span { flex: 1; }
-.figma-variable__nav-global small { color: #c9cdd4; font-size: 11px; }
-.figma-variable__nav-global.is-active { background: rgba(22, 93, 255, .06); color: var(--variable-primary); }
+.figma-variable__nav-global > span:not(.figma-variable__nav-icon) { flex: 1; }
+.figma-variable__nav-global small { color: #c9cdd4; font-size: 11px; line-height: 16.5px; }
+.figma-variable__nav-global.is-active { background: rgba(22, 93, 255, .05); color: var(--variable-primary); font-weight: 600; }
+.figma-variable__nav-global.is-active .figma-variable__nav-icon { background: var(--variable-primary); color: #fff; }
 
-.figma-variable__sets { display: flex; min-height: 0; flex: 1; flex-direction: column; padding-top: 3.5px; }
-.figma-variable__sets > header { display: flex; height: 28px; align-items: center; padding: 0 7px; }
-.figma-variable__sets > header button:first-child { display: flex; flex: 1; align-items: center; gap: 3.5px; padding: 0; color: #c9cdd4; }
+.figma-variable__sets { display: flex; min-height: 0; flex: 0 0 auto; flex-direction: column; padding-top: 8px; }
+.figma-variable__sets > header { display: flex; height: 28px; align-items: center; padding: 0 4px 0 6px; }
+.figma-variable__sets > header button:first-child { display: flex; flex: 1; align-items: center; gap: 4px; padding: 3px 4px; color: #c9cdd4; }
 .figma-variable__sets > header button:first-child span { font-size: 11px; font-weight: 600; letter-spacing: .275px; text-transform: uppercase; }
 .figma-variable__sets > header button:first-child small { font-size: 11px; font-weight: 500; }
-.figma-variable__sets > header button:last-child { display: grid; width: 17.5px; height: 17.5px; place-items: center; border-radius: 3.5px; }
+.figma-variable__sets > header button:last-child { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 6px; }
 .figma-variable__sets > header button:last-child:hover { background: #f2f3f5; color: var(--variable-primary); }
-.figma-variable__set-list { display: grid; overflow-y: auto; min-height: 0; align-content: start; gap: 1.75px; padding-top: 3.5px; scrollbar-color: #c9cdd4 transparent; scrollbar-width: thin; }
-.figma-variable__set-item { display: flex; width: 100%; min-height: 52px; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px !important; text-align: left; }
+.figma-variable__set-list { display: grid; min-height: 0; align-content: start; gap: 2px; padding-top: 0; }
+.figma-variable__set-item { position: relative; display: flex; width: 100%; min-height: 42px; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px !important; text-align: left; }
 .figma-variable__set-item:hover { background: #f4f6fa; }
 .figma-variable__set-item.is-active { background: rgba(22, 93, 255, .06); }
-.figma-variable__set-icon { display: grid; width: 16px; height: 16px; flex: 0 0 auto; place-items: center; border-radius: 4px; background: #e5e6eb; color: #86909c; }
+.figma-variable__set-item.is-active::before { position: absolute; top: 6px; bottom: 6px; left: 0; width: 3px; border-radius: 0 2px 2px 0; background: var(--variable-primary); content: ''; }
+.figma-variable__set-icon { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: rgba(22, 93, 255, .07); color: var(--variable-primary); }
 .figma-variable__set-item.is-active .figma-variable__set-icon { background: var(--variable-primary); color: #fff; }
 .figma-variable__set-copy { display: grid; min-width: 0; gap: 1px; }
-.figma-variable__set-copy strong { overflow: hidden; color: #1d2129; font-size: 12px; font-weight: 500; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.figma-variable__set-item.is-active .figma-variable__set-copy strong { color: var(--variable-primary); }
-.figma-variable__set-copy small { color: #c9cdd4; font-size: 10px; font-style: normal; line-height: 15px; }
+.figma-variable__set-copy strong { overflow: hidden; color: #4e5969; font-size: 13px; font-weight: 400; line-height: 19.5px; text-overflow: ellipsis; white-space: nowrap; }
+.figma-variable__set-item.is-active .figma-variable__set-copy strong { color: var(--variable-primary); font-weight: 600; }
+.figma-variable__set-copy small { display: flex; height: 18px; align-items: center; gap: 3px; padding-top: 2px; color: #c9cdd4; font-size: 9px; font-style: normal; line-height: 13.5px; }
 .figma-variable__set-copy em { color: var(--variable-danger); font-style: normal; }
 .figma-variable__set-copy em.is-disabled { color: #c9cdd4; }
 .figma-variable__set-empty { margin: 10px; color: #c9cdd4; font-size: 11px; text-align: center; }
-.figma-variable__builtin-link { flex: 0 0 auto; margin-top: 7px; padding-top: 7px; border-top: 1px solid #e5e6eb; }
-.figma-variable__builtin-link button { display: flex; width: 100%; height: 34px; align-items: center; gap: 7px; padding: 0 10.5px; border-radius: 7px; font-size: 13px; font-weight: 500; }
+.figma-variable__builtin-link { flex: 0 0 auto; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e6eb; }
+.figma-variable__builtin-link button { position: relative; display: flex; width: 100%; min-height: 42px; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 400; }
 .figma-variable__builtin-link button:hover { background: #f4f6fa; }
-.figma-variable__builtin-link button.is-active { background: rgba(120, 22, 255, .06); color: var(--variable-purple); }
+.figma-variable__builtin-link button .figma-variable__nav-icon { background: rgba(120, 22, 255, .07); color: var(--variable-purple); }
+.figma-variable__builtin-link button.is-active { background: rgba(120, 22, 255, .06); color: var(--variable-purple); font-weight: 600; }
+.figma-variable__builtin-link button.is-active .figma-variable__nav-icon { background: var(--variable-purple); color: #fff; }
 
 .figma-variable__main { overflow: auto; min-width: 0; flex: 1; }
 .figma-variable__error { display: flex; align-items: center; justify-content: space-between; margin: 12px 17.5px; padding: 8px 10px; border: 1px solid #ffb4b4; border-radius: 7px; background: #ffe8e8; color: #c92a2a; font-size: 12px; }
 .figma-variable__error button { border: 0; background: transparent; color: inherit; font-weight: 600; }
-.figma-variable__loading { display: flex; min-height: 300px; align-items: center; justify-content: center; gap: 8px; color: #86909c; font-size: 13px; }
-.figma-variable__loading svg { animation: figma-variable-spin 1s linear infinite; }
+.figma-variable__skeleton { overflow: hidden; margin: 0 20px 20px; border: 1px solid #e5e6eb; border-radius: 11px; background: #fff; }
+.figma-variable__skeleton::before { display: block; height: 37px; border-bottom: 1px solid #e5e6eb; background: #fafafa; content: ''; }
+.figma-variable__skeleton-row { display: grid; height: 46px; grid-template-columns: 22% 20% 13% 1fr; align-items: center; gap: 16px; padding: 0 16px; border-bottom: 1px solid #e5e6eb; background: #fff; }
+.figma-variable__skeleton-row:last-child { border-bottom: 0; }
+.figma-variable__skeleton-row i { display: block; height: 12px; border-radius: 3px; background: #e5e6eb; }
+.figma-variable__skeleton-row i:nth-child(1) { width: 72%; }
+.figma-variable__skeleton-row i:nth-child(2) { width: 78%; }
+.figma-variable__skeleton-row i:nth-child(3) { width: 64%; }
+.figma-variable__skeleton-row i:nth-child(4) { width: 78%; }
 
-.figma-variable__global-head, .figma-variable__set-head { display: grid; grid-template-columns: 1fr auto; gap: 10.5px; padding: 17.5px 17.5px 10.5px; border-bottom: 1px solid transparent; background: transparent; }
+.figma-variable__global-head, .figma-variable__set-head { display: grid; grid-template-columns: 1fr auto; gap: 10.5px; padding: 20px 20px 12px; border-bottom: 1px solid transparent; background: transparent; }
 .figma-variable__set-head { border-bottom-color: #e5e6eb; background: #fff; }
+.figma-variable__set-head { gap: 12px; }
 .figma-variable__title-block h2, .figma-variable__set-title-row h2 { margin: 0; color: #1d2129; font-size: 15px; font-weight: 600; line-height: 22.5px; }
 .figma-variable__title-block p { margin: 1.75px 0 0; color: #86909c; font-size: 12px; line-height: 18px; }
 .figma-variable__head-actions { display: flex; align-items: flex-start; gap: 8px; }
@@ -651,10 +673,12 @@ button { cursor: pointer; }
 .figma-variable__icon-button.is-danger:hover { background: #ffe8e8; color: var(--variable-danger); }
 
 .figma-variable__filters { display: flex; grid-column: 1 / -1; align-items: center; gap: 7px; padding-top: 10.5px; }
+.figma-variable__set-head .figma-variable__filters { padding-top: 0; }
 .figma-variable__filters label { position: relative; display: flex; align-items: center; color: #86909c; }
 .figma-variable__filters label svg { position: absolute; left: 8.75px; pointer-events: none; }
-.figma-variable__filters input { width: 220px; height: 28px; padding: 0 10.5px 0 28px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; color: #1d2129; font-size: 13px; }
-.figma-variable__filters select { width: 110px; height: 28px; padding: 0 26px 0 12px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; background: #fff; color: #1d2129; font-size: 13px; }
+.figma-variable__filters input { width: 220px; height: 32px; padding: 0 10.5px 0 28px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; color: #1d2129; font-size: 13px; }
+.figma-variable__set-head .figma-variable__filters input { width: 200px; }
+.figma-variable__filters select { width: 110px; height: 32px; padding: 0 26px 0 12px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; background: #fff; color: #1d2129; font-size: 13px; }
 .figma-variable__filters select:nth-of-type(2) { width: 100px; }
 .figma-variable__filters p { margin: 0 0 0 auto; color: #86909c; font-size: 12px; }
 
@@ -665,29 +689,31 @@ button { cursor: pointer; }
 .figma-variable__set-title-row > span { padding: 1.75px 7px; border-radius: 999px; background: #f2f3f5; color: #86909c; font-size: 11px; line-height: 16.5px; }
 .figma-variable__set-title-row > span.is-disabled { background: #ffe8e8; color: var(--variable-danger); }
 .figma-variable__set-heading p { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 3.5px 0 0; color: #86909c; font-size: 12px; line-height: 18px; }
+.figma-variable__set-heading p { margin-top: 6px; }
 .figma-variable__set-heading p i { color: #c9cdd4; font-style: normal; }
 .figma-variable__set-heading p .is-danger { color: var(--variable-danger); }
 
-.figma-variable__table-wrap { margin: 0 17.5px 17.5px; overflow: hidden; border: 1px solid #e5e6eb; border-radius: 11px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
+.figma-variable__table-wrap { margin: 0 20px 20px; overflow: hidden; border: 1px solid #e5e6eb; border-radius: 11px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
 .figma-variable__table-wrap.is-empty { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-.figma-variable__set-head + .figma-variable__table-wrap { margin-top: 17.5px; }
+.figma-variable__set-head + .figma-variable__table-wrap { margin-top: 20px; }
 .figma-variable__table { width: 100%; min-width: 980px; border-collapse: collapse; table-layout: fixed; }
-.figma-variable__table col.is-name { width: 24%; }
-.figma-variable__table col.is-value { width: 22%; }
-.figma-variable__table col.is-type { width: 8%; }
-.figma-variable__table col.is-description { width: 22%; }
-.figma-variable__table col.is-status { width: 6%; }
-.figma-variable__table col.is-updated { width: 12%; }
-.figma-variable__table col.is-actions { width: 72px; }
-.figma-variable__table th { height: 34.5px; padding: 0 14px; background: #fafafa; color: #86909c; font-size: 11px; font-weight: 600; letter-spacing: .275px; text-align: left; text-transform: uppercase; }
+.figma-variable__table col.is-name { width: 22%; }
+.figma-variable__table col.is-value { width: 20%; }
+.figma-variable__table col.is-type { width: 13%; }
+.figma-variable__table col.is-description { width: 30%; }
+.figma-variable__table col.is-status { width: 7%; }
+.figma-variable__table col.is-actions { width: 8%; }
+.figma-variable__table th { height: 37px; padding: 0 16px; background: #fafafa; color: #86909c; font-size: 11px; font-weight: 600; letter-spacing: .275px; text-align: left; text-transform: uppercase; }
 .figma-variable__table th:last-child { text-align: right; }
-.figma-variable__table td { height: 46.5px; padding: 0 14px; border-top: 1px solid #e5e6eb; color: #4e5969; font-size: 12px; }
+.figma-variable__table td { height: 46px; padding: 0 16px; border-top: 1px solid #e5e6eb; color: #4e5969; font-size: 12px; }
 .figma-variable__name { display: inline-flex; align-items: center; gap: 7px; color: #1d2129; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; font-weight: 600; }
 .figma-variable__name.is-secret { color: #1d2129; }
-.figma-variable__name.is-secret svg { color: var(--variable-danger); }
+.figma-variable__name.is-secret svg { color: var(--variable-warning); }
 .figma-variable__value { display: flex; min-width: 0; align-items: center; gap: 5.25px; overflow: hidden; font-family: 'JetBrains Mono', Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .figma-variable__value button { display: grid; width: 17.5px; height: 17.5px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 3.5px; background: transparent; color: #c9cdd4; }
 .figma-variable__type { display: inline-flex; padding: .5px 5.25px; border-radius: 3.5px; font-size: 11px; font-weight: 600; line-height: 16.5px; }
+.figma-variable__type-list { display: flex; align-items: center; gap: 5.25px; }
+.figma-variable__sensitive-tag { display: inline-flex; padding: .5px 5.25px; border-radius: 3.5px; background: #fff3e8; color: var(--variable-warning); font-size: 10px; line-height: 16.5px; }
 .figma-variable__type.is-text { background: #e8f3ff; color: var(--variable-primary); }
 .figma-variable__type.is-number { background: #e8fffe; color: var(--variable-cyan); }
 .figma-variable__type.is-boolean { background: #f5e8ff; color: var(--variable-purple); }
@@ -705,8 +731,6 @@ button { cursor: pointer; }
 .figma-variable__empty { display: flex; min-height: 250px; align-items: center; justify-content: center; flex-direction: column; gap: 10.5px; color: #c9cdd4; }
 .figma-variable__empty p { margin: 0; color: #86909c; font-size: 13px; }
 
-@keyframes figma-variable-spin { to { transform: rotate(360deg); } }
-
 @media (max-width: 1100px) {
   .figma-variable__sidebar { width: 220px; flex-basis: 220px; }
   .figma-variable__set-heading p span:first-child { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -720,25 +744,33 @@ button { cursor: pointer; }
 .figma-variable-modal__card.is-set { width: 480px; }
 .figma-variable-modal__card.is-delete { width: 420px; }
 .figma-variable-modal__card.is-import { width: 580px; }
-.figma-variable-modal__card > header { display: flex; min-height: 54.5px; flex: 0 0 auto; align-items: center; justify-content: space-between; padding: 14px 24px; border-bottom: 1px solid #e5e6eb; }
+.figma-variable-modal__card > header { display: flex; min-height: 54.5px; flex: 0 0 auto; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e5e6eb; }
 .figma-variable-modal__card > header h3 { margin: 0; color: #1d2129; font-size: 15px; font-weight: 600; line-height: 22.5px; }
 .figma-variable-modal__card > header button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #c9cdd4; }
 .figma-variable-modal__body { display: grid; overflow: auto; gap: 16px; padding: 20px 24px; }
-.figma-variable-modal__field { display: grid; gap: 6px; color: #4e5969; font-size: 12px; }
+.figma-variable-modal__field { display: grid; gap: 6px; color: #4e5969; font-size: 12px; line-height: 18px; }
 .figma-variable-modal__field > span, .figma-variable-modal__option-column > span { color: #4e5969; font-size: 12px; font-weight: 500; }
 .figma-variable-modal__field em { color: #f53f3f; font-style: normal; }
-.figma-variable-modal__field input, .figma-variable-modal__field textarea { width: 100%; min-height: 32px; padding: 6px 10.5px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; color: #1d2129; font-size: 13px; resize: vertical; }
+.figma-variable-modal__field input, .figma-variable-modal__field textarea { width: 100%; min-height: 32px; padding: 6px 10.5px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; color: #1d2129; font-size: 13px; line-height: 19.5px; resize: vertical; }
+.figma-variable-modal__field input { height: 32px; }
+.figma-variable-modal__field textarea { height: 72px; min-height: 72px; }
 .figma-variable-modal__field input:focus, .figma-variable-modal__field textarea:focus { border-color: #165dff; box-shadow: 0 0 0 2px rgba(22, 93, 255, .08); }
 .figma-variable-modal__variable-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .figma-variable-modal__option-column { display: grid; align-content: start; gap: 6px; }
 .figma-variable-modal__option-column.is-sensitive { gap: 8px; }
 .figma-variable-modal__option-column.is-sensitive > div { display: flex; align-items: center; gap: 8px; }
-.figma-variable-modal__option-column small, .figma-variable-modal__enabled small { color: #86909c; font-size: 12px; }
+.figma-variable-modal__option-column small, .figma-variable-modal__enabled small, .figma-variable-modal__sensitive-row small { color: #86909c; font-size: 11px; line-height: 16.5px; }
 .figma-variable-modal__type-options, .figma-variable-modal__scope-options { display: flex; flex-wrap: wrap; gap: 7px; }
-.figma-variable-modal__type-options button { min-height: 26px; padding: 4px 10px; border: 1.5px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 11px; font-weight: 600; }
-.figma-variable-modal__scope-options button { min-height: 28px; padding: 6px 12px; border: 1.5px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 12px; font-weight: 500; }
+.figma-variable-modal__type-options button { min-height: 26px; padding: 4px 10px; border: 1.5px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 11px; font-weight: 600; line-height: 16.5px; }
+.figma-variable-modal__scope-options button { min-height: 40px; flex: 1; padding: 10px 12px; border: 1.5px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; font-size: 12px; font-weight: 500; }
 .figma-variable-modal__type-options button.is-active, .figma-variable-modal__scope-options button.is-active { border-color: #165dff; background: rgba(22, 93, 255, .03); color: #165dff; }
-.figma-variable-modal__enabled { display: flex; align-items: center; gap: 7px; color: #4e5969; font-size: 12px; }
+.figma-variable-modal__enabled { display: flex; align-items: center; gap: 7px; color: #4e5969; font-size: 12px; line-height: 18px; }
+.figma-variable-modal__enabled .app-switch--compact, .figma-variable-modal__sensitive-row .app-switch--compact { width: 32px; height: 16px; line-height: 16px; }
+.figma-variable-modal__enabled .app-switch--compact .el-switch__core, .figma-variable-modal__sensitive-row .app-switch--compact .el-switch__core { min-width: 32px; width: 32px; height: 16px; }
+.figma-variable-modal__enabled .app-switch--compact .el-switch__action, .figma-variable-modal__sensitive-row .app-switch--compact .el-switch__action { width: 12px; height: 12px; }
+.figma-variable-modal__sensitive-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fafafa; }
+.figma-variable-modal__sensitive-row > div { display: grid; gap: 2px; min-width: 0; }
+.figma-variable-modal__sensitive-row strong { color: #1d2129; font-size: 13px; font-weight: 500; line-height: 19.5px; }
 .figma-variable-modal__warning { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid #ffd595; border-radius: 7px; background: #fff3e8; color: #ff7d00; font-size: 12px; line-height: 18px; }
 .figma-variable-modal__warning svg { flex: 0 0 auto; margin-top: 1px; }
 .figma-variable-modal__error { margin: 0; color: #f53f3f; font-size: 11px; line-height: 16.5px; }
@@ -756,7 +788,7 @@ button { cursor: pointer; }
 .figma-variable-modal__danger-box p { margin: 4px 0 0; color: #f53f3f; font-size: 12px; line-height: 18px; }
 .figma-variable-modal__danger-box span { display: block; margin-top: 4px; color: #4e5969; font-size: 12px; line-height: 18px; }
 
-.figma-variable-import__steps { display: flex; min-height: 67px; flex: 0 0 auto; align-items: flex-start; padding: 12px 24px 0; border-bottom: 1px solid #e5e6eb; background: #fafafa; }
+.figma-variable-import__steps { display: flex; min-height: 68px; flex: 0 0 auto; align-items: flex-start; padding: 12px 24px 0; border-bottom: 1px solid #e5e6eb; background: #fafafa; }
 .figma-variable-import__step { display: flex; width: 48px; flex: 0 0 48px; align-items: center; flex-direction: column; gap: 4px; }
 .figma-variable-import__step > span { display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: #e5e6eb; color: #86909c; font-size: 11px; font-weight: 700; }
 .figma-variable-import__step small { color: #c9cdd4; font-size: 10px; line-height: 15px; white-space: nowrap; }

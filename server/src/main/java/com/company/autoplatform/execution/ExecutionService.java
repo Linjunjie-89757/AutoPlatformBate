@@ -34,6 +34,10 @@ public class ExecutionService {
         return taskDomainService.listTasks(workspaceCode, keyword, status, engineType, pageNo, pageSize);
     }
 
+    public TaskStatsResponse taskStats(String workspaceCode) {
+        return taskDomainService.taskStats(workspaceCode);
+    }
+
     public TaskDetailResponse getTask(Long id, String workspaceCode) {
         return taskDomainService.getTask(id, workspaceCode);
     }
@@ -63,6 +67,10 @@ public class ExecutionService {
             Long pageSize
     ) {
         return reportDomainService.listReports(workspaceCode, keyword, result, logSource, pageNo, pageSize);
+    }
+
+    public ReportStatsResponse reportStats(String workspaceCode) {
+        return reportDomainService.reportStats(workspaceCode);
     }
 
     public ReportDetailResponse getReport(Long id, String workspaceCode) {

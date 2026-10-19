@@ -378,14 +378,14 @@ const emit = defineEmits<{
 }
 
 .api-response-tabs button.is-active {
-  border-bottom-color: var(--app-primary);
-  color: var(--app-primary);
+  border-bottom-color: var(--app-warning);
+  color: var(--app-warning);
   font-weight: 500;
 }
 
 .api-response-tabs button:not(.is-active):hover {
   background: transparent;
-  color: var(--app-text-secondary);
+  color: var(--app-text-muted);
 }
 
 .api-response-tabs button.is-active::after {

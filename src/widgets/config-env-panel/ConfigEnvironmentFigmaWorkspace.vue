@@ -61,6 +61,7 @@ const {
   fieldErrors,
   form,
   loadData,
+  loadSelectedTabData,
   loading,
   loadVariableSetVersions,
   mockApplications,
@@ -291,6 +292,7 @@ function tabLabel(tab: EnvironmentDetailTab) {
 function selectDetailTab(tab: EnvironmentDetailTab) {
   activeTab.value = tab
   if (tab === 'variables') void loadVariableSetVersions()
+  if (tab === 'references' || tab === 'mock') void loadSelectedTabData(tab)
 }
 
 onMounted(() => void loadData())

@@ -11,19 +11,26 @@ public class SettingsService {
     private final SettingsEnvironmentDomainService environmentDomainService;
     private final SettingsParamSetDomainService paramSetDomainService;
     private final ConfigReferenceDomainService referenceDomainService;
+    private final SettingsOverviewDomainService overviewDomainService;
 
     public SettingsService(
             DbConnectionDomainService dbConnectionDomainService,
             DbConnectionTestSupport dbConnectionTestSupport,
             SettingsEnvironmentDomainService environmentDomainService,
             SettingsParamSetDomainService paramSetDomainService,
-            ConfigReferenceDomainService referenceDomainService
+            ConfigReferenceDomainService referenceDomainService,
+            SettingsOverviewDomainService overviewDomainService
     ) {
         this.dbConnectionDomainService = dbConnectionDomainService;
         this.dbConnectionTestSupport = dbConnectionTestSupport;
         this.environmentDomainService = environmentDomainService;
         this.paramSetDomainService = paramSetDomainService;
         this.referenceDomainService = referenceDomainService;
+        this.overviewDomainService = overviewDomainService;
+    }
+
+    public SettingsOverviewResponse overview(String workspaceCode) {
+        return overviewDomainService.overview(workspaceCode);
     }
 
     public PageResponse<EnvConfigItem> listEnvs(String workspaceCode, String keyword, String envType, Integer status) {

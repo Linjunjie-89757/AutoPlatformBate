@@ -85,6 +85,7 @@ const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
 let loadRequestSeq = 0
 let pendingLoadSignature = ''
+let filterReloadTimer: ReturnType<typeof window.setTimeout> | null = null
 let tableFrameObserver: ResizeObserver | null = null
 
 const assigneeNameMap = computed(() => new Map((props.assigneeOptions ?? []).map((item) => [item.value, item.label])))
@@ -220,6 +221,16 @@ function reloadFromFirstPage() {
   pageNo.value = 1
 }
 
+function scheduleFilterReload() {
+  if (filterReloadTimer) {
+    window.clearTimeout(filterReloadTimer)
+  }
+  filterReloadTimer = window.setTimeout(() => {
+    filterReloadTimer = null
+    reloadFromFirstPage()
+  }, 300)
+}
+
 function handlePageChange(value: number) {
   pageNo.value = value
 }
@@ -237,6 +248,8 @@ async function loadDefects() {
     status: props.filter.status,
     priority: props.filter.priority,
     severity: props.filter.severity,
+    createdFrom: props.filter.createdFrom,
+    createdTo: props.filter.createdTo,
   })
   if (loading.value && pendingLoadSignature === loadSignature) {
     return
@@ -254,6 +267,8 @@ async function loadDefects() {
       status: props.filter.status,
       priority: props.filter.priority,
       severity: props.filter.severity,
+      createdFrom: props.filter.createdFrom,
+      createdTo: props.filter.createdTo,
     })
     if (requestSeq === loadRequestSeq) {
       defects.value = Array.isArray(page.items) ? page.items : []
@@ -536,7 +551,7 @@ watch(detailDrawerVisible, (visible) => {
 watch(
   () => props.filter,
   () => {
-    reloadFromFirstPage()
+    scheduleFilterReload()
   },
   { deep: true },
 )
@@ -573,6 +588,9 @@ watch(tableFrameRef, (element) => {
 })
 
 onBeforeUnmount(() => {
+  if (filterReloadTimer) {
+    window.clearTimeout(filterReloadTimer)
+  }
   tableFrameObserver?.disconnect()
 })
 

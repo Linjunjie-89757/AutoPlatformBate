@@ -9,6 +9,13 @@ export type ConfigCenterTab =
 
 export type ConfigStatus = 0 | 1
 
+export interface SettingsOverview {
+  database: { total: number; enabled: number }
+  environment: { total: number; enabled: number }
+  notification: { total: number; enabled: number }
+  parameter: { total: number; enabled: number }
+}
+
 export interface EnvConfigItem {
   id: number
   workspaceCode: string

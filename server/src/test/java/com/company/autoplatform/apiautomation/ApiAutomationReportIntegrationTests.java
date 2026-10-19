@@ -67,6 +67,46 @@ class ApiAutomationReportIntegrationTests extends IntegrationTestSupport {
 
         apiAutomationService.runCase(apiCase.id(), WORKSPACE_CODE, new ApiRunRequest(WORKSPACE_CODE, null, null, null, null));
 
+        ApiDefinitionDetail scenarioDefinition = apiAutomationService.createDefinition(WORKSPACE_CODE, new SaveApiDefinitionRequest(
+                WORKSPACE_CODE,
+                unique + "-scenario-definition",
+                null,
+                "report scenario definition",
+                List.of("report-v1"),
+                requestConfig("/ok"),
+                List.of(statusCodeAssertion()),
+                List.of(),
+                List.of(),
+                List.of()
+        ));
+        ApiScenarioDetail scenario = apiAutomationService.createScenario(WORKSPACE_CODE, new SaveApiScenarioRequest(
+                WORKSPACE_CODE,
+                unique + "-scenario",
+                null,
+                null,
+                "P2",
+                "ACTIVE",
+                "report pagination scenario",
+                List.of("report-v1"),
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                List.of(new ApiScenarioStepInput("Run saved definition", "DEFINITION", scenarioDefinition.id(), true))
+        ));
+        apiAutomationService.runScenario(scenario.id(), WORKSPACE_CODE,
+                new ApiRunRequest(WORKSPACE_CODE, null, null, null, null));
+
         int suiteId = createSuite(unique);
         addItem(suiteId, apiCase.id());
         mockMvc.perform(post("/api/automation/api/execution-suites/{id}/run", suiteId)
@@ -83,12 +123,31 @@ class ApiAutomationReportIntegrationTests extends IntegrationTestSupport {
                         .param("pageNo", "1")
                         .param("pageSize", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(greaterThanOrEqualTo(2)))
+                .andExpect(jsonPath("$.data.total").value(greaterThanOrEqualTo(3)))
                 .andExpect(jsonPath("$.data.items[?(@.objectType == 'API_CASE')]", hasSize(greaterThanOrEqualTo(1))))
+                .andExpect(jsonPath("$.data.items[?(@.objectType == 'SCENARIO')]", hasSize(greaterThanOrEqualTo(1))))
                 .andExpect(jsonPath("$.data.items[?(@.objectType == 'SUITE')]", hasSize(greaterThanOrEqualTo(1))))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
+
+        List<String> orderedReportKeys = com.jayway.jsonpath.JsonPath.read(listResponse, "$.data.items[*].reportKey");
+        List<String> pagedReportKeys = new java.util.ArrayList<>();
+        for (int pageNo = 1; pageNo <= orderedReportKeys.size(); pageNo++) {
+            String pageResponse = mockMvc.perform(get("/api/automation/api/reports")
+                            .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                            .param("keyword", unique)
+                            .param("pageNo", String.valueOf(pageNo))
+                            .param("pageSize", "1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.total").value(orderedReportKeys.size()))
+                    .andExpect(jsonPath("$.data.items", hasSize(1)))
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            pagedReportKeys.add(com.jayway.jsonpath.JsonPath.read(pageResponse, "$.data.items[0].reportKey"));
+        }
+        org.assertj.core.api.Assertions.assertThat(pagedReportKeys).containsExactlyElementsOf(orderedReportKeys);
 
         List<String> caseReportKeys = com.jayway.jsonpath.JsonPath.read(listResponse, "$.data.items[?(@.objectType == 'API_CASE')].reportKey");
         List<String> suiteReportKeys = com.jayway.jsonpath.JsonPath.read(listResponse, "$.data.items[?(@.objectType == 'SUITE')].reportKey");

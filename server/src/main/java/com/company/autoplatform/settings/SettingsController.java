@@ -25,6 +25,13 @@ public class SettingsController {
         this.settingsService = settingsService;
     }
 
+    @GetMapping("/overview")
+    public ApiResponse<SettingsOverviewResponse> overview(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(settingsService.overview(workspaceCode));
+    }
+
     @GetMapping("/envs")
     public ApiResponse<PageResponse<EnvConfigItem>> listEnvs(
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,

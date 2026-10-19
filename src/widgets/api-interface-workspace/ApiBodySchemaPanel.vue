@@ -221,4 +221,19 @@ const emit = defineEmits<{
   outline: 2px solid rgba(22, 93, 255, 0.18);
   outline-offset: 2px;
 }
+
+.api-schema-panel.is-body-schema .api-schema-header {
+  height: 33px;
+  min-height: 33px;
+}
+
+.api-schema-panel.is-body-schema .api-schema-row {
+  height: 37.5px;
+  min-height: 37.5px;
+}
+
+.api-schema-panel.is-body-schema .api-schema-checkbox {
+  width: 14px;
+  height: 14px;
+}
 </style>

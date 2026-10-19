@@ -114,7 +114,10 @@ const emit = defineEmits<{
               v-for="group in props.responseSchemaGroups"
               :key="group.code"
               type="button"
-              :class="{ 'is-active': props.activeResponseSchemaGroup?.code === group.code }"
+              :class="[
+                `is-status-${group.code}`,
+                { 'is-active': props.activeResponseSchemaGroup?.code === group.code },
+              ]"
               @click="emit('update:activeDefinitionResponseCode', group.code)"
             >
               {{ group.code }}
@@ -182,6 +185,45 @@ const emit = defineEmits<{
   gap: 8px;
 }
 
+.api-method-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #f2f3f5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  line-height: 16px;
+}
+
+.api-method-badge.method-get {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.api-method-badge.method-post {
+  background: #fff3e8;
+  color: #ff7d00;
+}
+
+.api-method-badge.method-put {
+  background: #e8f3ff;
+  color: #165dff;
+}
+
+.api-method-badge.method-patch {
+  background: #f5e8ff;
+  color: #7816ff;
+}
+
+.api-method-badge.method-delete {
+  background: #ffe8e8;
+  color: #f53f3f;
+}
+
 .api-definition-title-row strong {
   min-width: 0;
   overflow: hidden;
@@ -194,7 +236,7 @@ const emit = defineEmits<{
 .api-definition-summary p {
   margin: 7px 0 0;
   color: var(--app-text-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .api-definition-path {
@@ -221,10 +263,11 @@ const emit = defineEmits<{
 
 .api-definition-status-tabs {
   display: inline-flex;
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 4px;
-  background: #fff;
+  gap: 4px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .api-definition-status-tabs button {
@@ -289,9 +332,9 @@ const emit = defineEmits<{
 
 .api-definition-title-row strong {
   color: #1d2129;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 19.5px;
+  line-height: 22px;
 }
 
 .api-definition-summary p,
@@ -303,15 +346,28 @@ const emit = defineEmits<{
 
 .api-definition-status-tabs button {
   color: #86909c;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 3px 12px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .api-definition-status-tabs button.is-active {
-  color: #ff7d00;
+  color: #fff;
+  font-weight: 700;
 }
 
-.api-definition-status-tabs button.is-active {
-  background: #fff7e8;
+.api-definition-status-tabs button:not(.is-active) {
+  background: #f4f6fa;
+}
+
+.api-definition-status-tabs button.is-status-200.is-active {
+  background: #ff7d00;
+}
+
+.api-definition-status-tabs button.is-status-400.is-active,
+.api-definition-status-tabs button.is-status-401.is-active,
+.api-definition-status-tabs button.is-status-500.is-active {
+  background: #f53f3f;
 }
 </style>

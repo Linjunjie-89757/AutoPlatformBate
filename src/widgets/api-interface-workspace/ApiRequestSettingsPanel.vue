@@ -1,53 +1,70 @@
 <script setup lang="ts">
 import type { ApiDefinitionDetail } from '@/entities/api-automation'
+import { computed, ref, watch } from 'vue'
+import ApiRequestTimeoutInput from './ApiRequestTimeoutInput.vue'
 import './styles/api-request-settings-panel.css'
 
 const props = defineProps<{
   detail: ApiDefinitionDetail
-  workspaceLabel: string
-  environmentName: string
-  variableSetName: string
-  hasRunResult: boolean
+  loading?: boolean
+  saving?: boolean
+  canEdit?: boolean
   markDirty: () => void
 }>()
 
-function updateTags(value: string | number) {
-  props.detail.tags = String(value)
-    .split(',')
-    .map(item => item.trim())
-    .filter(Boolean)
+const disabled = computed(() => props.loading || props.saving || props.canEdit === false)
+const showResetConfirm = ref(false)
+watch(() => props.detail, () => { showResetConfirm.value = false })
+
+function updateTimeout(field: 'connectTimeoutMs' | 'timeoutMs', value: number) {
+  if (disabled.value) return
+  props.detail.requestConfig[field] = value
+  props.markDirty()
+}
+
+function updateRedirect(event: Event) {
+  if (disabled.value) return
+  props.detail.requestConfig.followRedirects = (event.target as HTMLInputElement).checked
+  props.markDirty()
+}
+
+function resetDefaults() {
+  if (disabled.value) return
+  Object.assign(props.detail.requestConfig, { connectTimeoutMs: 30000, timeoutMs: 60000, followRedirects: true })
+  showResetConfirm.value = false
   props.markDirty()
 }
 </script>
 
 <template>
-  <div class="api-settings-panel">
-    <div class="api-config-panel-head">
-      <strong>请求设置</strong>
-      <span>维护接口元信息、超时和调试上下文。</span>
+  <div class="api-request-settings" :aria-busy="Boolean(loading || saving)">
+    <div v-if="loading" class="api-settings-skeleton" role="status" aria-label="正在加载请求设置">
+      <span class="api-settings-skeleton__title" />
+      <div class="api-settings-skeleton__inputs"><span /><span /></div>
+      <span class="api-settings-skeleton__section" />
+      <span class="api-settings-skeleton__option" />
     </div>
-    <label>接口名称</label>
-    <el-input v-model="detail.name" placeholder="接口名称" @input="markDirty" />
-    <label>模块 / 目录</label>
-    <el-input v-model="detail.directoryName" placeholder="模块 / 目录" @input="markDirty" />
-    <label>标签</label>
-    <el-input :model-value="detail.tags.join(', ')" placeholder="标签，逗号分隔" @update:model-value="updateTags" />
-    <label>超时时间</label>
-    <div class="api-settings-control-cell">
-      <el-input-number
-        v-model="detail.requestConfig.timeoutMs"
-        :min="1000"
-        :step="1000"
-        class="api-settings-timeout-number"
-        @change="markDirty"
-      />
-    </div>
-    <label>描述</label>
-    <el-input v-model="detail.description" type="textarea" :rows="4" placeholder="接口描述、调用约束或备注" @input="markDirty" />
-    <div class="api-settings-footer">
-      <span>写入空间 {{ workspaceLabel }}</span>
-      <span>调试上下文 {{ environmentName }} / {{ variableSetName }}</span>
-      <span>最后运行 {{ hasRunResult ? '已运行' : '未运行' }}</span>
-    </div>
+    <template v-else>
+      <section class="api-settings-group">
+        <h3>超时（ms）</h3>
+        <div class="api-settings-timeouts">
+          <ApiRequestTimeoutInput label="连接超时" :model-value="detail.requestConfig.connectTimeoutMs ?? 10000" :disabled="disabled" @update:model-value="updateTimeout('connectTimeoutMs', $event)" />
+          <ApiRequestTimeoutInput label="响应超时" :model-value="detail.requestConfig.timeoutMs" :disabled="disabled" @update:model-value="updateTimeout('timeoutMs', $event)" />
+        </div>
+      </section>
+      <section class="api-settings-group">
+        <h3>重定向</h3>
+        <label class="api-settings-redirect" :class="{ 'is-disabled': disabled }">
+          <input type="checkbox" :checked="detail.requestConfig.followRedirects !== false" :disabled="disabled" @change="updateRedirect">
+          <span>自动跟随重定向</span><small>（301 / 302 / 307 / 308）</small>
+        </label>
+      </section>
+      <div v-if="showResetConfirm" class="api-settings-reset-confirm">
+        <span>确认恢复默认值？</span>
+        <button type="button" :disabled="disabled" @click="showResetConfirm = false">取消</button>
+        <button type="button" class="is-danger" :disabled="disabled" @click="resetDefaults">确认</button>
+      </div>
+      <button v-else type="button" class="api-settings-reset" :disabled="disabled" @click="showResetConfirm = true">恢复默认值</button>
+    </template>
   </div>
 </template>

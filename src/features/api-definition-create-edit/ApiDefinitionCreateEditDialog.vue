@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { reactive, watch } from 'vue'
 
 import { apiMethodOptions, type ApiDefinitionDetail, type ApiDefinitionItem } from '@/entities/api-automation'
@@ -121,7 +122,7 @@ watch(
       <div class="api-definition-dialog__grid is-request">
         <div class="api-definition-dialog__field">
           <span>请求方法 *</span>
-          <el-select v-model="form.method" class="api-definition-dialog__select" :disabled="loadingDetail">
+          <el-select :suffix-icon="AppSelectChevron" v-model="form.method" class="api-definition-dialog__select" :disabled="loadingDetail">
             <el-option v-for="item in apiMethodOptions" :key="item" :label="item" :value="item" />
           </el-select>
         </div>

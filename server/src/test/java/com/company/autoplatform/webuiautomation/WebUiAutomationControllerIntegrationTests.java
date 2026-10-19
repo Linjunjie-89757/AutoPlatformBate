@@ -114,6 +114,16 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.items[0].moduleName").value("payments"))
                 .andExpect(jsonPath("$.data.items[0].stepCount").value(1));
 
+        mockMvc.perform(get("/api/automation/web/cases")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique)
+                        .param("moduleName", "payments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+
         mockMvc.perform(delete("/api/automation/web/cases/{id}", caseId)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
                 .andExpect(status().isOk())
@@ -280,6 +290,15 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[0].id").value(savedTemplateId.intValue()))
                 .andExpect(jsonPath("$.data.items[0].templateName").value(unique + "-from-case"));
+
+        mockMvc.perform(get("/api/automation/web/templates")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items.length()").value(1));
     }
 
     @Test
@@ -1032,6 +1051,15 @@ class WebUiAutomationControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(2))
                 .andExpect(jsonPath("$.data.items[?(@.id==" + buttonId + ")].groupName").value(hasItem(unique + "-result")));
+
+        mockMvc.perform(get("/api/automation/web/elements")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items.length()").value(2));
 
         mockMvc.perform(get("/api/automation/web/elements/quality-check")
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)

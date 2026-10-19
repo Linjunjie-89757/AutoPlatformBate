@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Delete, Edit, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
@@ -312,7 +313,7 @@ watch(
         :prefix-icon="Search"
         @keyup.enter="searchVariableSets"
       />
-      <el-select v-model="status" class="web-ui-variable-toolbar__select" clearable placeholder="状态">
+      <el-select :suffix-icon="AppSelectChevron" v-model="status" class="web-ui-variable-toolbar__select" clearable placeholder="状态">
         <el-option
           v-for="item in configStatusOptions"
           :key="item.value"
@@ -422,7 +423,7 @@ watch(
             <el-input v-model="form.paramName" maxlength="80" show-word-limit placeholder="例如：测试环境管理员变量集" />
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="form.status">
+            <el-select :suffix-icon="AppSelectChevron" v-model="form.status">
               <el-option
                 v-for="item in configStatusOptions"
                 :key="item.value"

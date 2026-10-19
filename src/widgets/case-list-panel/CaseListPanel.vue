@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -941,7 +942,7 @@ defineExpose({
         </div>
         <label class="case-batch-move-dialog__field">
           <span>目标目录</span>
-          <el-select v-model="batchMoveTargetDirectoryId" placeholder="请选择目标目录" clearable>
+          <el-select :suffix-icon="AppSelectChevron" v-model="batchMoveTargetDirectoryId" placeholder="请选择目标目录" clearable>
             <el-option
               v-for="item in batchMoveDirectoryOptions"
               :key="String(item.value)"
@@ -1003,7 +1004,7 @@ defineExpose({
 
           <div class="case-defect-dialog__field">
             <span class="is-required">严重级别</span>
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               v-model="defectForm.severity"
               class="case-defect-dialog__select"
               :disabled="defectSaving"

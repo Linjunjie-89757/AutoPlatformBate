@@ -76,14 +76,9 @@ public class WebUiCaseDomainService {
             query.eq(WebUiCaseEntity::getStatus, normalizedStatus);
         }
         int safePageNo = safePageNo(pageNo);
-        if (pageSize == null || pageSize < 1) {
-            List<WebUiCaseEntity> entities = caseMapper.selectList(query.orderByDesc(WebUiCaseEntity::getUpdatedAt));
-            List<WebUiCaseItem> items = toCaseItems(entities);
-            int compatiblePageSize = safePageSize(pageSize, items.size());
-            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
         Page<WebUiCaseEntity> page = caseMapper.selectPage(
-                new Page<>(safePageNo, pageSize),
+                new Page<>(safePageNo, safePageSize),
                 query.orderByDesc(WebUiCaseEntity::getUpdatedAt));
         List<WebUiCaseItem> items = toCaseItems(page.getRecords());
         return PageResponse.of(items, page.getTotal(), page.getCurrent(), page.getSize());
@@ -319,16 +314,4 @@ public class WebUiCaseDomainService {
         return pageNo == null || pageNo < 1 ? 1 : pageNo;
     }
 
-    private int safePageSize(Integer pageSize, int total) {
-        if (pageSize == null || pageSize < 1) {
-            return total > 0 ? total : 10;
-        }
-        return pageSize;
-    }
-
-    private <T> List<T> paginate(List<T> items, int pageNo, int pageSize) {
-        int fromIndex = Math.min((pageNo - 1) * pageSize, items.size());
-        int toIndex = Math.min(fromIndex + pageSize, items.size());
-        return items.subList(fromIndex, toIndex);
-    }
 }

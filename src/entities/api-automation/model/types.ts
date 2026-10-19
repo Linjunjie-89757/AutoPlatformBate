@@ -88,6 +88,8 @@ export interface ApiRequestConfigInput {
   method: string
   path: string
   timeoutMs: number
+  connectTimeoutMs?: number | null
+  followRedirects?: boolean | null
   queryParams: ApiKeyValueInput[]
   headers: ApiKeyValueInput[]
   cookies: ApiKeyValueInput[]
@@ -737,107 +739,6 @@ export interface ApiExecutionSuiteDataIteration {
   stepCount: number | null
   durationMs: number | null
   failureSummary: string | null
-}
-
-export interface ApiAutomationReportItem {
-  reportKey: string
-  objectType: 'API_CASE' | 'SUITE' | string
-  historyId: number | null
-  reportId: number | null
-  workspaceCode: string
-  workspaceName: string | null
-  objectId: number | null
-  objectName: string
-  reportName: string | null
-  result: string | null
-  failureSummary: string | null
-  totalCount: number | null
-  successCount: number | null
-  failedCount: number | null
-  skippedCount: number | null
-  statusCode: number | null
-  durationMs: number | null
-  responseSize: number | null
-  environmentId: number | null
-  environmentName: string | null
-  variableSetId: number | null
-  variableSetName: string | null
-  runMode: string | null
-  runOn: string | null
-  branchName: string | null
-  triggerSource: string | null
-  dataDrivenEnabled: boolean
-  dataFileId: number | null
-  dataFileName: string | null
-  dataRowCount: number | null
-  operatorName: string | null
-  createdAt: string | null
-  archived: boolean
-}
-
-export interface ApiAutomationReportDetail extends ApiAutomationReportItem {
-  continueOnFailure: boolean | null
-  globalTimeoutMs: number | null
-  stepFailureRetryCount: number | null
-  defaultStepWaitMs: number | null
-  contextSnapshotJson?: string | null
-  dataIterations: ApiExecutionSuiteDataIteration[]
-  itemSnapshots: ApiExecutionSuiteRunItemSnapshot[]
-  stepResults: ApiRunStepResult[]
-}
-
-export interface ApiAutomationReportFailureBucket {
-  key: string
-  label: string
-  count: number
-  durationMs: number | null
-}
-
-export interface ApiAutomationReportAnalysis {
-  totalCount: number
-  passedCount: number
-  failedCount: number
-  skippedCount: number
-  failureRate: number
-  averageDurationMs: number | null
-  failureReasons: ApiAutomationReportFailureBucket[]
-  topFailedObjects: ApiAutomationReportFailureBucket[]
-  recentFailures: ApiAutomationReportItem[]
-}
-
-export interface ApiAutomationReportTrendPoint {
-  date: string
-  totalCount: number
-  passedCount: number
-  failedCount: number
-  skippedCount: number
-  failureRate: number
-  averageDurationMs: number | null
-}
-
-export interface ApiAutomationReportDistributionBucket {
-  key: string
-  label: string
-  count: number
-  durationMs: number | null
-}
-
-export interface ApiAutomationReportStatistics {
-  trendPoints: ApiAutomationReportTrendPoint[]
-  resultDistribution: ApiAutomationReportDistributionBucket[]
-  objectTypeDistribution: ApiAutomationReportDistributionBucket[]
-  slowestRuns: ApiAutomationReportItem[]
-}
-
-export interface ApiAutomationReportListQuery {
-  objectType?: string
-  result?: string
-  keyword?: string
-  createdFrom?: string
-  createdTo?: string
-  archived?: boolean | null
-  pageNo?: number
-  pageSize?: number
 }
 
 export interface ApiDefinitionListQuery {

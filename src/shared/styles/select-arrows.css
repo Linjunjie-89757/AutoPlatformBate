@@ -1,0 +1,61 @@
+/* Shared ChevronDown appearance; field geometry and menu behavior stay local. */
+.el-select__caret:has(> .lucide-chevron-down),
+.el-pagination .el-select__caret:not(.el-select__clear) {
+  font-size: var(--app-select-arrow-size, 12px);
+  color: var(--app-text-secondary, #4e5969);
+}
+
+.el-select__caret > .lucide-chevron-down {
+  width: 1em;
+  height: 1em;
+}
+
+.el-select__wrapper.is-disabled .el-select__caret:has(> .lucide-chevron-down),
+.el-pagination .el-select__wrapper.is-disabled .el-select__caret:not(.el-select__clear) {
+  color: var(--app-text-subtle, #c9cdd4);
+}
+
+/* Pagination owns its internal select and exposes no suffix-icon prop. */
+.el-pagination .el-select__caret:not(.el-select__clear) > svg,
+.el-dropdown__caret-button .el-icon > svg {
+  display: none;
+}
+
+.el-pagination .el-select__caret:not(.el-select__clear)::before,
+.el-dropdown__caret-button .el-icon::before {
+  content: '';
+  width: 1em;
+  height: 1em;
+  background: currentColor;
+  mask: url('../assets/select-chevron.svg') center / contain no-repeat;
+}
+
+/* Only opted-in native selects; paired custom icons and listboxes are excluded. */
+select.app-native-select {
+  appearance: none !important;
+  background-image: url('../assets/select-chevron.svg') !important;
+  background-repeat: no-repeat !important;
+  background-position: right var(--app-select-arrow-inset, 8px) center !important;
+  background-size: var(--app-select-arrow-size, 12px) var(--app-select-arrow-size, 12px) !important;
+  padding-right: var(--app-select-arrow-space, 26px) !important;
+}
+
+select.app-native-select:disabled {
+  background-image: url('../assets/select-chevron-disabled.svg') !important;
+}
+
+.api-param-row,
+.api-assertion-item-row,
+.api-processor-extract-row,
+.api-processor-extract-more-popper {
+  --app-select-arrow-size: 10px;
+  --app-select-arrow-inset: 6px;
+  --app-select-arrow-space: 22px;
+}
+
+@media (forced-colors: active) {
+  select.app-native-select {
+    appearance: auto !important;
+    background-image: none !important;
+  }
+}

@@ -854,15 +854,15 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
           <Search :size="13" />
           <input v-model="keyword" type="search" placeholder="搜索版本名称或编号">
         </label>
-        <select v-model="typeFilter" aria-label="版本类型">
+        <select class="app-native-select" v-model="typeFilter" aria-label="版本类型">
           <option value="all">全部类型</option>
           <option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option>
         </select>
-        <select v-model="statusFilter" aria-label="版本状态">
+        <select class="app-native-select" v-model="statusFilter" aria-label="版本状态">
           <option value="all">全部状态</option>
           <option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option>
         </select>
-        <select v-model="ownerFilter" aria-label="负责人">
+        <select class="app-native-select" v-model="ownerFilter" aria-label="负责人">
           <option value="all">全部负责人</option>
           <option v-for="owner in versionOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option>
         </select>
@@ -1051,7 +1051,7 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
         </article>
 
         <div v-else class="version-management__logs">
-          <header><strong>版本操作记录</strong><select v-model="logTypeFilter"><option value="all">全部类型</option><option value="status">状态变更</option><option value="edit">内容修改</option><option value="create">创建</option></select></header>
+          <header><strong>版本操作记录</strong><select class="app-native-select" v-model="logTypeFilter"><option value="all">全部类型</option><option value="status">状态变更</option><option value="edit">内容修改</option><option value="create">创建</option></select></header>
           <div class="version-management__timeline">
             <div v-for="(item, index) in currentLogs" :key="item.id" class="version-management__timeline-item"><div :class="['version-management__avatar', `is-${item.type}`]">{{ item.actor.slice(0, 1) }}</div><i v-if="index < currentLogs.length - 1" /><div><strong>{{ item.actor }}</strong><span>{{ item.action }}</span><p>{{ item.detail }}</p></div><time>{{ item.time }}</time></div>
             <div v-if="!currentLogs.length" class="version-management__empty"><strong>暂无操作记录</strong></div>
@@ -1078,8 +1078,8 @@ watch(() => [props.initialDetailId, props.initialDetailTab], restoreInitialDetai
       </template>
       <div class="version-management__form">
         <label><span>版本名称 <i>*</i></span><input v-model="versionForm.name" type="text" placeholder="例：v2.5.0"></label>
-        <div class="version-management__form-row"><label><span>版本类型 <i>*</i></span><select v-model="versionForm.type"><option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option></select></label><label><span>负责人 <i>*</i></span><select v-model="versionForm.owner"><option value="">请选择负责人</option><option v-for="owner in versionOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
-        <label v-if="isEditing"><span>当前状态</span><select v-model="versionForm.status"><option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option></select></label>
+        <div class="version-management__form-row"><label><span>版本类型 <i>*</i></span><select class="app-native-select" v-model="versionForm.type"><option v-for="(label, key) in versionTypeConfig" :key="key" :value="key">{{ label }}</option></select></label><label><span>负责人 <i>*</i></span><select class="app-native-select" v-model="versionForm.owner"><option value="">请选择负责人</option><option v-for="owner in versionOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
+        <label v-if="isEditing"><span>当前状态</span><select class="app-native-select" v-model="versionForm.status"><option v-for="(config, key) in versionStatusConfig" :key="key" :value="key">{{ config.label }}</option></select></label>
         <fieldset><legend>时间节点</legend><label><span>开始日期</span><input v-model="versionForm.startDate" type="date" :class="{ 'is-empty-date': !versionForm.startDate }"></label><label><span>计划提测日期</span><input v-model="versionForm.testDate" type="date" :class="{ 'is-empty-date': !versionForm.testDate }"></label><label><span>计划发布日期</span><input v-model="versionForm.releaseDate" type="date" :class="{ 'is-empty-date': !versionForm.releaseDate }"></label></fieldset>
         <label><span>版本目标</span><textarea v-model="versionForm.goal" rows="4" placeholder="描述本版本的核心目标和验收标准…" /></label>
       </div>

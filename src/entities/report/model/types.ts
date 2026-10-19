@@ -42,6 +42,14 @@ export interface ReportShareSummary {
   updatedAt: string
 }
 
+export interface ReportShareListResponse {
+  items: ReportShareSummary[]
+  total: number
+  pageNo?: number
+  pageSize?: number
+  totalPages?: number
+}
+
 export interface ReportShareCreated extends ReportShareSummary {
   token: string
   shareUrl: string
@@ -61,10 +69,22 @@ export interface ReportListResponse {
   totalPages?: number
 }
 
+export interface ReportStats {
+  total: number
+  success: number
+  failed: number
+}
+
 export interface ReportListQuery {
   keyword?: string
   result?: string
   logSource?: string
+  pageNo?: number
+  pageSize?: number
+}
+
+export interface ReportShareListQuery {
+  reportId?: number
   pageNo?: number
   pageSize?: number
 }

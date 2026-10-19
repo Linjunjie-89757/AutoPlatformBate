@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -2189,19 +2190,19 @@ watch(
                 :prefix-icon="Search"
                 @keyup.enter="searchCases"
               />
-              <el-select v-model="status" class="web-ui-case-toolbar__select" clearable placeholder="全部状态" @change="applyFigmaCaseFilters">
+              <el-select :suffix-icon="AppSelectChevron" v-model="status" class="web-ui-case-toolbar__select" clearable placeholder="全部状态" @change="applyFigmaCaseFilters">
                 <el-option label="已启用" value="ENABLED" />
                 <el-option label="已停用" value="DISABLED" />
                 <el-option label="草稿" value="DRAFT" />
               </el-select>
-              <el-select v-model="priorityFilter" class="web-ui-case-toolbar__select" clearable placeholder="全部优先级">
+              <el-select :suffix-icon="AppSelectChevron" v-model="priorityFilter" class="web-ui-case-toolbar__select" clearable placeholder="全部优先级">
                 <el-option label="P0" value="P0" />
                 <el-option label="P1" value="P1" />
                 <el-option label="P2" value="P2" />
                 <el-option label="P3" value="P3" />
                 <el-option label="P4" value="P4" />
               </el-select>
-              <el-select v-model="browserFilter" class="web-ui-case-toolbar__browser" clearable placeholder="全部浏览器">
+              <el-select :suffix-icon="AppSelectChevron" v-model="browserFilter" class="web-ui-case-toolbar__browser" clearable placeholder="全部浏览器">
                 <el-option label="Chrome" value="CHROMIUM" />
                 <el-option label="Firefox" value="FIREFOX" />
                 <el-option label="Safari" value="WEBKIT" />
@@ -2606,7 +2607,7 @@ watch(
           <span>{{ pendingRunCase?.name || '-' }}</span>
         </el-form-item>
         <el-form-item label="运行环境">
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="runForm.environmentId"
             clearable
             placeholder="使用用例默认配置"
@@ -2636,7 +2637,7 @@ watch(
           </div>
         </el-form-item>
         <el-form-item label="变量集">
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="runForm.variableSetId"
             clearable
             filterable
@@ -2673,7 +2674,7 @@ watch(
           <span>{{ selectedCases.length }} 条</span>
         </el-form-item>
         <el-form-item label="运行环境">
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="batchForm.environmentId"
             clearable
             placeholder="使用各用例默认配置"
@@ -2703,7 +2704,7 @@ watch(
           </div>
         </el-form-item>
         <el-form-item label="变量集">
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="batchForm.variableSetId"
             clearable
             filterable
@@ -2923,7 +2924,7 @@ watch(
           <el-input v-model="templateForm.baseUrl" maxlength="500" clearable placeholder="https://example.com" />
         </el-form-item>
         <el-form-item label="浏览器">
-          <el-select v-model="templateForm.browserType">
+          <el-select :suffix-icon="AppSelectChevron" v-model="templateForm.browserType">
             <el-option label="Chromium" value="CHROMIUM" />
             <el-option label="Firefox" value="FIREFOX" />
             <el-option label="WebKit" value="WEBKIT" />
@@ -2936,7 +2937,7 @@ watch(
           <el-input-number v-model="templateForm.defaultTimeoutMs" :min="1000" :max="60000" :step="1000" controls-position="right" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="templateForm.status">
+          <el-select :suffix-icon="AppSelectChevron" v-model="templateForm.status">
             <el-option label="启用" value="ENABLED" />
             <el-option label="停用" value="DISABLED" />
           </el-select>

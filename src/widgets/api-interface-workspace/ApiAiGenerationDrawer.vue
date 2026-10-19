@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed } from 'vue'
 import { MagicStick } from '@element-plus/icons-vue'
 import { X as LucideX } from '@lucide/vue'
@@ -89,7 +90,7 @@ const drawerVisible = computed({
         <section class="ai-case-section ai-case-form-section">
           <label class="ai-case-form-field">
             <span>用例数</span>
-            <el-select :model-value="caseCount" class="ai-case-form-control" @update:model-value="emit('update:caseCount', String($event))">
+            <el-select :suffix-icon="AppSelectChevron" :model-value="caseCount" class="ai-case-form-control" @update:model-value="emit('update:caseCount', String($event))">
               <el-option label="自动" value="AUTO" />
               <el-option label="10 条" value="10" />
               <el-option label="20 条" value="20" />
@@ -99,7 +100,7 @@ const drawerVisible = computed({
           </label>
           <label class="ai-case-form-field">
             <span>AI模型</span>
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               :model-value="providerId"
               class="ai-case-form-control"
               :loading="providersLoading"

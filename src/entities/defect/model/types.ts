@@ -135,6 +135,21 @@ export interface DefectStatistics {
   pendingVerify: number
   closed: number
   rejected: number
+  highPriority: number
+  severityDistribution: Array<{
+    severity: DefectSeverity | string
+    count: number
+  }>
+  assigneeDistribution: Array<{
+    name: string
+    open: number
+    closed: number
+  }>
+  trend: Array<{
+    date: string
+    created: number
+    closed: number
+  }>
 }
 
 export interface DefectListResponse {
@@ -152,6 +167,8 @@ export interface DefectClientFilter {
   severity: string
   assigneeId: string
   workspaceCode: string
+  createdFrom: string
+  createdTo: string
 }
 
 export interface ReplaceDefectCasesPayload {
@@ -164,6 +181,8 @@ export interface DefectListQuery {
   priority?: string
   severity?: string
   relatedCaseId?: number
+  createdFrom?: string
+  createdTo?: string
   pageNo?: number
   pageSize?: number
 }

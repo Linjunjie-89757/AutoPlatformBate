@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed } from 'vue'
 import { X } from '@lucide/vue'
 
@@ -143,7 +144,7 @@ function handleSubmitClick() {
         </div>
 
         <div class="api-case-drawer-meta-row">
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             :model-value="props.priority"
             :disabled="props.readOnly"
             class="api-case-drawer-meta-field"
@@ -152,7 +153,7 @@ function handleSubmitClick() {
           >
             <el-option v-for="item in props.priorityOptions" :key="item" :label="item" :value="item" />
           </el-select>
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             :model-value="props.status"
             :disabled="props.readOnly"
             class="api-case-drawer-meta-field"
@@ -161,7 +162,7 @@ function handleSubmitClick() {
           >
             <el-option v-for="item in props.statusOptions" :key="item" :label="item" :value="item" />
           </el-select>
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             :model-value="props.tags"
             :disabled="props.readOnly"
             class="api-case-drawer-tags-field"

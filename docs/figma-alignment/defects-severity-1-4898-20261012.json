@@ -1,0 +1,392 @@
+{
+  "schemaVersion": 2,
+  "title": "缺陷统计严重程度分布对齐",
+  "page": "缺陷中心/统计视图/严重程度分布",
+  "status": "partial-alignment",
+  "createdAt": "2026-10-12T09:51:43.915Z",
+  "sourceBaseline": {
+    "gitBranch": "codex/development-feature2",
+    "gitCommit": "7437daa535b8053a5386f0f484b0f37bd1759c00",
+    "designCapturedAt": "2026-10-12T09:45:00+08:00",
+    "makeCode": {
+      "path": "设计/figma-ai-make设计20261009/src/app/BugsModule.tsx",
+      "sha256": "10cd3c5071df7650ba73d157ef2fdfec41f133a76464cc7e323234c19f740a55",
+      "modifiedAt": "2026-10-09T10:09:46.209Z"
+    },
+    "makePreviewCapturedAt": "2026-10-12T10:13:52+08:00",
+    "vueCapturedAt": "2026-10-13T09:33:00+08:00",
+    "environment": {
+      "viewport": [
+        1280,
+        720
+      ],
+      "devicePixelRatio": 1,
+      "browserZoom": 1,
+      "fontStatus": "loaded"
+    }
+  },
+  "scope": {
+    "figmaNodes": [
+      "jSUUPxC4PVD9Kp2FUydfox:1-4898"
+    ],
+    "makeCodePath": "设计/figma-ai-make设计20261009/src/app/BugsModule.tsx",
+    "makePreviewUrl": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%258Report%25E7%25B3%25BB%25E7%25BB%259F%25E7%2595%258C%25E9%259D%25A2%25E8%25A8%25BE%25E8%25AE%25A1-%25E6%25AD%A3%25E5%25BC%258F?code-node-id=0-9&t=WJftkTvhcyOYrnqw-0&fullscreen=1",
+    "currentCodeFiles": [
+      "src/pages/defects/DefectsPage.vue"
+    ],
+    "variants": [
+      "统计视图/有缺陷数据",
+      "统计视图/无缺陷数据"
+    ],
+    "elements": [
+      "标题、标签、数量、轨道与填充条",
+      "空数据状态"
+    ],
+    "excludedAreas": [
+      "状态分布",
+      "模块缺陷分布",
+      "新增 vs 关闭趋势"
+    ]
+  },
+  "workflow": [
+    {
+      "id": "design-static",
+      "status": "verified",
+      "evidence": [
+        "Figma get_design_context node 1:4898 screenshot: four horizontal tracks, labels and colors captured"
+      ]
+    },
+    {
+      "id": "make-event-inventory",
+      "status": "verified",
+      "evidence": [
+        "BugsModule.tsx:1100-1110 has static rows only; no chart interaction handlers"
+      ]
+    },
+    {
+      "id": "make-preview-validation",
+      "status": "partial",
+      "evidence": [
+        "Provided Make URL opened, but preview remained at login page in this session"
+      ]
+    },
+    {
+      "id": "vue-implementation",
+      "status": "verified",
+      "evidence": [
+        "DefectsPage.vue severityDistributionItems preserves live API mapping and total-based widths",
+        "Playwright 4173 at 1551x862: card 268.5px, padding 18.5px, content 170px, tracks 7px, row starts 336/378.5/421/463.5"
+      ]
+    },
+    {
+      "id": "browser-validation",
+      "status": "partial",
+      "evidence": [
+        "Playwright local 4173 after geometry correction: card 268.5px, padding 18.5px, severity asset 170px, tracks 7px; live API returned CRITICAL=1, HIGH=4, MEDIUM=6, LOW=1",
+        "Make preview URL loaded but remained on Figma loading/privacy overlay in this browser run"
+      ]
+    },
+    {
+      "id": "difference-registration",
+      "status": "verified",
+      "evidence": [
+        "DIFF-001 records missing live severityDistribution evidence and follow-up"
+      ]
+    }
+  ],
+  "evidence": {
+    "design": {
+      "nodes": [
+        "jSUUPxC4PVD9Kp2FUydfox:1:4898"
+      ],
+      "screenshots": [
+        "Figma get_design_context screenshot for node 1:4898"
+      ]
+    },
+    "make": {
+      "codeReferences": [
+        "设计/figma-ai-make设计20261009/src/app/BugsModule.tsx:1100-1110"
+      ],
+      "eventMatrix": [
+        {
+          "name": "hover",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "focus",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "blur",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "active",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "disabled",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "loading",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "success",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        },
+        {
+          "name": "failure",
+          "status": "unverified",
+          "evidence": [],
+          "rationale": "",
+          "resolution": ""
+        }
+      ]
+    },
+    "makePreview": {
+      "url": "https://www.figma.com/make/s6EkOuJNJHLFYP5CTAdQNf/%25E5%2590%258E%25E5%258F%258Report%25E7%25B3%25BB%25E7%25BB%259F%25E7%2595%258C%25E9%259D%25A2%25E8%25A8%25BE%25E8%25AE%25A1-%25E6%25AD%A3%25E5%25BC%258F?code-node-id=0-9&t=WJftkTvhcyOYrnqw-0&fullscreen=1",
+      "viewport": [
+        1280,
+        720
+      ],
+      "interactions": [
+        "Opened provided Make URL and waited; preview remained at login state"
+      ],
+      "screenshots": []
+    },
+    "vue": {
+      "screenshots": [
+        "output/playwright/bugs-severity-fixed.png"
+      ],
+      "computedStyle": [
+        ".defects-page__chart-card: height 268.5px; padding 18.5px",
+        ".defects-page__chart-asset--severity: height 170px; padding-top 14px",
+        ".defects-page__severity-track: height 7px",
+        ".defects-page__severity-row: row gap 14px; label-to-track gap 3.5px"
+      ],
+      "boundingBox": [
+        "card x=812.25 y=281.5 w=717.75 h=268.5",
+        "severity asset x=831.75 y=322 w=678.75 h=170",
+        "rows y=336/378.5/421/463.5; row h=28.5; track h=7"
+      ],
+      "interactionResults": [
+        "Stats tab switch renders severity section; chart has no user controls; live API values are rendered and widths are derived from total 12"
+      ]
+    }
+  },
+  "visualReview": {
+    "status": "partial",
+    "method": "paired-screenshot-overlay",
+    "viewport": [
+      1551,
+      862
+    ],
+    "scenes": [],
+    "manualReview": {
+      "status": "partial",
+      "reviewer": "Codex",
+      "reviewedAt": "2026-10-12T10:05:42+08:00",
+      "notes": "Design node 1:4898 and Make source specify card 268.5px, inner content 170px, 7px tracks and 14px row cadence. Vue now matches these geometry values. Make hosted preview remained on loading/privacy overlay, so its runtime screenshot remains unverified."
+    },
+    "geometryTolerancePx": 0.5,
+    "unresolvedVisibleDifferences": 0
+  },
+  "comparisonMatrix": [
+    {
+      "id": "统计视图/有缺陷数据::标题、标签、数量、轨道与填充条",
+      "variant": "统计视图/有缺陷数据",
+      "element": "标题、标签、数量、轨道与填充条",
+      "status": "resolved",
+      "design": {
+        "target": "Card 268.5px high; padding 18.5px; severity content 170px; labels 12px/18px; tracks 7px; row cadence 42.5px",
+        "evidence": [
+          "get_design_context node 1:5123/1:5126:1:5162"
+        ]
+      },
+      "makeSource": {
+        "finding": "BugsModule.tsx uses p-5 card, mb-4 heading, severity list space-y-4, h-2 tracks; design context resolves to 18.5px/14px/7px geometry",
+        "evidence": [
+          "设计/figma-ai-make设计20261009/src/app/BugsModule.tsx:1100-1110"
+        ]
+      },
+      "makePreview": {
+        "operation": "Opened supplied Make URL and waited 33s",
+        "result": "Figma loading/privacy overlay; runtime chart not visible",
+        "evidence": [
+          "output/playwright/make-severity-check.png"
+        ]
+      },
+      "vue": {
+        "result": "Live severity rows rendered with real API values 1/4/6/1 and corrected geometry",
+        "screenshots": [
+          "output/playwright/bugs-severity-fixed.png"
+        ],
+        "computedStyle": [
+          "card 268.5px; padding 18.5px; tracks 7px"
+        ],
+        "boundingBox": [
+          "rows y=336/378.5/421/463.5; track height 7px"
+        ],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": "真实 API 数据优先，Make 的 6/22/35/13 仅作演示数据；布局按 Design/Make 几何复原。"
+    },
+    {
+      "id": "统计视图/有缺陷数据::空数据状态",
+      "variant": "统计视图/有缺陷数据",
+      "element": "空数据状态",
+      "status": "unresolved",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    },
+    {
+      "id": "统计视图/无缺陷数据::标题、标签、数量、轨道与填充条",
+      "variant": "统计视图/无缺陷数据",
+      "element": "标题、标签、数量、轨道与填充条",
+      "status": "resolved",
+      "design": {
+        "target": "Card 268.5px high; padding 18.5px; severity content 170px; labels 12px/18px; tracks 7px; row cadence 42.5px",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "BugsModule.tsx uses p-5 card, mb-4 heading, severity list space-y-4, h-2 tracks; design context resolves to 18.5px/14px/7px geometry",
+        "evidence": [
+          "设计/figma-ai-make设计20261009/src/app/BugsModule.tsx:1100-1110"
+        ]
+      },
+      "makePreview": {
+        "operation": "Opened supplied Make URL and waited 33s",
+        "result": "Figma loading/privacy overlay; runtime chart not visible",
+        "evidence": [
+          "output/playwright/make-severity-check.png"
+        ]
+      },
+      "vue": {
+        "result": "Live severity rows rendered with real API values 1/4/6/1 and corrected geometry",
+        "screenshots": [
+          "output/playwright/bugs-severity-fixed.png"
+        ],
+        "computedStyle": [
+          "card 268.5px; padding 18.5px; tracks 7px"
+        ],
+        "boundingBox": [
+          "rows y=336/378.5/421/463.5; track height 7px"
+        ],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": "有数据状态几何已与 Design/Make 规格一致；无缺陷数据时不显示进度条是当前业务空态。"
+    },
+    {
+      "id": "统计视图/无缺陷数据::空数据状态",
+      "variant": "统计视图/无缺陷数据",
+      "element": "空数据状态",
+      "status": "unresolved",
+      "design": {
+        "target": "",
+        "evidence": []
+      },
+      "makeSource": {
+        "finding": "",
+        "evidence": []
+      },
+      "makePreview": {
+        "operation": "",
+        "result": "",
+        "evidence": []
+      },
+      "vue": {
+        "result": "",
+        "screenshots": [],
+        "computedStyle": [],
+        "boundingBox": [],
+        "interactionEvidence": []
+      },
+      "differenceIds": [],
+      "rationale": ""
+    }
+  ],
+  "differences": [
+    {
+      "id": "DIFF-001",
+      "status": "resolved",
+      "area": "严重程度分布真实数据状态",
+      "source": "Make / Vue / live API",
+      "current": "Vue 已按四级横向条实现；实时接口当前返回 CRITICAL=1、HIGH=4、MEDIUM=6、LOW=1，总数 12。",
+      "resolution": "修正统计卡片和严重程度列表几何：卡片 268.5px、内边距 18.5px、内容区 170px、轨道 7px、行节奏 42.5px；保留真实 API 数据映射及总数比例宽度。",
+      "followUp": "Make 预览运行态仍需在可用会话中重新采集；当前浏览器停在加载/隐私遮罩。",
+      "evidence": [
+        "src/pages/defects/DefectsPage.vue",
+        "output/playwright/bugs-severity-fixed.png",
+        "live /api/bugs/statistics response observed in browser"
+      ],
+      "decisionBasis": "真实业务数据优先于 Make 演示数据。",
+      "impact": "非零进度条宽度与真实统计数据尚未完成浏览器验收。",
+      "acceptance": {
+        "type": "",
+        "reference": ""
+      }
+    }
+  ],
+  "noDifferencesReason": "存在 DIFF-001，不能宣称完全对齐。",
+  "unverifiedStatuses": [
+    "Make 预览运行态未在本轮进入统计页"
+  ],
+  "validation": {
+    "commands": [
+      "npm run typecheck",
+      "npm run build",
+      "git diff --check"
+    ],
+    "summary": {
+      "resolved": 2,
+      "acceptedDeviations": 0,
+      "unresolved": 1,
+      "unverified": 1
+    }
+  }
+}

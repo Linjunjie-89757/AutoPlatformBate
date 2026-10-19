@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @Service
 public class BugService {
@@ -51,11 +52,13 @@ public class BugService {
             String status,
             String severity,
             String priority,
+            LocalDate createdFrom,
+            LocalDate createdTo,
             Long relatedCaseId,
             Integer pageNo,
             Integer pageSize
     ) {
-        PageResponse<BugEntity> page = bugDomainService.listBugs(workspaceCode, keyword, status, severity, priority, relatedCaseId, pageNo, pageSize);
+        PageResponse<BugEntity> page = bugDomainService.listBugs(workspaceCode, keyword, status, severity, priority, createdFrom, createdTo, relatedCaseId, pageNo, pageSize);
         return new PageResponse<>(
                 bugResponseAssembler.toSummaries(page.items()),
                 page.total(),
@@ -127,8 +130,8 @@ public class BugService {
         return bugAttachmentSupport.downloadBugAttachment(bugId, attachmentId, workspaceCode);
     }
 
-    public BugStatisticsResponse statistics(String workspaceCode) {
-        return bugDomainService.statistics(workspaceCode);
+    public BugStatisticsResponse statistics(String workspaceCode, LocalDate createdFrom, LocalDate createdTo) {
+        return bugDomainService.statistics(workspaceCode, createdFrom, createdTo);
     }
 
     public List<BugCaseSummaryResponse> listBugCases(Long id, String workspaceCode) {

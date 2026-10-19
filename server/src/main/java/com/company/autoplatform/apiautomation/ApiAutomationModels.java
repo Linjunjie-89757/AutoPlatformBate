@@ -185,8 +185,18 @@ public final class ApiAutomationModels {
             List<ApiKeyValueInput> cookies,
             ApiRequestBodyInput body,
             ApiAuthConfigInput authConfig,
-            List<ApiSchemaFieldInput> schemaFields
+            List<ApiSchemaFieldInput> schemaFields,
+            @jakarta.validation.constraints.Min(1000) Integer connectTimeoutMs,
+            Boolean followRedirects
     ) {
+        public ApiRequestConfigInput(
+                String method, String path, Integer timeoutMs,
+                List<ApiKeyValueInput> queryParams, List<ApiKeyValueInput> headers, List<ApiKeyValueInput> cookies,
+                ApiRequestBodyInput body, ApiAuthConfigInput authConfig, List<ApiSchemaFieldInput> schemaFields
+        ) {
+            this(method, path, timeoutMs, queryParams, headers, cookies, body, authConfig, schemaFields, null, null);
+        }
+
         public ApiRequestConfigInput(
                 String method,
                 String path,

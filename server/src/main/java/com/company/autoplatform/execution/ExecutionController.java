@@ -49,6 +49,13 @@ public class ExecutionController {
         return ApiResponse.ok(executionService.listTasks(workspaceCode, keyword, status, engineType, pageNo, pageSize));
     }
 
+    @GetMapping("/tasks/stats")
+    public ApiResponse<TaskStatsResponse> taskStats(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(executionService.taskStats(workspaceCode));
+    }
+
     @GetMapping("/tasks/{id}")
     public ApiResponse<TaskDetailResponse> getTask(
             @PathVariable Long id,
@@ -104,6 +111,13 @@ public class ExecutionController {
         return ApiResponse.ok(executionService.listReports(workspaceCode, keyword, result, logSource, pageNo, pageSize));
     }
 
+    @GetMapping("/reports/stats")
+    public ApiResponse<ReportStatsResponse> reportStats(
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+    ) {
+        return ApiResponse.ok(executionService.reportStats(workspaceCode));
+    }
+
     @GetMapping("/reports/{id}")
     public ApiResponse<ReportDetailResponse> getReport(
             @PathVariable Long id,
@@ -113,11 +127,13 @@ public class ExecutionController {
     }
 
     @GetMapping("/report-shares")
-    public ApiResponse<List<ReportShareSummaryResponse>> listReportShares(
+    public ApiResponse<PageResponse<ReportShareSummaryResponse>> listReportShares(
             @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
-            @RequestParam(value = "reportId", required = false) Long reportId
+            @RequestParam(value = "reportId", required = false) Long reportId,
+            @RequestParam(value = "pageNo", required = false) Long pageNo,
+            @RequestParam(value = "pageSize", required = false) Long pageSize
     ) {
-        return ApiResponse.ok(reportShareDomainService.listShares(workspaceCode, reportId));
+        return ApiResponse.ok(reportShareDomainService.listShares(workspaceCode, reportId, pageNo, pageSize));
     }
 
     @PostMapping("/reports/{id}/shares")

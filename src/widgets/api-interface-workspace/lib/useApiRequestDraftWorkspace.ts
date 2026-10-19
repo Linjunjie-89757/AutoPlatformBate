@@ -31,7 +31,9 @@ export function emptyRequestConfig(method = 'GET'): ApiRequestConfigInput {
   return {
     method,
     path: '',
-    timeoutMs: 10000,
+    timeoutMs: 60000,
+    connectTimeoutMs: 30000,
+    followRedirects: true,
     queryParams: [emptyKeyValue()],
     headers: [emptyKeyValue()],
     cookies: [],

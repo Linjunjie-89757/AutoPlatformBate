@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, reactive, ref, watch, type Component } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -1241,7 +1242,7 @@ async function savePermissions() {
           <div class="settings-form-grid">
             <label class="settings-field">
               <span>默认执行环境</span>
-              <select
+              <select class="app-native-select"
                 v-model="workspaceForm.environment"
                 @mousedown.prevent="notifyUnsupportedWorkspaceSetting('默认执行环境')"
                 @keydown="preventUnsupportedWorkspaceSelect($event, '默认执行环境')"
@@ -1315,17 +1316,17 @@ async function savePermissions() {
             <Search />
             <input v-model="userKeyword" placeholder="搜索姓名或账号" type="text">
           </label>
-          <select v-model="identityFilter">
+          <select class="app-native-select" v-model="identityFilter">
             <option value="all">全部身份</option>
             <option value="OWNER">工作区负责人</option>
             <option value="ADMIN">管理员</option>
             <option value="MEMBER">普通成员</option>
           </select>
-          <select v-model="roleFilter">
+          <select class="app-native-select" v-model="roleFilter">
             <option value="all">全部角色</option>
             <option v-for="role in roles" :key="role.id" :value="role.roleCode">{{ role.name }}</option>
           </select>
-          <select v-model="statusFilter">
+          <select class="app-native-select" v-model="statusFilter">
             <option value="all">全部状态</option>
             <option value="active">已启用</option>
             <option value="disabled">已禁用</option>
@@ -1494,7 +1495,7 @@ async function savePermissions() {
             <p>为角色配置模块级和操作级权限</p>
           </span>
           <span class="settings-permission-actions">
-            <select v-model="permissionRoleId" :disabled="permissionsLoading || permissionsSaving" @change="applyPermissionRole(permissionRoleId)">
+            <select class="app-native-select" v-model="permissionRoleId" :disabled="permissionsLoading || permissionsSaving" @change="applyPermissionRole(permissionRoleId)">
               <option v-for="role in roles" :key="role.id" :value="role.id">{{ role.name }}</option>
             </select>
             <button type="button" :disabled="permissionsLoading || permissionsSaving" @click="clearPermissions">清空</button>
@@ -1577,7 +1578,7 @@ async function savePermissions() {
             <Search />
             <input v-model="auditKeyword" placeholder="搜索操作或操作人" type="text">
           </label>
-          <select v-model="auditTypeFilter">
+          <select class="app-native-select" v-model="auditTypeFilter">
             <option value="all">全部操作类型</option>
             <option value="AUTH">登录认证</option>
             <option value="WORKSPACE">工作区与成员</option>
@@ -1586,7 +1587,7 @@ async function savePermissions() {
             <option value="CONFIG">平台配置</option>
             <option value="OTHER">其他</option>
           </select>
-          <select v-model="auditResultFilter">
+          <select class="app-native-select" v-model="auditResultFilter">
             <option value="all">全部结果</option>
             <option value="SUCCESS">成功</option>
             <option value="FAILED">失败</option>
@@ -1792,7 +1793,7 @@ async function savePermissions() {
           <div class="settings-modal-grid">
             <label class="settings-field">
               <span>业务角色 <em v-if="inviteForm.memberType === 'MEMBER'">*</em></span>
-              <el-select
+              <el-select :suffix-icon="AppSelectChevron"
                 v-model="inviteForm.roleIds"
                 class="settings-role-multi-select"
                 multiple
@@ -1812,7 +1813,7 @@ async function savePermissions() {
             </label>
             <label class="settings-field">
               <span>工作区身份 <em>*</em></span>
-              <select v-model="inviteForm.memberType" @change="handleInviteMemberTypeChange">
+              <select class="app-native-select" v-model="inviteForm.memberType" @change="handleInviteMemberTypeChange">
                 <option value="MEMBER">普通成员</option>
                 <option value="ADMIN">管理员</option>
               </select>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 import { Delete, RefreshRight, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -206,7 +207,7 @@ async function deleteTask(task: WebUiElementCollectTaskListItem) {
           :prefix-icon="Search"
           @keyup.enter="searchTasks"
         />
-        <el-select
+        <el-select :suffix-icon="AppSelectChevron"
           v-model="query.status"
           class="web-ui-collect-task-list__status"
           clearable

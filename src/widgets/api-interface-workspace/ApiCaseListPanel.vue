@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { MoreFilled, Setting } from '@element-plus/icons-vue'
+import { Setting } from '@element-plus/icons-vue'
+import { MoreHorizontal } from '@lucide/vue'
 
 import type { ApiDefinitionCaseItem } from '@/entities/api-automation'
 import { figmaApiInterfaceIcons } from '@/shared/assets/figma-icons'
@@ -105,9 +106,9 @@ const emit = defineEmits<{
                 <el-button v-if="canEdit !== false" text type="primary" size="small" class="case-list-action-button" @click="emit('edit', row)">编辑</el-button>
                 <el-button v-if="canExecute !== false" text size="small" type="primary" :loading="runningId === row.id" @click="emit('run', row)">执行</el-button>
                 <el-dropdown trigger="click" placement="bottom-end">
-                  <el-button text type="primary" size="small" class="case-list-more-button">
-                    <el-icon><MoreFilled /></el-icon>
-                  </el-button>
+                  <button type="button" class="case-list-more-button" aria-label="更多操作" title="更多操作">
+                    <MoreHorizontal :size="14" aria-hidden="true" />
+                  </button>
                   <template #dropdown>
                     <el-dropdown-menu class="case-list-more-menu">
                       <el-dropdown-item class="case-list-menu-item" @click="emit('detail', row)">查看详情</el-dropdown-item>
@@ -258,8 +259,26 @@ const emit = defineEmits<{
 }
 
 .case-list-more-button {
+  display: inline-flex;
+  box-sizing: border-box;
   width: 26px;
+  flex: 0 0 26px;
+  align-items: center;
+  justify-content: center;
   padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.case-list-more-button:hover,
+.case-list-more-button:focus-visible {
+  background: #f2f3f5;
+  color: #4e5969;
+  outline: 0;
 }
 
 .case-list-menu-item {
@@ -336,8 +355,7 @@ const emit = defineEmits<{
   font-weight: 400;
 }
 
-.case-list-action-button,
-.case-list-more-button {
+.case-list-action-button {
   height: 28px;
   color: #165dff;
   font-size: 12px;

@@ -17,6 +17,7 @@ type ChartOption = ComposeOption<PieSeriesOption | TooltipComponentOption>
 
 const props = defineProps<{
   items: DefectStatusChartItem[]
+  accessibleLabel?: string
 }>()
 
 const option = computed<ChartOption>(() => ({
@@ -72,7 +73,7 @@ const option = computed<ChartOption>(() => ({
       :option="option"
       autoresize
       role="img"
-      aria-label="缺陷状态分布环形图"
+      :aria-label="props.accessibleLabel || '缺陷状态分布环形图'"
     />
     <div class="defect-status-chart__legend" aria-hidden="true">
       <span

@@ -1,0 +1,817 @@
+{
+  "title": "下拉箭头统一",
+  "date": "2026-10-19",
+  "status": "partial-alignment",
+  "implementationStatus": "implemented",
+  "verificationStatus": "representative-browser-validation",
+  "baseline": {
+    "gitHead": "7437daa535b8053a5386f0f484b0f37bd1759c00",
+    "workingTree": "已有大量未提交修改，基于当前文件增量修改",
+    "makeDirectory": "设计/figma-ai-make最新代码20261016",
+    "sources": [
+      "src/app/App.tsx:364,4627,4765,6001,6229",
+      "src/app/VarConfigModule.tsx:19",
+      "src/app/BugsModule.tsx:71"
+    ],
+    "design": "延用此前处理器与相关页面记录；本轮未重新取得 Design 截图",
+    "makePreview": "本轮未重新操作在线预览，不宣称 Design/Make/Vue 全量一致"
+  },
+  "acceptance": {
+    "type": "user-decision",
+    "reference": "用户在本轮统一方案后回复：可以，你看看怎么处理。此前方案明确普通 12px、紧凑 10px、保留已对齐菜单按钮规格。",
+    "deviation": "Make 普通 select 使用浏览器箭头，未指定 12px/10px；统一形状和尺寸是本次批准的系统规范。"
+  },
+  "targets": {
+    "normal": {
+      "size": 12,
+      "color": "#4e5969"
+    },
+    "compact": {
+      "size": 10,
+      "color": "#4e5969"
+    },
+    "disabled": {
+      "color": "#c9cdd4"
+    },
+    "preserved": [
+      "请求方法颜色",
+      "处理器/断言添加按钮9px",
+      "此前已对齐自定义环境菜单11px",
+      "标签输入隐藏箭头",
+      "目录折叠图标"
+    ],
+    "native": "保留原生选择交互，显式类接入共享 Lucide 路径资源；不模拟原生展开旋转"
+  },
+  "counts": {
+    "vueFiles": 77,
+    "elementSelects": 159,
+    "nativeSelects": 109,
+    "existingPairedIcons": 11
+  },
+  "files": [
+    {
+      "file": "src/features/api-case-create-edit/ApiCaseAdvancedEditor.vue",
+      "beforeSha256": "5ea923d88b0511a8cbaf0c37ce05b4c8b1d64549f6f037e848b7c76e822fae4c",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 7,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/api-case-create-edit/ApiCaseCreateEditDialog.vue",
+      "beforeSha256": "52fd47514480b4ac070a5a14f18937c9cf8144d3b8bae52983c9646a2236c9fc",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 3,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/api-case-create-edit/ApiCaseDrawer.vue",
+      "beforeSha256": "4948b8d450f03e0a5d7bc1eb28a474e73b98f9a8dfb4ef3e3f413c86a286679e",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 3,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/api-definition-create-edit/ApiDefinitionCreateEditDialog.vue",
+      "beforeSha256": "aed0e97237a38814c85b042297ea96ca081d7b5986350e885dc8dc6918d9727e",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/case-batch-update/CaseBatchUpdateDialog.vue",
+      "beforeSha256": "e92720cc2764c5c9ed4d855ee9a6e6f5fc75a4061b628f9fbb53ea38441f08a8",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 3,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/case-create-edit/CaseCreateEditDialog.vue",
+      "beforeSha256": "11bfb9e91a7dbe2553d997fb629e33abbde0bac2479ce7f7b77818754cc9b311",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/case-create-edit/CaseCreateEditDrawer.vue",
+      "beforeSha256": "202f4eaa832c17f651f18c803987b4885d328d1edd0ca8d92c66a875ade450f2",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 2
+    },
+    {
+      "file": "src/features/case-execution-defects/CaseDefectEditorDrawer.vue",
+      "beforeSha256": "db6defb43d0076783f2bc6b8706a520028268c5cf6f55d0c96a3bf8a19d9f4c2",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/defect-case-associate/DefectCaseAssociateDialog.vue",
+      "beforeSha256": "377a0f0d394cc98fa37f9e8e90da40b20a7dc2475c38ef51e0bb21c18ac985f5",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/defect-create-edit/DefectCreateEditDialog.vue",
+      "beforeSha256": "90249b130adf131aa1264438642ae7fea674008028fb8600a06121e998df9d7d",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 5,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/features/workspace-create-edit/WorkspaceCreateEditDialog.vue",
+      "beforeSha256": "73be486b774a9e0ae12e58849ddd05a98d616b5d877c70e8c21b9041b858c5cb",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/features/workspace-member-manage/WorkspaceMemberDialog.vue",
+      "beforeSha256": "7a09edf9e43cf0c16588c8fd52758f6ddfe0e8a58bf1bfbf711150447e292895",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/pages/automation-tasks/AutomationTasksPage.vue",
+      "beforeSha256": "ccdb87c105782aac8463e7e2475aeffce787c058f074f8b580cb9d8140dca3cf",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 5
+    },
+    {
+      "file": "src/pages/cases/CaseAiConfigPage.vue",
+      "beforeSha256": "9d2930bf54718dbb8aed3a99b17fe1b5df53b09f8824ecd055147929749cf9d9",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/pages/cases/CaseAiGeneratePage.vue",
+      "beforeSha256": "3c8130e5cef798ac1fc4d64a8b1484d7b03815adc17dbfdaf3114d63737ccd5f",
+      "bom": true,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/pages/cases/CaseAiRecordDetailPage.vue",
+      "beforeSha256": "15bbe83da0440f2182b36dbbcc3a8ebe92c8be7d3662a8493a00be3511c167bc",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/pages/cases/CaseAiRecordsPage.vue",
+      "beforeSha256": "f3d896717a7ab5dc64b681df65384ac4a44b2af5c3d2dbf2d9a1b1f8379ad4b7",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/pages/cases/CasesPage.vue",
+      "beforeSha256": "4acaa88f0e6dbb77c5ef37103e2646ef1584d863a058893b77efa24e7225369c",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/pages/defects/DefectEditPage.vue",
+      "beforeSha256": "f534e87aeea2fa48192c2538e5d787686ff19cc6b30bc9c935325e81cf5258d6",
+      "bom": true,
+      "crlf": true,
+      "elementCount": 5,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/pages/defects/DefectsPage.vue",
+      "beforeSha256": "6c0217f412f9a6a01f9903ed24bb683c70c28d7a4b79eb1f50822522e82ce276",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/pages/profile/ProfileSettingsPage.vue",
+      "beforeSha256": "037963c6e9cb94f56fb716874ff24bfbb2c60070a5555e3e4bd57f7513df7f5e",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 3
+    },
+    {
+      "file": "src/pages/reports/ReportCenterPage.vue",
+      "beforeSha256": "b659fe060bd227a7ff1b782901efe4cc4b6e793e03ade1549e237ac844e4e94c",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 2
+    },
+    {
+      "file": "src/pages/system-settings/AddWorkspaceMembersDialog.vue",
+      "beforeSha256": "ec27b76f3dce3d88f681fc8d68f4f5671c053aca5d0bea0094f8abe42432adf9",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/pages/system-settings/SystemSettingsPage.vue",
+      "beforeSha256": "e20c4098a766e94620b787fc82b5835a14e63c60f0746de2aa02ba9df461fc3f",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 8
+    },
+    {
+      "file": "src/pages/test-management/RequirementManagementPanel.vue",
+      "beforeSha256": "d06959334572579f56107f29662bb1211cb83dd7146347e0fc628ff8e616366e",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 9
+    },
+    {
+      "file": "src/pages/test-management/TestPlanCopyDialog.vue",
+      "beforeSha256": "bb6a3d18d4f6862f5d12b0d5c2fb15dee7efaabcc812d7a7fb9d0d583aefc7d8",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/pages/test-management/TestPlanDefectDrawer.vue",
+      "beforeSha256": "334e9fb5fce4b21eb71946b16c2ef12ed7afd2898431f65c3cd793e4599f9740",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 3
+    },
+    {
+      "file": "src/pages/test-management/TestPlanManagementPanel.vue",
+      "beforeSha256": "240c97f8773fe1a56510ed20e912cd5ddafb2b7e3d7f9ab42347c6419ac25b9f",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 11
+    },
+    {
+      "file": "src/pages/test-management/VersionManagementPanel.vue",
+      "beforeSha256": "50f05a82afcd02dff690b589e3c3df713cd4ce1158125fb913f155ea0a13ce25",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 7
+    },
+    {
+      "file": "src/shared/ui/app-tag-input/AppTagInput.vue",
+      "beforeSha256": "ae0ab7904864af14c3ea7c902d3d46ba72aa237871436837f2917ca1a97fca15",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/shared/ui/app-user-select/AppUserSelect.vue",
+      "beforeSha256": "fdedded4ccc41a39d964fc98adff5744b7560fb0aa2644126a00d2be82562fdb",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue",
+      "beforeSha256": "9314ed7a42ac9ca5b004823d7edf5baa1098de1eacbe3ee9fad93b5153043f52",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 2
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiAiGenerationDrawer.vue",
+      "beforeSha256": "180cc4c0b5fa1240534614ba8dd2e0c3ccc8bc90757531f4b789ebc96870d825",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiAiGenerationWorkspace.vue",
+      "beforeSha256": "8ec54d349028298317f20b6df5fd4770be4aecb4b3dc2dffddbf48e24b2b6ced",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiAssertionPanel.vue",
+      "beforeSha256": "c3b9bc323ac548ec70d68d4378e9a1328c5c757cc7e7732c16021a131175674d",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 5,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiCaseDetailDrawerContent.vue",
+      "beforeSha256": "baba1992824d0c7d7802d6cb8ff775f1c20acc6724841fe769d3d6402734d1f7",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiDefinitionSaveDialog.vue",
+      "beforeSha256": "9b4ad865eafef9d4a8fbf754e198aecb89bfd63cdf7c344a3999343c4c46a095",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiExtractorPanel.vue",
+      "beforeSha256": "1f63fb88bc4a9c122dc7990e561501dfe1e24361f7a71d20c43beff6fc948fe2",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiImportDialog.vue",
+      "beforeSha256": "aa8653dcdf2fb4182c992c628f11edca8cd17e3f96b8702f212ca73cccd04188",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiKeyValueTable.vue",
+      "beforeSha256": "e8efa0857ae11cd235d6f5cdfeb58ed688bf262f972a38488e4c9c11c3f1a51b",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiProcessorDetail.vue",
+      "beforeSha256": "2812752404a70eff6bb942af5c1464da3172c8ae1f382184894ef0c40eaab552",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 4,
+      "nativeCount": 2
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiRequestBodyPanel.vue",
+      "beforeSha256": "4024aa8e6ebcf94e6c3eff391fd2483b06d28babd1a1c9dfce629a695b2e7e15",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiRequestToolbar.vue",
+      "beforeSha256": "ec6bb8201e40ca228374d30e685c3dc2a32721799c968440f3b4e403e1fa6119",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-interface-workspace/ApiRunEnvironmentDrawer.vue",
+      "beforeSha256": "7ed479aa1d1ecafbb373648ed913fffeed6f48983bedb3984eebc2d4b1b25e7c",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/api-scenario-workspace/ApiScenarioFigmaWorkspace.vue",
+      "beforeSha256": "a344acee0ed75405d92cc309012bf9b5531a568108f8dd3d8b20147aafc874a5",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 16
+    },
+    {
+      "file": "src/widgets/automation-task-filter-panel/AutomationTaskFilterPanel.vue",
+      "beforeSha256": "025be1d6f87f6fcc094344af88859e7839451bc31ff4509a4cfcbb6a76fd6fb5",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/case-filter-panel/CaseFilterPanel.vue",
+      "beforeSha256": "5cb6e854d11d67404a865dce57b13f4002c2265c87475f39b6380f0db4e596c8",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 4,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/case-list-panel/CaseListPanel.vue",
+      "beforeSha256": "091b13ad665b7addac50d90da70ba533db9a01ec63709b7c6bd525eb98527125",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/config-ai-panel/ConfigAiPanel.vue",
+      "beforeSha256": "e9227eb9bc67fee3211db626296a178d1925e468388e31cafe3b842d2e435386",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 4
+    },
+    {
+      "file": "src/widgets/config-env-panel/ConfigEnvironmentMockDialogs.vue",
+      "beforeSha256": "bc1c53a7ff94fe7ed8211f248a8faa8bde8a9a894332fe8e000b405d851c426e",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 2
+    },
+    {
+      "file": "src/widgets/config-env-panel/ConfigEnvironmentVariableDialogs.vue",
+      "beforeSha256": "1f6ce2370f028d70b307ddfef5fc98b79eb4f2d37d16bbbf56ce2306a8e4ea39",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/widgets/config-mock-panel/ConfigMockFigmaWorkspace.vue",
+      "beforeSha256": "b62471eb48babcf03a1571a9f0bde75ffc1f437f09f71c1853a62739ce181a10",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 6
+    },
+    {
+      "file": "src/widgets/config-mock-panel/ConfigMockPanel.vue",
+      "beforeSha256": "ae97f17b0526dfc28ad8f2b44b9287d20a00bcd169ebe98ae9b15dcf2d565678",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 7,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/config-notification-panel/ConfigNotificationOverlays.vue",
+      "beforeSha256": "dfe1e7a1f03bb5dd20cd954fa16c5b740c402ad0653bcf2fc53d908775d7bbfe",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 4,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/config-notification-panel/ConfigNotificationRecordList.vue",
+      "beforeSha256": "6d0287401c43e530912cd67a9abc1028e79294b6128b281083db76886a404b3d",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/config-param-panel/ConfigVariableFigmaWorkspace.vue",
+      "beforeSha256": "e4488fb3592e222460d3f917ba842170900abf297555539a01b176e6dfe9325d",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 2
+    },
+    {
+      "file": "src/widgets/config-runner-panel/ConfigRunnerEditorDrawer.vue",
+      "beforeSha256": "744c950e564ff29adafd3cda62021673c1b9184ea72f8971779ab42b7a9c96c9",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 1
+    },
+    {
+      "file": "src/widgets/config-runner-panel/ConfigRunnerPanel.vue",
+      "beforeSha256": "dfcb06f16e02ae56c38f57167b0606063f038033f8a717158bb39d166caebf38",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 2
+    },
+    {
+      "file": "src/widgets/defect-filter-panel/DefectFilterPanel.vue",
+      "beforeSha256": "dccf9ba21e6175eafea3e24ffc6c216746a5e3258a38616e566f3a459b6b5d30",
+      "bom": true,
+      "crlf": true,
+      "elementCount": 5,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiCaseBasicInfoDialog.vue",
+      "beforeSha256": "37cf3f790d957716d26227090708fd8e2c4560180c445c4f702ab8a2413ed81f",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiCaseDetailWorkspace.vue",
+      "beforeSha256": "cd3ce598835c04a00dd1060df545c280bcf0d898b60bc147a29ef1eb9bc0d189",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 14,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiCaseEditorDrawer.vue",
+      "beforeSha256": "2b153f487e3ed3e0eb956b0dc00c73aa83e388eb7c3eade3cc6d74b6d43df229",
+      "bom": true,
+      "crlf": true,
+      "elementCount": 11,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiCaseWorkspace.vue",
+      "beforeSha256": "76b04b3ac04f2a2f9152f0bc9a0bfa1cf8917fdf3e1747a56b2d9ef0e6c82bc2",
+      "bom": true,
+      "crlf": true,
+      "elementCount": 9,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementAiCaptureWorkspace.vue",
+      "beforeSha256": "048b27094c43b0b844e2b4009257bbd57759a1c06b275014c9c7314196b6ae16",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 4,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementAiCollectDrawer.vue",
+      "beforeSha256": "cc11f4e9be53efdfba8c89b25ef4abd39973af998f9165f81c78a67bc9620045",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 6,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementCollectLaunchDialog.vue",
+      "beforeSha256": "14c4c749ba53a48469adc7c653c47fe1821dd51310220a31d7f6c2c728a412cf",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 5,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementCollectTaskListDrawer.vue",
+      "beforeSha256": "4306ca131337c3d035bd03224bbd51b2421911fc90a552cf94f7c0038ad97c3b",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 1,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementCollectTaskWorkspace.vue",
+      "beforeSha256": "a52e598944453c8ef83e0be413e68d288c1420c45b45e86d688ee14b9ed2da9c",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementEditDialog.vue",
+      "beforeSha256": "cb7c3922e111b6126cb4a32ec012a832e4a2e1c0e84e74cab5e0b703df75083b",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 4,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementFigmaLibrary.vue",
+      "beforeSha256": "e259f2911e5527645bfb63c1c4a21362d9e90014dde7208d11df3c3aaed150f8",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 4
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementStructureDialogs.vue",
+      "beforeSha256": "8937709cd680d72e763a87c4a036a56f18684587f411b5934c9e376aa64f9e53",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 5,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementToolbar.vue",
+      "beforeSha256": "819a47ad19649ed6a0434e0498049798ef09e606acec387f298a309406da6c35",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiElementUtilityDialogs.vue",
+      "beforeSha256": "678218be5694db512e7cddae2497cf7d93e8a2f8af88735b211acf02560d8dfb",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 3,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiRunRecordsFigmaPage.vue",
+      "beforeSha256": "8a0b0bfd520437e5b1a29a59b4ca3bcc539e551f3d9462b09be37dd1dfe09886",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 3
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiSuiteFigmaWorkspace.vue",
+      "beforeSha256": "3674f5a04541095f2238188debd832188cc2c681bbf8a0bca5eb235eec9750b3",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 0,
+      "nativeCount": 5
+    },
+    {
+      "file": "src/widgets/web-ui-case-workspace/WebUiVariableSetPanel.vue",
+      "beforeSha256": "176e4bb56db6b60e5065be78c59d1811a84b4857981452f9d2bab31427f1e584",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 0
+    },
+    {
+      "file": "src/widgets/workspace-settings-panel/WorkspaceSettingsPanel.vue",
+      "beforeSha256": "16117d5d85106cfb709ba362aefb20768c2f24391ac9d07dbef00e5b383c24f6",
+      "bom": false,
+      "crlf": true,
+      "elementCount": 2,
+      "nativeCount": 3
+    }
+  ],
+  "preserved": [
+    {
+      "file": "src/pages/platform-admin/PlatformNotificationsPage.vue",
+      "line": 256,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/pages/platform-admin/PlatformNotificationsPage.vue",
+      "line": 296,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/pages/workspace-select/components/WorkspaceCreateView.vue",
+      "line": 140,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue",
+      "line": 1001,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue",
+      "line": 1078,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue",
+      "line": 1160,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue",
+      "line": 1162,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/api-execution-workspace/ApiExecutionSuiteFigmaWorkspace.vue",
+      "line": 1164,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/case-ai-config/CaseAiConfigFigmaWorkspace.vue",
+      "line": 222,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/case-ai-config/CaseAiConfigFigmaWorkspace.vue",
+      "line": 252,
+      "reason": "existing separate icon"
+    },
+    {
+      "file": "src/widgets/config-env-panel/ConfigEnvironmentEffectivePanel.vue",
+      "line": 25,
+      "reason": "existing separate icon"
+    }
+  ],
+  "differences": [
+    {
+      "id": "D01",
+      "item": "普通 Element Plus 箭头",
+      "status": "implemented",
+      "decision": "通过 suffix-icon 使用 Lucide；公共 CSS 仅匹配对应 SVG 的 caret，排除清空与加载图标",
+      "verified": "六个代表页面截图与几何复测，普通箭头12px；其他隐藏弹窗未逐一展开"
+    },
+    {
+      "id": "D02",
+      "item": "原生选择框箭头",
+      "status": "implemented",
+      "decision": "109处无配对图标的select接入app-native-select，保留现有边框/字号/高度和事件，统一箭头及必要右侧空间",
+      "verified": "变量筛选选择恢复、Runner/AI/Mock/报告/测试管理/Web页面可见筛选；未逐一操作全部动态弹窗"
+    },
+    {
+      "id": "D03",
+      "item": "紧凑表格与禁用",
+      "status": "verified",
+      "decision": "参数/断言/提取行使用10px，禁用浅灰",
+      "evidence": [
+        "extract.png",
+        "params.png",
+        "browser-results.json"
+      ]
+    },
+    {
+      "id": "D04",
+      "item": "分页和分体按钮内置箭头",
+      "status": "verified",
+      "decision": "组件未暴露对应suffix-icon，使用同一资源mask替换箭头显示，保留currentColor与旋转逻辑",
+      "evidence": [
+        "browser-results.json",
+        "additional-results.json"
+      ]
+    },
+    {
+      "id": "D05",
+      "item": "任务筛选透明文字",
+      "status": "verified",
+      "decision": "原有color:transparent导致选择值不可见，改回#4e5969",
+      "evidence": [
+        "before-tasks.png",
+        "after-tasks.png"
+      ]
+    },
+    {
+      "id": "D06",
+      "item": "原生select展开/禁用/强制颜色模式",
+      "status": "partial",
+      "decision": "保留原生交互；原生禁用资源与forced-colors回退已有代码，未逐项运行所有原生禁用和强制颜色环境"
+    },
+    {
+      "id": "D07",
+      "item": "Make在线、Design配对及全量弹窗状态",
+      "status": "unverified",
+      "decision": "本轮已做系统规范统一与代表页面复验；不宣称整个系统所有状态或Figma全量像素验收"
+    }
+  ],
+  "evidenceRoot": "output/playwright/select-arrow-20261019",
+  "evidence": {
+    "viewport": {
+      "width": 1440,
+      "height": 1000,
+      "dpr": 1
+    },
+    "beforeAfter": [
+      "api",
+      "variables",
+      "defects",
+      "tasks",
+      "web",
+      "cases"
+    ],
+    "review": [
+      "comparison.png",
+      "overlay-api.png",
+      "overlay-variables.png",
+      "overlay-defects.png",
+      "overlay-web.png",
+      "overlay-cases.png"
+    ],
+    "sweep": "browser-results.json"
+  },
+  "validation": {
+    "typecheck": "passed",
+    "build": "passed;已有依赖注释和chunk大小警告",
+    "encoding": "77个Vue文件UTF-8、BOM与CRLF/LF类型检查通过",
+    "diffCheck": "passed",
+    "businessWrites": "浏览器仅操作筛选和未保存草稿，成员弹窗已取消，无确认保存/发送/邀请"
+  }
+}

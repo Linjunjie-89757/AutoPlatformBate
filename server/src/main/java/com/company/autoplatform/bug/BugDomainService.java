@@ -1,6 +1,7 @@
 package com.company.autoplatform.bug;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.company.autoplatform.auth.CurrentUserContext;
 import com.company.autoplatform.casecenter.CaseService;
@@ -9,6 +10,8 @@ import com.company.autoplatform.common.JsonUtils;
 import com.company.autoplatform.common.NotFoundException;
 import com.company.autoplatform.common.PageResponse;
 import com.company.autoplatform.execution.ExecutionService;
+import com.company.autoplatform.user.UserEntity;
+import com.company.autoplatform.user.UserMapper;
 import com.company.autoplatform.user.UserService;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceScope;
@@ -16,18 +19,26 @@ import com.company.autoplatform.workspace.WorkspaceService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class BugDomainService {
 
     private static final int DEFAULT_PAGE_NO = 1;
     private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final int STATISTICS_TREND_DAYS = 7;
+    private static final DateTimeFormatter TREND_DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
 
     private final BugMapper bugMapper;
     private final BugFlowMapper bugFlowMapper;
     private final BugCaseRelationMapper bugCaseRelationMapper;
     private final UserService userService;
+    private final UserMapper userMapper;
     private final WorkspaceService workspaceService;
     private final CaseService caseService;
     private final ExecutionService executionService;
@@ -37,6 +48,7 @@ public class BugDomainService {
             BugFlowMapper bugFlowMapper,
             BugCaseRelationMapper bugCaseRelationMapper,
             UserService userService,
+            UserMapper userMapper,
             WorkspaceService workspaceService,
             CaseService caseService,
             ExecutionService executionService
@@ -45,6 +57,7 @@ public class BugDomainService {
         this.bugFlowMapper = bugFlowMapper;
         this.bugCaseRelationMapper = bugCaseRelationMapper;
         this.userService = userService;
+        this.userMapper = userMapper;
         this.workspaceService = workspaceService;
         this.caseService = caseService;
         this.executionService = executionService;
@@ -56,6 +69,8 @@ public class BugDomainService {
             String status,
             String severity,
             String priority,
+            LocalDate createdFrom,
+            LocalDate createdTo,
             Long relatedCaseId,
             Integer pageNo,
             Integer pageSize
@@ -96,6 +111,13 @@ public class BugDomainService {
         String normalizedPriority = blankToNull(priority);
         if (normalizedPriority != null) {
             query.eq(BugEntity::getPriority, normalizeBugPriority(normalizedPriority));
+        }
+
+        if (createdFrom != null) {
+            query.ge(BugEntity::getCreatedAt, createdFrom.atStartOfDay());
+        }
+        if (createdTo != null) {
+            query.lt(BugEntity::getCreatedAt, createdTo.plusDays(1).atStartOfDay());
         }
 
         if (relatedCaseId != null) {
@@ -254,28 +276,180 @@ public class BugDomainService {
         return requireBug(id);
     }
 
-    public BugStatisticsResponse statistics(String workspaceCode) {
+    public BugStatisticsResponse statistics(String workspaceCode, LocalDate createdFrom, LocalDate createdTo) {
+        if (createdFrom != null && createdTo != null && createdFrom.isAfter(createdTo)) {
+            throw new BadRequestException("统计开始日期不能晚于结束日期");
+        }
+        LocalDate trendStart = createdFrom != null && createdTo != null
+                ? createdFrom
+                : LocalDate.now().minusDays(STATISTICS_TREND_DAYS - 1L);
+        LocalDate trendEnd = createdFrom != null && createdTo != null
+                ? createdTo.plusDays(1)
+                : LocalDate.now().plusDays(1);
         WorkspaceEntity workspace = resolveScopedWorkspace(workspaceCode);
-        LambdaQueryWrapper<BugEntity> query = new LambdaQueryWrapper<>();
+        Long scopedWorkspaceId = null;
+        List<Long> scopedWorkspaceIds = List.of();
+        boolean unrestricted = workspace == null && workspaceService.isPlatformAdmin();
         if (workspace != null) {
-            query.eq(BugEntity::getWorkspaceId, workspace.getId());
+            scopedWorkspaceId = workspace.getId();
         } else if (!workspaceService.isPlatformAdmin()) {
             List<Long> workspaceIds = workspaceService.listReadableWorkspaceIds();
             if (workspaceIds.isEmpty()) {
-                return new BugStatisticsResponse(0, 0, 0, 0, 0, 0, 0);
+                return emptyStatistics(trendStart, trendEnd);
             }
-            query.in(BugEntity::getWorkspaceId, workspaceIds);
+            scopedWorkspaceIds = workspaceIds;
         }
-        List<BugEntity> scoped = bugMapper.selectList(query);
+        List<Map<String, Object>> rows = bugMapper.selectMaps(statsQuery(scopedWorkspaceId, scopedWorkspaceIds, createdFrom, createdTo)
+                .select("status", "COUNT(*) AS bug_count")
+                .groupBy("status"));
+        long total = 0;
+        long todo = 0;
+        long assigned = 0;
+        long inProgress = 0;
+        long pendingVerify = 0;
+        long closed = 0;
+        long rejected = 0;
+        for (Map<String, Object> row : rows) {
+            long count = numericValue(row, "bug_count");
+            total += count;
+            String status = String.valueOf(mapValue(row, "status")).toUpperCase();
+            switch (status) {
+                case "TODO" -> todo += count;
+                case "ASSIGNED" -> assigned += count;
+                case "IN_PROGRESS" -> inProgress += count;
+                case "PENDING_VERIFY" -> pendingVerify += count;
+                case "CLOSED" -> closed += count;
+                case "REJECTED" -> rejected += count;
+                default -> { }
+            }
+        }
+        List<Map<String, Object>> priorityRows = bugMapper.selectMaps(statsQuery(scopedWorkspaceId, scopedWorkspaceIds, createdFrom, createdTo)
+                .select("priority", "COUNT(*) AS item_count")
+                .groupBy("priority"));
+        long highPriority = countPriority(priorityRows, "P0") + countPriority(priorityRows, "P1");
+
+        List<Map<String, Object>> severityRows = bugMapper.selectMaps(statsQuery(scopedWorkspaceId, scopedWorkspaceIds, createdFrom, createdTo)
+                .select("severity", "COUNT(*) AS item_count")
+                .groupBy("severity"));
+        List<BugStatisticsResponse.DistributionItem> severityDistribution = severityRows.stream()
+                .map(row -> new BugStatisticsResponse.DistributionItem(
+                        String.valueOf(mapValue(row, "severity")), numericValue(row, "item_count")))
+                .toList();
+
+        List<Map<String, Object>> assigneeRows = bugMapper.selectMaps(statsQuery(scopedWorkspaceId, scopedWorkspaceIds, createdFrom, createdTo)
+                .select("assignee_id", "status", "COUNT(*) AS item_count")
+                .isNotNull("assignee_id")
+                .groupBy("assignee_id", "status"));
+        Map<Long, long[]> assigneeCounts = new LinkedHashMap<>();
+        for (Map<String, Object> row : assigneeRows) {
+            Long assigneeId = longValue(mapValue(row, "assignee_id"));
+            if (assigneeId == null) continue;
+            long[] counts = assigneeCounts.computeIfAbsent(assigneeId, ignored -> new long[2]);
+            String status = String.valueOf(mapValue(row, "status"));
+            int countIndex = "CLOSED".equalsIgnoreCase(status) || "REJECTED".equalsIgnoreCase(status) ? 1 : 0;
+            counts[countIndex] += numericValue(row, "item_count");
+        }
+        List<UserEntity> assigneeUsers = assigneeCounts.isEmpty()
+                ? List.of()
+                : userMapper.selectBatchIds(assigneeCounts.keySet());
+        Map<Long, UserEntity> assignees = assigneeUsers.stream()
+                .collect(java.util.stream.Collectors.toMap(UserEntity::getId, user -> user));
+        List<BugStatisticsResponse.AssigneeDistributionItem> assigneeDistribution = assigneeCounts.entrySet().stream()
+                .map(entry -> {
+                    UserEntity user = assignees.get(entry.getKey());
+                    String name = user == null ? "用户 " + entry.getKey()
+                            : user.getDisplayName() == null || user.getDisplayName().isBlank()
+                                    ? user.getUsername() : user.getDisplayName();
+                    return new BugStatisticsResponse.AssigneeDistributionItem(
+                            name, entry.getValue()[0], entry.getValue()[1]);
+                })
+                .sorted(java.util.Comparator.comparingLong(
+                        (BugStatisticsResponse.AssigneeDistributionItem item) -> item.open() + item.closed()).reversed())
+                .toList();
+
+        List<Map<String, Object>> createdRows = bugMapper.selectMaps(new QueryWrapper<BugEntity>()
+                .select("DATE(created_at) AS stat_date", "COUNT(*) AS item_count")
+                .ge("created_at", trendStart.atStartOfDay())
+                .lt("created_at", trendEnd.atStartOfDay())
+                .eq(scopedWorkspaceId != null, "workspace_id", scopedWorkspaceId)
+                .in(!scopedWorkspaceIds.isEmpty(), "workspace_id", scopedWorkspaceIds)
+                .groupBy("DATE(created_at)"));
+        List<Map<String, Object>> closedRows = bugFlowMapper.selectClosedCountsByDate(
+                scopedWorkspaceId,
+                unrestricted ? List.of() : scopedWorkspaceIds,
+                trendStart.atStartOfDay(),
+                trendEnd.atStartOfDay());
+        Map<LocalDate, Long> createdByDate = countByDate(createdRows);
+        Map<LocalDate, Long> closedByDate = countByDate(closedRows);
+        int trendDays = Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(trendStart, trendEnd));
+        List<BugStatisticsResponse.TrendItem> trend = new ArrayList<>(trendDays);
+        for (int day = 0; day < trendDays; day++) {
+            LocalDate date = trendStart.plusDays(day);
+            trend.add(new BugStatisticsResponse.TrendItem(
+                    date.format(TREND_DATE_FORMAT),
+                    createdByDate.getOrDefault(date, 0L),
+                    closedByDate.getOrDefault(date, 0L)));
+        }
         return new BugStatisticsResponse(
-                scoped.size(),
-                scoped.stream().filter(item -> BugStatus.valueOf(item.getStatus()) == BugStatus.TODO).count(),
-                scoped.stream().filter(item -> BugStatus.valueOf(item.getStatus()) == BugStatus.ASSIGNED).count(),
-                scoped.stream().filter(item -> BugStatus.valueOf(item.getStatus()) == BugStatus.IN_PROGRESS).count(),
-                scoped.stream().filter(item -> BugStatus.valueOf(item.getStatus()) == BugStatus.PENDING_VERIFY).count(),
-                scoped.stream().filter(item -> BugStatus.valueOf(item.getStatus()) == BugStatus.CLOSED).count(),
-                scoped.stream().filter(item -> BugStatus.valueOf(item.getStatus()) == BugStatus.REJECTED).count()
-        );
+                total, todo, assigned, inProgress, pendingVerify, closed, rejected,
+                highPriority, severityDistribution, assigneeDistribution, trend);
+    }
+
+    private QueryWrapper<BugEntity> statsQuery(
+            Long workspaceId,
+            List<Long> workspaceIds,
+            LocalDate createdFrom,
+            LocalDate createdTo
+    ) {
+        QueryWrapper<BugEntity> query = new QueryWrapper<BugEntity>()
+                .eq(workspaceId != null, "workspace_id", workspaceId)
+                .in(!workspaceIds.isEmpty(), "workspace_id", workspaceIds);
+        if (createdFrom != null) {
+            query.ge("created_at", createdFrom.atStartOfDay());
+        }
+        if (createdTo != null) {
+            query.lt("created_at", createdTo.plusDays(1).atStartOfDay());
+        }
+        return query;
+    }
+
+    private BugStatisticsResponse emptyStatistics(LocalDate trendStart, LocalDate trendEnd) {
+        int trendDays = Math.toIntExact(java.time.temporal.ChronoUnit.DAYS.between(trendStart, trendEnd));
+        List<BugStatisticsResponse.TrendItem> trend = new ArrayList<>(trendDays);
+        for (int day = 0; day < trendDays; day++) {
+            trend.add(new BugStatisticsResponse.TrendItem(
+                    trendStart.plusDays(day).format(TREND_DATE_FORMAT), 0, 0));
+        }
+        return new BugStatisticsResponse(0, 0, 0, 0, 0, 0, 0, 0, List.of(), List.of(), trend);
+    }
+
+    private Long longValue(Object value) {
+        if (value instanceof Number number) return number.longValue();
+        if (value == null) return null;
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private long countPriority(List<Map<String, Object>> rows, String priority) {
+        return rows.stream()
+                .filter(row -> priority.equalsIgnoreCase(String.valueOf(row.get("priority"))))
+                .mapToLong(row -> numericValue(row, "item_count"))
+                .sum();
+    }
+
+    private Map<LocalDate, Long> countByDate(List<Map<String, Object>> rows) {
+        Map<LocalDate, Long> result = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Object dateValue = mapValue(row, "stat_date");
+            LocalDate date = dateValue instanceof java.sql.Date sqlDate
+                    ? sqlDate.toLocalDate()
+                    : LocalDate.parse(String.valueOf(dateValue));
+            result.put(date, numericValue(row, "item_count"));
+        }
+        return result;
     }
 
     public BugEntity requireBug(Long id) {
@@ -423,5 +597,22 @@ public class BugDomainService {
         } catch (NumberFormatException exception) {
             return 0;
         }
+    }
+
+    private long numericValue(Map<String, Object> row, String key) {
+        Object value = mapValue(row, key);
+        return value instanceof Number number ? number.longValue() : Long.parseLong(String.valueOf(value));
+    }
+
+    private Object mapValue(Map<String, Object> row, String key) {
+        Object value = row.get(key);
+        if (value != null) {
+            return value;
+        }
+        return row.entrySet().stream()
+                .filter(entry -> key.equalsIgnoreCase(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(null);
     }
 }

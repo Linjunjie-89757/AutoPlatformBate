@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
-import { ArrowDown } from '@element-plus/icons-vue'
 import { Folder as LucideFolder, FolderOpen as LucideFolderOpen, FolderPlus as LucideFolderPlus } from '@lucide/vue'
 import { ElMessage } from 'element-plus'
 
@@ -188,7 +188,7 @@ function confirmCreateModule() {
         >
           <span>{{ form.directoryName || '请选择保存模块' }}</span>
           <el-icon>
-            <ArrowDown />
+            <AppSelectChevron />
           </el-icon>
         </button>
         <div v-if="moduleSelectOpen" class="api-definition-save-dialog__module-dropdown">
@@ -257,7 +257,7 @@ function confirmCreateModule() {
         show-word-limit
       />
       <label class="api-definition-save-dialog__label">父级模块</label>
-      <el-select
+      <el-select :suffix-icon="AppSelectChevron"
         v-model="createModuleForm.parentId"
         class="api-definition-save-dialog__parent-select"
         filterable

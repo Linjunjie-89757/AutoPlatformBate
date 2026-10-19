@@ -86,6 +86,51 @@ class DbConnectionServiceTests extends IntegrationTestSupport {
     }
 
     @Test
+    void settingsOverviewAggregatesTotalsAndEnabledCounts() {
+        String unique = "settings-overview-" + System.nanoTime();
+        SettingsOverviewResponse before = settingsService.overview(WORKSPACE_CODE);
+
+        EnvConfigItem env = settingsService.createEnv(WORKSPACE_CODE, new CreateEnvConfigRequest(
+                null,
+                "TEST",
+                unique + "-env",
+                "https://" + unique + ".example.com",
+                "{}"
+        ));
+        ParamSetItem param = settingsService.createParam(WORKSPACE_CODE, new CreateParamSetRequest(
+                null,
+                "API",
+                unique + "-param",
+                "{}"
+        ));
+        DbConnectionItem dbConnection = settingsService.createDbConnection(WORKSPACE_CODE, new DbConnectionRequest(
+                null,
+                unique + "-db",
+                "H2",
+                "org.h2.Driver",
+                "jdbc:h2:mem:" + unique + ";MODE=MySQL;DB_CLOSE_DELAY=-1",
+                "sa",
+                "",
+                2,
+                3000,
+                null,
+                0
+        ));
+
+        SettingsOverviewResponse after = settingsService.overview(WORKSPACE_CODE);
+        assertThat(after.environment().total()).isEqualTo(before.environment().total() + 1);
+        assertThat(after.environment().enabled()).isEqualTo(before.environment().enabled() + 1);
+        assertThat(after.parameter().total()).isEqualTo(before.parameter().total() + 1);
+        assertThat(after.parameter().enabled()).isEqualTo(before.parameter().enabled() + 1);
+        assertThat(after.database().total()).isEqualTo(before.database().total() + 1);
+        assertThat(after.database().enabled()).isEqualTo(before.database().enabled());
+
+        settingsService.deleteEnv(env.id(), WORKSPACE_CODE);
+        settingsService.deleteParam(param.id(), WORKSPACE_CODE);
+        settingsService.deleteDbConnection(dbConnection.id(), WORKSPACE_CODE);
+    }
+
+    @Test
     void dbConnectionCrudDoesNotExposePasswordAndKeepsPasswordOnBlankUpdate() {
         String connectionName = "core-db-crud-" + System.nanoTime();
         DbConnectionItem created = settingsService.createDbConnection(WORKSPACE_CODE, new DbConnectionRequest(

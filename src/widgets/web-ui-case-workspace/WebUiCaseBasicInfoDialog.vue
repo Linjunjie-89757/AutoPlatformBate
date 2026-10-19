@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -173,7 +174,7 @@ watch(
         <el-input v-model="form.baseUrl" maxlength="500" clearable placeholder="https://example.com" />
       </el-form-item>
       <el-form-item label="浏览器">
-        <el-select v-model="form.browserType">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.browserType">
           <el-option v-for="item in WEB_UI_BROWSER_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
@@ -184,7 +185,7 @@ watch(
         <el-input-number v-model="form.defaultTimeoutMs" :min="1000" :max="60000" :step="1000" controls-position="right" />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="form.status">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.status">
           <el-option v-for="item in WEB_UI_CASE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>

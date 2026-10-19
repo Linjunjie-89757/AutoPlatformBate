@@ -340,7 +340,7 @@ watch(
               </label>
               <label class="case-editor-drawer__field">
                 <span>用例类型</span>
-                <select v-model="form.caseType">
+                <select class="app-native-select" v-model="form.caseType">
                   <option v-for="item in caseTypeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
                 </select>
               </label>
@@ -355,7 +355,7 @@ watch(
               </div>
               <div class="case-editor-drawer__field">
                 <span>来源</span>
-                <select v-model="form.sourceType"><option value="MANUAL">手工创建</option><option value="IMPORTED">导入</option><option value="AI_GENERATED">AI 生成</option></select>
+                <select class="app-native-select" v-model="form.sourceType"><option value="MANUAL">手工创建</option><option value="IMPORTED">导入</option><option value="AI_GENERATED">AI 生成</option></select>
               </div>
             </div>
           </section>

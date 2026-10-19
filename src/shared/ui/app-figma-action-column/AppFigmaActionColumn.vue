@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, useSlots } from 'vue'
-import { Ellipsis } from '@lucide/vue'
+import { MoreHorizontal } from '@lucide/vue'
 
 import { getAppFigmaActionColumnWidth } from './model'
 
@@ -59,7 +59,7 @@ const columnClass = computed(() => [
           @click.stop
         >
           <button class="app-figma-action-column__more" type="button" title="更多" aria-label="更多">
-            <Ellipsis />
+            <MoreHorizontal />
           </button>
           <template #dropdown>
             <slot name="overflow" v-bind="scope" />

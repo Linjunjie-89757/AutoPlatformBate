@@ -600,13 +600,9 @@ async function loadTasks() {
 async function loadTaskStats() {
   try {
     const workspaceCode = selectedWorkspaceCode.value || 'ALL'
-    const [all, running, failed] = await Promise.all([
-      automationTaskApi.getTasks(workspaceCode, { pageNo: 1, pageSize: 1 }),
-      automationTaskApi.getTasks(workspaceCode, { status: 'RUNNING', pageNo: 1, pageSize: 1 }),
-      automationTaskApi.getTasks(workspaceCode, { status: 'FAILED', pageNo: 1, pageSize: 1 }),
-    ])
-    taskTotal.value = all.total
-    statusTotals.value = { running: running.total, failed: failed.total }
+    const stats = await automationTaskApi.getTaskStats(workspaceCode)
+    taskTotal.value = stats.total
+    statusTotals.value = { running: stats.running, failed: stats.failed }
   } catch {
     taskTotal.value = 0
     statusTotals.value = { running: 0, failed: 0 }
@@ -690,26 +686,26 @@ onBeforeUnmount(() => {
               <Search class="task-search-field__icon" />
               <input v-model="filter.keyword" type="search" placeholder="搜索任务名称">
             </label>
-            <select v-model="filter.type" class="task-filter-select" aria-label="任务类型" @change="handleTaskTypeFilterChange">
+            <select v-model="filter.type" class="task-filter-select app-native-select" aria-label="任务类型" @change="handleTaskTypeFilterChange">
               <option value="">全部类型</option>
               <option value="接口套件">接口套件</option>
               <option value="接口场景">接口场景</option>
               <option value="Web UI 套件">Web UI 套件</option>
               <option value="Web UI 用例">Web UI 用例</option>
             </select>
-            <select v-model="filter.status" class="task-filter-select" aria-label="任务状态" @change="handleUnsupportedFilter('status')">
+            <select v-model="filter.status" class="task-filter-select app-native-select" aria-label="任务状态" @change="handleUnsupportedFilter('status')">
               <option value="">全部状态</option>
               <option value="enabled">已启用</option>
               <option value="disabled">未启用</option>
             </select>
-            <select v-model="filter.result" class="task-filter-select" aria-label="最近结果">
+            <select v-model="filter.result" class="task-filter-select app-native-select" aria-label="最近结果">
               <option value="">全部结果</option>
               <option value="通过">通过</option>
               <option value="失败">失败</option>
               <option value="执行中">执行中</option>
               <option value="从未执行">从未执行</option>
             </select>
-            <select v-model="filter.environment" class="task-filter-select" aria-label="运行环境" @change="handleUnsupportedFilter('environment')">
+            <select v-model="filter.environment" class="task-filter-select app-native-select" aria-label="运行环境" @change="handleUnsupportedFilter('environment')">
               <option value="">全部环境</option>
               <option value="测试环境">测试环境</option>
               <option value="预发布">预发布</option>
@@ -1070,7 +1066,7 @@ onBeforeUnmount(() => {
             </label>
             <label class="task-edit-field">
               <span>任务类型 <em>*</em></span>
-              <select v-model="taskEditorForm.engineType" class="task-edit-select">
+              <select v-model="taskEditorForm.engineType" class="task-edit-select app-native-select">
                 <option value="API">接口套件</option>
                 <option value="WEB">Web UI 套件</option>
               </select>
@@ -1933,7 +1929,7 @@ onBeforeUnmount(() => {
   padding: 0 28px 0 12px;
   outline: 0;
   background: #ffffff;
-  color: transparent;
+  color: #4e5969;
   font: inherit;
   font-size: 12px;
   line-height: 18px;

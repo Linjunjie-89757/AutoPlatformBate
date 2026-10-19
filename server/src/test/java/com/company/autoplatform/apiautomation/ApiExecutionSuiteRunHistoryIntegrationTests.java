@@ -88,6 +88,14 @@ class ApiExecutionSuiteRunHistoryIntegrationTests extends IntegrationTestSupport
                 .getResponse()
                 .getContentAsString();
 
+        mockMvc.perform(get("/api/automation/api/execution-suites/{id}/run-history", suiteId)
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(11))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items", hasSize(10)));
+
         Integer historyId = com.jayway.jsonpath.JsonPath.read(response, "$.data.items[0].id");
         assertThat(historyId).isNotNull();
 

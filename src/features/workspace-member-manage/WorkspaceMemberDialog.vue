@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { reactive, ref, watch } from 'vue'
 
 import type { UserItem } from '@/entities/user'
@@ -100,7 +101,7 @@ watch(
     <div class="workspace-member-dialog">
       <div class="workspace-member-dialog__field">
         <span>用户 {{ mode === 'create' ? '*' : '' }}</span>
-        <el-select
+        <el-select :suffix-icon="AppSelectChevron"
           v-model="form.userIds"
           multiple
           filterable

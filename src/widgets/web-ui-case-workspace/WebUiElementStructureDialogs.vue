@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import {
   WEB_UI_CASE_STATUS_OPTIONS,
   type SaveWebUiElementGroupPayload,
@@ -43,7 +44,7 @@ const emit = defineEmits<{
         <el-input-number v-model="moduleForm.sortOrder" :min="0" :max="9999" controls-position="right" />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="moduleForm.status">
+        <el-select :suffix-icon="AppSelectChevron" v-model="moduleForm.status">
           <el-option v-for="item in WEB_UI_CASE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
@@ -60,7 +61,7 @@ const emit = defineEmits<{
   <el-dialog :model-value="pageVisible" title="新增页面对象" width="560px" @update:model-value="emit('update:pageVisible', $event)">
     <el-form label-width="96px">
       <el-form-item label="所属模块" required>
-        <el-select v-model="pageForm.moduleId" filterable>
+        <el-select :suffix-icon="AppSelectChevron" v-model="pageForm.moduleId" filterable>
           <el-option v-for="item in pageModuleOptions" :key="item.id" :label="item.moduleName" :value="item.id" />
         </el-select>
       </el-form-item>
@@ -74,7 +75,7 @@ const emit = defineEmits<{
         <el-input-number v-model="pageForm.sortOrder" :min="0" :max="9999" controls-position="right" />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="pageForm.status">
+        <el-select :suffix-icon="AppSelectChevron" v-model="pageForm.status">
           <el-option v-for="item in WEB_UI_CASE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>
@@ -91,7 +92,7 @@ const emit = defineEmits<{
   <el-dialog :model-value="groupVisible" title="新增分组" width="560px" @update:model-value="emit('update:groupVisible', $event)">
     <el-form label-width="96px">
       <el-form-item label="所属页面对象" required>
-        <el-select v-model="groupForm.pageId" filterable placeholder="选择页面对象">
+        <el-select :suffix-icon="AppSelectChevron" v-model="groupForm.pageId" filterable placeholder="选择页面对象">
           <el-option v-for="item in groupPageOptions" :key="item.id" :label="item.pageName" :value="item.id" />
         </el-select>
       </el-form-item>
@@ -102,7 +103,7 @@ const emit = defineEmits<{
         <el-input-number v-model="groupForm.sortOrder" :min="0" :max="9999" controls-position="right" />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="groupForm.status">
+        <el-select :suffix-icon="AppSelectChevron" v-model="groupForm.status">
           <el-option v-for="item in WEB_UI_CASE_STATUS_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </el-form-item>

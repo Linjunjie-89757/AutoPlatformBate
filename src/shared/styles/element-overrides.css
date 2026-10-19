@@ -153,55 +153,62 @@
 .el-message {
   --app-message-accent: var(--app-primary);
   --app-message-background: var(--app-primary-soft);
-  --app-message-border: rgb(22 93 255 / 22%);
+  --app-message-border: var(--app-primary);
+  position: fixed;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  margin: 0;
   width: max-content;
   min-width: 280px;
   max-width: min(420px, calc(100vw - 32px));
-  min-height: 44px;
-  padding: 10px 14px;
+  padding: 10px 16px;
   gap: 8px;
   border: 1px solid var(--app-message-border);
-  border-radius: var(--app-radius-md);
+  border-radius: var(--app-radius-lg);
   background: var(--app-message-background);
-  box-shadow: 0 4px 16px rgb(29 33 41 / 14%);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 12%);
+  transform: translateX(-50%);
 }
 
 .el-message--success {
   --app-message-accent: var(--app-success);
   --app-message-background: var(--app-success-soft);
-  --app-message-border: rgb(0 180 42 / 22%);
+  --app-message-border: var(--app-success);
 }
 
 .el-message--warning {
   --app-message-accent: var(--app-warning);
   --app-message-background: var(--app-warning-soft);
-  --app-message-border: rgb(255 125 0 / 24%);
+  --app-message-border: var(--app-warning);
 }
 
 .el-message--error {
   --app-message-accent: var(--app-danger);
   --app-message-background: var(--app-danger-soft);
-  --app-message-border: rgb(245 63 63 / 22%);
+  --app-message-border: var(--app-danger);
 }
 
 .el-message--info {
   --app-message-accent: var(--app-primary);
   --app-message-background: var(--app-primary-soft);
-  --app-message-border: rgb(22 93 255 / 22%);
+  --app-message-border: var(--app-primary);
 }
 
 .el-message .el-message__icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
   margin-right: 0;
   color: var(--app-message-accent);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .el-message .el-message__content {
   min-width: 0;
-  color: var(--app-text-primary);
+  margin: 0;
+  color: var(--app-message-accent);
   font-size: var(--app-font-size-sm);
   font-weight: 500;
   line-height: var(--app-line-height-md);

@@ -200,8 +200,11 @@ public class MockDomainService {
         endpointMapper.deleteById(id);
     }
 
-    public PageResponse<MockScenarioItem> listScenarios(String workspaceCode, Long endpointId, String keyword, Integer status) {
+    public PageResponse<MockScenarioItem> listScenarios(String workspaceCode, Long appId, Long endpointId, String keyword, Integer status) {
         LambdaQueryWrapper<MockScenarioEntity> query = scopedScenarioQuery(workspaceCode);
+        if (appId != null) {
+            query.eq(MockScenarioEntity::getAppId, appId);
+        }
         if (endpointId != null) {
             query.eq(MockScenarioEntity::getEndpointId, endpointId);
         }
@@ -324,6 +327,16 @@ public class MockDomainService {
                 .map(this::toCallLogItem)
                 .toList();
         return new PageResponse<>(items, items.size());
+    }
+
+    public long countUnmatchedCallLogs(String workspaceCode, Long appId) {
+        LambdaQueryWrapper<MockCallLogEntity> query = scopedLogQuery(workspaceCode)
+                .eq(MockCallLogEntity::getMatched, 0)
+                .ge(MockCallLogEntity::getCreatedAt, LocalDateTime.now().minusHours(24));
+        if (appId != null) {
+            query.eq(MockCallLogEntity::getAppId, appId);
+        }
+        return callLogMapper.selectCount(query);
     }
 
     public ConfigReferenceSummary applicationReferences(Long id, String workspaceCode) {

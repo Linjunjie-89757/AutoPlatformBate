@@ -243,7 +243,9 @@ public class ApiExecutionEngineSupport {
         }
         EnvironmentConfigPayload config = ApiAutomationJsonSupport.read(environment.getConfigJson(), EnvironmentConfigPayload.class,
                 new EnvironmentConfigPayload(List.of(), emptyAuthConfig(), 10000, List.of(), null, null, null, null, null, List.of()));
-        List<EnvironmentServiceEndpoint> services = normalizeServices(config.services(), environment.getBaseUrl());
+        LegacyApiConfigPayload legacyApiConfig = config.apiConfig();
+        String configuredBaseUrl = firstNonBlank(environment.getBaseUrl(), legacyApiConfig == null ? null : legacyApiConfig.baseUrl());
+        List<EnvironmentServiceEndpoint> services = normalizeServices(config.services(), configuredBaseUrl);
         String defaultServiceKey = normalizeDefaultServiceKey(config.defaultServiceKey(), services);
         String requestedServiceKey = Optional.ofNullable(serviceKey).orElse("").trim();
         String effectiveServiceKey = requestedServiceKey.isEmpty() ? defaultServiceKey : requestedServiceKey;
@@ -258,9 +260,9 @@ public class ApiExecutionEngineSupport {
         return new ResolvedEnvironment(
                 environment.getId(),
                 baseUrl,
-                defaultList(config.headers()),
-                normalizeAuth(config.authConfig()),
-                config.timeoutMs() == null ? 10000 : config.timeoutMs(),
+                firstNonEmpty(config.headers(), legacyApiConfig == null ? null : legacyApiConfig.headers()),
+                resolveEnvironmentAuth(config.authConfig(), legacyApiConfig),
+                resolveEnvironmentTimeout(config.timeoutMs(), legacyApiConfig),
                 defaultList(config.variables()),
                 config.defaultVariableSetId(),
                 Boolean.FALSE.equals(config.mockEnabled()) ? null : config.mockApplicationId(),
@@ -277,6 +279,70 @@ public class ApiExecutionEngineSupport {
                 defaultList(config.variableSetIds()),
                 defaultList(config.disabledVariableSetIds())
         );
+    }
+
+    private ApiAuthConfigInput resolveEnvironmentAuth(ApiAuthConfigInput authConfig, LegacyApiConfigPayload legacyApiConfig) {
+        if (legacyApiConfig == null) {
+            return normalizeAuth(authConfig);
+        }
+        ApiAuthConfigInput legacyAuth = legacyApiConfig.authConfig();
+        if (legacyAuth == null) {
+            legacyAuth = new ApiAuthConfigInput(
+                    normalizeLegacyAuthType(legacyApiConfig.authType()),
+                    new ApiAuthCredentialInput(legacyApiConfig.authBasicUser(), legacyApiConfig.authBasicPass()),
+                    new ApiAuthCredentialInput(legacyApiConfig.authDigestUser(), legacyApiConfig.authDigestPass()),
+                    legacyApiConfig.authBearer(),
+                    legacyApiConfig.authApiKeyName(),
+                    legacyApiConfig.authApiKeyValue(),
+                    legacyApiConfig.authApiKeyIn()
+            );
+        }
+        return isEmptyAuth(authConfig) && !isEmptyAuth(legacyAuth)
+                ? normalizeAuth(legacyAuth)
+                : normalizeAuth(authConfig);
+    }
+
+    private String normalizeLegacyAuthType(String authType) {
+        if (authType == null || authType.isBlank()) {
+            return "NONE";
+        }
+        String normalized = authType.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        return "APIKEY".equals(normalized) ? "API_KEY" : normalized;
+    }
+
+    private Integer resolveEnvironmentTimeout(Integer timeoutMs, LegacyApiConfigPayload legacyApiConfig) {
+        if (timeoutMs != null) {
+            return timeoutMs;
+        }
+        return legacyApiConfig == null || legacyApiConfig.timeout() == null ? 10000 : legacyApiConfig.timeout();
+    }
+
+    private boolean isEmptyAuth(ApiAuthConfigInput authConfig) {
+        if (authConfig == null) {
+            return true;
+        }
+        return (authConfig.authType() == null || authConfig.authType().isBlank() || "NONE".equalsIgnoreCase(authConfig.authType()))
+                && blank(authConfig.bearerToken())
+                && blank(authConfig.apiKeyName())
+                && blank(authConfig.apiKeyValue())
+                && emptyCredential(authConfig.basicAuth())
+                && emptyCredential(authConfig.digestAuth());
+    }
+
+    private boolean emptyCredential(ApiAuthCredentialInput credential) {
+        return credential == null || (blank(credential.userName()) && blank(credential.password()));
+    }
+
+    private boolean blank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String firstNonBlank(String first, String second) {
+        return first != null && !first.isBlank() ? first.trim() : second == null ? "" : second.trim();
+    }
+
+    private <T> List<T> firstNonEmpty(List<T> first, List<T> second) {
+        return first != null && !first.isEmpty() ? first : defaultList(second);
     }
 
     private List<ParamSetEntity> loadEnvironmentVariableSets(
@@ -1170,7 +1236,9 @@ public class ApiExecutionEngineSupport {
                 new ArrayList<>(defaultList(config.headers())),
                 new ArrayList<>(defaultList(config.cookies())),
                 config.body() == null ? new ApiRequestBodyInput("NONE", null, List.of(), null, null, null) : config.body(),
-                normalizeAuth(config.authConfig())
+                normalizeAuth(config.authConfig()),
+                config.connectTimeoutMs(),
+                config.followRedirects()
         );
     }
 
@@ -1183,7 +1251,10 @@ public class ApiExecutionEngineSupport {
                 config.headers(),
                 config.cookies(),
                 config.body(),
-                config.authConfig()
+                config.authConfig(),
+                List.of(),
+                config.connectTimeoutMs(),
+                config.followRedirects()
         );
     }
 

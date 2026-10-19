@@ -147,9 +147,13 @@ export const defectApi = {
     return normalizeDefectListResponse(unwrapApiResponse(payload))
   },
 
-  async getDefectStatistics(workspaceCode = 'ALL') {
+  async getDefectStatistics(
+    workspaceCode = 'ALL',
+    query?: Pick<DefectListQuery, 'createdFrom' | 'createdTo'>,
+  ) {
     const payload = await httpGet<ApiResponse<DefectStatistics>>('/bugs/statistics', {
       headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery(query),
     })
 
     return unwrapApiResponse(payload)

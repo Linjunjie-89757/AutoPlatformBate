@@ -7,6 +7,7 @@ import ApiProcessorPanel from './ApiProcessorPanel.vue'
 import ApiRequestConfigurationPanel from './ApiRequestConfigurationPanel.vue'
 import ApiRequestContentTabs from './ApiRequestContentTabs.vue'
 import ApiRequestToolbar from './ApiRequestToolbar.vue'
+import ApiRequestSettingsPanel from './ApiRequestSettingsPanel.vue'
 import ApiResponsePanel from './ApiResponsePanel.vue'
 
 type AnyFn = (...args: any[]) => any
@@ -216,19 +217,31 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
 />
 
 <div class="api-editor-scroll">
-  <div v-if="activeEditor.loading" class="api-editor-loading">
+  <ApiRequestSettingsPanel
+    v-if="activeEditor.loading && activeEditor.activeTab === 'settings'"
+    :detail="activeEditor.detail"
+    loading
+    :mark-dirty="markDirty"
+  />
+  <div v-else-if="activeEditor.loading" class="api-editor-loading">
     <div class="api-editor-loading__title">正在加载接口详情</div>
     <div class="api-editor-loading__line is-long"></div>
     <div class="api-editor-loading__line"></div>
     <div class="api-editor-loading__block"></div>
   </div>
   <template v-else>
-  <div :class="['api-request-body', `is-${activeEditor.activeTab}`, { 'is-assertion-tab': activeEditor.activeTab === 'tests' }]">
+  <div :class="[
+    ['pre', 'post'].includes(activeEditor.activeTab) ? 'api-processor-tab-content' : 'api-request-body',
+    `is-${activeEditor.activeTab}`,
+    { 'is-assertion-tab': activeEditor.activeTab === 'tests' },
+  ]">
     <ApiRequestConfigurationPanel
       v-if="['params', 'headers', 'cookies', 'body', 'auth', 'settings'].includes(activeEditor.activeTab)"
       v-model:active-body-raw-text="activeBodyRawText"
       v-model:body-json-view-mode="bodyJsonViewMode"
       :active-editor="activeEditor"
+      :saving="saving"
+      :can-edit="activeEditor.definitionId ? canEdit : canCreate"
       :active-body-language="activeBodyLanguage"
       :body-modes="bodyModes"
       :body-schema-fields="bodySchemaFields"
@@ -393,8 +406,9 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
     </template>
   </div>
 
+  </template>
   <ApiResponsePanel
-    v-if="shouldShowResponsePanel"
+    v-if="shouldShowResponsePanel && (!activeEditor.loading || activeEditor.activeTab === 'settings')"
     :min-height="responsePanelHeight"
     :show-empty="showResponseEmpty"
     :collapsed="Boolean(activeEditor.responseCollapsed)"
@@ -418,7 +432,6 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
     @toggle-collapsed="activeEditor.responseCollapsed = !activeEditor.responseCollapsed"
     @update:active-tab="activeEditor.responseTab = $event"
   />
-  </template>
 </div>
 </template>
 

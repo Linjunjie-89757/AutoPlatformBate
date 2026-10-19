@@ -4,8 +4,8 @@ import {
   ChevronRight,
   Clock3,
   Hash,
+  Lock,
   Search,
-  ShieldCheck,
   Variable,
   Zap,
 } from '@lucide/vue'
@@ -41,7 +41,6 @@ const builtinGroups: BuiltinGroup[] = [
       { name: '$faker.phone', syntax: '{{$faker.phone()}}', description: '随机手机号', example: '138****5678' },
       { name: '$faker.email', syntax: '{{$faker.email()}}', description: '随机邮箱地址', example: 'user@example.com' },
       { name: '$faker.uuid', syntax: '{{$faker.uuid()}}', description: '随机 UUID v4', example: '550e8400-...' },
-      { name: '$faker.idCard', syntax: '{{$faker.idCard()}}', description: '随机身份证号', example: '310...' },
     ],
   },
   {
@@ -62,21 +61,20 @@ const builtinGroups: BuiltinGroup[] = [
     tone: 'orange',
     icon: Zap,
     items: [
-      { name: '$run.id', syntax: '{{$run.id}}', description: '当前执行任务 ID', example: 'RUN-20260801-001' },
-      { name: '$workspace.code', syntax: '{{$workspace.code}}', description: '当前工作区编码', example: 'QA' },
-      { name: '$iteration', syntax: '{{$iteration}}', description: '当前循环序号', example: '1' },
-      { name: '$random', syntax: '{{$random}}', description: '运行级随机数', example: '827361' },
+      { name: '$env.name', syntax: '{{$env.name}}', description: '当前环境名称', example: 'QA-压测' },
+      { name: '$run.id', syntax: '{{$run.id}}', description: '当前执行 ID', example: 'run_abc123' },
+      { name: '$prev.response', syntax: '{{$prev.response.data.id}}', description: '上一步响应取值', example: '42' },
     ],
   },
   {
     key: 'crypto',
-    title: '加密&编解码',
+    title: '加密 & 编解码',
     tone: 'blue',
-    icon: ShieldCheck,
+    icon: Lock,
     items: [
-      { name: '$md5', syntax: '{{$md5(value)}}', description: '生成 MD5 摘要', example: '098f6bcd...' },
-      { name: '$base64', syntax: '{{$base64(value)}}', description: 'Base64 编码', example: 'dGVzdA==' },
-      { name: '$urlEncode', syntax: '{{$urlEncode(value)}}', description: 'URL 编码', example: '%E6%B5%8B%E8%AF%95' },
+      { name: '$base64.encode', syntax: '{{$base64.encode(value)}}', description: 'Base64 编码', example: 'aGVsbG8=' },
+      { name: '$md5', syntax: '{{$md5(value)}}', description: 'MD5 摘要', example: '5d41402a...' },
+      { name: '$hmac.sha256', syntax: '{{$hmac.sha256(key,value)}}', description: 'HMAC-SHA256 签名', example: 'a7b3c9...' },
     ],
   },
 ]
@@ -118,7 +116,7 @@ async function copySyntax(syntax: string) {
     <header>
       <div class="figma-variable__title-block">
         <h2>内置 &amp; 动态函数</h2>
-        <p>只读参考手册。在变量值或响应 Body 中使用 &#123;&#123;函数名&#125;&#125; 语法调用</p>
+      <p>只读参考手册。在变量值或请求体中使用 &#123;&#123;函数名&#125;&#125; 语法调用</p>
       </div>
       <label><Search :size="12" /><input v-model="builtinKeyword" type="search" placeholder="搜索函数名、说明"></label>
     </header>
@@ -150,7 +148,7 @@ async function copySyntax(syntax: string) {
 .figma-variable__title-block p { margin: 1.75px 0 0; color: #86909c; font-size: 12px; line-height: 18px; }
 .figma-variable__builtin > header label { position: relative; display: flex; align-items: center; justify-self: start; margin: 0; color: #86909c; }
 .figma-variable__builtin > header label svg { position: absolute; left: 8.75px; pointer-events: none; }
-.figma-variable__builtin > header input { width: 240px; height: 28px; padding: 0 10.5px 0 28px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; color: #1d2129; font-size: 13px; }
+.figma-variable__builtin > header input { width: 240px; height: 32px; padding: 0 10.5px 0 28px; border: 1px solid #e5e6eb; border-radius: 7px; outline: 0; color: #1d2129; font-size: 13px; }
 .figma-variable__builtin > header input:focus { border-color: var(--variable-primary); box-shadow: 0 0 0 2px rgba(22, 93, 255, .08); }
 .figma-variable__builtin-groups { display: grid; gap: 10.5px; padding: 0 17.5px 17.5px; }
 .figma-variable__builtin-group { overflow: hidden; border: 1px solid #e5e6eb; border-radius: 11px; background: #fff; }

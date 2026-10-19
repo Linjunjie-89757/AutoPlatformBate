@@ -91,6 +91,15 @@ class ApiExecutionSuiteCrudIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.cronExpression").value("0 0 2 * * ?"))
                 .andExpect(jsonPath("$.data.branchName").value("release/test"));
 
+        mockMvc.perform(get("/api/automation/api/execution-suites")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", unique + "-updated"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+
         mockMvc.perform(put("/api/automation/api/execution-suites/{id}", suiteId)
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
                         .contentType(MediaType.APPLICATION_JSON)

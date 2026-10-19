@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, reactive, watch } from 'vue'
 
 import {
@@ -176,7 +177,7 @@ watch(
       <div class="case-dialog__grid">
         <div class="case-dialog__field">
           <span>来源</span>
-          <el-select v-model="form.sourceType" class="case-dialog__select">
+          <el-select :suffix-icon="AppSelectChevron" v-model="form.sourceType" class="case-dialog__select">
             <el-option
               v-for="item in caseSourceTypeOptions"
               :key="item.value"
@@ -192,7 +193,7 @@ watch(
       <div class="case-dialog__grid">
         <div class="case-dialog__field">
           <span>所属目录</span>
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="form.directoryId"
             class="case-dialog__select"
             clearable

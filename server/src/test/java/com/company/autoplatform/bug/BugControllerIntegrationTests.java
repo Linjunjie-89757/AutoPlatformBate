@@ -13,6 +13,7 @@ import com.company.autoplatform.execution.TaskSummaryResponse;
 import com.company.autoplatform.workspace.WorkspaceEntity;
 import com.company.autoplatform.workspace.WorkspaceMapper;
 import com.company.autoplatform.workspace.WorkspaceScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -201,6 +203,96 @@ class BugControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.items[*].priority", containsInAnyOrder("P1", "P1")))
                 .andExpect(jsonPath("$.data.items[*].severity", containsInAnyOrder("HIGH", "HIGH")))
                 .andExpect(jsonPath("$.data.items[*].status", containsInAnyOrder("ASSIGNED", "ASSIGNED")));
+    }
+
+    @Test
+    void statisticsAggregatesBugCountsByStatus() throws Exception {
+        String dateToday = LocalDate.now().toString();
+        JsonNode todayBefore = objectMapper.readTree(mockMvc.perform(get("/api/bugs/statistics")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("createdFrom", dateToday)
+                        .param("createdTo", dateToday))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString()).path("data");
+        JsonNode before = objectMapper.readTree(mockMvc.perform(get("/api/bugs/statistics")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString()).path("data");
+
+        Integer highPriorityBugId = createBug(uniquePrefix("statistics-assigned"), "P1", "HIGH", null, null, null);
+        BugFlowEntity closedFlow = new BugFlowEntity();
+        closedFlow.setBugId(highPriorityBugId.longValue());
+        closedFlow.setFromStatus("ASSIGNED");
+        closedFlow.setToStatus("CLOSED");
+        closedFlow.setOperatorId(11L);
+        closedFlow.setCreatedAt(LocalDateTime.now());
+        bugFlowMapper.insert(closedFlow);
+        mockMvc.perform(post("/api/bugs")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .contentType("application/json")
+                        .content(bugRequest(uniquePrefix("statistics-todo"), "P2", "MEDIUM", null, null, null, null, null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("TODO"));
+
+        JsonNode after = objectMapper.readTree(mockMvc.perform(get("/api/bugs/statistics")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString()).path("data");
+
+        assertEquals(before.path("total").asLong() + 2, after.path("total").asLong());
+        assertEquals(before.path("assigned").asLong() + 1, after.path("assigned").asLong());
+        assertEquals(before.path("todo").asLong() + 1, after.path("todo").asLong());
+        assertEquals(before.path("highPriority").asLong() + 1, after.path("highPriority").asLong());
+        assertEquals(severityCount(before, "HIGH") + 1, severityCount(after, "HIGH"));
+        assertEquals(assignedBugCount(before) + 1, assignedBugCount(after));
+        org.junit.jupiter.api.Assertions.assertTrue(after.path("assigneeDistribution").isArray());
+        assertEquals(7, after.path("trend").size());
+        JsonNode beforeToday = before.path("trend").findParents("date").stream()
+                .filter(item -> LocalDate.now().toString().equals(item.path("date").asText()))
+                .findFirst()
+                .orElseThrow();
+        JsonNode today = after.path("trend").findParents("date").stream()
+                .filter(item -> LocalDate.now().toString().equals(item.path("date").asText()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(beforeToday.path("created").asLong() + 2, today.path("created").asLong());
+        assertEquals(beforeToday.path("closed").asLong() + 1, today.path("closed").asLong());
+
+        JsonNode todayAfter = objectMapper.readTree(mockMvc.perform(get("/api/bugs/statistics")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("createdFrom", dateToday)
+                        .param("createdTo", dateToday))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString()).path("data");
+        assertEquals(todayBefore.path("total").asLong() + 2, todayAfter.path("total").asLong());
+        assertEquals(1, todayAfter.path("trend").size());
+    }
+
+    private long severityCount(JsonNode statistics, String severity) {
+        for (JsonNode item : statistics.path("severityDistribution")) {
+            if (severity.equals(item.path("severity").asText())) {
+                return item.path("count").asLong();
+            }
+        }
+        return 0;
+    }
+
+    private long assignedBugCount(JsonNode statistics) {
+        long count = 0;
+        for (JsonNode item : statistics.path("assigneeDistribution")) {
+            count += item.path("open").asLong() + item.path("closed").asLong();
+        }
+        return count;
     }
 
     @Test

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { Activity, Check, ChevronLeft, Crown, Edit2, Layers, Package, Shield, Target, Trash2, User, UserCog, Users } from '@lucide/vue'
@@ -983,7 +984,7 @@ watch(
           </div>
           <div class="team-filter-field">
             <span>平台角色</span>
-            <select v-model="userRoleFilter">
+            <select class="app-native-select" v-model="userRoleFilter">
               <option value="">全部角色</option>
               <option v-for="option in userRoleOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
@@ -992,7 +993,7 @@ watch(
           </div>
           <div class="team-filter-field">
             <span>状态</span>
-            <select v-model="userStatusFilter">
+            <select class="app-native-select" v-model="userStatusFilter">
               <option value="">全部状态</option>
               <option v-for="option in userStatusOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
@@ -1001,7 +1002,7 @@ watch(
           </div>
           <div class="team-filter-field">
             <span>所属空间</span>
-            <select v-model="userWorkspaceFilter">
+            <select class="app-native-select" v-model="userWorkspaceFilter">
               <option value="">全部空间</option>
               <option value="__none__">无</option>
               <option v-for="option in userWorkspaceOptions" :key="option.value" :value="option.value">
@@ -1266,7 +1267,7 @@ watch(
         <template v-if="!isPlatformAdminSelected">
           <div class="user-edit-dialog__field is-full">
             <span>可访问空间</span>
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               v-model="userForm.workspaceCodes"
               class="user-edit-dialog__workspace-select"
               multiple
@@ -1321,7 +1322,7 @@ watch(
         </div>
         <div class="user-edit-dialog__field is-full">
           <span>可访问空间</span>
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="batchUserForm.workspaceCodes"
             class="user-edit-dialog__workspace-select"
             multiple

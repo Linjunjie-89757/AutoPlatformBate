@@ -6,6 +6,7 @@ import {
 } from '@/entities/config'
 
 export type ConfigVariableStage = 'COMMON' | 'DEV' | 'TEST' | 'STAGING' | 'PROD' | 'SANDBOX'
+export type ConfigVariableScope = 'API' | 'WEB_UI' | 'APP'
 
 export interface WebUiVariableItem {
   name: string
@@ -25,6 +26,7 @@ export interface ConfigParamForm {
   value: string
   description: string
   stageType: ConfigVariableStage
+  applicableTypes: ConfigVariableScope[]
   sensitive: boolean
   variables: WebUiVariableItem[]
   status: ConfigStatus
@@ -38,6 +40,7 @@ export function createDefaultConfigParamForm(workspaceCode = 'ALL'): ConfigParam
     value: '',
     description: '',
     stageType: 'COMMON',
+    applicableTypes: ['API'],
     sensitive: false,
     variables: [createDefaultWebUiVariable()],
     status: 1,
@@ -54,7 +57,7 @@ export function createDefaultWebUiVariableSetForm(workspaceCode = 'ALL'): Config
 export function createConfigParamFormFromItem(item: ParamSetItem): ConfigParamForm {
   const content = parseParamContent(item.contentJson)
   const variables = parseWebUiVariables(item.contentJson)
-  const metadata = parseVariableSetMetadata(item.contentJson)
+  const metadata = parseVariableSetMetadata(item.contentJson, item.paramType)
   const variableCollectionDefined = hasVariableCollection(item.contentJson)
 
   return {
@@ -64,6 +67,7 @@ export function createConfigParamFormFromItem(item: ParamSetItem): ConfigParamFo
     value: content.value,
     description: metadata.description || content.description,
     stageType: metadata.stageType,
+    applicableTypes: metadata.applicableTypes,
     sensitive: content.sensitive,
     variables: variables.length > 0
       ? variables
@@ -85,6 +89,7 @@ export function buildCreateParamPayload(form: ConfigParamForm): CreateParamPaylo
     ? JSON.stringify({
         description: form.description.trim(),
         stageType: form.stageType,
+        applicableTypes: form.applicableTypes,
         systemBuiltIn: form.paramType === 'GLOBAL',
         variables: form.variables
           .map(variable => ({
@@ -92,7 +97,7 @@ export function buildCreateParamPayload(form: ConfigParamForm): CreateParamPaylo
             value: variable.value,
             sensitive: variable.sensitive,
             description: variable.description.trim(),
-            valueType: variable.sensitive ? 'SECRET' : (variable.valueType || 'TEXT'),
+            valueType: variable.valueType === 'SECRET' ? 'TEXT' : (variable.valueType || 'TEXT'),
             scopeType: variable.scopeType || 'ALL',
             stageType: variable.stageType || 'COMMON',
             enabled: variable.enabled !== false,
@@ -185,7 +190,7 @@ export function parseWebUiVariables(contentJson: string): WebUiVariableItem[] {
           : typeof item.desc === 'string'
             ? item.desc
             : '',
-        valueType: normalizeVariableValueType(item.valueType, item.sensitive === true || item.isSecret === true),
+        valueType: normalizeVariableValueType(item.valueType),
         scopeType: normalizeVariableScope(item.scopeType),
         stageType: normalizeVariableStage(item.stageType),
         enabled: item.enabled !== false,
@@ -196,20 +201,21 @@ export function parseWebUiVariables(contentJson: string): WebUiVariableItem[] {
   }
 }
 
-export function parseVariableSetMetadata(contentJson: string) {
+export function parseVariableSetMetadata(contentJson: string, legacyParamType?: string) {
   const raw = contentJson?.trim()
-  if (!raw) return { description: '', stageType: 'COMMON' as ConfigVariableStage }
+  if (!raw) return { description: '', stageType: 'COMMON' as ConfigVariableStage, applicableTypes: ['API'] as ConfigVariableScope[] }
   try {
     const parsed = JSON.parse(raw) as unknown
     if (!isRecord(parsed) || Array.isArray(parsed)) {
-      return { description: '', stageType: 'COMMON' as ConfigVariableStage }
+      return { description: '', stageType: 'COMMON' as ConfigVariableStage, applicableTypes: ['API'] as ConfigVariableScope[] }
     }
     return {
       description: typeof parsed.description === 'string' ? parsed.description : '',
       stageType: normalizeVariableStage(parsed.stageType),
+      applicableTypes: normalizeApplicableTypes(parsed.applicableTypes, legacyParamType),
     }
   } catch {
-    return { description: '', stageType: 'COMMON' as ConfigVariableStage }
+    return { description: '', stageType: 'COMMON' as ConfigVariableStage, applicableTypes: ['API'] as ConfigVariableScope[] }
   }
 }
 
@@ -232,11 +238,22 @@ function hasVariableCollection(contentJson: string) {
   }
 }
 
-function normalizeVariableValueType(value: unknown, sensitive: boolean): NonNullable<WebUiVariableItem['valueType']> {
-  if (sensitive) return 'SECRET'
+function normalizeVariableValueType(value: unknown): NonNullable<WebUiVariableItem['valueType']> {
   const normalized = typeof value === 'string' ? value.toUpperCase() : ''
   if (normalized === 'NUMBER' || normalized === 'BOOLEAN' || normalized === 'JSON') return normalized
   return 'TEXT'
+}
+
+function normalizeApplicableTypes(value: unknown, legacyParamType?: string): ConfigVariableScope[] {
+  const values = Array.isArray(value) ? value : []
+  const scopes = values
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.toUpperCase())
+    .filter((item): item is ConfigVariableScope => item === 'API' || item === 'WEB_UI' || item === 'APP')
+  if (scopes.length) return [...new Set(scopes)]
+  if (legacyParamType === 'WEB_UI_VARIABLE_SET') return ['WEB_UI']
+  if (legacyParamType === 'APP_UI_VARIABLE_SET') return ['APP']
+  return ['API']
 }
 
 function normalizeVariableScope(value: unknown): NonNullable<WebUiVariableItem['scopeType']> {

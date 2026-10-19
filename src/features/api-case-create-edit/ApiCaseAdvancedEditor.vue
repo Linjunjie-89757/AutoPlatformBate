@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { ChevronDown, ChevronUp, Copy, Trash2, WandSparkles } from '@lucide/vue'
 
@@ -646,9 +647,9 @@ function toIndex(index: string | number) {
               <div v-for="(item, index) in activeRow.extractors" :key="item.id || index" class="extract-row">
                 <el-input v-model="item.variableName" placeholder="变量名" />
                 <el-input v-model="item.description" placeholder="描述" />
-                <el-select v-model="item.variableType"><el-option label="临时变量" value="TEMPORARY" /><el-option label="环境变量" value="ENVIRONMENT" /></el-select>
-                <el-select v-model="item.extractType"><el-option label="JSONPath" value="JSON_PATH" /><el-option label="XPath" value="X_PATH" /><el-option label="Regex" value="REGEX" /></el-select>
-                <el-select v-model="item.extractScope"><el-option label="响应体" value="BODY" /><el-option label="响应头" value="RESPONSE_HEADERS" /><el-option label="状态码" value="RESPONSE_CODE" /></el-select>
+                <el-select :suffix-icon="AppSelectChevron" v-model="item.variableType"><el-option label="临时变量" value="TEMPORARY" /><el-option label="环境变量" value="ENVIRONMENT" /></el-select>
+                <el-select :suffix-icon="AppSelectChevron" v-model="item.extractType"><el-option label="JSONPath" value="JSON_PATH" /><el-option label="XPath" value="X_PATH" /><el-option label="Regex" value="REGEX" /></el-select>
+                <el-select :suffix-icon="AppSelectChevron" v-model="item.extractScope"><el-option label="响应体" value="BODY" /><el-option label="响应头" value="RESPONSE_HEADERS" /><el-option label="状态码" value="RESPONSE_CODE" /></el-select>
                 <el-input v-model="item.expression" placeholder="表达式">
                   <template #suffix>
                     <button type="button" class="fast-extract" :disabled="!hasResponseBody" :title="fastExtractionTitle" @click.stop="openFastExtractionForExtractor(activeRow, toIndex(index))"><WandSparkles /></button>
@@ -665,7 +666,7 @@ function toIndex(index: string | number) {
 
         <template v-else>
           <div v-if="activeRow.assertionType === 'RESPONSE_CODE'" class="api-case-advanced-form">
-            <label><span>条件</span><el-select v-model="activeRow.condition"><el-option v-for="item in CONDITION_OPTIONS" :key="item.value" :label="item.label" :value="item.value" /></el-select></label>
+            <label><span>条件</span><el-select :suffix-icon="AppSelectChevron" v-model="activeRow.condition"><el-option v-for="item in CONDITION_OPTIONS" :key="item.value" :label="item.label" :value="item.value" /></el-select></label>
             <label><span>期望值</span><el-input v-model="activeRow.expectedValue" placeholder="200" /></label>
           </div>
 
@@ -673,7 +674,7 @@ function toIndex(index: string | number) {
             <div v-for="(item, index) in activeRow.assertions" :key="index" class="assert-row">
               <el-checkbox v-model="item.enabled" />
               <el-input v-model="item.header" placeholder="响应头名称" />
-              <el-select v-model="item.condition"><el-option v-for="option in CONDITION_OPTIONS" :key="option.value" :label="option.label" :value="option.value" /></el-select>
+              <el-select :suffix-icon="AppSelectChevron" v-model="item.condition"><el-option v-for="option in CONDITION_OPTIONS" :key="option.value" :label="option.label" :value="option.value" /></el-select>
               <el-input v-model="item.expectedValue" placeholder="期望值" />
               <button type="button" @click="copyItem(activeRow.assertions, toIndex(index))">复制</button>
               <button type="button" class="danger" @click="removeItem(activeRow.assertions, toIndex(index), { header: '', condition: 'EQUALS', expectedValue: '' })">删除</button>
@@ -694,7 +695,7 @@ function toIndex(index: string | number) {
                   <button type="button" class="fast-extract" :disabled="!hasResponseBody" :title="fastExtractionTitle" @click.stop="openFastExtractionForAssertion(activeRow, toIndex(index))"><WandSparkles /></button>
                 </template>
               </el-input>
-              <el-select v-model="item.condition"><el-option v-for="option in CONDITION_OPTIONS" :key="option.value" :label="option.label" :value="option.value" /></el-select>
+              <el-select :suffix-icon="AppSelectChevron" v-model="item.condition"><el-option v-for="option in CONDITION_OPTIONS" :key="option.value" :label="option.label" :value="option.value" /></el-select>
               <el-input v-model="item.expectedValue" placeholder="期望值" />
               <button type="button">测试</button>
               <button type="button" @click="copyItem(activeBodyGroup(activeRow).assertions, toIndex(index))">复制</button>
@@ -712,7 +713,7 @@ function toIndex(index: string | number) {
             <div v-for="(item, index) in activeRow.variableAssertionItems" :key="index" class="assert-row">
               <el-checkbox v-model="item.enabled" />
               <el-input v-model="item.variableName" placeholder="变量名" />
-              <el-select v-model="item.condition"><el-option v-for="option in CONDITION_OPTIONS" :key="option.value" :label="option.label" :value="option.value" /></el-select>
+              <el-select :suffix-icon="AppSelectChevron" v-model="item.condition"><el-option v-for="option in CONDITION_OPTIONS" :key="option.value" :label="option.label" :value="option.value" /></el-select>
               <el-input v-model="item.expectedValue" placeholder="期望值" />
               <button type="button" @click="copyItem(activeRow.variableAssertionItems, toIndex(index))">复制</button>
               <button type="button" class="danger" @click="removeItem(activeRow.variableAssertionItems, toIndex(index), { variableName: '' })">删除</button>

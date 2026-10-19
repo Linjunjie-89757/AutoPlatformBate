@@ -58,7 +58,7 @@ class ExecutionControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.total").value(2))
                 .andExpect(jsonPath("$.data.pageNo").value(1))
-                .andExpect(jsonPath("$.data.pageSize").value(2))
+                .andExpect(jsonPath("$.data.pageSize").value(20))
                 .andExpect(jsonPath("$.data.totalPages").value(1))
                 .andExpect(jsonPath("$.data.items[*].id").value(containsInAnyOrder(
                         first.id().intValue(),
@@ -109,6 +109,23 @@ class ExecutionControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.items[0].id").value(expected.id().intValue()))
                 .andExpect(jsonPath("$.data.items[0].status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.items[0].engineType").value("API"));
+    }
+
+    @Test
+    void taskStatsAggregatesWorkspaceStatusesInOneResponse() throws Exception {
+        String unique = uniquePrefix("task-stats");
+        TaskStatsResponse before = executionService.taskStats(RISK_OPS);
+        createTask(RISK_OPS, unique + "-ready", "API", "READY");
+        createTask(RISK_OPS, unique + "-running", "API", "RUNNING");
+        createTask(RISK_OPS, unique + "-failed", "WEB", "FAILED");
+
+        mockMvc.perform(get("/api/tasks/stats")
+                        .header(WorkspaceScope.HEADER, RISK_OPS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(before.total() + 3))
+                .andExpect(jsonPath("$.data.running").value(before.running() + 1))
+                .andExpect(jsonPath("$.data.failed").value(before.failed() + 1));
     }
 
     @Test
@@ -163,6 +180,8 @@ class ExecutionControllerIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, RISK_OPS))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(20))
                 .andExpect(jsonPath("$.data.items[*].id").value(hasItem(reportId)));
 
         mockMvc.perform(get("/api/reports")
@@ -246,6 +265,43 @@ class ExecutionControllerIntegrationTests extends IntegrationTestSupport {
                         .header(WorkspaceScope.HEADER, RISK_OPS))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.reports[?(@.id == %d)].logSource".formatted(reportId)).value(hasItem("API_LOCAL_RUNNER")));
+    }
+
+    @Test
+    void reportStatsAggregatesWorkspaceResultsInOneResponse() throws Exception {
+        String unique = uniquePrefix("report-stats");
+        ReportStatsResponse before = executionService.reportStats(RISK_OPS);
+
+        TaskSummaryResponse successTask = createTask(RISK_OPS, unique + "-success-task", "API", "SUCCESS");
+        TaskSummaryResponse failedTask = createTask(RISK_OPS, unique + "-failed-task", "API", "FAILED");
+        createReport("""
+                {
+                  "workspaceCode": "%s",
+                  "taskId": %d,
+                  "reportName": "%s-success-report",
+                  "result": "SUCCESS",
+                  "logSource": "API",
+                  "failureSummary": null
+                }
+                """.formatted(RISK_OPS, successTask.id(), unique), RISK_OPS);
+        createReport("""
+                {
+                  "workspaceCode": "%s",
+                  "taskId": %d,
+                  "reportName": "%s-failed-report",
+                  "result": "FAILED",
+                  "logSource": "API",
+                  "failureSummary": "failed"
+                }
+                """.formatted(RISK_OPS, failedTask.id(), unique), RISK_OPS);
+
+        mockMvc.perform(get("/api/reports/stats")
+                        .header(WorkspaceScope.HEADER, RISK_OPS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.total").value(before.total() + 2))
+                .andExpect(jsonPath("$.data.success").value(before.success() + 1))
+                .andExpect(jsonPath("$.data.failed").value(before.failed() + 1));
     }
 
     @Test
@@ -336,14 +392,28 @@ class ExecutionControllerIntegrationTests extends IntegrationTestSupport {
                 .getContentAsString();
         long shareId = objectMapper.readTree(createdResponse).path("data").path("id").asLong();
         String firstToken = objectMapper.readTree(createdResponse).path("data").path("token").asText();
+        String secondShareResponse = mockMvc.perform(post("/api/reports/{id}/shares", reportId)
+                        .header(WorkspaceScope.HEADER, RISK_OPS)
+                        .contentType("application/json")
+                        .content("{\"expiresInDays\":7}"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        long secondShareId = objectMapper.readTree(secondShareResponse).path("data").path("id").asLong();
 
         mockMvc.perform(get("/api/report-shares")
                         .header(WorkspaceScope.HEADER, RISK_OPS)
-                        .param("reportId", reportId.toString()))
+                        .param("reportId", reportId.toString())
+                        .param("pageNo", "1")
+                        .param("pageSize", "1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(1))
-                .andExpect(jsonPath("$.data[0].id").value(shareId))
-                .andExpect(jsonPath("$.data[0].reportName").value(unique + "-report"));
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].id").value(secondShareId))
+                .andExpect(jsonPath("$.data.items[0].reportName").value(unique + "-report"))
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(1));
 
         mockMvc.perform(get("/api/public/reports/{token}", firstToken))
                 .andExpect(status().isOk())

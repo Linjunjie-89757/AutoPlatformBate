@@ -234,23 +234,14 @@ public class ApiExecutionSuiteDomainService {
         int safePageNo = pageNo == null || pageNo < 1 ? 1 : pageNo;
         List<ApiExecutionSuiteEntity> pageEntities;
         long total;
-        int safePageSize;
-        if (pageSize == null || pageSize < 1) {
-            List<ApiExecutionSuiteEntity> suiteEntities = suiteMapper.selectList(query.orderByDesc(ApiExecutionSuiteEntity::getUpdatedAt));
-            safePageSize = suiteEntities.isEmpty() ? 10 : suiteEntities.size();
-            int fromIndex = Math.min((safePageNo - 1) * safePageSize, suiteEntities.size());
-            int toIndex = Math.min(fromIndex + safePageSize, suiteEntities.size());
-            pageEntities = suiteEntities.subList(fromIndex, toIndex);
-            total = suiteEntities.size();
-        } else {
-            Page<ApiExecutionSuiteEntity> page = suiteMapper.selectPage(
-                    new Page<>(safePageNo, pageSize),
-                    query.orderByDesc(ApiExecutionSuiteEntity::getUpdatedAt));
-            pageEntities = page.getRecords();
-            total = page.getTotal();
-            safePageSize = Math.toIntExact(page.getSize());
-            safePageNo = Math.toIntExact(page.getCurrent());
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
+        Page<ApiExecutionSuiteEntity> page = suiteMapper.selectPage(
+                new Page<>(safePageNo, safePageSize),
+                query.orderByDesc(ApiExecutionSuiteEntity::getUpdatedAt));
+        pageEntities = page.getRecords();
+        total = page.getTotal();
+        safePageSize = Math.toIntExact(page.getSize());
+        safePageNo = Math.toIntExact(page.getCurrent());
         Map<Long, Long> itemCounts = pageEntities.isEmpty()
                 ? Map.of()
                 : suiteItemMapper.selectList(new LambdaQueryWrapper<ApiExecutionSuiteItemEntity>()
@@ -740,17 +731,9 @@ public class ApiExecutionSuiteDomainService {
                 .eq(ApiExecutionSuiteRunHistoryEntity::getSuiteId, suiteId)
                 .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getCreatedAt)
                 .orderByDesc(ApiExecutionSuiteRunHistoryEntity::getId);
-        if (pageSize == null || pageSize < 1) {
-            List<ApiExecutionSuiteRunHistoryItem> items = suiteRunHistoryMapper.selectList(query).stream()
-                    .map(this::toSuiteRunHistoryItem)
-                    .toList();
-            int compatiblePageSize = 10;
-            int fromIndex = Math.min((safePageNo - 1) * compatiblePageSize, items.size());
-            int toIndex = Math.min(fromIndex + compatiblePageSize, items.size());
-            return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, compatiblePageSize);
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
         Page<ApiExecutionSuiteRunHistoryEntity> page = suiteRunHistoryMapper.selectPage(
-                new Page<>(safePageNo, pageSize), query);
+                new Page<>(safePageNo, safePageSize), query);
         List<ApiExecutionSuiteRunHistoryItem> items = page.getRecords().stream()
                 .map(this::toSuiteRunHistoryItem)
                 .toList();

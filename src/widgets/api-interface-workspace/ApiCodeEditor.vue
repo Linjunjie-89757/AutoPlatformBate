@@ -7,6 +7,7 @@
       'is-fill': fill,
       'is-dark': themeVariant !== 'light',
       'is-figma-dark': themeVariant === 'figma-dark',
+      'is-sql-dark': themeVariant === 'sql-dark',
     }"
     :style="editorShellStyle"
   >
@@ -32,6 +33,7 @@ const API_CONSOLE_LANGUAGE = 'api-console'
 const API_CODE_THEME = 'api-code-light'
 const API_CODE_DARK_THEME = 'api-code-dark'
 const API_CODE_FIGMA_DARK_THEME = 'api-code-figma-dark'
+const API_CODE_SQL_DARK_THEME = 'api-code-sql-dark'
 let apiConsoleLanguageReady = false
 let monacoModulePromise: Promise<typeof MonacoApi> | null = null
 const languageModulePromises = new Map<ApiCodeLanguage, Promise<unknown>>()
@@ -50,7 +52,7 @@ const props = withDefaults(defineProps<{
   plain?: boolean
   minFitContentHeight?: number
   maxFitContentHeight?: number
-  themeVariant?: 'light' | 'dark' | 'figma-dark'
+  themeVariant?: 'light' | 'dark' | 'figma-dark' | 'sql-dark'
   fontSize?: number
   lineHeight?: number
   paddingTop?: number
@@ -181,6 +183,20 @@ function ensureApiConsoleLanguage(monacoApi: typeof MonacoApi) {
     },
   })
 
+  monacoApi.editor.defineTheme(API_CODE_SQL_DARK_THEME, {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#1A2035',
+      'editor.foreground': '#A8D8FF',
+      'editorLineNumber.foreground': '#7C9ABF',
+      'editorLineNumber.activeForeground': '#A8D8FF',
+      'editor.lineHighlightBackground': '#24305066',
+      'editorCursor.foreground': '#7EB8F7',
+      'editor.selectionBackground': '#243050',
+    },
+  })
   apiConsoleLanguageReady = true
 }
 
@@ -263,6 +279,7 @@ function resolveEditorFontFamily() {
 }
 
 function resolveEditorTheme(themeVariant = props.themeVariant) {
+  if (themeVariant === 'sql-dark') return API_CODE_SQL_DARK_THEME
   if (themeVariant === 'figma-dark') {
     return API_CODE_FIGMA_DARK_THEME
   }
@@ -529,6 +546,10 @@ onBeforeUnmount(() => {
   background: #1e1e1e;
 }
 
+.api-code-editor.is-sql-dark {
+  background: #1a2035;
+}
+
 .api-code-editor.is-dark .api-code-editor__toolbar {
   padding: 5.25px 10.5px 6.25px;
   border-bottom: 1px solid #2d2d3f;
@@ -543,5 +564,10 @@ onBeforeUnmount(() => {
   color: #7c7c9a;
   font-size: 10px;
   line-height: 18px;
+}
+
+.api-code-editor.is-sql-dark .api-code-editor__toolbar {
+  background: #141b2d;
+  border-bottom-color: #243050;
 }
 </style>

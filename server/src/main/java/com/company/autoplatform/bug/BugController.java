@@ -21,8 +21,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -42,11 +44,13 @@ public class BugController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "severity", required = false) String severity,
             @RequestParam(value = "priority", required = false) String priority,
+            @RequestParam(value = "createdFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdFrom,
+            @RequestParam(value = "createdTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdTo,
             @RequestParam(value = "relatedCaseId", required = false) Long relatedCaseId,
             @RequestParam(value = "pageNo", required = false) Integer pageNo,
             @RequestParam(value = "pageSize", required = false) Integer pageSize
     ) {
-        return ApiResponse.ok(bugService.listBugs(workspaceCode, keyword, status, severity, priority, relatedCaseId, pageNo, pageSize));
+        return ApiResponse.ok(bugService.listBugs(workspaceCode, keyword, status, severity, priority, createdFrom, createdTo, relatedCaseId, pageNo, pageSize));
     }
 
     @PostMapping("/bugs")
@@ -183,9 +187,11 @@ public class BugController {
 
     @GetMapping("/bugs/statistics")
     public ApiResponse<BugStatisticsResponse> statistics(
-            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode
+            @RequestHeader(value = WorkspaceScope.HEADER, required = false) String workspaceCode,
+            @RequestParam(value = "createdFrom", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdFrom,
+            @RequestParam(value = "createdTo", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdTo
     ) {
-        return ApiResponse.ok(bugService.statistics(workspaceCode));
+        return ApiResponse.ok(bugService.statistics(workspaceCode, createdFrom, createdTo));
     }
 
     @PostMapping("/cases/{id}/bugs")

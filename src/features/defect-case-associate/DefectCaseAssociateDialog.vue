@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { Folder, LayoutGrid, Search, X } from '@lucide/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 
@@ -373,7 +374,7 @@ watch(currentPage, () => {
               {{ priority || '全部' }}
             </button>
           </div>
-          <el-select v-model="executionStatusFilter" class="defect-case-associate__status-filter" placeholder="全部状态">
+          <el-select :suffix-icon="AppSelectChevron" v-model="executionStatusFilter" class="defect-case-associate__status-filter" placeholder="全部状态">
             <el-option label="全部状态" value="" />
             <el-option label="通过" value="PASSED" />
             <el-option label="失败" value="FAILED" />

@@ -45,6 +45,12 @@ export interface AutomationTaskListResponse {
   totalPages?: number
 }
 
+export interface AutomationTaskStats {
+  total: number
+  running: number
+  failed: number
+}
+
 export interface AutomationTaskClientFilter {
   keyword: string
   status: string

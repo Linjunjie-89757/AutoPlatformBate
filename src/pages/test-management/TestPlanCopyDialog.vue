@@ -85,7 +85,7 @@ const optionItems: Array<{ key: keyof TestPlanCopyOptions; label: string; descri
         </label>
         <label>
           <span>目标版本</span>
-          <select v-model="targetVersionId">
+          <select class="app-native-select" v-model="targetVersionId">
             <option value="">不关联版本</option>
             <option v-for="version in versions.filter(item => item.status !== 'archived')" :key="version.id" :value="version.id">{{ version.name }}</option>
           </select>

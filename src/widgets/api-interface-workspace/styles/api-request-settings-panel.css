@@ -115,3 +115,111 @@
   border-radius: 6px;
   background: #f7f8fa;
 }
+
+/* Compact request settings; legacy .api-settings-panel is also used by read-only case details. */
+.api-request-settings {
+  --api-settings-font: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  background: #fff;
+  color: var(--app-text-primary);
+  font: 400 14px/21px var(--api-settings-font);
+}
+
+.api-settings-group { margin: 0 0 16px; }
+.api-settings-group h3 {
+  margin: 0 0 10px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.api-settings-timeouts { display: flex; flex-wrap: wrap; gap: 24px; }
+.api-settings-timeout { display: block; }
+.api-settings-timeout > span:first-child {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--app-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+.api-settings-stepper {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 120px;
+  height: 28px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: #fff;
+  transition: border-color .15s;
+}
+.api-settings-stepper:focus-within { border-color: var(--app-primary); }
+.api-settings-stepper button {
+  display: flex;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  color: var(--app-text-muted);
+  cursor: pointer;
+}
+.api-settings-stepper button:hover:not(:disabled) { color: var(--app-primary); background: #165dff0a; }
+.api-settings-stepper i { width: 1px; height: 16px; flex: 0 0 1px; background: var(--app-border); }
+.api-settings-stepper input {
+  box-sizing: border-box;
+  width: 64px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--app-text-primary);
+  font: 400 12px/18px var(--api-settings-font);
+  text-align: center;
+}
+.api-settings-timeout.is-disabled > span:first-child,
+.api-settings-timeout.is-disabled input,
+.api-settings-stepper button:disabled { color: var(--app-text-subtle); }
+.api-settings-timeout.is-disabled .api-settings-stepper,
+.api-settings-stepper button:disabled { background: var(--app-bg-page); }
+.api-settings-timeout.is-disabled .api-settings-stepper { border-color: var(--app-border); }
+.api-settings-stepper button:disabled,
+.api-settings-stepper input:disabled { cursor: not-allowed; }
+.api-settings-redirect { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; line-height: 24px; cursor: pointer; }
+.api-settings-redirect input { width: 14px; height: 14px; margin: 0; accent-color: var(--app-primary); cursor: pointer; }
+.api-settings-redirect > span { color: var(--app-text-primary); font-size: 13px; line-height: 19.5px; }
+.api-settings-redirect small { color: var(--app-text-subtle); font-size: 11px; line-height: 16.5px; }
+.api-settings-redirect.is-disabled { opacity: .5; cursor: not-allowed; }
+.api-settings-redirect.is-disabled input { cursor: not-allowed; }
+.api-settings-reset,
+.api-settings-reset-confirm button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-text-muted);
+  font: 400 12px/18px var(--api-settings-font);
+  cursor: pointer;
+}
+.api-settings-reset:hover:not(:disabled) { color: var(--app-primary); }
+.api-settings-reset:disabled,
+.api-settings-reset-confirm button:disabled { color: var(--app-text-subtle); cursor: not-allowed; }
+.api-settings-reset-confirm { display: flex; align-items: center; gap: 8px; color: var(--app-text-secondary); font-size: 12px; line-height: 18px; }
+.api-settings-reset-confirm .is-danger { color: var(--app-danger); font-weight: 500; }
+.api-settings-skeleton { display: flex; flex-direction: column; gap: 10px; }
+.api-settings-skeleton span { display: block; border-radius: 4px; background: var(--app-border); }
+.api-settings-skeleton__title { width: 72px; height: 12px; }
+.api-settings-skeleton__inputs { display: flex; gap: 16px; }
+.api-settings-skeleton__inputs span { width: 120px; height: 28px; border-radius: 6px; }
+.api-settings-skeleton__section { width: 48px; height: 12px; margin-top: 8px; }
+.api-settings-skeleton__option { width: 110px; height: 16px; }

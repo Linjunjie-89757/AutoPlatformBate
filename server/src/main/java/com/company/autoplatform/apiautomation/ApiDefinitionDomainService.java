@@ -116,15 +116,9 @@ public class ApiDefinitionDomainService {
                 .orderByDesc(ApiDefinitionEntity::getId);
 
         int safePageNo = safePageNo(pageNo);
-        if (pageSize == null || pageSize < 1) {
-            List<ApiDefinitionItem> items = definitionMapper.selectList(query).stream()
-                    .map(entity -> toDefinitionItem(entity, readableWorkspaces))
-                    .toList();
-            int compatiblePageSize = safePageSize(pageSize, items.size());
-            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
 
-        Page<ApiDefinitionEntity> page = definitionMapper.selectPage(new Page<>(safePageNo, pageSize), query);
+        Page<ApiDefinitionEntity> page = definitionMapper.selectPage(new Page<>(safePageNo, safePageSize), query);
         List<ApiDefinitionItem> items = page.getRecords().stream()
                 .map(entity -> toDefinitionItem(entity, readableWorkspaces))
                 .toList();
@@ -912,19 +906,6 @@ public class ApiDefinitionDomainService {
 
     private int safePageNo(Integer pageNo) {
         return pageNo == null || pageNo < 1 ? 1 : pageNo;
-    }
-
-    private int safePageSize(Integer pageSize, int total) {
-        if (pageSize == null || pageSize < 1) {
-            return total > 0 ? total : 10;
-        }
-        return pageSize;
-    }
-
-    private <T> List<T> paginate(List<T> items, int pageNo, int pageSize) {
-        int fromIndex = Math.min((pageNo - 1) * pageSize, items.size());
-        int toIndex = Math.min(fromIndex + pageSize, items.size());
-        return items.subList(fromIndex, toIndex);
     }
 
     private Map<Long, WorkspaceEntity> readableWorkspaceMap() {

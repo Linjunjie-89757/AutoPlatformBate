@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import processorEmptyLeftIcon from '@/assets/figma-processor/processor-empty-right.svg'
-import { ChevronDown, Plus } from '@lucide/vue'
+import { Code2, ChevronDown, Layers, Plus } from '@lucide/vue'
 
 import { AppSwitch } from '@/shared/ui'
 
@@ -53,7 +52,6 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-      <span class="api-processor-count">{{ rows.length }} 项</span>
     </div>
 
     <div v-if="rows.length" class="api-processor-sidebar-list">
@@ -102,7 +100,7 @@ function toggleProcessor(processor: ApiProcessorPanelRow) {
       </div>
     </div>
     <div v-else class="api-processor-empty">
-      <img class="api-processor-empty-icon" :src="processorEmptyLeftIcon" alt="" aria-hidden="true" />
+      <component :is="stage === 'pre' ? Code2 : Layers" :size="24" aria-hidden="true" />
       <span>暂无处理器</span>
       <small>点击「添加」开始配置</small>
     </div>

@@ -43,16 +43,12 @@
 .api-doc-field-name {
   display: inline-flex;
   max-width: 100%;
-  min-height: 22px;
   align-items: center;
   overflow: hidden;
-  padding: 0 7px;
-  border-radius: 4px;
-  background: #eef6ff;
-  color: #2563eb;
+  color: #165dff;
   font-family: var(--app-font-family-mono);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -68,13 +64,13 @@
 }
 
 .api-doc-required {
-  color: #86909c;
+  color: #c9cdd4;
   font-size: 12px;
   line-height: 18px;
 }
 
 .api-doc-required.is-required {
-  color: #d97706;
+  color: #ff7d00;
   font-weight: 600;
 }
 
@@ -89,35 +85,42 @@
 }
 
 .api-schema-type {
-  display: inline-flex;
-  width: fit-content;
   max-width: 100%;
-  align-items: center;
-  padding: 2px 7px;
-  border-radius: 4px;
-  background: #f1f5f9;
-  color: #475569;
+  overflow: hidden;
+  color: #4e5969;
+  font-family: var(--app-font-family-mono);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .api-schema-type.is-string {
-  background: #ecfdf3;
-  color: #15803d;
+  color: #165dff;
 }
 
 .api-schema-type.is-number {
-  background: #eff6ff;
-  color: #2563eb;
+  color: #00b42a;
 }
 
 .api-schema-type.is-boolean {
-  background: #fef3c7;
-  color: #b45309;
+  color: #0fc6c2;
 }
 
-.api-schema-type.is-object,
+.api-schema-type.is-object {
+  color: #7816ff;
+}
+
 .api-schema-type.is-array {
-  background: #f5f3ff;
-  color: #7c3aed;
+  color: #ff7d00;
+}
+
+.api-doc-schema-head {
+  height: 33px;
+  min-height: 33px;
+}
+
+.api-doc-schema-row {
+  height: 37.5px;
+  min-height: 37.5px;
 }

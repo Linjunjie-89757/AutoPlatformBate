@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 interface ExtractorOption {
   label: string
   value: string
@@ -63,10 +64,10 @@ function syncExtractType(row: ApiExtractorPanelRow) {
       <div v-for="(extractor, index) in rows" :key="extractor.id || index" class="api-extractor-row">
         <el-switch v-model="extractor.enabled" size="small" @change="emit('dirty')" />
         <el-input v-model="extractor.name" placeholder="提取器名称" @input="emit('dirty')" />
-        <el-select v-model="extractor.source" @change="syncSource(extractor)">
+        <el-select :suffix-icon="AppSelectChevron" v-model="extractor.source" @change="syncSource(extractor)">
           <el-option v-for="item in sourceOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-select v-model="extractor.extractType" @change="syncExtractType(extractor)">
+        <el-select :suffix-icon="AppSelectChevron" v-model="extractor.extractType" @change="syncExtractType(extractor)">
           <el-option v-for="item in expressionTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-input v-model="extractor.expression" placeholder="$.data.id / token / 正则" @input="emit('dirty')" />

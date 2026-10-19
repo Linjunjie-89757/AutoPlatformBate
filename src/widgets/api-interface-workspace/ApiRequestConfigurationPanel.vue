@@ -8,6 +8,8 @@ type AnyFn = (...args: any[]) => any
 
 defineProps<{
   activeEditor: any
+  saving?: boolean
+  canEdit?: boolean
   activeBodyLanguage: any
   bodyModes: any[]
   bodySchemaFields: any[]
@@ -127,10 +129,9 @@ const bodyJsonViewMode = defineModel<any>('bodyJsonViewMode')
   <ApiRequestSettingsPanel
     v-else-if="activeEditor.activeTab === 'settings'"
     :detail="activeEditor.detail"
-    :workspace-label="currentDefinitionWorkspaceLabel"
-    :environment-name="currentEnvironmentName"
-    :variable-set-name="currentVariableSetName"
-    :has-run-result="Boolean(activeEditor.runResult)"
+    :loading="activeEditor.loading"
+    :saving="saving"
+    :can-edit="canEdit"
     :mark-dirty="markDirty"
   />
 </template>

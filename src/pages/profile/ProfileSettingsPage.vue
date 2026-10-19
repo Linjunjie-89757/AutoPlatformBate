@@ -394,9 +394,9 @@ function offlineDevice() {
         <section v-else-if="activeTab === 'preferences'" class="profile-card profile-card--preferences">
           <header class="profile-card__header"><h2>操作偏好</h2></header>
           <div class="profile-card__body">
-            <div class="profile-field"><label>默认工作区<small>登录后首先进入的模块</small></label><select v-model="defaultModule"><option v-for="item in moduleOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></div>
-            <div class="profile-field"><label>界面语言</label><select v-model="language"><option value="zh">简体中文</option><option value="zh-tw">繁體中文</option><option value="en">English</option></select></div>
-            <div class="profile-field"><label>列表分页数量</label><select v-model="pageSize"><option v-for="size in ['10', '20', '50', '100']" :key="size" :value="size">每页 {{ size }} 条</option></select></div>
+            <div class="profile-field"><label>默认工作区<small>登录后首先进入的模块</small></label><select class="app-native-select" v-model="defaultModule"><option v-for="item in moduleOptions" :key="item.value" :value="item.value">{{ item.label }}</option></select></div>
+            <div class="profile-field"><label>界面语言</label><select class="app-native-select" v-model="language"><option value="zh">简体中文</option><option value="zh-tw">繁體中文</option><option value="en">English</option></select></div>
+            <div class="profile-field"><label>列表分页数量</label><select class="app-native-select" v-model="pageSize"><option v-for="size in ['10', '20', '50', '100']" :key="size" :value="size">每页 {{ size }} 条</option></select></div>
             <div class="profile-field"><label>记住侧边栏状态</label><div class="profile-toggle-row"><AppSwitch v-model="rememberSidebar" label="记住侧边栏状态" size="regular" /><span>刷新后保留折叠 / 展开状态</span></div></div>
             <div class="profile-field"><label>删除前二次确认</label><div class="profile-toggle-row"><AppSwitch v-model="confirmBeforeDelete" label="删除前二次确认" size="regular" /><span>删除操作弹出确认提示</span></div></div>
             <div class="profile-field"><label>自动保存草稿</label><div class="profile-toggle-row"><AppSwitch v-model="autoSaveDraft" label="自动保存草稿" size="regular" /><span>编辑内容定期自动保存</span></div></div>

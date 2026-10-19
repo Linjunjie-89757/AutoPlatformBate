@@ -99,13 +99,13 @@ const {
         <img :src="figmaConfigAiIcons.search" alt="">
         <input v-model="searchKeyword" type="text" placeholder="搜索连接名称">
       </label>
-      <select v-model="statusFilter">
+      <select class="app-native-select" v-model="statusFilter">
         <option value="all">全部状态</option>
         <option value="normal">正常</option>
         <option value="error">异常</option>
         <option value="disabled">已停用</option>
       </select>
-      <select v-model="providerFilter">
+      <select class="app-native-select" v-model="providerFilter">
         <option value="all">全部服务商</option>
         <option v-for="item in providerPickerOrder" :key="item" :value="item">
           {{ getProviderVisual(item).label }}
@@ -270,12 +270,12 @@ const {
                 </span>
               </td>
               <td>
-                <select :value="row.primary" disabled>
+                <select class="app-native-select" :value="row.primary" disabled>
                   <option>{{ row.primary || '— 未指定 —' }}</option>
                 </select>
               </td>
               <td>
-                <select :value="row.backup" disabled>
+                <select class="app-native-select" :value="row.backup" disabled>
                   <option>{{ row.backup || '— 未指定 —' }}</option>
                 </select>
               </td>

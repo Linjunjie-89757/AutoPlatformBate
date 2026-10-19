@@ -28,6 +28,15 @@ const props = defineProps<{
   items: DefectTrendChartItem[]
 }>()
 
+const yAxisScale = computed(() => {
+  const maxValue = Math.max(0, ...props.items.flatMap(item => [item.newCount, item.closedCount]))
+  const interval = maxValue <= 4 ? 1 : Math.ceil(maxValue / 4)
+  return {
+    max: interval * 4,
+    interval,
+  }
+})
+
 const option = computed<ChartOption>(() => ({
   animationDuration: 1500,
   animationEasing: 'cubicOut',
@@ -93,8 +102,8 @@ const option = computed<ChartOption>(() => ({
   yAxis: {
     type: 'value',
     min: 0,
-    max: 16,
-    interval: 4,
+    max: yAxisScale.value.max,
+    interval: yAxisScale.value.interval,
     axisLine: { show: false },
     axisTick: { show: false },
     axisLabel: {

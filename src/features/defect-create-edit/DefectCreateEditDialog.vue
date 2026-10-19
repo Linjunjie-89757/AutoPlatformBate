@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 
 import { listAllCases, type CaseSummaryItem } from '@/entities/case'
@@ -257,7 +258,7 @@ watch(
       <div class="defect-dialog__grid">
         <div class="defect-dialog__field">
           <span class="is-required">严重程度</span>
-          <el-select v-model="form.severity" class="defect-dialog__select" :disabled="loadingDetail">
+          <el-select :suffix-icon="AppSelectChevron" v-model="form.severity" class="defect-dialog__select" :disabled="loadingDetail">
             <el-option
               v-for="item in defectSeverityOptions"
               :key="item.value"
@@ -269,7 +270,7 @@ watch(
 
         <div class="defect-dialog__field">
           <span class="is-required">优先级</span>
-          <el-select v-model="form.priority" class="defect-dialog__select" :disabled="loadingDetail">
+          <el-select :suffix-icon="AppSelectChevron" v-model="form.priority" class="defect-dialog__select" :disabled="loadingDetail">
             <el-option
               v-for="item in defectPriorityOptions"
               :key="item.value"
@@ -281,7 +282,7 @@ watch(
 
         <div class="defect-dialog__field">
           <span class="is-required">所属工作空间</span>
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="form.workspaceCode"
             class="defect-dialog__select"
             :disabled="mode === 'edit' || loadingDetail || workspaceOptionsLoading"
@@ -312,7 +313,7 @@ watch(
 
         <div class="defect-dialog__field">
           <span>来源类型</span>
-          <el-select v-model="visualForm.sourceType" class="defect-dialog__select" :disabled="loadingDetail">
+          <el-select :suffix-icon="AppSelectChevron" v-model="visualForm.sourceType" class="defect-dialog__select" :disabled="loadingDetail">
             <el-option label="手工录入" value="手工录入" />
             <el-option label="用例执行" value="用例执行" />
             <el-option label="报告导入" value="报告导入" />
@@ -321,7 +322,7 @@ watch(
 
         <div class="defect-dialog__field">
           <span>关联用例</span>
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-model="form.relatedCaseId"
             class="defect-dialog__select"
             :disabled="loadingDetail || caseOptionsLoading"

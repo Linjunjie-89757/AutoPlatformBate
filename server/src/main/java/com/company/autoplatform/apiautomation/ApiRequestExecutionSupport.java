@@ -109,20 +109,52 @@ public class ApiRequestExecutionSupport {
             ApiExecutionRuntimeModels.ResolvedEnvironment environment,
             Map<String, String> variables
     ) throws IOException, InterruptedException {
+        HttpClient client = clientFor(config);
+        try {
+            return sendRequest(client, request, config, environment, variables);
+        } finally {
+            if (client != httpClient) {
+                client.close();
+            }
+        }
+    }
+
+    HttpClient clientFor(ApiRequestConfigInput config) {
+        int connectTimeout = config.connectTimeoutMs() == null ? 10000 : config.connectTimeoutMs();
+        if (connectTimeout < 1000) {
+            throw new BadRequestException("Connection timeout must be at least 1000 ms");
+        }
+        boolean followRedirects = !Boolean.FALSE.equals(config.followRedirects());
+        if (connectTimeout == 10000 && followRedirects) {
+            return httpClient;
+        }
+        return HttpClient.newBuilder()
+                .connectTimeout(Duration.ofMillis(connectTimeout))
+                .followRedirects(followRedirects ? HttpClient.Redirect.NORMAL : HttpClient.Redirect.NEVER)
+                .build();
+    }
+
+    private SentRequestResult sendRequest(
+            HttpClient client,
+            ResolvedRequest request,
+            ApiRequestConfigInput config,
+            ApiExecutionRuntimeModels.ResolvedEnvironment environment,
+            Map<String, String> variables
+    ) throws IOException, InterruptedException {
         ApiAuthConfigInput authConfig = request.authConfig();
         String authType = Optional.ofNullable(authConfig.authType()).orElse("NONE").toUpperCase();
         return switch (authType) {
             case "NONE" -> {
                 HttpRequest httpRequest = buildHttpRequest(request, config, environment);
                 yield new SentRequestResult(
-                        httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
+                        client.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
                         flattenHeaders(httpRequest.headers().map())
                 );
             }
-            case "BASIC" -> sendBasicAuthRequest(request, config, environment, variables, authConfig);
-            case "BEARER" -> sendBearerAuthRequest(request, config, environment, variables, authConfig);
-            case "API_KEY" -> sendApiKeyRequest(request, config, environment, variables, authConfig);
-            case "DIGEST" -> sendDigestAuthRequest(request, config, environment, variables, authConfig);
+            case "BASIC" -> sendBasicAuthRequest(client, request, config, environment, variables, authConfig);
+            case "BEARER" -> sendBearerAuthRequest(client, request, config, environment, variables, authConfig);
+            case "API_KEY" -> sendApiKeyRequest(client, request, config, environment, variables, authConfig);
+            case "DIGEST" -> sendDigestAuthRequest(client, request, config, environment, variables, authConfig);
             default -> throw new BadRequestException("Unsupported auth type: " + authType);
         };
     }
@@ -187,6 +219,7 @@ public class ApiRequestExecutionSupport {
     }
 
     private SentRequestResult sendBasicAuthRequest(
+            HttpClient client,
             ResolvedRequest request,
             ApiRequestConfigInput config,
             ApiExecutionRuntimeModels.ResolvedEnvironment environment,
@@ -199,12 +232,13 @@ public class ApiRequestExecutionSupport {
         String encoded = Base64.getEncoder().encodeToString((userName + ":" + password).getBytes(StandardCharsets.UTF_8));
         HttpRequest httpRequest = buildHttpRequest(request, config, environment, "Basic " + encoded);
         return new SentRequestResult(
-                httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
+                client.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
                 flattenHeaders(httpRequest.headers().map())
         );
     }
 
     private SentRequestResult sendBearerAuthRequest(
+            HttpClient client,
             ResolvedRequest request,
             ApiRequestConfigInput config,
             ApiExecutionRuntimeModels.ResolvedEnvironment environment,
@@ -214,12 +248,13 @@ public class ApiRequestExecutionSupport {
         String token = requireAuthValue(variableResolver.replaceVariables(authConfig.bearerToken(), variables), "Bearer token");
         HttpRequest httpRequest = buildHttpRequest(request, config, environment, "Bearer " + token);
         return new SentRequestResult(
-                httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
+                client.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
                 flattenHeaders(httpRequest.headers().map())
         );
     }
 
     private SentRequestResult sendApiKeyRequest(
+            HttpClient client,
             ResolvedRequest request,
             ApiRequestConfigInput config,
             ApiExecutionRuntimeModels.ResolvedEnvironment environment,
@@ -251,7 +286,7 @@ public class ApiRequestExecutionSupport {
         }
         HttpRequest httpRequest = buildHttpRequest(authenticatedRequest, config, environment);
         return new SentRequestResult(
-                httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
+                client.send(httpRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
                 flattenHeaders(httpRequest.headers().map())
         );
     }
@@ -287,6 +322,7 @@ public class ApiRequestExecutionSupport {
     }
 
     private SentRequestResult sendDigestAuthRequest(
+            HttpClient client,
             ResolvedRequest request,
             ApiRequestConfigInput config,
             ApiExecutionRuntimeModels.ResolvedEnvironment environment,
@@ -298,7 +334,7 @@ public class ApiRequestExecutionSupport {
         String password = variableResolver.replaceVariables(Optional.ofNullable(credential.password()).orElse(""), variables);
 
         HttpRequest initialRequest = buildHttpRequest(request, config, environment);
-        HttpResponse<String> initialResponse = httpClient.send(initialRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> initialResponse = client.send(initialRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (initialResponse.statusCode() != 401) {
             return new SentRequestResult(initialResponse, flattenHeaders(initialRequest.headers().map()));
         }
@@ -312,7 +348,7 @@ public class ApiRequestExecutionSupport {
         String authorizationHeader = buildDigestAuthorizationHeader(request, userName, password, challenge);
         HttpRequest digestRequest = buildHttpRequest(request, config, environment, authorizationHeader);
         return new SentRequestResult(
-                httpClient.send(digestRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
+                client.send(digestRequest, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)),
                 flattenHeaders(digestRequest.headers().map())
         );
     }

@@ -234,7 +234,7 @@ function confirm() {
             </div>
             <div>
               <label>工作区角色 <em>*</em></label>
-              <select v-model="roleId">
+              <select class="app-native-select" v-model="roleId">
                 <option v-for="role in roles" :key="role.id" :value="role.id">{{ role.name }}</option>
               </select>
               <small class="add-members-dialog__role-desc">{{ selectedRole?.description }}</small>

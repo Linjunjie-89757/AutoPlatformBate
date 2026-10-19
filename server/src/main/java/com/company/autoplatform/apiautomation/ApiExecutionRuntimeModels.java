@@ -2,6 +2,7 @@ package com.company.autoplatform.apiautomation;
 
 import com.company.autoplatform.execution.ReportEntity;
 import com.company.autoplatform.execution.TaskEntity;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -29,7 +30,7 @@ final class ApiExecutionRuntimeModels {
             List<ApiKeyValueInput> headers,
             ApiAuthConfigInput authConfig,
             Integer timeoutMs,
-            List<ApiVariableItem> variables,
+            @JsonAlias("localVariables") List<ApiVariableItem> variables,
             Long defaultVariableSetId,
             Boolean mockEnabled,
             Long mockApplicationId,
@@ -37,7 +38,8 @@ final class ApiExecutionRuntimeModels {
             String defaultServiceKey,
             List<EnvironmentServiceEndpoint> services,
             List<Long> variableSetIds,
-            List<Long> disabledVariableSetIds
+            List<Long> disabledVariableSetIds,
+            LegacyApiConfigPayload apiConfig
     ) {
         EnvironmentConfigPayload(
                 List<ApiKeyValueInput> headers,
@@ -52,8 +54,26 @@ final class ApiExecutionRuntimeModels {
                 List<EnvironmentServiceEndpoint> services
         ) {
             this(headers, authConfig, timeoutMs, variables, defaultVariableSetId, mockEnabled,
-                    mockApplicationId, mockReleaseId, defaultServiceKey, services, List.of(), List.of());
+                    mockApplicationId, mockReleaseId, defaultServiceKey, services, List.of(), List.of(), null);
         }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record LegacyApiConfigPayload(
+            String baseUrl,
+            Integer timeout,
+            List<ApiKeyValueInput> headers,
+            String authType,
+            String authBearer,
+            String authBasicUser,
+            String authBasicPass,
+            String authApiKeyName,
+            String authApiKeyValue,
+            String authApiKeyIn,
+            String authDigestUser,
+            String authDigestPass,
+            ApiAuthConfigInput authConfig
+    ) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -194,11 +214,21 @@ final class ApiExecutionRuntimeModels {
         private String method;
         private String path;
         private Integer timeoutMs;
+        private Integer connectTimeoutMs;
+        private Boolean followRedirects;
         private List<ApiKeyValueInput> queryParams;
         private List<ApiKeyValueInput> headers;
         private List<ApiKeyValueInput> cookies;
         private ApiRequestBodyInput body;
         private ApiAuthConfigInput authConfig;
+
+        MutableRequestConfig(
+                String method, String path, Integer timeoutMs,
+                List<ApiKeyValueInput> queryParams, List<ApiKeyValueInput> headers, List<ApiKeyValueInput> cookies,
+                ApiRequestBodyInput body, ApiAuthConfigInput authConfig
+        ) {
+            this(method, path, timeoutMs, queryParams, headers, cookies, body, authConfig, null, null);
+        }
 
         MutableRequestConfig(
                 String method,
@@ -208,7 +238,9 @@ final class ApiExecutionRuntimeModels {
                 List<ApiKeyValueInput> headers,
                 List<ApiKeyValueInput> cookies,
                 ApiRequestBodyInput body,
-                ApiAuthConfigInput authConfig
+                ApiAuthConfigInput authConfig,
+                Integer connectTimeoutMs,
+                Boolean followRedirects
         ) {
             this.method = method;
             this.path = path;
@@ -218,6 +250,8 @@ final class ApiExecutionRuntimeModels {
             this.cookies = cookies;
             this.body = body;
             this.authConfig = authConfig;
+            this.connectTimeoutMs = connectTimeoutMs;
+            this.followRedirects = followRedirects;
         }
 
         String method() {
@@ -230,6 +264,14 @@ final class ApiExecutionRuntimeModels {
 
         Integer timeoutMs() {
             return timeoutMs;
+        }
+
+        Integer connectTimeoutMs() {
+            return connectTimeoutMs;
+        }
+
+        Boolean followRedirects() {
+            return followRedirects;
         }
 
         List<ApiKeyValueInput> queryParams() {
@@ -257,6 +299,8 @@ final class ApiExecutionRuntimeModels {
             request.put("method", method);
             request.put("path", path);
             request.put("timeoutMs", timeoutMs);
+            request.put("connectTimeoutMs", connectTimeoutMs);
+            request.put("followRedirects", followRedirects);
             request.put("queryParams", new ArrayList<>(queryParams));
             request.put("headers", new ArrayList<>(headers));
             request.put("cookies", new ArrayList<>(cookies));
@@ -270,6 +314,8 @@ final class ApiExecutionRuntimeModels {
             method = blankToFallback(next.method(), method).toUpperCase();
             path = blankToFallback(next.path(), path);
             timeoutMs = next.timeoutMs() == null ? timeoutMs : next.timeoutMs();
+            connectTimeoutMs = next.connectTimeoutMs() == null ? connectTimeoutMs : next.connectTimeoutMs();
+            followRedirects = next.followRedirects() == null ? followRedirects : next.followRedirects();
             queryParams = new ArrayList<>(defaultList(next.queryParams()));
             headers = new ArrayList<>(defaultList(next.headers()));
             cookies = new ArrayList<>(defaultList(next.cookies()));

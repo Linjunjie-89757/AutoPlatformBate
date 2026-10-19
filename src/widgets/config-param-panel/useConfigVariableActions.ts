@@ -33,7 +33,7 @@ export function useConfigVariableActions(options: UseConfigVariableActionsOption
   }
 
   function displayedVariableValue(variable: WebUiVariableItem) {
-    if (options.effectiveVariableType(variable) === 'SECRET' && !revealedVariables.value.has(variable.name)) {
+    if ((variable.sensitive || variable.valueType === 'SECRET') && !revealedVariables.value.has(variable.name)) {
       return '••••••••••••'
     }
     return variable.value || '—'

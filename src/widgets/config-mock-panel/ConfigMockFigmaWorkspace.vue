@@ -196,9 +196,9 @@ const {
         <section v-if="activeTab === 'interfaces'" class="figma-mock-pane is-interface-pane" :class="{ 'is-empty-state': !filteredEndpoints.length }">
           <div class="figma-mock-toolbar">
             <label class="figma-mock-search is-wide"><Search :size="14" /><input v-model="endpointSearch" type="search" placeholder="搜索接口名称或路径"></label>
-            <select v-model="endpointMethod"><option value="ALL">全部方法</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
-            <select v-model="endpointStatus"><option value="ALL">全部状态</option><option value="ENABLED">已启用</option><option value="DISABLED">已停用</option></select>
-            <select v-model="endpointVersion"><option value="ALL">全部版本</option><option value="PUBLISHED">已发布</option><option value="DRAFT">草稿</option></select>
+            <select class="app-native-select" v-model="endpointMethod"><option value="ALL">全部方法</option><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+            <select class="app-native-select" v-model="endpointStatus"><option value="ALL">全部状态</option><option value="ENABLED">已启用</option><option value="DISABLED">已停用</option></select>
+            <select class="app-native-select" v-model="endpointVersion"><option value="ALL">全部版本</option><option value="PUBLISHED">已发布</option><option value="DRAFT">草稿</option></select>
             <span class="figma-mock-toolbar__spacer" />
             <button type="button" class="figma-mock-btn" disabled title="后端暂未提供 Mock 批量导入接口"><Upload :size="14" />导入</button>
             <button type="button" class="figma-mock-btn is-primary" @click="emit('create-endpoint')"><Plus :size="14" />新增接口</button>
@@ -278,9 +278,9 @@ const {
         <section v-else class="figma-mock-pane">
           <div class="figma-mock-toolbar is-log-toolbar">
             <label class="figma-mock-search is-wide"><Search :size="14" /><input v-model="logSearch" type="search" placeholder="搜索路径、场景名"></label>
-            <select v-model="logMethod"><option value="ALL">全部方法</option><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
-            <select v-model="logResult"><option value="ALL">全部结果</option><option value="MATCHED">命中</option><option value="UNMATCHED">未匹配</option></select>
-            <select disabled><option>今日</option></select><span class="figma-mock-toolbar__spacer" />
+            <select class="app-native-select" v-model="logMethod"><option value="ALL">全部方法</option><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+            <select class="app-native-select" v-model="logResult"><option value="ALL">全部结果</option><option value="MATCHED">命中</option><option value="UNMATCHED">未匹配</option></select>
+            <select class="app-native-select" disabled><option>今日</option></select><span class="figma-mock-toolbar__spacer" />
             <button type="button" class="figma-mock-btn" disabled title="后端暂未提供日志导出接口"><Download :size="14" />导出日志</button>
           </div>
           <div v-if="filteredLogs.length" class="figma-mock-table-wrap">

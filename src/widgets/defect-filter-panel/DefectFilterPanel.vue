@@ -1,8 +1,10 @@
 ﻿<script setup lang="ts">
-import { nextTick, reactive, watch } from 'vue'
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
+import { computed, nextTick, reactive, watch } from 'vue'
 import { CheckCircle, Trash2, UserCheck } from '@lucide/vue'
 
 import {
+  defectDateShortcuts,
   defectPriorityOptions,
   defectSeverityOptions,
   defectStatusOptions,
@@ -40,8 +42,18 @@ const form = reactive<DefectClientFilter>({
   severity: props.modelValue.severity,
   assigneeId: props.modelValue.assigneeId,
   workspaceCode: props.modelValue.workspaceCode,
+  createdFrom: props.modelValue.createdFrom,
+  createdTo: props.modelValue.createdTo,
 })
 let syncingFromModel = false
+
+const dateRange = computed<[string, string] | undefined>({
+  get: () => form.createdFrom && form.createdTo ? [form.createdFrom, form.createdTo] as [string, string] : undefined,
+  set: (value: [string, string] | undefined) => {
+    form.createdFrom = value?.[0] ?? ''
+    form.createdTo = value?.[1] ?? ''
+  },
+})
 
 function isSameFilter(left: DefectClientFilter, right: DefectClientFilter) {
   return (
@@ -50,7 +62,9 @@ function isSameFilter(left: DefectClientFilter, right: DefectClientFilter) {
     left.priority === right.priority &&
     left.severity === right.severity &&
     left.assigneeId === right.assigneeId &&
-    left.workspaceCode === right.workspaceCode
+    left.workspaceCode === right.workspaceCode &&
+    left.createdFrom === right.createdFrom &&
+    left.createdTo === right.createdTo
   )
 }
 
@@ -103,16 +117,16 @@ watch(
           <img class="defect-filter-panel__search-icon" :src="figmaDefectIcons.search" alt="" />
         </template>
       </el-input>
-      <el-select v-model="form.status" class="defect-filter-panel__control is-100" clearable placeholder="&#29366;&#24577;">
+      <el-select :suffix-icon="AppSelectChevron" v-model="form.status" class="defect-filter-panel__control is-100" clearable placeholder="&#29366;&#24577;">
         <el-option v-for="item in defectStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-select v-model="form.severity" class="defect-filter-panel__control is-110" clearable placeholder="&#20005;&#37325;&#32423;&#21035;">
+      <el-select :suffix-icon="AppSelectChevron" v-model="form.severity" class="defect-filter-panel__control is-110" clearable placeholder="&#20005;&#37325;&#32423;&#21035;">
         <el-option v-for="item in defectSeverityOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-select v-model="form.priority" class="defect-filter-panel__control is-100" clearable placeholder="&#20248;&#20808;&#32423;">
+      <el-select :suffix-icon="AppSelectChevron" v-model="form.priority" class="defect-filter-panel__control is-100" clearable placeholder="&#20248;&#20808;&#32423;">
         <el-option v-for="item in defectPriorityOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-select
+      <el-select :suffix-icon="AppSelectChevron"
         v-model="form.assigneeId"
         class="defect-filter-panel__control is-110"
         clearable
@@ -125,7 +139,7 @@ watch(
           :value="item.value"
         />
       </el-select>
-      <el-select
+      <el-select :suffix-icon="AppSelectChevron"
         v-if="showWorkspaceFilter"
         v-model="form.workspaceCode"
         class="defect-filter-panel__control is-100"
@@ -139,11 +153,18 @@ watch(
           :value="item.value"
         />
       </el-select>
-      <el-select
-        v-else
-        class="defect-filter-panel__control is-100"
-        disabled
-        placeholder="&#25152;&#23646;&#27169;&#22359;"
+      <el-date-picker
+        v-model="dateRange"
+        class="defect-filter-panel__date-range"
+        type="daterange"
+        placeholder="创建时间"
+        range-separator="至"
+        start-placeholder="开始日期"
+        end-placeholder="结束日期"
+        format="YYYY-MM-DD"
+        value-format="YYYY-MM-DD"
+        clearable
+        :shortcuts="defectDateShortcuts"
       />
     </div>
 
@@ -274,6 +295,12 @@ watch(
   width: 110px;
 }
 
+.defect-filter-panel :deep(.el-date-editor.defect-filter-panel__date-range) {
+  width: 260px !important;
+  min-width: 260px;
+  flex: 0 0 260px;
+}
+
 .defect-filter-panel :deep(.el-input__wrapper),
 .defect-filter-panel :deep(.el-select__wrapper) {
   min-height: 28px;
@@ -317,7 +344,8 @@ watch(
   .defect-filter-panel__left,
   .defect-filter-panel__right,
   .defect-filter-panel__search,
-  .defect-filter-panel__control {
+  .defect-filter-panel__control,
+  .defect-filter-panel__date-range {
     width: 100%;
   }
 

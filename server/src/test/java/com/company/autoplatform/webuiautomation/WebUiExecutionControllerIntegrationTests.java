@@ -330,6 +330,7 @@ class WebUiExecutionControllerIntegrationTests extends IntegrationTestSupport {
     @Test
     void batchRunExecutesCasesWithEnvironmentOverrideAndReturnsBatchDetail() throws Exception {
         stubBrowserRunner();
+        String batchName = uniquePrefix("batch");
         Long environmentId = createEnvironment(uniquePrefix("env"), "https://batch.example.test");
         Long firstCaseId = createCase(uniquePrefix("batch-pass"), List.of(
                 openStep("Open first", "/first", 1)
@@ -339,7 +340,7 @@ class WebUiExecutionControllerIntegrationTests extends IntegrationTestSupport {
         ));
 
         Map<String, Object> request = new LinkedHashMap<>();
-        request.put("batchName", "Nightly web UI");
+        request.put("batchName", batchName);
         request.put("caseIds", List.of(firstCaseId, secondCaseId));
         request.put("environmentId", environmentId);
         request.put("headless", true);
@@ -368,6 +369,24 @@ class WebUiExecutionControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.summary.id").value(batchId))
                 .andExpect(jsonPath("$.data.summary.status").value("FAILED"))
                 .andExpect(jsonPath("$.data.runs.length()").value(2));
+
+        mockMvc.perform(get("/api/automation/web/batches")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("keyword", batchName))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+
+        mockMvc.perform(get("/api/automation/web/runs")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("caseId", firstCaseId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items.length()").value(1));
     }
 
     @Test

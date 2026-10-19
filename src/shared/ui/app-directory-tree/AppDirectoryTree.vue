@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Fold, Folder, FolderOpened, MoreFilled, Plus, Search } from '@element-plus/icons-vue'
+import { Fold, Folder, FolderOpened, Plus, Search } from '@element-plus/icons-vue'
 
 import { figmaCaseIcons } from '@/shared/assets/figma-icons'
 import AppDirectoryMoreButton from './AppDirectoryMoreButton.vue'
@@ -176,17 +176,7 @@ function handleNodeCollapse(node: AppDirectoryTreeNode) {
               trigger="click"
               @command="(command: string | number | object) => emit('command', { command, node: data })"
             >
-              <AppDirectoryMoreButton v-if="variant === 'figma-compact'" @click.stop />
-              <button
-                v-else
-                type="button"
-                class="app-directory-tree__icon-button"
-                aria-label="更多操作"
-                title="更多操作"
-                @click.stop
-              >
-                <el-icon><MoreFilled /></el-icon>
-              </button>
+              <AppDirectoryMoreButton @click.stop />
               <template #dropdown>
                 <slot name="dropdown" :node="data" />
               </template>

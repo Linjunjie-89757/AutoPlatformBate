@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import {
   formatLocatorType,
   type ValidateWebUiLocatorResponse,
@@ -54,12 +55,12 @@ const emit = defineEmits<{
   <el-dialog :model-value="batchMoveVisible" title="批量移动分组" width="560px" @update:model-value="emit('update:batchMoveVisible', $event)">
     <el-form label-width="96px">
       <el-form-item label="目标页面对象" required>
-        <el-select v-model="batchMoveForm.pageId" filterable placeholder="选择页面对象" @change="emit('batch-page-change', $event as number | null)">
+        <el-select :suffix-icon="AppSelectChevron" v-model="batchMoveForm.pageId" filterable placeholder="选择页面对象" @change="emit('batch-page-change', $event as number | null)">
           <el-option v-for="item in pages" :key="item.id" :label="item.pageName" :value="item.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="目标分组">
-        <el-select v-model="batchMoveForm.groupId" clearable filterable placeholder="可不选择分组">
+        <el-select :suffix-icon="AppSelectChevron" v-model="batchMoveForm.groupId" clearable filterable placeholder="可不选择分组">
           <el-option v-for="item in batchMoveGroupOptions" :key="item.id" :label="item.groupName" :value="item.id" />
         </el-select>
       </el-form-item>
@@ -111,7 +112,7 @@ const emit = defineEmits<{
       />
       <el-form label-width="96px">
         <el-form-item label="运行环境">
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             :model-value="validateEnvironmentId"
             clearable
             placeholder="选择环境"

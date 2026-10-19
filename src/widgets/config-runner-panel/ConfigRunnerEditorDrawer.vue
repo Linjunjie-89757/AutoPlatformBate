@@ -142,7 +142,7 @@ function isCapabilitySelected(capability: string) {
           <div class="config-runner-editor-field">
             <label>
               <span>所属环境</span>
-              <select :value="target ? getRunnerEnv(target) : '测试环境'">
+              <select class="app-native-select" :value="target ? getRunnerEnv(target) : '测试环境'">
                 <option>生产环境</option>
                 <option>测试环境</option>
                 <option>预发布</option>

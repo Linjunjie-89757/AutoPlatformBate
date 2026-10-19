@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { nextTick, ref, watch } from 'vue'
 
 const props = withDefaults(
@@ -67,7 +68,7 @@ watch(() => props.modelValue, applyTagColors, { deep: true, immediate: true })
 </script>
 
 <template>
-  <el-select
+  <el-select :suffix-icon="AppSelectChevron"
     ref="selectRef"
     :model-value="props.modelValue"
     class="app-tag-input"

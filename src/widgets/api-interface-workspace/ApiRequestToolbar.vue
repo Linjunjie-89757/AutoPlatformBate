@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Save, Send } from '@lucide/vue'
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
+import { computed, ref } from 'vue'
+import { Globe, Play, Save } from '@lucide/vue'
 
 import type { ApiAutomationEnvironmentItem } from '@/entities/api-automation'
 
 const pathInputRef = ref<{ focus: () => void } | null>(null)
-const servicePickerOpen = ref(false)
 const urlFocused = ref(false)
 
 interface ApiServiceOption {
@@ -51,14 +51,6 @@ const emit = defineEmits<{
 
 const apiMethodOptions = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH', 'TRACE'] as const
 const canMutate = computed(() => props.definitionId ? props.canEdit !== false : props.canCreate !== false)
-const isAbsolutePath = computed(() => /^https?:\/\//i.test(props.path.trim()))
-const selectedService = computed(() =>
-  props.services.find(item => item.key === props.serviceKey)
-    || props.services.find(item => item.isDefault)
-    || props.services[0]
-    || null,
-)
-const serviceBaseUrl = computed(() => isAbsolutePath.value ? '' : selectedService.value?.baseUrl || '')
 
 function requestMethodClass(method?: string) {
   return `method-${String(method || 'GET').toLowerCase()}`
@@ -79,19 +71,6 @@ function updateEnvironment(value: number | null) {
   emit('persistRunOptions')
 }
 
-function chooseService(key: string) {
-  emit('update:serviceKey', key)
-  servicePickerOpen.value = false
-  pathInputRef.value?.focus()
-}
-
-function closeServicePicker() {
-  servicePickerOpen.value = false
-}
-
-onMounted(() => document.addEventListener('click', closeServicePicker))
-onBeforeUnmount(() => document.removeEventListener('click', closeServicePicker))
-
 defineExpose({
   focus: () => pathInputRef.value?.focus(),
 })
@@ -100,7 +79,7 @@ defineExpose({
 <template>
   <div class="api-request-line">
     <div class="api-url-compose">
-      <el-select
+      <el-select :suffix-icon="AppSelectChevron"
         :model-value="props.method"
         :class="['api-method-select', requestMethodClass(props.method)]"
         popper-class="api-method-popper"
@@ -111,46 +90,17 @@ defineExpose({
           <span :class="['api-method-option', requestMethodClass(methodOption)]">{{ methodOption }}</span>
         </el-option>
       </el-select>
-      <div
-        :class="['api-url-field', { 'is-focused': urlFocused, 'is-picker-open': servicePickerOpen }]"
-        @click.stop="pathInputRef?.focus()"
-      >
-        <button
-          v-if="props.environmentSelected && props.services.length && !isAbsolutePath"
-          type="button"
-          class="api-service-prefix"
-          :title="serviceBaseUrl || '选择服务前缀'"
-          :disabled="!canMutate"
-          @click.stop="servicePickerOpen = !servicePickerOpen"
-        >
-          <span>{{ serviceBaseUrl || '选择服务前缀' }}</span>
-        </button>
+      <div class="api-url-field" :class="{ 'is-focused': urlFocused }" @click.stop="pathInputRef?.focus()">
         <el-input
           ref="pathInputRef"
           :model-value="props.path"
-          :placeholder="serviceBaseUrl ? '/api/v1/path' : '请输入包含 http/https 的完整 URL 或接口路径'"
+          placeholder="/order/api/page 或 https://mock.example.com/path"
           :disabled="!canMutate"
           @focus="urlFocused = true"
           @blur="urlFocused = false"
           @update:model-value="updatePath"
         />
-        <div v-if="servicePickerOpen" class="api-service-picker" @click.stop>
-          <div class="api-service-picker__hint">选择服务模块，系统将自动拼接对应前置 URL</div>
-          <button
-            v-for="service in props.services"
-            :key="service.key"
-            type="button"
-            :class="['api-service-option', { 'is-selected': selectedService?.key === service.key }]"
-            @click="chooseService(service.key)"
-          >
-            <span class="api-service-option__radio"><i></i></span>
-            <strong>{{ service.name }}</strong>
-            <span>{{ service.baseUrl }}</span>
-            <b v-if="selectedService?.key === service.key">✓</b>
-          </button>
-        </div>
       </div>
-      <button type="button" class="api-curl-button" :disabled="!canMutate" @click="emit('importCurl')">Curl</button>
     </div>
     <div class="api-run-environment-combo">
       <button
@@ -159,8 +109,10 @@ defineExpose({
         :disabled="!props.environmentSelected"
         title="查看运行环境详情"
         @click="emit('openEnvironment')"
-      ></button>
-      <el-select
+      >
+        <Globe class="api-run-environment-detail-icon" :size="12" aria-hidden="true" />
+      </button>
+      <el-select :suffix-icon="AppSelectChevron"
         :model-value="props.environmentId"
         class="api-run-environment-select"
         clearable
@@ -184,7 +136,7 @@ defineExpose({
       :disabled="props.canExecute === false || props.sending || !props.path.trim()"
       @click="emit('send')"
     >
-      <Send class="api-send-button__icon" :size="13" aria-hidden="true" />
+      <Play class="api-send-button__icon" :size="13" aria-hidden="true" />
       发送
     </button>
     <el-dropdown
@@ -218,11 +170,11 @@ defineExpose({
 .api-request-line {
   display: grid;
   box-sizing: border-box;
-  grid-template-columns: minmax(0, 1fr) 110px 72.25px auto;
+  grid-template-columns: minmax(0, 1fr) 120px 73px auto;
   align-items: center;
-  gap: 7px;
-  height: 56px;
-  padding: 0 14px;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--app-border-soft);
   background: #fff;
 }
@@ -230,11 +182,11 @@ defineExpose({
 .api-url-compose {
   display: grid;
   box-sizing: border-box;
-  height: 31.5px;
+  height: 32px;
   min-width: 0;
-  grid-template-columns: 90px minmax(0, 1fr) 47px;
+  grid-template-columns: 88px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   overflow: visible;
   background: transparent;
 }
@@ -243,7 +195,7 @@ defineExpose({
   position: relative;
   display: flex;
   box-sizing: border-box;
-  height: 36px;
+  height: 34px;
   min-width: 0;
   align-items: center;
   padding: 0 10px;
@@ -253,8 +205,7 @@ defineExpose({
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.api-url-field.is-focused,
-.api-url-field.is-picker-open {
+.api-url-field.is-focused {
   border-color: var(--app-primary);
   box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.08);
 }
@@ -373,9 +324,10 @@ defineExpose({
 }
 
 .api-run-environment-combo {
-  display: block;
+  display: flex;
   box-sizing: border-box;
-  height: 28px;
+  width: 120px;
+  height: 32px;
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--app-border);
@@ -390,16 +342,16 @@ defineExpose({
 }
 
 .api-run-environment-select {
-  width: 100%;
+  width: 90px;
   min-width: 0;
 }
 
 .api-run-environment-select :deep(.el-select__wrapper) {
   box-sizing: border-box;
-  height: 26px;
-  min-height: 26px;
-  padding: 0 9px 0 10px;
-  border-radius: 7px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px 0 6px;
+  border-radius: 0 7px 7px 0;
   background: #ffffff;
   box-shadow: none;
 }
@@ -410,7 +362,20 @@ defineExpose({
 }
 
 .api-run-environment-detail-button {
-  display: none;
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid var(--app-border);
+  border-radius: 6px 0 0 6px;
+  background: #ffffff;
+  color: var(--app-text-muted);
+  cursor: pointer;
 }
 
 .api-run-environment-detail-button:hover:not(:disabled) {
@@ -432,9 +397,9 @@ defineExpose({
 .api-method-select :deep(.el-select__wrapper),
 .api-url-compose :deep(.el-input__wrapper) {
   box-sizing: border-box;
-  height: 31.5px;
-  min-height: 31.5px;
-  border-radius: 7px;
+  height: 32px;
+  min-height: 32px;
+  border-radius: 10px;
   font-size: 13px;
   line-height: 20px;
 }
@@ -457,12 +422,12 @@ defineExpose({
 }
 
 .api-method-select :deep(.el-select__wrapper) {
-  min-height: 31.5px;
+  min-height: 32px;
   padding: 0 10px;
   border-color: var(--api-method-border, #e8ffea);
   border-style: solid;
   border-width: 1px;
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--api-method-bg, #e8ffea);
   background-color: var(--api-method-bg, #e8ffea);
   box-shadow: none;
@@ -480,17 +445,17 @@ defineExpose({
 }
 
 .api-method-select {
-  width: 90px;
-  min-width: 90px;
-  height: 31.5px;
-  line-height: 21px;
+  width: 88px;
+  min-width: 88px;
+  height: 32px;
+  line-height: 20px;
 }
 
 .api-method-select :deep(.el-select__selected-item) {
   justify-content: center;
   color: var(--api-method-color, #00b42a);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 20px;
 }
 
@@ -617,9 +582,12 @@ defineExpose({
 
 .api-url-compose :deep(.el-input__wrapper) {
   box-sizing: border-box;
-  padding-inline: 11.5px;
-  border: 1px solid var(--app-border);
-  background: #ffffff;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 
@@ -633,37 +601,18 @@ defineExpose({
   color: var(--app-text-muted);
 }
 
-.api-curl-button {
-  box-sizing: border-box;
-  height: 28px;
-  min-height: 28px;
-  padding: 0 11.5px;
-  border-width: 1px;
-  border-color: var(--app-border);
-  border-style: solid;
-  background: #ffffff;
-  color: var(--app-text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.api-curl-button:hover {
-  background: var(--app-bg-soft);
-  color: var(--app-primary);
-}
-
 .api-send-button {
   display: inline-flex;
   box-sizing: border-box;
-  width: 72.25px;
-  min-width: 72.25px;
+  width: 73px;
+  min-width: 73px;
   height: 32px;
   align-items: center;
   justify-content: center;
-  gap: 5.25px;
+  gap: 6px;
   padding: 0 14px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--app-primary);
   color: #fff;
   cursor: pointer;
@@ -698,8 +647,8 @@ defineExpose({
 
 .api-save-dropdown {
   display: inline-flex;
-  width: auto;
-  min-width: 95px;
+  width: 71px;
+  min-width: 71px;
   height: 32px;
   align-items: center;
   vertical-align: middle;
@@ -731,16 +680,18 @@ defineExpose({
 .api-save-dropdown :deep(.el-button-group > .el-button:first-child) {
   flex: 1 1 auto;
   min-width: 0;
-  border-radius: 7px 0 0 7px;
-  padding: 0 10px 0 11.5px;
+  border-radius: 10px 0 0 10px;
+  padding: 0 4px;
 }
 
 .api-save-dropdown :deep(.el-button-group > .el-button:last-child) {
   display: inline-flex;
-  flex: 0 0 28px;
-  width: 28px;
+  flex: 0 0 18px;
+  width: 18px;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
   padding: 0;
   border-left-color: var(--app-border-soft);
 }
@@ -765,11 +716,11 @@ defineExpose({
 
 @media (max-width: 1280px) {
   .api-request-line {
-    grid-template-columns: minmax(0, 1fr) 104px 72.25px auto;
+    grid-template-columns: minmax(0, 1fr) 120px 73px auto;
   }
 
   .api-url-compose {
-    grid-template-columns: 88px minmax(0, 1fr) 47px;
+    grid-template-columns: 88px minmax(0, 1fr);
   }
 
   .api-method-select {

@@ -5,7 +5,10 @@ import type {
   ReportListQuery,
   ReportListResponse,
   ReportShareCreated,
+  ReportShareListQuery,
+  ReportShareListResponse,
   ReportShareSummary,
+  ReportStats,
   ReportSummaryItem,
   SharedReport,
 } from '../model/types'
@@ -66,6 +69,18 @@ export const reportApi = {
     return normalizeReportList(unwrapApiResponse(payload))
   },
 
+  async getReportStats(workspaceCode = 'ALL') {
+    const payload = await httpGet<ApiResponse<ReportStats>>('/reports/stats', {
+      headers: workspaceHeaders(workspaceCode),
+    })
+    const stats = unwrapApiResponse(payload)
+    return {
+      total: Number(stats?.total || 0),
+      success: Number(stats?.success || 0),
+      failed: Number(stats?.failed || 0),
+    }
+  },
+
   async getReport(workspaceCode: string, reportId: number) {
     const payload = await httpGet<ApiResponse<ReportDetail>>(`/reports/${reportId}`, {
       headers: workspaceHeaders(workspaceCode),
@@ -82,12 +97,20 @@ export const reportApi = {
     return unwrapApiResponse(payload)
   },
 
-  async getReportShares(workspaceCode = 'ALL', reportId?: number) {
-    const payload = await httpGet<ApiResponse<ReportShareSummary[]>>('/report-shares', {
+  async getReportShares(workspaceCode = 'ALL', query?: ReportShareListQuery) {
+    const payload = await httpGet<ApiResponse<ReportShareListResponse>>('/report-shares', {
       headers: workspaceHeaders(workspaceCode),
-      params: reportId ? { reportId } : undefined,
+      params: query,
     })
-    return unwrapApiResponse(payload) || []
+    const page = unwrapApiResponse(payload)
+    return {
+      ...page,
+      items: Array.isArray(page?.items) ? page.items : [],
+      total: Number(page?.total || 0),
+      pageNo: Number(page?.pageNo || 1),
+      pageSize: Number(page?.pageSize || query?.pageSize || 10),
+      totalPages: Number(page?.totalPages || 0),
+    }
   },
 
   async createReportShare(workspaceCode: string, reportId: number, expiresInDays = 7) {

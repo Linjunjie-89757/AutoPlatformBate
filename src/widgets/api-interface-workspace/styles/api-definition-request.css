@@ -19,8 +19,6 @@
   overflow: hidden;
 }
 
-.api-request-body.is-pre,
-.api-request-body.is-post,
 .api-request-body.is-tests {
   height: auto;
   min-height: 0;

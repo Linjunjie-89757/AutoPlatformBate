@@ -1,6 +1,7 @@
 package com.company.autoplatform.webuiautomation;
 
 import com.company.autoplatform.common.BadRequestException;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -168,7 +169,7 @@ public class WebUiExecutionContextSupport {
             Boolean mockEnabled,
             Long mockApplicationId,
             Long mockReleaseId,
-            List<VariableItem> variables,
+            @JsonAlias("localVariables") List<VariableItem> variables,
             String defaultServiceKey,
             List<ServiceEndpoint> services,
             List<Long> variableSetIds,

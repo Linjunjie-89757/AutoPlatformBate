@@ -4,6 +4,7 @@ import type {
   AutomationTaskDetail,
   AutomationTaskListQuery,
   AutomationTaskListResponse,
+  AutomationTaskStats,
   AutomationTaskSummaryItem,
   SaveAutomationTaskPayload,
 } from '../model/types'
@@ -72,6 +73,18 @@ export const automationTaskApi = {
     })
 
     return normalizeTaskListResponse(unwrapApiResponse(payload))
+  },
+
+  async getTaskStats(workspaceCode = 'ALL') {
+    const payload = await httpGet<ApiResponse<AutomationTaskStats>>('/tasks/stats', {
+      headers: workspaceHeaders(workspaceCode),
+    })
+    const stats = unwrapApiResponse(payload)
+    return {
+      total: Number(stats?.total || 0),
+      running: Number(stats?.running || 0),
+      failed: Number(stats?.failed || 0),
+    }
   },
 
   async getTask(workspaceCode: string, taskId: number) {

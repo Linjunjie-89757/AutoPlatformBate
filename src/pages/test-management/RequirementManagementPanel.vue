@@ -903,15 +903,15 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <Search :size="13" />
           <input v-model="keyword" type="search" placeholder="搜索需求 ID / 标题">
         </label>
-        <select v-model="versionFilter" aria-label="版本筛选">
+        <select class="app-native-select" v-model="versionFilter" aria-label="版本筛选">
           <option value="all">全部版本</option>
           <option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option>
         </select>
-        <select v-model="statusFilter" aria-label="状态筛选">
+        <select class="app-native-select" v-model="statusFilter" aria-label="状态筛选">
           <option value="all">全部状态</option>
           <option v-for="(config, key) in requirementStatusConfig" :key="key" :value="key">{{ config.label }}</option>
         </select>
-        <select v-model="priorityFilter" aria-label="优先级筛选">
+        <select class="app-native-select" v-model="priorityFilter" aria-label="优先级筛选">
           <option value="all">全部优先级</option>
           <option v-for="priority in ['P0', 'P1', 'P2', 'P3']" :key="priority" :value="priority">{{ priority }}</option>
         </select>
@@ -1077,7 +1077,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <header><h2>新建需求</h2><button type="button" aria-label="关闭" @click="createDialogOpen = false"><X :size="16" /></button></header>
           <div class="requirement-management__form">
             <label><span>需求标题 <i>*</i></span><input v-model="createForm.title" type="text" placeholder="请输入需求标题"></label>
-            <div><label><span>所属版本</span><select v-model="createForm.versionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select></label><label><span>负责人</span><select v-model="createForm.assignee"><option value="">暂不分配</option><option v-for="owner in requirementOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
+            <div><label><span>所属版本</span><select class="app-native-select" v-model="createForm.versionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select></label><label><span>负责人</span><select class="app-native-select" v-model="createForm.assignee"><option value="">暂不分配</option><option v-for="owner in requirementOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
             <fieldset><legend>优先级</legend><button v-for="priority in ['P0', 'P1', 'P2', 'P3'] as RequirementPriority[]" :key="priority" type="button" :class="{ 'is-active': createForm.priority === priority }" :style="createForm.priority === priority ? priorityStyle(priority) : undefined" @click="createForm.priority = priority">{{ priority }}</button></fieldset>
             <label><span>外部需求链接（可选）</span><input v-model="createForm.externalRef" type="text" placeholder="如 Jira Issue ID / 禅道需求链接"></label>
             <label><span>需求描述</span><textarea v-model="createForm.description" rows="4" placeholder="请输入需求详细描述..."></textarea></label>
@@ -1093,7 +1093,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <header><h2 id="requirement-edit-title">编辑需求</h2><button type="button" aria-label="关闭" @click="editDialogOpen = false; editTarget = null"><X :size="16" /></button></header>
           <div class="requirement-management__form">
             <label><span>需求标题 <i>*</i></span><input v-model="editForm.title" type="text" placeholder="请输入需求标题"></label>
-            <div><label><span>所属版本</span><select v-model="editForm.versionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select></label><label><span>负责人</span><select v-model="editForm.assignee"><option value="">暂不分配</option><option v-for="owner in requirementOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
+            <div><label><span>所属版本</span><select class="app-native-select" v-model="editForm.versionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select></label><label><span>负责人</span><select class="app-native-select" v-model="editForm.assignee"><option value="">暂不分配</option><option v-for="owner in requirementOwners" :key="owner.id" :value="owner.displayName">{{ owner.displayName }}</option></select></label></div>
             <fieldset><legend>优先级</legend><button v-for="priority in ['P0', 'P1', 'P2', 'P3'] as RequirementPriority[]" :key="priority" type="button" :class="{ 'is-active': editForm.priority === priority }" :style="editForm.priority === priority ? priorityStyle(priority) : undefined" @click="editForm.priority = priority">{{ priority }}</button></fieldset>
             <label><span>外部需求链接（可选）</span><input v-model="editForm.externalRef" type="text" placeholder="如 Jira Issue ID / 禅道需求链接"></label>
             <label><span>需求描述</span><textarea v-model="editForm.description" rows="4" placeholder="请输入需求详细描述..."></textarea></label>
@@ -1127,7 +1127,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
             <div v-if="importStep === 'config'" class="requirement-management__excel-config">
               <label class="requirement-management__import-version">
                 <span>默认关联版本 <i>*</i></span>
-                <select v-model="importVersionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select>
+                <select class="app-native-select" v-model="importVersionId"><option v-for="version in requirementVersions" :key="version.id" :value="version.id">{{ version.name }}</option></select>
               </label>
               <label class="requirement-management__import-dropzone" :class="{ 'is-dragging': isDraggingFile }" @dragover.prevent="isDraggingFile = true" @dragleave="isDraggingFile = false" @drop.prevent="handleImportFile($event.dataTransfer?.files || null)">
                 <Upload :size="28" /><strong>{{ importFileName || '点击或拖拽文件至此处' }}</strong><span>支持 .xlsx / .xls 格式，文件不超过 10MB</span><input ref="importFileInput" type="file" accept=".xlsx,.xls" @change="handleImportFile(($event.target as HTMLInputElement).files)">
@@ -1160,7 +1160,7 @@ watch(() => [props.initialAction, props.initialVersionId], restoreInitialAction)
           <div class="requirement-management__picker-content">
             <aside><strong>请求目录</strong><button v-for="entry in visibleDirectories" :key="entry.node.id" :class="{ 'is-active': pickerDirectoryId === entry.node.id }" :style="{ paddingLeft: `${6 + entry.depth * 14}px` }" type="button" @click="pickerDirectoryId = entry.node.id; entry.node.children?.length && !expandedDirectoryIds.has(entry.node.id) && toggleDirectory(entry.node.id)"><span class="requirement-management__tree-toggle" @click.stop="entry.node.children?.length && toggleDirectory(entry.node.id)"><ChevronRight v-if="entry.node.children?.length" :size="11" :class="{ 'is-expanded': expandedDirectoryIds.has(entry.node.id) }" /></span><FolderOpen v-if="entry.node.children?.length && expandedDirectoryIds.has(entry.node.id)" :size="13" /><Folder v-else :size="13" /><em>{{ entry.node.label }}</em><small><template v-if="selectedCaseCountForDirectory(entry.node)"><b>{{ selectedCaseCountForDirectory(entry.node) }}</b>/</template>{{ entry.node.count }}</small></button></aside>
             <main>
-              <div class="requirement-management__picker-toolbar"><label><Search :size="13" /><input v-model="pickerKeyword" type="search" placeholder="搜索用例名称或编号…"></label><select v-model="pickerRequirementFilter"><option value="all">按需求筛选</option><option v-for="requirement in pickerRequirementOptions" :key="requirement.id" :value="requirement.id">{{ requirement.id }} · {{ requirement.title }}</option></select></div>
+              <div class="requirement-management__picker-toolbar"><label><Search :size="13" /><input v-model="pickerKeyword" type="search" placeholder="搜索用例名称或编号…"></label><select class="app-native-select" v-model="pickerRequirementFilter"><option value="all">按需求筛选</option><option v-for="requirement in pickerRequirementOptions" :key="requirement.id" :value="requirement.id">{{ requirement.id }} · {{ requirement.title }}</option></select></div>
               <div class="requirement-management__picker-breadcrumb"><Folder :size="11" /><span>{{ selectedDirectory?.label || '全部' }}</span><small>({{ filteredLibraryCases.length }} 条)</small></div>
               <div class="requirement-management__picker-table-wrap"><table><thead><tr><th><input type="checkbox" :checked="allVisibleCasesChecked" @change="toggleAllVisibleCases"></th><th>编号</th><th>用例名称</th><th>所属目录</th><th>优先级</th></tr></thead><tbody><tr v-for="caseItem in filteredLibraryCases" :key="caseItem.id" :class="{ 'is-checked': pickerChecked.has(caseItem.id) }" @click="togglePickerCase(caseItem.id)"><td><input type="checkbox" :checked="pickerChecked.has(caseItem.id)" @click.stop @change="togglePickerCase(caseItem.id)"></td><td><code>{{ caseItem.no }}</code></td><td>{{ caseItem.title }}</td><td><span><Folder :size="10" />{{ findDirectory(caseDirectoryTree, caseItem.directoryId)?.label || caseItem.module }}</span></td><td><span class="requirement-management__badge is-priority" :style="priorityStyle(caseItem.priority)">{{ caseItem.priority }}</span></td></tr><tr v-if="!filteredLibraryCases.length"><td colspan="5">该目录下暂无用例</td></tr></tbody></table></div>
             </main>

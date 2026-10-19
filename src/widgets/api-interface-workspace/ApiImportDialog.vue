@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, type Component } from 'vue'
 import {
   Check as LucideCheck,
@@ -179,7 +180,7 @@ function handleFileChange(event: Event) {
           </label>
           <div class="api-import-field">
             <span>所属模块</span>
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               :model-value="directoryName"
               clearable
               filterable

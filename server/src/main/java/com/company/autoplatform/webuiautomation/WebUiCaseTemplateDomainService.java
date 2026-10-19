@@ -79,15 +79,9 @@ public class WebUiCaseTemplateDomainService {
         }
         int safePageNo = safePageNo(pageNo);
         LambdaQueryWrapper<WebUiCaseTemplateEntity> orderedQuery = query.orderByDesc(WebUiCaseTemplateEntity::getUpdatedAt);
-        if (pageSize == null || pageSize < 1) {
-            List<WebUiCaseTemplateItem> items = templateMapper.selectList(orderedQuery).stream()
-                    .map(this::toTemplateItem)
-                    .toList();
-            int compatiblePageSize = safePageSize(pageSize, items.size());
-            return PageResponse.of(paginate(items, safePageNo, compatiblePageSize), items.size(), safePageNo, compatiblePageSize);
-        }
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
         Page<WebUiCaseTemplateEntity> page = templateMapper.selectPage(
-                new Page<>(safePageNo, pageSize), orderedQuery);
+                new Page<>(safePageNo, safePageSize), orderedQuery);
         List<WebUiCaseTemplateItem> items = page.getRecords().stream()
                 .map(this::toTemplateItem)
                 .toList();
@@ -352,16 +346,4 @@ public class WebUiCaseTemplateDomainService {
         return pageNo == null || pageNo < 1 ? 1 : pageNo;
     }
 
-    private int safePageSize(Integer pageSize, int total) {
-        if (pageSize == null || pageSize < 1) {
-            return total > 0 ? total : 10;
-        }
-        return pageSize;
-    }
-
-    private <T> List<T> paginate(List<T> items, int pageNo, int pageSize) {
-        int fromIndex = Math.min((pageNo - 1) * pageSize, items.size());
-        int toIndex = Math.min(fromIndex + pageSize, items.size());
-        return items.subList(fromIndex, toIndex);
-    }
 }

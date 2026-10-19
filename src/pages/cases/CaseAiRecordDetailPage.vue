@@ -2078,7 +2078,7 @@ onBeforeUnmount(() => {
             <label class="case-ai-record-detail-page__result-search">
               <input v-model="caseSearch" type="search" placeholder="搜索用例名称..." />
             </label>
-            <select v-model="caseStatusFilter" class="case-ai-record-detail-page__result-filter">
+            <select v-model="caseStatusFilter" class="case-ai-record-detail-page__result-filter app-native-select">
               <option value="ALL">全部状态</option>
               <option value="PENDING">待采纳</option>
               <option value="ADOPTING">采纳中</option>

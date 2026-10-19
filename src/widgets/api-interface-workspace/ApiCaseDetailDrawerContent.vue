@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, toRefs } from 'vue'
 import ApiCodeEditor from './ApiCodeEditor.vue'
 
@@ -212,7 +213,7 @@ const queryParamTypeOptions = computed(() =>
                 <el-input :model-value="row.key" disabled placeholder="参数名称" />
                 <div class="api-type-field">
                   <button type="button" :class="['api-required-button', { active: row.required }]" disabled>*</button>
-                  <el-select :model-value="row.paramType" disabled>
+                  <el-select :suffix-icon="AppSelectChevron" :model-value="row.paramType" disabled>
                           <el-option v-for="type in queryParamTypeOptions" :key="type" :label="type" :value="type" />
                   </el-select>
                 </div>
@@ -268,7 +269,7 @@ const queryParamTypeOptions = computed(() =>
                     <el-input :model-value="row.key" disabled placeholder="参数名称" />
                     <div class="api-type-field">
                       <button type="button" :class="['api-required-button', { active: row.required }]" disabled>*</button>
-                      <el-select :model-value="row.paramType" disabled>
+                      <el-select :suffix-icon="AppSelectChevron" :model-value="row.paramType" disabled>
                         <el-option v-for="type in paramTypeOptions" :key="type" :label="type" :value="type" />
                       </el-select>
                     </div>

@@ -6,7 +6,7 @@ import { figmaDefectIcons } from '@/shared/assets/figma-icons'
 
 type DefectSummaryCard = {
   label: string
-  value: number
+  value: number | string
   status: string
   tone: 'total' | 'todo' | 'high' | 'verify'
 }
@@ -23,26 +23,17 @@ const emit = defineEmits<{
 }>()
 
 const stats = computed<DefectSummaryCard[]>(() => {
-  const source = props.statistics ?? {
-    total: 0,
-    todo: 0,
-    assigned: 0,
-    inProgress: 0,
-    pendingVerify: 0,
-    closed: 0,
-    rejected: 0,
-  }
-  const extraSource = source as DefectStatistics & {
-    highPriority?: number
-    highPriorityCount?: number
-  }
-  const highPriorityCount = extraSource.highPriority ?? extraSource.highPriorityCount ?? 0
-
+  const source = props.statistics
   return [
-    { label: '缺陷总数', value: source.total, status: '', tone: 'total' },
-    { label: '待处理', value: source.todo + source.assigned, status: 'TODO', tone: 'todo' },
-    { label: '高优先级', value: highPriorityCount, status: '', tone: 'high' },
-    { label: '待验证', value: source.pendingVerify, status: 'PENDING_VERIFY', tone: 'verify' },
+    { label: '缺陷总数', value: source?.total ?? '—', status: '', tone: 'total' },
+    {
+      label: '待处理',
+      value: source ? source.todo + source.assigned : '—',
+      status: 'TODO',
+      tone: 'todo',
+    },
+    { label: '高优先级', value: source?.highPriority ?? '—', status: '', tone: 'high' },
+    { label: '待验证', value: source?.pendingVerify ?? '—', status: 'PENDING_VERIFY', tone: 'verify' },
   ]
 })
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed } from 'vue'
 import { Cpu, InfoFilled } from '@element-plus/icons-vue'
 
@@ -309,7 +310,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
 
         <el-form class="web-ui-ai-collect__form" label-width="104px">
           <el-form-item label="AI 采集模型" required>
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               v-model="aiCollectForm.providerConnectionId"
               :loading="aiProviderLoading"
               clearable
@@ -332,7 +333,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
 
           <template v-if="aiCollectMode === 'ONLINE'">
             <el-form-item label="运行环境">
-              <el-select v-model="aiCollectForm.environmentId" clearable filterable placeholder="选择登录环境">
+              <el-select :suffix-icon="AppSelectChevron" v-model="aiCollectForm.environmentId" clearable filterable placeholder="选择登录环境">
                 <el-option v-for="item in enabledEnvironments" :key="item.id" :label="item.name" :value="item.id" />
               </el-select>
             </el-form-item>
@@ -494,7 +495,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
           </template>
 
           <el-form-item label="所属模块" required>
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               v-model="aiCollectForm.moduleId"
               clearable
               filterable
@@ -507,7 +508,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
 
           <el-form-item label="页面对象" required>
             <div class="web-ui-ai-collect__page-target">
-              <el-select
+              <el-select :suffix-icon="AppSelectChevron"
                 v-model="aiCollectForm.pageId"
                 clearable
                 filterable
@@ -529,7 +530,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
 
           <el-form-item v-if="aiCollectForm.groupStrategy === 'CUSTOM'" label="自选分组" required>
             <div class="web-ui-ai-collect__group-target">
-              <el-select
+              <el-select :suffix-icon="AppSelectChevron"
                 v-model="aiCollectForm.groupId"
                 clearable
                 filterable
@@ -749,7 +750,7 @@ const debugTaskResultRows = computed<DebugTaskResultRow[]>(() => {
           </el-table-column>
           <el-table-column label="定位方式" width="130">
             <template #default="{ row }">
-              <el-select v-model="row.locatorType">
+              <el-select :suffix-icon="AppSelectChevron" v-model="row.locatorType">
                 <el-option v-for="item in WEB_UI_LOCATOR_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
               </el-select>
             </template>

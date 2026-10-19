@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight, Check, Filter, Monitor, RefreshRight } from '@element-plus/icons-vue'
@@ -1880,7 +1881,7 @@ onBeforeUnmount(() => {
                         </label>
                         <label>
                           <span>所属分组</span>
-                          <el-select
+                          <el-select :suffix-icon="AppSelectChevron"
                             v-model="activeCandidate.groupName"
                             filterable
                             placeholder="选择标准区域"
@@ -1911,7 +1912,7 @@ onBeforeUnmount(() => {
                       <div class="web-ui-collect-workspace__form-grid">
                         <label>
                           <span>定位方式</span>
-                          <el-select v-model="activeCandidate.locatorType">
+                          <el-select :suffix-icon="AppSelectChevron" v-model="activeCandidate.locatorType">
                             <el-option v-for="item in WEB_UI_LOCATOR_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
                           </el-select>
                         </label>

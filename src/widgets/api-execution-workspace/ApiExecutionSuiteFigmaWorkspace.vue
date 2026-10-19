@@ -1186,7 +1186,7 @@ function resultItemSteps(item: ApiExecutionSuiteRunItemSnapshot): ApiRunStepResu
     <div v-if="pickerType" class="figma-suite__overlay">
       <section class="figma-suite__dialog" :class="{ 'is-scene': pickerType === 'scene' }">
         <header><strong>{{ pickerType === 'scene' ? '添加场景' : '添加接口用例' }}</strong><button title="关闭" type="button" @click="pickerType = null"><X /></button></header>
-        <div class="figma-suite__dialog-tools"><select><option>X-MAN</option></select><select v-if="pickerType === 'api'"><option>HTTP</option></select><label><Search /><input v-model="pickerKeyword" :placeholder="pickerType === 'scene' ? '搜索场景名称' : '搜索用例名称'" @input="schedulePickerReload" /></label></div>
+        <div class="figma-suite__dialog-tools"><select class="app-native-select"><option>X-MAN</option></select><select class="app-native-select" v-if="pickerType === 'api'"><option>HTTP</option></select><label><Search /><input v-model="pickerKeyword" :placeholder="pickerType === 'scene' ? '搜索场景名称' : '搜索用例名称'" @input="schedulePickerReload" /></label></div>
         <div v-loading="pickerLoading" class="figma-suite__dialog-table">
           <table :class="pickerType === 'scene' ? 'is-scene-picker' : 'is-api-picker'">
             <colgroup v-if="pickerType === 'api'">

@@ -899,16 +899,7 @@ public class ApiExecutionDomainService {
                 .eq(ApiScenarioRunHistoryEntity::getScenarioId, scenarioId)
                 .orderByDesc(ApiScenarioRunHistoryEntity::getCreatedAt)
                 .orderByDesc(ApiScenarioRunHistoryEntity::getId);
-        if (pageSize == null || pageSize < 1) {
-            List<ApiScenarioRunHistoryItem> items = scenarioRunHistoryMapper.selectList(query).stream()
-                    .map(this::toScenarioRunHistoryItem)
-                    .toList();
-            int compatiblePageSize = 10;
-            int fromIndex = Math.min((safePageNo - 1) * compatiblePageSize, items.size());
-            int toIndex = Math.min(fromIndex + compatiblePageSize, items.size());
-            return PageResponse.of(items.subList(fromIndex, toIndex), items.size(), safePageNo, compatiblePageSize);
-        }
-        int safePageSize = Math.min(pageSize, 50);
+        int safePageSize = pageSize == null || pageSize < 1 ? 10 : pageSize;
         Page<ApiScenarioRunHistoryEntity> page = scenarioRunHistoryMapper.selectPage(
                 new Page<>(safePageNo, safePageSize), query);
         List<ApiScenarioRunHistoryItem> items = page.getRecords().stream()

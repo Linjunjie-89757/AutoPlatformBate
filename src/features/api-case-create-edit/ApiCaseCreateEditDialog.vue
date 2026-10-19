@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, reactive, ref, watch } from 'vue'
 
 import {
@@ -842,7 +843,7 @@ watch(
                   >
                     *
                   </button>
-                  <el-select v-model="row.paramType" placeholder="类型" @change="handleKeyValueRowInput(requestConfig.queryParams, queryParamDefaults())">
+                  <el-select :suffix-icon="AppSelectChevron" v-model="row.paramType" placeholder="类型" @change="handleKeyValueRowInput(requestConfig.queryParams, queryParamDefaults())">
                     <el-option v-for="option in QUERY_PARAM_TYPE_OPTIONS" :key="option" :label="option" :value="option" />
                   </el-select>
                 </div>
@@ -933,7 +934,7 @@ watch(
                     >
                       *
                     </button>
-                    <el-select v-model="row.paramType" placeholder="类型" @change="handleKeyValueRowInput(requestConfig.body.formItems, bodyFormParamDefaults())">
+                    <el-select :suffix-icon="AppSelectChevron" v-model="row.paramType" placeholder="类型" @change="handleKeyValueRowInput(requestConfig.body.formItems, bodyFormParamDefaults())">
                       <el-option v-for="option in bodyFormParamTypeOptions" :key="option" :label="option" :value="option" />
                     </el-select>
                   </div>
@@ -1009,7 +1010,7 @@ watch(
           <div v-else-if="activeTab === 'auth'" class="request-section ms-like-form-panel">
             <div class="ms-like-form-row">
               <div class="ms-like-form-label">认证方式</div>
-              <el-select
+              <el-select :suffix-icon="AppSelectChevron"
                 :model-value="requestConfig.authConfig.authType"
                 class="ms-like-form-control"
                 @update:model-value="(value: string | number | boolean | Record<string, unknown>) => setAuthType(String(value))"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { Cpu, InfoFilled } from '@element-plus/icons-vue'
 
@@ -140,7 +141,7 @@ const pageObjectSummary = computed(() => {
     <el-form class="web-ui-collect-launch__runner-form" label-width="112px">
       <el-form-item label="本地 Runner" required>
         <div class="web-ui-collect-launch__runner-select-row">
-          <el-select v-model="selectedRunnerId" placeholder="选择可用 Runner">
+          <el-select :suffix-icon="AppSelectChevron" v-model="selectedRunnerId" placeholder="选择可用 Runner">
             <el-option
               v-for="item in runnerOptions"
               :key="item.id"
@@ -192,7 +193,7 @@ const pageObjectSummary = computed(() => {
 
     <el-form class="web-ui-collect-launch__form" label-width="112px">
       <el-form-item label="AI 采集模型" required>
-        <el-select
+        <el-select :suffix-icon="AppSelectChevron"
           v-model="form.providerConnectionId"
           :loading="aiProviderLoading"
           clearable
@@ -214,13 +215,13 @@ const pageObjectSummary = computed(() => {
       </el-form-item>
 
       <el-form-item label="运行环境">
-        <el-select v-model="form.environmentId" clearable filterable placeholder="选择登录环境">
+        <el-select :suffix-icon="AppSelectChevron" v-model="form.environmentId" clearable filterable placeholder="选择登录环境">
           <el-option v-for="item in enabledEnvironments" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
       </el-form-item>
 
       <el-form-item label="所属模块" required>
-        <el-select
+        <el-select :suffix-icon="AppSelectChevron"
           v-model="form.moduleId"
           clearable
           filterable
@@ -240,7 +241,7 @@ const pageObjectSummary = computed(() => {
             </el-button>
           </div>
           <div v-if="pageObjectExpanded" class="web-ui-collect-launch__page-target">
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               v-model="form.pageId"
               clearable
               filterable

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Check, CheckCircle, ChevronDown, ClipboardCheck, Info, RotateCcw, Save, Settings, Sparkles, Wrench, Zap } from '@lucide/vue'
@@ -663,7 +664,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="case-ai-config-page__tip-actions">
-          <el-select
+          <el-select :suffix-icon="AppSelectChevron"
             v-if="showWorkspaceSelector"
             v-model="selectedTargetWorkspaceCode"
             class="case-ai-config-page__workspace-select"

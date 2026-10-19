@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.net.http.HttpRequest;
+import java.net.http.HttpClient;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +22,100 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ApiRequestExecutionSupportTests {
 
     private final ApiRequestExecutionSupport requestSupport = new ApiRequestExecutionSupport(new ApiVariableResolver());
+
+    @Test
+    void requestSettingsSurviveJsonAndProcessorRoundTrip() {
+        ApiRequestConfigInput config = settingsConfig("http://localhost/test", noneAuth(), false, 30000, 60000);
+        String json = ApiAutomationJsonSupport.toJson(config, "settings serialization");
+        ApiRequestConfigInput read = ApiAutomationJsonSupport.read(json, ApiRequestConfigInput.class, null);
+        assertThat(read).isNotNull();
+        assertThat(read.connectTimeoutMs()).isEqualTo(30000);
+        assertThat(read.followRedirects()).isFalse();
+        ApiExecutionRuntimeModels.MutableRequestConfig mutable = new ApiExecutionRuntimeModels.MutableRequestConfig(
+                read.method(), read.path(), read.timeoutMs(), read.queryParams(), read.headers(), read.cookies(),
+                read.body(), read.authConfig(), read.connectTimeoutMs(), read.followRedirects());
+        Map<String, Object> script = mutable.toScriptMap();
+        script.put("path", "/changed");
+        mutable.applyScriptMap(script);
+        assertThat(mutable.connectTimeoutMs()).isEqualTo(30000);
+        assertThat(mutable.followRedirects()).isFalse();
+        assertThat(mutable.path()).isEqualTo("/changed");
+    }
+
+    @Test
+    void clientUsesConnectionTimeoutAndKeepsLegacyDefaults() {
+        ApiRequestConfigInput legacy = new ApiRequestConfigInput("GET", "/", 1000,
+                List.of(), List.of(), List.of(), new ApiRequestBodyInput("NONE", null, List.of(), null, null, null), noneAuth());
+        HttpClient legacyClient = requestSupport.clientFor(legacy);
+        assertThat(legacyClient.connectTimeout()).contains(Duration.ofSeconds(10));
+        assertThat(legacyClient.followRedirects()).isEqualTo(HttpClient.Redirect.NORMAL);
+        try (HttpClient custom = requestSupport.clientFor(settingsConfig("/", noneAuth(), false, 30000, 60000))) {
+            assertThat(custom.connectTimeout()).contains(Duration.ofSeconds(30));
+            assertThat(custom.followRedirects()).isEqualTo(HttpClient.Redirect.NEVER);
+        }
+        assertThatThrownBy(() -> requestSupport.clientFor(settingsConfig("/", noneAuth(), true, 10, 60000)))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void redirectSettingAppliesToEveryAuthenticationPath() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/redirect", exchange -> {
+            exchange.getResponseHeaders().add("Location", "/target");
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        server.createContext("/target", exchange -> {
+            exchange.sendResponseHeaders(200, -1);
+            exchange.close();
+        });
+        server.start();
+        try {
+            String url = "http://localhost:" + server.getAddress().getPort() + "/redirect";
+            List<ApiAuthConfigInput> auths = List.of(noneAuth(),
+                    new ApiAuthConfigInput("BASIC", new ApiAuthCredentialInput("user", "password"), null),
+                    new ApiAuthConfigInput("DIGEST", null, new ApiAuthCredentialInput("user", "password")),
+                    new ApiAuthConfigInput("BEARER", null, null, "token", null, null, null),
+                    new ApiAuthConfigInput("API_KEY", null, null, null, "X-API-Key", "key", "header"));
+            for (ApiAuthConfigInput auth : auths) {
+                for (boolean follow : new boolean[] {false, true}) {
+                    ApiRequestConfigInput config = settingsConfig(url, auth, follow, 30000, 60000);
+                    var environment = environment("", List.of());
+                    var request = requestSupport.resolveRequest(config, environment, Map.of(), auth);
+                    var result = requestSupport.sendRequest(request, config, environment, Map.of());
+                    assertThat(result.response().statusCode()).as("%s follow=%s", auth.authType(), follow)
+                            .isEqualTo(follow ? 200 : 302);
+                }
+            }
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void responseTimeoutStillAbortsSlowRequests() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/slow", exchange -> {
+            try { Thread.sleep(1500); } catch (InterruptedException exception) { Thread.currentThread().interrupt(); }
+            try { exchange.sendResponseHeaders(200, -1); } finally { exchange.close(); }
+        });
+        server.start();
+        try {
+            ApiRequestConfigInput config = settingsConfig("http://localhost:" + server.getAddress().getPort() + "/slow",
+                    noneAuth(), true, 30000, 1000);
+            var environment = environment("", List.of());
+            var request = requestSupport.resolveRequest(config, environment, Map.of(), noneAuth());
+            assertThatThrownBy(() -> requestSupport.sendRequest(request, config, environment, Map.of()))
+                    .isInstanceOf(HttpTimeoutException.class);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    private ApiRequestConfigInput settingsConfig(String path, ApiAuthConfigInput auth, boolean follow, int connect, int response) {
+        return new ApiRequestConfigInput("GET", path, response, List.of(), List.of(), List.of(),
+                new ApiRequestBodyInput("NONE", null, List.of(), null, null, null), auth, List.of(), connect, follow);
+    }
 
     @Test
     void resolveRequestJoinsBaseUrlAndResolvesQueryHeadersCookiesAndBody() {

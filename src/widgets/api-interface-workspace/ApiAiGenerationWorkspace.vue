@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { MagicStick, Search } from '@element-plus/icons-vue'
 import { Loader2, Play as LucidePlay } from '@lucide/vue'
 
@@ -96,10 +97,10 @@ const emit = defineEmits<{
           <Search />
           <input :value="props.keyword" type="text" placeholder="搜索" @input="emit('update:keyword', ($event.target as HTMLInputElement).value)" />
         </div>
-        <el-select :model-value="props.group" class="ai-generation-detail-filter" placeholder="分组" clearable @update:model-value="emit('update:group', String($event || ''))">
+        <el-select :suffix-icon="AppSelectChevron" :model-value="props.group" class="ai-generation-detail-filter" placeholder="分组" clearable @update:model-value="emit('update:group', String($event || ''))">
           <el-option v-for="item in props.groupOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-select :model-value="props.type" class="ai-generation-detail-filter is-wide" placeholder="类型" clearable @update:model-value="emit('update:type', String($event || ''))">
+        <el-select :suffix-icon="AppSelectChevron" :model-value="props.type" class="ai-generation-detail-filter is-wide" placeholder="类型" clearable @update:model-value="emit('update:type', String($event || ''))">
           <el-option v-for="item in props.typeOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <div class="ai-generation-detail-actions">

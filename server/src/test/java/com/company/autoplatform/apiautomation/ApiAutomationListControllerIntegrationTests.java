@@ -52,6 +52,8 @@ class ApiAutomationListControllerIntegrationTests extends IntegrationTestSupport
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
                 .andExpect(jsonPath("$.data.items[*].id", hasItem(definition.id().intValue())));
     }
 
@@ -401,6 +403,16 @@ class ApiAutomationListControllerIntegrationTests extends IntegrationTestSupport
                 .andExpect(jsonPath("$.data.totalPages").value(2))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
                 .andExpect(jsonPath("$.data.items[0].id").value(first.id().intValue()));
+
+        mockMvc.perform(get("/api/automation/api/cases")
+                        .header(WorkspaceScope.HEADER, WORKSPACE_CODE)
+                        .param("definitionId", definition.id().toString())
+                        .param("keyword", "case-alpha"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
+                .andExpect(jsonPath("$.data.items.length()").value(2));
     }
 
     @Test
@@ -417,6 +429,8 @@ class ApiAutomationListControllerIntegrationTests extends IntegrationTestSupport
                         .header(WorkspaceScope.HEADER, WORKSPACE_CODE))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(10))
                 .andExpect(jsonPath("$.data.items[*].id", hasItem(scenario.id().intValue())));
     }
 
@@ -495,6 +509,7 @@ class ApiAutomationListControllerIntegrationTests extends IntegrationTestSupport
                 .andExpect(jsonPath("$.data.totalPages").value(2))
                 .andExpect(jsonPath("$.data.items.length()").value(1))
                 .andExpect(jsonPath("$.data.items[0].id").value(first.id().intValue()));
+
     }
 
     private ApiDefinitionDetail createDefinition(

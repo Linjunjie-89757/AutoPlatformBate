@@ -1,0 +1,128 @@
+{
+  "date": "2026-10-19",
+  "status": "partial-alignment",
+  "scope": "接口管理设置Tab三态",
+  "differences": [
+    {
+      "id": "SET-01",
+      "status": "resolved",
+      "item": "紧凑布局",
+      "target": "16px内边距，无元信息表单和外框",
+      "actual": "16px；三态同尺寸1614×294，周边请求栏和响应区保持",
+      "evidence": "vue-states.json / overlay-normal.png"
+    },
+    {
+      "id": "SET-02",
+      "status": "resolved",
+      "item": "双超时步进框",
+      "target": "120×28px、圆角6、相隔24px、步长1000",
+      "actual": "两个120×28px，x16/x160、y68；步长和下限已验证",
+      "evidence": "vue-states.json / interaction-results.json"
+    },
+    {
+      "id": "SET-03",
+      "status": "resolved",
+      "item": "字体/颜色/间距",
+      "target": "Make Inter/PingFang SC/Microsoft YaHei；12px分组/字段，13px重定向，11px说明",
+      "actual": "采用Make对应字体和行高，灰/黑/浅灰及disabled色实测",
+      "evidence": "make-states.json / vue-states.json / overlay-normal.png"
+    },
+    {
+      "id": "SET-04",
+      "status": "resolved",
+      "item": "自动跟随重定向",
+      "target": "14px checkbox，切换实际生效",
+      "actual": "开200，关302，配置走实际debug-run和真实本地HTTP",
+      "evidence": "interaction-results.json"
+    },
+    {
+      "id": "SET-05",
+      "status": "resolved",
+      "item": "恢复默认",
+      "target": "行内二次确认/取消→30000/60000/true",
+      "actual": "取消保留34567，确认恢复三值；hover蓝",
+      "evidence": "interaction-results.json / make-interactions.json"
+    },
+    {
+      "id": "SET-06",
+      "status": "resolved",
+      "item": "加载骨架",
+      "target": "72×12、120×28两块、48×12、110×16",
+      "actual": "五块尺寸/位置匹配，真实GET延迟时呈现，响应区保留",
+      "evidence": "vue-states.json / overlay-loading.png / difference-loading.png"
+    },
+    {
+      "id": "SET-07",
+      "status": "resolved",
+      "item": "保存中",
+      "target": "字段、步进按钮、checkbox及恢复默认均禁用",
+      "actual": "真实PUT pending时8个控件均disabled，成功/失败后解除",
+      "evidence": "vue-states.json / overlay-saving.png / interaction-results.json"
+    },
+    {
+      "id": "SET-08",
+      "status": "resolved",
+      "item": "权限透传/输入提交",
+      "target": "实际权限控制，无环境强锁；blur提交，下限1000",
+      "actual": "保存中及canEdit=false禁用，新草稿按创建权限；blur/Enter/无效值回退已实测，未新建角色模型",
+      "evidence": "ApiRequestEditorMain.vue / ApiRequestSettingsPanel.vue / ApiRequestTimeoutInput.vue / interaction-results.json"
+    },
+    {
+      "id": "SET-09",
+      "status": "resolved",
+      "item": "保存与执行字段闭环",
+      "target": "连接超时和跟随重定向不再硬编码",
+      "actual": "JSON存储回读及执行链路透传；9项后端测试通过；响应超时继续用既有timeoutMs",
+      "evidence": "ApiRequestExecutionSupportTests / ApiRequestSettingsIntegrationTests / interaction-results.json"
+    },
+    {
+      "id": "SET-A1",
+      "status": "accepted-deviation",
+      "item": "旧数据保持原行为",
+      "detail": "旧记录没有connectTimeoutMs时仍按10秒连接、followRedirects缺失仍NORMAL；已有响应超时原值保留。新建和恢复默认才使用30秒/60秒/true。",
+      "acceptance": {
+        "type": "business-constraint",
+        "reference": "原ApiRequestExecutionSupport的10秒连接和Redirect.NORMAL默认，以及已有requestConfig.timeoutMs；不批量改写真实配置。"
+      }
+    },
+    {
+      "id": "SET-A2",
+      "status": "accepted-deviation",
+      "item": "数值上限",
+      "detail": "输入上限2147483647，超范围归一化；Make示例没有该上限。",
+      "acceptance": {
+        "type": "business-constraint",
+        "reference": "ApiAutomationModels.ApiRequestConfigInput 的两个超时字段类型为Java Integer。"
+      }
+    },
+    {
+      "id": "SET-A3",
+      "status": "accepted-deviation",
+      "item": "原生文本与控件渲染",
+      "detail": "Design由Copy design生成的文字/控件轮廓与浏览器真实输入、checkbox有抗锯齿差异；已按Make实际字体、颜色、布局渲染，未把静态图贴到UI代替功能。",
+      "acceptance": {
+        "type": "business-constraint",
+        "reference": "设置必须保持真实可编辑、可聚焦、可禁用；本项目要求保留真实业务组件与控件，Design get_design_context返回该区域大量vector/mask而非可编辑文本。"
+      }
+    }
+  ],
+  "unverified": [
+    {
+      "id": "SET-U1",
+      "item": "Make在线同视口截图",
+      "reason": "已通过CDP读取并操作真实Make三态、hover事件、加减、重定向及恢复默认，但顶层Page.captureScreenshot超时，未取得最新Make配对PNG。Design/Vue的三态配对、叠加及差异图已查看；不能据此宣称四方像素完全一致。"
+    },
+    {
+      "id": "SET-U2",
+      "item": "Make原型原生Focus与实际只读账户",
+      "reason": "Make CDP element.focus未出现源码所写蓝边，不能把该触发认定为真实Focus通过；Vue在150ms动画结束后蓝边已实测。canEdit=false逻辑已接入，未用另一真实只读账户做端到端权限回归（本次Design仅要求正常/加载/保存三态）。"
+    }
+  ],
+  "counts": {
+    "resolved": 9,
+    "accepted": 3,
+    "unresolved": 0,
+    "unverified": 2
+  },
+  "artifacts": "output/playwright/settings-20261019/"
+}

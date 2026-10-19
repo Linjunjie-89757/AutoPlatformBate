@@ -68,6 +68,28 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     environmentSelectedHandler = handler
   }
 
+  function resetSelectedDetails() {
+    referenceSummary.value = null
+    mockReleases.value = []
+    mockEndpointCount.value = null
+    mockScenarioCount.value = null
+    mockUnmatched24hCount.value = null
+    mockReferenceCount.value = null
+  }
+
+  async function loadSelectedTabData(tab: EnvironmentDetailTab) {
+    if (tab === 'references') {
+      await loadReferences()
+      return
+    }
+    if (tab === 'mock') {
+      await Promise.all([
+        loadMockReleases(form.mockApplicationId),
+        loadMockMetadata(form.mockApplicationId),
+      ])
+    }
+  }
+
   async function loadData(preferredId = selectedEnvId.value, preferredTab?: EnvironmentDetailTab) {
     loading.value = true
     errorMessage.value = ''
@@ -116,12 +138,9 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     selectedEnvId.value = env.id
     Object.assign(form, createConfigEnvFormFromItem(env))
     options.activeTab.value = preferredTab
+    resetSelectedDetails()
     environmentSelectedHandler()
-    await Promise.all([
-      loadReferences(),
-      loadMockReleases(form.mockApplicationId),
-      loadMockMetadata(form.mockApplicationId),
-    ])
+    await loadSelectedTabData(preferredTab)
   }
 
   async function loadReferences() {
@@ -156,20 +175,17 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     try {
       const [endpointPage, logPage, references] = await Promise.all([
         configApi.getMockEndpoints(options.workspaceCode(), { appId: applicationId, status: 1 }),
-        configApi.getMockCallLogs(options.workspaceCode(), { appId: applicationId }),
+        configApi.getMockUnmatchedCallLogCount(options.workspaceCode(), applicationId),
         configApi.getMockApplicationReferences(options.workspaceCode(), applicationId),
       ])
       mockEndpointCount.value = endpointPage.total
       mockReferenceCount.value = references.totalCount
-      const scenarioPages = await Promise.all((endpointPage.items || []).map(endpoint => (
-        configApi.getMockScenarios(options.workspaceCode(), { endpointId: endpoint.id, status: 1 })
-          .catch(() => null)
-      )))
-      mockScenarioCount.value = scenarioPages.reduce((total, page) => total + (page?.total || 0), 0)
-      const cutoff = Date.now() - 24 * 60 * 60 * 1000
-      mockUnmatched24hCount.value = (logPage.items || []).filter(item => (
-        !item.matched && (!item.createdAt || new Date(item.createdAt).getTime() >= cutoff)
-      )).length
+      const scenarioPage = await configApi.getMockScenarios(options.workspaceCode(), {
+        appId: applicationId,
+        status: 1,
+      })
+      mockScenarioCount.value = scenarioPage.total || 0
+      mockUnmatched24hCount.value = logPage || 0
     } catch {
       // Mock 主信息仍可展示；统计能力不可用时使用占位符，不伪造设计稿示例数据。
     }
@@ -393,6 +409,7 @@ export function useConfigEnvironmentManagement(options: UseConfigEnvironmentMana
     errorMessage,
     form,
     loadData,
+    loadSelectedTabData,
     loading,
     loadVariableSetVersions,
     mockApplications,

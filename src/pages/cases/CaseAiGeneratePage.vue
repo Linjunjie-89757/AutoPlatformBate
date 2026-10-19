@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -1425,7 +1426,7 @@ onBeforeUnmount(() => {
       <main class="figma-ai-case-generation__workspace">
         <div v-if="isAllScope" class="figma-ai-case-generation__workspace-select">
           <span>目标空间</span>
-          <el-select v-model="selectedTargetWorkspaceCode" :loading="loadingWorkspaces" clearable filterable placeholder="请选择目标空间">
+          <el-select :suffix-icon="AppSelectChevron" v-model="selectedTargetWorkspaceCode" :loading="loadingWorkspaces" clearable filterable placeholder="请选择目标空间">
             <el-option v-for="workspace in workspaces" :key="workspace.workspaceCode" :label="workspace.workspaceName" :value="workspace.workspaceCode" />
           </el-select>
         </div>

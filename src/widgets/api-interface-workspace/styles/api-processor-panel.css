@@ -75,8 +75,9 @@
   grid-template-columns: 264px minmax(0, 1fr);
   gap: 0;
   width: 100%;
-  height: 316px;
-  min-height: 316px;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   background: #fff;
 }
@@ -95,8 +96,8 @@
 }
 
 .api-processor-detail {
-  height: 316px;
-  min-height: 316px;
+  height: 100%;
+  min-height: 0;
   padding: 16px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -241,8 +242,9 @@
   grid-template-columns: 264px minmax(0, 1fr);
   gap: 0;
   width: 100%;
-  height: 316px;
-  min-height: 316px;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   background: #fff;
 }
@@ -261,8 +263,8 @@
 }
 
 .api-processor-panel .api-processor-detail {
-  height: 316px;
-  min-height: 316px;
+  height: 100%;
+  min-height: 0;
   padding: 14px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -300,13 +302,14 @@
 }
 
 .api-processor-panel .api-processor-sidebar-list {
-  gap: 2px;
-  padding: 6px 3.5px;
+  gap: 0;
+  padding: 6px 0;
 }
 
 .api-processor-panel .api-processor-list-item {
+  width: auto;
   min-height: 34px;
-  margin: 0;
+  margin: 0 4px 2px;
   padding: 6px 8px 6px 10px;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -327,7 +330,7 @@
 }
 
 .api-processor-panel .api-processor-list-item__main {
-  gap: 7px;
+  gap: 8px;
 }
 
 .api-processor-panel .api-processor-list-actions {
@@ -525,7 +528,11 @@
 
 /* Figma node 149:7707 processing tabs */
 .api-processor-panel {
-  display: flex;
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 0;
+  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
   padding: 0;
 }
@@ -535,8 +542,9 @@
   grid-template-columns: 240px minmax(0, 1fr);
   gap: 0;
   width: 100%;
-  height: 363px;
-  min-height: 363px;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   background: #ffffff;
 }
@@ -549,8 +557,8 @@
 }
 
 .api-processor-detail {
-  height: 363px;
-  min-height: 363px;
+  height: 100%;
+  min-height: 0;
   padding: 14px;
   overflow-x: hidden;
   overflow-y: auto;
@@ -630,26 +638,26 @@
 
 .api-processor-panel .api-processor-list-item .app-switch,
 .api-processor-panel .api-figma-enable .app-switch {
-  height: 15px;
-  line-height: 15px;
+  height: 16px;
+  line-height: 16px;
 }
 
 .api-processor-panel .api-processor-list-item .el-switch__core,
 .api-processor-panel .api-figma-enable .el-switch__core {
-  width: 28px;
-  min-width: 28px;
-  height: 15px;
+  width: 32px;
+  min-width: 32px;
+  height: 16px;
 }
 
 .api-processor-panel .api-processor-list-item .el-switch__action,
 .api-processor-panel .api-figma-enable .el-switch__action {
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
 }
 
 .api-processor-panel .api-processor-list-item .el-switch.is-checked .el-switch__core .el-switch__action,
 .api-processor-panel .api-figma-enable .el-switch.is-checked .el-switch__core .el-switch__action {
-  left: 14px;
+  left: 16px;
   margin-left: 0;
 }
 
@@ -667,7 +675,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 5.25px;
+  gap: 8px;
 }
 
 .api-processor-type-badge {
@@ -1439,23 +1447,6 @@
 .api-processor-panel .api-fast-extraction-suffix-button > svg {
   width: 11px;
   height: 11px;
-}
-
-.api-processor-panel .api-processor-detail.is-pre.is-script,
-.api-processor-panel .api-processor-detail.is-pre.is-sql {
-  gap: 10.5px;
-}
-
-.api-processor-panel .api-processor-detail.is-post {
-  gap: 12px;
-  padding: 14px 16px 16px;
-}
-
-/* The Design has a taller populated pre-processing frame; empty and post frames remain 316px. */
-.api-processor-panel.is-pre.has-active-processor .api-processor-editor,
-.api-processor-panel.is-pre.has-active-processor .api-processor-detail {
-  height: 556px;
-  min-height: 556px;
 }
 
 .api-processor-panel:not(.has-active-processor) .api-processor-detail {

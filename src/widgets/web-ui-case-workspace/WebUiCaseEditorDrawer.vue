@@ -1,4 +1,5 @@
 ﻿<script setup lang="ts">
+import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { CopyDocument, Delete, MagicStick, Plus, Top, Bottom, VideoPlay, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -1362,7 +1363,7 @@ onBeforeUnmount(() => {
             <el-input v-model="form.baseUrl" maxlength="500" clearable placeholder="https://example.com" />
           </el-form-item>
           <el-form-item label="浏览器">
-            <el-select v-model="form.browserType">
+            <el-select :suffix-icon="AppSelectChevron" v-model="form.browserType">
               <el-option
                 v-for="item in WEB_UI_BROWSER_OPTIONS"
                 :key="item.value"
@@ -1378,7 +1379,7 @@ onBeforeUnmount(() => {
             <el-input-number v-model="form.defaultTimeoutMs" :min="1000" :max="60000" :step="1000" controls-position="right" />
           </el-form-item>
           <el-form-item label="本地调试 Runner">
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               v-model="selectedRunnerId"
               clearable
               filterable
@@ -1410,7 +1411,7 @@ onBeforeUnmount(() => {
             </el-select>
           </el-form-item>
           <el-form-item label="调试变量集">
-            <el-select
+            <el-select :suffix-icon="AppSelectChevron"
               v-model="debugVariableSetId"
               clearable
               filterable
@@ -1426,7 +1427,7 @@ onBeforeUnmount(() => {
             </el-select>
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="form.status">
+            <el-select :suffix-icon="AppSelectChevron" v-model="form.status">
               <el-option
                 v-for="item in WEB_UI_CASE_STATUS_OPTIONS"
                 :key="item.value"
@@ -1487,7 +1488,7 @@ onBeforeUnmount(() => {
             </el-table-column>
             <el-table-column label="类型" min-width="132">
               <template #default="{ row }">
-                <el-select v-model="row.type" :title="getStepHelper(row)" @change="handleStepTypeChange(row)">
+                <el-select :suffix-icon="AppSelectChevron" v-model="row.type" :title="getStepHelper(row)" @change="handleStepTypeChange(row)">
                   <el-option
                     v-for="item in WEB_UI_STEP_TYPE_OPTIONS"
                     :key="item.value"
@@ -1505,7 +1506,7 @@ onBeforeUnmount(() => {
             <el-table-column label="元素库" min-width="220">
               <template #default="{ row }">
                 <div class="web-ui-element-picker">
-                  <el-select
+                  <el-select :suffix-icon="AppSelectChevron"
                     v-model="row.elementModuleId"
                     clearable
                     filterable
@@ -1516,7 +1517,7 @@ onBeforeUnmount(() => {
                   >
                     <el-option v-for="item in elementModules" :key="item.id" :label="item.moduleName" :value="item.id" />
                   </el-select>
-                  <el-select
+                  <el-select :suffix-icon="AppSelectChevron"
                     v-model="row.elementPageId"
                     clearable
                     filterable
@@ -1527,7 +1528,7 @@ onBeforeUnmount(() => {
                   >
                     <el-option v-for="item in getStepElementPages(row)" :key="item.id" :label="item.pageName" :value="item.id" />
                   </el-select>
-                  <el-select
+                  <el-select :suffix-icon="AppSelectChevron"
                     v-model="row.elementGroupId"
                     clearable
                     filterable
@@ -1538,7 +1539,7 @@ onBeforeUnmount(() => {
                   >
                     <el-option v-for="item in getStepElementGroups(row)" :key="item.id" :label="item.groupName" :value="item.id" />
                   </el-select>
-                  <el-select
+                  <el-select :suffix-icon="AppSelectChevron"
                     v-model="row.elementId"
                     clearable
                     filterable
@@ -1564,7 +1565,7 @@ onBeforeUnmount(() => {
             </el-table-column>
             <el-table-column label="定位方式" min-width="132">
               <template #default="{ row }">
-                <el-select
+                <el-select :suffix-icon="AppSelectChevron"
                   v-model="row.locatorType"
                   clearable
                   :disabled="!stepNeedsLocator(row.type)"
@@ -1659,7 +1660,7 @@ onBeforeUnmount(() => {
             </el-table-column>
             <el-table-column label="截图策略" min-width="132">
               <template #default="{ row }">
-                <el-select v-model="row.screenshotPolicy" :title="formatScreenshotPolicy(row.screenshotPolicy)">
+                <el-select :suffix-icon="AppSelectChevron" v-model="row.screenshotPolicy" :title="formatScreenshotPolicy(row.screenshotPolicy)">
                   <el-option
                     v-for="item in WEB_UI_SCREENSHOT_POLICY_OPTIONS"
                     :key="item.value"

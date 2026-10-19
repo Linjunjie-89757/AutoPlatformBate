@@ -137,7 +137,7 @@ const submit = (continueCreate: boolean) => {
           <p v-if="errorMessage" class="tp-defect-drawer__error">{{ errorMessage }}</p>
           <label class="tp-defect-drawer__field">
             <span>关联用例 <em>*</em></span>
-            <select v-model="form.caseId" :class="{ 'has-error': caseError }" @change="selectCase">
+            <select class="app-native-select" v-model="form.caseId" :class="{ 'has-error': caseError }" @change="selectCase">
               <option value="">请选择失败或阻塞用例</option>
               <option v-for="item in cases" :key="item.id" :value="item.id">{{ item.no }} {{ item.title }}</option>
             </select>
@@ -170,8 +170,8 @@ const submit = (continueCreate: boolean) => {
 
         <aside>
           <div class="tp-defect-drawer__field"><span>优先级 <em>*</em></span><div class="tp-defect-drawer__priorities"><button v-for="item in ['P0','P1','P2','P3']" :key="item" type="button" :class="[`is-${item.toLowerCase()}`, { 'is-selected': form.priority === item }]" @click="form.priority = item as TestPlanDefectSubmitPayload['priority']">{{ item }}</button></div></div>
-          <label class="tp-defect-drawer__field"><span>严重级别 <em>*</em></span><select v-model="form.severity"><option value="CRITICAL">致命</option><option value="HIGH">严重</option><option value="MEDIUM">一般</option><option value="LOW">轻微</option></select></label>
-          <label class="tp-defect-drawer__field"><span>处理人 <em>*</em></span><select v-model="form.assigneeId" :class="{ 'has-error': assigneeError }" @change="assigneeError = false"><option value="">请选择处理人</option><option v-for="owner in owners" :key="owner.id" :value="String(owner.id)">{{ owner.name }}</option></select></label>
+          <label class="tp-defect-drawer__field"><span>严重级别 <em>*</em></span><select class="app-native-select" v-model="form.severity"><option value="CRITICAL">致命</option><option value="HIGH">严重</option><option value="MEDIUM">一般</option><option value="LOW">轻微</option></select></label>
+          <label class="tp-defect-drawer__field"><span>处理人 <em>*</em></span><select class="app-native-select" v-model="form.assigneeId" :class="{ 'has-error': assigneeError }" @change="assigneeError = false"><option value="">请选择处理人</option><option v-for="owner in owners" :key="owner.id" :value="String(owner.id)">{{ owner.name }}</option></select></label>
           <label class="tp-defect-drawer__field"><span>标签</span><input v-model="form.tags" type="text" placeholder="多个标签用空格或逗号分隔"></label>
         </aside>
       </div>
