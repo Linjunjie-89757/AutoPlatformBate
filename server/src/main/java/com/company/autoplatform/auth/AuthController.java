@@ -2,6 +2,7 @@ package com.company.autoplatform.auth;
 
 import com.company.autoplatform.common.ApiResponse;
 import com.company.autoplatform.platformadmin.PlatformLoginFailureNotificationService;
+import com.company.autoplatform.user.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -28,17 +29,20 @@ public class AuthController {
     private final AuthService authService;
     private final AuthenticatedSessionService authenticatedSessionService;
     private final PlatformLoginFailureNotificationService loginFailureNotificationService;
+    private final UserService userService;
 
     public AuthController(
             AuthenticationManager authenticationManager,
             AuthService authService,
             AuthenticatedSessionService authenticatedSessionService,
-            PlatformLoginFailureNotificationService loginFailureNotificationService
+            PlatformLoginFailureNotificationService loginFailureNotificationService,
+            UserService userService
     ) {
         this.authenticationManager = authenticationManager;
         this.authService = authService;
         this.authenticatedSessionService = authenticatedSessionService;
         this.loginFailureNotificationService = loginFailureNotificationService;
+        this.userService = userService;
     }
 
     @PostMapping("/login")
@@ -74,6 +78,7 @@ public class AuthController {
         HttpSession session = httpServletRequest.getSession(true);
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
         authenticatedSessionService.register(session, authentication);
+        userService.recordSuccessfulLogin(((CurrentUserPrincipal) authentication.getPrincipal()).userId());
         return ApiResponse.ok(authService.currentUser(), "Login successful");
     }
 

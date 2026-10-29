@@ -302,6 +302,9 @@ const {
   editingCaseDetail,
   caseRunningId,
   caseListCurrentPage,
+  caseListLoading,
+  caseListError,
+  refreshDefinitionCases,
   caseListPageSize,
   activeDefinitionCases,
   caseListTotalPages,
@@ -449,7 +452,7 @@ const contentTabs = computed<ApiRequestContentTabItem[]>(() => [
   { label: '后置处理', value: 'post' },
   { label: '断言', value: 'tests', count: activeEditor.value?.detail.assertions.length || undefined },
   { label: '设置', value: 'settings' },
-  { label: '用例', value: 'cases', count: activeDefinitionCases.value.length || undefined },
+  { label: '测试用例', value: 'cases', count: activeDefinitionCases.value.length || undefined },
   { label: '定义', value: 'definition', count: activeSchemaFields.value.length || undefined },
 ])
 
@@ -863,6 +866,9 @@ useApiDefinitionWorkspaceLifecycle({
           :current-environment-name="currentEnvironmentName"
           :current-variable-set-name="currentVariableSetName"
           :active-definition-cases="activeDefinitionCases"
+          :case-list-loading="caseListLoading"
+          :case-list-error="caseListError"
+          :refresh-definition-cases="refreshDefinitionCases"
           :paged-definition-cases="pagedDefinitionCases"
           :case-list-total-pages="caseListTotalPages"
           :case-running-id="caseRunningId"

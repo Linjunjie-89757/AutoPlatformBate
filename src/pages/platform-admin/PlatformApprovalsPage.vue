@@ -34,6 +34,7 @@ const activeTab = ref<ApprovalTab>('pending')
 const pendingApplications = ref<PlatformJoinApplicationItem[]>([])
 const handledApplications = ref<PlatformJoinApplicationItem[]>([])
 const submittingId = ref<number | null>(null)
+const approveTarget = ref<PlatformJoinApplicationItem | null>(null)
 const rejectTarget = ref<PlatformJoinApplicationItem | null>(null)
 const rejectReason = ref('')
 
@@ -117,11 +118,13 @@ function moveToHandled(updated: PlatformJoinApplicationItem) {
   handledApplications.value = [updated, ...handledApplications.value.filter(item => item.id !== updated.id)]
 }
 
-async function approveApplication(item: PlatformJoinApplicationItem) {
-  if (submittingId.value !== null) return
+async function confirmApproveApplication() {
+  const item = approveTarget.value
+  if (!item || submittingId.value !== null) return
   submittingId.value = item.id
   try {
     moveToHandled(await platformAdminApi.approveJoinApplication(item.id))
+    approveTarget.value = null
     ElMessage.success('申请已批准')
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
@@ -275,7 +278,7 @@ onMounted(() => {
                     type="button"
                     class="platform-approvals-page__approve-button"
                     :disabled="submittingId !== null"
-                    @click="approveApplication(application)"
+                    @click="approveTarget = application"
                   >
                     <CheckCircle2 :size="12" />
                     <span>批准</span>
@@ -294,6 +297,25 @@ onMounted(() => {
         </section>
       </div>
     </main>
+
+    <div v-if="approveTarget" class="platform-approvals-page__mask" role="presentation" @click.self="submittingId === null && (approveTarget = null)">
+      <section class="platform-approvals-page__approve-dialog" role="dialog" aria-modal="true" aria-labelledby="platform-approve-title">
+        <header>
+          <span><CheckCircle2 :size="18" /></span>
+          <div>
+            <h2 id="platform-approve-title">批准加入申请</h2>
+            <small>{{ approveTarget.applicantName }} → {{ approveTarget.workspaceName }}</small>
+          </div>
+        </header>
+        <p>批准后，<strong>{{ approveTarget.applicantName }}</strong> 将以成员身份加入工作区 <strong>{{ approveTarget.workspaceName }}</strong>。</p>
+        <div class="platform-approvals-page__approve-actions">
+          <button type="button" class="is-cancel" :disabled="submittingId !== null" @click="approveTarget = null">取消</button>
+          <button type="button" class="is-confirm" :disabled="submittingId !== null" @click="confirmApproveApplication">
+            {{ submittingId === approveTarget.id ? '提交中…' : '确认批准' }}
+          </button>
+        </div>
+      </section>
+    </div>
 
     <div
       v-if="rejectTarget"
@@ -847,6 +869,45 @@ button.platform-approvals-page__nav-item.is-active {
   background: #fff;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
 }
+
+.platform-approvals-page__approve-dialog {
+  width: 420px;
+  padding: 24px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.platform-approvals-page__approve-dialog header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.platform-approvals-page__approve-dialog header > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.platform-approvals-page__approve-dialog header > div { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.platform-approvals-page__approve-dialog h2 { margin: 0; color: #1d2129; font-size: 15px; font-weight: 700; line-height: 22px; }
+.platform-approvals-page__approve-dialog header small { overflow: hidden; color: #86909c; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.platform-approvals-page__approve-dialog header > button { display: grid; width: 24px; height: 24px; place-items: center; border: 0; background: transparent; color: #c9cdd4; cursor: pointer; }
+.platform-approvals-page__approve-dialog > p { margin: 0 0 18px; color: #4e5969; font-size: 13px; line-height: 1.6; }
+.platform-approvals-page__approve-dialog > p strong:first-child { color: #1d2129; }
+.platform-approvals-page__approve-dialog > p strong:last-child { color: #db2777; }
+.platform-approvals-page__approve-actions { display: flex; gap: 10px; }
+.platform-approvals-page__approve-actions button { height: 38px; border-radius: 9px; cursor: pointer; font-size: 13px; }
+.platform-approvals-page__approve-actions .is-cancel { flex: 1; border: 1px solid #e5e6eb; background: #fff; color: #4e5969; }
+.platform-approvals-page__approve-actions .is-confirm { flex: 2; border: 0; background: #00b42a; color: #fff; font-weight: 600; }
+.platform-approvals-page__approve-actions button:disabled, .platform-approvals-page__approve-dialog header > button:disabled { cursor: not-allowed; opacity: .55; }
 
 .platform-approvals-page__reject-dialog h2 {
   margin: 0 0 6px;

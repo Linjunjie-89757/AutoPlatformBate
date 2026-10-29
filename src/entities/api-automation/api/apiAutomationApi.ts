@@ -16,6 +16,8 @@ import type {
   ApiDefinitionTreeSearchResult,
   ApiAutomationEnvironmentItem,
   ApiAutomationVariableSetItem,
+  ApiAutomationReportDetail,
+  ApiAutomationReportItem,
   ApiDataFileDetail,
   ApiDataFileItem,
   ApiDataFileListQuery,
@@ -1127,6 +1129,35 @@ export const apiAutomationApi = {
     )
 
     return normalizeScenarioRunHistoryDetail(unwrapApiResponse(payload))
+  },
+
+  async getReports(workspaceCode = 'ALL', query?: { pageNo?: number; pageSize?: number }) {
+    const payload = await httpGet<ApiResponse<PageResponse<ApiAutomationReportItem>>>('/automation/api/reports', {
+      headers: workspaceHeaders(workspaceCode),
+      params: cleanQuery(query),
+    })
+    return normalizePageResponse(unwrapApiResponse(payload), item => ({
+      ...item,
+      workspaceCode: item.workspaceCode || workspaceCode,
+      workspaceName: item.workspaceName || item.workspaceCode || workspaceCode,
+      reportName: item.reportName || item.objectName || '-',
+      result: item.result || 'UNKNOWN',
+      createdAt: item.createdAt || null,
+    }))
+  },
+
+  async getReportDetail(workspaceCode = 'ALL', reportKey: string) {
+    const payload = await httpGet<ApiResponse<ApiAutomationReportDetail>>(
+      `/automation/api/reports/${encodeURIComponent(reportKey)}`,
+      { headers: workspaceHeaders(workspaceCode) },
+    )
+    const detail = unwrapApiResponse(payload)
+    return {
+      ...detail,
+      stepResults: Array.isArray(detail.stepResults) ? detail.stepResults : [],
+      itemSnapshots: Array.isArray(detail.itemSnapshots) ? detail.itemSnapshots : [],
+      dataIterations: Array.isArray(detail.dataIterations) ? detail.dataIterations : [],
+    }
   },
 
   async streamAiCaseGeneration(

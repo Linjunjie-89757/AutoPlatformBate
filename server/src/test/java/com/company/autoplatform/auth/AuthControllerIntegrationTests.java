@@ -52,6 +52,8 @@ class AuthControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data.workspaceCodes", hasItem(WORKSPACE_CODE)))
                 .andExpect(jsonPath("$.data.workspaceAccesses").isArray())
                 .andExpect(jsonPath("$.data.workspaceAccesses[?(@.workspaceCode == '%s')].canManage".formatted(WORKSPACE_CODE), hasItem(true)));
+
+        org.assertj.core.api.Assertions.assertThat(userMapper.selectById(11L).getLastLoginAt()).isNotNull();
     }
 
     @Test

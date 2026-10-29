@@ -80,12 +80,19 @@
   flex: 1 1 238px;
 }
 
-.api-request-body.is-cases,
 .api-request-body.is-definition {
   min-height: 0;
   flex: 1 1 0;
   overflow: hidden auto;
   padding: 12px;
+}
+
+.api-request-body.is-cases {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .api-param-table.is-cookie {

@@ -716,6 +716,53 @@ export interface ApiScenarioRunHistoryDetail extends ApiScenarioRunHistoryItem {
   stepResults: ApiRunStepResult[]
 }
 
+export interface ApiAutomationReportItem {
+  reportKey: string
+  objectType: string
+  historyId: number
+  reportId: number | null
+  workspaceCode: string
+  workspaceName: string | null
+  objectId: number | null
+  objectName: string
+  reportName: string
+  result: string
+  failureSummary: string | null
+  totalCount: number | null
+  successCount: number | null
+  failedCount: number | null
+  skippedCount: number | null
+  statusCode: number | null
+  durationMs: number | null
+  responseSize: number | null
+  environmentId: number | null
+  environmentName: string | null
+  variableSetId: number | null
+  variableSetName: string | null
+  runMode: string | null
+  runOn: string | null
+  branchName: string | null
+  triggerSource: string | null
+  dataDrivenEnabled: boolean | null
+  dataFileId: number | null
+  dataFileName: string | null
+  dataRowCount: number | null
+  operatorName: string | null
+  createdAt: string | null
+  archived: boolean | null
+}
+
+export interface ApiAutomationReportDetail extends ApiAutomationReportItem {
+  continueOnFailure: boolean | null
+  globalTimeoutMs: number | null
+  stepFailureRetryCount: number | null
+  defaultStepWaitMs: number | null
+  contextSnapshotJson: string | null
+  dataIterations: ApiExecutionSuiteDataIteration[]
+  itemSnapshots: ApiExecutionSuiteRunItemSnapshot[]
+  stepResults: ApiRunStepResult[]
+}
+
 export interface ApiExecutionSuiteRunItemSnapshot {
   itemId: number | null
   itemType: string

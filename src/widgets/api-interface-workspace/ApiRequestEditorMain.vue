@@ -37,6 +37,9 @@ defineProps<{
   activeDefinitionCases: any[]
   pagedDefinitionCases: any[]
   caseListTotalPages: number
+  caseListLoading: boolean
+  caseListError: string
+  refreshDefinitionCases: () => Promise<void>
   caseRunningId: number | null
   definitionRequestSchemaGroups: any[]
   responseSchemaFields: any[]
@@ -223,7 +226,7 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
     loading
     :mark-dirty="markDirty"
   />
-  <div v-else-if="activeEditor.loading" class="api-editor-loading">
+  <div v-else-if="activeEditor.loading && activeEditor.activeTab !== 'cases'" class="api-editor-loading">
     <div class="api-editor-loading__title">正在加载接口详情</div>
     <div class="api-editor-loading__line is-long"></div>
     <div class="api-editor-loading__line"></div>
@@ -278,6 +281,12 @@ const activeDefinitionResponseCode = defineModel<string>('activeDefinitionRespon
         v-model:current-page="caseListCurrentPage"
         v-model:page-size="caseListPageSize"
         :definition-id="activeEditor.definitionId"
+        :endpoint-name="activeEditor.detail.name"
+        :method="activeEditor.detail.requestConfig.method || activeEditor.detail.method"
+        :path="activeEditor.detail.requestConfig.path"
+        :loading="activeEditor.loading || caseListLoading"
+        :error="caseListError"
+        @refresh="refreshDefinitionCases"
         :cases="activeDefinitionCases"
         :paged-cases="pagedDefinitionCases"
         :total-pages="caseListTotalPages"

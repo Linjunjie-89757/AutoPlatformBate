@@ -53,6 +53,7 @@ const router = useRouter()
 const pendingApprovalTotal = ref(0)
 const showPassword = ref(false)
 const loading = ref(true)
+const loadError = ref('')
 const saving = ref(false)
 const testing = ref(false)
 const saved = ref(false)
@@ -144,6 +145,7 @@ async function saveConfiguration() {
 
 async function loadConfiguration() {
   loading.value = true
+  loadError.value = ''
   try {
     const settings = await platformAdminApi.getNotificationSettings()
     smtp.host = settings.host || ''
@@ -163,7 +165,7 @@ async function loadConfiguration() {
       }
     }))
   } catch (error) {
-    ElMessage.error(getRequestErrorMessage(error))
+    loadError.value = getRequestErrorMessage(error)
   } finally {
     loading.value = false
   }
@@ -224,14 +226,23 @@ onBeforeUnmount(() => {
             <CheckCircle aria-hidden="true" />
             已保存
           </span>
-          <button type="button" class="platform-notify-page__save-button" :disabled="saving || loading" @click="saveConfiguration">
+          <button type="button" class="platform-notify-page__save-button" :disabled="saving || loading || Boolean(loadError)" @click="saveConfiguration">
             <CheckCircle aria-hidden="true" />
             <span>{{ saving ? '保存中...' : '保存配置' }}</span>
           </button>
         </div>
       </header>
 
-      <div class="platform-notify-page__grid">
+      <div v-if="loading" class="platform-notify-page__load-state" role="status">
+        <Loader2 :size="20" class="is-spinning" />
+        <span>正在加载通知配置</span>
+      </div>
+      <div v-else-if="loadError" class="platform-notify-page__load-state is-error" role="alert">
+        <strong>通知配置加载失败</strong>
+        <span>{{ loadError }}</span>
+        <button type="button" @click="loadConfiguration">重新加载</button>
+      </div>
+      <div v-else class="platform-notify-page__grid">
         <section
           class="platform-notify-page__card platform-notify-page__smtp-card"
           :class="{ 'has-test-success': testSucceeded }"
@@ -603,6 +614,34 @@ button.platform-notify-page__save-button:hover {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   align-items: start;
+}
+
+.platform-notify-page__load-state {
+  display: flex;
+  min-height: 320px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: #86909c;
+  font-size: 13px;
+}
+
+.platform-notify-page__load-state.is-error strong {
+  color: #1d2129;
+  font-size: 15px;
+}
+
+.platform-notify-page__load-state button {
+  height: 32px;
+  margin-top: 4px;
+  padding: 0 14px;
+  border: 1px solid rgba(219, 39, 119, 0.25);
+  border-radius: 7px;
+  background: #fdf2f8;
+  color: #db2777;
+  cursor: pointer;
+  font-size: 12px;
 }
 
 .platform-notify-page__card {

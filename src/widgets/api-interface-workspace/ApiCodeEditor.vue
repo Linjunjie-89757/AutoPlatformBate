@@ -5,7 +5,7 @@
       'is-fit-content': fitContent,
       'is-plain': plain,
       'is-fill': fill,
-      'is-dark': themeVariant !== 'light',
+      'is-dark': themeVariant === 'dark' || themeVariant === 'figma-dark' || themeVariant === 'sql-dark',
       'is-figma-dark': themeVariant === 'figma-dark',
       'is-sql-dark': themeVariant === 'sql-dark',
     }"
@@ -31,6 +31,7 @@ type ApiCodeLanguage = 'api-console' | 'javascript' | 'json' | 'sql' | 'text' | 
 
 const API_CONSOLE_LANGUAGE = 'api-console'
 const API_CODE_THEME = 'api-code-light'
+const API_CODE_FIGMA_LIGHT_THEME = 'api-code-figma-light'
 const API_CODE_DARK_THEME = 'api-code-dark'
 const API_CODE_FIGMA_DARK_THEME = 'api-code-figma-dark'
 const API_CODE_SQL_DARK_THEME = 'api-code-sql-dark'
@@ -46,13 +47,14 @@ const props = withDefaults(defineProps<{
   showFormatButton?: boolean
   placeholder?: string
   lineNumbers?: 'on' | 'off'
+  lineNumbersMinChars?: number
   folding?: boolean
   fitContent?: boolean
   fill?: boolean
   plain?: boolean
   minFitContentHeight?: number
   maxFitContentHeight?: number
-  themeVariant?: 'light' | 'dark' | 'figma-dark' | 'sql-dark'
+  themeVariant?: 'light' | 'figma-light' | 'dark' | 'figma-dark' | 'sql-dark'
   fontSize?: number
   lineHeight?: number
   paddingTop?: number
@@ -65,6 +67,7 @@ const props = withDefaults(defineProps<{
   showFormatButton: true,
   placeholder: '',
   lineNumbers: 'on',
+  lineNumbersMinChars: 3,
   folding: true,
   fitContent: false,
   fill: false,
@@ -145,6 +148,22 @@ function ensureApiConsoleLanguage(monacoApi: typeof MonacoApi) {
       { token: 'api-console-number', foreground: '9333ea' },
     ],
     colors: {},
+  })
+
+  monacoApi.editor.defineTheme(API_CODE_FIGMA_LIGHT_THEME, {
+    base: 'vs',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#FFFFFF',
+      'editor.foreground': '#1D2129',
+      'editorLineNumber.foreground': '#C9CDD4',
+      'editorLineNumber.activeForeground': '#C9CDD4',
+      'editor.lineHighlightBackground': '#FFFFFF',
+      'editorCursor.foreground': '#165DFF',
+      'editor.selectionBackground': '#D6E4FF',
+      'editor.inactiveSelectionBackground': '#E5E6EB',
+    },
   })
 
   monacoApi.editor.defineTheme(API_CODE_DARK_THEME, {
@@ -283,6 +302,9 @@ function resolveEditorTheme(themeVariant = props.themeVariant) {
   if (themeVariant === 'figma-dark') {
     return API_CODE_FIGMA_DARK_THEME
   }
+  if (themeVariant === 'figma-light') {
+    return API_CODE_FIGMA_LIGHT_THEME
+  }
   return themeVariant === 'dark' ? API_CODE_DARK_THEME : API_CODE_THEME
 }
 
@@ -308,7 +330,7 @@ function createEditor(monacoApi: typeof MonacoApi) {
     minimap: { enabled: false },
     contextmenu: !props.readOnly,
     lineNumbers: props.lineNumbers,
-    lineNumbersMinChars: 3,
+    lineNumbersMinChars: props.lineNumbersMinChars,
     lineDecorationsWidth: props.lineDecorationsWidth,
     glyphMargin: false,
     folding: props.folding,
@@ -316,8 +338,8 @@ function createEditor(monacoApi: typeof MonacoApi) {
     scrollBeyondLastLine: false,
     wordWrap: 'on',
     roundedSelection: false,
-    renderLineHighlight: props.themeVariant === 'figma-dark' || shouldUsePlainEditor() ? 'none' : 'line',
-    bracketPairColorization: { enabled: props.themeVariant !== 'figma-dark' && !shouldUsePlainEditor() },
+    renderLineHighlight: props.themeVariant === 'figma-dark' || props.themeVariant === 'figma-light' || shouldUsePlainEditor() ? 'none' : 'line',
+    bracketPairColorization: { enabled: props.themeVariant !== 'figma-dark' && props.themeVariant !== 'figma-light' && !shouldUsePlainEditor() },
     scrollbar: {
       alwaysConsumeMouseWheel: false,
       useShadows: false,
@@ -392,17 +414,18 @@ watch(
   (themeVariant) => {
     monaco?.editor.setTheme(resolveEditorTheme(themeVariant))
     editor?.updateOptions({
-      renderLineHighlight: themeVariant === 'figma-dark' || shouldUsePlainEditor() ? 'none' : 'line',
-      bracketPairColorization: { enabled: themeVariant !== 'figma-dark' && !shouldUsePlainEditor() },
+      renderLineHighlight: themeVariant === 'figma-dark' || themeVariant === 'figma-light' || shouldUsePlainEditor() ? 'none' : 'line',
+      bracketPairColorization: { enabled: themeVariant !== 'figma-dark' && themeVariant !== 'figma-light' && !shouldUsePlainEditor() },
     })
   },
 )
 
 watch(
-  () => [props.lineNumbers, props.folding] as const,
-  ([lineNumbers, folding]) => {
+  () => [props.lineNumbers, props.lineNumbersMinChars, props.folding] as const,
+  ([lineNumbers, lineNumbersMinChars, folding]) => {
     editor?.updateOptions({
       lineNumbers,
+      lineNumbersMinChars,
       folding,
     })
     syncEditorHeight()

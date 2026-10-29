@@ -2,10 +2,9 @@
 import {
   Bell,
   Building2,
-  Check,
   ClipboardCheck,
-  Eye,
   LayoutDashboard,
+  Pencil,
   Plus,
   ScrollText,
   Search,
@@ -23,8 +22,9 @@ import {
   type CreatePlatformWorkspacePayload,
   type PlatformWorkspaceItem,
 } from '@/entities/platform-admin'
+import { userApi, type UserItem } from '@/entities/user'
+import { workspaceApi } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
-import { confirmDelete } from '@/shared/ui'
 
 type WorkspaceFilter = 'all' | 'active' | 'disabled'
 
@@ -44,18 +44,42 @@ const errorMessage = ref('')
 const query = ref('')
 const filter = ref<WorkspaceFilter>('all')
 const workspaces = ref<PlatformWorkspaceItem[]>([])
+const ownerUsers = ref<UserItem[]>([])
+const ownerUsersLoading = ref(false)
 const workspaceColorMap = ref<Record<string, string>>({})
 const pendingApprovalTotal = ref(0)
 const savingCodes = ref<string[]>([])
 const createDialogOpen = ref(false)
-const detailWorkspace = ref<PlatformWorkspaceItem | null>(null)
+const editingWorkspace = ref<PlatformWorkspaceItem | null>(null)
+const deleteWorkspaceTarget = ref<PlatformWorkspaceItem | null>(null)
+const deleteConfirmName = ref('')
+const deletingWorkspace = ref(false)
 const createSubmitting = ref(false)
+const formErrors = reactive<{ workspaceName: string; ownerUserId: string }>({ workspaceName: '', ownerUserId: '' })
+const selectedWorkspaceColor = ref(WORKSPACE_COLORS[0])
 const createForm = reactive<CreatePlatformWorkspacePayload>({
   workspaceName: '',
   workspaceCode: '',
   description: '',
   status: 1,
 })
+
+function getWorkspaceColorPreference(workspaceCode: string) {
+  try {
+    const color = localStorage.getItem(`platform-workspace-color:${workspaceCode}`)
+    return color && WORKSPACE_COLORS.includes(color) ? color : null
+  } catch {
+    return null
+  }
+}
+
+function setWorkspaceColorPreference(workspaceCode: string, color: string) {
+  try {
+    localStorage.setItem(`platform-workspace-color:${workspaceCode}`, color)
+  } catch {
+    // Color is a local visual preference; workspace creation must not depend on browser storage.
+  }
+}
 
 const navigationItems: PlatformNavigationItem[] = [
   { key: 'overview', label: '平台概览', icon: LayoutDashboard },
@@ -77,6 +101,9 @@ const filteredWorkspaces = computed(() => {
       .some(value => value.toLowerCase().includes(normalizedQuery))
   })
 })
+const selectableOwnerUsers = computed(() => ownerUsers.value.filter(user =>
+  Number(user.status) === 1 || user.id === createForm.ownerUserId,
+))
 
 async function loadWorkspaces() {
   loading.value = true
@@ -88,13 +115,31 @@ async function loadWorkspaces() {
     ])
     workspaces.value = workspaceItems
     workspaceItems.forEach((workspace, index) => {
-      workspaceColorMap.value[workspace.workspaceCode] ??= WORKSPACE_COLORS[index % WORKSPACE_COLORS.length]
+      const savedColor = getWorkspaceColorPreference(workspace.workspaceCode)
+      workspaceColorMap.value[workspace.workspaceCode] ??= savedColor || WORKSPACE_COLORS[index % WORKSPACE_COLORS.length]
     })
     pendingApprovalTotal.value = overview.pendingApprovalTotal
   } catch (error) {
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadOwnerUsers() {
+  ownerUsersLoading.value = true
+  try {
+    ownerUsers.value = await userApi.getUsers()
+    if (editingWorkspace.value && createForm.ownerUserId == null && editingWorkspace.value.ownerName) {
+      const matchingOwners = ownerUsers.value.filter(user =>
+        user.displayName === editingWorkspace.value?.ownerName || user.username === editingWorkspace.value?.ownerName,
+      )
+      if (matchingOwners.length === 1) createForm.ownerUserId = matchingOwners[0].id
+    }
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error) || '负责人列表加载失败')
+  } finally {
+    ownerUsersLoading.value = false
   }
 }
 
@@ -149,24 +194,29 @@ async function toggleWorkspace(workspace: PlatformWorkspaceItem) {
   }
 }
 
-function viewWorkspace(workspace: PlatformWorkspaceItem) {
-  detailWorkspace.value = workspace
+async function deleteWorkspace(workspace: PlatformWorkspaceItem) {
+  deleteWorkspaceTarget.value = workspace
+  deleteConfirmName.value = ''
 }
 
-async function deleteWorkspace(workspace: PlatformWorkspaceItem) {
+async function confirmDeleteWorkspace() {
+  const workspace = deleteWorkspaceTarget.value
+  if (!workspace || deleteConfirmName.value !== workspace.workspaceName || deletingWorkspace.value) return
+  deletingWorkspace.value = true
   try {
-    await confirmDelete({
-      title: '删除工作区',
-      message: `确定删除工作区“${workspace.workspaceName}”吗？删除后不可恢复。`,
-      confirmText: '删除',
-      cancelText: '取消',
-    })
     await platformAdminApi.deleteWorkspace(workspace.workspaceCode)
     workspaces.value = workspaces.value.filter(item => item.workspaceCode !== workspace.workspaceCode)
+    try {
+      localStorage.removeItem(`platform-workspace-color:${workspace.workspaceCode}`)
+    } catch {
+      // Deletion should not be blocked by local preference storage.
+    }
+    deleteWorkspaceTarget.value = null
     ElMessage.success('工作区已删除')
   } catch (error) {
-    if (error === 'cancel' || error === 'close') return
     ElMessage.error(getRequestErrorMessage(error))
+  } finally {
+    deletingWorkspace.value = false
   }
 }
 
@@ -175,22 +225,49 @@ function resetCreateForm() {
   createForm.workspaceCode = ''
   createForm.description = ''
   createForm.status = 1
+  createForm.ownerUserId = null
+  formErrors.workspaceName = ''
+  formErrors.ownerUserId = ''
 }
 
 function openCreateDialog() {
   resetCreateForm()
+  selectedWorkspaceColor.value = WORKSPACE_COLORS[0]
+  editingWorkspace.value = null
+  void loadOwnerUsers()
+  createDialogOpen.value = true
+}
+
+function openEditDialog(workspace: PlatformWorkspaceItem) {
+  createForm.workspaceName = workspace.workspaceName
+  createForm.workspaceCode = workspace.workspaceCode
+  createForm.description = workspace.description || ''
+  createForm.status = workspace.status ?? 1
+  createForm.ownerUserId = workspace.ownerUserId ?? null
+  selectedWorkspaceColor.value = workspaceColor(workspace)
+  formErrors.workspaceName = ''
+  formErrors.ownerUserId = ''
+  editingWorkspace.value = workspace
+  void loadOwnerUsers()
   createDialogOpen.value = true
 }
 
 function closeCreateDialog() {
-  if (!createSubmitting.value) createDialogOpen.value = false
+  if (createSubmitting.value) return
+  createDialogOpen.value = false
+  editingWorkspace.value = null
+}
+
+function updateOwnerSelection(event: Event) {
+  const value = (event.target as HTMLSelectElement).value
+  createForm.ownerUserId = value ? Number(value) : null
+  formErrors.ownerUserId = ''
 }
 
 async function createWorkspace() {
-  if (!createForm.workspaceName?.trim()) {
-    ElMessage.warning('请输入工作区名称')
-    return
-  }
+  formErrors.workspaceName = createForm.workspaceName?.trim() ? '' : '请输入工作区名称'
+  formErrors.ownerUserId = createForm.ownerUserId ? '' : '请选择负责人'
+  if (formErrors.workspaceName || formErrors.ownerUserId) return
 
   createSubmitting.value = true
   try {
@@ -198,14 +275,39 @@ async function createWorkspace() {
       workspaceName: createForm.workspaceName.trim(),
       workspaceCode: createForm.workspaceCode?.trim() || undefined,
       description: createForm.description?.trim() || undefined,
-      status: 1,
+      ownerUserId: createForm.ownerUserId,
+      workspaceType: editingWorkspace.value?.workspaceType,
+      industry: editingWorkspace.value?.industry,
+      initializationMode: editingWorkspace.value?.initializationMode,
+      status: editingWorkspace.value?.status ?? 1,
     }
-    const created = await platformAdminApi.createWorkspace(payload)
-    workspaceColorMap.value[created.workspaceCode] = workspaceColorMap.value[created.workspaceCode]
-      || WORKSPACE_COLORS[workspaces.value.length % WORKSPACE_COLORS.length]
-    workspaces.value = [created, ...workspaces.value]
+    if (editingWorkspace.value) {
+      const updated = await workspaceApi.updateWorkspace(editingWorkspace.value.workspaceCode, payload)
+      const index = workspaces.value.findIndex(item => item.workspaceCode === updated.workspaceCode)
+      const updatedPlatformWorkspace: PlatformWorkspaceItem = {
+        ...editingWorkspace.value,
+        workspaceName: updated.workspaceName,
+        description: updated.description,
+        status: updated.status == null ? null : Number(updated.status),
+        ownerUserId: updated.ownerUserId ?? null,
+        ownerName: updated.ownerName,
+        workspaceType: updated.workspaceType,
+        industry: updated.industry,
+        initializationMode: updated.initializationMode,
+      }
+      if (index >= 0) workspaces.value[index] = updatedPlatformWorkspace
+      workspaceColorMap.value[updated.workspaceCode] = selectedWorkspaceColor.value
+      setWorkspaceColorPreference(updated.workspaceCode, selectedWorkspaceColor.value)
+      ElMessage.success('工作区已更新')
+    } else {
+      const created = await platformAdminApi.createWorkspace(payload)
+      workspaceColorMap.value[created.workspaceCode] = selectedWorkspaceColor.value
+      setWorkspaceColorPreference(created.workspaceCode, selectedWorkspaceColor.value)
+      workspaces.value = [created, ...workspaces.value]
+      ElMessage.success('工作区创建成功')
+    }
     createDialogOpen.value = false
-    ElMessage.success('工作区创建成功')
+    editingWorkspace.value = null
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   } finally {
@@ -367,12 +469,12 @@ onMounted(() => {
               <div class="platform-workspaces-page__actions" role="cell">
                 <button
                   type="button"
-                  class="platform-workspaces-page__row-button is-view"
-                  title="查看工作区"
-                  aria-label="查看工作区"
-                  @click="viewWorkspace(workspace)"
+                  class="platform-workspaces-page__row-button is-edit"
+                  title="编辑工作区"
+                  aria-label="编辑工作区"
+                  @click="openEditDialog(workspace)"
                 >
-                  <Eye :size="11" />
+                  <Pencil :size="11" />
                 </button>
                 <button
                   type="button"
@@ -407,62 +509,123 @@ onMounted(() => {
     </section>
 
     <div v-if="createDialogOpen" class="platform-workspaces-page__dialog-mask" @click.self="closeCreateDialog">
-      <section class="platform-workspaces-page__dialog" role="dialog" aria-modal="true" aria-labelledby="create-workspace-title">
+      <section
+        class="platform-workspaces-page__dialog"
+        :class="editingWorkspace ? 'is-edit' : 'is-create'"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="editingWorkspace ? 'edit-workspace-title' : 'create-workspace-title'"
+      >
         <header>
-          <div>
-            <h2 id="create-workspace-title">新建工作区</h2>
-            <p>创建后可在工作区中继续配置成员和权限</p>
+          <div class="platform-workspaces-page__dialog-heading">
+            <span><Building2 :size="16" /></span>
+            <div>
+              <h2 :id="editingWorkspace ? 'edit-workspace-title' : 'create-workspace-title'">
+                {{ editingWorkspace ? '编辑工作区' : '新建工作区' }}
+              </h2>
+              <p>{{ editingWorkspace ? '修改工作区信息' : '创建一个新的测试工作区' }}</p>
+            </div>
           </div>
           <button type="button" aria-label="关闭" @click="closeCreateDialog"><X :size="16" /></button>
         </header>
         <div class="platform-workspaces-page__dialog-body">
-          <label>
+          <label class="is-name" :class="{ 'has-error': formErrors.workspaceName }">
             <span>工作区名称 <em>*</em></span>
-            <input v-model="createForm.workspaceName" type="text" maxlength="128" placeholder="请输入工作区名称" />
+            <input
+              v-model="createForm.workspaceName"
+              type="text"
+              maxlength="128"
+              placeholder="例如：ARGUS、PROJECT-X"
+              :aria-invalid="Boolean(formErrors.workspaceName)"
+              @input="formErrors.workspaceName = ''"
+            />
+            <small v-if="formErrors.workspaceName" class="platform-workspaces-page__field-error">{{ formErrors.workspaceName }}</small>
           </label>
-          <label>
-            <span>工作区编码</span>
-            <input v-model="createForm.workspaceCode" type="text" maxlength="64" placeholder="留空自动生成" />
+          <label class="is-description">
+            <span>工作区描述</span>
+            <textarea v-model="createForm.description" maxlength="500" rows="3" placeholder="简要描述该工作区的用途和所属项目" />
           </label>
-          <label>
-            <span>描述</span>
-            <textarea v-model="createForm.description" maxlength="500" rows="3" placeholder="请输入工作区描述" />
+          <label class="is-owner" :class="{ 'has-error': formErrors.ownerUserId }">
+            <span>负责人 <em>*</em></span>
+            <select
+              :value="createForm.ownerUserId ?? ''"
+              :disabled="ownerUsersLoading"
+              :aria-invalid="Boolean(formErrors.ownerUserId)"
+              @change="updateOwnerSelection"
+            >
+              <option value="">{{ ownerUsersLoading ? '正在加载负责人…' : '请选择负责人' }}</option>
+              <option
+                v-for="user in selectableOwnerUsers"
+                :key="user.id"
+                :value="user.id"
+              >
+                {{ user.displayName || user.username }}{{ user.email ? `（${user.email}）` : '' }}{{ Number(user.status) === 1 ? '' : '（已停用）' }}
+              </option>
+            </select>
+            <small v-if="formErrors.ownerUserId" class="platform-workspaces-page__field-error">{{ formErrors.ownerUserId }}</small>
           </label>
+          <div class="platform-workspaces-page__color-field">
+            <span>工作区颜色</span>
+            <div role="radiogroup" aria-label="工作区颜色">
+              <button
+                v-for="color in WORKSPACE_COLORS"
+                :key="color"
+                type="button"
+                role="radio"
+                :aria-checked="selectedWorkspaceColor === color"
+                :aria-label="`选择颜色 ${color}`"
+                :class="{ 'is-selected': selectedWorkspaceColor === color }"
+                :style="{ '--workspace-color': color }"
+                @click="selectedWorkspaceColor = color"
+              />
+            </div>
+          </div>
+          <div class="platform-workspaces-page__workspace-preview">
+            <span :style="{ background: `linear-gradient(135deg, ${selectedWorkspaceColor}, ${selectedWorkspaceColor}99)` }">
+              {{ createForm.workspaceName.trim().slice(0, 1).toUpperCase() || 'W' }}
+            </span>
+            <div>
+              <strong>{{ createForm.workspaceName.trim().toUpperCase() || '工作区名称' }}</strong>
+              <small>{{ (createForm.description || '').trim() || '工作区描述' }}</small>
+            </div>
+          </div>
         </div>
         <footer>
           <button type="button" class="platform-workspaces-page__dialog-cancel" @click="closeCreateDialog">取消</button>
-          <button type="button" class="platform-workspaces-page__dialog-submit" :disabled="createSubmitting" @click="createWorkspace">
-            <Check v-if="!createSubmitting" :size="13" />
-            <span>{{ createSubmitting ? '创建中…' : '创建工作区' }}</span>
+          <button
+            type="button"
+            class="platform-workspaces-page__dialog-submit"
+            :disabled="createSubmitting || ownerUsersLoading"
+            @click="createWorkspace"
+          >
+            <span>{{ createSubmitting ? (editingWorkspace ? '保存中…' : '创建中…') : editingWorkspace ? '保存修改' : '创建工作区' }}</span>
           </button>
         </footer>
       </section>
     </div>
 
-    <div v-if="detailWorkspace" class="platform-workspaces-page__dialog-mask" @click.self="detailWorkspace = null">
-      <section class="platform-workspaces-page__dialog is-detail" role="dialog" aria-modal="true" aria-labelledby="workspace-detail-title">
+    <div v-if="deleteWorkspaceTarget" class="platform-workspaces-page__dialog-mask" @click.self="!deletingWorkspace && (deleteWorkspaceTarget = null)">
+      <section class="platform-workspaces-page__delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-workspace-title">
         <header>
-          <div>
-            <h2 id="workspace-detail-title">工作区详情</h2>
-            <p>查看平台工作区的基础信息和当前状态</p>
-          </div>
-          <button type="button" aria-label="关闭" @click="detailWorkspace = null"><X :size="16" /></button>
+          <span><Trash2 :size="16" /></span>
+          <h2 id="delete-workspace-title">删除工作区</h2>
+          <button type="button" aria-label="关闭" :disabled="deletingWorkspace" @click="deleteWorkspaceTarget = null"><X :size="16" /></button>
         </header>
-        <div class="platform-workspaces-page__detail-body">
-          <div class="platform-workspaces-page__detail-identity">
-            <span :style="{ background: workspaceColor(detailWorkspace) }">{{ workspaceInitial(detailWorkspace) }}</span>
-            <div><strong>{{ detailWorkspace.workspaceName }}</strong><small>{{ detailWorkspace.workspaceCode }}</small></div>
-            <em :class="isActive(detailWorkspace) ? 'is-active' : 'is-disabled'">{{ isActive(detailWorkspace) ? '正常' : '已停用' }}</em>
+        <div class="platform-workspaces-page__delete-body">
+          <div class="platform-workspaces-page__delete-warning">
+            <strong>此操作不可撤销</strong>
+            <p>若工作区存在成员、用例、任务、报告、缺陷、环境或参数集等关联数据，系统将阻止删除。</p>
           </div>
-          <dl>
-            <div><dt>负责人</dt><dd>{{ detailWorkspace.ownerName || '未设置' }}</dd></div>
-            <div><dt>成员数量</dt><dd>{{ detailWorkspace.memberCount }} 人</dd></div>
-            <div><dt>创建时间</dt><dd>{{ formatCreatedAt(detailWorkspace.createdAt) }}</dd></div>
-            <div class="is-wide"><dt>工作区描述</dt><dd>{{ detailWorkspace.description || '暂无描述' }}</dd></div>
-          </dl>
+          <label>
+            <span>请输入工作区名称 <strong>{{ deleteWorkspaceTarget.workspaceName }}</strong> 以确认删除：</span>
+            <input v-model="deleteConfirmName" :placeholder="deleteWorkspaceTarget.workspaceName" :disabled="deletingWorkspace" autocomplete="off" />
+          </label>
         </div>
         <footer>
-          <button type="button" class="platform-workspaces-page__dialog-submit" @click="detailWorkspace = null">关闭</button>
+          <button type="button" class="platform-workspaces-page__dialog-cancel" :disabled="deletingWorkspace" @click="deleteWorkspaceTarget = null">取消</button>
+          <button type="button" class="platform-workspaces-page__delete-submit" :disabled="deletingWorkspace || deleteConfirmName !== deleteWorkspaceTarget.workspaceName" @click="confirmDeleteWorkspace">
+            {{ deletingWorkspace ? '删除中…' : '确认删除' }}
+          </button>
         </footer>
       </section>
     </div>
@@ -490,21 +653,95 @@ onMounted(() => {
   font-family: inherit;
 }
 
-.platform-workspaces-page__dialog.is-detail { width: 520px; }
-.platform-workspaces-page__detail-body { padding: 20px 24px; }
-.platform-workspaces-page__detail-identity { display:flex; align-items:center; gap:12px; padding:14px; border:1px solid #e5e6eb; border-radius:8px; background:#f7f8fa; }
-.platform-workspaces-page__detail-identity > span { display:grid; width:40px; height:40px; flex:0 0 40px; place-items:center; border-radius:8px; color:#fff; font-size:15px; font-weight:600; }
-.platform-workspaces-page__detail-identity > div { display:grid; min-width:0; flex:1; gap:2px; }
-.platform-workspaces-page__detail-identity strong { color:#1d2129; font-size:14px; font-weight:600; }
-.platform-workspaces-page__detail-identity small { color:#86909c; font-size:11px; }
-.platform-workspaces-page__detail-identity em { padding:2px 8px; border-radius:10px; font-size:10px; font-style:normal; font-weight:600; }
-.platform-workspaces-page__detail-identity em.is-active { background:#e8ffea; color:#00b42a; }
-.platform-workspaces-page__detail-identity em.is-disabled { background:#f2f3f5; color:#86909c; }
-.platform-workspaces-page__detail-body dl { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 24px; margin:20px 0 0; }
-.platform-workspaces-page__detail-body dl > div { display:grid; gap:5px; }
-.platform-workspaces-page__detail-body dl > div.is-wide { grid-column:1 / -1; }
+.platform-workspaces-page__dialog.is-create,
+.platform-workspaces-page__dialog.is-edit { width: 460px; border:0; border-radius: 18px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.2); }
+.platform-workspaces-page__dialog.is-create header,
+.platform-workspaces-page__dialog.is-edit header { min-height: 80px; align-items: center; padding: 19px 24px; border-bottom: 1px solid #e5e6eb; }
+.platform-workspaces-page__dialog.is-create h2,
+.platform-workspaces-page__dialog.is-edit h2 { font-size: 15px; line-height: 22px; }
+.platform-workspaces-page__dialog.is-create header p,
+.platform-workspaces-page__dialog.is-edit header p { margin-top: 2px; font-size: 11px; line-height: 16px; }
+.platform-workspaces-page__dialog-heading { display:flex; align-items:center; gap:10px; }
+.platform-workspaces-page__dialog-heading > span { display:grid; width:34px; height:34px; place-items:center; border-radius:10px; background:#fdf2f8; color:#db2777; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-body,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-body { gap:0; padding:24px 24px 6px; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-body > .is-name,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-body > .is-name { margin-bottom:16px; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-body > .is-description,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-body > .is-description { margin-bottom:16px; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-body > .is-owner,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-body > .is-owner { margin-bottom:16px; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-body input,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-body input { height:36px; padding:0 12px; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-body textarea,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-body textarea { min-height:80px; padding:8px 12px; resize:none; line-height:1.6; }
+.platform-workspaces-page__dialog-body select { width:100%; height:36px; padding:0 12px; border:1px solid #e5e6eb; border-radius:8px; outline:none; background:#fff; color:#1d2129; font-size:13px; }
+.platform-workspaces-page__dialog-body select:focus { border-color:#db2777; box-shadow:0 0 0 2px rgba(219,39,119,.1); }
+.platform-workspaces-page__dialog-body select:disabled { background:#f7f8fa; color:#86909c; cursor:wait; }
+.platform-workspaces-page__dialog-body input[aria-invalid="true"],
+.platform-workspaces-page__dialog-body select[aria-invalid="true"] { border-color:#f53f3f; }
+.platform-workspaces-page__field-error { color:#f53f3f; font-size:11px; line-height:16px; }
+.platform-workspaces-page__color-field { display:grid; gap:8px; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__color-field,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__color-field { margin-bottom:20px; }
+.platform-workspaces-page__color-field > span { color:#4e5969; font-size:12px; font-weight:500; line-height:18px; }
+.platform-workspaces-page__color-field > div { display:flex; gap:8px; }
+.platform-workspaces-page__color-field button { width:28px; height:28px; flex:0 0 28px; border:2.5px solid transparent; border-radius:8px; background:var(--workspace-color); cursor:pointer; }
+.platform-workspaces-page__color-field button.is-selected { border-color:#fff; outline:2.5px solid var(--workspace-color); outline-offset:1px; }
+.platform-workspaces-page__workspace-preview { display:flex; min-height:61px; align-items:center; gap:12px; margin-bottom:20px; padding:12px 16px; border-radius:10px; background:#f4f6fa; }
+.platform-workspaces-page__workspace-preview > span { display:grid; width:36px; height:36px; flex:0 0 36px; place-items:center; border-radius:9px; color:#fff; font-size:14px; font-weight:700; }
+.platform-workspaces-page__workspace-preview > div { display:grid; min-width:0; gap:3px; }
+.platform-workspaces-page__workspace-preview strong { overflow:hidden; color:#1d2129; font-size:13px; font-weight:600; line-height:16px; text-overflow:ellipsis; white-space:nowrap; }
+.platform-workspaces-page__workspace-preview small { overflow:hidden; color:#86909c; font-size:11px; line-height:14px; text-overflow:ellipsis; white-space:nowrap; }
+.platform-workspaces-page__detail-header { display:flex; min-height:79px; align-items:center !important; padding:16px 20px !important; border-bottom:1px solid #e5e6eb; }
+.platform-workspaces-page__detail-heading { display:flex; min-width:0; align-items:center; gap:12px; }
+.platform-workspaces-page__detail-heading > span { display:grid; width:38px; height:38px; flex:0 0 38px; place-items:center; border-radius:10px; color:#fff; font-size:14px; font-weight:700; }
+.platform-workspaces-page__detail-heading > div { display:grid; min-width:0; gap:3px; }
+.platform-workspaces-page__detail-heading strong { overflow:hidden; color:#1d2129; font-size:14px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.platform-workspaces-page__detail-heading small { overflow:hidden; color:#86909c; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.platform-workspaces-page__dialog-mask.is-detail { display:block; background:rgba(29, 33, 41, 0.35); }
+.platform-workspaces-page__dialog.is-detail { position:absolute; top:0; right:0; bottom:0; display:flex; width:400px; height:100dvh; max-height:100dvh; flex-direction:column; border:0; border-radius:0; box-shadow:-4px 0 24px rgba(0,0,0,.12); }
+.platform-workspaces-page__detail-body { flex:1; padding:10px 20px; }
+.platform-workspaces-page__detail-body dl { display:grid; grid-template-columns:minmax(0,1fr); gap:0; margin:0; }
+.platform-workspaces-page__detail-body dl > div { display:grid; min-height:46.5px; grid-template-columns:80px minmax(0,1fr); align-items:center; border-bottom:1px solid #e5e6eb; }
 .platform-workspaces-page__detail-body dt { color:#86909c; font-size:11px; }
 .platform-workspaces-page__detail-body dd { margin:0; color:#1d2129; font-size:13px; line-height:20px; }
+.platform-workspaces-page__detail-body dd em { padding:2px 8px; border-radius:10px; font-size:10px; font-style:normal; font-weight:600; }
+.platform-workspaces-page__detail-body dd em.is-active { background:#e8ffea; color:#00b42a; }
+.platform-workspaces-page__detail-body dd em.is-disabled { background:#f2f3f5; color:#86909c; }
+.platform-workspaces-page__workspace-id { display:grid; min-height:61px; gap:6px; margin-top:16px; padding:10px 14px; border-radius:8px; background:#f4f6fa; }
+.platform-workspaces-page__workspace-id strong { color:#86909c; font-size:11px; }
+.platform-workspaces-page__workspace-id span { color:#86909c; font-family:monospace; font-size:11px; }
+.platform-workspaces-page__dialog.is-detail footer { margin-top:auto; border-top:1px solid #e5e6eb; padding:14px 20px; }
+.platform-workspaces-page__dialog.is-detail footer button { min-width:68px; height:34px; border:1px solid #e5e6eb; background:#fff; color:#4e5969; }
+.platform-workspaces-page__delete-dialog { width:440px; overflow:hidden; border:1px solid #e5e6eb; border-radius:16px; background:#fff; box-shadow:0 20px 60px rgba(0,0,0,.16); }
+.platform-workspaces-page__delete-dialog header { display:flex; height:74px; align-items:center; gap:10px; padding:0 24px; border-bottom:1px solid #e5e6eb; }
+.platform-workspaces-page__delete-dialog header > span { display:grid; width:34px; height:34px; flex:0 0 34px; place-items:center; border-radius:10px; background:#fff1f0; color:#f53f3f; }
+.platform-workspaces-page__delete-dialog h2 { flex:1; margin:0; color:#1d2129; font-size:15px; font-weight:700; }
+.platform-workspaces-page__delete-dialog header button { display:grid; width:24px; height:24px; place-items:center; border:0; background:transparent; color:#86909c; cursor:pointer; }
+.platform-workspaces-page__delete-dialog header button:disabled { cursor:not-allowed; }
+.platform-workspaces-page__delete-body { display:grid; gap:14px; padding:20px 24px 0; }
+.platform-workspaces-page__delete-warning { padding:12px 14px; border:1px solid #ffccc7; border-radius:8px; background:#fff1f0; color:#f53f3f; }
+.platform-workspaces-page__delete-warning strong { font-size:12px; font-weight:600; }
+.platform-workspaces-page__delete-warning p { margin:4px 0 0; font-size:11px; line-height:1.6; }
+.platform-workspaces-page__delete-body label { display:grid; gap:8px; color:#4e5969; font-size:11px; }
+.platform-workspaces-page__delete-body label strong { color:#f53f3f; font-size:12px; }
+.platform-workspaces-page__delete-body input { width:100%; height:36px; padding:0 12px; border:1px solid #e5e6eb; border-radius:8px; outline:none; color:#1d2129; font-size:13px; }
+.platform-workspaces-page__delete-body input:focus { border-color:#db2777; }
+.platform-workspaces-page__delete-body input::placeholder { color:#86909c; }
+.platform-workspaces-page__delete-dialog footer { display:flex; gap:10px; padding:18px 24px 22px; }
+.platform-workspaces-page__delete-dialog footer button { height:38px; border-radius:9px; font-size:13px; cursor:pointer; }
+.platform-workspaces-page__delete-dialog .platform-workspaces-page__dialog-cancel { width:128px; flex:0 0 128px; }
+.platform-workspaces-page__delete-submit { flex:1; border:0; background:#f53f3f; color:#fff; font-weight:600; }
+.platform-workspaces-page__delete-submit:disabled { background:#c9cdd4; cursor:not-allowed; }
+.platform-workspaces-page__delete-dialog footer button:disabled { cursor:not-allowed; }
+
+@media (max-width: 520px) {
+  .platform-workspaces-page__dialog.is-create,
+  .platform-workspaces-page__dialog.is-detail,
+  .platform-workspaces-page__delete-dialog { width:min(100%, 460px); }
+  .platform-workspaces-page__dialog.is-detail { width:min(100%, 400px); height:100dvh; max-height:100dvh; }
+}
 
 .platform-workspaces-page__sidebar {
   display: flex;
@@ -930,13 +1167,29 @@ button.platform-workspaces-page__nav-item.is-active {
   opacity: 0.65;
 }
 
-.platform-workspaces-page__row-button.is-view {
+.platform-workspaces-page__row-button.is-edit,
+.platform-workspaces-page__row-button.is-delete {
+  box-sizing: border-box;
+  width: 37px;
+  min-width: 37px;
+  flex: 0 0 37px;
+  padding: 0;
+}
+
+.platform-workspaces-page__row-button.is-edit svg,
+.platform-workspaces-page__row-button.is-delete svg {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+}
+
+.platform-workspaces-page__row-button.is-edit {
   border-color: rgba(22, 93, 255, 0.25);
   background: rgba(22, 93, 255, 0.08);
   color: #165dff;
 }
 
-.platform-workspaces-page__row-button.is-view:hover:not(:disabled) {
+.platform-workspaces-page__row-button.is-edit:hover:not(:disabled) {
   background: rgba(22, 93, 255, 0.145);
 }
 
@@ -1172,6 +1425,15 @@ button.platform-workspaces-page__nav-item.is-active {
   font-size: 12px;
   line-height: 18px;
 }
+
+.platform-workspaces-page__dialog.is-create footer,
+.platform-workspaces-page__dialog.is-edit footer { justify-content:flex-start; gap:10px; padding:0 24px 22px; }
+.platform-workspaces-page__dialog.is-create footer button,
+.platform-workspaces-page__dialog.is-edit footer button { height:38px; border-radius:9px; font-size:13px; line-height:20px; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-cancel,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-cancel { flex:1; }
+.platform-workspaces-page__dialog.is-create .platform-workspaces-page__dialog-submit,
+.platform-workspaces-page__dialog.is-edit .platform-workspaces-page__dialog-submit { flex:2; font-weight:600; }
 
 .platform-workspaces-page__dialog-cancel {
   border: 1px solid #e5e6eb;

@@ -10,6 +10,8 @@ import {
   type ReportShareSummary,
   type ReportSummaryItem,
 } from '@/entities/report'
+import { apiAutomationApi, type ApiAutomationReportDetail, type ApiAutomationReportItem, type ApiRunStepResult } from '@/entities/api-automation'
+import { webUiAutomationApi, type WebUiRunBatchSummary, type WebUiRunDetail, type WebUiRunSummary, type WebUiRunStepResult } from '@/entities/web-ui-automation'
 import { hasWorkspacePermission, useSession } from '@/entities/session'
 import { useWorkspaceContext } from '@/entities/workspace'
 import { getRequestErrorMessage } from '@/shared/api/error'
@@ -59,6 +61,55 @@ interface ReportRow extends Record<string, unknown> {
   workspaceName: string
   logSource: string
   failureSummary: string
+  source: 'generic' | 'api' | 'web' | 'web-batch'
+  reportKey: string | null
+  webRunId: number | null
+  webBatchId: number | null
+  createdAt: string | null
+}
+
+interface ReportStepView {
+  id: string
+  seq: number
+  name: string
+  status: 'pass' | 'fail' | 'skip' | 'error'
+  duration: string
+  method?: string | null
+  url?: string | null
+  requestBody?: string | null
+  responseStatus?: number | null
+  responseBody?: string | null
+  responseDuration?: string | null
+  assertions: Array<{ label: string; actual: string; success: boolean; message?: string | null }>
+  errorMessage?: string | null
+  locator?: string | null
+  inputValue?: string | null
+  screenshotUrl?: string | null
+}
+
+interface ReportDetailView {
+  id: string
+  taskId: number | null
+  taskName: string
+  reportName: string
+  result: string
+  logSource: string
+  workspaceCode: string
+  workspaceName: string
+  failureSummary: string | null
+  logText: string | null
+  attachments: ReportDetail['attachments']
+  createdAt: string | null
+  updatedAt: string | null
+  passRate: number | null
+  totalSteps: number | null
+  successSteps: number | null
+  failedSteps: number | null
+  skippedSteps: number | null
+  duration: string
+  environment: string
+  executor: string
+  steps: ReportStepView[]
 }
 
 interface ReportShareRow extends ReportShareSummary, Record<string, unknown> {}
@@ -78,18 +129,26 @@ const canShareReports = computed(() => hasWorkspacePermission(currentUser.value,
 const tableFrameRef = ref<HTMLElement | null>(null)
 const tableFrameWidth = ref(0)
 const reportItems = ref<ReportSummaryItem[]>([])
+const apiReportItems = ref<ApiAutomationReportItem[]>([])
+const webReportItems = ref<WebUiRunSummary[]>([])
+const webBatchReportItems = ref<WebUiRunBatchSummary[]>([])
 const reportKeyword = ref('')
 const reportTypeFilter = ref('all')
 const reportStatusFilter = ref('all')
 const reportLoading = ref(false)
 const reportError = ref('')
-const reportTotal = ref(0)
 const reportPageNo = ref(1)
 const reportPageSize = ref(10)
-const reportTotalPages = ref(0)
+const reportTotalPages = computed(() => Math.ceil(reportRows.value.length / Math.max(reportPageSize.value, 1)))
 const reportStats = ref({ total: 0, success: 0, failed: 0 })
 const selectedReportRow = ref<ReportRow | null>(null)
 const selectedReportDetail = ref<ReportDetail | null>(null)
+const selectedApiReportDetail = ref<ApiAutomationReportDetail | null>(null)
+const selectedWebReportDetail = ref<WebUiRunDetail | null>(null)
+const selectedWebBatchDetail = ref<{ summary: WebUiRunBatchSummary; runs: WebUiRunSummary[] } | null>(null)
+const selectedWebBatchSteps = ref<ReportStepView[]>([])
+const selectedStepId = ref('')
+const failedStepsOnly = ref(false)
 const detailLoading = ref(false)
 const detailError = ref('')
 const reportShares = ref<ReportShareSummary[]>([])
@@ -103,7 +162,6 @@ const sharingReportId = ref<number | null>(null)
 let reportRequestSeq = 0
 let detailRequestSeq = 0
 let shareRequestSeq = 0
-let reportFilterReloadTimer: ReturnType<typeof window.setTimeout> | null = null
 let tableFrameObserver: ResizeObserver | null = null
 
 function formatLogSource(value: string) {
@@ -138,10 +196,154 @@ function mapReportItem(item: ReportSummaryItem): ReportRow {
     workspaceName: item.workspaceName || '—',
     logSource: item.logSource || 'MANUAL',
     failureSummary: item.failureSummary || '—',
+    source: 'generic',
+    reportKey: null,
+    webRunId: null,
+    webBatchId: null,
+    createdAt: null,
   }
 }
 
-const reportRows = computed(() => reportItems.value.map(mapReportItem))
+function formatDurationMs(value?: number | null) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—'
+  const ms = Math.max(0, Number(value))
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const seconds = ms / 1000
+  if (seconds < 60) return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}s`
+  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
+}
+
+function reportTypeLabel(objectType?: string | null) {
+  return ({ API_CASE: '接口用例', SCENARIO: '接口场景', SUITE: '接口套件' } as Record<string, string>)[String(objectType || '').toUpperCase()] || '接口报告'
+}
+
+async function loadEveryReportPage<T>(loadPage: (pageNo: number, pageSize: number) => Promise<{ items: T[]; totalPages?: number }>) {
+  const first = await loadPage(1, 100)
+  const totalPages = Math.max(1, Number(first.totalPages || 1))
+  if (totalPages === 1) return first.items || []
+  const remaining = await Promise.all(Array.from({ length: totalPages - 1 }, (_, index) => loadPage(index + 2, 100)))
+  return [ ...(first.items || []), ...remaining.flatMap(page => page.items || []) ]
+}
+
+function mapApiReportItem(item: ApiAutomationReportItem): ReportRow {
+  const total = Number(item.totalCount || 0)
+  const success = Number(item.successCount || 0)
+  const failed = Number(item.failedCount || 0)
+  const skipped = Number(item.skippedCount || 0)
+  const result = String(item.result || '').toUpperCase()
+  return {
+    id: item.reportKey,
+    reportId: item.reportId || 0,
+    taskId: item.reportId || 0,
+    name: item.reportName || item.objectName || '-',
+    trigger: item.triggerSource || item.runOn || '接口自动化',
+    type: reportTypeLabel(item.objectType),
+    typeTone: item.objectType === 'SUITE' ? 'purple' : 'blue',
+    status: result.includes('SUCCESS') || result.includes('PASS') ? 'success' : result.includes('FAIL') ? 'failed' : 'interrupted',
+    passRate: total > 0 ? Math.round(success * 1000 / total) / 10 : null,
+    steps: total > 0 ? { success, failed, skipped } : null,
+    duration: formatDurationMs(item.durationMs),
+    executor: item.operatorName || '—',
+    env: item.environmentName || '—',
+    workspaceCode: item.workspaceCode || 'ALL',
+    workspaceName: item.workspaceName || item.workspaceCode || '—',
+    logSource: 'API',
+    failureSummary: item.failureSummary || '—',
+    source: 'api',
+    reportKey: item.reportKey,
+    webRunId: null,
+    webBatchId: null,
+    createdAt: item.createdAt || null,
+  }
+}
+
+function mapWebReportItem(item: WebUiRunSummary): ReportRow {
+  const total = Number(item.totalSteps || 0)
+  const success = Number(item.passedSteps || 0)
+  const failed = Number(item.failedSteps || 0)
+  const skipped = Number(item.skippedSteps || 0)
+  const result = String(item.status || '').toUpperCase()
+  return {
+    id: `WEB_UI_RUN:${item.id}`,
+    reportId: 0,
+    taskId: 0,
+    name: item.caseName || `Web UI 运行 #${item.id}`,
+    trigger: item.executionLocation || 'Web UI',
+    type: item.batchId ? 'Web UI 套件' : 'Web UI 用例',
+    typeTone: item.batchId ? 'purple' : 'cyan',
+    status: result.includes('PASS') || result.includes('SUCCESS') ? 'success' : result.includes('FAIL') ? 'failed' : 'interrupted',
+    passRate: total > 0 ? Math.round(success * 1000 / total) / 10 : null,
+    steps: total > 0 ? { success, failed, skipped } : null,
+    duration: formatDurationMs(item.durationMs),
+    executor: item.operatorName || '—',
+    env: item.environmentName || '—',
+    workspaceCode: item.workspaceCode || 'ALL',
+    workspaceName: item.workspaceName || item.workspaceCode || '—',
+    logSource: 'WEB',
+    failureSummary: item.failureSummary || '—',
+    source: 'web',
+    reportKey: null,
+    webRunId: item.id,
+    webBatchId: null,
+    createdAt: item.createdAt || item.startedAt || null,
+  }
+}
+
+function mapWebBatchReportItem(item: WebUiRunBatchSummary): ReportRow {
+  const total = Number(item.totalCases || 0)
+  const success = Number(item.successCases || 0)
+  const failed = Number(item.failedCases || 0)
+  return {
+    id: `WEB_UI_BATCH:${item.id}`,
+    reportId: 0,
+    taskId: 0,
+    name: item.batchName || `Web UI 套件 #${item.id}`,
+    trigger: item.source || 'Web UI',
+    type: 'Web UI 套件',
+    typeTone: 'purple',
+    status: String(item.status).toUpperCase().includes('SUCCESS') ? 'success' : String(item.status).toUpperCase().includes('FAIL') ? 'failed' : 'interrupted',
+    passRate: total > 0 ? Math.round(success * 1000 / total) / 10 : null,
+    steps: total > 0 ? { success, failed } : null,
+    duration: formatDurationMs(item.durationMs),
+    executor: item.operatorName || '—',
+    env: item.environmentName || '—',
+    workspaceCode: item.workspaceCode || 'ALL',
+    workspaceName: item.workspaceName || item.workspaceCode || '—',
+    logSource: 'WEB',
+    failureSummary: item.failureSummary || '—',
+    source: 'web-batch',
+    reportKey: null,
+    webRunId: null,
+    webBatchId: item.id,
+    createdAt: item.createdAt || item.startedAt || null,
+  }
+}
+
+const allReportRows = computed(() => [
+  ...reportItems.value
+    .filter(item => !apiReportItems.value.some(api => api.reportId === item.id))
+    .map(mapReportItem),
+  ...apiReportItems.value.map(mapApiReportItem),
+  ...webReportItems.value.map(mapWebReportItem),
+  ...webBatchReportItems.value.map(mapWebBatchReportItem),
+].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))))
+const filteredReportRows = computed(() => allReportRows.value.filter(row => {
+  const keyword = reportKeyword.value.trim().toLowerCase()
+  const matchesKeyword = !keyword || `${row.name} ${row.id} ${row.workspaceName}`.toLowerCase().includes(keyword)
+  const matchesType = reportTypeFilter.value === 'all'
+    || (reportTypeFilter.value === 'api-scene' && row.type === '接口场景')
+    || (reportTypeFilter.value === 'api-suite' && row.type === '接口套件')
+    || (reportTypeFilter.value === 'api-case' && row.type === '接口用例')
+    || (reportTypeFilter.value === 'webui-case' && row.type === 'Web UI 用例')
+    || (reportTypeFilter.value === 'webui-suite' && row.type === 'Web UI 套件')
+  const matchesStatus = reportStatusFilter.value === 'all' || row.status === reportStatusFilter.value
+  return matchesKeyword && matchesType && matchesStatus
+}))
+const reportRows = computed(() => filteredReportRows.value)
+const pagedReportRows = computed(() => {
+  const start = (reportPageNo.value - 1) * reportPageSize.value
+  return reportRows.value.slice(start, start + reportPageSize.value)
+})
 const summaryCards = computed<SummaryCard[]>(() => {
   return [
     { label: '全部报告', value: String(reportStats.value.total), tone: 'default' },
@@ -177,8 +379,6 @@ const reportColumnSettings = useTableColumnSettings({
   storageKey: computed(() => `app-figma-table:reports:${currentUser.value?.id || 'anonymous'}:ALL`),
   immediate: true,
 })
-
-const pagedReportRows = computed(() => reportRows.value)
 
 const reportOperationActionCount = 4
 const reportOperationColumnWidth = getAppFigmaActionColumnWidth(reportOperationActionCount)
@@ -262,13 +462,181 @@ function reportStatusFromResult(result?: string | null): ReportStatus {
 }
 
 const selectedReportStatus = computed(() => reportStatusFromResult(
-  selectedReportDetail.value?.result || selectedReportRow.value?.status,
+  selectedReportDetail.value?.result || selectedApiReportDetail.value?.result || selectedWebReportDetail.value?.summary.status || selectedReportRow.value?.status,
 ))
 const selectedReportName = computed(() => (
-  selectedReportDetail.value?.reportName || selectedReportRow.value?.name || '报告详情'
+  selectedReportDetail.value?.reportName || selectedApiReportDetail.value?.reportName || selectedWebReportDetail.value?.summary.caseName || selectedWebBatchDetail.value?.summary.batchName || selectedReportRow.value?.name || '报告详情'
 ))
-const selectedReportLog = computed(() => selectedReportDetail.value?.logText?.trim() || '')
-const selectedReportAttachments = computed(() => selectedReportDetail.value?.attachments || [])
+const selectedDetailView = computed<ReportDetailView | null>(() => {
+  const row = selectedReportRow.value
+  const api = selectedApiReportDetail.value
+  const web = selectedWebReportDetail.value
+  const batch = selectedWebBatchDetail.value
+  const generic = selectedReportDetail.value
+  if (api) {
+    const total = Number(api.totalCount || api.stepResults.length || 0)
+    const success = Number(api.successCount || api.stepResults.filter(step => step.success).length)
+    const failed = Number(api.failedCount || api.stepResults.filter(step => !step.success).length)
+    const skipped = Number(api.skippedCount || 0)
+    return {
+      id: api.reportKey,
+      taskId: api.reportId,
+      taskName: api.objectName || api.reportName,
+      reportName: api.reportName,
+      result: api.result,
+      logSource: 'API',
+      workspaceCode: api.workspaceCode,
+      workspaceName: api.workspaceName || api.workspaceCode,
+      failureSummary: api.failureSummary,
+      logText: api.contextSnapshotJson,
+      attachments: [],
+      createdAt: api.createdAt,
+      updatedAt: api.createdAt,
+      passRate: total > 0 ? Math.round(success * 1000 / total) / 10 : null,
+      totalSteps: total,
+      successSteps: success,
+      failedSteps: failed,
+      skippedSteps: skipped,
+      duration: formatDurationMs(api.durationMs),
+      environment: api.environmentName || '—',
+      executor: api.operatorName || '—',
+      steps: api.stepResults.map(mapApiStep),
+    }
+  }
+  if (web) {
+    const summary = web.summary
+    const total = Number(summary.totalSteps || web.steps.length || 0)
+    const success = Number(summary.passedSteps || web.steps.filter(step => step.status === 'PASSED').length)
+    const failed = Number(summary.failedSteps || web.steps.filter(step => step.status === 'FAILED').length)
+    const skipped = Number(summary.skippedSteps || web.steps.filter(step => step.status === 'SKIPPED').length)
+    return {
+      id: `WEB_UI_RUN:${summary.id}`,
+      taskId: null,
+      taskName: summary.caseName,
+      reportName: summary.caseName,
+      result: summary.status,
+      logSource: 'WEB',
+      workspaceCode: summary.workspaceCode,
+      workspaceName: summary.workspaceName || summary.workspaceCode,
+      failureSummary: summary.failureSummary,
+      logText: web.context ? JSON.stringify(web.context, null, 2) : null,
+      attachments: [],
+      createdAt: summary.createdAt || summary.startedAt,
+      updatedAt: summary.finishedAt || summary.createdAt,
+      passRate: total > 0 ? Math.round(success * 1000 / total) / 10 : null,
+      totalSteps: total,
+      successSteps: success,
+      failedSteps: failed,
+      skippedSteps: skipped,
+      duration: formatDurationMs(summary.durationMs),
+      environment: summary.environmentName || '—',
+      executor: summary.operatorName || '—',
+      steps: web.steps.map(mapWebStep),
+    }
+  }
+  if (batch) {
+    const summary = batch.summary
+    const total = Number(summary.totalCases || batch.runs.length || 0)
+    const success = Number(summary.successCases || batch.runs.filter(run => run.status === 'SUCCESS').length)
+    const failed = Number(summary.failedCases || batch.runs.filter(run => run.status === 'FAILED').length)
+    return {
+      id: `WEB_UI_BATCH:${summary.id}`,
+      taskId: null,
+      taskName: summary.batchName,
+      reportName: summary.batchName,
+      result: summary.status,
+      logSource: 'WEB',
+      workspaceCode: summary.workspaceCode,
+      workspaceName: summary.workspaceName || summary.workspaceCode,
+      failureSummary: summary.failureSummary,
+      logText: null,
+      attachments: [],
+      createdAt: summary.createdAt || summary.startedAt,
+      updatedAt: summary.finishedAt || summary.createdAt,
+      passRate: total > 0 ? Math.round(success * 1000 / total) / 10 : null,
+      totalSteps: total,
+      successSteps: success,
+      failedSteps: failed,
+      skippedSteps: 0,
+      duration: formatDurationMs(summary.durationMs),
+      environment: summary.environmentName || '—',
+      executor: summary.operatorName || '—',
+      steps: selectedWebBatchSteps.value,
+    }
+  }
+  if (!generic || !row) return null
+  return {
+    id: String(generic.id),
+    taskId: generic.taskId,
+    taskName: generic.taskName,
+    reportName: generic.reportName,
+    result: generic.result,
+    logSource: generic.logSource,
+    workspaceCode: generic.workspaceCode,
+    workspaceName: generic.workspaceName,
+    failureSummary: generic.failureSummary,
+    logText: generic.logText,
+    attachments: generic.attachments,
+    createdAt: generic.createdAt,
+    updatedAt: generic.updatedAt,
+    passRate: null,
+    totalSteps: null,
+    successSteps: null,
+    failedSteps: null,
+    skippedSteps: null,
+    duration: '—',
+    environment: '—',
+    executor: '—',
+    steps: [],
+  }
+})
+const visibleDetailSteps = computed(() => {
+  const steps = selectedDetailView.value?.steps || []
+  return failedStepsOnly.value ? steps.filter(step => step.status === 'fail' || step.status === 'error') : steps
+})
+const selectedDetailStep = computed(() => visibleDetailSteps.value.find(step => step.id === selectedStepId.value) || null)
+watch(selectedDetailView, detail => {
+  selectedStepId.value = detail?.steps[0]?.id || ''
+  failedStepsOnly.value = false
+})
+
+function mapApiStep(step: ApiRunStepResult): ReportStepView {
+  return {
+    id: String(step.id ?? step.stepOrder),
+    seq: Number(step.stepOrder || 0),
+    name: step.stepName || `步骤 ${step.stepOrder}`,
+    status: step.success ? 'pass' : 'fail',
+    duration: formatDurationMs(step.durationMs),
+    method: step.request?.method,
+    url: step.request?.url,
+    requestBody: step.request?.body,
+    responseStatus: step.response?.statusCode,
+    responseBody: step.response?.body,
+    responseDuration: formatDurationMs(step.durationMs),
+    assertions: (step.assertionResults || []).map(assertion => ({
+      label: assertion.subject || assertion.name || assertion.type || '断言',
+      actual: assertion.actualValue || assertion.expectedValue || '—',
+      success: Boolean(assertion.success),
+      message: assertion.message,
+    })),
+    errorMessage: step.errorMessage,
+  }
+}
+
+function mapWebStep(step: WebUiRunStepResult): ReportStepView {
+  return {
+    id: String(step.id),
+    seq: Number(step.sortOrder || 0),
+    name: step.stepName || `步骤 ${step.sortOrder}`,
+    status: step.status === 'PASSED' ? 'pass' : step.status === 'SKIPPED' ? 'skip' : step.status === 'FAILED' ? 'fail' : 'error',
+    duration: formatDurationMs(step.durationMs),
+    locator: step.locatorType && step.locatorValue ? `${step.locatorType}: ${step.locatorValue}` : null,
+    inputValue: step.inputValueSnapshot,
+    screenshotUrl: step.screenshotUrl,
+    assertions: [],
+    errorMessage: step.errorMessage,
+  }
+}
 const pagedReportShares = computed(() => reportShares.value as ReportShareRow[])
 const shareOperationColumnWidth = getAppFigmaActionColumnWidth(2)
 
@@ -307,10 +675,33 @@ async function loadSelectedReport() {
   detailLoading.value = true
   detailError.value = ''
   selectedReportDetail.value = null
+  selectedApiReportDetail.value = null
+  selectedWebReportDetail.value = null
+  selectedWebBatchDetail.value = null
+  selectedWebBatchSteps.value = []
   try {
-    const detail = await reportApi.getReport(row.workspaceCode || selectedWorkspaceCode.value || 'ALL', row.reportId)
+    const workspaceCode = row.workspaceCode || selectedWorkspaceCode.value || 'ALL'
+    if (row.source === 'api' && row.reportKey) {
+      selectedApiReportDetail.value = await apiAutomationApi.getReportDetail(workspaceCode, row.reportKey)
+    } else if (row.source === 'web' && row.webRunId) {
+      selectedWebReportDetail.value = await webUiAutomationApi.getRunDetail(workspaceCode, row.webRunId)
+    } else if (row.source === 'web-batch' && row.webBatchId) {
+      selectedWebBatchDetail.value = await webUiAutomationApi.getBatchDetail(workspaceCode, row.webBatchId)
+      const caseDetails = await Promise.allSettled(selectedWebBatchDetail.value.runs.map(run => webUiAutomationApi.getRunDetail(workspaceCode, run.id)))
+      selectedWebBatchSteps.value = caseDetails.flatMap((result, index) => {
+        if (result.status !== 'fulfilled') return []
+        const detail = result.value
+        return detail.steps.map((step, stepIndex) => ({
+          ...mapWebStep(step),
+          id: `${detail.summary.id}:${step.id}`,
+          seq: index * 1000 + stepIndex + 1,
+          name: `${detail.summary.caseName} / ${step.stepName}`,
+        }))
+      })
+    } else {
+      selectedReportDetail.value = await reportApi.getReport(workspaceCode, row.reportId)
+    }
     if (requestSeq !== detailRequestSeq) return
-    selectedReportDetail.value = detail
   } catch (error) {
     if (requestSeq !== detailRequestSeq) return
     detailError.value = getRequestErrorMessage(error)
@@ -321,8 +712,16 @@ async function loadSelectedReport() {
 
 function selectReport(item?: unknown) {
   if (!item || typeof item !== 'object' || !('reportId' in item)) return
-  selectedReportRow.value = item as ReportRow
+  const row = item as ReportRow
+  selectedReportRow.value = row
   pageMode.value = 'detail'
+  void router.replace({
+    query: {
+      ...route.query,
+      reportId: row.id,
+      workspace: row.workspaceCode || selectedWorkspaceCode.value || 'ALL',
+    },
+  })
   void loadSelectedReport()
 }
 
@@ -331,9 +730,13 @@ function backToList() {
   pageMode.value = 'list'
   selectedReportRow.value = null
   selectedReportDetail.value = null
+  selectedApiReportDetail.value = null
+  selectedWebReportDetail.value = null
+  selectedWebBatchDetail.value = null
+  selectedWebBatchSteps.value = []
   detailLoading.value = false
   detailError.value = ''
-  void Promise.all([loadReports(), loadReportStats()])
+  void loadReports()
   if (route.query.reportId) {
     const nextQuery = { ...route.query }
     delete nextQuery.reportId
@@ -381,11 +784,20 @@ async function createReportShare(item?: unknown, openPage = true) {
 
 function openSharedReport(item?: unknown) {
   if (!canShareReports.value) return
+  const target = resolveShareTarget(item)
+  if (target?.source !== 'generic') {
+    showUnsupportedCapability('接口自动化和 Web UI 报告的专用分享入口尚未接入统一报告中心')
+    return
+  }
   void createReportShare(item, true)
 }
 
 function copySharedReportLink(item: ReportRow) {
   if (!canShareReports.value) return
+  if (item.source !== 'generic') {
+    showUnsupportedCapability('接口自动化和 Web UI 报告的专用分享入口尚未接入统一报告中心')
+    return
+  }
   void createReportShare(item, false)
 }
 
@@ -459,17 +871,35 @@ async function revokeReportShare(item: ReportShareSummary) {
 
 async function openReportFromRoute() {
   const rawReportId = Array.isArray(route.query.reportId) ? route.query.reportId[0] : route.query.reportId
-  const reportId = Number(rawReportId)
-  if (!Number.isInteger(reportId) || reportId <= 0) return
+  if (typeof rawReportId !== 'string' || !rawReportId.trim()) return
   const workspaceCode = typeof route.query.workspace === 'string'
     ? route.query.workspace
     : selectedWorkspaceCode.value || 'ALL'
+  const reportId = Number(rawReportId)
+  if (!Number.isInteger(reportId) || reportId <= 0) {
+    const requestSeq = ++detailRequestSeq
+    pageMode.value = 'list'
+    detailLoading.value = false
+    await loadReports()
+    if (requestSeq !== detailRequestSeq) return
+    const row = allReportRows.value.find(item => item.id === rawReportId || item.reportKey === rawReportId)
+    if (!row) {
+      pageMode.value = 'detail'
+      selectedReportRow.value = null
+      detailError.value = '未找到该报告，可能已被删除或当前工作空间无权访问。'
+      return
+    }
+    selectedReportRow.value = row
+    pageMode.value = 'detail'
+    await loadSelectedReport()
+    return
+  }
   const requestSeq = ++detailRequestSeq
   detailLoading.value = true
   detailError.value = ''
   pageMode.value = 'detail'
   try {
-    const detail = await reportApi.getReport(workspaceCode, reportId)
+  const detail = await reportApi.getReport(workspaceCode, reportId)
     if (requestSeq !== detailRequestSeq) return
     selectedReportDetail.value = detail
     selectedReportRow.value = mapReportItem(detail)
@@ -483,20 +913,22 @@ async function openReportFromRoute() {
 
 function hasReportIdInRoute() {
   const rawReportId = Array.isArray(route.query.reportId) ? route.query.reportId[0] : route.query.reportId
-  const reportId = Number(rawReportId)
-  return Number.isInteger(reportId) && reportId > 0
+  return typeof rawReportId === 'string' && rawReportId.trim().length > 0
 }
 
 function handleReportTypeFilterChange(event: Event) {
-  if ((event.target as HTMLSelectElement).value === 'all') return
-  window.setTimeout(() => {
+  const value = (event.target as HTMLSelectElement).value
+  if (value !== 'all' && !['api-scene', 'api-suite', 'api-case', 'webui-case', 'webui-suite'].includes(value)) {
     reportTypeFilter.value = 'all'
-  }, 0)
-  showUnsupportedCapability('通用报告接口尚未提供报告对象类型字段，暂不能按类型筛选')
+  }
 }
 
 async function deleteReport(item: ReportRow) {
   if (!canDeleteReports.value) return
+  if (item.source !== 'generic') {
+    showUnsupportedCapability('该报告由自动化模块管理，请在对应模块中归档或删除')
+    return
+  }
   try {
     await confirmDelete({
       title: '删除报告',
@@ -512,7 +944,7 @@ async function deleteReport(item: ReportRow) {
       },
     })
     ElMessage.success('报告已删除')
-    await Promise.all([loadReports(), loadReportStats()])
+    await loadReports()
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') throw error
   }
@@ -523,58 +955,38 @@ async function loadReports() {
   reportLoading.value = true
   reportError.value = ''
   try {
-    const statusMap: Record<string, string> = {
-      success: 'SUCCESS',
-      failed: 'FAILED',
-      interrupted: 'OTHER',
-    }
-    const page = await reportApi.getReports(selectedWorkspaceCode.value || 'ALL', {
-      keyword: reportKeyword.value.trim(),
-      result: statusMap[reportStatusFilter.value],
-      pageNo: reportPageNo.value,
-      pageSize: reportPageSize.value,
-    })
+    const workspaceCode = selectedWorkspaceCode.value || 'ALL'
+    const results = await Promise.allSettled([
+      loadEveryReportPage(pageNo => reportApi.getReports(workspaceCode, { pageNo, pageSize: 100 })),
+      loadEveryReportPage(pageNo => apiAutomationApi.getReports(workspaceCode, { pageNo, pageSize: 100 })),
+      loadEveryReportPage(pageNo => webUiAutomationApi.getRuns(workspaceCode, { pageNo, pageSize: 100 })),
+      loadEveryReportPage(pageNo => webUiAutomationApi.getBatches(workspaceCode, { pageNo, pageSize: 100 })),
+    ])
     if (requestSeq !== reportRequestSeq) return
-    reportItems.value = page.items || []
-    reportTotal.value = page.total
-    reportPageNo.value = page.pageNo || reportPageNo.value
-    reportTotalPages.value = Number(page.totalPages || Math.ceil(page.total / Math.max(reportPageSize.value, 1)))
+    if (results.every(result => result.status === 'rejected')) {
+      throw (results[0] as PromiseRejectedResult).reason
+    }
+    const [generic, api, web, batches] = results
+    reportItems.value = generic.status === 'fulfilled' ? generic.value : []
+    apiReportItems.value = api.status === 'fulfilled' ? api.value : []
+    webReportItems.value = web.status === 'fulfilled' ? web.value : []
+    webBatchReportItems.value = batches.status === 'fulfilled' ? batches.value : []
+    reportPageNo.value = Math.min(reportPageNo.value, Math.max(1, reportTotalPages.value))
+    reportStats.value = {
+      total: allReportRows.value.length,
+      success: allReportRows.value.filter(row => row.status === 'success').length,
+      failed: allReportRows.value.filter(row => row.status === 'failed').length,
+    }
   } catch (error) {
     if (requestSeq !== reportRequestSeq) return
     reportItems.value = []
-    reportTotal.value = 0
-    reportTotalPages.value = 0
+    apiReportItems.value = []
+    webReportItems.value = []
+    webBatchReportItems.value = []
     reportError.value = getRequestErrorMessage(error)
   } finally {
     if (requestSeq === reportRequestSeq) reportLoading.value = false
   }
-}
-
-async function loadReportStats() {
-  try {
-    const workspaceCode = selectedWorkspaceCode.value || 'ALL'
-    reportStats.value = await reportApi.getReportStats(workspaceCode)
-  } catch {
-    reportStats.value = { total: 0, success: 0, failed: 0 }
-  }
-}
-
-function reloadReportsFromFirstPage() {
-  if (reportPageNo.value === 1) {
-    void loadReports()
-    return
-  }
-  reportPageNo.value = 1
-}
-
-function scheduleReportsReload() {
-  if (reportFilterReloadTimer) {
-    window.clearTimeout(reportFilterReloadTimer)
-  }
-  reportFilterReloadTimer = window.setTimeout(() => {
-    reportFilterReloadTimer = null
-    reloadReportsFromFirstPage()
-  }, 300)
 }
 
 function setReportPage(value: number) {
@@ -620,18 +1032,12 @@ function openReportColumnSettings() {
   reportColumnSettings.open()
 }
 
-watch([reportKeyword, reportStatusFilter], scheduleReportsReload)
+watch([reportKeyword, reportStatusFilter, reportTypeFilter, reportPageSize, reportTotalPages], () => {
+  if (reportPageNo.value !== 1) reportPageNo.value = 1
+})
 
 watch(reportPageNo, (value, oldValue) => {
   if (value !== oldValue) void loadReports()
-})
-
-watch(reportPageSize, (value, oldValue) => {
-  if (value !== oldValue) reloadReportsFromFirstPage()
-})
-
-watch(reportTotalPages, (value) => {
-  if (value > 0 && reportPageNo.value > value) reportPageNo.value = value
 })
 
 watch(activeTab, (value) => {
@@ -653,6 +1059,15 @@ watch(reportShareTotalPages, value => {
   if (value > 0 && sharePageNo.value > value) sharePageNo.value = value
 })
 
+watch(() => route.query.reportId, value => {
+  const reportId = Array.isArray(value) ? value[0] : value
+  if (typeof reportId === 'string' && reportId.trim()) {
+    if (selectedReportRow.value?.id !== reportId) void openReportFromRoute()
+    return
+  }
+  if (pageMode.value === 'detail') backToList()
+})
+
 watch(selectedWorkspaceCode, () => {
   detailRequestSeq += 1
   pageMode.value = 'list'
@@ -662,7 +1077,6 @@ watch(selectedWorkspaceCode, () => {
   detailError.value = ''
   if (reportPageNo.value === 1) void loadReports()
   else reportPageNo.value = 1
-  void loadReportStats()
   shareRequestSeq += 1
   reportShares.value = []
   reportShareTotal.value = 0
@@ -690,14 +1104,13 @@ onMounted(() => {
     void openReportFromRoute()
     return
   }
-  void Promise.all([loadReports(), loadReportStats()])
+  void loadReports()
 })
 
 onBeforeUnmount(() => {
   reportRequestSeq += 1
   detailRequestSeq += 1
   shareRequestSeq += 1
-  if (reportFilterReloadTimer) window.clearTimeout(reportFilterReloadTimer)
   tableFrameObserver?.disconnect()
   copiedResetTimers.forEach(timer => window.clearTimeout(timer))
   copiedResetTimers.clear()
@@ -733,6 +1146,7 @@ onBeforeUnmount(() => {
             </label>
             <select v-model="reportTypeFilter" class="report-filter-select app-native-select" aria-label="报告类型" @change="handleReportTypeFilterChange">
               <option value="all">全部类型</option>
+              <option value="api-case">接口用例</option>
               <option value="api-scene">接口场景</option>
               <option value="api-suite">接口套件</option>
               <option value="webui-case">Web UI 用例</option>
@@ -765,7 +1179,7 @@ onBeforeUnmount(() => {
             :error="reportError"
             :page-no="reportPageNo"
             :page-size="reportPageSize"
-            :total="reportTotal"
+            :total="reportRows.length"
             :page-sizes="[10, 20, 50, 100]"
             show-page-size
             show-jumper
@@ -991,38 +1405,38 @@ onBeforeUnmount(() => {
             <i></i>
             {{ statusLabel(selectedReportStatus) }}
           </span>
-          <div class="report-pass-rate is-unavailable">
-            <strong>—</strong>
+          <div class="report-pass-rate" :class="{ 'is-unavailable': selectedDetailView?.passRate === null }">
+            <strong>{{ selectedDetailView?.passRate === null || selectedDetailView?.passRate === undefined ? '—' : `${selectedDetailView.passRate}%` }}</strong>
             <span>通过率</span>
           </div>
           <i class="report-divider"></i>
           <div class="report-step-counts">
-            <span>总步骤 <strong>—</strong></span>
-            <span class="is-success">成功 <strong>—</strong></span>
-            <span class="is-danger">失败 <strong>—</strong></span>
-            <span class="is-muted">跳过 <strong>—</strong></span>
+            <span>总步骤 <strong>{{ selectedDetailView?.totalSteps ?? '—' }}</strong></span>
+            <span class="is-success">成功 <strong>{{ selectedDetailView?.successSteps ?? '—' }}</strong></span>
+            <span class="is-danger">失败 <strong>{{ selectedDetailView?.failedSteps ?? '—' }}</strong></span>
+            <span class="is-muted">跳过 <strong>{{ selectedDetailView?.skippedSteps ?? '—' }}</strong></span>
           </div>
           <i class="report-divider"></i>
           <dl class="report-meta-list">
             <div>
               <dt>耗时</dt>
-              <dd>—</dd>
+              <dd>{{ selectedDetailView?.duration || '—' }}</dd>
             </div>
             <div>
               <dt>执行环境</dt>
-              <dd>—</dd>
+              <dd>{{ selectedDetailView?.environment || '—' }}</dd>
             </div>
             <div>
               <dt>执行人</dt>
-              <dd>—</dd>
+              <dd>{{ selectedDetailView?.executor || '—' }}</dd>
             </div>
             <div>
               <dt>触发方式</dt>
-              <dd>{{ formatLogSource(selectedReportDetail?.logSource || selectedReportRow?.logSource || '') }}</dd>
+              <dd>{{ formatLogSource(selectedDetailView?.logSource || selectedReportRow?.logSource || '') }}</dd>
             </div>
             <div>
               <dt>开始</dt>
-              <dd>{{ formatDetailDate(selectedReportDetail?.createdAt) }}</dd>
+              <dd>{{ formatDetailDate(selectedDetailView?.createdAt) }}</dd>
             </div>
           </dl>
         </div>
@@ -1031,14 +1445,30 @@ onBeforeUnmount(() => {
       <div class="report-detail-body">
         <aside class="report-step-sidebar">
           <header>
-            <span>步骤 (—)</span>
-            <button type="button" disabled>
+            <span>步骤 ({{ selectedDetailView?.steps.length ?? '—' }})</span>
+            <button type="button" :disabled="!selectedDetailView?.steps.length" :class="{ 'is-active': failedStepsOnly }" @click="failedStepsOnly = !failedStepsOnly">
               <Filter :size="9" :stroke-width="2" />
-              全部
+              {{ failedStepsOnly ? '失败' : '全部' }}
             </button>
           </header>
-          <div class="report-step-list report-step-list--empty">
-            <span>暂无结构化步骤</span>
+          <div v-if="visibleDetailSteps.length" class="report-step-list">
+            <button
+              v-for="step in visibleDetailSteps"
+              :key="step.id"
+              type="button"
+              class="report-step-item"
+              :class="{ 'is-selected': selectedDetailStep?.id === step.id, 'is-failed': step.status === 'fail' || step.status === 'error' }"
+              @click="selectedStepId = step.id"
+            >
+              <i class="report-step-item__dot" :class="`is-${step.status}`"></i>
+              <span>
+                <strong>{{ step.name }}</strong>
+                <small>{{ step.duration }}</small>
+              </span>
+            </button>
+          </div>
+          <div v-else class="report-step-list report-step-list--empty">
+            <span>{{ selectedDetailView ? '暂无结构化步骤' : '正在准备报告详情' }}</span>
           </div>
         </aside>
 
@@ -1058,39 +1488,69 @@ onBeforeUnmount(() => {
             <button type="button" @click="loadSelectedReport">重新加载</button>
           </div>
 
-          <div v-else-if="selectedReportDetail" class="report-detail-real-content">
+          <div v-else-if="selectedDetailView" class="report-detail-real-content">
             <article class="report-section-card report-real-info-card">
               <h3>报告信息</h3>
               <dl class="report-real-info-grid">
                 <div>
                   <dt>报告 ID</dt>
-                  <dd>{{ selectedReportDetail.id }}</dd>
+                  <dd>{{ selectedDetailView.id }}</dd>
                 </div>
                 <div>
                   <dt>任务 ID</dt>
-                  <dd>{{ selectedReportDetail.taskId || '—' }}</dd>
+                  <dd>{{ selectedDetailView.taskId || '—' }}</dd>
                 </div>
                 <div>
                   <dt>任务名称</dt>
-                  <dd>{{ selectedReportDetail.taskName || '—' }}</dd>
+                  <dd>{{ selectedDetailView.taskName || '—' }}</dd>
                 </div>
                 <div>
                   <dt>工作空间</dt>
-                  <dd>{{ selectedReportDetail.workspaceName || selectedReportDetail.workspaceCode || '—' }}</dd>
+                  <dd>{{ selectedDetailView.workspaceName || selectedDetailView.workspaceCode || '—' }}</dd>
                 </div>
                 <div>
                   <dt>更新时间</dt>
-                  <dd>{{ formatDetailDate(selectedReportDetail.updatedAt) }}</dd>
+                  <dd>{{ formatDetailDate(selectedDetailView.updatedAt) }}</dd>
                 </div>
               </dl>
             </article>
 
-            <article v-if="selectedReportDetail.failureSummary" class="report-section-card report-real-failure-card">
+            <article v-if="selectedDetailView.failureSummary" class="report-section-card report-real-failure-card">
               <h3>失败摘要</h3>
-              <p>{{ selectedReportDetail.failureSummary }}</p>
+              <p>{{ selectedDetailView.failureSummary }}</p>
             </article>
 
-            <article v-if="selectedReportLog" class="report-section-card report-real-log-card">
+            <article v-if="selectedDetailStep" class="report-section-card report-real-step-card">
+              <h3>步骤详情</h3>
+              <div class="report-real-step-header">
+                <strong>{{ selectedDetailStep.name }}</strong>
+                <span>{{ selectedDetailStep.duration }}</span>
+              </div>
+              <p v-if="selectedDetailStep.locator" class="report-real-step-meta">定位器：{{ selectedDetailStep.locator }}</p>
+              <p v-if="selectedDetailStep.inputValue" class="report-real-step-meta">输入值：{{ selectedDetailStep.inputValue }}</p>
+              <p v-if="selectedDetailStep.errorMessage" class="report-real-step-error">{{ selectedDetailStep.errorMessage }}</p>
+              <div v-if="selectedDetailStep.assertions.length" class="report-real-step-assertions">
+                <strong>断言结果</strong>
+                <div v-for="(assertion, index) in selectedDetailStep.assertions" :key="index" :class="{ 'is-failed': !assertion.success }">
+                  <span>{{ assertion.label }}</span>
+                  <b>{{ assertion.success ? '通过' : '失败' }}</b>
+                  <small v-if="assertion.message">{{ assertion.message }}</small>
+                  <code>{{ assertion.actual }}</code>
+                </div>
+              </div>
+              <div v-if="selectedDetailStep.method || selectedDetailStep.url || selectedDetailStep.requestBody" class="report-real-step-block">
+                <strong>请求</strong>
+                <code>{{ [selectedDetailStep.method, selectedDetailStep.url].filter(Boolean).join(' ') }}</code>
+                <pre v-if="selectedDetailStep.requestBody">{{ selectedDetailStep.requestBody }}</pre>
+              </div>
+              <div v-if="selectedDetailStep.responseStatus || selectedDetailStep.responseBody" class="report-real-step-block">
+                <strong>响应 {{ selectedDetailStep.responseStatus || '' }}</strong>
+                <pre v-if="selectedDetailStep.responseBody">{{ selectedDetailStep.responseBody }}</pre>
+              </div>
+              <img v-if="selectedDetailStep.screenshotUrl" class="report-real-step-screenshot" :src="selectedDetailStep.screenshotUrl" alt="步骤截图">
+            </article>
+
+            <article v-if="selectedDetailView.logText" class="report-section-card report-real-log-card">
               <h3>执行日志</h3>
               <div class="report-code-block is-log">
                 <header>
@@ -1098,22 +1558,22 @@ onBeforeUnmount(() => {
                   <button
                     type="button"
                     :class="{ 'is-copied': copiedCodeBlockKey === 'detail-log' }"
-                    @click="copyReportCodeBlock('detail-log', selectedReportLog)"
+                    @click="copyReportCodeBlock('detail-log', selectedDetailView.logText || '')"
                   >
                     <Check v-if="copiedCodeBlockKey === 'detail-log'" :size="9" :stroke-width="2" />
                     <img v-else :src="figmaReportIcons.sharePage.copy" alt="">
                     {{ copiedCodeBlockKey === 'detail-log' ? '已复制' : '复制' }}
                   </button>
                 </header>
-                <pre>{{ selectedReportLog }}</pre>
+                <pre>{{ selectedDetailView.logText }}</pre>
               </div>
             </article>
 
-            <article v-if="selectedReportAttachments.length" class="report-section-card report-real-attachments-card">
-              <h3>附件 ({{ selectedReportAttachments.length }})</h3>
+            <article v-if="selectedDetailView.attachments.length" class="report-section-card report-real-attachments-card">
+              <h3>附件 ({{ selectedDetailView.attachments.length }})</h3>
               <div class="report-real-attachment-list">
                 <a
-                  v-for="attachment in selectedReportAttachments"
+                  v-for="attachment in selectedDetailView.attachments"
                   :key="attachment.id"
                   :href="attachment.downloadUrl || undefined"
                   :class="{ 'is-disabled': !attachment.downloadUrl }"
@@ -1128,7 +1588,7 @@ onBeforeUnmount(() => {
             </article>
 
             <div
-              v-if="!selectedReportLog && !selectedReportDetail.failureSummary && !selectedReportAttachments.length"
+              v-if="!selectedDetailView.steps.length && !selectedDetailView.logText && !selectedDetailView.failureSummary && !selectedDetailView.attachments.length"
               class="report-step-canvas-empty report-detail-data-empty"
             >
               <span class="report-step-canvas-empty__icon">
@@ -2257,6 +2717,162 @@ onBeforeUnmount(() => {
   color: #c9cdd4;
   font-size: 12px;
   line-height: 18px;
+}
+
+.report-step-list:not(.report-step-list--empty) {
+  overflow-y: auto;
+}
+
+.report-step-item {
+  width: 100%;
+  min-width: 0;
+}
+
+.report-step-item.is-failed,
+.report-step-item.is-error {
+  border-left-color: #f53f3f;
+}
+
+.report-step-item.is-selected {
+  border-left-color: #165dff;
+}
+
+.report-step-item > span {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.report-step-item strong {
+  overflow: hidden;
+  color: #4e5969;
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-step-item small {
+  flex: 0 0 auto;
+  color: #86909c;
+  font-size: 10px;
+}
+
+.report-step-item__dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: #00b42a;
+}
+
+.report-step-item__dot.is-fail,
+.report-step-item__dot.is-error {
+  background: #f53f3f;
+}
+
+.report-step-item__dot.is-skip {
+  background: #c9cdd4;
+}
+
+.report-step-item__dot.is-error {
+  background: #ff7d00;
+}
+
+.report-real-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #1d2129;
+  font-size: 13px;
+}
+
+.report-real-step-meta,
+.report-real-step-error {
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.report-real-step-error {
+  color: #f53f3f;
+}
+
+.report-real-step-assertions {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.report-real-step-assertions > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
+}
+
+.report-real-step-assertions > div.is-failed {
+  border-color: rgb(245 63 63 / 30%);
+  background: rgb(245 63 63 / 4%);
+}
+
+.report-real-step-assertions b {
+  color: #00b42a;
+  font-size: 11px;
+}
+
+.report-real-step-assertions .is-failed b {
+  color: #f53f3f;
+}
+
+.report-real-step-assertions small {
+  grid-column: 1 / -1;
+  color: #86909c;
+}
+
+.report-real-step-assertions code {
+  overflow: hidden;
+  color: #1d2129;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-real-step-block {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.report-real-step-block code,
+.report-real-step-block pre {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.report-real-step-screenshot {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  margin-top: 14px;
+  border: 1px solid #e5e6eb;
+  object-fit: contain;
 }
 
 .report-step-item {

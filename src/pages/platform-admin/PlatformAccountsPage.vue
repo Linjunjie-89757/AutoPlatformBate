@@ -8,6 +8,7 @@ import {
   Download,
   FileSpreadsheet,
   LayoutDashboard,
+  Lock,
   Mail,
   RotateCcw,
   ScrollText,
@@ -25,6 +26,7 @@ import { useRouter } from 'vue-router'
 import { platformAdminApi } from '@/entities/platform-admin'
 import { userApi, type UserItem } from '@/entities/user'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { confirmAction } from '@/shared/ui'
 import PlatformInviteRecordsPanel from './components/PlatformInviteRecordsPanel.vue'
 
 type AccountFilter = 'all' | 'active' | 'disabled'
@@ -62,6 +64,8 @@ const activeTab = ref<'accounts' | 'invites'>('accounts')
 const inviteRecordTotal = ref(0)
 const inviteFailedTotal = ref(0)
 const invitePanelKey = ref(0)
+const passwordResetDialog = ref<{ account: AccountRow; step: 'confirm' | 'success'; password?: string } | null>(null)
+const disableTarget = ref<AccountRow | null>(null)
 
 const navigationItems: NavigationItem[] = [
   { key: 'overview', label: '平台概览', icon: LayoutDashboard },
@@ -92,7 +96,7 @@ function toAccountRow(user: UserItem, workspaceCountOverride?: number): AccountR
     status: Number(user.status),
     activationStatus: user.activationStatus || 'ACTIVE',
     workspaceCount: workspaceCountOverride ?? user.workspaceCodes.length,
-    lastLogin: null,
+    lastLogin: user.lastLoginAt || null,
   }
 }
 
@@ -162,18 +166,47 @@ function handleNavigation(item: NavigationItem) {
 
 async function toggleAccount(account: AccountRow) {
   if (isSuperAdmin(account) || account.activationStatus === 'PENDING') return
+  const enabling = account.status !== 1
+  if (!enabling) {
+    disableTarget.value = account
+    return
+  }
   try {
-    const updated = await userApi.updateUser(account.id, {
-      email: account.email,
-      displayName: account.displayName,
-      roleCode: account.roleCode === 'ADMIN' ? 'ADMIN' : 'MEMBER',
-      status: account.status === 1 ? 0 : 1,
+    await confirmAction({
+      title: '启用账号',
+      message: `确认启用账号“${account.displayName}”吗？启用后该账号可以重新登录。`,
+      confirmText: '确认启用',
+      tone: 'success',
     })
-    const index = accounts.value.findIndex(item => item.id === account.id)
-    if (index >= 0) {
-      accounts.value[index] = toAccountRow(updated, account.workspaceCount)
-    }
-    ElMessage.success(account.status === 1 ? '账号已禁用' : '账号已启用')
+  } catch (reason) {
+    if (reason === 'cancel' || reason === 'close') return
+    throw reason
+  }
+  try {
+    await updateAccountStatus(account, 1)
+  } catch (error) {
+    ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function updateAccountStatus(account: AccountRow, status: 0 | 1) {
+  const updated = await userApi.updateUser(account.id, {
+    email: account.email,
+    displayName: account.displayName,
+    roleCode: account.roleCode === 'ADMIN' ? 'ADMIN' : 'MEMBER',
+    status,
+  })
+  const index = accounts.value.findIndex(item => item.id === account.id)
+  if (index >= 0) accounts.value[index] = toAccountRow(updated, account.workspaceCount)
+  ElMessage.success(status === 1 ? '账号已启用' : '账号已禁用')
+}
+
+async function confirmDisableAccount() {
+  const account = disableTarget.value
+  if (!account) return
+  try {
+    await updateAccountStatus(account, 0)
+    disableTarget.value = null
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
   }
@@ -181,11 +214,28 @@ async function toggleAccount(account: AccountRow) {
 
 async function resetPassword(account: AccountRow) {
   if (isSuperAdmin(account) || account.activationStatus === 'PENDING') return
+  passwordResetDialog.value = { account, step: 'confirm' }
+}
+
+async function confirmPasswordReset() {
+  const dialog = passwordResetDialog.value
+  if (!dialog) return
   try {
-    await userApi.resetUserPassword(account.id)
-    ElMessage.success('密码已重置')
+    const result = await userApi.resetUserPassword(dialog.account.id)
+    passwordResetDialog.value = { ...dialog, step: 'success', password: result.defaultPassword }
   } catch (error) {
     ElMessage.error(getRequestErrorMessage(error))
+  }
+}
+
+async function copyResetPassword() {
+  const password = passwordResetDialog.value?.password
+  if (!password) return
+  try {
+    await navigator.clipboard.writeText(password)
+    ElMessage.success('临时密码已复制')
+  } catch {
+    ElMessage.error('复制失败，请手动选择密码')
   }
 }
 
@@ -376,6 +426,52 @@ onMounted(() => {
 
     <InviteAccountModal v-if="inviteOpen" @close="closeInvite" @done="refreshMemberRecords" />
     <BatchImportModal v-if="batchOpen" @close="closeBatch" @done="refreshMemberRecords" />
+    <div v-if="passwordResetDialog" class="platform-accounts-page__dialog-mask" @click.self="passwordResetDialog = null">
+      <section class="platform-accounts-page__reset-dialog" role="dialog" aria-modal="true" aria-labelledby="password-reset-title">
+        <header>
+          <span class="platform-accounts-page__reset-icon"><Lock :size="16" /></span>
+          <div class="platform-accounts-page__reset-heading">
+            <strong id="password-reset-title">重置密码</strong>
+            <small>{{ passwordResetDialog.account.displayName }} · {{ passwordResetDialog.account.email }}</small>
+          </div>
+          <button type="button" aria-label="关闭" @click="passwordResetDialog = null"><X :size="16" /></button>
+        </header>
+        <div v-if="passwordResetDialog.step === 'confirm'" class="platform-accounts-page__reset-confirm">
+          <p>系统将为 <strong>{{ passwordResetDialog.account.displayName }}</strong> 生成一个临时密码，用户登录后需立即修改。原密码将立即失效。</p>
+          <div class="platform-accounts-page__reset-actions">
+            <button type="button" class="is-cancel" @click="passwordResetDialog = null">取消</button>
+            <button type="button" class="is-confirm" @click="confirmPasswordReset">确认重置</button>
+          </div>
+        </div>
+        <div v-else class="platform-accounts-page__reset-success">
+          <div class="platform-accounts-page__reset-success-heading">
+            <span><CheckCircle2 :size="24" /></span>
+            <strong>密码已重置</strong>
+            <small>临时密码已生成，请妥善保管并告知用户</small>
+          </div>
+          <div class="platform-accounts-page__temporary-password">
+            <div><small>临时密码</small><strong>{{ passwordResetDialog.password }}</strong></div>
+            <button type="button" @click="copyResetPassword">复制</button>
+          </div>
+          <div class="platform-accounts-page__password-notice">· 用户首次登录后将被要求立即修改密码<br />· 请通过安全渠道将临时密码提供给用户</div>
+          <button type="button" class="platform-accounts-page__password-result-done" @click="passwordResetDialog = null">完成</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="disableTarget" class="platform-accounts-page__dialog-mask" @click.self="disableTarget = null">
+      <section class="platform-accounts-page__disable-dialog" role="dialog" aria-modal="true" aria-labelledby="disable-account-title">
+        <header>
+          <span><ShieldAlert :size="16" /></span>
+          <div><strong id="disable-account-title">禁用账号</strong><small>{{ disableTarget.displayName }} · {{ disableTarget.email }}</small></div>
+        </header>
+        <p>禁用后，<strong>{{ disableTarget.displayName }}</strong> 将无法登录平台，其所有会话将立即失效。工作区数据不受影响，重新启用后可恢复访问。</p>
+        <div class="platform-accounts-page__reset-actions">
+          <button type="button" class="is-cancel" @click="disableTarget = null">取消</button>
+          <button type="button" class="is-danger" @click="confirmDisableAccount">确认禁用</button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -861,5 +957,40 @@ const BatchImportModal = defineComponent({
 .platform-accounts-page__preview-footer button { height:36px; padding:0 20px; border-radius:8px; cursor:pointer; font-size:13px; line-height:19.5px; }
 .platform-accounts-page__preview-footer .platform-accounts-page__modal-cancel { flex:0 0 auto; }
 .platform-accounts-page__preview-footer .platform-accounts-page__modal-submit { flex:0 0 auto; padding:0 24px; border:0; background:#165dff; }
+.platform-accounts-page__dialog-mask { position:fixed; inset:0; z-index:110; display:grid; place-items:center; padding:16px; background:rgba(0,0,0,.45); }
+.platform-accounts-page__reset-dialog { width:min(100%,420px); overflow:hidden; border-radius:18px; background:#fff; box-shadow:0 24px 64px rgba(0,0,0,.2); }
+.platform-accounts-page__reset-dialog > header { display:flex; height:81px; align-items:center; gap:10px; padding:0 24px; border-bottom:1px solid #e5e6eb; }
+.platform-accounts-page__reset-icon { display:grid; width:34px; height:34px; flex:0 0 34px; place-items:center; border-radius:10px; background:#fff5eb; color:#ff7d00; }
+.platform-accounts-page__reset-heading { display:flex; min-width:0; flex:1; flex-direction:column; gap:2px; }
+.platform-accounts-page__reset-heading strong,.platform-accounts-page__disable-dialog header strong { color:#1d2129; font-size:15px; font-weight:700; line-height:22.5px; }
+.platform-accounts-page__reset-heading small,.platform-accounts-page__disable-dialog header small { overflow:hidden; color:#86909c; font-size:11px; line-height:16.5px; text-overflow:ellipsis; white-space:nowrap; }
+.platform-accounts-page__reset-dialog > header button { display:grid; width:24px; height:24px; flex:0 0 24px; place-items:center; border:0; background:transparent; color:#c9cdd4; cursor:pointer; }
+.platform-accounts-page__reset-confirm { height:169.375px; padding:24px 24px 22.375px; }
+.platform-accounts-page__reset-confirm > p { min-height:65px; margin:0 0 20px; padding:12px 16px; border:1px solid rgba(255,125,0,.25); border-radius:10px; background:#fff5eb; color:#ff7d00; font-size:12px; line-height:19px; }
+.platform-accounts-page__reset-confirm > p strong { color:#ff7d00; }
+.platform-accounts-page__reset-actions { display:flex; gap:10px; }
+.platform-accounts-page__reset-actions button { height:38px; border-radius:9px; cursor:pointer; font-size:13px; }
+.platform-accounts-page__reset-actions .is-cancel { width:122px; flex:0 0 122px; border:1px solid #e5e6eb; background:#fff; color:#4e5969; }
+.platform-accounts-page__reset-actions .is-confirm,.platform-accounts-page__reset-actions .is-danger { flex:1; border:0; background:#ff7d00; color:#fff; font-weight:600; }
+.platform-accounts-page__reset-actions .is-danger { background:#f53f3f; }
+.platform-accounts-page__disable-dialog { width:min(100%,400px); padding:27px 24px 24px; border-radius:16px; background:#fff; box-shadow:0 24px 64px rgba(0,0,0,.2); }
+.platform-accounts-page__disable-dialog header { display:flex; align-items:center; gap:10px; margin-bottom:19px; }
+.platform-accounts-page__disable-dialog header > span { display:grid; width:36px; height:36px; flex:0 0 36px; place-items:center; border-radius:10px; background:#fff0f0; color:#f53f3f; }
+.platform-accounts-page__disable-dialog header > div { display:flex; min-width:0; flex-direction:column; gap:2px; }
+.platform-accounts-page__disable-dialog > p { min-height:65px; margin:0 0 20px; padding:12px 16px; border:1px solid rgba(245,63,63,.22); border-radius:10px; background:#fff0f0; color:#f53f3f; font-size:12px; line-height:19px; }
+.platform-accounts-page__disable-dialog > p strong { color:#f53f3f; }
+.platform-accounts-page__disable-dialog .is-cancel { width:115px; flex-basis:115px; }
+.platform-accounts-page__reset-success { display:flex; min-height:389.375px; flex-direction:column; padding:24px 24px 21.375px; }
+.platform-accounts-page__reset-success-heading { display:flex; align-items:center; flex-direction:column; margin-bottom:20px; text-align:center; }
+.platform-accounts-page__reset-success-heading > span { display:grid; width:52px; height:52px; place-items:center; margin-bottom:12px; border-radius:50%; background:#e8ffea; color:#00b42a; }
+.platform-accounts-page__reset-success-heading > strong { color:#1d2129; font-size:15px; font-weight:700; line-height:22px; }
+.platform-accounts-page__reset-success-heading > small { margin-top:4px; color:#86909c; font-size:12px; line-height:18px; }
+.platform-accounts-page__temporary-password { display:flex; min-height:85px; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border:1px solid #e5e6eb; border-radius:10px; background:#f4f6fa; }
+.platform-accounts-page__temporary-password > div { display:flex; min-width:0; flex-direction:column; gap:8px; }
+.platform-accounts-page__temporary-password small { color:#86909c; font-size:11px; }
+.platform-accounts-page__temporary-password strong { overflow-wrap:anywhere; color:#1d2129; font-family:var(--app-font-family-mono); font-size:18px; font-weight:700; letter-spacing:2px; }
+.platform-accounts-page__temporary-password button { display:flex; height:28px; flex:0 0 auto; align-items:center; padding:0 12px; border:1px solid #e5e6eb; border-radius:7px; background:#fff; color:#4e5969; cursor:pointer; font-size:12px; }
+.platform-accounts-page__password-notice { margin-top:14px; padding:10px 14px; border-radius:9px; background:#ebf3ff; color:#165dff; font-size:11px; line-height:18px; }
+.platform-accounts-page__password-result-done { width:100%; height:38px; margin-top:20px; border:0; border-radius:9px; background:#db2777; color:#fff; cursor:pointer; font-size:13px; font-weight:600; }
 @keyframes platform-accounts-spin { to { transform:rotate(360deg); } }
 </style>

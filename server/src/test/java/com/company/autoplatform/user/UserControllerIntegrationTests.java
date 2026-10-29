@@ -48,7 +48,8 @@ class UserControllerIntegrationTests extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.data[*].roleCode", hasItem("ADMIN")))
                 .andExpect(jsonPath("$.data[*].workspaceCodes").isArray())
                 .andExpect(jsonPath("$.data[*].username", hasItem("superadmin")))
-                .andExpect(jsonPath("$.data[*].roleCode", hasItem("SUPER_ADMIN")));
+                .andExpect(jsonPath("$.data[*].roleCode", hasItem("SUPER_ADMIN")))
+                .andExpect(jsonPath("$.data[0].lastLoginAt").hasJsonPath());
     }
 
     @Test

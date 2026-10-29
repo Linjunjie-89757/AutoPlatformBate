@@ -4,6 +4,7 @@ import {
   Building2,
   ClipboardCheck,
   LayoutDashboard,
+  RotateCcw,
   ScrollText,
   Search,
   ShieldAlert,
@@ -15,6 +16,7 @@ import { useRouter } from 'vue-router'
 import { auditLogApi, type OperationAuditLogItem } from '@/entities/audit-log'
 import { platformAdminApi } from '@/entities/platform-admin'
 import { getRequestErrorMessage } from '@/shared/api/error'
+import { AppFigmaPagination } from '@/shared/ui'
 
 interface NavigationItem {
   key: 'overview' | 'workspaces' | 'accounts' | 'requests' | 'audit' | 'notify'
@@ -30,6 +32,9 @@ const loading = ref(true)
 const errorMessage = ref('')
 const logs = ref<OperationAuditLogItem[]>([])
 const pendingApprovalTotal = ref(0)
+const pageNo = ref(1)
+const pageSize = ref(5)
+const total = ref(0)
 let latestLogRequestId = 0
 
 const navigationItems = computed<NavigationItem[]>(() => [
@@ -49,14 +54,16 @@ async function loadLogs(showLoading = true) {
     const page = await auditLogApi.getOperationLogs({
       workspaceCode: 'ALL',
       keyword: query.value.trim() || undefined,
-      pageNo: 1,
-      pageSize: 10,
+      pageNo: pageNo.value,
+      pageSize: pageSize.value,
     })
     if (requestId !== latestLogRequestId) return
     logs.value = Array.isArray(page.items) ? page.items : []
+    total.value = page.total || 0
   } catch (error) {
     if (requestId !== latestLogRequestId) return
     logs.value = []
+    total.value = 0
     errorMessage.value = getRequestErrorMessage(error)
   } finally {
     if (requestId === latestLogRequestId) loading.value = false
@@ -97,8 +104,20 @@ function actionName(item: OperationAuditLogItem) {
 }
 
 watch(query, () => {
+  pageNo.value = 1
   void loadLogs(false)
 })
+
+function handlePageChange(value: number) {
+  pageNo.value = value
+  void loadLogs()
+}
+
+function handlePageSizeChange(value: number) {
+  pageSize.value = value
+  pageNo.value = 1
+  void loadLogs()
+}
 
 onMounted(() => {
   void Promise.all([loadLogs(), loadPendingCount()])
@@ -140,6 +159,10 @@ onMounted(() => {
       <section class="platform-audit-page__card">
         <header class="platform-audit-page__header">
           <h1>平台操作日志</h1>
+          <button type="button" class="platform-audit-page__refresh" :disabled="loading" @click="loadLogs()">
+            <RotateCcw :class="{ 'is-spinning': loading }" :size="12" />
+            {{ loading ? '加载中' : '刷新' }}
+          </button>
         </header>
 
         <div class="platform-audit-page__toolbar">
@@ -152,10 +175,11 @@ onMounted(() => {
               aria-label="搜索操作人、动作或对象"
             />
           </label>
+          <span class="platform-audit-page__total">共 {{ total }} 条记录</span>
         </div>
 
         <div class="platform-audit-page__table" role="table" aria-label="平台操作日志">
-          <div class="platform-audit-page__row platform-audit-page__table-head" role="row">
+        <div v-if="!loading && !errorMessage" class="platform-audit-page__row platform-audit-page__table-head" role="row">
             <div role="columnheader">时间</div>
             <div role="columnheader">操作人</div>
             <div role="columnheader">动作</div>
@@ -190,6 +214,17 @@ onMounted(() => {
             </span>
           </div>
         </div>
+        <AppFigmaPagination
+          v-if="!errorMessage"
+          :page-no="pageNo"
+          :page-size="pageSize"
+          :total="total"
+          :show-page-size="false"
+          :show-jumper="false"
+          :jumper-threshold="5"
+          @page-change="handlePageChange"
+          @page-size-change="handlePageSizeChange"
+        />
       </section>
     </main>
   </div>
@@ -366,7 +401,8 @@ button.platform-audit-page__nav-item.is-active {
 
 .platform-audit-page__card {
   width: 100%;
-  height: 635.5px;
+  min-height: 0;
+  height: auto;
   overflow: hidden;
   border: 1px solid #e5e6eb;
   border-radius: 14px;
@@ -374,10 +410,15 @@ button.platform-audit-page__nav-item.is-active {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
+.platform-audit-page__card > .app-figma-pagination {
+  border-top: 1px solid #e5e6eb;
+}
+
 .platform-audit-page__header {
   display: flex;
-  height: 54px;
+  height: 63px;
   align-items: center;
+  justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid #e5e6eb;
 }
@@ -388,6 +429,23 @@ button.platform-audit-page__nav-item.is-active {
   font-weight: 700;
   line-height: 21px;
 }
+
+.platform-audit-page__refresh {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.platform-audit-page__refresh:disabled { cursor: not-allowed; color: #86909c; }
+.platform-audit-page__refresh .is-spinning { animation: platform-audit-spin 700ms linear infinite; }
 
 .platform-audit-page__toolbar {
   display: flex;
@@ -403,6 +461,8 @@ button.platform-audit-page__nav-item.is-active {
   width: 320px;
   height: 34px;
 }
+
+.platform-audit-page__total { margin-left: 10px; color: #86909c; font-size: 11px; }
 
 .platform-audit-page__search svg {
   position: absolute;

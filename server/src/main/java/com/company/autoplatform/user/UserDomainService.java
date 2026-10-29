@@ -167,6 +167,7 @@ public class UserDomainService {
                 userRoleSupport.isSuperAdminRole(user.getRoleCode()) ? "SUPER_ADMIN" : (PlatformRole.PLATFORM_ADMIN.equalsIgnoreCase(user.getRoleCode()) ? "ADMIN" : "MEMBER"),
                 user.getStatus(),
                 user.getPassword() == null || user.getPassword().isBlank() ? "PENDING" : "ACTIVE",
+                user.getLastLoginAt(),
                 workspaces.stream().map(WorkspaceEntity::getWorkspaceCode).toList(),
                 workspaces.stream().map(WorkspaceEntity::getWorkspaceName).toList()
         );

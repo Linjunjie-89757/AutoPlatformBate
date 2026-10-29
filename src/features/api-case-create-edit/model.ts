@@ -32,11 +32,13 @@ export interface ApiCaseForm {
   postProcessors: unknown[]
 }
 
-function createDefaultRequestConfig(method = 'GET', path = '', timeoutMs = 10000): ApiRequestConfigInput {
+function createDefaultRequestConfig(method = 'GET', path = '', timeoutMs = 60000): ApiRequestConfigInput {
   return {
     method,
     path,
     timeoutMs,
+    connectTimeoutMs: 30000,
+    followRedirects: true,
     queryParams: [],
     headers: [],
     cookies: [],
@@ -128,13 +130,13 @@ export function createDefaultApiCaseForm(
     definitionName: definition?.name || '',
     directoryName: definition?.directoryName || '',
     name: '',
-    priority: 'P0',
+    priority: 'P1',
     status: '进行中',
     method: definition?.method || 'GET',
     path: definition?.path || '',
     description: '',
     tagsText: '',
-    timeoutMs: '10000',
+    timeoutMs: '60000',
     lastRunAt: null,
     lastRunResult: null,
     baseRequestConfig: createDefaultRequestConfig(definition?.method || 'GET', definition?.path || ''),
@@ -163,7 +165,7 @@ export function createApiCaseFormFromSummary(
     path: item.path || definition?.path || '',
     description: item.description || '',
     tagsText: Array.isArray(item.tags) ? item.tags.join(', ') : '',
-    timeoutMs: '10000',
+    timeoutMs: '60000',
     lastRunAt: item.lastRunAt || null,
     lastRunResult: item.lastRunResult || null,
     baseRequestConfig: createDefaultRequestConfig(
@@ -191,7 +193,7 @@ export function createApiCaseFormFromDetail(item: ApiDefinitionCaseDetail): ApiC
     path: item.requestConfig?.path || item.path || '',
     description: item.description || '',
     tagsText: Array.isArray(item.tags) ? item.tags.join(', ') : '',
-    timeoutMs: String(item.requestConfig?.timeoutMs || 10000),
+    timeoutMs: String(item.requestConfig?.timeoutMs || 60000),
     lastRunAt: item.lastRunAt || null,
     lastRunResult: item.lastRunResult || null,
     baseRequestConfig: cloneRequestConfig(item.requestConfig || createDefaultRequestConfig(item.method || 'GET', item.path || '')),
@@ -237,7 +239,7 @@ export function buildSaveApiCasePayload(form: ApiCaseForm): SaveApiDefinitionCas
       ...baseRequestConfig,
       method: form.method.trim().toUpperCase(),
       path: form.path.trim(),
-      timeoutMs: Number(form.timeoutMs) || 10000,
+      timeoutMs: Number(form.timeoutMs) || 60000,
       queryParams: prepareKeyValueRowsForPayload(baseRequestConfig.queryParams),
       headers: prepareKeyValueRowsForPayload(baseRequestConfig.headers),
       cookies: prepareKeyValueRowsForPayload(baseRequestConfig.cookies),

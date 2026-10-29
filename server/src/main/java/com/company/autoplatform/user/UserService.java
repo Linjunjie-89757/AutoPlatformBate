@@ -2,6 +2,7 @@ package com.company.autoplatform.user;
 
 import com.company.autoplatform.auth.PlatformRole;
 import com.company.autoplatform.common.BadRequestException;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -85,6 +86,12 @@ public class UserService {
 
     public UserItem updateUser(Long userId, UpdateUserRequest request) {
         return userDomainService.updateUser(userId, request);
+    }
+
+    public void recordSuccessfulLogin(Long userId) {
+        userMapper.update(null, new LambdaUpdateWrapper<UserEntity>()
+                .eq(UserEntity::getId, userId)
+                .set(UserEntity::getLastLoginAt, LocalDateTime.now()));
     }
 
     public UserItem replaceWorkspaceRoles(Long userId, ReplaceUserWorkspaceRolesRequest request) {

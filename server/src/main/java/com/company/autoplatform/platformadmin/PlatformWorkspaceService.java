@@ -86,7 +86,11 @@ public class PlatformWorkspaceService {
                 item.memberCount() == null ? 0 : item.memberCount(),
                 item.status(),
                 item.createdAt(),
-                item.ownerName()
+                item.ownerUserId(),
+                item.ownerName(),
+                item.workspaceType(),
+                item.industry(),
+                item.initializationMode()
         );
     }
 

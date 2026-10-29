@@ -2,7 +2,7 @@
 import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed } from 'vue'
 import { MagicStick } from '@element-plus/icons-vue'
-import { X as LucideX } from '@lucide/vue'
+import { Bot, LoaderCircle, X as LucideX } from '@lucide/vue'
 
 import type { AiProviderConnectionItem } from '@/entities/ai-provider'
 import type { ApiAiCaseGenerationGroup } from './apiInterfaceTypes'
@@ -16,6 +16,9 @@ const props = defineProps<{
   providerId: number | null
   providers: AiProviderConnectionItem[]
   providersLoading: boolean
+  method?: string
+  path?: string
+  endpointName?: string
   noDuplicate: boolean
   prompt: string
   canGenerate: boolean
@@ -38,6 +41,21 @@ const drawerVisible = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
 })
+
+const totalOptionCount = computed(() => props.groups.reduce((total, group) => total + group.options.length, 0))
+const allOptionsSelected = computed(() => totalOptionCount.value > 0 && props.selectedCount === totalOptionCount.value)
+
+function toggleAllOptions() {
+  const checked = !allOptionsSelected.value
+  props.groups.forEach(group => emit('toggleGroup', group.key, checked))
+}
+
+function isGroupPartiallySelected(groupKey: string) {
+  const group = props.groups.find(item => item.key === groupKey)
+  if (!group) return false
+  const selected = group.options.filter(option => props.selectedOptionKeys.includes(option.key)).length
+  return selected > 0 && selected < group.options.length
+}
 </script>
 
 <template>
@@ -51,10 +69,15 @@ const drawerVisible = computed({
   >
     <template #header>
       <div class="ai-case-drawer-header">
-        <div>
-          <div class="ai-case-drawer-title">
-            <MagicStick />
-            <span>AI 生成接口用例</span>
+        <div class="ai-case-drawer-heading">
+          <div class="ai-case-drawer-icon" aria-hidden="true"><Bot /></div>
+          <div class="ai-case-drawer-heading-copy">
+            <div class="ai-case-drawer-title">AI 生成接口用例</div>
+            <div v-if="method || path || endpointName" class="ai-case-drawer-subtitle">
+              <span v-if="method" :class="['ai-case-method', `method-${String(method).toLowerCase()}`]">{{ method }}</span>
+              <span v-if="path" class="ai-case-path">{{ path }}</span>
+              <span v-if="endpointName" class="ai-case-endpoint">{{ endpointName }}</span>
+            </div>
           </div>
         </div>
         <button type="button" class="definition-import-close" @click="emit('update:modelValue', false)">
@@ -65,18 +88,39 @@ const drawerVisible = computed({
 
     <template #default>
       <div class="ai-case-drawer-body">
+        <div v-if="generationStatus === 'failed'" class="ai-case-status-banner is-error" role="alert">
+          生成任务创建失败，请检查 AI 服务连接后重试。
+        </div>
         <section class="ai-case-section">
           <div class="ai-case-section-title">
-            <span>选择生成的用例类型</span>
-            <small>已选 {{ selectedCount }} 项</small>
+            <span class="ai-case-section-heading">
+              <span>选择生成的用例类型</span>
+              <el-checkbox
+                :model-value="allOptionsSelected"
+                :indeterminate="selectedCount > 0 && !allOptionsSelected"
+                class="ai-case-global-checkbox"
+                @change="toggleAllOptions"
+              >
+                全选
+              </el-checkbox>
+            </span>
+            <div class="ai-case-selection-summary">
+              <span>已选 {{ selectedCount }} / {{ totalOptionCount }} 项</span>
+            </div>
           </div>
           <div class="ai-case-option-groups">
             <div v-for="group in groups" :key="group.key" class="ai-case-option-group">
               <div class="ai-case-option-group-title">
-                <strong>{{ group.label }}</strong>
-                <button type="button" class="ai-case-select-all-link" @click="emit('toggleGroup', group.key, !isGroupAllSelected(group.key))">
-                  全选
-                </button>
+                <span class="ai-case-group-heading">
+                  <el-checkbox
+                    :model-value="isGroupAllSelected(group.key)"
+                    :indeterminate="isGroupPartiallySelected(group.key)"
+                    class="ai-case-group-checkbox"
+                    :aria-label="`${group.label}全选`"
+                    @change="emit('toggleGroup', group.key, Boolean($event))"
+                  />
+                  <strong>{{ group.label }}</strong>
+                </span>
               </div>
               <el-checkbox-group :model-value="selectedOptionKeys" class="ai-case-option-list" @update:model-value="emit('update:selectedOptionKeys', $event as string[])">
                 <el-checkbox v-for="option in group.options" :key="option.key" :value="option.key">
@@ -100,7 +144,7 @@ const drawerVisible = computed({
           </label>
           <label class="ai-case-form-field">
             <span>AI模型</span>
-            <el-select :suffix-icon="AppSelectChevron"
+            <el-select v-if="!providersLoading && providers.length" :suffix-icon="AppSelectChevron"
               :model-value="providerId"
               class="ai-case-form-control"
               :loading="providersLoading"
@@ -115,6 +159,8 @@ const drawerVisible = computed({
                 :value="item.id"
               />
             </el-select>
+            <div v-else-if="providersLoading" class="ai-case-model-status is-loading">正在加载可用模型...</div>
+            <div v-else class="ai-case-model-status is-empty">暂无可用 AI 模型，请先配置 AI 连接。</div>
           </label>
           <div class="ai-case-form-switch">
             <el-switch :model-value="noDuplicate" @update:model-value="emit('update:noDuplicate', Boolean($event))" />
@@ -124,20 +170,31 @@ const drawerVisible = computed({
             </span>
           </div>
           <label class="ai-case-form-field">
+            <span>补充要求 <em>（可选）</em></span>
             <el-input
               :model-value="prompt"
               type="textarea"
+              maxlength="1000"
+              show-word-limit
               :autosize="{ minRows: 3, maxRows: 5 }"
-              placeholder="输入更多要求"
+              placeholder="例如：重点覆盖鉴权失败、边界值和重复提交场景"
               class="ai-case-form-control"
               @update:model-value="emit('update:prompt', String($event))"
             />
           </label>
-          <button type="button" class="ai-case-generate-submit" :disabled="!canGenerate" @click="emit('submit')">
-            <MagicStick />
-            {{ generationStatus === 'running' ? '生成中...' : '生成' }}
-          </button>
         </section>
+      </div>
+    </template>
+
+    <template #footer>
+      <div class="ai-case-drawer-footer">
+        <div v-if="!selectedCount" class="ai-case-footer-hint is-warning">请至少选择一个生成类型</div>
+        <div v-else-if="!providers.length && !providersLoading" class="ai-case-footer-hint">请先配置可用的 AI 模型</div>
+        <button type="button" class="ai-case-generate-submit" :disabled="!canGenerate" @click="emit('submit')">
+          <LoaderCircle v-if="generationStatus === 'running'" class="is-spinning" />
+          <MagicStick v-else />
+          {{ generationStatus === 'running' ? '生成中...' : generationStatus === 'failed' ? '重新生成' : '生成' }}
+        </button>
       </div>
     </template>
   </el-drawer>
@@ -409,5 +466,277 @@ const drawerVisible = computed({
 .ai-case-generate-submit svg {
   width: 16px;
   height: 16px;
+}
+
+.ai-case-drawer-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-case-drawer-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: #f1eaff;
+  color: #7816ff;
+}
+
+.ai-case-drawer-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ai-case-drawer-heading-copy {
+  min-width: 0;
+}
+
+.ai-case-drawer-title {
+  display: block;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.ai-case-drawer-subtitle {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  max-width: 460px;
+  overflow: hidden;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.ai-case-method {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #e8f7ed;
+  color: #00b42a;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+.ai-case-method.method-post { background: #fff3e8; color: #ff7d00; }
+.ai-case-method.method-put { background: #e8f3ff; color: #165dff; }
+.ai-case-method.method-delete { background: #ffefef; color: #f53f3f; }
+.ai-case-method.method-patch { background: #f1eaff; color: #7816ff; }
+
+.ai-case-path,
+.ai-case-endpoint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-case-path {
+  color: #4e5969;
+  font-family: Consolas, Monaco, monospace;
+}
+
+.ai-case-endpoint::before {
+  margin-right: 6px;
+  color: #c9cdd4;
+  content: '·';
+}
+
+.ai-case-status-banner {
+  margin: 12px 20px 0;
+  padding: 9px 12px;
+  border: 1px solid #ffbaba;
+  border-radius: 7px;
+  background: #fff0f0;
+  color: #f53f3f;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ai-case-section {
+  padding: 16px 20px;
+}
+
+.ai-case-section-title {
+  color: #1d2129;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-case-selection-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #86909c;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.ai-case-section-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-case-global-checkbox,
+.ai-case-group-checkbox {
+  height: 18px;
+  margin-right: 0;
+  color: #4e5969;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.ai-case-global-checkbox :deep(.el-checkbox__label) {
+  padding-left: 5px;
+}
+
+.ai-case-group-checkbox :deep(.el-checkbox__label) {
+  display: none;
+}
+
+.ai-case-option-groups {
+  gap: 10px;
+}
+
+.ai-case-option-group {
+  gap: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+}
+
+.ai-case-option-group-title {
+  min-height: 32px;
+  padding: 0 12px;
+  background: #f7f8fa;
+  border-bottom: 1px solid #e5e6eb;
+}
+
+.ai-case-group-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.ai-case-group-mark {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: #165dff;
+}
+
+.ai-case-option-group-title strong {
+  color: #1d2129;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ai-case-option-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 16px;
+  padding: 9px 12px 10px;
+}
+
+.ai-case-option-list :deep(.el-checkbox) {
+  height: 18px;
+  color: #4e5969;
+  font-size: 12px;
+}
+
+.ai-case-form-section {
+  gap: 14px;
+  border-top: 0;
+}
+
+.ai-case-form-field {
+  gap: 5px;
+}
+
+.ai-case-form-field > span {
+  color: #1d2129;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ai-case-form-field > span em {
+  color: #86909c;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.ai-case-form-control :deep(.el-select__wrapper) {
+  min-height: 32px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.ai-case-form-control :deep(.el-textarea__inner) {
+  min-height: 90px !important;
+  padding: 9px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ai-case-model-status {
+  margin-top: 5px;
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ai-case-model-status.is-empty {
+  color: #f53f3f;
+}
+
+.ai-case-drawer-footer {
+  display: grid;
+  gap: 7px;
+  padding: 10px 20px 12px;
+  border-top: 1px solid #e5e6eb;
+  background: #fff;
+}
+
+.ai-case-footer-hint {
+  color: #86909c;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.ai-case-footer-hint.is-warning {
+  color: #ff7d00;
+}
+
+.ai-case-generate-submit {
+  height: 36px;
+  border-radius: 7px;
+  background: #165dff;
+  font-size: 13px;
+}
+
+.ai-case-generate-submit:hover {
+  background: #0e4ecc;
+}
+
+.ai-case-generate-submit .is-spinning {
+  animation: ai-case-drawer-spin 1s linear infinite;
+}
+
+@keyframes ai-case-drawer-spin {
+  to { transform: rotate(360deg); }
 }
 </style>

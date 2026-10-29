@@ -7,6 +7,10 @@ public record PlatformWorkspaceItem(
         long memberCount,
         Integer status,
         String createdAt,
-        String ownerName
+        Long ownerUserId,
+        String ownerName,
+        String workspaceType,
+        String industry,
+        String initializationMode
 ) {
 }

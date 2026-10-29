@@ -66,6 +66,15 @@ export function useApiDefinitionCases(options: UseApiDefinitionCasesOptions) {
   const caseRunningId = ref<number | null>(null)
   const caseListCurrentPage = ref(1)
   const caseListPageSize = ref(10)
+  const caseLoadStates = ref<Record<string, { loading: boolean; error: string }>>({})
+  const caseLoadVersions = new Map<string, number>()
+  let caseLoadEpoch = 0
+  const activeCaseLoadState = computed(() => {
+    const editor = options.getActiveEditor()
+    return caseLoadStates.value[`${editor?.detail.workspaceCode || options.workspaceCode.value}:${editor?.definitionId}`]
+  })
+  const caseListLoading = computed(() => activeCaseLoadState.value?.loading ?? false)
+  const caseListError = computed(() => activeCaseLoadState.value?.error ?? '')
 
   const activeDefinitionCases = computed(() => {
     const id = options.getActiveEditor()?.definitionId
@@ -112,8 +121,15 @@ export function useApiDefinitionCases(options: UseApiDefinitionCasesOptions) {
   )
 
   async function loadCasesForDefinition(definitionId: number, workspaceCode = options.workspaceCode.value) {
+    const key = `${workspaceCode}:${definitionId}`
+    const version = (caseLoadVersions.get(key) || 0) + 1
+    const epoch = caseLoadEpoch
+    caseLoadVersions.set(key, version)
+    caseLoadStates.value[key] = { loading: true, error: '' }
+    const isCurrent = () => epoch === caseLoadEpoch && caseLoadVersions.get(key) === version
     try {
       const loadedCases = await listAllApiCases(workspaceCode, { definitionId })
+      if (!isCurrent()) return
       const others = cases.value.filter(item => item.definitionId !== definitionId)
       cases.value = [...others, ...loadedCases]
       options.onLoaded({
@@ -122,11 +138,21 @@ export function useApiDefinitionCases(options: UseApiDefinitionCasesOptions) {
         cases: cases.value,
       })
     } catch (error) {
-      ElMessage.warning(getRequestErrorMessage(error))
+      if (isCurrent()) caseLoadStates.value[key] = { loading: false, error: getRequestErrorMessage(error) }
+    } finally {
+      if (isCurrent()) caseLoadStates.value[key]!.loading = false
     }
   }
 
+  async function refreshDefinitionCases() {
+    const editor = options.getActiveEditor()
+    if (editor?.definitionId) await loadCasesForDefinition(editor.definitionId, editor.detail.workspaceCode || options.workspaceCode.value)
+  }
+
   function clearCases() {
+    caseLoadEpoch += 1
+    caseLoadVersions.clear()
+    caseLoadStates.value = {}
     cases.value = []
   }
 
@@ -451,6 +477,9 @@ export function useApiDefinitionCases(options: UseApiDefinitionCasesOptions) {
     editingCaseDetail,
     caseRunningId,
     caseListCurrentPage,
+    caseListLoading,
+    caseListError,
+    refreshDefinitionCases,
     caseListPageSize,
     activeDefinitionCases,
     caseListTotalPages,

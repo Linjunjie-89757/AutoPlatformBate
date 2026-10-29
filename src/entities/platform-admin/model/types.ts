@@ -30,7 +30,11 @@ export interface PlatformWorkspaceItem {
   memberCount: number
   status: number | null
   createdAt?: string | null
+  ownerUserId?: number | null
   ownerName?: string | null
+  workspaceType?: string | null
+  industry?: string | null
+  initializationMode?: string | null
 }
 
 export interface CreatePlatformWorkspacePayload {

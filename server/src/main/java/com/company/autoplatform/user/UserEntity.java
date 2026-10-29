@@ -23,6 +23,9 @@ public class UserEntity extends BaseEntity {
     @TableField("creation_source")
     private String creationSource;
 
+    @TableField("last_login_at")
+    private java.time.LocalDateTime lastLoginAt;
+
     private String password;
 
     private Integer status;
