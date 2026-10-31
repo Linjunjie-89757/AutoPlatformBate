@@ -129,8 +129,8 @@ watch(selectedWorkspaceCode, (value) => {
 
 <style scoped>
 .api-automation-app-page {
-  height: calc(100dvh - 86px);
-  min-height: calc(100dvh - 86px);
+  height: calc(100dvh - 92px);
+  min-height: calc(100dvh - 92px);
   overflow: hidden;
 }
 

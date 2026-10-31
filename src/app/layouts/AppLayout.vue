@@ -681,6 +681,10 @@ onBeforeUnmount(() => {
   backdrop-filter: none;
 }
 
+.app-layout.is-api-workbench .app-layout__header {
+  height: 44px;
+}
+
 .app-layout__header-copy {
   display: inline-flex;
   min-width: 0;
@@ -977,6 +981,15 @@ onBeforeUnmount(() => {
   padding: 0 17.5px;
   border-bottom: 1px solid var(--app-border);
   background: #ffffff;
+}
+
+.app-layout.is-api-workbench .app-layout__secondary-nav {
+  height: 48px;
+  min-height: 48px;
+}
+
+.app-layout.has-secondary-nav.is-api-workbench .app-layout__main {
+  min-height: calc(100dvh - 92px);
 }
 
 .app-layout__secondary-link {
