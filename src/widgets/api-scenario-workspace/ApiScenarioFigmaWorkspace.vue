@@ -1352,7 +1352,7 @@ function addChildStep(parent: ScenarioStep) {
           @click="scrollScenarioTabs('list', 'left')"
         ><ChevronLeft /></button>
         <div ref="scenarioListTabStripRef" class="figma-api-scenarios__scene-tab-strip" @scroll="updateScenarioTabScrolls">
-          <button v-for="id in openScenarioIds" :key="id" type="button" :title="scenarios.find(item => item.id === id)?.name" @click="activateScenarioTab(id)">
+          <button v-for="id in openScenarioIds" :key="id" :class="{ 'is-active': id === activeScenarioId }" type="button" :title="scenarios.find(item => item.id === id)?.name" @click="activateScenarioTab(id)">
             <span class="figma-api-scenarios__tab-label">{{ scenarios.find(item => item.id === id)?.name || '未命名场景' }}</span>
             <span class="figma-api-scenarios__tab-close" @click.stop="closeEditor(id)"><X /></span>
           </button>
@@ -1744,8 +1744,9 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__editor-open-tabs > button,
 .figma-api-scenarios__scene-tab-strip > button { display: inline-flex; box-sizing: border-box; width: auto; min-width: 0; max-width: 166px; height: 26px; flex: 0 0 auto; align-items: center; gap: 6px; overflow: hidden; padding: 4px 12px; border: 0; border-radius: 8px; background: transparent; color: #86909c; cursor: pointer; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; white-space: nowrap; }
 .figma-api-scenarios__editor-open-tabs > button.is-active { background: #e8f3ff; color: #165dff; }
-.figma-api-scenarios__editor-open-tabs > button:hover,
-.figma-api-scenarios__scene-tab-strip > button:hover { background: transparent; color: #86909c; }
+.figma-api-scenarios__scene-tab-strip > button.is-active { background: #e8f3ff; color: #165dff; }
+.figma-api-scenarios__editor-open-tabs > button:hover:not(.is-active),
+.figma-api-scenarios__scene-tab-strip > button:hover:not(.is-active) { background: transparent; color: #86909c; }
 .figma-api-scenarios__tab-label { display: block; min-width: 0; max-width: 120px; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .figma-api-scenarios__tab-close { display: inline-flex; width: 16px; height: 16px; flex: 0 0 16px; align-items: center; justify-content: center; border-radius: 4px; color: inherit; cursor: pointer; opacity: 0; transition: background-color .15s ease, opacity .15s ease; }
 .figma-api-scenarios__editor-open-tabs > button:hover .figma-api-scenarios__tab-close,
@@ -1826,7 +1827,7 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__scene-tabbar > button:hover:not(:first-child) { background: var(--app-bg-muted); color: var(--app-primary); }
 .figma-api-scenarios__scene-tabbar > i { width: 1px; height: 16px; flex: 0 0 1px; margin-right: -7px; background: #e5e6eb; }
 .figma-api-scenarios__scene-tabbar .figma-api-scenarios__tool-icon { border-radius: 0; color: #909399; }
-.figma-api-scenarios__scene-tabbar .figma-api-scenarios__tool-icon svg { width: 16px; height: 16px; }
+.figma-api-scenarios__scene-tabbar .figma-api-scenarios__tool-icon svg { width: 14px; height: 14px; }
 .figma-api-scenarios__scene-tabbar .figma-api-scenarios__tool-icon:hover { background: var(--app-bg-muted); color: var(--app-primary); }
 .figma-api-scenarios__scene-tab-strip { display: flex; min-width: 0; height: 26px; flex: 0 1 auto; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; padding: 0 4px; scrollbar-width: none; -ms-overflow-style: none; }
 .figma-api-scenarios__scene-more { width: 24.5px !important; }
@@ -1976,13 +1977,9 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__last-run strong i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .figma-api-scenarios__last-run small { display: block; margin-top: 2px; color: #86909c; font: 400 10px/15px "JetBrains Mono", Consolas, monospace; }
 
-/* Figma 204:825: scene editor sub-tabs are fixed 37px controls in a 38px rail. */
-.figma-api-scenarios__editor-tabs { box-sizing: border-box; padding: 0 14px; background: #fff; }
-.figma-api-scenarios__editor-tabs button { display: inline-flex; box-sizing: border-box; height: 37px; align-items: center; justify-content: center; padding: 0 14px 2px; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__editor-tabs button:nth-child(1) { width: 78px; }
-.figma-api-scenarios__editor-tabs.is-empty button:nth-child(1) { width: 72px; }
-.figma-api-scenarios__editor-tabs button:nth-child(2) { width: 76px; }
-.figma-api-scenarios__editor-tabs button:nth-child(3) { width: 52px; }
+/* Make scene editor sub-tabs: a stable 38px rail with intrinsic tab widths. */
+.figma-api-scenarios__editor-tabs { box-sizing: border-box; padding: 0 16px; background: #fff; }
+.figma-api-scenarios__editor-tabs button { display: inline-flex; box-sizing: border-box; height: 38px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0 16px 2px; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; white-space: nowrap; }
 
 /* Figma 204:825: the run rail is a fixed form block followed by a bottom-anchored result block. */
 .figma-api-scenarios__run-config { display: flex; height: 100%; flex-direction: column; overflow: hidden; }
