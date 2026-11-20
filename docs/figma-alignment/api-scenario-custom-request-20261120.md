@@ -1,0 +1,86 @@
+# 场景自定义请求抽屉
+
+- Design 节点 `1166:9241` 展示 Params 空态，`1166:11129` 展示新增参数行。
+- Make 源码 `设计/figma-design-code-2026112002/src/app/ApiSceneModule.tsx` 中的 `StepConfigDrawer`、`RequestKeyValueEditor`、`ProcessorEditor` 和 `AssertionEditor`。浏览器预览使用该版本的 `SceneManagement` 和原样式。
+- Vue 基线 `6f05ab4`。新增自定义请求原先直接插入占位步骤，之后只能在通用抽屉里编辑名称、方法和路径。其余请求 Tab 只显示提示，调试结果只有一行摘要。
+- 本次范围为场景自定义请求的新建和编辑，包括已有控制步骤入口新增的自定义请求。
+
+## 四方核对
+
+| 范围 | Design | Make 源码和预览 | Vue 结果 |
+| --- | --- | --- | --- |
+| 抽屉整体 | 右侧贴边，宽 `720px`，独立滚动正文，固定顶栏和底栏 | `1440 × 862`、DPR `1` 下实测顶栏 `74px`、底栏 `61px`、正文左右内边距 `20px` | 同视口数值一致。卡片宽 `679px`，请求方法和地址与发送按钮同一行。 |
+| Params 空态 | 有名称、值、描述表头及空态提示 | 默认无行，卡片实测 `312.5px` 高 | 同高度，验证了空态到填有一行的切换。 |
+| Params 单行 | 复选框、名称、值、描述，右侧上移、下移、复制、删除 | 添加一行后卡片实测 `262.5px` 高，输入行 `32px` | 同高度，验证了添加、输入、复制、上移和删除。对照图中有少量字形渲染差异。 |
+| Headers、Cookies、Body、设置 | 两节点只画出这些 Tab 的入口 | 结构化表格、表单模式、超时与重定向由 Make 源码表达，已操作切换各 Tab | 复用系统控件，按模型存储。Chrome 验证 Header、Cookie、表单 Body、响应超时和重定向。其余请求体分支未逐项截图验收。 |
+| 前置、后置、断言 | 两节点只画出入口 | Make 使用列表和详情配置，前置无提取，断言有六种，浏览器预览已核对六种断言 | 复用现有接口用例配置组件及真实字段，内部表单沿用系统样式。验证等待、提取、SQL 数据源 ID 和脚本内容写入请求、六种断言入口和状态码断言。各编辑态未做像素验收。 |
+| 发送和响应 | 默认隐藏响应块 | 发送后出现响应体、Headers、Cookies、断言结果，Make 使用演示结果 | 调用草稿调试接口。验证发送中、成功响应、Cookie、断言结果和失败提示。使用拦截响应核对 Payload，没有执行外部请求或写入报告。 |
+| 写回草稿 | 新建底部「保存并添加」 | 新建先编辑后加入，编辑写回步骤，关闭未确认修改时提示 | 验证必填校验、写回草稿、重新打开、放弃修改、保存修改、子步骤保存和场景保存请求。通过拦截验证场景 Payload，没有写入数据库。 |
+
+证据在 `output/playwright/`。`scenario-custom-request-design-*`、`scenario-custom-request-make-*`、`scenario-custom-request-vue-*` 分别记录 Design、Make、Vue。`scenario-custom-request-overlay-*` 和 `scenario-custom-request-diff-*` 为两种 Params 状态的叠加图和差异图，`scenario-custom-request-metrics.json` 记录实际尺寸。
+
+## Auth 四态复核
+
+| 模式 | Design 来源 | Vue 实测 |
+| --- | --- | --- |
+| No Auth | `1166:12939` | 内容区 `677 × 178px`，空态文案居中。单独导出的 Design 帧没有可见背景填充，抽屉内沿用 Make 的白色卡片背景。 |
+| Bearer Token | `1167:15707` | `645 × 34px` 的 Token 输入框，`{{token}}` 占位提示。 |
+| Basic Auth | `1167:16626` 的外层帧 `1167:16624` | 用户名、密码分两列，每列 `316.5px`，间距 `12px`。 |
+| API Key | `1167:17568` 的外层帧 `1167:17566` | Key、Value、添加到分三列，每列 `207px`。下拉用与 Make 相同的原生外观，默认 Header，可选 Query。 |
+
+四个按钮实测高 `32px`，宽度依序为 `69px`、`96px`、`83px`、`66px`，水平间距 `8px`。选中态的样式、控件位置和宽度已与 Design 核对。Make 与 Vue 测试使用 `1440 × 862`、DPR `1`。Vue 保持各模式在当前编辑会话中已输入的内容，也保留已有 Digest 配置的编辑入口。测试验证四态切换、Header / Query 切换、重新打开和保存请求的数据，未写入数据库。
+
+证据文件位于 `output/playwright/scenario-auth-*`，序号 `0–3` 分别对应上述四态。`baseline.json` 记录修改前 Vue 和 Make 测量，`metrics.json` 记录修改后 Vue 尺寸与选中色，另有 Design、Make、修改前后截图和差异图。
+
+## Body 六种模式复核
+
+本轮范围为场景自定义请求抽屉的 Body。Git 基线为 `6f05ab4`。目标文件为 `ApiScenarioCustomRequestDrawer.vue`、`ApiScenarioRequestBody.vue`、`ApiScenarioRequestRows.vue`。Make 源码取自 `设计/figma-design-code-2026112003new/src/app/ApiSceneModule.tsx` 的 `RequestBodyEditor`、`RequestKeyValueEditor` 和 `StepConfigDrawer`。在 Chrome 1440 × 862、DPR 1、100% 缩放下操作该导出版本的本地 Make 预览和 Vue 开发页面。
+
+| 模式 | Design 节点 | 修改前 Vue 差异 | Make 与修改后 Vue 的核对结果 |
+| --- | --- | --- | --- |
+| none | `1172:21828`，渲染所属帧 `1172:21826` | 空态只有文字 | 补齐 16px 图标和文字间距。空态区域均高 98px。 |
+| json | `1174:26236` | 浅色编辑器高 208px，缺少工具栏 | 深色编辑区宽 645px、高 237.125px，34px 行号栏。核对变量提示、格式化和错误态，Vue 行号随编辑区滚动。 |
+| form-data | `1174:26343` | 类型控件在值列内，共用「添加参数」 | 对齐独立 92px 类型列、32px 行控件、文件按钮和「添加字段」。Vue 的文本行与文件行沿用相同列宽，Make 行宽受输入控件固有宽度影响。 |
+| x-www-form-urlencoded | `1174:26437` | 与 form-data 共用表单数据和提示 | 对齐三列等宽布局、方形复选框和「添加表单字段」。两种表单各有抽屉内草稿，按选中的类型写入现有 `formItems`。 |
+| raw | `1174:26715` | 使用格式下拉和浅色编辑器 | Text / XML 按钮高 28px。深色编辑区宽 645px、高 252.25px。核对两种提示和切换后各自的内容。 |
+| binary | `1174:26623` | 行内文件选择，无文件信息卡片 | 虚线选择区宽 645px、高 177px。核对文件名、大小、类型、替换与清空。Vue 辅助文案说明文件会随请求体发送。 |
+
+六种默认态的 Body 内容区宽度均为 645px。Make 与 Vue 的内容区高度分别为 138、336.125、189、190.5、361.25、217px，两侧实测一致。对照图保留了文字渲染差异，主要在按钮文案宽度、JSON 行号行距和错误文案。Vue 行号间距采用与内容相同的 17.6px，错误提示使用中文。Vue 还提供输入焦点轮廓和读取文件期间的禁用反馈。
+
+在 Vue 操作验证了 JSON 格式化和校验、行号滚动、表单增删复制排序、文本和文件模式、Raw 的两种格式、Binary 的替换清空、不同模式及 Tab 之间的草稿保留、保存后重开。场景保存使用浏览器拦截核对 multipart 和 binary 的实际请求负载，包括文件内容。真实目标接口发送及文件读取失败未实测。
+
+截图和测量在 `output/playwright/scenario-body-*`。六张 `three-way-*` 图从左到右为 Design、Make、Vue。五张 `compare-*` 交互图从左到右为 Make、Vue。两份 `make-metrics.json`、`vue-metrics.json` 记录浏览器实测值。
+
+## 前置处理五态复核
+
+范围为场景自定义请求抽屉的前置处理 Tab。Git 基线为 `6f05ab4`，保留已有工作区改动。Make 使用 `设计/figma-design-code-2026112003new/src/app/ApiSceneModule.tsx` 中的 `ProcessorEditor`。Vue 在 `ApiCaseAdvancedEditor.vue` 中复用现有处理器逻辑，在 `ScenarioRequestProcessorPanel.vue` 中实现该入口的布局。用 Chrome 1440 × 862、DPR 1、100% 缩放检查本地 Make 端口 4179 和 Vue 端口 4173。
+
+| 状态 | Design 节点 | 修改前 Vue | Make 与修改后 Vue |
+| --- | --- | --- | --- |
+| 空态 | `1177:27644` | 分散面板、窄栏和两行左侧说明，整体高 344px | 645 × 330px 双栏面板，230px 侧栏，右侧提示水平垂直居中。 |
+| 添加菜单 | `1177:28577` | 添加按钮较窄，菜单只有文字 | 213 × 28px 全宽触发按钮，213px 宽菜单，紧贴按钮下方 2px。核对三项文案、彩色图标、菜单悬浮及点击外部收起。 |
+| 脚本 | `1177:29571` | 开关、复制与删除分散，脚本有额外工具栏，面板高 365px | 行内状态点和四个操作。详情包含 32px 名称输入、28 × 16px 启用开关、10 秒提示和 381 × 205.5px 深色输入区。面板高 358.5px。 |
+| SQL | `1177:30812` | 数据源与超时同排，编辑区及映射布局不同，面板高 450px | 数据源占一行，白色 SQL 输入区 381 × 141.5px，超时与结果变量同排，映射在下方。默认超时 30000ms，面板高 466.5px。 |
+| 等待 | `1177:31958` | 带步进、快捷按钮和说明输入，面板高 344px | 260 × 32px 等待时长输入，默认 1000ms，范围 1–600000ms。面板高 330px。 |
+
+与原型有差异的字段集中在 SQL。Vue 从工作空间读取并筛选可用数据源，新增时显式选择连接。对照截图选择同名测试数据源。变量映射保留「写入变量名／列名」双字段和多条编辑，直接写入后端的 `extractParams`。Design 导出菜单里能看到背后的空态文案，本地预览以 Make 实际的不透明菜单为交互参考。字体渲染、数据源搜索和清除控件、输入焦点样式保留 Vue 表现。
+
+Make 实际操作了打开和关闭菜单、添加三个类型、修改等待时长、启停、排序、复制、删除。Vue 同样覆盖这些操作，并复验了数据源选项、等待边界、SQL 映射增删、切换 Tab、保存后重开。场景保存由浏览器拦截核对 `preProcessors`，验证顺序、启停、脚本、数据库 ID、超时、结果变量和映射字段。数据源列表用测试响应，未执行脚本、SQL 或真实场景。Make 源码未定义此菜单的 Escape 行为，Vue 鼠标打开后按 Escape 未收起菜单。
+
+证据在 `output/playwright/scenario-pre-*`。五张 `three-way-*` 从左到右为 Design、Make、Vue，`diff-*` 为 Design 和 Vue 的裁剪差异。各端 `metrics.json` 保存浏览器的实际尺寸。
+
+## 后置处理三态复核
+
+基线为 `6f05ab4` 与工作区前置处理改动。来源为同版 Make 源码的 `ProcessorEditor`、Chrome 中的在线 Make 预览及三个 Design 节点。Vue 在 1920 × 896、DPR 1 下打开 720px 抽屉。在线 Make 也操作了对应状态，采集时后置面板宽 555px。以下几何值以 645px 宽的 Design 节点裁图为基准。
+
+| 状态 | Design 节点 | 本地旧版差异 | 修复后 |
+| --- | --- | --- | --- |
+| 空态 | `1180:34853` | 窄工具栏、两行空态说明、面板高 344px | 复用前置双栏面板，645 × 330px、230px 侧栏，左右空态文案对齐 |
+| 添加菜单 | `1180:34919` | 入口为「添加」，菜单无类型图标 | 213 × 28px 的「添加处理器」按钮，共用三项及绿色图标的「变量提取」 |
+| 变量提取 | `1180:35009` | 右侧为分段按钮和拆分表单，无法选择提取范围 | 名称和启用位于同一行，提取范围和方式各宽 184.5px，变量名称和表达式各占一行，字段均高 32px |
+
+后置处理通过 `ScenarioRequestProcessorPanel.vue` 复用脚本、SQL、等待和排序等交互。变量提取表单保存现有的 `extractors` 数组。提取范围支持响应体和响应头，兼容已保存的其他范围。提取方式采用后端现有的 JSONPath、XPath、正则。Make 的 Cookies 和通用「键名」没有对应后端取值。
+
+在 Chrome 中验证了后置菜单四项、提取默认值和必填校验、复制、删除、排序，以及保存后重开。场景提交由浏览器拦截核对 `steps[].postProcessors[].extractors` 的方法、范围、变量名和表达式。验证使用草稿，实际 HTTP 提取执行未测试。
+
+证据位于 `output/playwright/scenario-post-*`。`compare-all.png` 从左到右为三个 Design 裁图和本地对应状态，`diff-*` 存放逐态像素差异。另存有在线 Make 截图与几何测量。

@@ -101,7 +101,7 @@ export function readScenarioFileAsBase64(file: File) {
   })
 }
 
-export function formatScenarioBodyFormFileSize(row: ApiKeyValueInput) {
+export function formatScenarioBodyFormFileSize(row: Pick<ApiKeyValueInput, 'fileSize'>) {
   const size = row.fileSize
   if (size == null) return ''
   if (size >= 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`

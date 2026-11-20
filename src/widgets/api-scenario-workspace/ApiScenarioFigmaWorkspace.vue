@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
 import {
   ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Clock, Copy, CornerDownRight, Database, Edit2, FileText, Filter, Globe, GripVertical, Layers,
   Link2, MoreHorizontal, Play, Plus, Repeat, Save, Search, Settings, Shield, Terminal, Trash2,
@@ -48,6 +48,7 @@ import {
   type ScenarioResourceSelection,
   type ScenarioResult,
 } from './lib/apiScenarioStepRequestUtils'
+import ApiScenarioCustomRequestDrawer from './ApiScenarioCustomRequestDrawer.vue'
 import ApiScenarioResourcePicker from './ApiScenarioResourcePicker.vue'
 import ApiScenarioRunHistory from './ApiScenarioRunHistory.vue'
 
@@ -205,6 +206,7 @@ const selectedDataset = ref<string | number | null>(null)
 const showAddStep = ref(false)
 const resourceStepType = ref<keyof typeof resourceStepConfig | null>(null)
 const configuringStep = ref<ScenarioStep | null>(null)
+const customRequestEditor = shallowRef<{ draft: ApiScenarioStep; target: ScenarioStep | null; parent: ScenarioStep | null } | null>(null)
 const isEditingSceneName = ref(false)
 const sceneNameDraft = ref('')
 const sceneNameInput = ref<HTMLInputElement | null>(null)
@@ -637,6 +639,7 @@ watch(openScenarioIds, () => {
 
 watch(activeScenarioId, () => {
   resourceStepType.value = null
+  customRequestEditor.value = null
   void nextTick(() => {
     scrollActiveScenarioTabIntoView()
     updateScenarioTabScroll(scenarioListTabStripRef.value, scenarioListTabScroll)
@@ -1069,27 +1072,7 @@ async function debugScenarioStep() {
   try {
     const payload = { environmentId: scenario.environmentId, variableSetId: scenario.variableSetId }
     let response
-    if (step.type === 'custom') {
-      const requestConfig = normalizeScenarioRequestConfig(step.source?.requestConfig || createEmptyRequestConfig())
-      requestConfig.method = String(step.method || requestConfig.method || 'GET').toUpperCase()
-      requestConfig.path = step.detail.trim()
-      if (!requestConfig.path) {
-        ElMessage.warning('请输入请求 URL 或接口路径')
-        return
-      }
-      response = await apiAutomationApi.debugRunDefinitionDraft(scenario.workspaceCode, {
-        workspaceCode: scenario.workspaceCode,
-        name: step.label.trim() || '自定义请求',
-        description: '',
-        tags: [],
-        requestConfig,
-        assertions: step.source?.assertions || [],
-        extractors: [],
-        preProcessors: step.source?.preProcessors || [],
-        postProcessors: step.source?.postProcessors || [],
-        ...payload,
-      })
-    } else if (step.type === 'ref-api' && step.source?.resourceId) {
+    if (step.type === 'ref-api' && step.source?.resourceId) {
       response = await apiAutomationApi.debugRunDefinition(scenario.workspaceCode, step.source.resourceId, payload)
     } else if (step.type === 'ref-case' && step.source?.resourceId) {
       response = await apiAutomationApi.runCase(scenario.workspaceCode, step.source.resourceId, payload)
@@ -1142,6 +1125,11 @@ function duplicateStep(index: number) {
 function addStep(type: StepType = 'custom') {
   const scenario = activeScenario.value
   if (!scenario) return
+  if (type === 'custom') {
+    showAddStep.value = false
+    openCustomRequestEditor()
+    return
+  }
   if (type === 'ref-api' || type === 'ref-case' || type === 'ref-scene') {
     showAddStep.value = false
     resourceStepType.value = type
@@ -1151,9 +1139,8 @@ function addStep(type: StepType = 'custom') {
   const config = stepTypeConfig[type]
   scenario.steps.push({
     id: `step-${Date.now()}`, type,
-    label: type === 'custom' ? '自定义请求' : config.label,
-    detail: type === 'custom' ? '/api/path' : config.description,
-    method: type === 'custom' ? 'POST' : undefined,
+    label: config.label,
+    detail: config.description,
     enabled: true,
     children: ['loop', 'condition', 'once'].includes(type) ? [] : undefined,
   })
@@ -1205,8 +1192,42 @@ function addSelectedResourceSteps(items: ScenarioResourceSelection[]) {
 }
 
 function openStepConfiguration(step: ScenarioStep) {
+  if (step.type === 'custom') {
+    openCustomRequestEditor(step)
+    return
+  }
   configuringStep.value = step
   stepDebugText.value = '配置完成后可发送请求并查看响应结果。'
+}
+
+function openCustomRequestEditor(target: ScenarioStep | null = null, parent: ScenarioStep | null = null) {
+  configuringStep.value = null
+  customRequestEditor.value = {
+    target,
+    parent,
+    draft: target ? { ...serializeStep(target), id: target.id } : {
+      id: crypto.randomUUID?.() ?? `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      stepName: '自定义请求',
+      stepType: 'CUSTOM_REQUEST',
+      refType: 'DIRECT',
+      enabled: true,
+      resourceType: null,
+      resourceId: null,
+      requestConfig: { ...createEmptyRequestConfig(), method: 'POST' },
+    },
+  }
+}
+
+function applyCustomRequestStep(payload: ApiScenarioStep) {
+  const editor = customRequestEditor.value
+  const scenario = activeScenario.value
+  if (!editor || !scenario || (scenario.persistedId ? !props.canEdit : !props.canCreate)) return
+  const step = mapApiStep(payload, scenario.steps.length)
+  if (editor.target) Object.assign(editor.target, step)
+  else if (editor.parent) (editor.parent.children ??= []).push(step)
+  else scenario.steps.push(step)
+  activeEditorTab.value = 'steps'
+  customRequestEditor.value = null
 }
 
 function notifyPendingStepEditor(label: string) {
@@ -1216,10 +1237,6 @@ function notifyPendingStepEditor(label: string) {
 async function saveStepConfiguration() {
   const step = configuringStep.value
   if (!step) return
-  if (step.type === 'custom' && !step.detail.trim()) {
-    ElMessage.warning('请输入请求 URL 或接口路径')
-    return
-  }
   if (step.type === 'script' && !step.detail.trim()) {
     ElMessage.warning('请输入脚本内容')
     return
@@ -1359,15 +1376,7 @@ function isControllerStep(type: StepType) {
 }
 
 function addChildStep(parent: ScenarioStep) {
-  parent.children ||= []
-  parent.children.push({
-    id: `step-child-${Date.now()}`,
-    type: 'custom',
-    method: 'POST',
-    label: '自定义请求',
-    detail: '/api/path',
-    enabled: true,
-  })
+  openCustomRequestEditor(null, parent)
 }
 </script>
 
@@ -1724,7 +1733,32 @@ function addChildStep(parent: ScenarioStep) {
         @close="resourceStepType = null"
         @add="addSelectedResourceSteps"
       />
-      <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer"><header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header><nav><button class="is-active" type="button">基础信息</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Params')">Params</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Headers')">Headers</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Body')">Body</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Auth')">Auth</button><button type="button" @click="notifyPendingStepEditor('前置处理')">前置处理</button><button type="button" @click="notifyPendingStepEditor('后置处理')">后置处理</button><button type="button" @click="notifyPendingStepEditor('断言')">断言</button><button type="button" @click="notifyPendingStepEditor('设置')">设置</button></nav><div class="figma-api-scenarios__drawer-content"><label>步骤名称<input v-model="configuringStep.label" /></label><div v-if="configuringStep.type === 'custom'" class="figma-api-scenarios__request-line"><label>请求方式<select class="app-native-select" v-model="configuringStep.method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select></label><label>请求路径<input v-model="configuringStep.detail" /></label></div><label v-else>步骤内容<input v-model="configuringStep.detail" /></label><section class="figma-api-scenarios__debug-response"><header><span>调试响应</span><button type="button" :disabled="stepDebugLoading" @click="debugScenarioStep"><Play />发送</button></header><p>{{ stepDebugText }}</p></section></div><footer><button type="button" @click="configuringStep = null">关闭</button><button type="button" :disabled="scenarioSaving" @click="saveStepConfiguration">保存配置</button></footer></aside>
+      <ApiScenarioCustomRequestDrawer
+        v-if="customRequestEditor && activeScenario"
+        :initial-step="customRequestEditor.draft"
+        :is-new="!customRequestEditor.target"
+        :workspace-code="activeScenario.workspaceCode"
+        :environment-id="activeScenario.environmentId"
+        :variable-set-id="activeScenario.variableSetId"
+        @close="customRequestEditor = null"
+        @save="applyCustomRequestStep"
+      />
+      <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer">
+        <header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header>
+        <nav>
+          <button class="is-active" type="button">基础信息</button>
+          <button v-for="tab in ['前置处理', '后置处理', '断言', '设置']" :key="tab" type="button" @click="notifyPendingStepEditor(tab)">{{ tab }}</button>
+        </nav>
+        <div class="figma-api-scenarios__drawer-content">
+          <label>步骤名称<input v-model="configuringStep.label" /></label>
+          <label>步骤内容<input v-model="configuringStep.detail" /></label>
+          <section class="figma-api-scenarios__debug-response">
+            <header><span>调试响应</span><button type="button" :disabled="stepDebugLoading" @click="debugScenarioStep"><Play />发送</button></header>
+            <p>{{ stepDebugText }}</p>
+          </section>
+        </div>
+        <footer><button type="button" @click="configuringStep = null">关闭</button><button type="button" :disabled="scenarioSaving" @click="saveStepConfiguration">保存配置</button></footer>
+      </aside>
       <input ref="csvDatasetInput" type="file" accept=".csv,text/csv" hidden @change="importDatasetCsv" />
       <input ref="jsonDatasetInput" type="file" accept=".json,application/json" hidden @change="importDatasetJson" />
     </main>
@@ -2268,9 +2302,8 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__step-drawer > nav button { height: 36px; flex: 0 0 auto; padding: 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #4e5969; cursor: pointer; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
 .figma-api-scenarios__step-drawer > nav button.is-active { border-bottom-color: #165dff; color: #165dff; font-weight: 500; }
 .figma-api-scenarios__drawer-content { min-height: 0; flex: 1; overflow: auto; padding: 18px 20px 72px; }
-.figma-api-scenarios__drawer-content > label, .figma-api-scenarios__request-line > label { display: block; margin: 0 0 16px; color: #4e5969; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
+.figma-api-scenarios__drawer-content > label { display: block; margin: 0 0 16px; color: #4e5969; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
 .figma-api-scenarios__drawer-content input, .figma-api-scenarios__drawer-content select { box-sizing: border-box; width: 100%; height: 30px; margin-top: 6px; padding: 0 8px; border: 1px solid #e5e6eb; border-radius: 6px; color: #1d2129; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; outline: 0; }
-.figma-api-scenarios__request-line { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; }
 .figma-api-scenarios__debug-response { margin-top: 24px; border: 1px solid #e5e6eb; border-radius: 7px; overflow: hidden; }
 .figma-api-scenarios__debug-response > header { display: flex; height: 34px; align-items: center; justify-content: space-between; padding: 0 10px; border: 0; border-bottom: 1px solid #e5e6eb; }
 .figma-api-scenarios__debug-response > header span { color: #4e5969; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }

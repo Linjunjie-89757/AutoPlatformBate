@@ -3,10 +3,12 @@ import { ChevronDown as AppSelectChevron } from '@lucide/vue'
 import { computed, ref, watch } from 'vue'
 import { ChevronDown, ChevronUp, Code2, Copy, Database, FileText, Hash, Plus, Server, Shield, Timer, Trash2, Variable } from '@lucide/vue'
 
-import { configApi } from '@/entities/config'
+import { configApi, type DbConnectionItem } from '@/entities/config'
 import ApiCodeEditor from '@/widgets/api-interface-workspace/ApiCodeEditor.vue'
 import ApiFastExtractionDrawer from '@/widgets/api-interface-workspace/ApiFastExtractionDrawer.vue'
 import type { FastExtractionConfig, FastExtractionMode } from '@/widgets/api-interface-workspace/fastExtraction'
+
+import ScenarioRequestProcessorPanel from './ScenarioRequestProcessorPanel.vue'
 
 type EditorKind = 'processor' | 'assertion'
 type ProcessorStage = 'pre' | 'post'
@@ -81,6 +83,7 @@ const props = withDefaults(defineProps<{
   stage?: ProcessorStage
   workspaceCode?: string
   latestResponseBody?: string
+  scenarioRequest?: boolean
 }>(), {
   stage: 'pre',
   workspaceCode: 'ALL',
@@ -92,13 +95,14 @@ const emit = defineEmits<{
 }>()
 
 const activeId = ref('')
-const databaseConnectionOptions = ref<string[]>([])
+const databaseConnectionOptions = ref<Array<Pick<DbConnectionItem, 'id' | 'connectionName'>>>([])
 let databaseRequestId = 0
 
 const rows = computed<LooseConfig[]>({
   get: () => props.modelValue as LooseConfig[],
   set: value => emit('update:modelValue', value),
 })
+const scenarioProcessor = computed(() => props.scenarioRequest && props.kind === 'processor')
 
 const addOptions = computed(() => {
   if (props.kind === 'assertion') {
@@ -183,9 +187,8 @@ watch(
       const page = await configApi.getSettingsDbConnections(workspaceCode)
       if (requestId !== databaseRequestId) return
       databaseConnectionOptions.value = (page.items || [])
-        .filter(item => item.status !== 0)
-        .map(item => item.connectionName)
-        .filter(Boolean)
+        .filter(item => item.status !== 0 && item.connectionName)
+        .map(({ id, connectionName }) => ({ id, connectionName }))
     } catch {
       if (requestId === databaseRequestId) databaseConnectionOptions.value = []
     }
@@ -377,7 +380,7 @@ function createProcessor(type: string): LooseConfig {
     },
     TIME_WAITING: { delayMs: 500 },
     EXTRACT: {
-      extractors: [createExtractItem({ expression: '$.data.token', variableName: 'token' })],
+      extractors: [createExtractItem(scenarioProcessor.value ? {} : { expression: '$.data.token', variableName: 'token' })],
     },
   }
   const row: LooseConfig = {
@@ -387,8 +390,30 @@ function createProcessor(type: string): LooseConfig {
     name: props.kind === 'processor' ? PROCESSOR_LABELS[type] || '处理器' : '',
     ...defaults[type],
   }
+  if (props.scenarioRequest && (type === 'SCRIPT' || type === 'SQL')) {
+    row.script = ''
+    if (type === 'SQL') row.extractParams = []
+  }
+  if (props.scenarioRequest && type === 'TIME_WAITING') row.delayMs = 1000
+  if (scenarioProcessor.value && type === 'SQL') {
+    row.name = 'SQL 处理器'
+    row.queryTimeout = 30000
+  }
+  if (scenarioProcessor.value && type === 'TIME_WAITING') row.name = '等待处理器'
   normalizeProcessor(row)
   return row
+}
+
+function selectDatabaseConnection(value: string | number | null | undefined) {
+  const row = activeRow.value
+  if (!row) return
+  if (props.scenarioRequest) {
+    const connection = databaseConnectionOptions.value.find(option => option.id === value)
+    row.dataSourceId = connection?.id ?? null
+    row.dataSourceName = connection?.connectionName ?? ''
+  } else {
+    row.dataSourceName = value ?? ''
+  }
 }
 
 function createAssertion(type: string, index: number): LooseConfig {
@@ -406,7 +431,7 @@ function createAssertion(type: string, index: number): LooseConfig {
       },
     },
     SCRIPT: {
-      script: '// pm.expect(pm.response.json().code).to.eql(0);\n// pm.expect(pm.response.code).to.eql(200);\n',
+      script: props.scenarioRequest ? '' : '// pm.expect(pm.response.json().code).to.eql(0);\n// pm.expect(pm.response.code).to.eql(200);\n',
     },
   }
   const row: LooseConfig = {
@@ -444,7 +469,10 @@ function removeRow(index: number) {
   const nextRows = [...rows.value]
   const [removed] = nextRows.splice(index, 1)
   updateRows(nextRows)
-  if (removed?.id === activeId.value) activeId.value = nextRows[Math.min(index, nextRows.length - 1)]?.id || ''
+  if (removed?.id === activeId.value) {
+    const nextIndex = scenarioProcessor.value ? Math.max(0, index - 1) : Math.min(index, nextRows.length - 1)
+    activeId.value = nextRows[nextIndex]?.id || ''
+  }
 }
 
 function moveRow(index: number, delta: -1 | 1) {
@@ -537,7 +565,20 @@ function toIndex(index: string | number) {
 </script>
 
 <template>
-  <div :class="['api-case-advanced-editor', { 'is-assertion': kind === 'assertion', 'is-status-code': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_CODE', 'is-response-header': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_HEADER', 'is-response-body': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_BODY' }]">
+  <ScenarioRequestProcessorPanel
+    v-if="scenarioProcessor"
+    :stage="stage"
+    :rows="rows"
+    :active-index="activeIndex"
+    :database-connections="databaseConnectionOptions"
+    @add="addByCommand"
+    @select="activeId = rows[$event]?.id || ''"
+    @move="moveRow"
+    @duplicate="duplicateRow"
+    @remove="removeRow"
+    @select-database="selectDatabaseConnection"
+  />
+  <div v-else :class="['api-case-advanced-editor', { 'is-assertion': kind === 'assertion', 'is-status-code': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_CODE', 'is-response-header': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_HEADER', 'is-response-body': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_BODY' }]">
     <aside :class="['api-case-advanced-sidebar', { 'is-assertion': kind === 'assertion' }]">
       <div class="api-case-advanced-toolbar">
         <div class="api-case-advanced-toolbar-actions">
@@ -627,7 +668,10 @@ function toIndex(index: string | number) {
               <button type="button" @click="activeRow.script = ''">清空</button>
             </div>
             <div class="api-case-script-editor is-processor-script-editor"><ApiCodeEditor v-model="activeRow.script" language="javascript" height="190px" plain :show-format-button="false" /></div>
-            <div class="api-case-advanced-hint-box">
+            <div v-if="scenarioRequest" class="api-case-advanced-hint-box">
+              <code>variables.get/set</code> · <code>request</code> · <code>response</code> · <code>log()</code> · <code>fail()</code> · 运行超时 10 秒
+            </div>
+            <div v-else class="api-case-advanced-hint-box">
               <code>pm.variables.set(name,val)</code> · <code>pm.variables.get(name)</code> · <code>pm.request</code> · <code>pm.response</code> · <code class="is-warning">pm.test()</code>
             </div>
           </div>
@@ -638,22 +682,23 @@ function toIndex(index: string | number) {
               <div class="api-case-advanced-datasource">
                 <Database :size="13" aria-hidden="true" />
                 <el-select
-                  v-model="activeRow.dataSourceName"
+                  :model-value="scenarioRequest ? activeRow.dataSourceId : activeRow.dataSourceName"
                   :suffix-icon="AppSelectChevron"
                   filterable
                   clearable
-                  allow-create
+                  :allow-create="!scenarioRequest"
                   default-first-option
                   popper-class="api-case-datasource-popper"
                   placeholder="选择数据库连接"
+                  @update:model-value="selectDatabaseConnection"
                 >
-                  <el-option v-for="name in databaseConnectionOptions" :key="name" :label="name" :value="name" />
+                  <el-option v-for="connection in databaseConnectionOptions" :key="connection.id" :label="connection.connectionName" :value="scenarioRequest ? connection.id : connection.connectionName" />
                 </el-select>
               </div>
             </label>
             <label><span>超时 (ms)</span><el-input-number v-model="activeRow.queryTimeout" :min="100" :max="60000" :step="1000" :controls="false" /></label>
             <div class="api-case-advanced-code-panel span-2">
-              <div class="api-case-advanced-code-toolbar"><span>查询语句</span><small class="api-case-advanced-code-note">仅 SELECT</small></div>
+              <div class="api-case-advanced-code-toolbar"><span>{{ scenarioRequest ? 'SQL 语句' : '查询语句' }}</span><small v-if="!scenarioRequest" class="api-case-advanced-code-note">仅 SELECT</small></div>
               <div class="api-case-script-editor is-sql-editor"><ApiCodeEditor v-model="activeRow.script" language="text" height="100px" plain :show-format-button="false" /></div>
             </div>
             <div class="api-case-advanced-sql-extract span-2">
@@ -679,7 +724,7 @@ function toIndex(index: string | number) {
             <div class="api-case-advanced-field-block span-2">
               <span class="api-case-advanced-field-label">等待时长</span>
               <div class="api-case-advanced-stepper-row">
-                <el-input-number v-model="activeRow.delayMs" :min="100" :max="600000" :step="100" />
+                <el-input-number v-model="activeRow.delayMs" :min="scenarioRequest ? 1 : 100" :max="600000" :step="100" />
                 <span class="api-case-advanced-unit">毫秒（ms）</span>
               </div>
               <div class="api-case-advanced-shortcuts">
@@ -806,9 +851,8 @@ function toIndex(index: string | number) {
 
           <div v-else class="api-case-advanced-code-panel is-assertion-script">
             <div class="api-case-script-editor is-assertion-script-editor"><ApiCodeEditor v-model="activeRow.script" language="text" height="160px" :line-decorations-width="13" :font-size="13" :line-height="20" :padding-top="10" :padding-bottom="10" theme-variant="figma-light" plain :show-format-button="false" /></div>
-            <div class="api-case-advanced-hint-box">
-              <code>pm.expect(value).to.eql(expected)</code> · <code class="is-warning">pm.test(name, fn)</code> · <code class="is-danger">pm.expect.fail(msg)</code>
-            </div>
+            <div v-if="scenarioRequest" class="api-case-advanced-hint-box"><code>request</code> · <code>response</code> · <code>variables.get(name)</code> · <code class="is-danger">fail(message)</code></div>
+            <div v-else class="api-case-advanced-hint-box"><code>pm.expect(value).to.eql(expected)</code> · <code class="is-warning">pm.test(name, fn)</code> · <code class="is-danger">pm.expect.fail(msg)</code></div>
             <label class="api-case-advanced-field-block"><span class="api-case-advanced-field-label">说明 <em>（选填）</em></span><el-input v-model="activeRow.description" placeholder="描述此断言的用途" /></label>
           </div>
         </template>
