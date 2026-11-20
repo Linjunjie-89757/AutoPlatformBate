@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, toRaw, watch } from 'vue'
 import {
   ArrowDown, ArrowUp, ChevronLeft, ChevronRight, Clock, Copy, CornerDownRight, Database, Edit2, FileText, Filter, Globe, GripVertical, Layers,
   Link2, MoreHorizontal, Play, Plus, Repeat, Save, Search, Settings, Shield, Terminal, Trash2,
@@ -38,12 +38,18 @@ import { AppFigmaActionColumn } from '@/shared/ui/app-figma-action-column'
 import AppFigmaTable from '@/shared/ui/app-figma-table/AppFigmaTable.vue'
 import AppTableColumnSettingsDrawer from '@/shared/ui/app-table-column-settings-drawer/AppTableColumnSettingsDrawer.vue'
 import AppTableSettingsTrigger from '@/shared/ui/app-table-settings-trigger/AppTableSettingsTrigger.vue'
-import { AppSwitch, confirmDelete } from '@/shared/ui'
+import { AppDialog, AppSwitch, confirmDelete } from '@/shared/ui'
 
 import {
+  copyScenarioApiPostProcessors,
   createEmptyRequestConfig,
   normalizeScenarioRequestConfig,
+  normalizeScenarioRunResult as normalizeResult,
+  type ScenarioResourceSelection,
+  type ScenarioResult,
 } from './lib/apiScenarioStepRequestUtils'
+import ApiScenarioResourcePicker from './ApiScenarioResourcePicker.vue'
+import ApiScenarioRunHistory from './ApiScenarioRunHistory.vue'
 
 const props = withDefaults(defineProps<{
   workspaceCode?: string
@@ -61,10 +67,9 @@ const props = withDefaults(defineProps<{
   canExport: true,
 })
 
-type ScenarioResult = 'pass' | 'fail' | 'idle'
 type ScenarioPriority = 'P0' | 'P1' | 'P2' | 'P3'
-type EditorTab = 'steps' | 'test-data' | 'settings'
-type StepType = 'import' | 'custom' | 'ref-api' | 'ref-case' | 'ref-scene' | 'loop' | 'condition' | 'once' | 'script' | 'wait'
+type EditorTab = 'steps' | 'test-data' | 'settings' | 'history'
+type StepType = 'custom' | 'ref-api' | 'ref-case' | 'ref-scene' | 'loop' | 'condition' | 'once' | 'script' | 'wait'
 
 type ScenarioStep = {
   id: string
@@ -116,7 +121,6 @@ type Dataset = {
 }
 
 const stepTypeConfig: Record<StepType, { label: string; description: string; color: string; background: string; icon: unknown }> = {
-  import: { label: '导入', description: '从系统导入接口 / 用例', color: '#ff7d00', background: '#fff3e8', icon: Upload },
   custom: { label: '自定义', description: '配置自定义 HTTP 请求', color: '#165dff', background: '#e8f3ff', icon: Globe },
   'ref-api': { label: '引用接口', description: '引用已有接口定义', color: '#7816ff', background: '#f5e8ff', icon: Link2 },
   'ref-case': { label: '引用用例', description: '引用接口用例', color: '#0fc6c2', background: '#e0f7fa', icon: FileText },
@@ -127,7 +131,36 @@ const stepTypeConfig: Record<StepType, { label: string; description: string; col
   script: { label: '脚本', description: '执行 JavaScript 脚本', color: '#f59e0b', background: '#fffbeb', icon: Terminal },
   wait: { label: '等待', description: '等待指定时间 (ms)', color: '#64748b', background: '#f8fafc', icon: Clock },
 }
-const stepTypeEntries = Object.entries(stepTypeConfig) as Array<[StepType, (typeof stepTypeConfig)[StepType]]>
+const stepTypeGroups: Array<{
+  title: string
+  options: Array<{ type: StepType; label?: string; description?: string; color?: string }>
+}> = [
+  {
+    title: '复用已有资源',
+    options: [
+      { type: 'ref-api', description: '选择已有接口，可引用或复制' },
+      { type: 'ref-case', label: '引用接口用例', description: '复用已有用例的请求与断言', color: '#0891b2' },
+      { type: 'ref-scene', description: '选择并复用已有测试场景' },
+    ],
+  },
+  {
+    title: '新建步骤',
+    options: [
+      { type: 'custom', label: '自定义请求' },
+      { type: 'script' },
+      { type: 'wait' },
+      { type: 'loop' },
+      { type: 'condition' },
+      { type: 'once' },
+    ],
+  },
+]
+
+const resourceStepConfig = {
+  'ref-api': { kind: 'api', stepType: 'API', resourceType: 'DEFINITION' },
+  'ref-case': { kind: 'case', stepType: 'API_CASE', resourceType: 'CASE' },
+  'ref-scene': { kind: 'scene', stepType: 'API_SCENARIO', resourceType: null },
+} as const
 
 function makeScenario(id: number, name: string): Scenario {
   return {
@@ -170,7 +203,7 @@ const scenarioListTabScroll = ref({ overflow: false, arrivedLeft: true, arrivedR
 const scenarioEditorTabScroll = ref({ overflow: false, arrivedLeft: true, arrivedRight: true })
 const selectedDataset = ref<string | number | null>(null)
 const showAddStep = ref(false)
-const showImportSteps = ref(false)
+const resourceStepType = ref<keyof typeof resourceStepConfig | null>(null)
 const configuringStep = ref<ScenarioStep | null>(null)
 const isEditingSceneName = ref(false)
 const sceneNameDraft = ref('')
@@ -230,13 +263,6 @@ const flatScenarioModules = computed(() => {
 
 function normalizePriority(value?: string | null): ScenarioPriority {
   return value === 'P0' || value === 'P1' || value === 'P2' || value === 'P3' ? value : 'P2'
-}
-
-function normalizeResult(value?: string | null): ScenarioResult {
-  const normalized = String(value || '').toUpperCase()
-  if (normalized === 'SUCCESS' || normalized === 'PASSED' || normalized === 'PASS') return 'pass'
-  if (normalized === 'FAILED' || normalized === 'FAIL' || normalized === 'ERROR') return 'fail'
-  return 'idle'
 }
 
 function formatDateTime(value?: string | null) {
@@ -333,7 +359,6 @@ function mapDataset(item: ApiScenarioTestDatasetDetail): Dataset {
 
 function scenarioStepType(type: StepType): ApiScenarioStep['stepType'] {
   const mapping: Record<StepType, ApiScenarioStep['stepType']> = {
-    import: 'API',
     custom: 'CUSTOM_REQUEST',
     'ref-api': 'API',
     'ref-case': 'API_CASE',
@@ -348,7 +373,7 @@ function scenarioStepType(type: StepType): ApiScenarioStep['stepType'] {
 }
 
 function serializeStep(step: ScenarioStep): ApiScenarioStep {
-  const source = step.source ? structuredClone(step.source) : {
+  const source = step.source ? structuredClone(toRaw(step.source)) : {
     stepName: step.label,
     resourceType: null,
     resourceId: null,
@@ -356,7 +381,7 @@ function serializeStep(step: ScenarioStep): ApiScenarioStep {
   const stepType = scenarioStepType(step.type)
   const next: ApiScenarioStep = {
     ...source,
-    id: step.source?.id,
+    id: step.source?.id ? step.id : undefined,
     stepName: step.label.trim() || stepTypeConfig[step.type].label,
     stepType,
     enabled: step.enabled,
@@ -611,6 +636,7 @@ watch(openScenarioIds, () => {
 }, { deep: true })
 
 watch(activeScenarioId, () => {
+  resourceStepType.value = null
   void nextTick(() => {
     scrollActiveScenarioTabIntoView()
     updateScenarioTabScroll(scenarioListTabStripRef.value, scenarioListTabScroll)
@@ -1116,6 +1142,11 @@ function duplicateStep(index: number) {
 function addStep(type: StepType = 'custom') {
   const scenario = activeScenario.value
   if (!scenario) return
+  if (type === 'ref-api' || type === 'ref-case' || type === 'ref-scene') {
+    showAddStep.value = false
+    resourceStepType.value = type
+    return
+  }
   const suffix = scenario.steps.length + 1
   const config = stepTypeConfig[type]
   scenario.steps.push({
@@ -1130,9 +1161,47 @@ function addStep(type: StepType = 'custom') {
   if (suffix > 0) activeEditorTab.value = 'steps'
 }
 
-function importSteps() {
-  showImportSteps.value = false
-  ElMessage.info('当前 Figma 弹窗缺少资源选择控件，未执行导入')
+function addSelectedResourceSteps(items: ScenarioResourceSelection[]) {
+  const scenario = activeScenario.value
+  const type = resourceStepType.value
+  if (!scenario || !type || (scenario.persistedId ? !props.canEdit : !props.canCreate)) return
+  const config = resourceStepConfig[type]
+  const eligibleItems = items.filter(({ resource }) => resource.workspaceCode === scenario.workspaceCode
+    && (type !== 'ref-scene' || resource.id !== scenario.persistedId))
+  const steps = eligibleItems.map(({ resource, snapshot }): ScenarioStep => {
+    const id = crypto.randomUUID?.() ?? `step-${Date.now()}-${resource.id}-${scenario.steps.length}`
+    const source: ApiScenarioStep = snapshot ? {
+      id,
+      stepName: resource.name,
+      stepType: 'CUSTOM_REQUEST',
+      refType: 'DIRECT',
+      resourceType: null,
+      resourceId: null,
+      requestConfig: snapshot.requestConfig,
+      assertions: snapshot.assertions,
+      preProcessors: snapshot.preProcessors,
+      postProcessors: copyScenarioApiPostProcessors(snapshot),
+    } : {
+      id,
+      stepName: resource.name,
+      stepType: config.stepType,
+      refType: 'REF',
+      resourceType: config.resourceType,
+      resourceId: resource.id,
+    }
+    return {
+      id,
+      type: snapshot ? 'custom' : type,
+      label: resource.name,
+      detail: 'path' in resource ? snapshot?.requestConfig.path || resource.path : '',
+      method: 'method' in resource ? snapshot?.requestConfig.method || resource.method : undefined,
+      enabled: true,
+      source,
+    }
+  })
+  scenario.steps.push(...steps)
+  activeEditorTab.value = 'steps'
+  resourceStepType.value = null
 }
 
 function openStepConfiguration(step: ScenarioStep) {
@@ -1485,6 +1554,7 @@ function addChildStep(parent: ScenarioStep) {
             <button :class="{ 'is-active': activeEditorTab === 'steps' }" type="button" @click="activeEditorTab = 'steps'">步骤 ({{ activeScenario.steps.length }})</button>
             <button :class="{ 'is-active': activeEditorTab === 'test-data' }" type="button" @click="activeEditorTab = 'test-data'">测试数据</button>
             <button :class="{ 'is-active': activeEditorTab === 'settings' }" type="button" @click="activeEditorTab = 'settings'">设置</button>
+            <button :class="{ 'is-active': activeEditorTab === 'history' }" type="button" @click="activeEditorTab = 'history'">运行历史</button>
           </nav>
           <div v-if="false" class="figma-api-scenarios__steps">
             <div class="figma-api-scenarios__scene-info"><div><select class="app-native-select"><option>P1</option></select><input :value="editingScenario?.name" /></div><p>由 Codex 根据获客中心低风险新增编辑删除接口生成的可重复闭环场景。</p><small>X-MAN · 更新于 2026-07-14 · 获客中心</small></div>
@@ -1510,7 +1580,7 @@ function addChildStep(parent: ScenarioStep) {
               </div>
               <p v-if="!isNewScenario">{{ activeScenario.description || '暂无场景描述' }}</p><small>{{ activeScenarioAuthor }} · 更新于 {{ activeScenarioUpdatedAt }} · {{ activeScenario.module || '未分配模块' }}</small>
             </div>
-            <div class="figma-api-scenarios__steps-toolbar"><p>共 <b>{{ activeScenario.steps.length }}</b> 个步骤</p><div v-if="canEdit || isNewScenario"><button type="button" @click="showImportSteps = true"><Upload />导入步骤</button><button type="button" @click="showAddStep = true"><Plus />添加步骤</button></div></div>
+            <div class="figma-api-scenarios__steps-toolbar"><p>共 <b>{{ activeScenario.steps.length }}</b> 个步骤</p><div v-if="canEdit || isNewScenario"><button type="button" @click="showAddStep = true"><Plus />添加步骤</button></div></div>
             <div v-if="activeScenario.steps.length" class="figma-api-scenarios__step-list">
               <div v-for="(step, index) in activeScenario.steps" :key="step.id" class="figma-api-scenarios__step-group">
                 <article class="figma-api-scenarios__step-row" :class="{ 'is-disabled': !step.enabled, 'is-controller': isControllerStep(step.type) }" :style="{ '--step-color': stepTypeConfig[step.type].color }">
@@ -1555,7 +1625,7 @@ function addChildStep(parent: ScenarioStep) {
             <aside class="figma-api-scenarios__dataset-list"><div class="figma-api-scenarios__dataset-list-head"><b>数据集列表</b><button type="button" @click="addDataset()"><Plus /></button></div><div v-for="dataset in datasets" :key="dataset.id" :class="{ 'is-active': selectedDataset === dataset.id }" class="figma-api-scenarios__dataset-item"><button type="button" @click="selectedDataset = dataset.id"><AppSwitch :model-value="dataset.enabled" label="启用数据集" @click.stop @update:model-value="dataset.enabled = $event" /><span class="figma-api-scenarios__dataset-name"><b>{{ dataset.name }}</b><small>{{ dataset.rows.length }} 行数据</small></span></button><button class="figma-api-scenarios__dataset-more" type="button" title="操作" @click.stop><MoreHorizontal /></button></div></aside>
             <section class="figma-api-scenarios__dataset-editor"><header><b>{{ activeDataset?.name || '请选择或新建数据集' }}</b><div><button type="button" @click="selectCsvDatasetFile"><Upload />导入 CSV</button><button type="button" @click="selectJsonDatasetFile"><Database />导入 JSON</button><i /><button type="button" :disabled="!activeDataset" @click="exportDatasetCsv"><Database />导出 CSV</button><button type="button" :disabled="!activeDataset" @click="addDatasetColumn()">添加变量列</button><button class="is-primary" type="button" :disabled="!activeDataset" @click="addDatasetRow()"><Plus />添加数据行</button></div></header><div class="figma-api-scenarios__dataset-table-scroll"><table v-if="activeDataset"><colgroup><col class="figma-api-scenarios__dataset-index-column" /><col v-for="column in datasetColumns" :key="column" class="figma-api-scenarios__dataset-value-column" /><col class="figma-api-scenarios__dataset-action-column" /></colgroup><thead><tr><th>#</th><th v-for="(column, columnIndex) in datasetColumns" :key="`${activeDataset.id}-${columnIndex}`">{{ column }} <button type="button" title="删除列" @click="removeDatasetColumn(columnIndex)"><Trash2 /></button></th><th /></tr></thead><tbody><tr v-for="(row, rowIndex) in datasetRows" :key="`${activeDataset.id}-${rowIndex}`"><td>{{ rowIndex + 1 }}</td><td v-for="(_, columnIndex) in datasetColumns" :key="columnIndex"><input v-model="row[columnIndex]" /></td><td><button type="button" title="删除行" @click="removeDatasetRow(rowIndex)"><Trash2 /></button></td></tr></tbody></table></div></section>
           </div>
-          <div v-else class="figma-api-scenarios__settings">
+          <div v-else-if="activeEditorTab === 'settings'" class="figma-api-scenarios__settings">
             <div class="figma-api-scenarios__settings-panel">
               <article><p><b>失败后继续执行</b><span>单步失败后继续执行后续步骤</span></p><AppSwitch v-model="sceneSettings.continueOnFailure" label="失败后继续执行" size="regular" /></article>
               <article><p><b>全局超时时间 (ms)</b><span>整个场景的最大执行时间</span></p><input v-model.number="sceneSettings.timeout" type="number" /></article>
@@ -1563,6 +1633,13 @@ function addChildStep(parent: ScenarioStep) {
               <article><p><b>步骤间默认等待 (ms)</b><span>每个步骤执行前的默认等待时间</span></p><input v-model.number="sceneSettings.waitTime" type="number" /></article>
             </div>
           </div>
+          <ApiScenarioRunHistory
+            v-else
+            :key="activeScenario.id"
+            :scenario-id="activeScenario.persistedId"
+            :workspace-code="activeScenario.workspaceCode"
+            :environments="environments"
+          />
         </section>
         <aside v-if="false" class="figma-api-scenarios__run-config">
           <div class="figma-api-scenarios__run-actions"><select class="app-native-select"><option>测试环境</option></select><button type="button">运行</button><button type="button">保存</button></div>
@@ -1574,7 +1651,17 @@ function addChildStep(parent: ScenarioStep) {
           <label>标签<button type="button">+ 添加</button></label>
         </aside>
         <aside class="figma-api-scenarios__run-config" :class="{ 'is-new': isNewScenario }">
-          <div class="figma-api-scenarios__run-actions"><div><select class="app-native-select" v-model.number="activeScenario.environmentId" :disabled="!canEdit && !isNewScenario" @change="syncActiveScenarioEnvironment"><option :value="null">请选择环境</option><option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}</option></select><button type="button" title="环境设置" @click="openEnvironmentSettings"><Settings /></button></div><button v-if="canExecute" type="button" :disabled="scenarioRunning || scenarioSaving" @click="runScenario(activeScenario, canEdit || isNewScenario)"><Play />运行</button><button v-if="canEdit || isNewScenario" type="button" :disabled="scenarioSaving || scenarioRunning" @click="saveScenario"><Save />保存</button></div>
+          <div class="figma-api-scenarios__run-actions">
+            <div>
+              <select class="app-native-select" v-model.number="activeScenario.environmentId" aria-label="运行环境" :disabled="!canEdit && !isNewScenario" @change="syncActiveScenarioEnvironment">
+                <option :value="null">请选择环境</option>
+                <option v-for="environment in environments" :key="environment.id" :value="environment.id">{{ environment.name }}</option>
+              </select>
+              <button type="button" title="环境设置" aria-label="环境设置" @click="openEnvironmentSettings"><Settings /></button>
+            </div>
+            <button v-if="canExecute" class="figma-api-scenarios__run-button" type="button" :disabled="scenarioRunning || scenarioSaving" @click="runScenario(activeScenario, canEdit || isNewScenario)"><Play />运行</button>
+            <button v-if="canEdit || isNewScenario" type="button" :disabled="scenarioSaving || scenarioRunning" @click="saveScenario"><Save />保存</button>
+          </div>
           <div class="figma-api-scenarios__run-fields">
           <label><em>*</em> 所属模块<select class="app-native-select" v-model.number="activeScenario.moduleId" @change="syncActiveScenarioModule"><option :value="null">请选择所属模块</option><option v-for="module in flatScenarioModules" :key="module.id" :value="module.id">{{ module.name }}</option></select></label>
           <label>测试数据<select class="app-native-select" v-model="activeScenario.testData"><option value="">请选择测试数据</option><option>不使用测试数据</option><option v-for="dataset in datasets" :key="dataset.id">{{ dataset.name }}</option></select></label>
@@ -1587,7 +1674,56 @@ function addChildStep(parent: ScenarioStep) {
           <section v-if="activeScenario.lastRun" class="figma-api-scenarios__last-run"><p>上次运行</p><strong :class="`is-${activeScenario.lastResult}`"><i />{{ activeScenario.lastResult === 'pass' ? '通过' : '失败' }}</strong><small>{{ activeScenario.lastRun }}</small></section>
         </aside>
       </div>
-      <div v-if="showAddStep || showImportSteps" class="figma-api-scenarios__overlay" @click.self="showAddStep = false; showImportSteps = false"><section class="figma-api-scenarios__dialog" :class="{ 'is-import': showImportSteps }"><header><b>{{ showImportSteps ? '导入步骤' : '选择步骤类型' }}</b><button type="button" @click="showAddStep = false; showImportSteps = false"><X /></button></header><p v-if="showImportSteps">选择资源后会将对应接口和脚本步骤追加到当前场景。</p><div v-else class="figma-api-scenarios__step-type-grid"><button v-for="[type, config] in stepTypeEntries" :key="type" type="button" @click="addStep(type)"><span :style="{ color: config.color, background: config.background }"><component :is="config.icon" /></span><b>{{ config.label }}</b><small>{{ config.description }}</small></button></div><footer v-if="showImportSteps"><button type="button" @click="showAddStep = false; showImportSteps = false">取消</button><button type="button" @click="importSteps()">确认导入</button></footer></section></div>
+      <AppDialog
+        v-model="showAddStep"
+        title="选择步骤类型"
+        width="640px"
+        dialog-class="api-scenario-add-step-dialog"
+        modal-class="api-scenario-add-step-overlay"
+        align-center
+        destroy-on-close
+        :show-close="false"
+      >
+        <template #header>
+          <div class="figma-api-scenarios__add-step-header">
+            <strong>选择步骤类型</strong>
+            <button type="button" aria-label="关闭" @click="showAddStep = false"><X :size="15" aria-hidden="true" /></button>
+          </div>
+        </template>
+        <section v-for="group in stepTypeGroups" :key="group.title" class="figma-api-scenarios__step-type-group">
+          <h3>{{ group.title }}</h3>
+          <div class="figma-api-scenarios__step-type-grid">
+            <button
+              v-for="option in group.options"
+              :key="option.type"
+              type="button"
+              :style="{
+                '--step-option-color': option.color ?? stepTypeConfig[option.type].color,
+                '--step-option-background': stepTypeConfig[option.type].background,
+              }"
+              @click="addStep(option.type)"
+            >
+              <span class="figma-api-scenarios__step-type-icon" aria-hidden="true">
+                <component :is="stepTypeConfig[option.type].icon" :size="16" />
+              </span>
+              <span>
+                <strong>{{ option.label ?? stepTypeConfig[option.type].label }}</strong>
+                <small>{{ option.description ?? stepTypeConfig[option.type].description }}</small>
+              </span>
+            </button>
+          </div>
+        </section>
+      </AppDialog>
+      <ApiScenarioResourcePicker
+        v-if="resourceStepType && activeScenario"
+        :key="resourceStepType"
+        :kind="resourceStepConfig[resourceStepType].kind"
+        :workspace-code="activeScenario.workspaceCode"
+        :workspace-name="activeScenario.source?.workspaceName"
+        :current-scenario-id="activeScenario.persistedId"
+        @close="resourceStepType = null"
+        @add="addSelectedResourceSteps"
+      />
       <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer"><header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header><nav><button class="is-active" type="button">基础信息</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Params')">Params</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Headers')">Headers</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Body')">Body</button><button v-if="configuringStep.type === 'custom'" type="button" @click="notifyPendingStepEditor('Auth')">Auth</button><button type="button" @click="notifyPendingStepEditor('前置处理')">前置处理</button><button type="button" @click="notifyPendingStepEditor('后置处理')">后置处理</button><button type="button" @click="notifyPendingStepEditor('断言')">断言</button><button type="button" @click="notifyPendingStepEditor('设置')">设置</button></nav><div class="figma-api-scenarios__drawer-content"><label>步骤名称<input v-model="configuringStep.label" /></label><div v-if="configuringStep.type === 'custom'" class="figma-api-scenarios__request-line"><label>请求方式<select class="app-native-select" v-model="configuringStep.method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select></label><label>请求路径<input v-model="configuringStep.detail" /></label></div><label v-else>步骤内容<input v-model="configuringStep.detail" /></label><section class="figma-api-scenarios__debug-response"><header><span>调试响应</span><button type="button" :disabled="stepDebugLoading" @click="debugScenarioStep"><Play />发送</button></header><p>{{ stepDebugText }}</p></section></div><footer><button type="button" @click="configuringStep = null">关闭</button><button type="button" :disabled="scenarioSaving" @click="saveStepConfiguration">保存配置</button></footer></aside>
       <input ref="csvDatasetInput" type="file" accept=".csv,text/csv" hidden @change="importDatasetCsv" />
       <input ref="jsonDatasetInput" type="file" accept=".json,application/json" hidden @change="importDatasetJson" />
@@ -1646,8 +1782,8 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__empty { margin: 0; padding: 48px 0; color: #86909c; font-size: 13px; text-align: center; }
 .figma-api-scenarios__table-footer { display: flex; box-sizing: border-box; height: 43px; align-items: center; justify-content: space-between; padding: 0 14px; color: #86909c; font-size: 12px; line-height: 18px; }
 .figma-api-scenarios__table-footer button { display: inline-flex; box-sizing: border-box; width: 24.5px; height: 24.5px; align-items: center; justify-content: center; padding: 0; border: 1px solid #165dff; border-radius: 5px; background: #165dff; color: #fff; font: 500 12px/18px Inter, sans-serif; }
-.figma-api-scenarios__editor { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; background: #fff; }
-.figma-api-scenarios__editor-head { display: flex; box-sizing: border-box; height: 38px; align-items: center; gap: 7px; padding: 0 7px 0 8px; border-bottom: 1px solid #e5e6eb; background: #fff; }
+.figma-api-scenarios__editor { --scene-editor-font: Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif; display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; background: #fff; }
+.figma-api-scenarios__editor-head { display: flex; box-sizing: border-box; height: 38px; flex: 0 0 38px; align-items: center; gap: 7px; padding: 0 7px 0 8px; border-bottom: 1px solid #e5e6eb; background: #fff; }
 .figma-api-scenarios__editor-head > button:first-child { box-sizing: border-box; width: auto; height: 26px; flex: 0 0 auto; margin-right: -3px; padding: 4px 12px; border: 0; border-radius: 8px; background: transparent; color: #86909c; cursor: pointer; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; white-space: nowrap; }
 .figma-api-scenarios__editor-head > i { width: 1px; height: 16px; flex: 0 0 1px; margin-right: -7px; background: #e5e6eb; }
 .figma-api-scenarios__editor-head strong { color: #1d2129; font-size: 12px; font-weight: 500; line-height: 18px; }
@@ -1722,16 +1858,6 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__settings button { position: relative; width: 28px; height: 16px; padding: 0; border: 0; border-radius: 8px; background: #c9cdd4; }
 .figma-api-scenarios__settings button.is-on { background: #165dff; }
 .figma-api-scenarios__settings button i { position: absolute; top: 2px; left: 14px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
-.figma-api-scenarios__run-config { box-sizing: border-box; width: 220px; flex: 0 0 220px; overflow-y: auto; border-left: 1px solid #e5e6eb; background: #fff; }
-.figma-api-scenarios__run-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 10.5px; border-bottom: 1px solid #e5e6eb; }
-.figma-api-scenarios__run-actions select { grid-column: 1 / -1; }
-.figma-api-scenarios__run-config label { display: block; margin: 10.5px; color: #4e5969; font-size: 12px; line-height: 18px; }
-.figma-api-scenarios__run-config select, .figma-api-scenarios__run-config input { box-sizing: border-box; width: 100%; height: 24.5px; margin-top: 3.5px; padding: 0 8px; border: 1px solid #e5e6eb; border-radius: 7px; background: #fff; color: #4e5969; font: 400 12px/18px Inter, sans-serif; }
-.figma-api-scenarios__run-config button { box-sizing: border-box; height: 28px; border: 1px solid #165dff; border-radius: 7px; background: #fff; color: #165dff; cursor: pointer; font: 500 12px/18px Inter, sans-serif; }
-.figma-api-scenarios__run-config .figma-api-scenarios__run-actions > button:first-of-type { background: #165dff; color: #fff; }
-.figma-api-scenarios__numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.figma-api-scenarios__numbers label { margin: 0; }
-.figma-api-scenarios__run-config label > button { display: block; width: auto; height: auto; margin-top: 3.5px; padding: 0; border: 0; color: #165dff; }
 
 /* Editor states from Figma Make: multiple documents, compact step cards, data editing and local dialogs. */
 .figma-api-scenarios__name { min-width: 0; overflow: hidden; padding: 0 14px; border: 0; background: transparent; color: #165dff; cursor: pointer; font: 500 13px/20px Inter, "Noto Sans SC", sans-serif; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
@@ -1744,6 +1870,10 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__editor-open-tabs > button,
 .figma-api-scenarios__scene-tab-strip > button { display: inline-flex; box-sizing: border-box; width: auto; min-width: 0; max-width: 166px; height: 26px; flex: 0 0 auto; align-items: center; gap: 6px; overflow: hidden; padding: 4px 12px; border: 0; border-radius: 8px; background: transparent; color: #86909c; cursor: pointer; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; white-space: nowrap; }
 .figma-api-scenarios__editor-open-tabs > button.is-active { background: #e8f3ff; color: #165dff; }
+.figma-api-scenarios__editor-head > button:first-child,
+.figma-api-scenarios__scene-tabbar > button:first-child,
+.figma-api-scenarios__editor-open-tabs > button,
+.figma-api-scenarios__scene-tab-strip > button { font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; transition: color .15s cubic-bezier(.4, 0, .2, 1), background-color .15s cubic-bezier(.4, 0, .2, 1), border-color .15s cubic-bezier(.4, 0, .2, 1); }
 .figma-api-scenarios__scene-tab-strip > button.is-active { background: #e8f3ff; color: #165dff; }
 .figma-api-scenarios__editor-open-tabs > button:hover:not(.is-active),
 .figma-api-scenarios__scene-tab-strip > button:hover:not(.is-active) { background: transparent; color: #86909c; }
@@ -1787,32 +1917,13 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__settings > article { display: flex; box-sizing: border-box; min-height: 74px; align-items: center; justify-content: space-between; margin-bottom: 14px; padding: 15px; border: 1px solid #e5e6eb; border-radius: 9px; background: #fff; }
 .figma-api-scenarios__settings > article:last-child { margin-bottom: 0; }
 .figma-api-scenarios__settings > article p { min-width: 0; padding-right: 20px; }
-.figma-api-scenarios__run-config { background: #fafbfe; }
-.figma-api-scenarios__run-actions { display: grid; grid-template-columns: 1fr 1fr; }
-.figma-api-scenarios__run-actions > div { display: flex; grid-column: 1 / -1; gap: 6px; }
-.figma-api-scenarios__run-actions > div select { flex: 1; }
-.figma-api-scenarios__run-actions > div button { display: inline-flex; width: 28px; align-items: center; justify-content: center; padding: 0; border-color: #e5e6eb; background: #fff; color: #86909c; }
-.figma-api-scenarios__run-actions > div button svg { width: 12px; height: 12px; }
-.figma-api-scenarios__run-actions > button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
-.figma-api-scenarios__run-actions > button svg { width: 12px; height: 12px; }
-.figma-api-scenarios__run-config label em { color: #f53f3f; font-style: normal; }
-.figma-api-scenarios__tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.figma-api-scenarios__tag-list span { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 4px; background: #e8f3ff; color: #165dff; font-size: 11px; }
-.figma-api-scenarios__tag-list span svg { width: 10px; height: 10px; cursor: pointer; }
-.figma-api-scenarios__tag-list button { margin: 0; font-size: 11px; }
-.figma-api-scenarios__overlay { position: absolute; z-index: 20; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(29, 33, 41, .34); }
-.figma-api-scenarios__dialog { width: 440px; border-radius: 8px; background: #fff; box-shadow: 0 10px 30px rgba(29, 33, 41, .2); }
-.figma-api-scenarios__dialog header, .figma-api-scenarios__step-drawer header { display: flex; height: 48px; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #e5e6eb; }
-.figma-api-scenarios__dialog header b, .figma-api-scenarios__step-drawer header b { color: #1d2129; font-size: 14px; font-weight: 600; }
-.figma-api-scenarios__dialog header button, .figma-api-scenarios__step-drawer header button { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #86909c; cursor: pointer; }
-.figma-api-scenarios__dialog header svg, .figma-api-scenarios__step-drawer header svg { width: 14px; height: 14px; }
-.figma-api-scenarios__dialog p { margin: 18px 16px; color: #4e5969; font-size: 13px; line-height: 20px; }
-.figma-api-scenarios__step-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 18px 16px; }
-.figma-api-scenarios__step-type-grid button { height: 70px; border: 1px solid #e5e6eb; border-radius: 7px; background: #fff; color: #4e5969; cursor: pointer; font-size: 12px; }
-.figma-api-scenarios__step-type-grid button:hover { border-color: #165dff; background: #f2f7ff; color: #165dff; }
-.figma-api-scenarios__dialog footer, .figma-api-scenarios__step-drawer footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #e5e6eb; }
-.figma-api-scenarios__dialog footer button, .figma-api-scenarios__step-drawer footer button { height: 28px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 6px; background: #fff; color: #4e5969; cursor: pointer; font-size: 12px; }
-.figma-api-scenarios__dialog footer button:last-child, .figma-api-scenarios__step-drawer footer button:last-child { border-color: #165dff; background: #165dff; color: #fff; }
+.figma-api-scenarios__step-drawer header { display: flex; height: 48px; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #e5e6eb; }
+.figma-api-scenarios__step-drawer header b { color: #1d2129; font-size: 14px; font-weight: 600; }
+.figma-api-scenarios__step-drawer header button { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #86909c; cursor: pointer; }
+.figma-api-scenarios__step-drawer header svg { width: 14px; height: 14px; }
+.figma-api-scenarios__step-drawer footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid #e5e6eb; }
+.figma-api-scenarios__step-drawer footer button { height: 28px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 6px; background: #fff; color: #4e5969; cursor: pointer; font-size: 12px; }
+.figma-api-scenarios__step-drawer footer button:last-child { border-color: #165dff; background: #165dff; color: #fff; }
 .figma-api-scenarios__step-drawer { position: absolute; z-index: 18; top: 38px; right: 0; bottom: 0; width: 360px; border-left: 1px solid #e5e6eb; background: #fff; box-shadow: -6px 0 18px rgba(29, 33, 41, .12); }
 .figma-api-scenarios__step-drawer label { display: block; margin: 16px; color: #4e5969; font-size: 12px; }
 .figma-api-scenarios__step-drawer input, .figma-api-scenarios__step-drawer select { box-sizing: border-box; width: 100%; height: 30px; margin-top: 6px; padding: 0 8px; border: 1px solid #e5e6eb; border-radius: 6px; color: #1d2129; font-size: 12px; outline: 0; }
@@ -1886,18 +1997,17 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__scene-info select.is-p2 { background: #e8f3ff; color: #165dff; }
 .figma-api-scenarios__scene-info select.is-p3 { background: #f2f3f5; color: #86909c; }
 .figma-api-scenarios__scene-info > div > span { display: inline-flex; min-width: 0; align-items: center; gap: 5.25px; }
-.figma-api-scenarios__scene-info input { box-sizing: border-box; width: 175px; height: 21px; padding: 0 4px; border: 0; border-bottom: 2px solid #165dff; outline: 0; background: transparent; color: #1d2129; font: 600 14px/19px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__scene-name-button { display: inline-flex; min-width: 0; height: 21px; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: #1d2129; cursor: text; font: 600 14px/21px Inter, "Noto Sans SC", sans-serif; }
+.figma-api-scenarios__scene-info input { box-sizing: border-box; width: 175px; height: 21px; padding: 0 4px; border: 0; border-bottom: 2px solid #165dff; outline: 0; background: transparent; color: #1d2129; font: 600 14px/19px var(--scene-editor-font); }
+.figma-api-scenarios__scene-name-button { display: inline-flex; min-width: 0; height: 21px; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: #1d2129; cursor: text; font: 600 14px/21px var(--scene-editor-font); }
 .figma-api-scenarios__scene-name-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .figma-api-scenarios__scene-info svg { width: 12px; height: 12px; flex: 0 0 auto; color: #86909c; }
-.figma-api-scenarios__scene-info p { box-sizing: border-box; overflow: hidden; margin: 0 0 4px; color: #86909c; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; text-overflow: ellipsis; white-space: nowrap; }
-.figma-api-scenarios__scene-info small { box-sizing: border-box; display: block; margin: 0; color: #c9cdd4; font: 400 11px/16.5px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__steps-toolbar { box-sizing: border-box; height: 45px; flex: 0 0 45px; padding: 8px 16px; background: #fff; }
-.figma-api-scenarios__steps-toolbar p { color: #4e5969; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__steps-toolbar p b { color: #1d2129; font-weight: 700; }
-.figma-api-scenarios__steps-toolbar button { height: 26px; gap: 6px; border-radius: 10px; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; white-space: nowrap; }
+.figma-api-scenarios__scene-info p { box-sizing: border-box; overflow: hidden; margin: 0 0 4px; color: #86909c; font: 400 12px/18px var(--scene-editor-font); text-overflow: ellipsis; white-space: nowrap; }
+.figma-api-scenarios__scene-info small { box-sizing: border-box; display: block; margin: 0; color: #c9cdd4; font: 400 11px/16.5px var(--scene-editor-font); }
+.figma-api-scenarios__steps-toolbar { box-sizing: border-box; height: 43px; flex: 0 0 43px; padding: 8px 16px; background: #f4f6fa; }
+.figma-api-scenarios__steps-toolbar p { color: #4e5969; font: 400 12px/18px var(--scene-editor-font); }
+.figma-api-scenarios__steps-toolbar p b { font-weight: 700; color: inherit; }
+.figma-api-scenarios__steps-toolbar button { height: 26px; gap: 6px; border-radius: 10px; font: 500 12px/18px var(--scene-editor-font); white-space: nowrap; }
 .figma-api-scenarios__steps-toolbar > div { align-items: center; gap: 8px; }
-.figma-api-scenarios__steps-toolbar button:first-child { width: 92px; height: 28px; padding-inline: 12px; }
 .figma-api-scenarios__steps-toolbar button:last-child { width: 81px; padding-inline: 10px; border: 0; font-size: 11px; line-height: 16.5px; }
 .figma-api-scenarios__step-list { padding: 7px 10.5px 12px; background: #fafbfe; }
 .figma-api-scenarios__step-group { margin-bottom: 3.5px; }
@@ -1932,8 +2042,8 @@ function addChildStep(parent: ScenarioStep) {
 .figma-api-scenarios__add-step { box-sizing: border-box; height: 41px; margin-top: 3.5px; border-radius: 7px; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
 .figma-api-scenarios__step-empty { display: flex; box-sizing: border-box; min-height: 0; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: flex-start; padding: 72px 12px 0; color: #86909c; background: transparent; }
 .figma-api-scenarios__step-empty > svg { width: 32px; height: 32px; color: #c9cdd4; }
-.figma-api-scenarios__step-empty p { margin: 8px 0 12px; font: 400 13px/19.5px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__step-empty button { display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 10px; background: #165dff; color: #fff; font: 500 11px/16.5px Inter, "Noto Sans SC", sans-serif; }
+.figma-api-scenarios__step-empty p { margin: 8px 0 12px; font: 400 13px/19.5px var(--scene-editor-font); }
+.figma-api-scenarios__step-empty button { display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 10px; background: #165dff; color: #fff; font: 500 11px/16.5px var(--scene-editor-font); }
 .figma-api-scenarios__step-empty button svg { width: 11px; height: 11px; }
 
 .figma-api-scenarios__test-data > .figma-api-scenarios__dataset-list { width: 220px; flex: 0 0 220px; }
@@ -1979,54 +2089,176 @@ function addChildStep(parent: ScenarioStep) {
 
 /* Make scene editor sub-tabs: a stable 38px rail with intrinsic tab widths. */
 .figma-api-scenarios__editor-tabs { box-sizing: border-box; padding: 0 16px; background: #fff; }
-.figma-api-scenarios__editor-tabs button { display: inline-flex; box-sizing: border-box; height: 38px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0 16px 2px; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; white-space: nowrap; }
+.figma-api-scenarios__editor-tabs button { display: inline-flex; box-sizing: border-box; height: 37px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0 16px; font: 500 12px/18px var(--scene-editor-font); white-space: nowrap; transition: color .15s ease, border-color .15s ease; }
 
-/* Figma 204:825: the run rail is a fixed form block followed by a bottom-anchored result block. */
-.figma-api-scenarios__run-config { display: flex; height: 100%; flex-direction: column; overflow: hidden; }
-.figma-api-scenarios__run-fields { box-sizing: border-box; height: 370.25px; flex: 0 0 370.25px; padding: 10.5px; }
-.figma-api-scenarios__run-config.is-new .figma-api-scenarios__run-fields { height: 343.25px; flex-basis: 343.25px; }
-.figma-api-scenarios .figma-api-scenarios__run-fields > label { display: block; width: 198px; height: 46px; margin: 0; color: #4e5969; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios .figma-api-scenarios__run-fields > label + label,
-.figma-api-scenarios .figma-api-scenarios__run-fields > .figma-api-scenarios__numbers + label { margin-top: 10.5px; }
-.figma-api-scenarios .figma-api-scenarios__run-fields select,
-.figma-api-scenarios .figma-api-scenarios__run-fields input { box-sizing: border-box; width: 100%; height: 24.5px; margin-top: 3.5px; padding: 0 8px; border: 1px solid #e5e6eb; border-radius: 7px; background: #fff; color: #4e5969; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios .figma-api-scenarios__run-fields > .figma-api-scenarios__numbers { display: grid; box-sizing: border-box; width: 198px; height: 46px; grid-template-columns: 95.5px 95.5px; gap: 7px; margin: 10.5px 0; }
-.figma-api-scenarios .figma-api-scenarios__run-fields > .figma-api-scenarios__numbers label { width: 95.5px; height: 46px; margin: 0; color: #4e5969; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios .figma-api-scenarios__run-fields > .figma-api-scenarios__numbers input { width: 56px; color: #1d2129; text-align: center; }
-.figma-api-scenarios .figma-api-scenarios__run-fields > label:last-child { height: 66.75px; }
-.figma-api-scenarios__tag-list { gap: 3px 3.5px; margin-top: 5.25px; }
-.figma-api-scenarios__tag-list span { box-sizing: border-box; height: 20.5px; gap: 1.75px; padding: 1.75px 7px; border-radius: 999px; font: 400 11px/16.5px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__tag-list span svg { width: 9px; height: 9px; }
-.figma-api-scenarios__tag-list button { box-sizing: border-box; width: 33px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: #86909c; font: 500 11px/16.5px Inter, "Noto Sans SC", sans-serif; }
+/* Figma 1159:3032 — run configuration */
+.figma-api-scenarios__run-config {
+  display: flex;
+  box-sizing: border-box;
+  flex: 0 0 220px;
+  flex-direction: column;
+  width: 220px;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid #e5e6eb;
+  background: #fafbfe;
+}
+.figma-api-scenarios__run-actions {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, calc(50% - 3px));
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid #e5e6eb;
+}
+.figma-api-scenarios__run-actions > div { display: flex; grid-column: 1 / -1; align-items: center; gap: 6px; }
+.figma-api-scenarios__run-actions > div select { flex: 1; min-width: 0; }
+.figma-api-scenarios__run-actions button {
+  display: inline-flex;
+  box-sizing: border-box;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #4e5969;
+  cursor: pointer;
+  font: 500 12px/18px var(--scene-editor-font);
+}
+.figma-api-scenarios__run-actions > div button { width: 28px; height: 28px; flex: 0 0 28px; color: #86909c; }
+.figma-api-scenarios__run-actions button svg { width: 12px; height: 12px; }
+.figma-api-scenarios__run-actions > button:only-of-type { grid-column: 1 / -1; }
+.figma-api-scenarios__run-actions > .figma-api-scenarios__run-button { border-color: transparent; background: #165dff; color: #fff; font-weight: 600; }
+.figma-api-scenarios__run-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.figma-api-scenarios__run-fields { display: grid; flex-shrink: 0; gap: 12px; padding: 12px; }
+.figma-api-scenarios__run-fields label { display: block; min-width: 0; margin: 0; color: #4e5969; font: 500 12px/18px var(--scene-editor-font); }
+.figma-api-scenarios__run-fields label em { color: #f53f3f; font-style: normal; }
+.figma-api-scenarios__run-config select,
+.figma-api-scenarios__run-config input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #e5e6eb;
+  border-radius: 10px;
+  background-color: #fff;
+  color: #1d2129;
+  font: 400 12px/18px var(--scene-editor-font);
+}
+.figma-api-scenarios__run-config select.app-native-select:not(:disabled) {
+  background-image: url('./scene-run-select-chevron.svg') !important;
+  background-position: right 5px center !important;
+  background-size: auto !important;
+}
+.figma-api-scenarios__run-fields select,
+.figma-api-scenarios__run-fields input { margin-top: 4px; }
+.figma-api-scenarios__numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.figma-api-scenarios__run-fields .figma-api-scenarios__numbers input { width: 56px; padding-inline: 8px; text-align: center; }
+.figma-api-scenarios__tag-list { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; }
+.figma-api-scenarios__tag-list span { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border-radius: 999px; background: #e8f3ff; color: #165dff; font: 400 11px/16.5px var(--scene-editor-font); }
+.figma-api-scenarios__tag-list span svg { width: 9px; height: 9px; cursor: pointer; }
+.figma-api-scenarios__tag-list button { padding: 0; border: 0; background: transparent; color: #86909c; cursor: pointer; font: 400 11px/16.5px var(--scene-editor-font); }
 .figma-api-scenarios__last-run { box-sizing: border-box; display: flex; width: 219px; height: 77.25px; flex: 0 0 77.25px; flex-direction: column; margin-top: auto; padding: 10.5px 10.5px; border-top: 1px solid #e5e6eb; background: #fafbfe; }
 .figma-api-scenarios__last-run p { height: 17px; margin: 0; color: #86909c; font: 500 11px/16.5px Inter, "Noto Sans SC", sans-serif; }
 .figma-api-scenarios__last-run strong { box-sizing: border-box; height: 21.5px; gap: 5.25px; padding-top: 3.5px; color: #00b42a; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }
 .figma-api-scenarios__last-run strong i { width: 5.25px; height: 5.25px; }
 .figma-api-scenarios__last-run small { box-sizing: border-box; height: 16.75px; margin: 0; padding-top: 1.75px; color: #c9cdd4; font: 400 10px/15px Inter, "Noto Sans SC", sans-serif; }
 
-/* Figma 206:2158: right-side run configuration uses a compact 220px form rail. */
-.figma-api-scenarios__run-config label { box-sizing: border-box; margin: 10.5px; color: #4e5969; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__run-config select, .figma-api-scenarios__run-config input { height: 24.5px; margin-top: 3.5px; border-radius: 7px; font: 400 12px/18px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__run-actions { box-sizing: border-box; grid-template-columns: 94.5px 96.5px; grid-template-rows: 24.5px 28px; gap: 7px; padding: 10.5px; border-bottom: 1px solid #e5e6eb; }
-.figma-api-scenarios__run-actions > div { gap: 5.25px; }
-.figma-api-scenarios__run-actions > div select { margin-top: 0; }
-.figma-api-scenarios__run-actions > div button { width: 24.5px; height: 24.5px; border-radius: 7px; }
-.figma-api-scenarios__run-actions > button { height: 28px; border-radius: 7px; }
-.figma-api-scenarios__run-actions > button:first-of-type { font-weight: 600; }
-.figma-api-scenarios__run-actions > button:last-of-type { border-color: #e5e6eb; color: #4e5969; font-weight: 500; }
+:global(.el-overlay.api-scenario-add-step-overlay) { background-color: rgb(0 0 0 / 36%); }
+:global(.el-dialog.api-scenario-add-step-dialog) {
+  display: flex;
+  max-width: calc(100% - 32px);
+  max-height: 82vh;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 25%);
+  font-family: Inter, "Noto Sans SC", sans-serif;
+}
+:global(.api-scenario-add-step-dialog > .el-dialog__header) {
+  min-height: 0;
+  flex: 0 0 auto;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e6eb;
+}
+:global(.api-scenario-add-step-dialog > .el-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
+.figma-api-scenarios__add-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #1d2129;
+  font-size: 15px;
+  line-height: 22.5px;
+}
+.figma-api-scenarios__add-step-header strong { font-weight: 600; }
+.figma-api-scenarios__add-step-header button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+}
+.figma-api-scenarios__add-step-header button:hover { background: #f3f4f6; }
+.figma-api-scenarios__step-type-group + .figma-api-scenarios__step-type-group { margin-top: 20px; }
+.figma-api-scenarios__step-type-group h3 {
+  margin: 0 0 8px;
+  color: #c9cdd4;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16.5px;
+}
+.figma-api-scenarios__step-type-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.figma-api-scenarios__step-type-grid button {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e5e6eb;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.figma-api-scenarios__step-type-grid button:hover,
+.figma-api-scenarios__step-type-grid button:focus-visible {
+  border-color: var(--step-option-color);
+  background-color: var(--step-option-background);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 10%), 0 2px 4px -2px rgb(0 0 0 / 10%);
+}
+.figma-api-scenarios__step-type-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  margin-top: 2px;
+  border-radius: 10px;
+  background-color: var(--step-option-background);
+  color: var(--step-option-color);
+}
+.figma-api-scenarios__step-type-grid strong { display: block; color: #1d2129; font-size: 13px; font-weight: 600; line-height: 19.5px; }
+.figma-api-scenarios__step-type-grid small { display: block; margin-top: 2px; color: #86909c; font-size: 12px; line-height: 18px; }
 
-.figma-api-scenarios__dialog { width: 640px; border-radius: 8px; }
-.figma-api-scenarios__dialog:not(.is-import) { height: 476.75px; }
-.figma-api-scenarios__dialog:not(.is-import) > header { box-sizing: border-box; height: 53.5px; padding: 0 17.5px; }
-.figma-api-scenarios__dialog:not(.is-import) > header b { font: 600 14px/21px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__dialog:not(.is-import) > header button { width: 24.5px; height: 24.5px; }
-.figma-api-scenarios__dialog:not(.is-import) > header svg { width: 15px; height: 15px; }
-.figma-api-scenarios__step-type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(5, 69.25px); gap: 10.5px; padding: 17.5px; }
-.figma-api-scenarios__step-type-grid button { display: grid; box-sizing: border-box; height: 69.25px; min-height: 69.25px; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: 19.5px 18px; column-gap: 10.5px; padding: 15px; border-radius: 11px; text-align: left; }
-.figma-api-scenarios__step-type-grid button > span { display: inline-flex; width: 28px; height: 28px; grid-row: 1 / 3; align-self: start; align-items: center; justify-content: center; margin-top: 1.75px; border-radius: 7px; }
-.figma-api-scenarios__step-type-grid button > span svg { width: 16px; height: 16px; }
-.figma-api-scenarios__step-type-grid button b { color: #1d2129; font: 600 13px/19.5px Inter, "Noto Sans SC", sans-serif; }
-.figma-api-scenarios__step-type-grid button small { color: #86909c; font: 500 12px/18px Inter, "Noto Sans SC", sans-serif; }
+@media (max-width: 480px) {
+  .figma-api-scenarios__step-type-grid { grid-template-columns: minmax(0, 1fr); }
+}
 
 .figma-api-scenarios__step-drawer { top: 38px; width: 640px; display: flex; flex-direction: column; }
 .figma-api-scenarios__step-drawer > header { flex: 0 0 48px; }

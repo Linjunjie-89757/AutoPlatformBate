@@ -319,15 +319,11 @@ onBeforeUnmount(() => {
     <aside
       class="app-layout__sidebar"
     >
-      <RouterLink
-        class="app-layout__brand"
-        title="工作台"
-        :to="{ path: '/', query: navigationTargetQuery }"
-      >
+      <div class="app-layout__brand">
         <span class="app-layout__brand-mark">
-          <img :src="autotestFigmaMarkUrl" alt="">
+          <img :src="autotestFigmaMarkUrl" alt="AutoTest">
         </span>
-      </RouterLink>
+      </div>
 
       <nav class="app-layout__nav" aria-label="主导航">
         <div
@@ -340,42 +336,46 @@ onBeforeUnmount(() => {
           }"
           :style="{ '--nav-color': item.color, '--nav-bg': item.lightBg }"
         >
-          <button
-            v-if="hasNavigationChildren(item)"
-            type="button"
-            class="app-layout__nav-item app-layout__nav-button"
-            :class="{
-              'is-active': isNavigationItemActive(item),
-              'has-children': true,
-            }"
-            :title="item.label"
-            @click="router.push({ path: item.path, query: navigationTargetQuery })"
+          <el-tooltip
+            :content="item.label"
+            placement="right"
+            effect="dark"
+            popper-class="app-layout__nav-tooltip"
+            transition="app-layout-nav-tooltip-fade"
+            :offset="14"
+            :show-arrow="false"
+            :show-after="0"
+            :hide-after="0"
+            :enterable="false"
+            :trigger="['hover', 'focus']"
+            :trigger-keys="[]"
           >
-            <span class="app-layout__nav-icon-shell">
-              <component
-                :is="item.componentIcon"
-                v-if="item.componentIcon"
-                class="app-layout__nav-icon"
-              />
-              <img v-else class="app-layout__nav-icon" :src="item.icon" alt="">
-            </span>
-          </button>
-          <RouterLink
-            v-else
-            class="app-layout__nav-item"
-            :class="{ 'is-active': isNavigationItemActive(item) }"
-            :title="item.label"
-            :to="{ path: item.path, query: navigationTargetQuery }"
-          >
-            <span class="app-layout__nav-icon-shell">
-              <component
-                :is="item.componentIcon"
-                v-if="item.componentIcon"
-                class="app-layout__nav-icon"
-              />
-              <img v-else class="app-layout__nav-icon" :src="item.icon" alt="">
-            </span>
-          </RouterLink>
+            <button
+              v-if="hasNavigationChildren(item)"
+              type="button"
+              class="app-layout__nav-item app-layout__nav-button"
+              :class="{ 'is-active': isNavigationItemActive(item), 'has-children': true }"
+              :aria-label="item.label"
+              @click="router.push({ path: item.path, query: navigationTargetQuery })"
+            >
+              <span class="app-layout__nav-icon-shell">
+                <component :is="item.componentIcon" v-if="item.componentIcon" class="app-layout__nav-icon" />
+                <img v-else class="app-layout__nav-icon" :src="item.icon" alt="">
+              </span>
+            </button>
+            <RouterLink
+              v-else
+              class="app-layout__nav-item"
+              :class="{ 'is-active': isNavigationItemActive(item) }"
+              :aria-label="item.label"
+              :to="{ path: item.path, query: navigationTargetQuery }"
+            >
+              <span class="app-layout__nav-icon-shell">
+                <component :is="item.componentIcon" v-if="item.componentIcon" class="app-layout__nav-icon" />
+                <img v-else class="app-layout__nav-icon" :src="item.icon" alt="">
+              </span>
+            </RouterLink>
+          </el-tooltip>
         </div>
       </nav>
 
@@ -525,12 +525,6 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   color: var(--app-primary);
-  cursor: pointer;
-  transition: background-color 150ms ease;
-}
-
-.app-layout__brand:hover {
-  background: var(--app-bg-muted);
 }
 
 .app-layout__brand-mark {
@@ -604,19 +598,19 @@ onBeforeUnmount(() => {
   filter: brightness(0) invert(1);
 }
 
-.app-layout__nav-item[title="配置中心"]:not(.is-active) .app-layout__nav-icon {
+.app-layout__nav-item[aria-label="配置中心"]:not(.is-active) .app-layout__nav-icon {
   filter: brightness(0) saturate(100%) invert(37%) sepia(19%) saturate(1795%) hue-rotate(199deg) brightness(88%) contrast(89%);
 }
 
-.app-layout__nav-item[title="系统设置"]:not(.is-active) .app-layout__nav-icon {
+.app-layout__nav-item[aria-label="系统设置"]:not(.is-active) .app-layout__nav-icon {
   filter: brightness(0) saturate(100%) invert(34%) sepia(9%) saturate(732%) hue-rotate(178deg) brightness(91%) contrast(86%);
 }
 
-.app-layout__nav-item[title="报告中心"]:not(.is-active) .app-layout__nav-icon {
+.app-layout__nav-item[aria-label="报告中心"]:not(.is-active) .app-layout__nav-icon {
   filter: brightness(0) saturate(100%) invert(16%) sepia(94%) saturate(4739%) hue-rotate(265deg) brightness(98%) contrast(105%);
 }
 
-.app-layout__nav-item[title="任务中心"]:not(.is-active) .app-layout__nav-icon {
+.app-layout__nav-item[aria-label="任务中心"]:not(.is-active) .app-layout__nav-icon {
   filter: brightness(0) saturate(100%) invert(72%) sepia(60%) saturate(2463%) hue-rotate(354deg) brightness(101%) contrast(92%);
 }
 
@@ -639,6 +633,27 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   color: currentColor;
   opacity: 0.94;
+}
+
+:global(.el-popper.app-layout__nav-tooltip.is-dark) {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: #1d2129;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 18%);
+  color: #fff;
+  font: 500 12px/18px Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+  white-space: nowrap;
+}
+
+:global(.app-layout-nav-tooltip-fade-enter-active),
+:global(.app-layout-nav-tooltip-fade-leave-active) {
+  transition: opacity 150ms ease;
+}
+
+:global(.app-layout-nav-tooltip-fade-enter-from),
+:global(.app-layout-nav-tooltip-fade-leave-to) {
+  opacity: 0;
 }
 
 .app-layout__sidebar-footer {
@@ -682,7 +697,7 @@ onBeforeUnmount(() => {
 }
 
 .app-layout.is-api-workbench .app-layout__header {
-  height: 44px;
+  height: 48px;
 }
 
 .app-layout__header-copy {
@@ -984,8 +999,8 @@ onBeforeUnmount(() => {
 }
 
 .app-layout.is-api-workbench .app-layout__secondary-nav {
-  height: 48px;
-  min-height: 48px;
+  height: 44px;
+  min-height: 44px;
 }
 
 .app-layout.has-secondary-nav.is-api-workbench .app-layout__main {

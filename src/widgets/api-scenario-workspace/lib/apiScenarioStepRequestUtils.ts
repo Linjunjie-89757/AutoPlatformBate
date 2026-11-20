@@ -1,6 +1,11 @@
 import {
+  type ApiDefinitionDetail,
+  type ApiDefinitionItem,
+  type ApiDefinitionCaseDetail,
+  type ApiDefinitionCaseItem,
   type ApiKeyValueInput,
   type ApiRequestConfigInput,
+  type ApiScenarioItem,
   type ApiScenarioStep,
   type ApiScenarioStepType,
 } from '@/entities/api-automation'
@@ -8,6 +13,20 @@ import {
 import { normalizeSwaggerPathVariables } from './apiRequestPathTemplate'
 
 export type ScenarioBodyType = 'NONE' | 'FORM_DATA' | 'FORM_URLENCODED' | 'RAW_JSON' | 'RAW_XML' | 'RAW_TEXT' | 'BINARY'
+export type ScenarioResourceKind = 'api' | 'case' | 'scene'
+export type ScenarioResource = ApiDefinitionItem | ApiDefinitionCaseItem | ApiScenarioItem
+export type ScenarioResourceSelection = {
+  resource: ScenarioResource
+  snapshot?: ApiDefinitionDetail | ApiDefinitionCaseDetail
+}
+export type ScenarioResult = 'pass' | 'fail' | 'idle'
+
+export function normalizeScenarioRunResult(value?: string | null): ScenarioResult {
+  const normalized = String(value || '').toUpperCase()
+  if (normalized === 'SUCCESS' || normalized === 'PASSED' || normalized === 'PASS') return 'pass'
+  if (normalized === 'FAILED' || normalized === 'FAIL' || normalized === 'ERROR') return 'fail'
+  return 'idle'
+}
 
 export const scenarioQueryParamTypeOptions = ['string', 'integer', 'number', 'boolean', 'array'] as const
 export const scenarioBodyParamTypeOptionValues = ['string', 'integer', 'number', 'boolean', 'array', 'json', 'file'] as const
@@ -124,6 +143,7 @@ export function normalizeScenarioRequestConfig(config?: ApiRequestConfigInput | 
   const bodyType = normalizeScenarioBodyType(body.type)
   const rawText = body.rawText ?? ''
   return {
+    ...next,
     method: String(next.method || 'GET').toUpperCase(),
     path: normalizeSwaggerPathVariables(next.path),
     timeoutMs: Number(next.timeoutMs || 30000),
@@ -143,11 +163,30 @@ export function normalizeScenarioRequestConfig(config?: ApiRequestConfigInput | 
       binaryBase64: body.binaryBase64 || null,
     },
     authConfig: {
+      ...next.authConfig,
       authType: next.authConfig?.authType || 'NONE',
       basicAuth: next.authConfig?.basicAuth || { userName: '', password: '' },
       digestAuth: next.authConfig?.digestAuth || { userName: '', password: '' },
     },
   }
+}
+
+export function copyScenarioApiPostProcessors(definition: Pick<ApiDefinitionDetail, 'extractors' | 'postProcessors'>): unknown[] {
+  if (!definition.extractors.length) return definition.postProcessors
+
+  const extractors = definition.extractors as Array<{ name: string; sourceType: string; expression: string }>
+  return [...definition.postProcessors, {
+    id: 'legacy-extract',
+    processorType: 'EXTRACT',
+    name: 'Extract',
+    enabled: true,
+    extractors: extractors.map(item => ({
+      ...item,
+      variableName: item.name,
+      variableType: 'TEMPORARY',
+      enabled: true,
+    })),
+  }]
 }
 
 export function normalizeScenarioBodyType(type?: string | null): ScenarioBodyType {
