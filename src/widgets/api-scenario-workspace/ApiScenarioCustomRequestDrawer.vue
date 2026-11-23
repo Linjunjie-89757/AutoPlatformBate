@@ -107,7 +107,10 @@ function validate(): string {
     if (assertion.assertionType === 'RESPONSE_CODE' && !String(assertion.expectedValue ?? '').trim()) return '请输入期望状态码。'
     if (assertion.assertionType === 'RESPONSE_HEADER' && enabledRows(assertion.assertions).some(row => !String(row.header || '').trim())) return '请填写断言的响应头名称。'
     if (assertion.assertionType === 'VARIABLE' && enabledRows(assertion.variableAssertionItems).some(row => !String(row.variableName || '').trim())) return '请填写断言变量名。'
-    if (assertion.assertionType === 'RESPONSE_TIME' && !(Number(assertion.expectedValue) >= 0)) return '响应时间不能小于 0 ms。'
+    if (assertion.assertionType === 'RESPONSE_TIME') {
+      const threshold = Number(assertion.expectedValue)
+      if (!String(assertion.expectedValue ?? '').trim() || !Number.isFinite(threshold) || threshold < 0) return '请输入大于或等于 0 ms 的响应时间。'
+    }
     if (assertion.assertionType === 'RESPONSE_BODY') {
       const group = assertion.assertionBodyType === 'REGEX' ? assertion.regexAssertion : assertion.assertionBodyType === 'X_PATH' ? assertion.xpathAssertion : assertion.jsonPathAssertion
       const expressions = enabledRows((group as { assertions?: unknown[] } | undefined)?.assertions)

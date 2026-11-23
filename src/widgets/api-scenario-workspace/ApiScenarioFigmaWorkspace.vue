@@ -49,6 +49,7 @@ import {
   type ScenarioResult,
 } from './lib/apiScenarioStepRequestUtils'
 import ApiScenarioCustomRequestDrawer from './ApiScenarioCustomRequestDrawer.vue'
+import ScenarioSimpleStepDrawer from '@/features/api-case-create-edit/ScenarioSimpleStepDrawer.vue'
 import ApiScenarioResourcePicker from './ApiScenarioResourcePicker.vue'
 import ApiScenarioRunHistory from './ApiScenarioRunHistory.vue'
 
@@ -207,6 +208,7 @@ const showAddStep = ref(false)
 const resourceStepType = ref<keyof typeof resourceStepConfig | null>(null)
 const configuringStep = ref<ScenarioStep | null>(null)
 const customRequestEditor = shallowRef<{ draft: ApiScenarioStep; target: ScenarioStep | null; parent: ScenarioStep | null } | null>(null)
+const simpleStepEditor = shallowRef<{ draft: ApiScenarioStep; target: ScenarioStep | null; parent: ScenarioStep | null } | null>(null)
 const isEditingSceneName = ref(false)
 const sceneNameDraft = ref('')
 const sceneNameInput = ref<HTMLInputElement | null>(null)
@@ -640,6 +642,7 @@ watch(openScenarioIds, () => {
 watch(activeScenarioId, () => {
   resourceStepType.value = null
   customRequestEditor.value = null
+  simpleStepEditor.value = null
   void nextTick(() => {
     scrollActiveScenarioTabIntoView()
     updateScenarioTabScroll(scenarioListTabStripRef.value, scenarioListTabScroll)
@@ -1130,6 +1133,11 @@ function addStep(type: StepType = 'custom') {
     openCustomRequestEditor()
     return
   }
+  if (type === 'script' || type === 'wait') {
+    showAddStep.value = false
+    openSimpleStepEditor(type)
+    return
+  }
   if (type === 'ref-api' || type === 'ref-case' || type === 'ref-scene') {
     showAddStep.value = false
     resourceStepType.value = type
@@ -1196,8 +1204,28 @@ function openStepConfiguration(step: ScenarioStep) {
     openCustomRequestEditor(step)
     return
   }
+  if (step.type === 'script' || step.type === 'wait') {
+    openSimpleStepEditor(step.type, step)
+    return
+  }
   configuringStep.value = step
   stepDebugText.value = '配置完成后可发送请求并查看响应结果。'
+}
+
+function openSimpleStepEditor(type: 'script' | 'wait', target: ScenarioStep | null = null, parent: ScenarioStep | null = null) {
+  configuringStep.value = null
+  const source = target ? serializeStep(target) : {
+    id: crypto.randomUUID?.() ?? 'step-' + Date.now(),
+    stepName: type === 'script' ? '脚本步骤' : '等待步骤',
+    stepType: type === 'script' ? 'SCRIPT' as const : 'CONSTANT_TIMER' as const,
+    refType: 'DIRECT' as const,
+    resourceType: null,
+    resourceId: null,
+    enabled: true,
+    script: type === 'script' ? '' : undefined,
+    delayMs: type === 'wait' ? 1000 : undefined,
+  }
+  simpleStepEditor.value = { target, parent, draft: source }
 }
 
 function openCustomRequestEditor(target: ScenarioStep | null = null, parent: ScenarioStep | null = null) {
@@ -1228,6 +1256,18 @@ function applyCustomRequestStep(payload: ApiScenarioStep) {
   else scenario.steps.push(step)
   activeEditorTab.value = 'steps'
   customRequestEditor.value = null
+}
+
+function applySimpleStep(payload: ApiScenarioStep) {
+  const editor = simpleStepEditor.value
+  const scenario = activeScenario.value
+  if (!editor || !scenario || (scenario.persistedId ? !props.canEdit : !props.canCreate)) return
+  const step = mapApiStep(payload, scenario.steps.length)
+  if (editor.target) Object.assign(editor.target, step)
+  else if (editor.parent) (editor.parent.children ??= []).push(step)
+  else scenario.steps.push(step)
+  activeEditorTab.value = 'steps'
+  simpleStepEditor.value = null
 }
 
 function notifyPendingStepEditor(label: string) {
@@ -1742,6 +1782,13 @@ function addChildStep(parent: ScenarioStep) {
         :variable-set-id="activeScenario.variableSetId"
         @close="customRequestEditor = null"
         @save="applyCustomRequestStep"
+      />
+      <ScenarioSimpleStepDrawer
+        v-if="simpleStepEditor"
+        :initial-step="simpleStepEditor.draft"
+        :is-new="!simpleStepEditor.target"
+        @close="simpleStepEditor = null"
+        @save="applySimpleStep"
       />
       <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer">
         <header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header>

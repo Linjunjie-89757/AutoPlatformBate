@@ -8,6 +8,7 @@ import ApiCodeEditor from '@/widgets/api-interface-workspace/ApiCodeEditor.vue'
 import ApiFastExtractionDrawer from '@/widgets/api-interface-workspace/ApiFastExtractionDrawer.vue'
 import type { FastExtractionConfig, FastExtractionMode } from '@/widgets/api-interface-workspace/fastExtraction'
 
+import ScenarioRequestAssertionPanel from './ScenarioRequestAssertionPanel.vue'
 import ScenarioRequestProcessorPanel from './ScenarioRequestProcessorPanel.vue'
 
 type EditorKind = 'processor' | 'assertion'
@@ -125,6 +126,11 @@ const addOptions = computed(() => {
 
 const activeRow = computed(() => rows.value.find(row => row.id === activeId.value) || null)
 const activeIndex = computed(() => activeRow.value ? rows.value.indexOf(activeRow.value) : -1)
+const scenarioAssertionConditions = computed(() => {
+  if (activeRow.value?.assertionType === 'RESPONSE_CODE') return STATUS_CODE_CONDITION_OPTIONS
+  if (activeRow.value?.assertionType === 'RESPONSE_TIME') return RESPONSE_TIME_CONDITION_OPTIONS
+  return CONDITION_OPTIONS
+})
 const fastExtractionVisible = ref(false)
 const activeFastExtractionTarget = ref<{
   target: 'assertion-body' | 'extractor'
@@ -417,19 +423,26 @@ function selectDatabaseConnection(value: string | number | null | undefined) {
 }
 
 function createAssertion(type: string, index: number): LooseConfig {
+  const scenario = props.scenarioRequest
   const defaults: Record<string, LooseConfig> = {
-    RESPONSE_CODE: { expectedValue: '' },
+    RESPONSE_CODE: { expectedValue: scenario ? '200' : '' },
     RESPONSE_HEADER: {
-      assertions: [createAssertionItem({ header: 'Content-Type', condition: 'CONTAINS', expectedValue: 'application/json' })],
+      assertions: [createAssertionItem({
+        header: 'Content-Type',
+        condition: scenario ? 'EQUALS' : 'CONTAINS',
+        expectedValue: scenario ? '' : 'application/json',
+      })],
     },
     RESPONSE_BODY: {
       assertionBodyType: 'JSON_PATH',
       expressionType: 'JSON_PATH',
       jsonPathAssertion: {
         responseFormat: 'JSON',
-        assertions: [createAssertionItem({ expression: '$.code' })],
+        assertions: [createAssertionItem({ expression: '$.code', expectedValue: scenario ? '0' : '' })],
       },
     },
+    RESPONSE_TIME: scenario ? { condition: 'LT' } : {},
+    VARIABLE: scenario ? { condition: 'EQUALS' } : {},
     SCRIPT: {
       script: props.scenarioRequest ? '' : '// pm.expect(pm.response.json().code).to.eql(0);\n// pm.expect(pm.response.code).to.eql(200);\n',
     },
@@ -439,7 +452,7 @@ function createAssertion(type: string, index: number): LooseConfig {
     assertionType: type,
     type,
     enabled: true,
-    name: `${ASSERTION_LABELS[type] || '断言'}断言 ${index + 1}`,
+    name: `${ASSERTION_LABELS[type] || '断言'}断言${scenario ? '' : ` ${index + 1}`}`,
     ...defaults[type],
   }
   normalizeAssertion(row)
@@ -577,6 +590,19 @@ function toIndex(index: string | number) {
     @duplicate="duplicateRow"
     @remove="removeRow"
     @select-database="selectDatabaseConnection"
+  />
+  <ScenarioRequestAssertionPanel
+    v-else-if="scenarioRequest && kind === 'assertion'"
+    :rows="rows"
+    :active-index="activeIndex"
+    :conditions="scenarioAssertionConditions"
+    @add="addByCommand"
+    @select="activeId = rows[$event]?.id || ''"
+    @move="moveRow"
+    @duplicate="duplicateRow"
+    @remove="removeRow"
+    @add-rule="addItem"
+    @remove-rule="removeItem"
   />
   <div v-else :class="['api-case-advanced-editor', { 'is-assertion': kind === 'assertion', 'is-status-code': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_CODE', 'is-response-header': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_HEADER', 'is-response-body': kind === 'assertion' && activeRow?.assertionType === 'RESPONSE_BODY' }]">
     <aside :class="['api-case-advanced-sidebar', { 'is-assertion': kind === 'assertion' }]">
