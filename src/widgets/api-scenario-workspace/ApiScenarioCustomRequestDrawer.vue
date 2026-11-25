@@ -364,9 +364,9 @@ async function sendDebug() {
 .scenario-request__spin { animation: scenario-request-spin 1s linear infinite; }
 @keyframes scenario-request-spin { to { transform: rotate(360deg); } }
 .scenario-request__footer-status { margin-right: auto; color: #c9cdd4; font-size: 11px; }
-.scenario-request__cancel { height: 28px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 10px; background: #fff; color: #4e5969; }
+.scenario-request__cancel { height: 28px; padding: 0 12px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; color: #4e5969; }
 .scenario-request__cancel:hover { background: #f4f6fa; }
-.scenario-request__save { height: 32px; padding: 0 14px; border: 0; border-radius: 10px; background: #165dff; color: #fff; font-size: 13px; }
+.scenario-request__save { height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: #165dff; color: #fff; font-size: 13px; }
 .scenario-request__save:hover { background: #0e42d2; }
 .scenario-request__save.is-danger { background: #f53f3f; }
 :global(.el-overlay.scenario-request-discard-overlay) { background: rgb(29 33 41 / 48%); }

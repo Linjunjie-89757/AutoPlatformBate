@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Clock3, Code2, Save, X } from '@lucide/vue'
+import { AlertTriangle, Clock3, Code2, Save, X } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import type { ApiScenarioStep } from '@/entities/api-automation'
 import { AppDialog, AppDrawer } from '@/shared/ui'
@@ -37,7 +37,7 @@ function clampDelay(event: Event) { const value = Number((event.target as HTMLIn
 </script>
 
 <template>
-  <AppDrawer :model-value="true" size="720px" variant="standard" :with-header="true" drawer-class="scenario-simple-step-drawer" modal-class="scenario-simple-step-overlay" :close-on-click-modal="false" @update:model-value="value => !value && close()">
+  <AppDrawer :model-value="true" size="720px" variant="standard" :with-header="true" :show-close="false" drawer-class="scenario-simple-step-drawer" modal-class="scenario-simple-step-overlay" :close-on-click-modal="false" @update:model-value="value => !value && close()">
     <template #header><header class="simple-step__header"><span class="simple-step__icon" :class="{ 'is-wait': !isScript }"><Code2 v-if="isScript" :size="18" /><Clock3 v-else :size="18" /></span><div><h3>{{ title }}</h3><p>{{ subtitle }}</p></div><button type="button" aria-label="关闭" @click="close"><X :size="17" /></button></header></template>
     <div class="simple-step__body">
       <section class="simple-step__card"><label>步骤名称 <em>*</em><input v-model="draft.stepName" /></label></section>
@@ -48,7 +48,16 @@ function clampDelay(event: Event) { const value = Number((event.target as HTMLIn
     </div>
     <template #footer><span class="simple-step__status">{{ dirty ? '存在未保存的修改' : '所有修改已保存' }}</span><button type="button" class="simple-step__cancel" @click="close">取消</button><button type="button" class="simple-step__save" @click="save"><Save :size="13" />保存并添加</button></template>
   </AppDrawer>
-  <AppDialog v-model="confirmClose" title="放弃未保存的修改？" width="400px" variant="standard"><p class="simple-step__confirm">当前内容尚未保存，关闭后会丢失。</p><template #footer><button type="button" class="simple-step__cancel" @click="confirmClose = false">继续编辑</button><button type="button" class="simple-step__save is-danger" @click="emit('close')">放弃修改</button></template></AppDialog>
+  <AppDialog v-model="confirmClose" title="放弃未保存的修改？" width="400px" variant="standard" dialog-class="simple-step-discard-dialog" modal-class="simple-step-discard-overlay" align-center :show-close="false">
+    <div class="simple-step__discard">
+      <span><AlertTriangle :size="17" /></span>
+      <div><h4>放弃未保存的修改？</h4><p>关闭后，本次填写的配置将不会保留。</p></div>
+    </div>
+    <div class="simple-step__discard-actions">
+      <button type="button" class="simple-step__cancel" @click="confirmClose = false">继续编辑</button>
+      <button type="button" class="simple-step__save is-danger" @click="emit('close')">放弃修改</button>
+    </div>
+  </AppDialog>
 </template>
 
 <style scoped>
@@ -97,5 +106,15 @@ function clampDelay(event: Event) { const value = Number((event.target as HTMLIn
 .simple-step__cancel{border:1px solid #e5e6eb;background:#fff;color:#4e5969}
 .simple-step__save{border:0;background:#165dff;color:#fff}
 .simple-step__save.is-danger{background:#f53f3f}
-.simple-step__confirm{color:#4e5969;font-size:12px}
+:global(.el-overlay.simple-step-discard-overlay){background:rgb(29 33 41 / 48%)}
+:global(.el-dialog.simple-step-discard-dialog){max-width:calc(100% - 32px);border-radius:16px;box-shadow:0 25px 50px -12px rgb(0 0 0 / 25%)}
+:global(.el-dialog.simple-step-discard-dialog > .el-dialog__header){display:none}
+:global(.el-dialog.simple-step-discard-dialog > .el-dialog__body){padding:20px}
+.simple-step__discard{display:flex;align-items:flex-start;gap:12px}
+.simple-step__discard span{display:grid;width:36px;height:36px;flex:none;place-items:center;border-radius:50%;background:#fff3e8;color:#ff7d00}
+.simple-step__discard h4{margin:0;color:#1d2129;font-size:14px;font-weight:600}
+.simple-step__discard p{margin:4px 0 0;color:#86909c;font-size:12px;line-height:20px}
+.simple-step__discard-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:20px}
+.simple-step__discard-actions .simple-step__cancel{height:28px;padding:0 12px;border-radius:8px;font-size:12px}
+.simple-step__discard-actions .simple-step__save.is-danger{height:32px;padding:0 14px;border-radius:8px;font-size:13px}
 </style>

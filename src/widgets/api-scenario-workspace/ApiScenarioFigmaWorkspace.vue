@@ -49,6 +49,7 @@ import {
   type ScenarioResult,
 } from './lib/apiScenarioStepRequestUtils'
 import ApiScenarioCustomRequestDrawer from './ApiScenarioCustomRequestDrawer.vue'
+import ScenarioLoopStepDrawer from '@/features/api-case-create-edit/ScenarioLoopStepDrawer.vue'
 import ScenarioSimpleStepDrawer from '@/features/api-case-create-edit/ScenarioSimpleStepDrawer.vue'
 import ApiScenarioResourcePicker from './ApiScenarioResourcePicker.vue'
 import ApiScenarioRunHistory from './ApiScenarioRunHistory.vue'
@@ -157,6 +158,7 @@ const stepTypeGroups: Array<{
     ],
   },
 ]
+const childStepOptions = stepTypeGroups.flatMap(group => group.options)
 
 const resourceStepConfig = {
   'ref-api': { kind: 'api', stepType: 'API', resourceType: 'DEFINITION' },
@@ -205,10 +207,17 @@ const scenarioListTabScroll = ref({ overflow: false, arrivedLeft: true, arrivedR
 const scenarioEditorTabScroll = ref({ overflow: false, arrivedLeft: true, arrivedRight: true })
 const selectedDataset = ref<string | number | null>(null)
 const showAddStep = ref(false)
+const showChildStepPicker = ref(false)
 const resourceStepType = ref<keyof typeof resourceStepConfig | null>(null)
+type StepInsertTarget = { parent: ScenarioStep } | { loopDraft: ApiScenarioStep } | null
+const childStepPickerTarget = shallowRef<StepInsertTarget>(null)
+const pendingStepTarget = shallowRef<StepInsertTarget>(null)
 const configuringStep = ref<ScenarioStep | null>(null)
 const customRequestEditor = shallowRef<{ draft: ApiScenarioStep; target: ScenarioStep | null; parent: ScenarioStep | null } | null>(null)
 const simpleStepEditor = shallowRef<{ draft: ApiScenarioStep; target: ScenarioStep | null; parent: ScenarioStep | null } | null>(null)
+const loopStepEditor = shallowRef<{ draft: ApiScenarioStep; target: ScenarioStep | null } | null>(null)
+const loopStepEditorStack = shallowRef<Array<{ draft: ApiScenarioStep; target: ScenarioStep | null }>>([])
+const loopStepDrawerRef = ref<{ syncChildren: (children: ApiScenarioStep[]) => void } | null>(null)
 const isEditingSceneName = ref(false)
 const sceneNameDraft = ref('')
 const sceneNameInput = ref<HTMLInputElement | null>(null)
@@ -1138,6 +1147,11 @@ function addStep(type: StepType = 'custom') {
     openSimpleStepEditor(type)
     return
   }
+  if (type === 'loop') {
+    showAddStep.value = false
+    openLoopStepEditor()
+    return
+  }
   if (type === 'ref-api' || type === 'ref-case' || type === 'ref-scene') {
     showAddStep.value = false
     resourceStepType.value = type
@@ -1154,6 +1168,63 @@ function addStep(type: StepType = 'custom') {
   })
   showAddStep.value = false
   if (suffix > 0) activeEditorTab.value = 'steps'
+}
+
+function appendChildStep(target: StepInsertTarget, step: ScenarioStep, apiStep: ApiScenarioStep) {
+  if (target && 'parent' in target) {
+    (target.parent.children ??= []).push(step)
+    return
+  }
+  if (target && 'loopDraft' in target) {
+    target.loopDraft.children = [...(target.loopDraft.children || []), apiStep]
+    loopStepDrawerRef.value?.syncChildren(target.loopDraft.children)
+    return
+  }
+  activeScenario.value?.steps.push(step)
+}
+
+function createControllerStep(type: 'condition' | 'once'): ScenarioStep {
+  const config = stepTypeConfig[type]
+  return {
+    id: `step-${Date.now()}`,
+    type,
+    label: config.label,
+    detail: config.description,
+    enabled: true,
+    children: [],
+  }
+}
+
+function selectChildStepType(type: StepType) {
+  const target = childStepPickerTarget.value
+  childStepPickerTarget.value = null
+  showChildStepPicker.value = false
+  if (type === 'ref-api' || type === 'ref-case' || type === 'ref-scene') {
+    pendingStepTarget.value = target
+    resourceStepType.value = type
+    return
+  }
+  pendingStepTarget.value = target
+  if (type === 'custom') {
+    openCustomRequestEditor()
+    return
+  }
+  if (type === 'script' || type === 'wait') {
+    openSimpleStepEditor(type)
+    return
+  }
+  if (type === 'loop') {
+    openLoopStepEditor()
+    return
+  }
+  const step = createControllerStep(type)
+  const apiStep = serializeStep(step)
+  appendChildStep(target, step, apiStep)
+  pendingStepTarget.value = null
+}
+
+function isChildControllerDisabled(type: StepType) {
+  return ['loop', 'condition', 'once'].includes(type) && loopStepEditorStack.value.length >= 2
 }
 
 function addSelectedResourceSteps(items: ScenarioResourceSelection[]) {
@@ -1194,9 +1265,16 @@ function addSelectedResourceSteps(items: ScenarioResourceSelection[]) {
       source,
     }
   })
-  scenario.steps.push(...steps)
+  const target = pendingStepTarget.value
+  if (target && 'parent' in target) target.parent.children = [...(target.parent.children || []), ...steps]
+  else if (target && 'loopDraft' in target) {
+    target.loopDraft.children = [...(target.loopDraft.children || []), ...steps.map(item => item.source || serializeStep(item))]
+    loopStepDrawerRef.value?.syncChildren(target.loopDraft.children)
+  }
+  else scenario.steps.push(...steps)
   activeEditorTab.value = 'steps'
   resourceStepType.value = null
+  pendingStepTarget.value = null
 }
 
 function openStepConfiguration(step: ScenarioStep) {
@@ -1206,6 +1284,10 @@ function openStepConfiguration(step: ScenarioStep) {
   }
   if (step.type === 'script' || step.type === 'wait') {
     openSimpleStepEditor(step.type, step)
+    return
+  }
+  if (step.type === 'loop') {
+    openLoopStepEditor(step)
     return
   }
   configuringStep.value = step
@@ -1226,6 +1308,24 @@ function openSimpleStepEditor(type: 'script' | 'wait', target: ScenarioStep | nu
     delayMs: type === 'wait' ? 1000 : undefined,
   }
   simpleStepEditor.value = { target, parent, draft: source }
+}
+
+function openLoopStepEditor(target: ScenarioStep | null = null) {
+  configuringStep.value = null
+  if (loopStepEditor.value) loopStepEditorStack.value = [...loopStepEditorStack.value, loopStepEditor.value]
+  const source = target ? serializeStep(target) : {
+    id: crypto.randomUUID?.() ?? 'step-' + Date.now(),
+    stepName: '循环步骤',
+    stepType: 'LOOP_CONTROLLER' as const,
+    refType: 'DIRECT' as const,
+    resourceType: null,
+    resourceId: null,
+    enabled: true,
+    loopType: 'FIXED' as const,
+    loopCount: 1,
+    children: [],
+  }
+  loopStepEditor.value = { target, draft: source }
 }
 
 function openCustomRequestEditor(target: ScenarioStep | null = null, parent: ScenarioStep | null = null) {
@@ -1253,9 +1353,15 @@ function applyCustomRequestStep(payload: ApiScenarioStep) {
   const step = mapApiStep(payload, scenario.steps.length)
   if (editor.target) Object.assign(editor.target, step)
   else if (editor.parent) (editor.parent.children ??= []).push(step)
+  else if (pendingStepTarget.value) appendChildStep(pendingStepTarget.value, step, payload)
+  else if (loopStepEditor.value) {
+    loopStepEditor.value.draft.children = [...(loopStepEditor.value.draft.children || []), payload]
+    loopStepDrawerRef.value?.syncChildren(loopStepEditor.value.draft.children)
+  }
   else scenario.steps.push(step)
   activeEditorTab.value = 'steps'
   customRequestEditor.value = null
+  pendingStepTarget.value = null
 }
 
 function applySimpleStep(payload: ApiScenarioStep) {
@@ -1265,9 +1371,33 @@ function applySimpleStep(payload: ApiScenarioStep) {
   const step = mapApiStep(payload, scenario.steps.length)
   if (editor.target) Object.assign(editor.target, step)
   else if (editor.parent) (editor.parent.children ??= []).push(step)
+  else if (pendingStepTarget.value) appendChildStep(pendingStepTarget.value, step, payload)
+  else if (loopStepEditor.value) {
+    loopStepEditor.value.draft.children = [...(loopStepEditor.value.draft.children || []), payload]
+    loopStepDrawerRef.value?.syncChildren(loopStepEditor.value.draft.children)
+  }
   else scenario.steps.push(step)
   activeEditorTab.value = 'steps'
   simpleStepEditor.value = null
+  pendingStepTarget.value = null
+}
+
+function applyLoopStep(payload: ApiScenarioStep) {
+  const editor = loopStepEditor.value
+  const scenario = activeScenario.value
+  if (!editor || !scenario || (scenario.persistedId ? !props.canEdit : !props.canCreate)) return
+  const step = mapApiStep(payload, scenario.steps.length)
+  if (editor.target) Object.assign(editor.target, step)
+  else if (pendingStepTarget.value) appendChildStep(pendingStepTarget.value, step, payload)
+  else scenario.steps.push(step)
+  activeEditorTab.value = 'steps'
+  pendingStepTarget.value = null
+  const previous = loopStepEditorStack.value.pop()
+  if (previous) {
+    loopStepEditor.value = previous
+    return
+  }
+  loopStepEditor.value = null
 }
 
 function notifyPendingStepEditor(label: string) {
@@ -1416,7 +1546,29 @@ function isControllerStep(type: StepType) {
 }
 
 function addChildStep(parent: ScenarioStep) {
-  openCustomRequestEditor(null, parent)
+  childStepPickerTarget.value = { parent }
+  showChildStepPicker.value = true
+}
+
+function addLoopChildStep() {
+  if (!loopStepEditor.value) return
+  childStepPickerTarget.value = { loopDraft: loopStepEditor.value.draft }
+  showChildStepPicker.value = true
+}
+
+function closeLoopStepEditor() {
+  const previous = loopStepEditorStack.value.pop()
+  if (previous) {
+    loopStepEditor.value = previous
+    pendingStepTarget.value = null
+    return
+  }
+  loopStepEditor.value = null
+  pendingStepTarget.value = null
+}
+
+function updateLoopChildren(children: ApiScenarioStep[]) {
+  if (loopStepEditor.value) loopStepEditor.value.draft.children = children
 }
 </script>
 
@@ -1763,6 +1915,46 @@ function addChildStep(parent: ScenarioStep) {
           </div>
         </section>
       </AppDialog>
+      <AppDialog
+        v-model="showChildStepPicker"
+        title="选择子步骤类型"
+        width="560px"
+        dialog-class="api-scenario-add-step-dialog api-scenario-child-step-dialog"
+        modal-class="api-scenario-add-step-overlay"
+        align-center
+        destroy-on-close
+        :show-close="false"
+      >
+        <template #header>
+          <div class="figma-api-scenarios__add-step-header">
+            <strong>选择子步骤类型</strong>
+            <button type="button" aria-label="关闭" @click="showChildStepPicker = false"><X :size="15" aria-hidden="true" /></button>
+          </div>
+        </template>
+        <div class="figma-api-scenarios__step-type-grid figma-api-scenarios__child-step-grid">
+          <button
+            v-for="option in childStepOptions"
+            :key="option.type"
+            type="button"
+            :style="{
+              '--step-option-color': option.color ?? stepTypeConfig[option.type].color,
+              '--step-option-background': stepTypeConfig[option.type].background,
+              opacity: isChildControllerDisabled(option.type) ? 0.45 : 1,
+              cursor: isChildControllerDisabled(option.type) ? 'not-allowed' : 'pointer',
+            }"
+            :disabled="isChildControllerDisabled(option.type)"
+            @click="selectChildStepType(option.type)"
+          >
+            <span class="figma-api-scenarios__step-type-icon" aria-hidden="true">
+              <component :is="stepTypeConfig[option.type].icon" :size="16" />
+            </span>
+            <span>
+              <strong>{{ option.label ?? stepTypeConfig[option.type].label }}</strong>
+                <small>{{ isChildControllerDisabled(option.type) ? '已达到最大嵌套深度' : option.description ?? stepTypeConfig[option.type].description }}</small>
+            </span>
+          </button>
+        </div>
+      </AppDialog>
       <ApiScenarioResourcePicker
         v-if="resourceStepType && activeScenario"
         :key="resourceStepType"
@@ -1770,7 +1962,7 @@ function addChildStep(parent: ScenarioStep) {
         :workspace-code="activeScenario.workspaceCode"
         :workspace-name="activeScenario.source?.workspaceName"
         :current-scenario-id="activeScenario.persistedId"
-        @close="resourceStepType = null"
+        @close="resourceStepType = null; pendingStepTarget = null"
         @add="addSelectedResourceSteps"
       />
       <ApiScenarioCustomRequestDrawer
@@ -1789,6 +1981,18 @@ function addChildStep(parent: ScenarioStep) {
         :is-new="!simpleStepEditor.target"
         @close="simpleStepEditor = null"
         @save="applySimpleStep"
+      />
+      <ScenarioLoopStepDrawer
+        v-if="loopStepEditor"
+        :key="loopStepEditor.draft.id"
+        ref="loopStepDrawerRef"
+        :initial-step="loopStepEditor.draft"
+        :is-new="!loopStepEditor.target"
+        :depth="loopStepEditorStack.length"
+        @close="closeLoopStepEditor"
+        @save="applyLoopStep"
+        @request-add-child="addLoopChildStep"
+        @children-change="updateLoopChildren"
       />
       <aside v-if="configuringStep" class="figma-api-scenarios__step-drawer">
         <header><div><b>配置步骤</b><small>{{ stepTypeLabel(configuringStep.type) }}</small></div><button type="button" @click="configuringStep = null"><X /></button></header>
@@ -2336,6 +2540,10 @@ function addChildStep(parent: ScenarioStep) {
 }
 .figma-api-scenarios__step-type-grid strong { display: block; color: #1d2129; font-size: 13px; font-weight: 600; line-height: 19.5px; }
 .figma-api-scenarios__step-type-grid small { display: block; margin-top: 2px; color: #86909c; font-size: 12px; line-height: 18px; }
+:global(.api-scenario-child-step-dialog > .el-dialog__body) { padding: 16px; }
+:global(.api-scenario-child-step-dialog .figma-api-scenarios__step-type-grid button) { padding: 12px; border-radius: 12px; }
+:global(.api-scenario-child-step-dialog .figma-api-scenarios__step-type-grid strong) { font-size: 12px; line-height: 18px; }
+:global(.api-scenario-child-step-dialog .figma-api-scenarios__step-type-grid small) { font-size: 10px; line-height: 15px; }
 
 @media (max-width: 480px) {
   .figma-api-scenarios__step-type-grid { grid-template-columns: minmax(0, 1fr); }
